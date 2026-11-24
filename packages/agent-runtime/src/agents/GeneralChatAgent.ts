@@ -803,7 +803,9 @@ export class GeneralChatAgent implements Agent {
           // keep the names for the dashboards.
           if (state.forceFinish) {
             return {
-              reason: 'max_steps_completed',
+              reason: state.toolCallBudget?.stoppedByBudget
+                ? 'tool_call_budget_exceeded'
+                : 'max_steps_completed',
               reasonDetail: `LLM returned ${rawToolCalls.length} unresolvable tool_calls after max steps: ${unresolvedNames || 'unnamed'}`,
               type: 'finish',
             };
@@ -889,10 +891,16 @@ export class GeneralChatAgent implements Agent {
 
         // No tool calls, conversation is complete
         return {
-          reason: state.forceFinish ? 'max_steps_completed' : 'completed',
-          reasonDetail: state.forceFinish
-            ? 'Force finish: LLM produced final text response after max steps'
-            : 'LLM response completed without tool calls',
+          reason: state.toolCallBudget?.stoppedByBudget
+            ? 'tool_call_budget_exceeded'
+            : state.forceFinish
+              ? 'max_steps_completed'
+              : 'completed',
+          reasonDetail: state.toolCallBudget?.stoppedByBudget
+            ? `Force finish: LLM answered after ${state.toolCallBudget.exhaustedTool} spent its call budget`
+            : state.forceFinish
+              ? 'Force finish: LLM produced final text response after max steps'
+              : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }

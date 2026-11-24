@@ -13,6 +13,7 @@ const KNOWN_ERROR_TYPES = new Set<string>([
   ...[...Object.values(ChatErrorType), ...Object.values(AgentRuntimeErrorType)].map(String),
   'cost_limit',
   'max_steps',
+  'tool_call_budget_exceeded',
   'tool_call_repeat_limit',
 ]);
 

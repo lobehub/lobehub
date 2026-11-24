@@ -18,7 +18,7 @@ export interface ForceFinishSummaryInjectorConfig {
 /**
  * Force Finish Summary Injector
  *
- * When the agent reaches the maximum step limit (forceFinish mode),
+ * When the agent reaches the step or tool call limit (forceFinish mode),
  * this processor appends a system message instructing the LLM to
  * summarize progress and produce a final text response without using tools.
  *
@@ -45,7 +45,7 @@ export class ForceFinishSummaryInjector extends BaseProvider {
 
     clonedContext.messages.push({
       content:
-        'You have reached the maximum step limit. Please summarize your progress and provide a final response. Do not attempt to use any tools.',
+        'You have reached the step or tool call limit for this run. Please summarize your progress and provide a final response. Do not attempt to use any tools.',
       role: 'system' as const,
     });
 

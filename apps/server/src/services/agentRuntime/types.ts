@@ -138,6 +138,7 @@ export type StepCompletionReason =
   | 'max_steps'
   | 'cost_limit'
   | 'tool_call_repeat_limit'
+  | 'tool_call_budget_exceeded'
   | 'waiting_for_human'
   | 'waiting_for_async_tool'
   | 'waiting_for_client';
