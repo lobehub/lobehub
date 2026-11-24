@@ -52,9 +52,11 @@ interface IdentityFieldsProps {
 /** Matches the `agents.description` column width. */
 const DESCRIPTION_MAX_LENGTH = 1000;
 
-/** Name / role / description / slug, shared by the edit and the create form. */
-const IdentityFields = memo<IdentityFieldsProps>(
-  ({ agentId, autoFocus = true, form, slugPlaceholder }) => {
+type IdentityBasicFieldsProps = Pick<IdentityFieldsProps, 'agentId' | 'autoFocus' | 'form'>;
+
+/** Name and role: what nearly everyone fills in, so the create form always shows them. */
+export const IdentityBasicFields = memo<IdentityBasicFieldsProps>(
+  ({ agentId, autoFocus = true, form }) => {
     const { t } = useTranslation('setting');
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
     const { setName } = form;
@@ -98,64 +100,92 @@ const IdentityFields = memo<IdentityFieldsProps>(
             onChange={(e) => form.setTitle(e.target.value)}
           />
         </Field>
-        {/* Other agents read this when they list agents to pick a teammate, so
-          the hint says who the text is for. */}
-        <Field
-          label={t('settingAgent.description.label')}
-          hint={
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {t('settingAgent.description.hint')}
-            </Text>
-          }
-        >
-          <TextArea
-            autoSize={{ maxRows: 6, minRows: 2 }}
-            maxLength={DESCRIPTION_MAX_LENGTH}
-            placeholder={t('settingAgent.description.inputPlaceholder')}
-            value={form.description}
-            onChange={(e) => form.setDescription(e.target.value)}
-          />
-        </Field>
-        {/* A builtin agent's identifier is not an editable field at all, so it is
-          not dressed as one: a disabled input still reads as "a control you
-          can't use right now" and needs a sentence explaining itself. Rendering
-          the bare marker states the fact and needs no caption. */}
-        {form.slugLocked ? (
-          <Field label={t('settingAgent.slug.label')}>
-            <Text code style={{ alignSelf: 'flex-start', color: cssVar.colorTextSecondary }}>
-              <span style={{ color: cssVar.colorTextTertiary }}>@</span>
-              {form.slug}
-            </Text>
-          </Field>
-        ) : (
-          <Field
-            label={t('settingAgent.slug.label')}
-            hint={
-              <Text style={{ fontSize: 12 }} type={form.error ? 'danger' : 'secondary'}>
-                {/* Show the url the current input actually produces — a literal
-                  `<slug>` leaves the reader to do the substitution themselves,
-                  and it updates as they type. Only an empty field falls back to
-                  describing the field in the abstract. */}
-                {form.error ??
-                  (form.slug.trim()
-                    ? t('settingAgent.slug.openWith', { slug: form.slug.trim().toLowerCase() })
-                    : t('settingAgent.slug.tooltip'))}
-              </Text>
-            }
-          >
-            <Input
-              aria-invalid={!!form.error}
-              data-invalid={form.error ? '' : undefined}
-              placeholder={slugPlaceholder ?? t('settingAgent.slug.placeholder')}
-              prefix={'@'}
-              value={form.slug}
-              onChange={(e) => form.setSlug(e.target.value)}
-            />
-          </Field>
-        )}
       </>
     );
   },
 );
+
+IdentityBasicFields.displayName = 'IdentityBasicFields';
+
+type IdentityDetailFieldsProps = Pick<IdentityFieldsProps, 'form' | 'slugPlaceholder'>;
+
+/** Description and slug: optional details the create form tucks under "More options". */
+export const IdentityDetailFields = memo<IdentityDetailFieldsProps>(({ form, slugPlaceholder }) => {
+  const { t } = useTranslation('setting');
+
+  return (
+    <>
+      {/* Other agents read this when they list agents to pick a teammate, so
+        the hint says who the text is for. */}
+      <Field
+        label={t('settingAgent.description.label')}
+        hint={
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('settingAgent.description.hint')}
+          </Text>
+        }
+      >
+        <TextArea
+          autoSize={{ maxRows: 6, minRows: 2 }}
+          maxLength={DESCRIPTION_MAX_LENGTH}
+          placeholder={t('settingAgent.description.inputPlaceholder')}
+          value={form.description}
+          onChange={(e) => form.setDescription(e.target.value)}
+        />
+      </Field>
+      {/* A builtin agent's identifier is not an editable field at all, so it is
+        not dressed as one: a disabled input still reads as "a control you
+        can't use right now" and needs a sentence explaining itself. Rendering
+        the bare marker states the fact and needs no caption. */}
+      {form.slugLocked ? (
+        <Field label={t('settingAgent.slug.label')}>
+          <Text code style={{ alignSelf: 'flex-start', color: cssVar.colorTextSecondary }}>
+            <span style={{ color: cssVar.colorTextTertiary }}>@</span>
+            {form.slug}
+          </Text>
+        </Field>
+      ) : (
+        <Field
+          label={t('settingAgent.slug.label')}
+          hint={
+            <Text style={{ fontSize: 12 }} type={form.error ? 'danger' : 'secondary'}>
+              {/* Show the url the current input actually produces — a literal
+                `<slug>` leaves the reader to do the substitution themselves,
+                and it updates as they type. Only an empty field falls back to
+                describing the field in the abstract. */}
+              {form.error ??
+                (form.slug.trim()
+                  ? t('settingAgent.slug.openWith', { slug: form.slug.trim().toLowerCase() })
+                  : t('settingAgent.slug.tooltip'))}
+            </Text>
+          }
+        >
+          <Input
+            aria-invalid={!!form.error}
+            data-invalid={form.error ? '' : undefined}
+            placeholder={slugPlaceholder ?? t('settingAgent.slug.placeholder')}
+            prefix={'@'}
+            value={form.slug}
+            onChange={(e) => form.setSlug(e.target.value)}
+          />
+        </Field>
+      )}
+    </>
+  );
+});
+
+IdentityDetailFields.displayName = 'IdentityDetailFields';
+
+/** Name / role / description / slug, shared by the edit form as one flat list. */
+const IdentityFields = memo<IdentityFieldsProps>(
+  ({ agentId, autoFocus, form, slugPlaceholder }) => (
+    <>
+      <IdentityBasicFields agentId={agentId} autoFocus={autoFocus} form={form} />
+      <IdentityDetailFields form={form} slugPlaceholder={slugPlaceholder} />
+    </>
+  ),
+);
+
+IdentityFields.displayName = 'IdentityFields';
 
 export default IdentityFields;

@@ -1407,6 +1407,7 @@ export default {
   'settingAgent.identity.createFailed': 'Could not create the agent, please try again',
   'settingAgent.identity.done': 'Done',
   'settingAgent.identity.edit': 'Edit identity',
+  'settingAgent.identity.moreOptions': 'More options',
   'settingAgent.identity.saved': 'Saved',
   'settingAgent.identity.saveFailed': 'Could not save the identity, please try again',
   'settingAgent.identity.untitled': 'Unnamed agent',

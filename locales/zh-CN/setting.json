@@ -1813,6 +1813,7 @@
   "settingAgent.identity.createFailed": "创建助理失败，请重试",
   "settingAgent.identity.done": "完成",
   "settingAgent.identity.edit": "编辑身份信息",
+  "settingAgent.identity.moreOptions": "更多选项",
   "settingAgent.identity.saveFailed": "身份信息保存失败，请重试",
   "settingAgent.identity.saved": "已保存",
   "settingAgent.identity.untitled": "未命名助理",

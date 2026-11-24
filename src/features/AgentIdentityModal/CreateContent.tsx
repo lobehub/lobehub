@@ -12,7 +12,8 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
 import BlindBoxAvatar from './BlindBoxAvatar';
-import IdentityFields from './IdentityFields';
+import CreateMoreOptions from './CreateMoreOptions';
+import { IdentityBasicFields, IdentityDetailFields } from './IdentityFields';
 import {
   useCreateAgentIdentityForm,
   type UseCreateAgentIdentityFormOptions,
@@ -21,9 +22,10 @@ import {
 export type CreateAgentIdentityContentProps = UseCreateAgentIdentityFormOptions;
 
 /**
- * Creating an agent is filling in who it is: avatar on top, then the same
- * identity fields the edit form has. Everything else (prompt, model, skills) is
- * configured on the profile page the new agent opens on.
+ * Creating an agent is filling in who it is: avatar and name on top, with the
+ * optional details (description, slug, visibility) folded under "More options".
+ * Everything else (prompt, model, skills) is configured on the profile page the
+ * new agent opens on.
  */
 const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
   ({ groupId, onCreated, visibility }) => {
@@ -93,11 +95,14 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
             </Text>
           )}
         </Flexbox>
-        <IdentityFields
-          form={form}
-          slugPlaceholder={t('settingAgent.slug.autoPlaceholder', { ns: 'setting' })}
-        />
-        <CreateVisibilityField state={visibilityState} />
+        <IdentityBasicFields form={form} />
+        <CreateMoreOptions error={form.error}>
+          <IdentityDetailFields
+            form={form}
+            slugPlaceholder={t('settingAgent.slug.autoPlaceholder', { ns: 'setting' })}
+          />
+          <CreateVisibilityField state={visibilityState} />
+        </CreateMoreOptions>
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={form.saving} onClick={() => close()}>
             {t('cancel', { ns: 'common' })}
