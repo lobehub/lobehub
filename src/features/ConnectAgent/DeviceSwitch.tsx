@@ -3,7 +3,7 @@
 import type { DeviceListItem } from '@lobechat/types';
 import { Flexbox, Icon, Select, Tag, Text } from '@lobehub/ui';
 import { LaptopIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
@@ -23,6 +23,8 @@ const deviceLabel = (device: DeviceListItem) =>
 interface DeviceSwitchProps {
   /** Other devices that are online or still being checked. */
   available: DeviceListItem[];
+  /** Shown to the right of the select (the rescan action). */
+  extra?: ReactNode;
   localLabel: string;
   /** This computer's own row, when listed: it lends the local option its icon. */
   localRow?: DeviceListItem;
@@ -33,7 +35,7 @@ interface DeviceSwitchProps {
 
 /** "Runs on": this computer first and tagged, other devices after, offline ones folded. */
 export const DeviceSwitch = memo<DeviceSwitchProps>(
-  ({ available, localLabel, localRow, offline, onPick, target }) => {
+  ({ available, extra, localLabel, localRow, offline, onPick, target }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [showOffline, setShowOffline] = useState(false);
     // An offline device stays visible while it is the one picked.
@@ -58,15 +60,11 @@ export const DeviceSwitch = memo<DeviceSwitchProps>(
     });
 
     return (
-      <Flexbox horizontal align={'center'} gap={8} style={{ paddingInline: 4 }}>
-        <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-          {t('connectAgent.create.switchDevice')}
-        </Text>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Select
           aria-label={t('connectAgent.create.switchDevice')}
           popupMatchSelectWidth={false}
-          size={'small'}
-          style={{ minWidth: 180 }}
+          style={{ flex: 1, minWidth: 0 }}
           value={target.kind === 'device' ? target.device.deviceId : LOCAL_TARGET_VALUE}
           options={[
             {
@@ -107,6 +105,7 @@ export const DeviceSwitch = memo<DeviceSwitchProps>(
             if (device) onPick({ device, kind: 'device' });
           }}
         />
+        {extra}
       </Flexbox>
     );
   },
