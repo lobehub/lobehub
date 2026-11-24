@@ -552,7 +552,11 @@ export class GeneralChatAgent implements Agent {
     }
 
     const systemRole =
-      this.config.agentConfig?.systemRole ?? state.world?.agent?.systemRole ?? undefined;
+      this.config.agentConfig?.systemRole ??
+      state.world?.agent?.systemRole ??
+      (state.metadata as { agentConfig?: { systemRole?: string } } | undefined)?.agentConfig
+        ?.systemRole ??
+      undefined;
     return typeof systemRole === 'string' && systemRole.length > 0
       ? estimateTokenCount(systemRole)
       : 0;

@@ -350,6 +350,26 @@ describe('countContextTokens', () => {
       });
       expect(replayDisabled.bySource.content).toBe(161);
       expect(replayDisabled.bySource.reasoning).toBe(0);
+
+      // When thinking was salvaged into visible content (`answerSalvagedFromReasoning: true`),
+      // the full output token count remains replayed as ordinary assistant content.
+      const salvaged = countContextTokens({
+        messages: [
+          mkMsg({
+            content: 'answer promoted from thinking '.repeat(50),
+            metadata: {
+              answerSalvagedFromReasoning: true,
+              usage: { outputReasoningTokens: 7500, totalOutputTokens: 7500 } as any,
+            } as any,
+            role: 'assistant',
+            usage: { outputReasoningTokens: 7500, totalOutputTokens: 7500 } as any,
+          }),
+        ],
+        options: { includeReasoning: false },
+      });
+      expect(salvaged.bySource.content).toBe(7500);
+      expect(salvaged.bySource.reasoning).toBe(0);
+      expect(salvaged.rawTotal).toBe(7500);
       expect(replayDisabled.rawTotal).toBe(161);
     });
 

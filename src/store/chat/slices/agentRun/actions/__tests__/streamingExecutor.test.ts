@@ -54,10 +54,7 @@ vi.mock('@/utils/localStorage', () => {
 interface AgentRuntimeStepContext {
   agent: {
     config: {
-      compressionConfig: {
-        enabled: boolean;
-        maxWindowToken?: number;
-      };
+      compressionConfig: { enabled: boolean; includeReasoning?: boolean; maxWindowToken?: number };
     };
   };
 }
@@ -624,6 +621,7 @@ describe('StreamingExecutor actions', () => {
 
       expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
         enabled: true,
+        includeReasoning: false,
         maxWindowToken: 200_000,
       });
 
@@ -663,15 +661,14 @@ describe('StreamingExecutor actions', () => {
 
       expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
         enabled: true,
+        includeReasoning: false,
         maxWindowToken: undefined,
       });
 
       streamSpy.mockRestore();
     });
 
-    // https://github.com/lobehub/lobehub/issues/17723 — Stop during a retry
-    // backoff kept the spinner until the delay elapsed, then saved the last
-    // provider error on the reply as if the run had failed.
+    // https://github.com/lobehub/lobehub/issues/17723 — Stop during retry backoff ends immediately without a provider error.
     it('ends at once without a provider error when stopped during a retry backoff', async () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });

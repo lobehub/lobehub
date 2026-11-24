@@ -204,8 +204,14 @@ export const countContextTokens = ({
         message.usage?.totalOutputTokens ?? message.metadata?.usage?.totalOutputTokens;
 
       if (recordedOutputTokens && recordedOutputTokens > 0) {
-        const rawReasoningTokens =
-          message.usage?.outputReasoningTokens ?? message.metadata?.usage?.outputReasoningTokens;
+        const answerSalvagedFromReasoning = Boolean(
+          (message.metadata as { answerSalvagedFromReasoning?: boolean } | undefined)
+            ?.answerSalvagedFromReasoning,
+        );
+        const rawReasoningTokens = answerSalvagedFromReasoning
+          ? 0
+          : (message.usage?.outputReasoningTokens ??
+            message.metadata?.usage?.outputReasoningTokens);
         const recordedReasoningTokens =
           rawReasoningTokens && rawReasoningTokens > 0
             ? Math.min(recordedOutputTokens, rawReasoningTokens)

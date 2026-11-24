@@ -98,4 +98,67 @@ describe('GeneralChatAgent context budget accounting', () => {
 
     expect(result.type).toBe('call_llm');
   });
+
+  it('falls back to estimating agentConfig.systemRole on legacy conversations without contextAccounting', async () => {
+    const longSystemRole = 'Follow all repository guidelines carefully. '.repeat(10_000);
+    const agent = new GeneralChatAgent({
+      agentConfig: { maxSteps: 100, systemRole: longSystemRole },
+      compressionConfig: {
+        enabled: true,
+        maxWindowToken: 128_000,
+        thresholdRatio: 0.5,
+      },
+      modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
+      operationId: 'test-session',
+    });
+
+    const state = {
+      ...AgentRuntime.createInitialState({ operationId: 'test-session' }),
+      messages: [
+        { content: 'Legacy user prompt', role: 'user' },
+        { content: 'Legacy assistant reply without contextAccounting', role: 'assistant' },
+        { content: 'Short follow-up question', role: 'user' },
+      ] as any,
+    };
+
+    const result = (await agent.runner(createInitContext(), state)) as any;
+
+    expect(result.type).toBe('compress_context');
+    expect(result.payload.currentTokenCount).toBeGreaterThan(50_000);
+  });
+
+  it('ignores retained DB reasoning on historical assistant messages when includeReasoning is false', async () => {
+    const agent = new GeneralChatAgent({
+      agentConfig: { maxSteps: 100 },
+      compressionConfig: {
+        enabled: true,
+        includeReasoning: false,
+        maxWindowToken: 128_000,
+        thresholdRatio: 0.5,
+      },
+      modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
+      operationId: 'test-session',
+    });
+
+    const state = {
+      ...AgentRuntime.createInitialState({ operationId: 'test-session' }),
+      messages: [
+        { content: 'Initial question', role: 'user' },
+        {
+          content: 'Short final answer',
+          reasoning: { content: 'Detailed reasoning trace '.repeat(10_000) },
+          role: 'assistant',
+          usage: {
+            outputReasoningTokens: 56_000,
+            totalOutputTokens: 56_100,
+          },
+        },
+        { content: 'Please summarize the prior answer without repeating it.', role: 'user' },
+      ] as any,
+    };
+
+    const result = (await agent.runner(createInitContext(), state)) as any;
+
+    expect(result.type).toBe('call_llm');
+  });
 });
