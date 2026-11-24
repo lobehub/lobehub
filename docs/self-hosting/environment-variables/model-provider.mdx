@@ -49,6 +49,17 @@ When deploying LobeHub, a rich set of environment variables related to model ser
   `api.openai.com` domain, then you need to add `/v1` to the URL yourself.
 </Callout>
 
+<Callout type={'tip'}>
+  **PZERO** is a prepaid OpenAI-compatible inference service. Example configuration:
+  ```bash
+  OPENAI_PROXY_URL="https://api.pzero.studio/v1"
+  OPENAI_API_KEY="pzero_YOUR_KEY"
+  OPENAI_MODEL_LIST="+deepseek-v4-flash"
+  ```
+  Get a key at [pzero.studio/agents](https://pzero.studio/agents) (sign-in free; min top-up 1 USDC on Base; no starter credits).
+  Public model catalog (no key required): `GET https://api.pzero.studio/v1/models`
+</Callout>
+
 Related discussions:
 
 - [Why is the return value blank after installing Docker, configuring environment variables?](https://github.com/lobehub/lobehub/discussions/623)
