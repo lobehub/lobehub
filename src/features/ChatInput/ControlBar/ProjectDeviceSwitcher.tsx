@@ -76,6 +76,8 @@ interface ProjectDeviceSwitcherProps {
   directoryId?: string;
   /** Picked another device's project directory; absent when folders can't be picked here. */
   onSelect?: (target: ProjectDeviceTarget) => void;
+  /** Where the menu opens; above the chip by default, as under a chat input. */
+  placement?: 'bottomRight' | 'topLeft';
   /** The project whose execution environments are offered, in its priority order. */
   projectId?: string;
   /**
@@ -102,6 +104,7 @@ const ProjectDeviceSwitcher = ({
   directories,
   directoryId,
   onSelect,
+  placement = 'topLeft',
   projectId: projectIdProp,
   sandbox,
 }: ProjectDeviceSwitcherProps) => {
@@ -296,7 +299,7 @@ const ProjectDeviceSwitcher = ({
     <Popover
       content={content}
       open={open}
-      placement="topLeft"
+      placement={placement}
       styles={{ content: { padding: 4 } }}
       trigger="click"
       onOpenChange={setOpen}
