@@ -30,7 +30,9 @@ Ace Data Cloud is an independent API service. Use an Ace account and API token; 
 
   Fetch the current model catalog, enable a model, and select it for the Agent. Catalog presence does not establish your token's service permissions or every model capability. Check the service documentation. Connection checks and chat can incur API charges.
 
-  This entry selects Chat Completions, Responses, or Messages from each model's published protocol bindings. Messages uses the native adapter with Bearer authentication. It does not turn asynchronous Suno/Seedance media APIs into chat models. Install individual media MCP tools separately and enable them for the Agent. Preserve the same task ID when polling an asynchronous operation; do not generate again while waiting.
+  The picker lists models available to your account that support Chat Completions. LobeHub sends chat requests directly to the configured endpoint. Models served only through Anthropic Messages need a client that supports that protocol.
+
+  Install media MCP tools separately to use asynchronous services such as Suno and Seedance. Keep the task ID returned by the first request and use it to check the result.
 </Steps>
 
 ## Troubleshooting
@@ -40,6 +42,6 @@ Ace Data Cloud is an independent API service. Use an Ace account and API token; 
 - **429:** the provider reports a rate-limit error. Wait for the service limit to recover before retrying; do not silently switch models or price tiers.
 - **Empty catalog:** inspect the model-fetch error rather than assuming historical model IDs are available.
 - **Tools or vision:** the gateway model list supplies IDs; the public platform catalog supplies model types, declared capabilities, and protocol bindings. Official Ace endpoints use both, including chat models such as `gpt-4o-image`. Undeclared capabilities and limits remain unknown. Custom endpoints do not inherit official Ace metadata.
-- **Protocols and prices:** models that require Messages use the native Messages adapter with Bearer authentication. API price projections describe the ordinary-context base rate, so LobeHub does not substitute another provider's price for an unknown Ace usage estimate. Refer to the current Ace pricing and usage records.
+- **Prices:** API price projections describe the ordinary-context base rate, so LobeHub does not substitute another provider's price for an unknown Ace usage estimate. Refer to the current Ace pricing and usage records.
 
 The images show real historical Ace Applications pages, not successful LobeHub installation or inference. Keep tokens in provider settings, out of chat and screenshots.
