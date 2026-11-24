@@ -5599,6 +5599,7 @@ When I am ___, I need ___
   'market.skills.stats.stars': 'GitHub stars',
   'market.skills.title': 'Skills',
   'market.skills.uninstall': 'Uninstall',
+  'market.skills.uninstallFailed': "Couldn't uninstall. Try again later.",
   'market.skills.version': 'Version',
   'workspaceSetting.labels.archive.failedRetry':
     "Couldn't archive the label. Check your network and try again.",

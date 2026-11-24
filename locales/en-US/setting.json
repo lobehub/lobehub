@@ -1455,6 +1455,7 @@
   "market.skills.stats.stars": "GitHub stars",
   "market.skills.title": "Skills",
   "market.skills.uninstall": "Uninstall",
+  "market.skills.uninstallFailed": "Couldn't uninstall. Try again later.",
   "market.skills.version": "Version",
   "marketPublish.status.archived": "Archived",
   "marketPublish.status.deprecated": "Deprecated",

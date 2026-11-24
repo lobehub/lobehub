@@ -1455,6 +1455,7 @@
   "market.skills.stats.stars": "GitHub Star",
   "market.skills.title": "技能",
   "market.skills.uninstall": "卸载",
+  "market.skills.uninstallFailed": "卸载失败，请稍后重试",
   "market.skills.version": "版本",
   "marketPublish.status.archived": "已归档",
   "marketPublish.status.deprecated": "已弃用",

@@ -141,7 +141,7 @@ export const GithubSkillRow = memo<{
 }>(({ check, onOpen, skill }) => {
   const { t } = useTranslation('setting');
   const { error, pending, update } = useApplyGithubUpdate(skill.id, check);
-  const { removing, uninstall } = useUninstallLibrarySkill(skill.id);
+  const { failed: uninstallFailed, removing, uninstall } = useUninstallLibrarySkill(skill.id);
   const repo = githubSkillRepo(skill);
   const sourceUrl = skill.manifest?.sourceUrl ?? (repo ? `https://github.com/${repo}` : undefined);
 
@@ -183,10 +183,12 @@ export const GithubSkillRow = memo<{
         </>
       }
       subtitle={
-        <Text ellipsis fontSize={12} type={error ? 'danger' : 'secondary'}>
-          {error
-            ? t('market.skills.github.updateFailed')
-            : [repo, skill.description].filter(Boolean).join(' · ')}
+        <Text ellipsis fontSize={12} type={error || uninstallFailed ? 'danger' : 'secondary'}>
+          {uninstallFailed
+            ? t('market.skills.uninstallFailed')
+            : error
+              ? t('market.skills.github.updateFailed')
+              : [repo, skill.description].filter(Boolean).join(' · ')}
         </Text>
       }
       onOpen={onOpen}

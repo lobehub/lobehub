@@ -37,7 +37,7 @@ export const useCustomSkills = (query = '') => {
 const CustomSkillRow = memo<{ skill: AgentSkillListItem }>(({ skill }) => {
   const { t } = useTranslation('setting');
   const { t: tp } = useTranslation('plugin');
-  const { removing, uninstall } = useUninstallLibrarySkill(skill.id);
+  const { failed, removing, uninstall } = useUninstallLibrarySkill(skill.id);
 
   const openDetail = () =>
     createModal({
@@ -86,8 +86,8 @@ const CustomSkillRow = memo<{ skill: AgentSkillListItem }>(({ skill }) => {
         </DropdownMenu>
       }
       subtitle={
-        <Text ellipsis fontSize={12} type={'secondary'}>
-          {skill.description}
+        <Text ellipsis fontSize={12} type={failed ? 'danger' : 'secondary'}>
+          {failed ? t('market.skills.uninstallFailed') : skill.description}
         </Text>
       }
       onOpen={openDetail}
