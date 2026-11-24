@@ -1608,7 +1608,7 @@
   "permission.noManagePermission": "仅创建者或工作区所有者可以修改权限",
   "permission.page.accessLevelLabel": "访问级别",
   "permission.page.accessLevelPrivateHint": "发布到工作区后成员会拿到这个级别，发布后可以再调整。",
-  "permission.page.agentEntry": "权限与可见性",
+  "permission.page.agentEntry": "权限",
   "permission.page.configGroup": "修改权限",
   "permission.page.devicePolicyDesc": "成员在自己的运行中是否可以切换执行环境。",
   "permission.page.devicePolicyFixedDesc": "成员只能使用你设定的执行环境",

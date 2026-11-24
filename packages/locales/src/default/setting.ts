@@ -528,7 +528,7 @@ export default {
   'permission.page.accessLevelLabel': 'Access level',
   'permission.page.accessLevelPrivateHint':
     'Members get this level once the agent is published to the workspace. It can be changed after publishing.',
-  'permission.page.agentEntry': 'Permissions & visibility',
+  'permission.page.agentEntry': 'Permissions',
   'permission.page.configGroup': 'Editable settings',
   'permission.page.devicePolicyDesc':
     'Whether members can switch the execution environment for their own runs.',
