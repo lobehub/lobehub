@@ -1,6 +1,7 @@
 import type { ChatToolPayload } from '@lobechat/types';
 
 import type { AgentState } from '../types';
+import { selectEffectiveToolManifestMap } from './operationToolSet';
 
 /**
  * Consecutive identical calls allowed before the turn is stopped. High enough
@@ -18,6 +19,15 @@ export const TOOL_CALL_REPEAT_LIMIT = 20;
  * be dispatched to a real service. Legitimate fan-out stays far below this.
  */
 export const TOOL_CALL_BURST_LIMIT = 50;
+
+/**
+ * Consecutive LLM turns that may ask for an API past its
+ * `maxCallsPerOperation` budget, each answered with a rejected tool result,
+ * before the run is stopped. The rejection exists so the model can answer with
+ * what it already retrieved; one that keeps asking turn after turn is stuck.
+ */
+export const TOOL_CALL_BUDGET_FEEDBACK_LIMIT = 2;
+export const TOOL_CALL_BUDGET_REASON = 'tool_call_budget_exceeded';
 
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -73,3 +83,63 @@ export const hasRepeatedToolCall = (guard: AgentState['toolCallRepeatGuard']) =>
 
 export const hasToolCallBurst = (toolsCalling: ChatToolPayload[]) =>
   toolsCalling.length > TOOL_CALL_BURST_LIMIT;
+
+const getApiKey = ({ apiName, identifier }: ChatToolPayload) =>
+  JSON.stringify([identifier, apiName]);
+
+/**
+ * The API's `maxCallsPerOperation`, read from the same effective manifest map
+ * executors use so a step-activated tool is budgeted like a static one.
+ */
+export const getToolCallBudget = (
+  toolCalling: ChatToolPayload,
+  state: AgentState,
+): number | undefined => {
+  const apis = selectEffectiveToolManifestMap(state)[toolCalling.identifier]?.api as
+    Array<{ maxCallsPerOperation?: number; name?: string }> | undefined;
+  const limit = apis?.find((api) => api.name === toolCalling.apiName)?.maxCallsPerOperation;
+
+  return typeof limit === 'number' && limit > 0 ? limit : undefined;
+};
+
+/**
+ * What the model reads back for a call past the budget. It has to name the way
+ * out: a bare "rejected" reads like a transient failure and invites a retry.
+ */
+export const buildToolCallBudgetContent = (toolCalling: ChatToolPayload, limit: number) =>
+  `Tool call rejected: ${toolCalling.apiName} has reached its limit of ${limit} calls in this reply. The call was not executed, and further calls will be rejected too. Do not call it again: answer now with the results you already have, and say plainly if they do not cover the request.`;
+
+/**
+ * Count this turn's calls against each API's operation-wide budget.
+ *
+ * The repeat guard above keys on arguments, so a model that rephrases its
+ * query every turn never trips it (500 `searchUserMemory` calls in one reply,
+ * each with a new query). The budget ignores arguments and spans the whole
+ * operation, and only applies to APIs that declare one, so file reads, shell
+ * commands and job polling keep running as often as the task needs.
+ */
+export const updateToolCallBudget = (state: AgentState, toolsCalling: ChatToolPayload[]) => {
+  const previousGuard = state.toolCallRepeatGuard;
+  const apiCalls = { ...previousGuard?.apiCalls };
+  const overBudgetCalls: Array<{ limit: number; toolCalling: ChatToolPayload }> = [];
+
+  for (const toolCalling of toolsCalling) {
+    const limit = getToolCallBudget(toolCalling, state);
+    if (limit === undefined) continue;
+
+    const key = getApiKey(toolCalling);
+    apiCalls[key] = (apiCalls[key] ?? 0) + 1;
+    if (apiCalls[key] > limit) overBudgetCalls.push({ limit, toolCalling });
+  }
+
+  return {
+    apiCalls,
+    overBudgetCalls,
+    // Consecutive turns only: a turn that stays within budget (or calls no
+    // tools) means the model took the feedback, so the count starts over.
+    overBudgetRounds: overBudgetCalls.length > 0 ? (previousGuard?.overBudgetRounds ?? 0) + 1 : 0,
+  };
+};
+
+export const hasIgnoredToolCallBudget = (overBudgetRounds: number) =>
+  overBudgetRounds > TOOL_CALL_BUDGET_FEEDBACK_LIMIT;
