@@ -28,8 +28,7 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     ? `/project/${projectId}/dashboard/${dashboardId}`
     : `/project/${projectId}/dashboard`;
 
-export type ProjectSettingsSection =
-  'directories' | 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
+export type ProjectSettingsSection = 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
 
 export const getProjectSettingsPath = (projectId: string, section: ProjectSettingsSection) =>
   `/project/${projectId}/settings/${section}`;

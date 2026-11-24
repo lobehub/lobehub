@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} połączenia",
   "heteroAgent.executionTarget.personalGroup": "Prywatne urządzenia",
   "heteroAgent.executionTarget.presenceChecking": "Sprawdzanie statusu…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Wyświetlane są tylko urządzenia z katalogiem roboczym tego projektu. Dodaj katalog dla innego urządzenia w ustawieniach projektu.",
   "heteroAgent.executionTarget.reconnect": "Połącz ponownie",
   "heteroAgent.executionTarget.reconnectFailed": "Nie udało się ponownie połączyć tego urządzenia. Upewnij się, że aplikacja na komputerze działa, a następnie spróbuj ponownie.",
   "heteroAgent.executionTarget.sandbox": "Chmurowa piaskownica",

@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "آنلاین · {{count}} اتصالات",
   "heteroAgent.executionTarget.personalGroup": "دستگاه‌های خصوصی",
   "heteroAgent.executionTarget.presenceChecking": "در حال بررسی وضعیت…",
-  "heteroAgent.executionTarget.projectDevicesHint": "فقط دستگاه‌هایی که دارای دایرکتوری کاری این پروژه هستند فهرست شده‌اند. برای افزودن دایرکتوری برای دستگاه دیگر، به تنظیمات پروژه بروید.",
   "heteroAgent.executionTarget.reconnect": "اتصال مجدد",
   "heteroAgent.executionTarget.reconnectFailed": "اتصال مجدد این دستگاه امکان‌پذیر نبود. مطمئن شوید که برنامه دسکتاپ در حال اجرا است، سپس دوباره تلاش کنید.",
   "heteroAgent.executionTarget.sandbox": "محیط آزمایشی ابری",

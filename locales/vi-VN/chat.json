@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Trực tuyến · {{count}} kết nối",
   "heteroAgent.executionTarget.personalGroup": "Thiết bị riêng tư",
   "heteroAgent.executionTarget.presenceChecking": "Đang kiểm tra trạng thái…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Chỉ các thiết bị có thư mục làm việc của dự án này được liệt kê. Thêm một thư mục cho thiết bị khác trong cài đặt dự án.",
   "heteroAgent.executionTarget.reconnect": "Kết nối lại",
   "heteroAgent.executionTarget.reconnectFailed": "Không thể kết nối lại thiết bị này. Hãy đảm bảo ứng dụng trên máy tính đang chạy, sau đó thử lại.",
   "heteroAgent.executionTarget.sandbox": "Hộp cát đám mây",

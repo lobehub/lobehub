@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Çevrimiçi · {{count}} bağlantı",
   "heteroAgent.executionTarget.personalGroup": "Özel Cihazlar",
   "heteroAgent.executionTarget.presenceChecking": "Durum kontrol ediliyor…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Sadece bu projenin çalışma dizinine sahip cihazlar listelenir. Proje ayarlarından başka bir cihaz için bir dizin ekleyin.",
   "heteroAgent.executionTarget.reconnect": "Yeniden bağlan",
   "heteroAgent.executionTarget.reconnectFailed": "Bu cihaza yeniden bağlanılamadı. Masaüstü uygulamasının çalıştığından emin olun ve tekrar deneyin.",
   "heteroAgent.executionTarget.sandbox": "Bulut sandbox",

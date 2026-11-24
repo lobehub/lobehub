@@ -1639,7 +1639,6 @@
   "heteroAgent.executionTarget.otherDevicesGroup": "Other devices",
   "heteroAgent.executionTarget.personalGroup": "Private Devices",
   "heteroAgent.executionTarget.presenceChecking": "Checking status…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Only devices with this project's working directory are listed. Add a directory for another device in the project settings.",
   "heteroAgent.executionTarget.reconnect": "Reconnect",
   "heteroAgent.executionTarget.reconnectFailed": "Could not reconnect this device. Make sure the desktop app is running, then try again.",
   "heteroAgent.executionTarget.sandbox": "Cloud Sandbox",
