@@ -1,6 +1,10 @@
 import { type ReactNode } from 'react';
 
 import AsyncError from '@/components/AsyncError';
+import {
+  repositoriesLabel,
+  repositorySlug,
+} from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import EnvironmentForm, {
   type EnvironmentFormValue,
 } from '@/features/EnvironmentManager/EnvironmentForm';
@@ -62,14 +66,11 @@ export function ProjectWorkingDirectories({
     );
   }
 
-  // The repositories the sandbox clones, named on its row.
-  const sandboxSummary = (environment?.configuration?.sources ?? [])
-    .flatMap((source) =>
-      source.kind === 'git'
-        ? [source.url.replace(/^https?:\/\/[^/]+\//, '').replace(/\.git$/, '')]
-        : [],
-    )
-    .join(', ');
+  // The sandbox is told apart by the repositories it clones: their name and
+  // the first one's logo on its card.
+  const sandboxRepository = environment
+    ? { label: repositoriesLabel(environment), slug: repositorySlug(environment) }
+    : undefined;
 
   return (
     <ExecutionEnvironments
@@ -77,7 +78,7 @@ export function ProjectWorkingDirectories({
       environmentId={environment?.id}
       projectId={projectId}
       sandboxDetails={cloud}
-      sandboxSummary={sandboxSummary || undefined}
+      sandboxRepository={sandboxRepository}
     />
   );
 }

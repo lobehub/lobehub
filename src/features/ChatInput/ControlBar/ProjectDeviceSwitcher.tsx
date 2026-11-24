@@ -7,6 +7,7 @@ import { ChevronDownIcon, SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
@@ -16,7 +17,11 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useDeviceList } from '@/store/device';
-import { type ProjectDirectory } from '@/store/projectWorkingDirectory';
+import {
+  type ProjectDirectory,
+  useProjectDirectoryStore,
+  useProjectEnvironments,
+} from '@/store/projectWorkingDirectory';
 
 import DeviceDetailPopover from './DeviceDetailPopover';
 import OptionRow from './OptionRow';
@@ -25,6 +30,7 @@ import {
   type ProjectDeviceTarget,
   projectDirectoryDeviceName,
 } from './projectDeviceTargets';
+import { repositoriesLabel, repositorySlug } from './sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 const styles = stylex.create({
@@ -103,6 +109,10 @@ const ProjectDeviceSwitcher = ({
   const directory = directories.find((d) => d.id === directoryId);
   const projectId = projectIdProp ?? directories[0]?.projectId;
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
+  useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId, !!projectId);
+  // Without a project this would read the scope-wide list, so it is ignored.
+  const [scopedEnvironment] = useProjectEnvironments(projectId);
+  const projectEnvironment = projectId ? scopedEnvironment : undefined;
   const { data: devices } = useDeviceList();
   const load = useDeviceLoad(devices?.find((d) => d.deviceId === directory?.deviceId));
   // The shared row, not the topic-pinned effective config: a fixed target is
@@ -131,14 +141,24 @@ const ProjectDeviceSwitcher = ({
     if (!target.active) onSelect?.(target);
   };
 
+  // Named after the repositories it clones, as on the project's settings.
+  const sandboxLabel = projectEnvironment ? repositoriesLabel(projectEnvironment) : undefined;
+  const sandboxSlug = projectEnvironment ? repositorySlug(projectEnvironment) : undefined;
   const sandboxRow = sandbox ? (
     <OptionRow
       active={sandbox.active}
+      desc={sandboxLabel ? t('heteroAgent.executionTarget.sandbox') : undefined}
       disabled={!sandbox.onSelect}
-      icon={<ExecutionTargetIcon target={'sandbox'} />}
       key="sandbox"
-      label={t('heteroAgent.executionTarget.sandbox')}
+      label={sandboxLabel || t('heteroAgent.executionTarget.sandbox')}
       tags={sandbox.active && activeTag ? [activeTag] : []}
+      icon={
+        sandboxSlug ? (
+          <RepositoryAvatar size={16} url={sandboxSlug} />
+        ) : (
+          <ExecutionTargetIcon target={'sandbox'} />
+        )
+      }
       onClick={() => {
         if (!sandbox.onSelect || sandbox.active) return;
         setOpen(false);

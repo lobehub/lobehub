@@ -24,6 +24,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -75,8 +76,11 @@ interface ExecutionEnvironmentsProps {
   projectId: string;
   /** What the cloud sandbox row unfolds into: the project environment's form. */
   sandboxDetails: ReactNode;
-  /** The cloud sandbox's repositories, named on its row. */
-  sandboxSummary?: string;
+  /**
+   * The repositories the cloud sandbox clones: `owner/name` (`+N` for more)
+   * as its card's name, and the first one's slug for its logo.
+   */
+  sandboxRepository?: { label?: string; slug?: string };
 }
 
 /**
@@ -92,7 +96,7 @@ export function ExecutionEnvironments({
   environmentId,
   projectId,
   sandboxDetails,
-  sandboxSummary,
+  sandboxRepository,
 }: ExecutionEnvironmentsProps) {
   const { t } = useTranslation('project');
   const { error, loaded, ordered, reorder, revalidate } =
@@ -269,9 +273,19 @@ export function ExecutionEnvironments({
             onClick={() => setSandboxOpen(!isSandboxOpen)}
           />
         ),
-        icon: <Icon icon={BoxIcon} size={20} />,
-        meta: metaText(sandboxSummary || t('settings.sandboxNoRepository')),
-        title: t('settings.cloudSandboxGroup'),
+        icon: sandboxRepository?.slug ? (
+          <RepositoryAvatar size={24} url={sandboxRepository.slug} />
+        ) : (
+          <Icon icon={BoxIcon} size={20} />
+        ),
+        // Named after its repositories once it has some, so two sandboxes
+        // would never read alike; "cloud sandbox" then says what it is.
+        meta: metaText(
+          sandboxRepository?.label
+            ? t('settings.cloudSandboxGroup')
+            : t('settings.sandboxNoRepository'),
+        ),
+        title: sandboxRepository?.label || t('settings.cloudSandboxGroup'),
       })}
       {isSandboxOpen && <div style={{ paddingBlockEnd: 4 }}>{sandboxDetails}</div>}
     </Flexbox>
