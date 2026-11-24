@@ -180,7 +180,7 @@ const Timeline = ({
         isLoading={!detail && !sync.error}
         // Delayed so a fast fetch (switching Channels, opening a thread) paints no placeholder;
         // right after the route skeleton it hands over immediately.
-        loading={delayed(<ChannelConversationSkeleton />)}
+        loading={delayed(<ChannelConversationSkeleton maxWidth={maxWidth} />)}
         onRetry={() => void channelActions.refreshDetail(params)}
       >
         {detail && (
