@@ -216,4 +216,204 @@ describe('SkillContextProvider', () => {
     expect(systemMessage!.content).not.toContain('<content>');
     expect(systemMessage!.content).toMatchSnapshot();
   });
+
+  describe('session-created skills (prompt cache stability)', () => {
+    it('omits a skill created via lobe-skill-store in flat tool history from <available_skills>', async () => {
+      const skills: SkillMeta[] = [
+        {
+          description: 'Newly installed PPT skill',
+          identifier: 'market-pptx',
+          name: 'pptx',
+        },
+        { description: 'Existing skill', identifier: 'doc-writer', name: 'doc-writer' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        { content: 'Install pptx', id: 'u1', role: 'user' },
+        {
+          content: 'Skill "pptx" created successfully from market.',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+          role: 'tool',
+        },
+        { content: 'Make a deck', id: 'u2', role: 'user' },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).not.toContain('<skill name="pptx">');
+      expect(systemMessage!.content).toContain('<skill name="doc-writer">');
+      expect(result.metadata.skillContext).toEqual({ injected: true, skillsCount: 1 });
+    });
+
+    it('omits a skill created via lobe-skill-store in assistantGroup history', async () => {
+      const skills: SkillMeta[] = [
+        { description: 'Find skills', identifier: 'find-skills-id', name: 'find-skills' },
+        { description: 'Existing skill', identifier: 'doc-writer', name: 'doc-writer' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        { content: 'Install a skill', id: 'u1', role: 'user' },
+        {
+          children: [
+            {
+              content: '',
+              id: 'a1',
+              tools: [
+                {
+                  apiName: 'importSkill',
+                  id: 'tc1',
+                  identifier: 'lobe-skill-store',
+                  result: {
+                    content: 'Skill "find-skills" created successfully.',
+                    state: {
+                      name: 'Find-Skills',
+                      skillId: 'skl_2',
+                      status: 'created',
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+          content: '',
+          id: 'g1',
+          role: 'assistantGroup',
+        },
+        { content: 'Next turn', id: 'u2', role: 'user' },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).not.toContain('<skill name="find-skills">');
+      expect(systemMessage!.content).toContain('<skill name="doc-writer">');
+    });
+
+    it('skips injection entirely when the only enabled skill was created in this session', async () => {
+      const skills: SkillMeta[] = [
+        { description: 'Newly installed', identifier: 'find-skills-id', name: 'find-skills' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        { content: 'Install', id: 'u1', role: 'user' },
+        {
+          content: 'Skill "find-skills" created successfully from market.',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'find-skills', skillId: 'skl_1', status: 'created', success: true },
+          role: 'tool',
+        },
+        { content: 'Continue', id: 'u2', role: 'user' },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      expect(result.messages.find((msg) => msg.role === 'system')).toBeUndefined();
+      expect(result.metadata.skillContext).toBeUndefined();
+    });
+
+    it('keeps skills whose import status was updated, unchanged, or failed', async () => {
+      const skills: SkillMeta[] = [
+        { description: 'Updated skill', identifier: 's1', name: 'updated-skill' },
+        { description: 'Unchanged skill', identifier: 's2', name: 'unchanged-skill' },
+        { description: 'Failed skill', identifier: 's3', name: 'failed-skill' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        {
+          content: 'updated',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'updated-skill', status: 'updated', success: true },
+          role: 'tool',
+        },
+        {
+          content: 'unchanged',
+          id: 't2',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'unchanged-skill', status: 'unchanged', success: true },
+          role: 'tool',
+        },
+        {
+          content: 'failed',
+          id: 't3',
+          plugin: { apiName: 'importSkill', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'failed-skill', status: 'created', success: false },
+          role: 'tool',
+        },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).toContain('<skill name="updated-skill">');
+      expect(systemMessage!.content).toContain('<skill name="unchanged-skill">');
+      expect(systemMessage!.content).toContain('<skill name="failed-skill">');
+    });
+
+    it('keeps a session-created skill listed once its import turn is compressed into compressedGroup', async () => {
+      const skills: SkillMeta[] = [
+        { description: 'PPT skill', identifier: 'pptx-id', name: 'pptx' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        {
+          compressedMessages: [
+            {
+              content: 'Skill "pptx" created successfully from market.',
+              id: 't1',
+              plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+              pluginState: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+              role: 'tool',
+            },
+          ],
+          content: 'Earlier summary',
+          id: 'cg1',
+          role: 'compressedGroup',
+        },
+        { content: 'Make another deck', id: 'u2', role: 'user' },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).toContain('<skill name="pptx">');
+    });
+
+    it('still injects explicitly activated skills with content even if created in this session', async () => {
+      const skills: SkillMeta[] = [
+        {
+          activated: true,
+          content: '<skill_body>Full pptx instructions</skill_body>',
+          description: 'PPT skill',
+          identifier: 'pptx-id',
+          name: 'pptx',
+        },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        {
+          content: 'Skill "pptx" created successfully from market.',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+          role: 'tool',
+        },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).toContain('<skill_body>Full pptx instructions</skill_body>');
+    });
+  });
 });

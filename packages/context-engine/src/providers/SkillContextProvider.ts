@@ -1,8 +1,9 @@
 import { type SkillItem, type SkillSource, skillsPrompts } from '@lobechat/prompts';
+import { isPlainRecord, pickTrimmedString } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
-import type { PipelineContext, ProcessorOptions } from '../types';
+import type { Message, PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -14,6 +15,80 @@ declare module '../types' {
 }
 
 const log = debug('context-engine:provider:SkillContextProvider');
+
+/**
+ * Wire-format identifier and import APIs of `lobe-skill-store`. Literal copies —
+ * frozen, persisted in message rows, and not importable here without adding a
+ * tool-package dependency to `context-engine`.
+ */
+const SKILL_STORE_IDENTIFIER = 'lobe-skill-store';
+const SKILL_STORE_IMPORT_APIS = new Set(['importFromMarket', 'importSkill']);
+
+const extractCreatedSkillName = (state: unknown): string | undefined => {
+  if (!isPlainRecord(state)) return undefined;
+  if (state.success !== true || state.status !== 'created') return undefined;
+
+  return pickTrimmedString(state.name)?.toLowerCase();
+};
+
+/**
+ * Collect lower-cased names of skills created by `lobe-skill-store` in the
+ * visible (non-truncated, non-compressed) conversation history.
+ *
+ * When the model installs a new skill mid-conversation, the import confirmation
+ * (and usually an `activateSkill` result right after) is already in visible
+ * history. Injecting that newly created skill into `<available_skills>` inside
+ * the leading system message on the next turn mutates message `[0]` and
+ * invalidates 100% of the provider prompt cache without adding information the
+ * model does not already have.
+ *
+ * Deliberately skips `compressedGroup.compressedMessages`: once the import turn
+ * is compressed into a summary or truncated out of history, the skill returns
+ * to `<available_skills>` so the model never loses visibility of it. Also
+ * ignores `status: 'updated' | 'unchanged'` because those skills were already
+ * in the initial `<available_skills>` block and removing them would itself
+ * break the cached prefix.
+ */
+export const collectSessionCreatedSkillNames = (messages: readonly Message[]): Set<string> => {
+  const names = new Set<string>();
+
+  for (const msg of messages) {
+    if (
+      msg.role === 'tool' &&
+      isPlainRecord(msg.plugin) &&
+      msg.plugin.identifier === SKILL_STORE_IDENTIFIER &&
+      typeof msg.plugin.apiName === 'string' &&
+      SKILL_STORE_IMPORT_APIS.has(msg.plugin.apiName)
+    ) {
+      const name = extractCreatedSkillName(msg.pluginState);
+      if (name) names.add(name);
+      continue;
+    }
+
+    if (!Array.isArray(msg.children)) continue;
+
+    for (const child of msg.children) {
+      if (!isPlainRecord(child) || !Array.isArray(child.tools)) continue;
+
+      for (const tool of child.tools) {
+        if (
+          !isPlainRecord(tool) ||
+          tool.identifier !== SKILL_STORE_IDENTIFIER ||
+          typeof tool.apiName !== 'string' ||
+          !SKILL_STORE_IMPORT_APIS.has(tool.apiName)
+        ) {
+          continue;
+        }
+
+        const result = isPlainRecord(tool.result) ? tool.result : undefined;
+        const name = extractCreatedSkillName(result?.state);
+        if (name) names.add(name);
+      }
+    }
+  }
+
+  return names;
+};
 
 /**
  * Lightweight skill metadata for context injection
@@ -81,7 +156,18 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     super(options);
   }
 
-  protected buildSystemRoleContent(_context: PipelineContext): string | null {
+  private resolvePromptSkills(context: PipelineContext) {
+    const enabledSkills = this.config.enabledSkills ?? [];
+    const activatedSkills = selectActivatedSkills(enabledSkills);
+    const sessionCreatedSkillNames = collectSessionCreatedSkillNames(context.messages);
+    const availableSkills = enabledSkills.filter(
+      (s) => !s.activated && !sessionCreatedSkillNames.has(s.name.trim().toLowerCase()),
+    );
+
+    return { activatedSkills, availableSkills };
+  }
+
+  protected buildSystemRoleContent(context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
     const { enabledSkills } = this.config;
@@ -91,9 +177,10 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
       return null;
     }
 
-    // Separate activated skills (inject content directly) from available skills (list only)
-    const activatedSkills = selectActivatedSkills(enabledSkills);
-    const availableSkills = enabledSkills.filter((s) => !s.activated);
+    // Separate activated skills (inject content directly) from available skills (list only),
+    // keeping skills created inside this conversation out of <available_skills> so the
+    // leading system message stays byte-stable for prompt caching.
+    const { activatedSkills, availableSkills } = this.resolvePromptSkills(context);
 
     const contentParts: string[] = [];
 
@@ -135,9 +222,10 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
   }
 
   protected onInjected(context: PipelineContext): void {
+    const { activatedSkills, availableSkills } = this.resolvePromptSkills(context);
     context.metadata.skillContext = {
       injected: true,
-      skillsCount: this.config.enabledSkills?.length ?? 0,
+      skillsCount: activatedSkills.length + availableSkills.length,
     };
   }
 }
