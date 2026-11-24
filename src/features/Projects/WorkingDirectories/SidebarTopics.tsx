@@ -41,7 +41,7 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { pickExecutionEnvironment } from './executionEnvironments';
+import { pickExecutionEnvironment } from './executionEnvironmentModel';
 import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import {

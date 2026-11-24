@@ -9,7 +9,7 @@ import { useProjectDirectories, useProjectDirectoryStore } from '@/store/project
 import {
   orderExecutionEnvironments,
   type ProjectExecutionEnvironment,
-} from './executionEnvironments';
+} from './executionEnvironmentModel';
 
 const executionOrderKey = (projectId?: string) =>
   projectId ? ['project-execution-order', projectId] : null;
