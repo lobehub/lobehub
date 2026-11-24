@@ -178,6 +178,51 @@ export const ChannelManifest: BuiltinToolManifest = {
       },
     },
     {
+      name: ChannelApiName.addReaction,
+      description:
+        'React to a message in the current conversation with an emoji, as yourself, the way a person would: it posts nothing, notifies nobody and does not replace your answer. Any emoji; you can leave several different ones on one message.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.removeReaction,
+      description: 'Remove a reaction you left on a message in the current conversation.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
+          },
+        },
+      },
+    },
+    {
       name: ChannelApiName.sendMessage,
       description:
         "Ask or tell another Agent something. Address one Agent by agentIds: it is asked in the conversation between you two, never in the person's conversation or a group; its answer wakes you there, and what you then write is posted back where you asked. To address several Agents together, also give channelId, a group they are all in: the message appears as your requester's, marked as relayed by you, they answer in that group, and the reply is brought back to you here as a new request. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",

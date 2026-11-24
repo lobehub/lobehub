@@ -14,6 +14,8 @@ import type {
   ChannelListThreadsParams,
   ChannelMessagePersonParams,
   ChannelPeoplePage,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelRequestConnectorParams,
@@ -33,6 +35,8 @@ import type {
 export interface ChannelHistoryService {
   /** Holds the run's questions for its reply; see `ChannelHistoryRepository.ask`. */
   askUser?: (params: ChannelAskUserParams) => Promise<ChannelAskedUser>;
+  /** Adds or removes the run's Agent's own reaction; the runtime binds the run. */
+  react?: (params: ChannelReactParams, add: boolean) => Promise<ChannelReacted>;
   readMessage: (params: ChannelReadMessageParams) => Promise<ChannelHistoryMessageDetail>;
   readMessages: (params: ChannelReadMessagesParams) => Promise<ChannelHistoryPage>;
   /** Posts a card in the run's conversation; the runtime binds the run and tool call. */
@@ -154,6 +158,25 @@ export class ChannelExecutionRuntime {
       };
     }
   };
+  private async react(params: ChannelReactParams, add: boolean) {
+    try {
+      if (!this.service.react) throw new Error('Reactions are not available in this run');
+      const state = await this.service.react(params, add);
+      return {
+        content: state.added
+          ? `Reacted with ${state.emoji}.`
+          : `Your ${state.emoji} reaction is not on that message.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not react to that message';
+      return { content: message, error: { type: 'ChannelReactionError', message }, success: false };
+    }
+  }
+
+  addReaction = (params: ChannelReactParams) => this.react(params, true);
+  removeReaction = (params: ChannelReactParams) => this.react(params, false);
   readMessages = (params: ChannelReadMessagesParams) =>
     this.result(() => this.service.readMessages(params));
   readMessage = (params: ChannelReadMessageParams) =>

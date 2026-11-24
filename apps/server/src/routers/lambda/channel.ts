@@ -446,6 +446,18 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  /** Adds the caller's reaction, or removes it when they already left that emoji. */
+  toggleReaction: externalChannelProcedure
+    .input(z.object({ channelId, emoji: z.string().min(1).max(32), messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.toggleReaction(input.channelId, input.messageId, input.emoji),
+      success: true,
+    })),
+  /** The caller's most used reactions lately, most used first; the client pads its defaults. */
+  frequentReactions: externalChannelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.frequentReactions(),
+    success: true,
+  })),
   deleteMessage: channelProcedure
     .input(z.object({ channelId, messageId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
