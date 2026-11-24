@@ -13,6 +13,7 @@ import type {
   AITTSModelCard,
   AIVideoModelCard,
 } from '../../types/aiModel';
+
 import { gptImage26Schema } from './gptImage26Parameters';
 
 /** OpenAI cards for endpoints other than chat and decisions; `allModels` lives in `./index`. */
