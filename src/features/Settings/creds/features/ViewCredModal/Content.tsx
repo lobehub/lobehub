@@ -82,14 +82,16 @@ const MASK = '••••••••••••';
 interface FieldRowProps {
   children: ReactNode;
   extra?: ReactNode;
+  /** Let a long label (`Credential Values`) take the width it needs, like a value name. */
+  fitLabel?: boolean;
   label: ReactNode;
   mono?: boolean;
 }
 
-const FieldRow: FC<FieldRowProps> = ({ children, extra, label, mono }) => (
+const FieldRow: FC<FieldRowProps> = ({ children, extra, fitLabel, label, mono }) => (
   <div {...stylex.props(styles.row)}>
     <div
-      {...stylex.props(styles.label, mono && styles.code, mono && styles.labelFit)}
+      {...stylex.props(styles.label, mono && styles.code, (mono || fitLabel) && styles.labelFit)}
       title={mono && typeof label === 'string' ? label : undefined}
     >
       {label}
@@ -251,11 +253,14 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
           <FieldRow label={t('creds.form.description')}>{cred.description}</FieldRow>
         )}
         {isKV && !showValues && valuesHint && (
-          <FieldRow label={t('creds.view.values')}>{valuesHint}</FieldRow>
+          <FieldRow fitLabel label={t('creds.view.values')}>
+            {valuesHint}
+          </FieldRow>
         )}
         {showValues &&
           (!revealed ? (
             <FieldRow
+              fitLabel
               label={t('creds.view.values')}
               extra={
                 <Button
