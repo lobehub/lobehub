@@ -28,7 +28,20 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     ? `/project/${projectId}/dashboard/${dashboardId}`
     : `/project/${projectId}/dashboard`;
 
-export type ProjectSettingsSection = 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
+export type ProjectSettingsSection =
+  'advanced' | 'environments' | 'general' | 'knowledge' | 'members';
+
+/**
+ * Settings tabs that were folded into another tab. An old link keeps opening
+ * where that content now lives instead of falling back to General.
+ */
+const LEGACY_PROJECT_SETTINGS_SECTIONS: Record<string, ProjectSettingsSection> = {
+  directories: 'environments',
+  sites: 'advanced',
+};
+
+export const resolveProjectSettingsSection = (section: string) =>
+  LEGACY_PROJECT_SETTINGS_SECTIONS[section] ?? section;
 
 export const getProjectSettingsPath = (projectId: string, section: ProjectSettingsSection) =>
   `/project/${projectId}/settings/${section}`;
