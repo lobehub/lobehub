@@ -194,8 +194,14 @@ export const prepareHeteroRun = async (
   const githubTokenPromise = traceHeteroStage('github_token', resolveGithubToken);
   const recentMessagesPromise = traceHeteroStage('history', loadRecentMessages);
   const [resumeSessionId, operationJwt, topic] = await settleInOrder([
+    // A sub-agent resumes its own session, never the topic's: the topic's
+    // belongs to the conversation's agent or to another sub-agent. The thread
+    // decides, not `isolationThread`: that flag is only set when the sub-agent
+    // is spawned, and a later message in its thread has to resume it too.
     traceHeteroStage('resume_session', () =>
-      heteroService.getHeterogeneousResumeSessionId(topicId),
+      appContext?.threadId
+        ? heteroService.getThreadResumeSessionId(appContext.threadId, topicId)
+        : heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
     traceHeteroStage('sign_operation_jwt', signOperationJwt),
     // Read repos from topic metadata for sandbox setup (web/cloud only).
