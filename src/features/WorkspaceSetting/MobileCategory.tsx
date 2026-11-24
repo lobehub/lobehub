@@ -51,8 +51,14 @@ const MobileWorkspaceSettingCategory = memo(() => {
               icon={item.key === WorkspaceSettingsTabs.Profile ? UserCircle : item.icon}
               key={item.key}
               label={item.label}
-              // Same URL builder as the desktop sidebar and settings search.
-              onClick={() => navigate(getWorkspaceSettingsTabUrl(slug, item.key))}
+              // Same URL builder as the desktop sidebar and settings search; a
+              // personal-only account tab opens its personal page instead.
+              onClick={() =>
+                navigate(
+                  item.href ?? getWorkspaceSettingsTabUrl(slug, item.key as WorkspaceSettingsTabs),
+                  { escape: true },
+                )
+              }
             />
           ))}
         </Fragment>

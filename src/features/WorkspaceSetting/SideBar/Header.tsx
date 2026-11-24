@@ -1,38 +1,26 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { HomeIcon } from 'lucide-react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { useSettingsScopeTitle } from '@/features/SettingsSwitch/useSettingsScopeTitle';
+
+import { useWorkspaceSettingsScope } from '../hooks/useWorkspaceSettingsScope';
 
 const Header = memo(() => {
-  const { t } = useTranslation('setting');
-  const activeWorkspace = useActiveWorkspace();
-  const slug = activeWorkspace?.slug;
-  const name = activeWorkspace?.name ?? slug;
+  const { groups, scope, slug, space, tabUrl } = useWorkspaceSettingsScope();
+  // "Account Settings" or "<Workspace> Settings", following the visible set.
+  const title = useSettingsScopeTitle(scope, space);
+  const firstTab = groups.find((group) => group.scope === scope)?.items[0]?.key;
 
   if (!slug) return null;
 
   return (
     <SideBarHeaderLayout
-      breadcrumb={[
-        {
-          href: `/${slug}/settings`,
-          title: t('workspaceSetting.breadcrumb.settings'),
-        },
-      ]}
-      homeItem={{
-        href: `/${slug}`,
-        title: (
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Icon icon={HomeIcon} size={14} />
-            <span>{name}</span>
-          </Flexbox>
-        ),
-      }}
+      breadcrumb={[{ href: firstTab ? tabUrl(firstTab) : `/${slug}/settings`, title }]}
+      homeItem={{ href: `/${slug}`, title: <Icon icon={HomeIcon} /> }}
     />
   );
 });

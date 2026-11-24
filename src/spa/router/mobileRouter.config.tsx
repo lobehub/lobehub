@@ -39,6 +39,8 @@ import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
+import { legacyWorkspaceBillingRoute } from './legacySettingsRoutes';
+
 // One element per shape, shared by every tab: switching tabs keeps the page
 // mounted instead of swapping in a new lazy component.
 const settingsTabElement = dynamicElement(
@@ -492,16 +494,8 @@ export const mobileRoutes: RouteObject[] = [
             errorElement: <ErrorBoundary />,
             path: 'settings',
           },
-          // Legacy `/:slug/billing/*` URLs — redirect to `/:slug/settings/*`.
-          {
-            children: [
-              { element: redirectElement('../settings/plans'), path: 'plans' },
-              { element: redirectElement('../settings/usage'), path: 'usage' },
-              { element: redirectElement('../settings/credits'), path: 'credits' },
-              { element: redirectElement('../settings/billing'), path: 'billing' },
-            ],
-            path: 'billing',
-          },
+          // Legacy `/:slug/billing/*` URLs open the matching `/:slug/settings/*` page.
+          legacyWorkspaceBillingRoute,
         ],
         element: dynamicLayout(
           () => import('@/routes/(main)/[workspaceSlug]/_layout'),

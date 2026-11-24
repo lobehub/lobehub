@@ -51,16 +51,25 @@ export class AntigravityAcpAdapter extends TraeAcpAdapter {
       this.stream.pendingStepBoundary = true;
       return [this.stream.event('step_complete', { phase: 'user_message', uuid: value.uuid })];
     }
-    const events = super.adapt(value);
-    if (value.type !== `${IDENTIFIER}_error`) return events;
+    if (value.type !== `${IDENTIFIER}_error`) return super.adapt(value);
     // Sign-in and quota failures carry the status guide the UI renders for them.
     const classified = classifyCliMessageError({
       agentType: IDENTIFIER,
       detail: typeof value.message === 'string' ? value.message : undefined,
     });
-    return classified
-      ? events.map((event) => (event.type === 'error' ? { ...event, data: classified } : event))
-      : events;
+    if (!classified) return super.adapt(value);
+    // A quota rejection can be the first output after a steer. Open its step
+    // before the terminal event so the card stays with the new user message.
+    const start =
+      classified.code === 'rate_limit' && this.stream.pendingStepBoundary
+        ? this.stream.ensureStream(true)
+        : [];
+    return [
+      ...start,
+      ...super
+        .adapt(value)
+        .map((event) => (event.type === 'error' ? { ...event, data: classified } : event)),
+    ];
   }
 
   protected override toUsageData(usage: unknown): UsageData | undefined {

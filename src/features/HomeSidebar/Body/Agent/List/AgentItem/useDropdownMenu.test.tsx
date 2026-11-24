@@ -36,7 +36,6 @@ const mocks = vi.hoisted(() => ({
   openAgentInNewWindow: vi.fn(),
   openRenameModal: vi.fn(),
   setSidebarItemVisible: vi.fn(),
-  transferMenuItems: null as null | { key: string; label: string }[],
 }));
 
 vi.mock('antd', async (importOriginal) => {
@@ -61,10 +60,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
-}));
-
-vi.mock('@/business/client/hooks/useAgentTransferMenuItem', () => ({
-  useAgentTransferMenuItem: () => mocks.transferMenuItems,
 }));
 
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
@@ -222,7 +217,6 @@ describe('useAgentDropdownMenu', () => {
     mocks.canManageSettings = false;
     mocks.myPinnedIds = [];
     mocks.recommendedIds = [];
-    mocks.transferMenuItems = null;
   });
 
   describe('workspace pins', () => {
@@ -473,7 +467,6 @@ describe('useAgentDropdownMenu', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
     mocks.canManageResource = true;
-    mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
     const { result } = renderPublicAgentMenu('member-1');
 
@@ -486,7 +479,6 @@ describe('useAgentDropdownMenu', () => {
       'rename',
       'duplicate',
       'moveGroup',
-      'copy-agent',
       'divider',
       'permission',
       'divider',
@@ -494,11 +486,10 @@ describe('useAgentDropdownMenu', () => {
     ]);
   });
 
-  it('keeps Lobe AI (the inbox) organizable but never deletable, copyable or transferable', () => {
+  it('keeps Lobe AI (the inbox) organizable but never deletable or duplicable', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
     mocks.canManageResource = true;
-    mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
@@ -517,7 +508,6 @@ describe('useAgentDropdownMenu', () => {
     expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar', 'rename', 'moveGroup']));
     expect(keys).not.toContain('delete');
     expect(keys).not.toContain('duplicate');
-    expect(keys).not.toContain('copy-agent');
     expect(keys).not.toContain('permission');
     expect(keys).not.toContain('visibility');
   });

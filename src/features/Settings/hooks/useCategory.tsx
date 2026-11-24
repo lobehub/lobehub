@@ -34,6 +34,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -50,6 +51,7 @@ export enum SettingsGroupKey {
   Account = 'account',
   Agent = 'agent',
   Connection = 'connection',
+  Data = 'data',
   Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
@@ -66,6 +68,8 @@ export interface CategoryItem {
 export interface CategoryGroup {
   items: CategoryItem[];
   key: SettingsGroupKey;
+  /** Account settings follow the user; space settings belong to the personal space. */
+  scope: SettingsScope;
   title: string;
 }
 
@@ -99,7 +103,8 @@ export const useCategory = () => {
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
-    // Account group — who the user is and how the app behaves for them.
+    // ── Account settings: who the user is and how the app behaves for them,
+    // the same in every space.
     const accountItems: CategoryItem[] = [
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
@@ -127,22 +132,68 @@ export const useCategory = () => {
         label: t('tab.notification'),
       },
       {
-        icon: ChartColumnBigIcon,
-        key: SettingsTabs.Stats,
-        label: tAuth('tab.stats'),
+        icon: BrainCircuit,
+        key: SettingsTabs.Memory,
+        label: t('tab.memory'),
+      },
+      enableBusinessFeatures && {
+        icon: Gift,
+        key: SettingsTabs.Referral,
+        label: tSubscription('tab.referral'),
       },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
       items: accountItems,
       key: SettingsGroupKey.Account,
+      scope: 'account',
       title: t('group.profile'),
     });
 
-    // Personal subscription / billing items sit right under the account they
-    // belong to. Always shown when business features are enabled — workspace
-    // settings live under a separate `/:workspaceSlug/settings/*` surface and
-    // never share this sidebar.
+    // Machine and app preferences — low-frequency, so the sidebar starts it
+    // collapsed.
+    const systemItems: CategoryItem[] = [
+      isDesktop && {
+        icon: EthernetPort,
+        key: SettingsTabs.Proxy,
+        label: t('tab.proxy'),
+      },
+      isDesktop && {
+        icon: TerminalSquare,
+        key: SettingsTabs.SystemTools,
+        label: t('tab.systemTools'),
+      },
+      showAdvanced && {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
+      },
+      enableOAuthApps && {
+        icon: AppWindowIcon,
+        key: SettingsTabs.OAuthApps,
+        label: tAuth('tab.oauthApps'),
+      },
+      {
+        icon: FlaskConical,
+        key: SettingsTabs.Labs,
+        label: tLabs('title'),
+      },
+      !hideDocs && {
+        icon: Info,
+        key: SettingsTabs.About,
+        label: t('tab.about'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: systemItems,
+      key: SettingsGroupKey.System,
+      scope: 'account',
+      title: t('group.systemDeveloper'),
+    });
+
+    // ── Personal space settings: what the personal space owns and spends.
+    // Workspaces keep their own copy under `/:workspaceSlug/settings/*`.
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
@@ -153,12 +204,12 @@ export const useCategory = () => {
           label: tSubscription('tab.usage'),
         },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
-        { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
       ];
 
       groups.push({
         items: subscriptionItems,
         key: SettingsGroupKey.Subscription,
+        scope: 'space',
         title: t('group.subscription'),
       });
     }
@@ -183,11 +234,6 @@ export const useCategory = () => {
         label: t('tab.tools'),
       },
       {
-        icon: BrainCircuit,
-        key: SettingsTabs.Memory,
-        label: t('tab.memory'),
-      },
-      {
         icon: TagIcon,
         key: SettingsTabs.Labels,
         label: t('tab.labels'),
@@ -197,11 +243,11 @@ export const useCategory = () => {
     groups.push({
       items: agentItems,
       key: SettingsGroupKey.Agent,
+      scope: 'space',
       title: t('group.aiConfig'),
     });
 
-    // Connection group — the outside services agents can reach, whoever owns
-    // the binding. Every entry here is already the user's own.
+    // Connection group — the outside services the space's agents can reach.
     const connectionItems: CategoryItem[] = [
       // What connectors fire on their own: the event subscriptions agents made
       // through them. Connectors themselves are managed in the Marketplace.
@@ -223,6 +269,7 @@ export const useCategory = () => {
       groups.push({
         items: connectionItems,
         key: SettingsGroupKey.Connection,
+        scope: 'space',
         title: t('group.connection'),
       });
 
@@ -248,27 +295,23 @@ export const useCategory = () => {
         key: SettingsTabs.Environments,
         label: t('tab.environmentsAndCreds'),
       },
-      isDesktop && {
-        icon: EthernetPort,
-        key: SettingsTabs.Proxy,
-        label: t('tab.proxy'),
-      },
-      isDesktop && {
-        icon: TerminalSquare,
-        key: SettingsTabs.SystemTools,
-        label: t('tab.systemTools'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
       items: resourceItems,
       key: SettingsGroupKey.Resource,
+      scope: 'space',
       title: t('group.resource'),
     });
 
-    // System & developer group — low-frequency, so the sidebar starts it
-    // collapsed. API Key has a single home whichever flag turned it on.
-    const systemItems: CategoryItem[] = [
+    // Data & developer group — what the space stores and spent, and the keys
+    // that act on it. API Key has a single home whichever flag turned it on.
+    const dataItems: CategoryItem[] = [
+      {
+        icon: ChartColumnBigIcon,
+        key: SettingsTabs.Stats,
+        label: tAuth('tab.stats'),
+      },
       {
         icon: Database,
         key: SettingsTabs.Storage,
@@ -279,37 +322,18 @@ export const useCategory = () => {
         key: SettingsTabs.Trash,
         label: t('tab.trash'),
       },
-      showAdvanced && {
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('tab.advanced'),
-      },
       showApiKeyManage && {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
-      enableOAuthApps && {
-        icon: AppWindowIcon,
-        key: SettingsTabs.OAuthApps,
-        label: tAuth('tab.oauthApps'),
-      },
-      {
-        icon: FlaskConical,
-        key: SettingsTabs.Labs,
-        label: tLabs('title'),
-      },
-      !hideDocs && {
-        icon: Info,
-        key: SettingsTabs.About,
-        label: t('tab.about'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
-      items: systemItems,
-      key: SettingsGroupKey.System,
-      title: t('group.systemDeveloper'),
+      items: dataItems,
+      key: SettingsGroupKey.Data,
+      scope: 'space',
+      title: t('group.data'),
     });
 
     return groups;
