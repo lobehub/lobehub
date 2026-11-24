@@ -562,6 +562,7 @@
   "settings.editDirectoryFailed": "Could not update the folder",
   "settings.editDirectoryOtherEnvironment": "This folder already belongs to another environment. Choose a different folder or device.",
   "settings.environments": "Execution environments",
+  "settings.executionOrderHint": "New conversations use the first available execution environment in this order. Drag to reorder.",
   "settings.general": "General",
   "settings.generalDescription": "Manage the project name, address, and description.",
   "settings.identifier": "Project identifier",

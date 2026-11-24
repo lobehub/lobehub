@@ -199,6 +199,10 @@ export function ExecutionEnvironments({
    * One execution environment as a card: an icon tile, its name with any
    * state tag, a quiet line saying where it works, and its actions.
    */
+  // The drag handle sits at the right end of each card's header row, after its
+  // actions — the same place on every card, an unfolded sandbox included.
+  const handle = canManage ? <SortableList.DragHandle /> : null;
+
   const card = ({
     actions,
     icon,
@@ -239,9 +243,10 @@ export function ExecutionEnvironments({
           </Flexbox>
         )}
       </Flexbox>
-      {actions && (
+      {(actions || handle) && (
         <Flexbox horizontal align="center" gap={4} style={{ flex: 'none' }}>
           {actions}
+          {handle}
         </Flexbox>
       )}
     </Flexbox>
@@ -335,32 +340,30 @@ export function ExecutionEnvironments({
 
   return (
     <Flexbox gap={12}>
-      {canManage && (
-        <Flexbox horizontal justify="flex-end">
+      <Flexbox horizontal align="center" gap={16} justify="space-between">
+        <Text fontSize={13} type="secondary">
+          {t('settings.executionOrderHint')}
+        </Text>
+        {canManage && (
           <Button
             icon={<Icon icon={PlusIcon} />}
-            size="small"
+            style={{ flex: 'none' }}
+            type="primary"
             onClick={() => openAddDirectoryModal(projectId, environmentId)}
           >
             {t('settings.addExecutionEnvironment')}
           </Button>
-        </Flexbox>
-      )}
+        )}
+      </Flexbox>
       {canManage ? (
         <SortableList
           items={items}
           renderItem={(item: ProjectExecutionEnvironment) => (
             <SortableList.Item
               id={item.id}
+              style={{ borderRadius: 16, padding: 16 }}
               variant="filled"
-              style={{
-                // An unfolded sandbox grows downwards; its handle stays by its header.
-                alignItems: item.kind === 'sandbox' && isSandboxOpen ? 'flex-start' : 'center',
-                borderRadius: 16,
-                padding: 16,
-              }}
             >
-              <SortableList.DragHandle />
               {render(item)}
             </SortableList.Item>
           )}

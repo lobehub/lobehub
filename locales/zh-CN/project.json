@@ -562,6 +562,7 @@
   "settings.editDirectoryFailed": "无法修改文件夹",
   "settings.editDirectoryOtherEnvironment": "这个文件夹已属于其他环境，请选择别的文件夹或设备。",
   "settings.environments": "执行环境",
+  "settings.executionOrderHint": "新对话会按列表顺序，自动使用第一个可用的执行环境，拖动可调整顺序。",
   "settings.general": "基础设置",
   "settings.generalDescription": "管理项目名称、链接和说明。",
   "settings.identifier": "项目标识",
