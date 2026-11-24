@@ -63,7 +63,7 @@ export default {
   'navigation.projects': 'Projects',
   'navigation.provider': 'Provider',
   'navigation.recentView': 'Recent pages',
-  'navigation.resources': 'Docs',
+  'navigation.resources': 'Library',
   'navigation.resourceAll': 'All',
   'navigation.resourceAudios': 'Audio',
   'navigation.resourceDocuments': 'Documents',

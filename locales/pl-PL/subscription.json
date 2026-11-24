@@ -657,7 +657,6 @@
   "plansModal.creditLimit.title": "Osiągnięto limit zużycia",
   "plansModal.default.desc": "Odblokuj większą pojemność i zaawansowane funkcje.",
   "plansModal.default.title": "Zmień swój plan",
-  "plansModal.fileStorageLimit.desc": "Twoje miejsce na pliki jest pełne. Zmień plan, aby nadal przesyłać i zarządzać plikami.",
   "plansModal.fileStorageLimit.title": "Osiągnięto limit miejsca",
   "plansModal.messengerWechat.desc": "Systemowy bot WeChat jest dostępny w płatnych planach osobistych. Ulepsz plan, aby się połączyć i z niego korzystać.",
   "plansModal.messengerWechat.title": "Połącz WeChat po ulepszeniu planu",

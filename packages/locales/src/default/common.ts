@@ -165,7 +165,7 @@ export default {
 
   'cmdk.newAgentTeam': 'Create New Group',
 
-  'cmdk.newLibrary': 'Create New Library',
+  'cmdk.newLibrary': 'Create New Knowledge Base',
 
   'cmdk.newPage': 'Create New Page',
   'cmdk.newTask': 'Create New Task',
@@ -180,7 +180,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Docs',
+  'cmdk.resource': 'Library',
 
   'cmdk.search.agent': 'Agent',
 
@@ -208,9 +208,9 @@ export default {
 
   'cmdk.search.goals': 'Goals',
 
-  'cmdk.search.knowledgeBase': 'Library',
+  'cmdk.search.knowledgeBase': 'Knowledge Base',
 
-  'cmdk.search.knowledgeBases': 'Libraries',
+  'cmdk.search.knowledgeBases': 'Knowledge Bases',
 
   'cmdk.search.loading': 'Searching...',
 
@@ -459,7 +459,7 @@ export default {
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
   'navPanel.hideSection': 'Hide Section',
-  'navPanel.library': 'Library',
+  'navPanel.library': 'Knowledge Base',
   'navPanel.moveDown': 'Move Down',
   'navPanel.pinned': 'Pinned',
   'navPanel.privateAgents': 'Private',
@@ -503,7 +503,7 @@ export default {
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
   'visibilityConfirm.makePrivate.itemLibrary':
-    'It stays in the library you filed it in — other members just stop seeing it there',
+    'It stays in the knowledge base you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
@@ -628,13 +628,13 @@ export default {
   'tab.generation': 'Generation',
   'tab.goals': 'Goals',
   'tab.home': 'Home',
-  'tab.knowledgeBase': 'Library',
+  'tab.knowledgeBase': 'Knowledge Base',
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',
   'tab.pages': 'Pages',
-  'tab.resource': 'Docs',
+  'tab.resource': 'Library',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',
