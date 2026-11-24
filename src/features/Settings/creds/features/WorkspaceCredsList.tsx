@@ -1,19 +1,20 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
+import { Avatar, Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
 import { EyeOffIcon, GlobeIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import PrivateLockIcon from '@/components/PrivateLockIcon';
 import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { matchesVisibilityFilter, type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { confirmCredModal } from './confirmCredModal';
 import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
@@ -52,6 +53,8 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
   const { session } = useMarketAuth();
   const { allowed: isAdmin } = usePermission('manage_provider_key');
   const myAccountId = session?.userInfo?.accountId;
+  const myAvatar = useUserStore(userProfileSelectors.userAvatar);
+  const myName = useUserStore(userProfileSelectors.displayUserName);
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery();
   const credentials = data?.data ?? [];
@@ -108,6 +111,30 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
 
   const handleDelete = (id: number) => run(() => credsApi.client.delete.mutate({ id }));
 
+  /**
+   * Who a row belongs to: a shared personal credential names its owner; a
+   * workspace credential is attributed only when the viewer created it —
+   * Market returns no profile for other creators.
+   */
+  const authorOf = (cred: UserCredSummary): { avatar?: string; name: string } | undefined => {
+    if (cred.ownerType === 'user') {
+      return isOwnCredRow(cred, myAccountId)
+        ? { avatar: myAvatar, name: myName }
+        : cred.ownerDisplayName
+          ? { name: cred.ownerDisplayName }
+          : undefined;
+    }
+    if (myAccountId !== undefined && cred.createdByAccountId === myAccountId) {
+      return { avatar: myAvatar, name: myName };
+    }
+    return undefined;
+  };
+
+  const visibilityLabel = (cred: UserCredSummary) =>
+    cred.visibility === 'private'
+      ? t('visibilityFilter.private', { ns: 'common' })
+      : t('visibilityFilter.workspace', { ns: 'common' });
+
   return (
     <AsyncBoundary
       data={data}
@@ -129,6 +156,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
         {visibleCredentials.map((cred) => {
           const access = workspaceCredRowAccess(cred, { isAdmin, myAccountId });
           const writeOnly = isWriteOnlyCredRow(cred);
+          const author = authorOf(cred);
           const actions: CredDetailAction[] = [
             ...(access.publish
               ? [
@@ -166,21 +194,21 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
             <CredItem
               cred={cred}
               key={cred.id}
-              titleSuffix={cred.visibility === 'private' && <PrivateLockIcon />}
-              tags={
-                cred.ownerType === 'user' ? (
-                  <Tag>
-                    {isOwnCredRow(cred, myAccountId)
-                      ? t('creds.owner.fromPersonal')
-                      : t('creds.owner.sharedBy', { name: cred.ownerDisplayName })}
-                  </Tag>
-                ) : (
-                  writeOnly && (
-                    <Tooltip title={t('creds.writeOnly.tooltip')}>
-                      <Tag>{t('creds.writeOnly.tag')}</Tag>
+              extra={
+                <>
+                  <Tag data-testid={`cred-visibility-${cred.id}`}>{visibilityLabel(cred)}</Tag>
+                  {author && (
+                    <Tooltip title={author.name}>
+                      <span data-testid={`cred-author-${cred.id}`} style={{ display: 'flex' }}>
+                        <Avatar
+                          avatar={author.avatar || author.name}
+                          size={24}
+                          title={author.name}
+                        />
+                      </span>
                     </Tooltip>
-                  )
-                )
+                  )}
+                </>
               }
               onClick={() =>
                 createViewCredModal({
@@ -188,6 +216,25 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
                   canReadValues: access.manage && !writeOnly,
                   cred,
                   credsApi,
+                  extraItems: [
+                    {
+                      children: visibilityLabel(cred),
+                      key: 'visibility',
+                      label: t('creds.detail.visibility'),
+                    },
+                    ...(author
+                      ? [
+                          {
+                            children:
+                              cred.ownerType === 'user' && isOwnCredRow(cred, myAccountId)
+                                ? t('creds.owner.fromPersonal')
+                                : author.name,
+                            key: 'author',
+                            label: t('creds.detail.author'),
+                          },
+                        ]
+                      : []),
+                  ],
                   onDelete: access.manage ? handleDelete : undefined,
                   onEdit: access.manage
                     ? () =>
@@ -198,6 +245,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
                           writeOnly,
                         })
                     : undefined,
+                  valuesHint: access.manage && writeOnly ? t('creds.writeOnly.tooltip') : undefined,
                 })
               }
             />

@@ -775,6 +775,8 @@ export default {
   'creds.createModal.titles.kv-header': 'New HTTP header',
   'creds.createModal.titles.oauth': 'New OAuth credential',
   'creds.detail.account': 'Account',
+  'creds.detail.author': 'Owner',
+  'creds.detail.visibility': 'Visible to',
   'creds.empty': 'No credentials configured yet',
   'creds.errors.createFailed': 'Failed to create the credential. Please try again.',
   'creds.errors.deleteFailed': 'Failed to delete the credential. Please try again.',
@@ -793,8 +795,6 @@ export default {
   'creds.form.addHeader': 'Add header',
   'creds.form.envVars': 'Environment variables',
   'creds.form.headers': 'Headers',
-  'creds.form.keyDesc':
-    'Agents find this credential by its identifier. Letters, numbers, hyphens and underscores only.',
   'creds.form.removePair': 'Remove',
   'creds.form.valuesDesc.kv-env':
     'Set as environment variables when an agent uses this credential.',
@@ -837,9 +837,6 @@ export default {
   'creds.form.descriptionPlaceholder': 'Optional description for this credential',
   'creds.form.file': 'Credential File',
   'creds.form.fileRequired': 'Please upload a file',
-  'creds.form.key': 'Identifier',
-  'creds.form.keyPattern': 'Identifier can only contain letters, numbers, underscores, and hyphens',
-  'creds.form.keyRequired': 'Identifier is required',
   'creds.form.name': 'Display Name',
   'creds.form.nameRequired': 'Display name is required',
   'creds.form.save': 'Save',
@@ -852,7 +849,6 @@ export default {
   'creds.form.valuePlaceholder': 'Enter value',
   'creds.oauth.noConnections': 'No OAuth connections available. Please connect an account first.',
   'creds.table.actions': 'Actions',
-  'creds.table.key': 'Identifier',
   'creds.table.lastUsed': 'Last Used',
   'creds.table.name': 'Name',
   'creds.table.neverUsed': 'Never',
@@ -868,6 +864,7 @@ export default {
   'creds.view.noValues': 'No Values',
   'creds.view.oauthNote': 'OAuth credentials are managed by the connected service.',
   'creds.view.show': 'Show',
+  'creds.view.showValues': 'Show values',
   'creds.view.title': 'View Credential: {{name}}',
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
@@ -4807,7 +4804,6 @@ When I am ___, I need ___
   'tab.environmentsAndCreds': 'Environments & Vault',
   'environmentsAndCreds.tabs.environments': 'Environments',
   'environmentsAndCreds.tabs.vault': 'Vault',
-  'creds.writeOnly.tag': 'Write-only',
   'creds.writeOnly.tooltip':
     'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',
   'creds.writeOnly.editHint':

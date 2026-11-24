@@ -34,7 +34,6 @@ interface KVCredFormProps {
 
 interface FormValues {
   description?: string;
-  key: string;
   kvPairs: Array<{ key: string; value: string }>;
   name: string;
 }
@@ -52,7 +51,6 @@ const KVCredForm: FC<KVCredFormProps> = ({
     initialValues: (preset
       ? {
           description: preset.description,
-          key: preset.key,
           kvPairs: preset.keys.map((key) => ({ key, value: '' })),
           name: preset.name,
         }
@@ -83,7 +81,9 @@ const KVCredForm: FC<KVCredFormProps> = ({
 
       await credsApi.client.createKV.mutate({
         description: values.description,
-        key: values.key,
+        // A preset keeps its fixed key, which skills look the credential up by;
+        // otherwise the server derives one from the name.
+        key: preset?.key,
         name: values.name,
         type,
         values: valuesObj,
@@ -113,18 +113,6 @@ const KVCredForm: FC<KVCredFormProps> = ({
           disabled={disabled}
           placeholder={type === 'kv-env' ? 'OpenAI API Key' : 'Internal API Token'}
         />
-      </Form.Field>
-
-      <Form.Field
-        desc={t('creds.form.keyDesc')}
-        label={t('creds.form.key')}
-        name="key"
-        required={t('creds.form.keyRequired')}
-        validate={(value?: string) =>
-          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
-        }
-      >
-        <Input disabled={disabled} placeholder={type === 'kv-env' ? 'openai' : 'internal-api'} />
       </Form.Field>
 
       <KVPairsField disabled={disabled} type={type} />
