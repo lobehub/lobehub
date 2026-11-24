@@ -36,7 +36,7 @@
   "canvas.menu.versions": "版本歷史",
   "canvas.notFound": "此畫布不存在或您無權訪問。",
   "canvas.runtimeErrors": "此畫布報告了錯誤 ({{count}})",
-  "canvas.runtimeErrorsHint": "某些組件無法渲染。請要求代理修復畫布，或展開以查看詳細信息。",
+  "canvas.runtimeErrorsHint": "某些組件無法渲染。請要求助手修復畫布，或展開以查看詳細信息。",
   "canvas.share.confirmTitle": "在您分享此畫布之前",
   "canvas.share.failed": "無法分享。請再試一次。",
   "canvas.share.note": "較新的版本會保持私密，直到您分享它們。",
