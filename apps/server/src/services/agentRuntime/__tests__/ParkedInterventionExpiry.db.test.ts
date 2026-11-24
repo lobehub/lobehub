@@ -23,7 +23,12 @@ const runtime = vi.hoisted(() => ({
 }));
 
 vi.mock('../AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn(() => runtime),
+  // A class, so `new` works under every Vitest version (an arrow mock is not constructible).
+  AgentRuntimeService: class {
+    constructor() {
+      return runtime;
+    }
+  },
 }));
 
 const db = await getTestDB();
