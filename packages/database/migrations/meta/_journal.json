@@ -1603,6 +1603,13 @@
       "when": 1795457259109,
       "tag": "0228_channel_message_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "7",
+      "when": 1795517203544,
+      "tag": "0229_custom_emoji_and_reactions",
+      "breakpoints": true
     }
   ],
   "version": "6"
