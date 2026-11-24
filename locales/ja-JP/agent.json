@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "訪問者はこのエージェントを読むだけでなく、実行します。すべての返信はワークスペースで生成され、その共有予算に請求されます。作成者や他のメンバーのクォータは消費されません。エージェントは以下で付与された訪問者アクセスのみで動作します。",
   "share.settings.notice.workspaceTitle": "訪問者はワークスペース予算でこのエージェントを実行します",
   "share.settings.permissions.allowCreatorViewSessions": "訪問者の会話を閲覧可能にする",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "デフォルトではオフ: 訪問者の会話は訪問者にのみプライベートです。",
   "share.settings.permissions.allowReadMemory": "メモリの読み取りを許可",
   "share.settings.permissions.allowReadMemoryHint": "エージェントは訪問者への回答時にあなたの長期メモリを利用する可能性があります。",
   "share.settings.permissions.desc": "訪問者の実行が読み取れる内容と、訪問者が見られる内容。",

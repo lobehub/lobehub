@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "訪客不僅僅是閱讀此代理——他們還運行它。每次回覆都在工作區中生成，並計入其共享預算，而不會消耗創建者或其他成員的配額。代理僅以您在下方授予的訪客訪問權限行事。",
   "share.settings.notice.workspaceTitle": "訪客在工作區預算上運行此代理",
   "share.settings.permissions.allowCreatorViewSessions": "允許我查看訪客對話",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "預設為關閉：訪客對話僅對訪客可見。",
   "share.settings.permissions.allowReadMemory": "允許讀取我的記憶",
   "share.settings.permissions.allowReadMemoryHint": "代理在回答訪客時可能會使用您的長期記憶。",
   "share.settings.permissions.desc": "訪客執行時可以讀取的內容，以及訪客可以看到的回應。",

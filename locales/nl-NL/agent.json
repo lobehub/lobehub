@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Bezoekers lezen deze Ajan niet alleen — ze gebruiken hem. Elk antwoord wordt gegenereerd in de Werkruimte en in rekening gebracht op het gedeelde budget, zonder het quotum van de maker of een ander lid te gebruiken. De Ajan handelt alleen met de bezoekersrechten die je hieronder verleent.",
   "share.settings.notice.workspaceTitle": "Bezoekers gebruiken deze Ajan op het budget van de Werkruimte",
   "share.settings.permissions.allowCreatorViewSessions": "Sta mij toe om bezoekersgesprekken te lezen",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Standaard uitgeschakeld: bezoekersgesprekken blijven privé voor de bezoeker.",
   "share.settings.permissions.allowReadMemory": "Sta lezen van mijn geheugen toe",
   "share.settings.permissions.allowReadMemoryHint": "De Agent mag gebruik maken van uw langetermijngeheugen bij het beantwoorden van een bezoeker.",
   "share.settings.permissions.desc": "Wat een bezoeker mag lezen tijdens een actie, en wat de bezoeker te zien krijgt.",

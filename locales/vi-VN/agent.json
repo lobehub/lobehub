@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Khách truy cập không chỉ đọc Ajan này — họ chạy nó. Mỗi phản hồi được tạo trong Không gian làm việc và được tính vào ngân sách chia sẻ của nó, mà không tiêu thụ hạn mức của người tạo hoặc bất kỳ thành viên nào khác. Ajan chỉ hoạt động với quyền truy cập của khách truy cập mà bạn cấp bên dưới.",
   "share.settings.notice.workspaceTitle": "Khách truy cập chạy Ajan này trên ngân sách của Không gian làm việc",
   "share.settings.permissions.allowCreatorViewSessions": "Cho phép tôi đọc các cuộc trò chuyện của khách truy cập",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Tắt theo mặc định: các cuộc trò chuyện của khách truy cập sẽ chỉ riêng tư với họ.",
   "share.settings.permissions.allowReadMemory": "Cho phép đọc bộ nhớ của tôi",
   "share.settings.permissions.allowReadMemoryHint": "Agent có thể sử dụng bộ nhớ dài hạn của bạn khi trả lời khách truy cập.",
   "share.settings.permissions.desc": "Những gì lần chạy của khách truy cập có thể đọc, và những gì khách truy cập có thể thấy.",

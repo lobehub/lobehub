@@ -450,6 +450,14 @@ describe('agentShareRouter', () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'contacts' });
     });
 
+    it('stores an open grant for every visitor even while contacts are off', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: false });
+
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'everyone' } });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'everyone' });
+    });
+
     // The runtime grants nothing while contacts are off, so a grant must not be
     // stored then either (it would also come alive when they turn on).
     it('refuses a grant while contacts are off for the Agent owner', async () => {
