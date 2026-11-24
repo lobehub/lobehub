@@ -38,7 +38,7 @@ describe('buildUserTurnMetadata', () => {
         trigger: RequestTrigger.Chat,
       }),
     ).toEqual({
-      selectedToolIds: ['lobe-web-browsing', 'xmind', 'lobe-agent-management'],
+      selectedToolIds: ['lobe-web-browsing', 'xmind', 'lobe-agent'],
       trigger: RequestTrigger.Chat,
     });
   });

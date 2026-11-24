@@ -976,6 +976,7 @@ export class AiAgentService {
     threadId?: string;
     topicId?: string;
   }): Promise<{
+    deviceCancellationAccepted?: boolean;
     deviceCancellationConfirmed?: boolean;
     operationId?: string;
     success: boolean;

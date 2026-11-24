@@ -142,6 +142,7 @@ export const buildServerCallLlmContext = async ({
       editingGroupId,
       enabledToolIds: resolved.enabledToolIds,
       executionTarget,
+      groupId: state.origin?.groupId,
       features: resolveServerConnectorFeatures(),
       includeRecentAgents: state.origin?.trigger !== 'channel',
       isSubAgent: state.origin?.lineage?.isSubAgent === true,

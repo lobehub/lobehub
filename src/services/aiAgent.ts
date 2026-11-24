@@ -166,7 +166,7 @@ export interface ExecAgentTaskParams {
   localDeviceId?: string;
   /**
    * Agents the user @-mentioned in this message (multi-mention). The server
-   * enables the callAgent tool and injects the mentioned-agents delegation
+   * enables lobe-agent's callSubAgent and injects the mentioned-agents delegation
    * context so the supervisor run delegates to them instead of answering itself.
    */
   mentionedAgents?: RuntimeMentionedAgent[];

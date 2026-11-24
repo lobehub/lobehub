@@ -1,4 +1,4 @@
-import { isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
+import { isCallSubAgentCall, isLegacyCallAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import type { ChatToolResult } from '@lobechat/types';
 
 interface CustomToolRenderInput {
@@ -10,14 +10,18 @@ interface CustomToolRenderInput {
 
 /**
  * A failed `callSubAgent` whose child thread was preserved keeps its custom
- * render: that card is the only entry to the sub-agent's work.
+ * render: that card is the only entry to the sub-agent's work. The legacy
+ * `callAgent` card only shows the instruction, so its failure keeps the
+ * generic error view.
  */
 const isFailedSubAgentWithThread = ({
   apiName,
   identifier,
   result,
 }: Omit<CustomToolRenderInput, 'showCustomToolRender'>): boolean =>
-  isCallSubAgentCall({ apiName, identifier }) && typeof result.state?.threadId === 'string';
+  isCallSubAgentCall({ apiName, identifier }) &&
+  !isLegacyCallAgentCall({ apiName, identifier }) &&
+  typeof result.state?.threadId === 'string';
 
 /**
  * Errored results fall back to the generic error view, except

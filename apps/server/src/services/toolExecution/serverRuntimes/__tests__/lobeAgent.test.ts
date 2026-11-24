@@ -60,6 +60,13 @@ vi.mock('@/database/models/message', () => ({
   }),
 }));
 
+// callSubAgent reads the continued thread and a named target; see callSubAgent.test.ts.
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return { findById: vi.fn().mockResolvedValue(undefined) };
+  }),
+}));
+
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(function () {
     return {

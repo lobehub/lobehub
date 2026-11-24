@@ -1,6 +1,7 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { DashboardIdentifier, isDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -195,7 +196,7 @@ export const discoverTools = async (
   // selections persisted on earlier user turns in the topic; merged in
   // (deduped) alongside the agent's configured plugins and any internal
   // `additionalPluginIds` so a mentioned-but-not-enabled tool (e.g. a custom MCP
-  // connector or `lobe-agent-management` from an earlier @agent mention) stays
+  // connector or `lobe-agent` from an earlier @agent mention) stays
   // enabled across follow-up turns in the same conversation.
   let historyMessagesCache: any[] | undefined;
   const readHistoryMessages = async () => {
@@ -272,7 +273,11 @@ export const discoverTools = async (
           optedInIds,
           turnIds: [
             ...(additionalPluginIds || []),
-            ...effectiveSelectedToolIds.filter((id) => id !== 'lobe-agent-management'),
+            // The delegation tool an @agent mention implies is not a pick of
+            // the user's (`lobe-agent-management` on rows from before it moved).
+            ...effectiveSelectedToolIds.filter(
+              (id) => id !== LobeAgentIdentifier && id !== 'lobe-agent-management',
+            ),
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
             // An eval binds its connectors to the run by snapshot.
             ...boundConnectorIds,
@@ -647,6 +652,8 @@ export const discoverTools = async (
         executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
       isSubAgent: appContext?.isSubAgent,
       scope: appContext?.scope ?? undefined,
+      // Chat mode admits lobe-agent only to delegate to @mentioned agents.
+      toolMode: isGoalTurn ? 'custom' : resolveToolMode(agentConfig.chatConfig ?? undefined),
     };
 
     toolsEngine = createServerAgentToolsEngine(toolsContext, {
@@ -684,6 +691,7 @@ export const discoverTools = async (
       hasEnabledKnowledgeBases,
       hasIdentityAccount,
       hasEventConnector,
+      hasMentionedAgents,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,

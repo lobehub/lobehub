@@ -21,7 +21,7 @@ const escapeAttribute = (value: string) =>
 /**
  * Sub-Agent Result Message Processor
  *
- * A background sub-agent (`callSubAgent` / `callAgent` with `runInBackground`)
+ * A background sub-agent (`callSubAgent` with `runInBackground`)
  * reports back as a `user` message whose sender is that sub-agent
  * (`metadata.subAgentCallback`), with its answer as the content. The chat shows
  * it as the sub-agent speaking; the model must not read it as the human, so

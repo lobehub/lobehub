@@ -177,7 +177,7 @@ export const useMentionCategories = (): MentionSource => {
       ]);
 
       // Ownership-and-visibility gate for the private bucket. Once a mention
-      // fires it becomes a `callAgent` tool-call in the current topic, and
+      // fires it becomes a `callSubAgent({ agentId })` call in the current topic, and
       // topic/message rows are workspace-scoped without visibility — so the
       // sub-agent's assistant output would land in a topic that every
       // workspace member can read. Only expose private agents when the parent

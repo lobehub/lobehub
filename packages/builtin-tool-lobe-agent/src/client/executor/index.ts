@@ -154,6 +154,13 @@ const createAbortController = (signal?: AbortSignal) => {
 const isParentMessage = (message: unknown): message is ParentMessage =>
   !!message && typeof message === 'object';
 
+/**
+ * Why a sub-agent feature is missing here. The client runtime only runs when
+ * the conversation does not go through the server (gateway mode off).
+ */
+const CLIENT_RUNTIME_LIMIT =
+  'This conversation runs its tools in the app itself instead of on the server, so sub-agents run inline and are gone once they answer.';
+
 const nestedSubAgentDisabledResult = (): BuiltinToolResult => ({
   content: 'Nested sub-agent execution is not allowed.',
   error: {
@@ -457,38 +464,47 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return nestedSubAgentDisabledResult();
     }
 
-    const { description, instruction, inheritMessages, timeout } = params;
-
-    if (!description || !instruction) {
-      return { content: 'Sub-agent description and instruction are required.', success: false };
-    }
+    const { inheritMessages, instruction, timeout } = params;
 
     // Tool-call JSON reaches this executor without schema validation; a
     // malformed id must not silently start a fresh (billed) sub-agent.
     if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
       return { content: 'subAgentId must be a string.', success: false };
     }
-    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
+    if (
+      params.agentId !== undefined &&
+      params.agentId !== null &&
+      typeof params.agentId !== 'string'
+    ) {
+      return { content: 'agentId must be a string.', success: false };
+    }
+    // Strict-schema models send `""` to mean "not set"; naming yourself means a copy.
     const subAgentId = params.subAgentId?.trim();
+    const requestedAgentId = params.agentId?.trim() || undefined;
+    const targetAgentId = requestedAgentId === ctx.agentId ? undefined : requestedAgentId;
+    const description =
+      params.description?.trim() || (targetAgentId ? `Call agent ${targetAgentId}` : '');
 
-    // Continuing an earlier sub-agent is implemented by the server runtime only.
-    // Fail loudly instead of silently starting a fresh sub-agent that has none
-    // of the earlier sub-agent's history.
+    if (!description || !instruction) {
+      return { content: 'Sub-agent description and instruction are required.', success: false };
+    }
+
+    // This runtime runs a sub-agent inline and keeps no handle on it once its
+    // result is in; continuing, background delivery and cancelling all live in
+    // the server runtime. Fail loudly instead of silently starting a fresh
+    // sub-agent that has none of the earlier one's history.
     if (subAgentId) {
       return {
-        content:
-          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Leave subAgentId empty to start a new sub-agent.',
+        content: `${CLIENT_RUNTIME_LIMIT} It cannot continue an earlier sub-agent (subAgentId). Leave subAgentId empty and call callSubAgent${targetAgentId ? ' with the same agentId' : ''} again, putting what the earlier sub-agent found into the instruction.`,
         success: false,
       };
     }
 
-    // Background delivery wakes the parent through the server runtime, which
-    // this runtime does not have. Running it in the foreground instead would
-    // block a turn the model expected to keep going.
+    // Running it in the foreground instead would block a turn the model
+    // expected to keep going.
     if (params.runInBackground) {
       return {
-        content:
-          'Background sub-agents (runInBackground) are not supported in this runtime. Call callSubAgent again without runInBackground to wait for the result.',
+        content: `${CLIENT_RUNTIME_LIMIT} It cannot run a sub-agent in the background (runInBackground). Call callSubAgent again without runInBackground to wait for the result.`,
         success: false,
       };
     }
@@ -512,6 +528,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       description,
       inheritMessages,
       instruction,
+      targetAgentId,
       timeout,
       toolMessageId: ctx.messageId,
     });
@@ -529,6 +546,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       content: result,
       state: {
         model,
+        ...(targetAgentId && { targetAgentId }),
         threadId,
         totalCost,
         totalInputTokens,
@@ -550,7 +568,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     if (ctx.isSubAgent) return nestedSubAgentDisabledResult();
 
     return {
-      content: 'Cancelling a sub-agent is not supported in this runtime.',
+      content: `${CLIENT_RUNTIME_LIMIT} Its sub-agents always finish within the call that started them, so there is no running sub-agent to cancel.`,
       success: false,
     };
   };

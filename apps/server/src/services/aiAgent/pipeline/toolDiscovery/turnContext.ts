@@ -23,7 +23,8 @@ import type { ToolDiscoveryDeps, ToolDiscoveryInput } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
 
-const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
+/** @mentioned agents are delegated to with `lobe-agent`'s `callSubAgent({ agentId })`. */
+const AGENT_DELEGATION_IDENTIFIER = LobeAgentManifest.identifier;
 const SERIALIZED_AGENT_MENTION_RE =
   /<mention\b[^>]*\bid=["']?(?:agt_|market:)[^"'\s/>]+["']?[^>]*\/>/;
 
@@ -51,7 +52,7 @@ const extractEditorTurnToolIds = (
     typeof (record.metadata as Record<string, unknown>).id === 'string' &&
     ((record.metadata as Record<string, unknown>).id as string).length > 0
   ) {
-    out.push(AGENT_MANAGEMENT_IDENTIFIER);
+    out.push(AGENT_DELEGATION_IDENTIFIER);
   }
   if (Array.isArray(record.children)) {
     for (const child of record.children) {
@@ -139,7 +140,7 @@ export const collectSelectedToolIds = (
       typeof message.content === 'string' &&
       SERIALIZED_AGENT_MENTION_RE.test(message.content)
     ) {
-      ids.push(AGENT_MANAGEMENT_IDENTIFIER);
+      ids.push(AGENT_DELEGATION_IDENTIFIER);
     }
   };
 
@@ -153,7 +154,7 @@ export const collectSelectedToolIds = (
     ...new Set([
       ...ids,
       ...current.filter((id): id is string => typeof id === 'string' && id.length > 0),
-      ...(includeAgentMentions && options?.hasMentionedAgents ? [AGENT_MANAGEMENT_IDENTIFIER] : []),
+      ...(includeAgentMentions && options?.hasMentionedAgents ? [AGENT_DELEGATION_IDENTIFIER] : []),
     ]),
   ];
 };

@@ -1,14 +1,32 @@
 import { LobeAgentApiName, LobeAgentIdentifier } from './types';
 
 /**
- * Whether a tool call is `lobe-agent.callSubAgent` — the only call whose
- * result carries the sub-agent reference and whose sub-agent can be continued
- * (`callAgent` children and group members cannot).
+ * The retired `lobe-agent-management.callAgent`, now an alias that forwards to
+ * `callSubAgent({ agentId })`. Spelled out here because `lobe-agent` must not
+ * depend on the agent-management package. History, cached tool lists and the
+ * alias itself still produce calls under this name.
+ */
+const LEGACY_CALL_AGENT = { apiName: 'callAgent', identifier: 'lobe-agent-management' } as const;
+
+/** Whether a tool call is the retired `lobe-agent-management.callAgent` alias. */
+export const isLegacyCallAgentCall = (
+  plugin?: { apiName?: string | null; identifier?: string | null } | null,
+): boolean =>
+  plugin?.identifier === LEGACY_CALL_AGENT.identifier &&
+  plugin.apiName === LEGACY_CALL_AGENT.apiName;
+
+/**
+ * Whether a tool call hands work to a sub-agent whose result carries the
+ * sub-agent reference and which can be continued or cancelled:
+ * `lobe-agent.callSubAgent` (with or without `agentId`), or the legacy
+ * `lobe-agent-management.callAgent` (group members are not).
  */
 export const isCallSubAgentCall = (
   plugin?: { apiName?: string | null; identifier?: string | null } | null,
 ): boolean =>
-  plugin?.identifier === LobeAgentIdentifier && plugin.apiName === LobeAgentApiName.callSubAgent;
+  (plugin?.identifier === LobeAgentIdentifier &&
+    plugin.apiName === LobeAgentApiName.callSubAgent) ||
+  isLegacyCallAgentCall(plugin);
 
 /**
  * Trailer appended to every server `callSubAgent` tool result. It is the
@@ -41,10 +59,9 @@ export const appendSubAgentReference = (content: string, subAgentId: string): st
 };
 
 /**
- * Tool result of a background call (`callSubAgent` / `callAgent` with
- * `runInBackground`) — what the parent sees in place of the answer, which
- * arrives later as a message of its own. `subAgentId` is appended as the
- * follow-up handle when the sub-agent can be continued (`callSubAgent` only).
+ * Tool result of a background `callSubAgent({ runInBackground })` — what the
+ * parent sees in place of the answer, which arrives later as a message of its
+ * own. `subAgentId` is appended as the follow-up handle.
  */
 export const buildBackgroundSubAgentReceipt = (subAgentId?: string): string => {
   const receipt =
@@ -62,3 +79,22 @@ export const buildSteeredSubAgentReceipt = (subAgentId: string): string =>
     'The sub-agent is still running, so this instruction was queued for it. It reads it at its next step and continues with it in mind; its result arrives the way its running call reports it — do not wait or poll for it here.',
     subAgentId,
   );
+
+/**
+ * Appended to every result of the `callAgent` alias, so a model still calling
+ * it from an old prompt or cached tool list moves to the new interface.
+ */
+export const LEGACY_CALL_AGENT_NOTE =
+  'Note: `callAgent` is retired and will be removed. Next time, hand work to another agent with the lobe-agent `callSubAgent` tool and its `agentId`.';
+
+/**
+ * Add {@link LEGACY_CALL_AGENT_NOTE} to a `callAgent` alias result, before the
+ * `<sub_agent>` trailer so that stays the last thing in the content.
+ */
+export const withLegacyCallAgentNote = (content: string): string => {
+  const match = SUB_AGENT_REFERENCE_PATTERN.exec(content);
+  const body = match ? content.slice(0, match.index).trimEnd() : content;
+  const noted = body ? `${body}\n\n${LEGACY_CALL_AGENT_NOTE}` : LEGACY_CALL_AGENT_NOTE;
+
+  return match ? `${noted}\n\n${match[0].trim()}` : noted;
+};

@@ -15,6 +15,8 @@ Use \`callSubAgent\` (\`description\`, \`instruction\`) to delegate multi-step e
 - **Background (\`runInBackground: true\`)**: Default \`false\` waits in the same turn. Set \`true\` only when you have other independent work or shouldn't block the user; it returns an id immediately and delivers \`<sub_agent_result>\` later (starting a new turn if ended). Never poll, sleep, or re-call to check progress; if you end your turn while it runs, tell the user what is running. Use the delivered result to finish the user's request — the user has not seen it.
 - **Continue / steer (\`subAgentId\`)**: Every result ends with \`<sub_agent id="..." />\`. Pass that \`subAgentId\` to resume a stopped/failed sub-agent with its existing history instead of restarting (if it failed due to budget/quota, tell the user and wait before continuing). To steer a running background sub-agent, pass \`subAgentId\` with the correction rather than cancelling it.
 - **Cancel**: Use \`cancelSubAgent({ subAgentId })\` only when a running sub-agent's result is no longer needed — never just because it is slow.
+- **Another agent (\`agentId\`)**: Without \`agentId\` the sub-agent is a copy of you. Pass an id from \`<available_agents>\`, \`<mentioned_agents>\` or \`searchAgent\` to hand the work to one of the user's other agents (including external agents such as Claude Code or Codex) when the request clearly matches what it is set up for; it runs with its own model, tools and instructions, so write a self-contained instruction. Never pass your own id. When the user @mentions agents, delegate their part of the request this way. Background, continue, steer and cancel work the same; when continuing with \`subAgentId\`, do not pass \`agentId\` again.
+- **Sub-agent vs task**: \`callSubAgent\` is for work done now whose result comes back to you in this conversation. Work that should be tracked on its own, outlive this conversation or run on a schedule belongs in a task.
 </sub_agents>
 ${isDesktop ? runInClientSection : ''}`;
 
@@ -58,6 +60,21 @@ ${multimodalAnalysisSection}
 ${askUserQuestionSection}
 ${planTodoSection}
 ${ventSection}`;
+
+const delegationSection = `
+<delegate_to_agents>
+You can hand work to the user's other agents with \`callSubAgent\`. Pass the agent's id as \`agentId\` (from \`<mentioned_agents>\` or \`<available_agents>\`), a short \`description\` and a self-contained \`instruction\`: the agent runs with its own model, tools and instructions, and has not seen this conversation. Its answer comes back to you as the tool result; use it to reply to the user.
+- When the user @mentions agents, delegate their part of the request to those agents instead of answering it yourself. Several independent agents can run in parallel: emit one call each in the same turn.
+- Every result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` (without \`agentId\`) to send the same agent a follow-up; it keeps its earlier work.
+- \`runInBackground: true\` returns at once; the answer arrives later as a new message. Use it only when you have other work to do meanwhile — never poll for it.
+</delegate_to_agents>`;
+
+/**
+ * Prompt for the delegation-only manifest: just `callSubAgent` with a target
+ * agent, offered where the rest of `lobe-agent` is not (chat mode, @mentions
+ * injected into a run that does not otherwise carry the tool).
+ */
+export const delegationSystemPrompt = delegationSection.trim();
 
 /** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
 export const systemPrompt = `${baseSystemPrompt}

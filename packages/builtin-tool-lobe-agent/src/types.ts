@@ -140,6 +140,14 @@ export interface AnalyzeMediaState {
  * Dispatch a single sub-agent.
  */
 export interface CallSubAgentParams {
+  /**
+   * Hand the work to this other agent (one the caller can access) instead of
+   * an anonymous copy of the caller. The target runs on its own configuration
+   * (model, tools, and for an external agent such as Claude Code its own CLI).
+   * Omitted when `subAgentId` continues an earlier one: the sub-agent keeps
+   * whichever agent it was started with.
+   */
+  agentId?: string;
   description: string;
   inheritMessages?: boolean;
   instruction: string;
@@ -234,8 +242,8 @@ export interface CallSubAgentState extends SubAgentRunStats {
    */
   result?: string;
   /**
-   * Who a background run's answer is delivered as: the named `callAgent`
-   * target, or the parent itself (with the call's description) for a clone.
+   * Who a background run's answer is delivered as: the named target agent
+   * (`agentId`), or the parent itself (with the call's description) for a clone.
    */
   sender?: { agentId: string; name: string };
   status?: 'pending' | 'completed' | 'error';

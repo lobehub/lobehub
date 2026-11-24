@@ -28,6 +28,7 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 import type { OperationCompletionShareVisitor } from '@/server/services/agentRuntime/CompletionLifecycle/types';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { hasSubAgentBridgeHook } from '@/server/services/aiAgent/hooks/threadRunHooks';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
@@ -653,12 +654,17 @@ export class HeterogeneousAgentService {
     // from the one that registered the in-memory thread hooks. Finalize the
     // isolation thread durably here as well, and project its terminal answer
     // back onto the source assistant in the main conversation.
+    // Not for a sub-agent call, though: its completion bridge writes that
+    // call's own tool result. The thread's source stays the call that first
+    // spawned it, so a follow-up's answer written here would replace the
+    // first call's result (and its `<sub_agent id>` tag) in the parent's history.
+    const projectsAnswerToSource = !hasSubAgentBridgeHook(serializedHooks);
     if (isolationThreadId) {
       try {
         const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
         const thread = await threadModel.findById(isolationThreadId);
         if (thread) {
-          if (lastAssistantContent && thread.sourceMessageId) {
+          if (projectsAnswerToSource && lastAssistantContent && thread.sourceMessageId) {
             await this.messageModel.update(thread.sourceMessageId, {
               content: lastAssistantContent,
             });

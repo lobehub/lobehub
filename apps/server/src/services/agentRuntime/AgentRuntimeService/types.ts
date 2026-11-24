@@ -105,8 +105,8 @@ import type {
 } from './stepPolicy';
 import type {
   completeSubAgentBridge,
-  isCallSubAgentToolMessage,
   publishSubAgentProgress,
+  readSubAgentCallKind,
 } from './subAgentBridge';
 
 export interface InterventionLifecycleCheckpoint {
@@ -331,7 +331,6 @@ export interface AgentRuntimeServiceContext {
   readonly humanIntervention: HumanInterventionHandler;
   injectQueuedFollowUp: Bound<typeof injectQueuedFollowUp>;
   interruptOperation: Bound<typeof interruptOperation>;
-  isCallSubAgentToolMessage: Bound<typeof isCallSubAgentToolMessage>;
   isOperationInterrupted: Bound<typeof isOperationInterrupted>;
   listClientLlmWaits: Bound<typeof listClientLlmWaits>;
   loadGroupMemberBridge: Bound<typeof loadGroupMemberBridge>;
@@ -348,6 +347,7 @@ export interface AgentRuntimeServiceContext {
   queryUiMessages: Bound<typeof queryUiMessages>;
   readonly queueService: QueueService | null;
   readQueuedMessagesFlag: Bound<typeof readQueuedMessagesFlag>;
+  readSubAgentCallKind: Bound<typeof readSubAgentCallKind>;
   recordInterventionLifecycleCompletion: Bound<typeof recordInterventionLifecycleCompletion>;
   refreshMessagesFromDB: Bound<typeof refreshMessagesFromDB>;
   releaseOperationLock: Bound<typeof releaseOperationLock>;

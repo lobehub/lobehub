@@ -19,6 +19,18 @@ describe('shouldShowCustomToolRender', () => {
     ).toBe(true);
   });
 
+  // Its card shows only the instruction, so a failure would vanish in it.
+  it('keeps the generic error view for a failed legacy callAgent', () => {
+    expect(
+      shouldShowCustomToolRender({
+        apiName: 'callAgent',
+        identifier: 'lobe-agent-management',
+        result: { error: { message: 'Child failed' }, state: { threadId: 'thd_saved' } },
+        showCustomToolRender: true,
+      }),
+    ).toBe(false);
+  });
+
   it('uses the generic error renderer when there is no child thread to open', () => {
     expect(shouldShowCustomToolRender({ ...subAgent, result: { error: 'Child failed' } })).toBe(
       false,

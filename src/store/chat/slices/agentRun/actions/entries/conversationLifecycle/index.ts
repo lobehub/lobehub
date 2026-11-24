@@ -1,6 +1,6 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { createLobeAgentDelegationManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { collectHeteroAttachedFiles } from '@lobechat/heterogeneous-agents';
@@ -1650,9 +1650,8 @@ export class ConversationLifecycleActionImpl {
           // Forward both library and filesystem skill selections to the server.
           selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
           // Forward @-mentioned agents so the server supervisor can delegate to
-          // them (multi-mention). Mirrors the client runtime's `initialContext`
-          // injection: the server enables the callAgent tool and injects the
-          // mentioned-agents delegation context so the supervisor calls them.
+          // them (multi-mention). Mirrors the client runtime's `initialContext` injection: the
+          // server enables lobe-agent's callSubAgent and injects the mentioned-agents context.
           // Omit when empty (single-mention executes the target directly and does
           // not need supervisor delegation context). Non-group only — group @member mentions are handled by
           // the group orchestration path, not agent-management delegation.
@@ -2094,9 +2093,10 @@ export class ConversationLifecycleActionImpl {
             .getDisplayMessagesByKey(messageMapKey(execContext))(this.#get())
             .filter((item) => !isLocalOnlyMessage(item));
 
-          // When agents are @mentioned, inject a slim callAgent-only manifest
-          // so the AI can delegate directly without activating the full agent-management tool
-          const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
+          // @mentions delegate via the delegation-only lobe-agent (a full lobe-agent wins the merge)
+          const injectedManifests = hasMentionedAgents
+            ? [createLobeAgentDelegationManifest()]
+            : undefined;
           const activeTopicDocumentInitialContext =
             await resolveActiveTopicDocumentInitialContext(execContext);
 

@@ -4,25 +4,13 @@ import { BRANDING_NAME } from '@lobechat/business-const';
  * System role for Agent Management tool
  *
  * This provides guidance on how to effectively use the agent management tools
- * to create, configure, search, and orchestrate AI agents.
- *
- * The prompt is assembled by `buildSystemPrompt` so the callAgent guidance can
- * be dropped wholesale in contexts where dispatch is not allowed (sub-agent
- * runs reject callAgent with NESTED_AGENT_CALL_NOT_ALLOWED) — otherwise the
- * prompt would keep instructing the model to use a tool that is no longer in
- * its tool list.
+ * to create, configure and search AI agents. Handing work to an agent is not
+ * part of this tool: it is `lobe-agent`'s `callSubAgent({ agentId })`, which
+ * owns that guidance (the old `callAgent` API is only a hidden alias of it).
  */
 
 interface WorkflowPattern {
-  /** Pattern only makes sense when the model can dispatch/run agents. */
-  requiresCallAgent?: boolean;
   steps: string[];
-  /**
-   * Replacement steps for the no-callAgent variant. Needed when only part of
-   * the pattern depends on dispatching (e.g. a final "call/test the agent"
-   * step) — the rest of the workflow is still valid for a sub-agent.
-   */
-  stepsWithoutCallAgent?: string[];
   title: string;
 }
 
@@ -31,48 +19,11 @@ const workflowPatterns: WorkflowPattern[] = [
     steps: [
       'Review available models and plugins from injected context',
       'Create agent with complete configuration (title, systemRole, model, provider, plugins)',
-      'Test the agent with sample tasks',
-    ],
-    stepsWithoutCallAgent: [
-      'Review available models and plugins from injected context',
-      'Create agent with complete configuration (title, systemRole, model, provider, plugins)',
     ],
     title: 'Create with Full Configuration',
   },
   {
-    // Create → test → refine is a dispatch loop end to end; drop it entirely.
-    requiresCallAgent: true,
     steps: [
-      'Create agent with basic configuration (title, systemRole, model, provider)',
-      'Test with sample tasks',
-      'Update configuration based on results (add plugins, adjust settings)',
-    ],
-    title: 'Create and Refine',
-  },
-  {
-    requiresCallAgent: true,
-    steps: [
-      'Search for existing agents (workspace or marketplace)',
-      'Select the best match for the task',
-      'Call agent with specific instruction',
-    ],
-    title: 'Find and Use',
-  },
-  {
-    requiresCallAgent: true,
-    steps: [
-      'Create a specialized agent for a specific task',
-      'Immediately call the agent to execute the task',
-      'Refine agent configuration based on results',
-    ],
-    title: 'Create, Call, and Iterate',
-  },
-  {
-    steps: [
-      "Use getAgentDetail to inspect an agent's current configuration",
-      'Decide whether to call it, update it, or duplicate it based on the details',
-    ],
-    stepsWithoutCallAgent: [
       "Use getAgentDetail to inspect an agent's current configuration",
       'Decide whether to update it or duplicate it based on the details',
     ],
@@ -87,99 +38,34 @@ const workflowPatterns: WorkflowPattern[] = [
     title: 'Duplicate and Customize',
   },
   {
-    steps: [
-      'Create or select an agent',
-      'Use installPlugin to add necessary tools/integrations',
-      'Call the agent with instructions that leverage the installed plugins',
-    ],
-    stepsWithoutCallAgent: [
-      'Create or select an agent',
-      'Use installPlugin to add necessary tools/integrations',
-    ],
+    steps: ['Create or select an agent', 'Use installPlugin to add necessary tools/integrations'],
     title: 'Equip with Plugins',
   },
 ];
 
-const buildWorkflowPatterns = (includeCallAgent: boolean) =>
+const buildWorkflowPatterns = () =>
   workflowPatterns
-    .filter((pattern) => includeCallAgent || !pattern.requiresCallAgent)
-    .map((pattern, index) => {
-      const steps =
-        includeCallAgent || !pattern.stepsWithoutCallAgent
-          ? pattern.steps
-          : pattern.stepsWithoutCallAgent;
-      return `### Pattern ${index + 1}: ${pattern.title}\n${steps
-        .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
-        .join('\n')}`;
-    })
+    .map(
+      (pattern, index) =>
+        `### Pattern ${index + 1}: ${pattern.title}\n${pattern.steps
+          .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
+          .join('\n')}`,
+    )
     .join('\n\n');
 
-const bestPractices: { requiresCallAgent?: boolean; text: string }[] = [
-  {
-    text: '**Use Context Information**: Always refer to the injected context for accurate model IDs, provider IDs, and plugin IDs',
-  },
-  {
-    text: '**Specify Model AND Provider**: When setting a model, always specify both `model` and `provider` together',
-  },
-  {
-    text: '**Start with Essential Config**: Begin with title, systemRole, model, and provider. Add plugins and other settings as needed',
-  },
-  {
-    requiresCallAgent: true,
-    text: '**Clear Instructions**: When calling agents, be specific about expected outcomes and deliverables',
-  },
-  {
-    text: '**Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements',
-  },
-  {
-    text: '**Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery',
-  },
-  {
-    requiresCallAgent: true,
-    text: '**Test and Iterate**: Test agents with sample tasks and refine configuration based on actual usage',
-  },
-  {
-    text: "**Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead",
-  },
+const bestPractices: string[] = [
+  '**Use Context Information**: Always refer to the injected context for accurate model IDs, provider IDs, and plugin IDs',
+  '**Specify Model AND Provider**: When setting a model, always specify both `model` and `provider` together',
+  '**Start with Essential Config**: Begin with title, systemRole, model, and provider. Add plugins and other settings as needed',
+  '**Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements',
+  '**Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery',
+  "**Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead",
 ];
 
-const buildBestPractices = (includeCallAgent: boolean) =>
-  bestPractices
-    .filter((practice) => includeCallAgent || !practice.requiresCallAgent)
-    .map((practice, index) => `${index + 1}. ${practice.text}`)
-    .join('\n');
+const buildBestPractices = () =>
+  bestPractices.map((practice, index) => `${index + 1}. ${practice}`).join('\n');
 
-const executionGuideSection = `
-
-<execution_guide>
-## Calling Agents
-
-### Synchronous Call
-For quick responses in the conversation context:
-\`\`\`
-callAgent(agentId, instruction)
-\`\`\`
-The agent will respond directly in the current conversation.
-
-### Background Call
-When you have other independent work to do meanwhile, or the user should not wait:
-\`\`\`
-callAgent(agentId, instruction, runInBackground: true)
-\`\`\`
-The call returns at once. The agent's reply arrives later as a message from that agent; if your turn has ended, it starts a new one. Do not poll or call the agent again to check on it.
-</execution_guide>`;
-
-const subAgentContextSection = `
-
-<subagent_context>
-## Sub-Agent Context
-
-You are currently running as a sub-agent. Dispatching work to other agents is not available in this context — there is no callAgent tool, and requesting it would be rejected. Complete the task yourself with the tools you have instead of attempting to delegate.
-</subagent_context>`;
-
-export const buildSystemPrompt = (
-  { includeCallAgent }: { includeCallAgent: boolean } = { includeCallAgent: true },
-) => `You have Agent Management tools to create, configure, and orchestrate AI agents. Your primary responsibility is to help users build and manage their agent ecosystem effectively.
+export const systemPrompt = `You have Agent Management tools to create, configure, and organize AI agents. Your primary responsibility is to help users build and manage their agent ecosystem effectively.
 
 <core_capabilities>
 ## Tool Overview
@@ -199,14 +85,7 @@ export const buildSystemPrompt = (
 
 **Plugin Management:**
 - **searchMarketTools**: Search the MCP marketplace for plugins not listed in the injected context
-- **installPlugin**: Install a plugin/tool for an agent (builtin, Composio, LobehubSkill, or MCP marketplace)${
-  includeCallAgent
-    ? `
-
-**Execution:**
-- **callAgent**: Invoke an agent to handle a task`
-    : ''
-}
+- **installPlugin**: Install a plugin/tool for an agent (builtin, Composio, LobehubSkill, or MCP marketplace)
 </core_capabilities>
 
 <context_injection>
@@ -215,11 +94,7 @@ export const buildSystemPrompt = (
 When this tool is enabled, you will receive contextual information about:
 - **Current Agent**: Your own agent ID (in the \`<current_agent>\` tag). Use this ID to manage yourself when the user asks to modify your settings.
 - **Available Models**: List of AI models and providers you can use when creating/updating agents
-- **Available Agents**: The user's existing agents (most recently updated).${
-  includeCallAgent
-    ? " You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request."
-    : ''
-}
+- **Available Agents**: The user's existing agents (most recently updated).
 - **Available Plugins**: List of plugins (builtin tools, Composio integrations, LobehubSkill providers) you can enable for agents
 
 This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins/agentId parameters. If none of the agents in the \`available_agents\` section match the user's intent, fall back to searchAgent (which can also search the marketplace).
@@ -241,13 +116,7 @@ You can manage yourself using the same Agent Management tools. Your own agent ID
 
 **Tool selection for prompt changes**: When only the system prompt needs updating, always use \`updatePrompt\` instead of \`updateAgent\`. It takes a flat \`prompt\` string parameter (no nested config object), which is simpler and avoids serialization issues.
 
-**Priority rule**: When the user wants to modify the current agent, always use the Agent Management tools first. Only fall back to other tools (e.g., Agent Builder) if the Agent Management tools cannot fulfill the request.${
-  includeCallAgent
-    ? `
-
-**IMPORTANT**: Never use callAgent with your own agent ID — this would create an infinite loop.`
-    : ''
-}
+**Priority rule**: When the user wants to modify the current agent, always use the Agent Management tools first. Only fall back to other tools (e.g., Agent Builder) if the Agent Management tools cannot fulfill the request.
 </self_management>
 
 <agent_creation_guide>
@@ -336,7 +205,7 @@ Refer to the injected context for available plugin IDs and descriptions.
 Use getAgentDetail to inspect an agent's full configuration before making decisions:
 
 **When to use:**
-${includeCallAgent ? '- Before calling an agent, to understand its capabilities\n' : ''}- Before updating an agent, to see current settings
+- Before updating an agent, to see current settings
 - To check what model, plugins, or system prompt an agent uses
 
 \`\`\`
@@ -401,12 +270,12 @@ Use searchAgent to discover agents:
 - Use specific keywords related to the task
 - Filter by category when browsing marketplace
 - Check agent descriptions for capability details
-</search_guide>${includeCallAgent ? executionGuideSection : subAgentContextSection}
+</search_guide>
 
 <workflow_patterns>
 ## Common Workflows
 
-${buildWorkflowPatterns(includeCallAgent)}
+${buildWorkflowPatterns()}
 </workflow_patterns>
 
 <agent_card_rendering>
@@ -444,15 +313,5 @@ Do NOT render a card when calling \`getAgentDetail\`, \`updateAgent\`, \`updateP
 <best_practices>
 ## Best Practices
 
-${buildBestPractices(includeCallAgent)}
+${buildBestPractices()}
 </best_practices>`;
-
-export const systemPrompt = buildSystemPrompt({ includeCallAgent: true });
-
-/**
- * Variant for sub-agent runs, where `callAgent` is filtered out of the manifest
- * (dispatching from within a sub-agent is rejected at execution time). Every
- * callAgent mention is dropped and an explicit note tells the model dispatch is
- * unavailable, so it executes the task itself instead of burning tool calls.
- */
-export const systemPromptWithoutCallAgent = buildSystemPrompt({ includeCallAgent: false });

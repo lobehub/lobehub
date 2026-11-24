@@ -11,7 +11,6 @@ import {
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
-import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
 import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
 import {
@@ -34,7 +33,7 @@ import {
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
-import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { runCallSubAgent } from './callSubAgent';
 import { searchMarketTools } from './marketToolSearch';
 import {
   NEXT_RUN_NOTE,
@@ -85,109 +84,35 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
-      callAgent: async (
+      /**
+       * Retired: handing work to another agent is `lobe-agent.callSubAgent`
+       * with `agentId`. Kept as an alias for calls from old prompts and cached
+       * tool lists — it forwards there, so the target can be continued and
+       * cancelled like any sub-agent, and its results ask the model to switch.
+       */
+      callAgent: (
         params: CallAgentParams,
         ctx: ToolExecutionContext,
-      ): Promise<ToolExecutionResult> => {
-        const { agentId, instruction } = params;
-
-        if (ctx.isSubAgent) {
-          return {
-            content: 'Agent calls cannot be triggered from within another sub-agent.',
-            error: {
-              code: 'NESTED_AGENT_CALL_NOT_ALLOWED',
-              message: 'Agent calls cannot be triggered from within another sub-agent.',
-            },
-            success: false,
-          };
-        }
-
-        if (!ctx.subAgent) {
-          return {
-            content: 'Agent execution is not available in this runtime.',
-            error: { code: 'AGENT_CALL_UNAVAILABLE' },
-            success: false,
-          };
-        }
-
-        if (!instruction || typeof instruction !== 'string') {
-          return {
-            content: 'instruction is required.',
-            error: { code: 'INVALID_ARGUMENTS', message: 'instruction is required.' },
-            success: false,
-          };
-        }
-
-        const background = params.runInBackground === true;
-
-        // The target's name titles its thread and, for a background call, is who
-        // the reply is delivered as.
-        const targetTitle = (await agentModel.getAgentConfigById(agentId))?.title;
-
-        const runner = ctx.subAgent;
-        const startRun = () =>
-          runner.run({
-            agentId,
-            background,
-            description: targetTitle || `Call agent ${agentId}`,
-            instruction,
-            timeout: 1_800_000,
-          });
-
-        let runResult: Awaited<ReturnType<typeof startRun>>;
-        if (background) {
-          const outcome = await startBackgroundSubAgent({
+      ): Promise<ToolExecutionResult> =>
+        runCallSubAgent(
+          {
+            agentId: params.agentId,
+            description: '',
+            instruction: params.instruction,
+            runInBackground: params.runInBackground,
+          },
+          ctx,
+          {
+            agentId: ctx.agentId,
             db: context.serverDB!,
             groupId: ctx.groupId,
-            retryHint: 'Call callAgent again without runInBackground to wait for the reply.',
-            start: startRun,
             threadId: ctx.threadId,
             topicId: ctx.topicId,
             userId: context.userId!,
             workspaceId: context.workspaceId,
-          });
-          if ('refusal' in outcome) {
-            return {
-              content: outcome.refusal.message,
-              error: { code: outcome.refusal.code, message: outcome.refusal.message },
-              success: false,
-            };
-          }
-          runResult = outcome.result;
-        } else {
-          runResult = await startRun();
-        }
-        const { started, error, subOperationId, threadId, toolMessageId } = runResult;
-
-        if (!started) {
-          const detail = error ? `: ${error}` : '.';
-          const message = `Agent "${agentId}" failed to start${detail}`;
-          return {
-            content: message,
-            error: { code: 'AGENT_CALL_START_FAILED', message },
-            success: false,
-          };
-        }
-
-        // Detached: the receipt is the whole tool result; the reply arrives later
-        // as a message from the target. It goes into the runner's placeholder,
-        // which anchors the thread.
-        if (background) {
-          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
-        }
-
-        return {
-          content: '',
-          deferred: true,
-          state: {
-            status: 'pending',
-            subOperationId,
-            targetAgentId: agentId,
-            threadId,
           },
-          success: true,
-        };
-      },
+          { legacyCallAgent: true },
+        ),
 
       createAgent: async (params: CreateAgentParams): Promise<ToolExecutionResult> => {
         try {

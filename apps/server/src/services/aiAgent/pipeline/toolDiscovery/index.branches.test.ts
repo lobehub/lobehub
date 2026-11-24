@@ -434,6 +434,7 @@ describe('discoverTools — connector discovery', () => {
         loadHistoryMessages: vi.fn().mockResolvedValue([
           {
             content: '<mention name="Writer" id="agt_writer" /> Hello',
+            // A row from before delegation moved to `lobe-agent` carries the old id.
             metadata: { selectedToolIds: ['community-mcp', 'lobe-agent-management'] },
             role: 'user',
           },
@@ -443,9 +444,7 @@ describe('discoverTools — connector discovery', () => {
     }).promise;
 
     expect(engineInstalledIds()).toEqual(['community-mcp']);
-    expect(result.agentPlugins).toEqual(
-      expect.arrayContaining(['community-mcp', 'lobe-agent-management']),
-    );
+    expect(result.agentPlugins).toEqual(expect.arrayContaining(['community-mcp', 'lobe-agent']));
   });
 
   it('does not leak supervisor @-mentioned connectors from shared group history into an in-group member turn', async () => {

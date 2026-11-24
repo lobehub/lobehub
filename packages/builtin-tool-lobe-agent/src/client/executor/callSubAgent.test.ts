@@ -56,8 +56,41 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain('not supported in this runtime');
+    // Says why, and what to do instead.
+    expect(result.content).toContain('instead of on the server');
+    expect(result.content).toContain('Leave subAgentId empty');
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it('hands the work to another agent with agentId', async () => {
+    const run = vi.fn().mockResolvedValue({ result: 'logo', success: true, threadId: 'thd_3' });
+
+    const result = await lobeAgentExecutor.callSubAgent(
+      { agentId: ' agent-designer ', description: '', instruction: 'Draft a logo' },
+      createContext(run),
+    );
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Call agent agent-designer',
+        targetAgentId: 'agent-designer',
+      }),
+    );
+    expect(result).toMatchObject({
+      state: { targetAgentId: 'agent-designer', threadId: 'thd_3' },
+      success: true,
+    });
+  });
+
+  it('runs a copy when the caller names itself', async () => {
+    const run = vi.fn().mockResolvedValue({ result: 'ok', success: true, threadId: 'thd_4' });
+
+    await lobeAgentExecutor.callSubAgent({ ...params, agentId: 'agent-self' }, {
+      ...createContext(run),
+      agentId: 'agent-self',
+    } as BuiltinToolContext);
+
+    expect(run.mock.calls[0][0].targetAgentId).toBeUndefined();
   });
 
   // GPT-family models fill every declared field, so a fresh dispatch arrives as
@@ -124,7 +157,19 @@ describe('lobeAgentExecutor.callSubAgent runInBackground', () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain('not supported in this runtime');
+    expect(result.content).toContain('without runInBackground');
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('lobeAgentExecutor.cancelSubAgent', () => {
+  it('explains that client sub-agents never outlive their call', async () => {
+    const result = await lobeAgentExecutor.cancelSubAgent(
+      { subAgentId: 'thd_1' },
+      {} as unknown as BuiltinToolContext,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('no running sub-agent to cancel');
   });
 });

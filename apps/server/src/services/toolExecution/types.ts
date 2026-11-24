@@ -31,16 +31,27 @@ export interface ServerSubAgentRunParams {
    * Run detached from the parent (`callSubAgent({ runInBackground })`): the
    * placeholder is written with the start receipt as its final tool result, and
    * the child's answer is delivered to the parent as a later message instead of
-   * resuming a parked parent. Only set by `callSubAgent`.
+   * resuming a parked parent.
    */
   background?: boolean;
+  /**
+   * Whether an instruction for a still-running `subAgentId` may be queued for
+   * its next step. False for external agents (Claude Code, …): their process
+   * never reads that queue, so the instruction would be lost.
+   */
+  canSteer?: boolean;
   /** Short label shown in the UI (sub-agent thread title). */
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
   instruction: string;
   /**
-   * Continue this earlier `callSubAgent` sub-agent (its isolation thread id)
-   * instead of starting a new one. Only set by `callSubAgent`.
+   * Who a background run's answer is delivered as. A named target answers as
+   * itself (its title); unset, a copy answers with the call's `description`.
+   */
+  senderName?: string;
+  /**
+   * Continue this earlier sub-agent (its isolation thread id) instead of
+   * starting a new one. `agentId` must then be the agent it runs as.
    */
   subAgentId?: string;
   /** Optional per-run timeout in milliseconds. */

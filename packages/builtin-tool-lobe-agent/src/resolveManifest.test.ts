@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { LobeAgentManifest } from './manifest';
-import { resolveLobeAgentManifest } from './resolveManifest';
-import { systemPromptWithoutSubAgent } from './systemRole';
+import {
+  createLobeAgentDelegationManifest,
+  LobeAgentDelegationManifest,
+  resolveLobeAgentManifest,
+} from './resolveManifest';
+import { delegationSystemPrompt, systemPromptWithoutSubAgent } from './systemRole';
 import { LobeAgentApiName } from './types';
 
 const apiNames = (manifest: { api: { name: string }[] }) => manifest.api.map((a) => a.name);
@@ -65,5 +69,38 @@ describe('resolveLobeAgentManifest', () => {
     expect(LobeAgentManifest.api).toHaveLength(before);
     // the full manifest's systemRole still describes sub-agent dispatch
     expect(LobeAgentManifest.systemRole).toContain('callSubAgent');
+  });
+
+  it('offers callSubAgent with an optional agentId in the full manifest', () => {
+    const api = LobeAgentManifest.api.find((a) => a.name === LobeAgentApiName.callSubAgent)!;
+
+    expect(api.parameters.properties).toHaveProperty('agentId');
+    expect(api.parameters.required).toEqual(['description', 'instruction']);
+  });
+
+  it('becomes the delegation-only manifest in chat mode', () => {
+    const result = resolveLobeAgentManifest({ scope: 'main', toolMode: 'chat' })!;
+
+    expect(result).toBe(LobeAgentDelegationManifest);
+    expect(apiNames(result)).toEqual([LobeAgentApiName.callSubAgent]);
+    expect(result.api[0].parameters.required).toEqual(['agentId', 'description', 'instruction']);
+    expect(result.systemRole).toBe(delegationSystemPrompt);
+    expect(result.systemRole).not.toContain('createPlan');
+  });
+
+  it('is unavailable in chat mode where dispatch is hidden', () => {
+    expect(resolveLobeAgentManifest({ isSubAgent: true, toolMode: 'chat' })).toBeNull();
+    expect(resolveLobeAgentManifest({ scope: 'group', toolMode: 'chat' })).toBeNull();
+  });
+});
+
+describe('createLobeAgentDelegationManifest', () => {
+  it('injects only callSubAgent under the lobe-agent identifier', () => {
+    const manifest = createLobeAgentDelegationManifest();
+
+    expect(manifest.identifier).toBe(LobeAgentManifest.identifier);
+    expect(manifest.api.map((a) => a.name)).toEqual([LobeAgentApiName.callSubAgent]);
+    expect(manifest.api[0].parameters.required).toContain('agentId');
+    expect(manifest.systemRole).toBe(delegationSystemPrompt);
   });
 });

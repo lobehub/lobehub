@@ -222,10 +222,15 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     // ==================== Sub-Agent ====================
     {
       description:
-        'Dispatch an isolated sub-agent for multi-step work, or pass `subAgentId` to continue or steer an existing sub-agent.',
+        'Dispatch an isolated sub-agent for multi-step work — a copy of you, or another agent via `agentId` — or pass `subAgentId` to continue or steer an existing sub-agent.',
       name: LobeAgentApiName.callSubAgent,
       parameters: {
         properties: {
+          agentId: {
+            description:
+              'Optional. Id of another agent to hand the work to — from `<available_agents>`, `<mentioned_agents>` or `searchAgent` — instead of a copy of yourself. It runs with its own model and tools. Never pass your own id. Leave empty when continuing a sub-agent with `subAgentId`: it keeps the agent it was started with.',
+            type: 'string',
+          },
           description: {
             description: 'Short UI label for the task.',
             type: 'string',

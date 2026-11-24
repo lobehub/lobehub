@@ -131,6 +131,8 @@ export interface ServerCreateAgentToolsEngineParams {
    * only ships when there is something for it to act on.
    */
   hasIdentityAccount?: boolean;
+  /** The user @mentioned other agents this turn (delegated to via `lobe-agent`). */
+  hasMentionedAgents?: boolean;
   /** Whether an attached or agent-assigned file is previewed because it is too long to inline */
   hasOversizedFiles?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */

@@ -26,6 +26,7 @@ describe('cancelSubAgentThreadRun', () => {
   beforeEach(() => {
     messageModel = {
       claimBackgroundSubAgentDelivery: vi.fn(async (ids: string[]) => ids),
+      findById: vi.fn().mockResolvedValue({ agentId: 'agent-1', id: 'placeholder-1' }),
       findMessagePlugin: vi.fn(async (id: string) =>
         id === 'placeholder-1' ? callSubAgentPlugin : { ...callSubAgentPlugin, state: {} },
       ),
@@ -189,10 +190,24 @@ describe('cancelSubAgentThreadRun', () => {
 
   it.each([
     ['another topic', { topicId: 'topic-2' }],
-    ['another agent', { agentId: 'agent-2' }],
+    ['another dispatcher', { agentId: 'agent-2' }],
     ['a non-isolation thread', { type: ThreadType.Continuation }],
   ])('refuses a thread from %s', async (_, overrides) => {
     vi.mocked(deps.threadModel.findById).mockResolvedValue(subAgentThread(overrides) as any);
+    // A named target's thread qualifies only when this agent's tool call spawned it.
+    messageModel.findById.mockResolvedValue({ agentId: 'agent-2', id: 'placeholder-1' });
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(deps.interruptTask).not.toHaveBeenCalled();
+    expect(result.status).toBe('failed');
+    expect(result.error).toContain('was not found in this conversation');
+  });
+
+  // Agent A's sub-agent may run as agent B; B running in the same topic must
+  // not take it over just because the thread runs as B.
+  it('refuses a thread that runs as the caller but another agent dispatched', async () => {
+    messageModel.findById.mockResolvedValue({ agentId: 'agent-2', id: 'placeholder-1' });
 
     const result = await cancelSubAgentThreadRun(deps, params);
 
@@ -203,8 +218,8 @@ describe('cancelSubAgentThreadRun', () => {
 
   it('refuses a thread that callSubAgent did not start', async () => {
     messageModel.findMessagePlugin.mockResolvedValue({
-      apiName: 'callAgent',
-      identifier: 'lobe-agent-management',
+      apiName: 'speak',
+      identifier: 'lobe-group-management',
     });
 
     const result = await cancelSubAgentThreadRun(deps, params);
@@ -212,6 +227,56 @@ describe('cancelSubAgentThreadRun', () => {
     expect(deps.interruptTask).not.toHaveBeenCalled();
     expect(result).toMatchObject({ status: 'failed' });
     expect(result.error).toContain('not a sub-agent started by callSubAgent');
+  });
+
+  // An external agent has no runtime state to carry the interrupt mark: the
+  // device confirming the process exited on this stop is the proof.
+  it('reports a Claude Code sub-agent stopped once the device confirms its exit', async () => {
+    deps.isOperationInterrupted = vi.fn().mockResolvedValue(false);
+    deps.interruptTask = vi
+      .fn()
+      .mockResolvedValue({ deviceCancellationConfirmed: true, success: true });
+    deps.agentOperationModel.findById = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'running' })
+      .mockResolvedValue({ status: 'interrupted' }) as any;
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(result).toMatchObject({ status: 'cancelled', stopped: true });
+    expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
+  });
+
+  // A platform agent (OpenClaw, Hermes) has no runtime state; its task being
+  // cancelled on the device is the stop, settled later by its notify callback.
+  it('reports a platform sub-agent cancelled once the device accepts the cancel', async () => {
+    deps.isOperationInterrupted = vi.fn().mockResolvedValue(false);
+    deps.interruptTask = vi
+      .fn()
+      .mockResolvedValue({ deviceCancellationAccepted: true, success: false });
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(result.status).toBe('cancelled');
+    expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
+  });
+
+  // The thread runs as the target agent; the dispatcher's tool call anchors it.
+  it.each([
+    ['callSubAgent({ agentId })', callSubAgentPlugin],
+    ['the legacy callAgent', { apiName: 'callAgent', identifier: 'lobe-agent-management' }],
+  ])('cancels a named agent started by %s', async (_, plugin) => {
+    vi.mocked(deps.threadModel.findById).mockResolvedValue(
+      subAgentThread({ agentId: 'agent-target' }) as any,
+    );
+    messageModel.findMessagePlugin.mockResolvedValue(plugin);
+    deps.isOperationInterrupted = vi.fn().mockResolvedValue(true);
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(messageModel.findById).toHaveBeenCalledWith('placeholder-1');
+    expect(deps.interruptTask).toHaveBeenCalled();
+    expect(result.status).not.toBe('failed');
   });
 });
 
@@ -222,7 +287,10 @@ describe('continuing a sub-agent that is still stopping', () => {
       agentOperationModel: { findById: vi.fn().mockResolvedValue({ status: 'running' }) },
       agentRuntimeService: { isOperationInterrupted },
       execAgent: vi.fn(),
-      messageModel: { findMessagePlugin: vi.fn().mockResolvedValue(callSubAgentPlugin) },
+      messageModel: {
+        findById: vi.fn().mockResolvedValue({ agentId: 'agent-1', id: 'placeholder-1' }),
+        findMessagePlugin: vi.fn().mockResolvedValue(callSubAgentPlugin),
+      },
       threadModel: { claimForRun: vi.fn(), findById: vi.fn().mockResolvedValue(subAgentThread()) },
       userId: 'user-1',
     } as unknown as SubAgentRunDeps;
