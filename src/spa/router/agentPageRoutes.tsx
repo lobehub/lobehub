@@ -194,6 +194,14 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(
+      () => import('@/routes/(main)/agent/visitor'),
+      'Desktop > Chat > Share Visitors',
+    ),
+    handle: { meta: agentShareVisitorTopicRouteMeta },
+    path: 'visitor',
+  },
+  {
+    element: dynamicElement(
       () => import('@/routes/(main)/agent/visitor/[topicId]'),
       'Desktop > Chat > Share Visitor Topic',
     ),

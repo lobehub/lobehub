@@ -16,7 +16,7 @@ const AgentList = memo<{ onMoreClick?: () => void }>(({ onMoreClick }) => {
     s.closeAllAgentsDrawer,
   ]);
   // A workspace merges shared and private rows into one Agents section with
-  // team / personal pin groups; personal mode keeps the original layout.
+  // the member's own pinned list; personal mode keeps the original layout.
   const activeWorkspaceId = useActiveWorkspaceId();
 
   return (

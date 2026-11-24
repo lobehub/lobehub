@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   getRememberedSandboxDirectory,
-  getRememberedSandboxRepository,
   rememberedSandboxDirectoryKey,
   rememberSandboxSelection,
 } from './rememberedSandboxDirectory';
@@ -56,36 +55,22 @@ describe('rememberedSandboxDirectory', () => {
     expect(getRememberedSandboxDirectory({ workspaceId: 'ws_1' }, 'agent-1')).toBeUndefined();
   });
 
-  // The persistent sandbox remembers its folder and the temporary one its
-  // repository, each on its own: using one never erases the other.
-  it('remembers the temporary sandbox repository apart from the folder', () => {
-    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
+  // T-14825: the cloud sandbox is not set up from an environment, so only the
+  // folder is remembered; picking a temporary sandbox leaves it alone.
+  it('remembers the folder alone, whatever environment the pick carried', () => {
+    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1', workingDirectory: 'code' });
     rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
 
-    expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'code' });
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
-  });
-
-  it('remembers a temporary sandbox that used no repository', () => {
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
-    rememberSandboxSelection(ME, 'agent-1', {});
-
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({});
-  });
-
-  it('remembers nothing for the temporary sandbox until one is used', () => {
-    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
-
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toBeUndefined();
+    const key = rememberedSandboxDirectoryKey(ME, 'agent-1')!;
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ workingDirectory: 'code' });
+    expect(localStorage.length).toBe(1);
   });
 
   it('changes nothing for a legacy environment directory', () => {
     rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
     rememberSandboxSelection(ME, 'agent-1', { instanceId: 'inst_1' });
 
     expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'code' });
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
   });
 
   it('ignores a corrupted entry', () => {

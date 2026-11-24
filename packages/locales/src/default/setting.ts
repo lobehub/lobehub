@@ -528,6 +528,7 @@ export default {
   'permission.page.accessLevelLabel': 'Access level',
   'permission.page.accessLevelPrivateHint':
     'Members get this level once the agent is published to the workspace. It can be changed after publishing.',
+  'permission.page.agentEntry': 'Permissions',
   'permission.page.configGroup': 'Editable settings',
   'permission.page.devicePolicyDesc':
     'Whether members can switch the execution environment for their own runs.',
@@ -543,6 +544,8 @@ export default {
   'permission.page.documentPrivateNotice':
     'This page is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.entry': 'Permissions',
+  'permission.page.groupTransferDesc':
+    'Hand this group to another workspace member. It moves to them once they accept.',
   'permission.page.kbAccessibleWhenShared': 'Can access when shared',
   'permission.page.kbNoAccessWhenShared': 'No access when shared',
   'permission.page.libraryAccessLevelPrivateHint':
@@ -585,11 +588,13 @@ export default {
   'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
   'permission.page.modelPolicyDesc':
     'Whether members can switch the model for their own conversations.',
+  'permission.page.ownershipGroup': 'Ownership',
   'permission.page.personalDesc':
     'This agent only belongs to you, so there is nothing to share yet. Publish it to a workspace to set member permissions.',
   'permission.page.personalTitle': 'Permissions apply to workspace agents',
   'permission.page.privateNotice':
     'This agent is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.sharingGroup': 'Visibility & ownership',
   'permission.page.title': 'Permissions',
   'permission.page.topicSharePolicyDesc':
     "Whether members can publish share links for this agent's topics.",
@@ -597,8 +602,16 @@ export default {
     "Members can publish share links for any of this agent's topics",
   'permission.page.topicSharePolicyRestrictedDesc':
     'Only you and workspace owners can publish share links',
+  'permission.page.transferDesc':
+    'Hand this agent to another workspace member. It moves to them once they accept.',
+  'permission.page.transferLabel': 'Transfer ownership',
   'permission.page.usableWhenShared': 'Can use when shared',
   'permission.page.viewableWhenShared': 'Can view when shared',
+  'permission.page.visibilityBuiltinDesc':
+    'Built-in agents are always visible to the whole workspace',
+  'permission.page.visibilityCreatorOnlyDesc':
+    'Only the creator can make a shared agent private again',
+  'permission.page.visibilityDesc': 'Who in the workspace can see and use this agent',
   'permission.saveNoEditPermission':
     'You have view-only access to this page, so your changes were not saved',
   'permission.updateError': 'Failed to update permission',
@@ -775,6 +788,8 @@ export default {
   'creds.createModal.titles.kv-header': 'New HTTP header',
   'creds.createModal.titles.oauth': 'New OAuth credential',
   'creds.detail.account': 'Account',
+  'creds.detail.author': 'Owner',
+  'creds.detail.visibility': 'Visible to',
   'creds.empty': 'No credentials configured yet',
   'creds.errors.createFailed': 'Failed to create the credential. Please try again.',
   'creds.errors.deleteFailed': 'Failed to delete the credential. Please try again.',
@@ -793,8 +808,6 @@ export default {
   'creds.form.addHeader': 'Add header',
   'creds.form.envVars': 'Environment variables',
   'creds.form.headers': 'Headers',
-  'creds.form.keyDesc':
-    'Agents find this credential by its identifier. Letters, numbers, hyphens and underscores only.',
   'creds.form.removePair': 'Remove',
   'creds.form.valuesDesc.kv-env':
     'Set as environment variables when an agent uses this credential.',
@@ -837,9 +850,6 @@ export default {
   'creds.form.descriptionPlaceholder': 'Optional description for this credential',
   'creds.form.file': 'Credential File',
   'creds.form.fileRequired': 'Please upload a file',
-  'creds.form.key': 'Identifier',
-  'creds.form.keyPattern': 'Identifier can only contain letters, numbers, underscores, and hyphens',
-  'creds.form.keyRequired': 'Identifier is required',
   'creds.form.name': 'Display Name',
   'creds.form.nameRequired': 'Display name is required',
   'creds.form.save': 'Save',
@@ -852,7 +862,6 @@ export default {
   'creds.form.valuePlaceholder': 'Enter value',
   'creds.oauth.noConnections': 'No OAuth connections available. Please connect an account first.',
   'creds.table.actions': 'Actions',
-  'creds.table.key': 'Identifier',
   'creds.table.lastUsed': 'Last Used',
   'creds.table.name': 'Name',
   'creds.table.neverUsed': 'Never',
@@ -868,6 +877,7 @@ export default {
   'creds.view.noValues': 'No Values',
   'creds.view.oauthNote': 'OAuth credentials are managed by the connected service.',
   'creds.view.show': 'Show',
+  'creds.view.showValues': 'Show values',
   'creds.view.title': 'View Credential: {{name}}',
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
@@ -4807,7 +4817,6 @@ When I am ___, I need ___
   'tab.environmentsAndCreds': 'Environments & Vault',
   'environmentsAndCreds.tabs.environments': 'Environments',
   'environmentsAndCreds.tabs.vault': 'Vault',
-  'creds.writeOnly.tag': 'Write-only',
   'creds.writeOnly.tooltip':
     'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',
   'creds.writeOnly.editHint':
@@ -4881,7 +4890,7 @@ When I am ___, I need ___
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
-  'environments.form.sources': 'Source code',
+  'environments.form.sources': 'Repositories',
   'environments.form.sourcesHint':
     'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
@@ -5476,6 +5485,11 @@ When I am ___, I need ___
   'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
   'environments.form.repositorySetupHint':
     "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.setupAndVariables': 'Setup and environment variables',
+  'environments.form.setupConfigured': 'Setup configured',
+  'environments.form.setupNotConfigured': 'No setup',
+  'environments.form.variablesCount_one': '{{count}} variable',
+  'environments.form.variablesCount_other': '{{count}} variables',
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
@@ -5522,6 +5536,7 @@ When I am ___, I need ___
   'market.skills.agents.removeAll': 'Remove all',
   'market.skills.agents.title': 'Assistants · {{count}}',
   'market.skills.copyPrompt': 'Copy this message',
+  'market.skills.customGroup': 'Custom',
   'market.skills.desc':
     'Reusable ways of working for your assistants. Install one, then turn it on in an assistant.',
   'market.skills.empty': 'No matching skills',
@@ -5598,6 +5613,7 @@ When I am ___, I need ___
   'market.skills.stats.stars': 'GitHub stars',
   'market.skills.title': 'Skills',
   'market.skills.uninstall': 'Uninstall',
+  'market.skills.uninstallFailed': "Couldn't uninstall. Try again later.",
   'market.skills.version': 'Version',
   'workspaceSetting.labels.archive.failedRetry':
     "Couldn't archive the label. Check your network and try again.",
@@ -5605,4 +5621,6 @@ When I am ___, I need ___
     "Couldn't delete the label. Check your network and try again.",
   'workspaceSetting.labels.form.saveFailedRetry':
     "Couldn't save the label. Check your network and try again.",
+  'workspace.auditLog.actions.budget.model_policy_removed': 'Model tier rule removed',
+  'workspace.auditLog.actions.budget.model_policy_updated': 'Model tier rule updated',
 };

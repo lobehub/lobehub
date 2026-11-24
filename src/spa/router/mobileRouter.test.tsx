@@ -123,6 +123,16 @@ describe('mobile community route layouts', () => {
   });
 });
 
+describe('mobile share visitors page', () => {
+  it('gives the empty visitors page the shell back header', () => {
+    const route = matchRoutes(mobileRoutes, '/agent/agt_1/visitor')?.at(-1)?.route;
+
+    expect(route?.path).toBe('visitor');
+    expect((route?.handle as { mobileShellHeader?: boolean }).mobileShellHeader).toBe(true);
+    expect(getRouteMetaFromHandle(route?.handle)?.titleKey).toBeDefined();
+  });
+});
+
 describe('mobile Marketplace skill and connector pages', () => {
   it.each([
     ['/marketplace/mcp/installed', 'mcp/installed'],

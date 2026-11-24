@@ -239,7 +239,7 @@ describe('deriveWorktreePath', () => {
     expect(deriveWorktreePath('/code/lobehub', '')).toBe('/code/lobehub');
   });
 
-  // Better Coding Experience names the folder after the branch's own name: the
+  // The folder is named after the branch's own name: the
   // app's `lobehub/` namespace is dropped, every other name folds as before.
   describe('stripBranchPrefix', () => {
     const root = () => `/Users/me/.lobehub/worktrees/${key('/code/lobehub')}`;

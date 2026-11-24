@@ -105,9 +105,28 @@ describe('HeterogeneousAgentService — sub-agent session per isolation thread',
     });
     const { service } = createService({});
 
-    await expect(service.getIsolationThreadResumeSessionId('thread-1')).resolves.toBe(
+    await expect(service.getThreadResumeSessionId('thread-1', 'topic-1')).resolves.toBe(
       'cc-thread-sess',
     );
-    await expect(service.getIsolationThreadResumeSessionId('thread-new')).resolves.toBeUndefined();
+  });
+
+  // A new sub-agent starts fresh: the topic's session is the conversation's.
+  it('does not hand a new sub-agent the topic session', async () => {
+    threads.set('thread-new', { id: 'thread-new', metadata: {}, type: ThreadType.Isolation });
+    const { service } = createService({});
+
+    await expect(
+      service.getThreadResumeSessionId('thread-new', 'topic-1'),
+    ).resolves.toBeUndefined();
+  });
+
+  // Reads follow the same rule the writes bind by.
+  it('resumes a run in an ordinary thread from the topic session', async () => {
+    threads.set('thread-1', { id: 'thread-1', metadata: {}, type: ThreadType.Continuation });
+    const { service } = createService({});
+
+    await expect(service.getThreadResumeSessionId('thread-1', 'topic-1')).resolves.toBe(
+      'topic-sess',
+    );
   });
 });

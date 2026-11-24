@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   agentRenameField,
   SessionDefaultGroup,
@@ -18,16 +19,15 @@ import {
   Pin,
   PinOff,
   Settings2Icon,
+  ShieldIcon,
   TagIcon,
   Trash,
-  UsersIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
-import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -43,7 +43,6 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
 import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
-import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
 
 interface UseAgentDropdownMenuParams {
   avatar?: string;
@@ -127,7 +126,6 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
   const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
-  const visibilityMenu = useAgentVisibilityMenu({ id, slug, userId, visibility });
 
   // Member Permissions only gate Agent configuration. Workspace-level list
   // organization (pin/group) and duplication remain available to members.
@@ -148,11 +146,14 @@ export const useAgentDropdownMenu = ({
   // Delete also opens to a workspace Admin on another member's shared agent
   // (server `canManage`); the confirmation then warns that someone else created
   // it, and the server only accepts the delete with that acknowledgment.
-  const canDelete = canManage || canManageResource;
+  // Lobe AI (the inbox) is listed like any Agent, but it is the scope's
+  // built-in default: it cannot be deleted, handed over or moved elsewhere.
+  const isInbox = slug === INBOX_SESSION_ID;
+  const canDelete = !isInbox && (canManage || canManageResource);
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace
   // feature is off or the viewer lacks permission for this agent)
-  const transferMenuItems = useAgentTransferMenuItem(
+  const agentTransferMenuItems = useAgentTransferMenuItem(
     id,
     {
       avatar,
@@ -161,13 +162,8 @@ export const useAgentDropdownMenu = ({
     },
     { userId, visibility },
   );
-  // Ownership handover to a workspace member (recipient must accept) — a
-  // separate entry from the cross-scope "Move to…" above.
-  const transferToMemberItem = useAgentTransferToMemberMenuItem(
-    id,
-    { avatar, backgroundColor, title },
-    { userId, visibility },
-  );
+  const transferMenuItems = isInbox ? null : agentTransferMenuItems;
+  const canManagePermission = !isInbox && canManageResource;
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(id);
 
@@ -175,7 +171,7 @@ export const useAgentDropdownMenu = ({
 
   // Workspace: a personal pin for every member plus an owner/admin-only team
   // pin on public rows. Personal mode keeps the single column-backed pin.
-  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
     id,
     pinned,
     type: 'agent',
@@ -198,9 +194,7 @@ export const useAgentDropdownMenu = ({
                 },
               ]
             : []),
-        // Team-pinned rows are the fixed section every member sees; hiding
-        // them would do nothing there.
-        ...(isShownInSidebar && !isTeamPinned
+        ...(isShownInSidebar
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -262,7 +256,8 @@ export const useAgentDropdownMenu = ({
               },
             ]
           : []),
-        ...(canCreate
+        // A copy of Lobe AI would come out nameless: its stored title is blank.
+        ...(canCreate && !isInbox
           ? [
               {
                 icon: <Icon icon={LucideCopy} />,
@@ -443,30 +438,25 @@ export const useAgentDropdownMenu = ({
         ...(canConfigure && transferMenuItems?.length ? transferMenuItems : []),
         ...(canConfigure
           ? [
-              // Permissions live on their own page now — the sidebar keeps a
-              // shortcut so creators and workspace owners don't have to open
-              // the Agent first.
-              ...(activeWorkspaceId && canManageResource
+              // Member permissions, visibility and the handover to a member
+              // are low-frequency management: they live in the Agent's
+              // settings, and the row keeps one shortcut into that section
+              // for creators and workspace owners.
+              ...(activeWorkspaceId && canManagePermission
                 ? [
                     { type: 'divider' as const },
                     {
-                      icon: <Icon icon={UsersIcon} />,
+                      icon: <Icon icon={ShieldIcon} />,
                       key: 'permission',
-                      label: t('permission.page.entry', { ns: 'setting' }),
+                      label: t('permission.page.agentEntry', { ns: 'setting' }),
                       onClick: ({ domEvent }: any) => {
                         domEvent?.stopPropagation();
                         navigate(`/agent/${id}/permission`);
                       },
-                      sfSymbol: 'person.2',
+                      sfSymbol: 'lock.shield',
                     },
                   ]
                 : []),
-              // Visibility is a property: the row carries the current scope
-              // and opens Private / Workspace, replacing the one-way
-              // "Publish to Workspace" and "Make private" actions.
-              ...(visibilityMenu.submenu ? [visibilityMenu.submenu] : []),
-              // Under Visibility: hand ownership to a member.
-              ...(transferToMemberItem ? [transferToMemberItem] : []),
               ...(canDelete
                 ? [
                     { type: 'divider' as const },
@@ -499,16 +489,15 @@ export const useAgentDropdownMenu = ({
     [
       activeWorkspaceId,
       workspacePinItems,
-      isTeamPinned,
       canCreate,
       canConfigure,
       canEdit,
-      canManageResource,
+      canManagePermission,
       canDelete,
+      isInbox,
       navigate,
       pinned,
       id,
-      avatar,
       title,
       name,
       pinAgent,
@@ -529,8 +518,6 @@ export const useAgentDropdownMenu = ({
       isDefault,
       openCreateGroupModal,
       transferMenuItems,
-      transferToMemberItem,
-      visibilityMenu,
       isShownInSidebar,
       setSidebarItemVisible,
       t,

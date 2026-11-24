@@ -826,3 +826,77 @@ describe('ProjectDirectoryRepository.relocate', () => {
     ).rejects.toThrow('Project not found or access denied');
   });
 });
+
+// The project's execution environments — its device folders and the cloud
+// sandbox — in the order a new conversation tries them.
+describe('ProjectDirectoryRepository execution order', () => {
+  const order = async () => {
+    const { sandbox } = await repo.executionOrder(base.projectId);
+    const folders = await directoryModel.list(base.projectId);
+    return [
+      ...folders.map((folder) => ({ id: folder.path, sortOrder: folder.sortOrder })),
+      {
+        id: 'sandbox',
+        sortOrder: sandbox,
+      },
+    ]
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder || Number(a.id === 'sandbox') - Number(b.id === 'sandbox'),
+      )
+      .map((item) => item.id);
+  };
+
+  it('tries folders before the sandbox until anything is reordered', async () => {
+    await repo.bind(base);
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('stores a reordered priority for folders and the sandbox', async () => {
+    const first = await repo.bind(base);
+    const second = await repo.bind({ ...base, path: '/work/second' });
+
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', second.id, first.id]);
+
+    expect(await order()).toEqual(['sandbox', '/work/second', '/work/repo']);
+  });
+
+  it('places a new folder before the sandbox when the sandbox is last', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, [first.id, 'sandbox']);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('places a new folder last when the sandbox was moved ahead of folders', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['sandbox', '/work/repo', '/work/second']);
+  });
+
+  it("refuses an order naming a folder that is not this project's", async () => {
+    await repo.bind(base);
+
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, [
+        'sandbox',
+        '00000000-0000-0000-0000-000000000000',
+      ]),
+    ).rejects.toThrow('Unknown project directory');
+  });
+
+  it('lets only someone who may change the project reorder it', async () => {
+    const first = await repo.bind(base);
+
+    await expect(
+      otherRepo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]),
+    ).rejects.toThrow('Project not found or access denied');
+  });
+});

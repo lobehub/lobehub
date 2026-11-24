@@ -2,6 +2,7 @@ import { getOfficialMcpServerById, resolveConnectorCatalogItem } from '@lobechat
 import type {
   ChannelConnectorRequest,
   ChannelConnectorRequestResult,
+  ChannelListThreadsParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelRequestConnectorParams,
@@ -112,6 +113,12 @@ export class ChannelHistoryService {
         { concurrency: 10 },
       ),
     };
+  };
+
+  /** The Threads of the run's Channel, so a read can name one with `threadId`. */
+  listThreads = async (params: ChannelListThreadsParams = {}) => {
+    await assertChannelEnabled(this.userId);
+    return this.repository.listThreads(this.operationId, params);
   };
 
   /**

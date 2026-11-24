@@ -35465,6 +35465,70 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - bad_request
+                          - conflict
+                          - forbidden
+                          - idempotency_conflict
+                          - insufficient_scope
+                          - internal_error
+                          - not_found
+                          - payload_too_large
+                          - payment_required
+                          - precondition_failed
+                          - rate_limited
+                          - service_unavailable
+                          - unauthorized
+                          - unprocessable_entity
+                          - upstream_error
+                          - validation_error
+                          - workspace_mismatch
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                        enum:
+                          - invalid_request_error
+                          - not_found
+                          - rate_limit_error
+                          - server_error
+                    required:
+                      - code
+                      - message
+                      - param
+                      - type
+                    additionalProperties: false
+                  requestId:
+                    type: string
+                required:
+                  - error
+                  - requestId
+                additionalProperties: false
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:

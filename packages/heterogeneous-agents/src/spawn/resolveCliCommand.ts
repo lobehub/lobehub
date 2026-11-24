@@ -693,7 +693,9 @@ export const detectValidatedCommand = async (
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'antigravity': {
-    validateHelpKeywords: ['--input-format', '--output-format', '--conversation', 'stream-json'],
+    // `agy --help` lists the ACP server from 1.5.6, the release that steers a
+    // running turn when another prompt arrives.
+    validateHelpKeywords: ['Agent Client Protocol'],
     validatePattern:
       /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
   },

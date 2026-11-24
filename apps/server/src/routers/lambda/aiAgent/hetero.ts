@@ -629,7 +629,7 @@ export const heteroRouter = router({
 
       if (scope) await renewHeteroSteers(operationId);
       // Queue mode leaves the follow-ups to the run end; read once per poll.
-      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : undefined;
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -649,7 +649,6 @@ export const heteroRouter = router({
             acceptsImageAttachments,
             acceptsImages,
             agentId: operation.agentId,
-            mode: followUpMode,
             operationId,
             scope,
           });

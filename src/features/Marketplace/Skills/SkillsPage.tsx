@@ -2,18 +2,21 @@ import { ActionIcon, Button, Center, Flexbox, SearchBar, Text } from '@lobehub/u
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useDebounce, useInViewport } from 'ahooks';
+import { useDebounce, useInViewport, useMemoizedFn } from 'ahooks';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { SkillCategory, SkillSorts } from '@/types/discover';
 
+import { catalogStyles } from '../Catalog/styles';
 import BackLink from './BackLink';
+import { CustomSkills, useCustomSkills } from './CustomSkills';
 import GithubImportPage from './github/GithubImportPage';
 import { GithubAddressRow } from './github/GithubRows';
 import {
@@ -25,6 +28,7 @@ import { parseGithubSource } from './github/githubSource';
 import { RowGridSkeleton, SectionSkeleton } from './MarketSkeleton';
 import SkillRow, { type SkillSummary } from './SkillRow';
 import { useSkillsNav } from './useSkillsNav';
+import VirtualGrid, { MarketScrollProvider } from './VirtualGrid';
 
 /** Rows a group previews before its "all" arrow. */
 const PREVIEW_COUNT = 6;
@@ -36,12 +40,6 @@ const styles = stylex.create({
   divider: {
     height: 1,
     backgroundColor: cssVar.colorBorderSecondary,
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    columnGap: 16,
-    rowGap: 4,
   },
   header: {
     display: 'flex',
@@ -98,21 +96,25 @@ const useMarketSkills = (
   return { isLoading, items: list?.items ?? [], total: list?.totalCount ?? 0 };
 };
 
-/** Rows in two columns; `withAgents` (the installed skills) shows how many assistants have each on. */
+const skillKey = (skill: SkillSummary) => skill.identifier;
+
+/**
+ * Rows in two columns, only those near the viewport mounted; `withAgents` (the
+ * installed skills) shows how many assistants have each on.
+ */
 const SkillGrid = memo<{ skills: SkillSummary[]; withAgents?: boolean }>(
   ({ skills, withAgents = false }) => {
     const { openSkill } = useSkillsNav();
+    // Stable, so the rows the grid keeps mounted still open with the current navigation.
+    const open = useMemoizedFn((identifier: string) => openSkill(identifier));
     return (
-      <div {...stylex.props(styles.grid)}>
-        {skills.map((skill) => (
-          <SkillRow
-            key={skill.identifier}
-            showAgents={withAgents}
-            skill={skill}
-            onOpen={() => openSkill(skill.identifier)}
-          />
-        ))}
-      </div>
+      <VirtualGrid
+        getKey={skillKey}
+        items={skills}
+        renderItem={(skill) => (
+          <SkillRow showAgents={withAgents} skill={skill} onOpen={() => open(skill.identifier)} />
+        )}
+      />
     );
   },
 );
@@ -151,6 +153,15 @@ const useCategoryName = () => {
   return (category: string) =>
     t(`skills.categories.${category}.name`, { defaultValue: category }) as string;
 };
+
+/**
+ * The Market's own taxonomy. Its category list also carries the free-text tags
+ * skill authors typed (hundreds, most with a handful of skills); those stay
+ * reachable by search but do not get a group each.
+ */
+const CATALOG_CATEGORIES = new Set<string>(
+  Object.values(SkillCategory).filter((category) => category !== SkillCategory.All),
+);
 
 /** Categories already scrolled to while the app is open. */
 const seenCategories = new Set<string>();
@@ -195,6 +206,7 @@ const Catalog = memo(() => {
   const { t } = useTranslation('setting');
   const installed = useInstalledSkills();
   const fromGithub = useInstalledGithubSkills();
+  const custom = useCustomSkills();
   const { setGroup: setSkillGroup } = useSkillsNav();
   const useSkillCategories = useDiscoverStore((s) => s.useSkillCategories);
   const { isLoading, queryKey } = useSkillCategories();
@@ -202,7 +214,7 @@ const Catalog = memo(() => {
   const groups = useMemo(
     () =>
       (categories ?? [])
-        .filter((item) => item.category !== SkillCategory.All && item.count > 0)
+        .filter((item) => CATALOG_CATEGORIES.has(item.category) && item.count > 0)
         .toSorted((a, b) => b.count - a.count),
     [categories],
   );
@@ -224,6 +236,11 @@ const Catalog = memo(() => {
           <InstalledGithubSkills items={fromGithub} />
         </Group>
       )}
+      {custom.length > 0 && (
+        <Group title={t('market.skills.customGroup')}>
+          <CustomSkills items={custom} />
+        </Group>
+      )}
       {isLoading && !categories ? (
         <>
           <SectionSkeleton count={PREVIEW_COUNT} />
@@ -240,12 +257,13 @@ const Catalog = memo(() => {
 
 Catalog.displayName = 'MarketSkillCatalog';
 
-/** Search results: matching installed skills first, then the market's. */
+/** Search results: matching skills in the library first, then the market's. */
 const SearchResults = memo<{ query: string }>(({ query }) => {
   const { t } = useTranslation('setting');
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const installed = useInstalledSkills().filter((skill) => matches(skill, query));
   const fromGithub = useInstalledGithubSkills(query);
+  const custom = useCustomSkills(query);
   const address = parseGithubSource(query);
   const { setGithubUrl } = useSkillsNav();
   const { isLoading, items, total } = useMarketSkills({ q: query }, pageSize, !address);
@@ -271,6 +289,11 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
       {fromGithub.length > 0 && (
         <Group title={t('market.skills.github.installedGroup')}>
           <InstalledGithubSkills items={fromGithub} />
+        </Group>
+      )}
+      {custom.length > 0 && (
+        <Group title={t('market.skills.customGroup')}>
+          <CustomSkills items={custom} />
         </Group>
       )}
       <Group title={t('market.skills.results')}>
@@ -347,13 +370,13 @@ const GroupPage = memo<{ group: string }>(({ group }) => {
 GroupPage.displayName = 'MarketSkillGroupPage';
 
 /**
- * The Skills page: my skills (from the Market, then from GitHub), then the LobeHub
+ * The Skills page: my skills (from the Market, from GitHub, then custom), then the LobeHub
  * Market's skills by category, each a short preview whose arrow opens the whole
  * group. Searching lists every match, then public GitHub repositories; a pasted
  * GitHub address offers that repository instead. "Add from GitHub" opens the
  * GitHub import page with an empty address.
  */
-const SkillsPage = memo(() => {
+const SkillsPageContent = memo(() => {
   const { t } = useTranslation('setting');
   const [query, setQuery] = useState('');
   const q = useDebounce(query.trim(), { wait: 300 });
@@ -389,6 +412,17 @@ const SkillsPage = memo(() => {
     </Flexbox>
   );
 });
+
+SkillsPageContent.displayName = 'MarketSkillsPageContent';
+
+/** In the Marketplace's centered column, like the other catalogs and their pages. */
+const SkillsPage = memo(() => (
+  <MarketScrollProvider viewportId={SCROLL_PARENT_ID}>
+    <div {...stylex.props(catalogStyles.frame)}>
+      <SkillsPageContent />
+    </div>
+  </MarketScrollProvider>
+));
 
 SkillsPage.displayName = 'MarketSkillsPage';
 

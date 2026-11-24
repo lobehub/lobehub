@@ -11,24 +11,27 @@ import {
   Text,
   ToggleGroup,
 } from '@lobehub/ui';
-import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessPreciseSchedule } from '@/business/client/hooks/useBusinessPreciseSchedule';
 import { densityVars } from '@/styles/densityVars';
 
 import {
-  buildCronPattern,
   getMinuteChoices,
-  parseCronPattern,
   SCHEDULE_TYPE_OPTIONS,
-  type ScheduleType,
   TIMEZONE_OPTIONS,
   type TimezoneOption,
   WEEKDAYS,
 } from './CronConfig';
+import {
+  CUSTOM_MINUTE_UPGRADE,
+  type SchedulerFormChange,
+  useSchedulerForm,
+} from './useSchedulerForm';
+
+export type { SchedulerFormChange } from './useSchedulerForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   fieldLabel: css`
@@ -51,21 +54,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const DEFAULT_PATTERN = '0 9 * * *';
-const DEFAULT_TIMEZONE = 'UTC';
-
 const pad = (n: number) => String(n).padStart(2, '0');
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({ label: pad(hour), value: hour }));
-
-/** Sentinel minute option that opens the upgrade flow instead of changing the value. */
-const CUSTOM_MINUTE_UPGRADE = -1;
-
-export interface SchedulerFormChange {
-  maxExecutions: number | null;
-  pattern: string;
-  timezone: string;
-}
 
 interface SchedulerFormProps {
   maxExecutions?: number | null;
@@ -83,135 +74,23 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     [t],
   );
 
-  // Local state seeded once from props at mount; never re-synced. Keeps the
-  // form in user control even if an unrelated detail refresh runs concurrently.
-  // Parent should `key={taskId}` this component to remount cleanly across tasks.
-  const [initial] = useState(() => {
-    const parsed = parseCronPattern(pattern || DEFAULT_PATTERN);
-    return {
-      ...parsed,
-      triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
-    };
-  });
-
-  const [scheduleType, setScheduleType] = useState<ScheduleType>(initial.scheduleType);
-  const [triggerTime, setTriggerTime] = useState<Dayjs>(initial.triggerTime);
-  const [hourlyInterval, setHourlyInterval] = useState<number>(initial.hourlyInterval ?? 1);
-  const [weekdays, setWeekdays] = useState<number[]>(
-    initial.weekdays ?? (initial.scheduleType === 'weekly' ? [1, 2, 3, 4, 5] : []),
-  );
-  const [tz, setTz] = useState<string>(timezone || DEFAULT_TIMEZONE);
-  const [maxExec, setMaxExec] = useState<number | null>(maxExecutions ?? null);
-  const [continuous, setContinuous] = useState<boolean>(
-    maxExecutions === null || maxExecutions === undefined,
-  );
-
-  const emit = useCallback(
-    (
-      overrides: Partial<{
-        hourlyInterval: number;
-        maxExec: number | null;
-        scheduleType: ScheduleType;
-        triggerTime: Dayjs;
-        tz: string;
-        weekdays: number[];
-      }>,
-    ) => {
-      // When the user is mid-editing maxExec (cleared the input but hasn't
-      // typed yet), local maxExec is null but `continuous` is still false.
-      // Falling back to the persisted prop here avoids emitting null for an
-      // unrelated field change — which would otherwise flip Continuous on.
-      const fallbackMaxExec = continuous ? null : (maxExec ?? maxExecutions ?? null);
-      const next = {
-        hourlyInterval: overrides.hourlyInterval ?? hourlyInterval,
-        maxExec: overrides.maxExec === undefined ? fallbackMaxExec : overrides.maxExec,
-        scheduleType: overrides.scheduleType ?? scheduleType,
-        triggerTime: overrides.triggerTime ?? triggerTime,
-        tz: overrides.tz ?? tz,
-        weekdays: overrides.weekdays ?? weekdays,
-      };
-      const nextPattern = buildCronPattern(
-        next.scheduleType,
-        next.triggerTime,
-        next.hourlyInterval,
-        next.weekdays,
-      );
-      onChange({ maxExecutions: next.maxExec, pattern: nextPattern, timezone: next.tz });
-    },
-    [
-      continuous,
-      hourlyInterval,
-      maxExec,
-      maxExecutions,
-      onChange,
-      scheduleType,
-      triggerTime,
-      tz,
-      weekdays,
-    ],
-  );
-
-  const handleScheduleTypeChange = (value: ScheduleType) => {
-    const nextWeekdays = value === 'weekly' ? (weekdays.length ? weekdays : [1, 2, 3, 4, 5]) : [];
-    setScheduleType(value);
-    setWeekdays(nextWeekdays);
-    emit({ scheduleType: value, weekdays: nextWeekdays });
-  };
-
-  const handleHourChange = (hour: number) => {
-    const next = triggerTime.hour(hour);
-    setTriggerTime(next);
-    emit({ triggerTime: next });
-  };
-
-  const handleMinuteChange = (minute: number) => {
-    if (minute === CUSTOM_MINUTE_UPGRADE) {
-      onUpgrade?.();
-      return;
-    }
-    const next = triggerTime.minute(minute);
-    setTriggerTime(next);
-    emit({ triggerTime: next });
-  };
-
-  const handleHourlyIntervalChange = (value: number | string | null) => {
-    const next = typeof value === 'number' && value > 0 ? value : 1;
-    setHourlyInterval(next);
-    emit({ hourlyInterval: next });
-  };
-
-  const handleWeekdaysChange = (values: string[]) => {
-    const next = values.map(Number).sort((a, b) => a - b);
-    setWeekdays(next);
-    emit({ weekdays: next });
-  };
-
-  const handleTimezoneChange = (value: string) => {
-    setTz(value);
-    emit({ tz: value });
-  };
-
-  const handleMaxExecChange = (value: number | string | null) => {
-    if (typeof value === 'number' && value > 0) {
-      setMaxExec(value);
-      emit({ maxExec: value });
-      return;
-    }
-    // Mid-edit clear (e.g. user is replacing 100 with 5): keep the field
-    // empty locally but don't toggle Continuous or emit a null upstream.
-    setMaxExec(null);
-  };
-
-  const handleContinuousChange = (checked: boolean) => {
-    setContinuous(checked);
-    if (checked) {
-      emit({ maxExec: null });
-    } else {
-      const next = maxExec ?? 100;
-      setMaxExec(next);
-      emit({ maxExec: next });
-    }
-  };
+  const {
+    continuous,
+    handleContinuousChange,
+    handleHourChange,
+    handleHourlyIntervalChange,
+    handleMaxExecChange,
+    handleMinuteChange,
+    handleScheduleTypeChange,
+    handleTimezoneChange,
+    handleWeekdaysChange,
+    hourlyInterval,
+    maxExec,
+    scheduleType,
+    triggerTime,
+    tz,
+    weekdays,
+  } = useSchedulerForm({ maxExecutions, onChange, onUpgrade, pattern, timezone });
 
   const showTimeRow = scheduleType !== 'hourly';
 

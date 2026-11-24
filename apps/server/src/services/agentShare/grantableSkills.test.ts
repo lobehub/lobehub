@@ -100,6 +100,34 @@ describe('listShareGrantableSkills', () => {
       expect(skills.map((skill) => skill.identifier)).toContain('lobehub');
     });
 
+    it('keeps implicit builtin skills for an owner with no settings row', async () => {
+      mocks.getUserSettings.mockResolvedValue(undefined);
+
+      const skills = await listShareGrantableSkills({
+        agentConfig: legacyAgent,
+        agentId: 'agent-1',
+        db: {} as any,
+        includeLegacyBuiltinSkills: true,
+        userId: 'owner',
+      });
+
+      expect(skills.map((skill) => skill.identifier)).toContain('lobehub');
+    });
+
+    it('does not offer legacy builtin skills when the settings read fails', async () => {
+      mocks.getUserSettings.mockRejectedValue(new Error('settings unavailable'));
+
+      const skills = await listShareGrantableSkills({
+        agentConfig: legacyAgent,
+        agentId: 'agent-1',
+        db: {} as any,
+        includeLegacyBuiltinSkills: true,
+        userId: 'owner',
+      });
+
+      expect(skills.map((skill) => skill.identifier)).not.toContain('lobehub');
+    });
+
     it('does not auto-grant implicit builtin skills to a visitor run', async () => {
       const skills = await listShareGrantableSkills({
         agentConfig: legacyAgent,

@@ -85,6 +85,16 @@ describe('resolveShareVisitorDeviceAccess', () => {
     expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
   });
 
+  it('grants any visitor under `everyone`, without the list or the address book', async () => {
+    isChannelEnabled.mockResolvedValue(false);
+
+    expect(
+      await resolveShareVisitorDeviceAccess(db, share({ deviceAccess: 'everyone' }), 'stranger'),
+    ).toBe(true);
+    expect(filterAddressBookPeople).not.toHaveBeenCalled();
+    expect(isChannelEnabled).not.toHaveBeenCalled();
+  });
+
   it('denies a listed contact while contacts are off for the owner', async () => {
     const config = { deviceAccess: 'allowlist', deviceAllowUserIds: ['visitor-1'] } as const;
     filterAddressBookPeople.mockResolvedValue(['visitor-1']);

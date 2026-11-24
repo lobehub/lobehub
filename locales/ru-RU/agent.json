@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Посетители не просто читают этого агента — они запускают его. Каждый ответ генерируется в рабочем пространстве и оплачивается из его общего бюджета, не потребляя квоту создателя или другого участника. Агент действует только с доступом, который вы предоставляете ниже.",
   "share.settings.notice.workspaceTitle": "Посетители запускают этого агента за счет бюджета рабочего пространства",
   "share.settings.permissions.allowCreatorViewSessions": "Разрешить мне просматривать беседы посетителей",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "По умолчанию отключено: беседы посетителей остаются конфиденциальными для них.",
   "share.settings.permissions.allowReadMemory": "Разрешить чтение моей памяти",
   "share.settings.permissions.allowReadMemoryHint": "Агент может использовать вашу долгосрочную память при ответах посетителям.",
   "share.settings.permissions.desc": "Что может читать запуск посетителя и что посетитель может видеть в ответ.",

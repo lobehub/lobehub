@@ -4,6 +4,7 @@ import { type UserCredSummary } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type FC, memo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useDensity } from '@/styles/density';
 
@@ -12,6 +13,8 @@ import { styles } from './style';
 
 interface CredItemProps {
   cred: UserCredSummary;
+  /** Right-aligned row meta, e.g. the workspace visibility tag and the author avatar. */
+  extra?: ReactNode;
   /** Opens the item's detail, which holds its edit, remove and sharing actions. */
   onClick: (cred: UserCredSummary) => void;
   /** Tags shown after the name (owner, sharing state). */
@@ -22,15 +25,22 @@ interface CredItemProps {
 
 /**
  * One vault item: the website's logo (else the OAuth avatar or the type icon),
- * the name with its markers, and the description. The whole row opens it.
+ * the name with its markers, and one line of "type · account · description".
+ * The whole row opens it.
  */
-const CredItem: FC<CredItemProps> = memo(({ cred, onClick, tags, titleSuffix }) => {
+const CredItem: FC<CredItemProps> = memo(({ cred, extra, onClick, tags, titleSuffix }) => {
+  const { t } = useTranslation('setting');
   const { compact, tokens } = useDensity();
+
+  const subtitle = [t(`creds.types.${cred.type}`), cred.oauthUsername, cred.description]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Flexbox
       horizontal
       align="center"
+      aria-label={cred.name}
       gap={tokens.sectionGap}
       role="button"
       tabIndex={0}
@@ -55,12 +65,15 @@ const CredItem: FC<CredItemProps> = memo(({ cred, onClick, tags, titleSuffix }) 
           {titleSuffix}
           {tags}
         </Flexbox>
-        {cred.description && (
-          <span {...stylex.props(styles.description, compact && styles.descriptionCompact)}>
-            {cred.description}
-          </span>
-        )}
+        <span {...stylex.props(styles.description, compact && styles.descriptionCompact)}>
+          {subtitle}
+        </span>
       </Flexbox>
+      {extra && (
+        <Flexbox horizontal align="center" flex={'none'} gap={8}>
+          {extra}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

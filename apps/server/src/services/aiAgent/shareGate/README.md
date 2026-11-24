@@ -77,7 +77,9 @@ tool does not ship):
   (personal contacts, or the workspace's members and external contacts),
   including people added later; `allowlist` admits only visitors named in
   `deviceAllowUserIds`, and only while they are still in that address book.
-  There is no "every visitor" value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  `everyone` admits every signed-in visitor holding the link, set only
+  after the creator confirms that it reaches strangers; a legacy stored `all`
+  stays denied. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
   `canUseDevice` and re-applied at dispatch. The same grant admits
   device-only MCP servers (which still need their own tool grant). The device
   is always the Agent's configured execution environment; a visitor never

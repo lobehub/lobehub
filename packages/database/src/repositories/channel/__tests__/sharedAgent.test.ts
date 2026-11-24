@@ -376,7 +376,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
           message: 'This shared Agent reached its monthly usage limit',
           type: 'ShareSpendLimitExceeded',
         }),
-      ).toBe(true);
+      ).toBe('error');
       const job = (await visitor.detail(channel.id))!.jobs.find(
         (item) => item.id === claim.job.id,
       )!;

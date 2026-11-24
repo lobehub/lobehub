@@ -14,6 +14,7 @@ const {
   findOperation,
   findShare,
   getScopedOnlineDevices,
+  recordShareRunResult,
   resolveChannelAttachments,
   serviceOptions,
 } = vi.hoisted(() => ({
@@ -41,6 +42,7 @@ const {
   ),
   findOperation: vi.fn(),
   findShare: vi.fn(),
+  recordShareRunResult: vi.fn(),
   resolveChannelAttachments: vi.fn(),
   serviceOptions: [] as Array<{ options: unknown; userId: string }>,
 }));
@@ -75,6 +77,7 @@ vi.mock('@/server/services/aiAgent', () => ({
     }
   },
 }));
+vi.mock('@/server/services/aiAgent/shareGate/runMetrics', () => ({ recordShareRunResult }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultAgentConfig: () => ({}) }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: {} }));
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({ getScopedOnlineDevices }));
@@ -253,6 +256,81 @@ describe('dispatching a contact’s shared Agent', () => {
       message: 'This shared Agent reached its monthly usage limit',
       type: 'ShareSpendLimitExceeded',
     });
+  });
+
+  // A refusal before the run starts never reaches the runtime's completion, so the share's
+  // failure dashboard missed every limit refusal (trigger stays `channel` on these rows).
+  it('counts a refused reply as a share admission refusal by its type', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue('error');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      errorType: 'ShareSpendLimitExceeded',
+      outcome: 'refused',
+      stage: 'admission',
+    });
+  });
+
+  it('counts an untyped dispatch failure as an admission error', async () => {
+    findShare.mockResolvedValue({ ...liveShare, ownerId: 'x' });
+    executions.retireReservation.mockResolvedValue('error');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      errorType: undefined,
+      outcome: 'error',
+      stage: 'admission',
+    });
+  });
+
+  it('counts nothing at dispatch for a run that started', async () => {
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).not.toHaveBeenCalled();
+  });
+
+  it('counts a reply its requester cancelled before the run as interrupted, not a failure', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue('interrupted');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      outcome: 'interrupted',
+      stage: 'admission',
+    });
+  });
+
+  // The visitor pressed Stop after the reply was reserved but before its run started.
+  it.each([
+    [{ share }, 1],
+    [{ runtime: 'native' }, 0],
+  ])('counts a reply stopped before its run started (%o)', async (config, calls) => {
+    executions.retireReservation.mockResolvedValue('interrupted');
+    const row = { config, operation: { userId: 'owner' } };
+    const query = Object.assign(Promise.resolve([row]), {
+      from: () => query,
+      innerJoin: () => query,
+      where: () => query,
+    });
+    await new ChannelCoordinator({ select: () => query } as never).stopWriters([
+      { channelId: 'channel', id: 'job', operationId: 'op' },
+    ]);
+
+    expect(recordShareRunResult).toHaveBeenCalledTimes(calls);
+    if (calls)
+      expect(recordShareRunResult).toHaveBeenCalledWith({
+        outcome: 'interrupted',
+        stage: 'admission',
+      });
+  });
+
+  it('counts nothing when another worker already settled the reservation', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue(false);
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).not.toHaveBeenCalled();
   });
 
   // A shared Claude Code / Codex Agent's run stops at the share gate when the share grants the

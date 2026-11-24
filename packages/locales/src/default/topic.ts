@@ -17,6 +17,8 @@ export default {
   'actions.archiveMergedPullRequestsOwn': 'Archive My Topics with Merged PRs',
   'actions.archiveMergedPullRequestsWorkspace': 'Archive All Topics with Merged PRs',
   'actions.archiveMergedPullRequestsNone': 'No topics with merged PRs found.',
+  'actions.archiveMergedPullRequestsFailed':
+    "Couldn't check which topics have merged PRs. Check your network and try again.",
   'actions.archiveMergedPullRequestsSuccess_one': 'Archived {{count}} topic with a merged PR.',
   'actions.archiveMergedPullRequestsSuccess_other': 'Archived {{count}} topics with merged PRs.',
   'actions.confirmArchiveMergedPullRequestsWorkspace':
@@ -337,13 +339,14 @@ export default {
   'scheduledStatusTip': 'Scheduled to run at {{time}}.',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
+  'shareVisitorTopics.backToShare': 'Back to Share',
+  'shareVisitorTopics.empty': 'No visitor conversations yet',
   'shareVisitorTopics.readOnly': 'Read-only',
   'shareVisitorTopics.readOnlyHint':
     "A visitor's conversation through your share link. You can read it, but not reply or change it.",
   'shareVisitorTopics.title': 'Visitors',
   'shareVisitorTopics.unavailable': 'This conversation is no longer available',
   'shareVisitorTopics.untitled': 'Untitled conversation',
-  'shareVisitorTopics.viewAll': 'View all visitor conversations',
   'sidebar.collapseAll': 'Collapse all groups',
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',

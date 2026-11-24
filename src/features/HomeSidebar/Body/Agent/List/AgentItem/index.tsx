@@ -12,6 +12,7 @@ import AgentAvatar, { isGeneratedAgentAvatar } from '@/components/AgentAvatar';
 import PrivateLockIcon from '@/components/PrivateLockIcon';
 import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { useAgentVisibilityControl } from '@/features/AgentVisibility/useAgentVisibilityControl';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -24,7 +25,6 @@ import { useAgentModal } from '../../ModalProvider';
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
-import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 import VisibilityLockAction from './VisibilityLockAction';
 
@@ -150,25 +150,25 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     openCreateGroupModal(id, visibility);
   }, [id, openCreateGroupModal, visibility]);
 
-  // In a workspace the row's column is the team pin (public) or the creator's
-  // own pin (private); the member's own pins live in their preference.
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
+  // In a workspace the row's column is a default pin for new members (public)
+  // or the creator's own pin (private); the member's own pins live in their
+  // preference.
+  const { isMyPinned, isPrivate } = useSidebarPinState({ id, pinned, visibility });
 
   // Memoize pin icon
   // The lock sits with the pin in the fixed trailing slot rather than after
   // the title, where a long name or role tag would truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
+      isMyPinned || isPrivate ? (
         <>
           {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
+          {isMyPinned && (
             <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
           )}
         </>
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [isMyPinned, isPrivate],
   );
 
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
@@ -237,10 +237,15 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     visibility,
   });
 
-  // The lock is the same door as the menu's Visibility row: whoever may change
-  // the scope can open it from the lock on hover.
-  const visibilityMenu = useAgentVisibilityMenu({ id, slug, userId, visibility });
-  const showVisibilityLock = isPrivate && visibilityMenu.canChange;
+  // Whoever may change the scope gets the lock on hover, a shortcut into the
+  // Agent's Permissions settings where visibility now lives.
+  const { canChange: canChangeVisibility } = useAgentVisibilityControl({
+    id,
+    slug,
+    userId,
+    visibility,
+  });
+  const showVisibilityLock = isPrivate && canChangeVisibility;
 
   return (
     <WorkspaceLink
@@ -264,7 +269,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
           // so the resting lock fades under the clickable one.
           showVisibilityLock ? (
             <>
-              <VisibilityLockAction options={visibilityMenu.options} />
+              <VisibilityLockAction agentId={id} />
               <Actions dropdownMenu={dropdownMenu} />
             </>
           ) : (

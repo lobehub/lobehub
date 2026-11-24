@@ -87,7 +87,7 @@ interface PermissionModeSelectorProps {
 }
 
 /**
- * The composer's Claude Code permission mode (Better Coding Experience lab).
+ * The composer's Claude Code permission mode.
  * The chip names the mode the topic's run is in; when that is not the picked
  * one (root, an outdated `lh`), it says why.
  */

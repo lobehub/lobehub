@@ -815,6 +815,9 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.calendar.title': 'Codex usage calendar',
+  'heteroAgent.codexQuota.creditsBalance': 'Credits balance',
+  'heteroAgent.codexQuota.creditsUnlimited': 'Unlimited',
+  'heteroAgent.codexQuota.creditsUsdEstimate': '≈ {{amount}}',
   'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
   'heteroAgent.codexQuota.errorConnection':
     "Couldn't reach the Codex quota endpoint. Check your network or LobeHub proxy settings.",
@@ -1013,8 +1016,6 @@ export default {
   'heteroAgent.executionTarget.onlineConnections_one': 'Online · {{count}} connection',
   'heteroAgent.executionTarget.onlineConnections_other': 'Online · {{count}} connections',
   'heteroAgent.executionTarget.presenceChecking': 'Checking status…',
-  'heteroAgent.executionTarget.projectDevicesHint':
-    "Only devices with this project's working directory are listed. Add a directory for another device in the project settings.",
   'heteroAgent.executionTarget.switchProjectTopic.content':
     'This topic will run in the project directory "{{directory}}" on {{device}}. Its next turn starts a fresh session there.',
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
@@ -1024,15 +1025,8 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
-  'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
-  'heteroAgent.executionTarget.persistentSandboxDesc':
-    'Keeps results and work on your drive, for everyday tasks',
-  'heteroAgent.executionTarget.temporarySandbox': 'Temporary Sandbox',
-  'heteroAgent.executionTarget.temporarySandboxDesc':
-    'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
-  'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
@@ -1135,9 +1129,7 @@ export default {
   'inputQueue.edit': 'Edit',
   'inputQueue.enqueueRejected': 'Queue is full. Try again after the current run finishes.',
   'inputQueue.queuedHint': 'Sends when the current step finishes',
-  'inputQueue.queuedMergeHint': 'Merged and sent when the current step finishes',
   'inputQueue.queuedRunEndHint': 'Sends when the current run finishes',
-  'inputQueue.queuedRunEndMergeHint': 'Merged and sent when the current run finishes',
   'inputQueue.queuedOneByOneHint': 'Sent one at a time after the current run finishes',
   'inputQueue.steerDeliveryUnknownHint':
     'Couldn’t confirm the agent got this. Send it again or delete it',
@@ -1803,9 +1795,12 @@ export default {
   'textSelection.quote': 'Quote',
   'pin': 'Pin',
   'pinOff': 'Unpin',
-  'pinForTeam': 'Pin for team',
-  'pinForTeamForbidden': 'Only workspace owners and admins can change team pins',
-  'unpinForTeam': 'Unpin for team',
+  'recommendAgent': 'Add to recommended agents',
+  'recommendAgentSuccess':
+    'Added to recommended agents. New members will start with it in their sidebar',
+  'recommendAgentForbidden': 'Only workspace owners and admins can change recommended agents',
+  'unrecommendAgent': 'Remove from recommended agents',
+  'unrecommendAgentSuccess': 'Removed from recommended agents',
   'rag.referenceChunks': 'Reference Source',
   'rag.userQuery.actions.delete': 'Delete Query Rewrite',
   'rag.userQuery.actions.regenerate': 'Regenerate Query',
@@ -1836,17 +1831,10 @@ export default {
   'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
-  'sandboxStorage.ephemeral': 'Temporary working directory',
   'sandboxStorage.persistentUpsell': 'Persistent working directory',
   'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxStorage.setUpEnvironment': 'Set up an environment',
   'sandboxStorage.manage': 'Manage',
-  // The menu lists environments: a person picks the environment, and which
-  // copy (instance) of it the conversation lands in is only asked about when
-  // there is more than one. "Copy" is the product's word for an instance.
-  'sandboxStorage.pickerTitle': 'Environment',
-  'sandboxStorage.pickerInfoTooltip':
-    'An environment describes what a run needs around it — files, or repositories, setup and variables. Conversations run inside one of its copies and keep what they leave there; a second copy only appears when two conversations need the same environment at once.',
   'sandboxStorage.kind.files': 'Files',
   'sandboxStorage.kind.code': 'Code',
   'sandboxStorage.copies': 'Copies',
@@ -4091,17 +4079,19 @@ export default {
   'workingPanel.browser.tool.scroll': 'Scrolled page',
   'workingPanel.browser.tool.setViewport': 'Set viewport',
   'workingPanel.browser.tool.snapshot': 'Read page elements',
+  'workingPanel.claudeMemory.copyPath': 'Copy path',
+  'workingPanel.claudeMemory.copyPathSuccess': 'Path copied',
   'workingPanel.claudeMemory.empty.description':
     'Claude Code saves what is worth remembering here as it works in this project.',
   'workingPanel.claudeMemory.empty.title': "Claude hasn't saved anything for this project yet",
-  'workingPanel.claudeMemory.group.feedback': 'Feedback',
-  'workingPanel.claudeMemory.group.index': 'Index',
+  'workingPanel.claudeMemory.group.feedback': 'Your guidance',
   'workingPanel.claudeMemory.group.other': 'Other',
   'workingPanel.claudeMemory.group.project': 'Project',
-  'workingPanel.claudeMemory.group.reference': 'References',
+  'workingPanel.claudeMemory.group.reference': 'External resources',
   'workingPanel.claudeMemory.group.user': 'About you',
-  'workingPanel.claudeMemory.indexHint': 'Loaded at the start of every session',
   'workingPanel.claudeMemory.location': 'Saved in {{path}}',
+  'workingPanel.claudeMemory.more': 'More',
+  'workingPanel.claudeMemory.openIndex': 'Open the MEMORY.md index, loaded into every session',
   'workingPanel.claudeMemory.refresh': 'Refresh',
   'workingPanel.claudeMemory.title': 'Claude Memory',
   'workingPanel.openMenu.configuration': 'Configuration',
@@ -4748,40 +4738,18 @@ export default {
     'The worktree is still being cleaned up. Try sending again in a moment.',
   'worktreeRestore.waiting': 'Waiting for the worktree cleanup to finish before restoring it…',
   'you': 'You',
-  'sandboxDrive.manageEnvironments': 'Settings',
-  'sandboxDrive.openStorage': 'Sandbox Storage',
-  'sandboxEnvironment.none': 'No environment',
-  'sandboxEnvironment.missing': 'Environment unavailable',
-  'sandboxEnvironment.loading': 'Loading environment…',
-  'sandboxDrive.pickerTitle': 'Work location',
-  'sandboxDrive.pickerInfoTooltip':
-    'A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. An environment is set up before the first command.',
-  'sandboxEnvironment.title': 'Environment',
-  'sandboxEnvironment.hint':
-    'Its repositories are cloned, setup runs and its variables are set before the first command.',
-  'sandboxEnvironment.empty': 'No environments yet. Create one to get started.',
-  'sandboxEnvironment.add': 'New environment',
-  'sandboxEnvironment.loadFailed': "Couldn't load environments",
-  'sandboxEnvironment.retry': 'Retry',
-  'sandboxEnvironment.saveFailed': 'Could not change the environment. Try again.',
   'sandboxDrive.root': 'Root',
-  'sandboxDrive.building': '{{name}} · building',
+  'sandboxOptions.temporary': 'Temporary',
   'sandboxDrive.title': 'Cloud drive',
   'sandboxDrive.browseOther': 'Choose another folder…',
-  'sandboxDrive.environmentBuildingDesc':
-    'Environment directory · building, usable once it finishes',
   'sandboxDrive.fallback.directoryMissing':
     'This folder no longer exists on the drive. Runs use a temporary sandbox until you pick another folder.',
   'sandboxDrive.fallback.instanceUnavailable':
-    'This environment directory can’t be used here any more. Runs use a temporary sandbox until you pick another one.',
+    'This folder can’t be used here any more. Runs use a temporary sandbox until you pick another folder.',
   'sandboxDrive.fallback.rootNotAllowed':
     'The public drive’s root cannot be a working folder. This run will use a temporary sandbox; pick a folder.',
-  'sandboxDrive.fallbackChip.directoryMissing': 'Folder no longer exists',
-  'sandboxDrive.fallbackChip.instanceUnavailable': 'Environment unavailable',
-  'sandboxDrive.fallbackChip.rootNotAllowed': 'Pick a folder',
   'sandboxDrive.fallback.instanceRebuildRequired':
-    'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
-  'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
+    'This private folder is on the public drive and can’t be used there. This run will use a temporary sandbox; pick another folder.',
   'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
   'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
   'resource.artifacts.history.restoreFailedRetry':
@@ -4822,7 +4790,6 @@ export default {
   'taskList.find.open': 'Find in view',
   'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
-  'sandboxEnvironment.noRepository': 'No repository',
   'sessionGroup.createFailedRetry':
     "Couldn't create the category. Check your network and try again.",
   'shareModal.downloadFailedRetry': "Couldn't download the PDF. Check your network and try again.",

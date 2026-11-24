@@ -75,7 +75,7 @@ export const agentShareConfigSchema = z
       .max(500)
       .refine((ids) => new Set(ids).size === ids.length, 'Duplicate declined identifier')
       .optional(),
-    deviceAccess: z.enum(['none', 'contacts', 'allowlist']).optional(),
+    deviceAccess: z.enum(['none', 'contacts', 'allowlist', 'everyone']).optional(),
     /** Each id must also be in the scope's address book; `updateShareConfig` checks that. */
     deviceAllowUserIds: z
       .array(z.string().trim().min(1).max(64))

@@ -195,10 +195,12 @@ export const prepareHeteroRun = async (
   const recentMessagesPromise = traceHeteroStage('history', loadRecentMessages);
   const [resumeSessionId, operationJwt, topic] = await settleInOrder([
     // A sub-agent resumes its own session, never the topic's: the topic's
-    // belongs to the conversation's agent or to another sub-agent.
+    // belongs to the conversation's agent or to another sub-agent. The thread
+    // decides, not `isolationThread`: that flag is only set when the sub-agent
+    // is spawned, and a later message in its thread has to resume it too.
     traceHeteroStage('resume_session', () =>
-      appContext?.isolationThread && appContext.threadId
-        ? heteroService.getIsolationThreadResumeSessionId(appContext.threadId)
+      appContext?.threadId
+        ? heteroService.getThreadResumeSessionId(appContext.threadId, topicId)
         : heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
     traceHeteroStage('sign_operation_jwt', signOperationJwt),
@@ -206,16 +208,16 @@ export const prepareHeteroRun = async (
     traceHeteroStage('topic', () => deps.topicModel.findById(topicId)),
   ]);
   const topicRepos: string[] = topic?.metadata?.repos ?? [];
-  const permissionModePromise = resolveDispatchPermissionMode(deps.db, deps.userId, {
+  const permissionMode = resolveDispatchPermissionMode({
     heteroType,
     topicMetadata: topic?.metadata,
-  }).then(async (mode) => {
-    // An `lh` that never reports the mode back is flagged when the run ends.
-    await expectPermissionModeReport(deps.topicModel, { mode, operationId, topicId }).catch(
-      (error) => log('execAgent: permission mode report marker failed: %O', error),
-    );
-    return mode;
   });
+  // An `lh` that never reports the mode back is flagged when the run ends.
+  const permissionModeReportPromise = expectPermissionModeReport(deps.topicModel, {
+    mode: permissionMode,
+    operationId,
+    topicId,
+  }).catch((error) => log('execAgent: permission mode report marker failed: %O', error));
 
   const collaborationModePromise = resolveDispatchCollaborationMode(deps.db, deps.userId, {
     heteroType,
@@ -399,6 +401,7 @@ export const prepareHeteroRun = async (
         )
       : undefined;
 
+  await permissionModeReportPromise;
   const heteroParams = {
     agentType: heteroType,
     assistantMessageId,
@@ -416,7 +419,7 @@ export const prepareHeteroRun = async (
     imageList: heteroImageList,
     jwt: operationJwt,
     operationId,
-    permissionMode: await permissionModePromise,
+    permissionMode,
     // The CLI receives only the request: `/goal` is already in the system
     // context, and Claude Code's own `/goal` command would otherwise take it.
     // Non-image attachments have no content block a CLI accepts, so they ride

@@ -1,12 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { SkillDetailView, SkillNavKey } from '@/features/CommunitySkillDetail';
+import { catalogStyles } from '@/features/Marketplace/Catalog/styles';
 import MarketplaceSkillDetail from '@/features/Marketplace/Skills/SkillDetail';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
@@ -83,11 +85,12 @@ export const MobileSkillPage = (_props: { mobile?: boolean }) => {
  */
 const DesktopSkillPage = memo(() => {
   const { slug = '' } = useParams<{ slug: string }>();
-  // The detail layout's header already carries the back arrow.
+  // The detail layout's header already carries the back arrow; the centered
+  // column matches the Agent and App pages.
   return (
-    <Flexbox data-testid="skill-detail-content" gap={16}>
+    <div data-testid="skill-detail-content" {...stylex.props(catalogStyles.frame)}>
       <MarketplaceSkillDetail identifier={slug} key={slug} />
-    </Flexbox>
+    </div>
   );
 });
 

@@ -1,3 +1,4 @@
+import { validateCronPattern } from '@lobechat/utils/cronEval';
 import dayjs, { type Dayjs } from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -68,16 +69,16 @@ export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>)
       });
     }
     case 'weekly': {
-      const days = parsed.weekdays ?? [];
-      const allDays = days.length === 7;
-      if (allDays) {
+      const days = parsed.weekdays;
+      if (!days?.length) return pattern;
+      if (days.length === WEEKDAYS.length) {
         return t('taskSchedule.summary.daily', {
           time: formatHHmm(parsed.triggerHour, parsed.triggerMinute),
         });
       }
-      const labels = [...days]
-        .sort((a, b) => a - b)
-        .map((d) => t(WEEKDAYS.find((w) => w.key === d)!.label as any))
+      const labels = WEEKDAYS.filter(({ key }) => days.includes(key))
+        .sort((a, b) => a.key - b.key)
+        .map(({ label }) => t(label))
         .join('/');
       return t('taskSchedule.summary.weekly', {
         days: labels,
@@ -139,6 +140,10 @@ const computeNextScheduleFiring = (
 export const nextScheduleFiring = (pattern: string, tz: string | null): Dayjs | null => {
   const parsed = parseCronPattern(pattern);
   const safeTz = tz || dayjs.tz.guess();
+  if (parsed.scheduleType === 'weekly' && !parsed.weekdays?.length) {
+    const result = validateCronPattern(pattern, safeTz, { count: 1 });
+    return result.valid ? dayjs(result.nextRuns[0]).tz(safeTz) : null;
+  }
   try {
     return computeNextScheduleFiring(
       parsed.scheduleType,

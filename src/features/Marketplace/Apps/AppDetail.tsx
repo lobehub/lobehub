@@ -11,7 +11,7 @@ import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import { MarketplaceDetailBodySkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { ConnectorDetailEmbeddedContext } from '@/features/Connectors/ConnectorDetail';
 import { hasConnectorPage } from '@/features/Integrations/connectorPage';
 import InstallResult from '@/features/Messenger/InstallResult';
@@ -228,7 +228,7 @@ export default function AppDetail() {
           error={error}
           isEmpty={!app}
           isLoading={loading}
-          loading={<CatalogRowsSkeleton />}
+          loading={<MarketplaceDetailBodySkeleton />}
           onRetry={retry}
         >
           {app && (

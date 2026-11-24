@@ -9,6 +9,7 @@ import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModel
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSingleton } from '@/hooks/useSingleton';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
 import { useBuildListItems } from '../../hooks/useBuildListItems';
@@ -51,6 +52,7 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
   const {
+    isModelHidden,
     isModelRestricted,
     onBeforeModelSelect,
     onRestrictedModelClick,
@@ -65,7 +67,10 @@ export const List: FC<ListProps> = ({
   );
 
   const chatEnabledList = useEnabledChatModels();
-  const enabledList = enabledListProp ?? chatEnabledList;
+  const enabledList = useMemo(
+    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isModelHidden),
+    [chatEnabledList, enabledListProp, isModelHidden],
+  );
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,

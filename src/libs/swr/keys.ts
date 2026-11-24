@@ -328,16 +328,6 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
-  gitLinkedPR: def(
-    'device:gitLinkedPR',
-    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
-      'device:gitLinkedPR',
-      deviceId,
-      path,
-      branch,
-      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
-    ],
-  ),
   gitPullRequestDetail: def(
     'device:gitPullRequestDetail',
     (deviceId: string, path: string, number: number) => [

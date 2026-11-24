@@ -15,7 +15,7 @@ const resolve = (topicMetadata: Record<string, unknown> | undefined, heteroType 
 
 describe('resolveDispatchCollaborationMode', () => {
   beforeEach(() => {
-    preference.lab = { enableBetterCodingExperience: true, enableCodexAppServer: true };
+    preference.lab = { enableCodexAppServer: true };
   });
 
   it('sends nothing for a topic that never turned Plan on, or another agent', async () => {
@@ -23,16 +23,14 @@ describe('resolveDispatchCollaborationMode', () => {
     await expect(resolve({ heteroPlanMode: true }, 'claude-code')).resolves.toBeUndefined();
   });
 
-  it('sends the switch, off included, with both labs on', async () => {
+  it('sends the switch, off included, with the app-server lab on', async () => {
     await expect(resolve({ heteroPlanMode: true })).resolves.toBe('plan');
     await expect(resolve({ heteroPlanMode: false })).resolves.toBe('default');
   });
 
-  it('sends nothing with either lab off', async () => {
-    for (const lab of [{ enableCodexAppServer: true }, { enableBetterCodingExperience: true }]) {
-      preference.lab = lab;
-      await expect(resolve({ heteroPlanMode: true })).resolves.toBeUndefined();
-    }
+  it('sends nothing with the app-server lab off', async () => {
+    preference.lab = {};
+    await expect(resolve({ heteroPlanMode: true })).resolves.toBeUndefined();
   });
 });
 

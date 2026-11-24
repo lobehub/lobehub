@@ -166,6 +166,19 @@ export interface LobeChatPluginApi {
    *
    */
   humanIntervention?: ExtendedHumanInterventionConfig;
+  /**
+   * Calls to this API one operation may run, counted across every LLM turn and
+   * regardless of arguments. Calls past it are answered with a rejected tool
+   * result telling the model to work with what it already has, instead of
+   * being dispatched. Set it on retrieval-style APIs a model can loop on by
+   * rephrasing the query each turn — the repeat guard keys on arguments and
+   * never sees that loop. Leave it unset for APIs that legitimately run many
+   * times in one operation (file reads, shell commands, job polling).
+   *
+   * Framework-only config like `humanIntervention`: it never reaches the
+   * LLM-facing tool spec.
+   */
+  maxCallsPerOperation?: number;
   name: string;
   /**
    * Run this API's calls one after another, in the order the model emitted

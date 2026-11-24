@@ -229,7 +229,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
@@ -284,7 +284,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
 
-    expect(await execution.retireReservation(channel.id, a1.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, a1.id)).toBe('error');
     expect(await execution.claim(channel.id, a2.id, lease)).not.toBeNull();
   });
 
@@ -326,7 +326,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, rootJob.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, threadJob.id, lease)).toBeNull();
 
-    expect(await execution.retireReservation(channel.id, rootJob.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, rootJob.id)).toBe('error');
     expect(await execution.claim(channel.id, threadJob.id, lease)).not.toBeNull();
   });
 
@@ -608,7 +608,7 @@ describe('ChannelExecutionRepository', () => {
       code: 'CONFLICT',
     });
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -634,7 +634,24 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.heartbeat(job.id, lease)).toBe(true);
     expect(await execution.heartbeat(job.id, { ...lease, leaseOwner: 'other' })).toBe(false);
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     expect(await execution.heartbeat(job.id, lease)).toBe(false);
+  });
+
+  it('retires a reservation cancelled before it started as interrupted', async () => {
+    const { channel, job } = await mentionAgent();
+    const claim = (await execution.claim(channel.id, job.id, lease))!;
+    await db
+      .update(channelJobs)
+      .set({ publicationRevoked: true })
+      .where(eq(channelJobs.id, job.id));
+
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('interrupted');
+    const [operation] = await db
+      .select({ status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, claim.job.operationId!));
+    expect(operation.status).toBe('interrupted');
+    expect((await jobById(job.id)).status).toBe('cancelled');
   });
 });

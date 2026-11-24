@@ -26,9 +26,9 @@ export const filterCreds = <
     if (type && type !== 'all' && cred.type !== type) return false;
     if (!needle) return true;
 
-    return [cred.name, cred.key, cred.description].some((text) =>
-      text?.toLowerCase().includes(needle),
-    );
+    // Not the key: it is generated and never shown, so matching it would
+    // surface rows for text the user cannot see.
+    return [cred.name, cred.description].some((text) => text?.toLowerCase().includes(needle));
   });
 };
 

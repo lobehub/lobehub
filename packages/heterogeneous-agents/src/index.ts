@@ -1,7 +1,6 @@
 export {
   AmpAdapter,
-  AntigravityAdapter,
-  type AntigravityAdapterOptions,
+  AntigravityAcpAdapter,
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
   CopilotAcpAdapter,

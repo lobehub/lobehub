@@ -2,7 +2,7 @@ import type { ChatTopicMetadata, CodexCollaborationMode } from '@lobechat/types'
 import { isCodexCollaborationMode } from '@lobechat/types';
 
 /*
- * Browser-safe slice of the Codex Plan switch (Better Coding Experience lab):
+ * Browser-safe slice of the Codex Plan switch:
  * the mode report a native Codex run emits and the topic patch it maps to.
  * The thread logic lives in `codex/CodexThreadSession` (Node only).
  */

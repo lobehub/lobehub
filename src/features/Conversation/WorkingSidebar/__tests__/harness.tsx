@@ -42,23 +42,37 @@ const effectiveConfig = vi.hoisted(() => ({
 }));
 
 const platform = vi.hoisted(() => ({ isDesktop: true }));
+/** The pull request the topic's Work rows link, as the sidebar reads it. */
 const linkedPR = vi.hoisted(() => ({
   number: undefined as number | undefined,
   branch: 'feature' as string | undefined,
-  status: undefined as string | undefined,
 }));
 
 vi.mock('@/store/device', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useFetchGitBranch: () => ({ data: linkedPR.branch ? { branch: linkedPR.branch } : undefined }),
-  useFetchGitLinkedPR: () => ({
-    data: {
-      pullRequestStatus: linkedPR.status,
-      pullRequest: linkedPR.number
-        ? { number: linkedPR.number, state: 'open', url: 'https://github.com/test/repo/pull/1' }
-        : undefined,
-    },
-  }),
+}));
+
+vi.mock('@/features/TopicPullRequests/useTopicPullRequests', () => ({
+  useTopicPullRequests: () => {
+    const views = linkedPR.number
+      ? [
+          {
+            confirmed: true,
+            identifier: `test/repo#${linkedPR.number}`,
+            isDraft: false,
+            localDetail: true,
+            number: linkedPR.number,
+            repoFullName: 'test/repo',
+            state: 'open',
+            title: `PR ${linkedPR.number}`,
+            url: `https://github.com/test/repo/pull/${linkedPR.number}`,
+            vouched: true,
+          },
+        ]
+      : [];
+    return { primary: views[0], probes: [], views };
+  },
 }));
 
 vi.mock('../PullRequest', async () => {
@@ -498,7 +512,6 @@ beforeEach(() => {
   platform.isDesktop = true;
   linkedPR.number = undefined;
   linkedPR.branch = 'feature';
-  linkedPR.status = undefined;
   chatStore.topicDataMap = {};
   chatStore.topicDetailMap = {};
   filesProps.current = undefined;

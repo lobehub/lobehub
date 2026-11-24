@@ -18,7 +18,7 @@ import {
   setupIpcCapture,
 } from './heterogeneousAgentExecutor.testUtils';
 
-const followUp = vi.hoisted(() => ({ mode: 'queue' as 'legacy' | 'queue' | 'steer' }));
+const followUp = vi.hoisted(() => ({ mode: 'queue' as 'queue' | 'steer' }));
 vi.mock('../lifecycle/followUpMode', () => ({ getFollowUpMode: () => followUp.mode }));
 
 const mockSendPrompt = vi.fn();
@@ -183,21 +183,18 @@ describe('heterogeneousAgentExecutor background tasks', () => {
     expect(getLocalBackgroundTaskStopper(defaultParams.operationId)).toBeUndefined();
   });
 
-  it.each(['queue', 'legacy'] as const)(
-    'offers a stop for a CLI run in %s mode, whose input stays open though nothing is steered',
-    async (mode) => {
-      followUp.mode = mode;
-      await withSdkLab(false, () =>
-        executeHeterogeneousAgent(() => createMockStore(), defaultParams),
-      );
+  it('offers a stop for a CLI run in Queue mode, whose input stays open though nothing is steered', async () => {
+    followUp.mode = 'queue';
+    await withSdkLab(false, () =>
+      executeHeterogeneousAgent(() => createMockStore(), defaultParams),
+    );
 
-      expect(stopperDuringRun).toBeDefined();
-      mockStopBackgroundTask.mockResolvedValue(undefined);
-      await stopperDuringRun!('bys1w0wxo');
-      expect(mockStopBackgroundTask).toHaveBeenCalledWith('ipc-sess-1', 'bys1w0wxo');
-      expect(getLocalBackgroundTaskStopper(defaultParams.operationId)).toBeUndefined();
-    },
-  );
+    expect(stopperDuringRun).toBeDefined();
+    mockStopBackgroundTask.mockResolvedValue(undefined);
+    await stopperDuringRun!('bys1w0wxo');
+    expect(mockStopBackgroundTask).toHaveBeenCalledWith('ipc-sess-1', 'bys1w0wxo');
+    expect(getLocalBackgroundTaskStopper(defaultParams.operationId)).toBeUndefined();
+  });
 
   it('offers a stop for a CLI run in Steer mode', async () => {
     followUp.mode = 'steer';

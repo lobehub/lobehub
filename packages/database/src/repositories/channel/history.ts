@@ -40,6 +40,7 @@ import {
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { isUuid } from '../../utils/uuid';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
@@ -682,9 +683,10 @@ export class ChannelHistoryRepository {
             ? await findThread(tx, channelId, params.threadId)
             : null;
         const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
-        const [message] = await readManifestMessages(tx, channelId, manifest, {
-          messageId: params.messageId,
-        });
+        // Message ids are uuids; anything else (a Thread id, say) would abort the query.
+        const [message] = isUuid(params.messageId)
+          ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+          : [];
         if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
         if (offset > message.content.length)
           throw new ChannelError('BAD_REQUEST', 'Offset exceeds message length');

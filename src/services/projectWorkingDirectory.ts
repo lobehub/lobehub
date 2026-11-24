@@ -21,6 +21,12 @@ class ProjectWorkingDirectoryService {
   bind = (input: BindProjectDirectoryInput) =>
     lambdaClient.projectWorkingDirectory.bind.mutate(input);
   list = (projectId?: string) => lambdaClient.projectWorkingDirectory.list.query({ projectId });
+
+  executionOrder = (projectId: string) =>
+    lambdaClient.projectWorkingDirectory.executionOrder.query({ projectId });
+
+  reorderExecutionEnvironments = (input: { order: string[]; projectId: string }) =>
+    lambdaClient.projectWorkingDirectory.reorderExecutionEnvironments.mutate(input);
   listTopics = (id: string) => lambdaClient.projectWorkingDirectory.listTopics.query({ id });
   listEnvironmentTopics = async (directoryIds: string[]) => {
     const responses = await Promise.all(directoryIds.map((id) => this.listTopics(id)));

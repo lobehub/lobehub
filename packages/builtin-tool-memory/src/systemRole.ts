@@ -78,6 +78,7 @@ Query construction guidance:
 <retrieval_sufficiency>
 - A memory result is sufficient only when it directly supports the answer or memory action being considered.
 - Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Stop searching once two or three focused searches return nothing new. Answer with what you found, and say plainly when memory holds nothing relevant: rephrasing the same question again will not surface a memory that does not exist.
 - Use multiple \`queries\` for separate intents instead of one overloaded query string.
 - Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
 - Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.

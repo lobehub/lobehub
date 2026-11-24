@@ -57,4 +57,17 @@ describe('MemoryManifest', () => {
     // genuine user facts inside an assignment can still become memory
     expect(boundaries).toContain('genuine facts about the user');
   });
+
+  /**
+   * @example
+   * One reply ran 500 memory searches, a rephrased query each time, and never
+   * answered. The search API carries a per-operation budget so the runtime
+   * rejects the calls past it, and the system role names the way out.
+   */
+  it('bounds how many memory searches one operation may run', () => {
+    const search = MemoryManifest.api.find((api) => api.name === MemoryApiName.searchUserMemory);
+
+    expect(search?.maxCallsPerOperation).toBe(20);
+    expect(systemPrompt).toContain('Stop searching once two or three focused searches');
+  });
 });

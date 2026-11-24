@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Besucher lesen diesen Ajan nicht nur – sie führen ihn aus. Jede Antwort wird im Arbeitsbereich generiert und dem gemeinsamen Budget belastet, ohne das Kontingent des Erstellers oder eines anderen Mitglieds zu verbrauchen. Der Ajan agiert nur mit dem unten gewährten Besucherzugang.",
   "share.settings.notice.workspaceTitle": "Besucher führen diesen Ajan auf dem Budget des Arbeitsbereichs aus",
   "share.settings.permissions.allowCreatorViewSessions": "Erlauben, dass ich Besucher-Gespräche lese",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Standardmäßig deaktiviert: Besucher-Gespräche bleiben privat für den Besucher.",
   "share.settings.permissions.allowReadMemory": "Lesen meines Speichers erlauben",
   "share.settings.permissions.allowReadMemoryHint": "Der Agent kann auf Ihren Langzeitspeicher zugreifen, während er einem Besucher antwortet.",
   "share.settings.permissions.desc": "Was ein Besucher während eines Besuchs lesen darf und was der Besucher zurücksehen kann.",

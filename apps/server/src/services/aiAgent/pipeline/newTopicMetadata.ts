@@ -24,7 +24,7 @@ export interface NewTopicMetadataInput {
 
 /**
  * The worktree the composer created for this topic on its first send
- * (Better Coding Experience "New worktree"), when it was cut from the project
+ * ("New worktree"), when it was cut from the project
  * directory the topic is born in. The project directory still names the
  * source; the worktree is where the topic runs, so it must survive the
  * project override below.
@@ -104,7 +104,7 @@ export const buildNewTopicMetadata = ({
     ...(openedBy && { openedBy }),
     taskId,
     ...(webhookThread && { webhook: webhookThread }),
-    // Claude Code permission mode the composer chip showed (Better Coding Experience).
+    // Claude Code permission mode the composer chip showed.
     ...(initialTopicMeta?.heteroPermissionMode && {
       heteroPermissionMode: initialTopicMeta.heteroPermissionMode,
     }),

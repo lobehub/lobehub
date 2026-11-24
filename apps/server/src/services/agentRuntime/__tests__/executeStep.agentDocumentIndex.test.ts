@@ -108,7 +108,7 @@ describe('AgentRuntimeService.executeStep - agent-document index snapshot', () =
       }),
     );
     vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
-    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
 
     await service.executeStep({

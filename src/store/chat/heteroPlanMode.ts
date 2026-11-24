@@ -12,7 +12,7 @@ import { getUserStoreState } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 /*
- * Codex Plan switch (Better Coding Experience lab), renderer side.
+ * Codex Plan switch, renderer side.
  *
  * A topic's switch lives in `metadata.heteroPlanMode`: absent until the user
  * first turns it on, so a topic that never did sends no collaboration mode at
@@ -21,18 +21,13 @@ import { labPreferSelectors } from '@/store/user/selectors';
  * switch, or Execute plan under a plan).
  */
 
-/** Whether the Plan switch applies at all: both labs on (it needs the native app-server). */
-export const isCodexPlanModeEnabled = (): boolean => {
-  const state = getUserStoreState();
-  return (
-    labPreferSelectors.enableBetterCodingExperience(state) &&
-    labPreferSelectors.enableCodexAppServer(state)
-  );
-};
+/** Whether the Plan switch applies at all: it needs the native app-server (its lab on). */
+export const isCodexPlanModeEnabled = (): boolean =>
+  labPreferSelectors.enableCodexAppServer(getUserStoreState());
 
 /**
  * The collaboration mode a local Codex run sends, or undefined to send none
- * (another agent, a topic that never turned Plan on, a lab off).
+ * (another agent, a topic that never turned Plan on, the app-server lab off).
  */
 export const resolveRunCollaborationMode = (
   agentType: string | undefined,

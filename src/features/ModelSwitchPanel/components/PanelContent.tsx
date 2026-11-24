@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
 import { useBusinessModelPricingPrefetch } from '@/business/client/hooks/useBusinessModelPricing';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { ENABLE_RESIZING, MAX_WIDTH } from '../const';
@@ -39,7 +39,7 @@ export const PanelContent: FC<PanelContentProps> = ({
   pricingMode,
   provider: providerProp,
 }) => {
-  const chatEnabledList = useEnabledChatModels();
+  const chatEnabledList = useSelectableChatModels();
   const enabledList = enabledListProp ?? chatEnabledList;
   const [searchKeyword, setSearchKeyword] = useState('');
   const { groupMode, handleGroupModeChange } = usePanelState();

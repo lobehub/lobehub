@@ -50,6 +50,8 @@ const modesCache = new Map<string, Record<string, ExplicitMode>>();
 const toModes = (rows: { agentId: string; mode: ExplicitMode }[]) =>
   Object.fromEntries(rows.map(({ agentId, mode }) => [agentId, mode]));
 
+const EMPTY_AGENTS: SidebarAgentItem[] = [];
+
 /** My own LobeHub assistants; external runtimes and other people's agents are left out. */
 export const useMyAgentCandidates = (enabled: boolean) => {
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -57,16 +59,15 @@ export const useMyAgentCandidates = (enabled: boolean) => {
   const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
   useFetchAgentList(enabled && isLogin);
 
+  // Every skill row calls this; only the installed ones need the list.
   return useHomeStore(
     useShallow((s) =>
-      homeAgentListSelectors
-        .allAgents(s)
-        .filter(
-          (item) =>
-            item.type === 'agent' &&
-            !item.heterogeneousType &&
-            (!item.userId || item.userId === userId),
-        ),
+      (enabled ? homeAgentListSelectors.allAgents(s) : EMPTY_AGENTS).filter(
+        (item) =>
+          item.type === 'agent' &&
+          !item.heterogeneousType &&
+          (!item.userId || item.userId === userId),
+      ),
     ),
   );
 };

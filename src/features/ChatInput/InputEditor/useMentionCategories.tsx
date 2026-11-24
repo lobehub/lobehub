@@ -34,7 +34,6 @@ import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
 import { AGENT_CATEGORY_IDS, mergeIntoCategory, SKILL_PRECEDING_IDS } from './mentionMenuSections';
 
-const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
 type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
 
@@ -213,13 +212,10 @@ export const useMentionCategories = (): MentionSource => {
         installedAgentSources.add(currentAgent.forkedFromIdentifier);
       }
 
-      // Quota stays at MAX_AGENT_ITEMS total. When the user has private agents
-      // we reserve up to half for them so they don't get drowned out by a long
-      // workspace list.
-      const privateBudget = isCurrentContextPrivate ? Math.min(privateCandidates.length, 10) : 0;
-      const workspaceBudget = MAX_AGENT_ITEMS - privateBudget;
-      const privateItems = privateCandidates.slice(0, privateBudget).map(toItem);
-      const workspaceItems = workspaceCandidates.slice(0, workspaceBudget).map(toItem);
+      // Every candidate stays searchable; the menu caps what it renders
+      // (`limitMentionGroups`), private sections first.
+      const privateItems = isCurrentContextPrivate ? privateCandidates.map(toItem) : [];
+      const workspaceItems = workspaceCandidates.map(toItem);
 
       if (privateItems.length > 0) {
         categories.push({

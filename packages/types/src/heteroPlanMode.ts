@@ -1,7 +1,7 @@
 import { applyWorktreeModeDir } from './worktreeMode';
 
 /**
- * Codex collaboration modes the Plan switch (Better Coding Experience lab)
+ * Codex collaboration modes the Plan switch
  * moves a native Codex thread between. Plan is not a permission mode: Codex
  * keeps allowing every action either way.
  */

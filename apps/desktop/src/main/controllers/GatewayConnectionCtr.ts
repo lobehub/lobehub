@@ -311,8 +311,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     hostname: string;
     platform: string;
   }> {
-    // Signed in, report the stable id the gateway registers — not the pre-connect
-    // fallback — so the renderer's "this device" matches the pins it writes.
+    // Report the gateway's stable id, not the pre-connect fallback, so "this device" matches pins.
     const stableId = await this.service.resolveCurrentDeviceId().catch(() => undefined);
     const info = { ...this.service.getDeviceInfo(), ...(stableId && { deviceId: stableId }) };
     try {
@@ -328,6 +327,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           deviceId: info.deviceId,
           headers,
           serverUrl,
+          userId: this.remoteServerConfigCtr.getDesktopBootstrapIdentity().userId,
         });
       }
     } catch (error) {

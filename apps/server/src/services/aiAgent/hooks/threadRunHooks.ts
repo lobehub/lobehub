@@ -68,7 +68,8 @@ const readLiveHeteroSessionId = async (
   try {
     const metadata = (await threadModel.findById(threadId))?.metadata as ThreadMetadata | null;
     return metadata?.heteroSessionId;
-  } catch {
+  } catch (error) {
+    log('reading the live session of thread %s failed: %O', threadId, error);
     return undefined;
   }
 };

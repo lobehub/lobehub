@@ -202,6 +202,10 @@ export class MessageService {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
   };
 
+  /** Status per pending card id (`null` when gone) plus a revision of the topic, for the approval poll. */
+  getInterventionSnapshot = async (topicId: string, messageIds: string[]) =>
+    lambdaClient.message.getInterventionSnapshot.query({ messageIds, topicId });
+
   /**
    * Bulk form, for surfaces that need every omitted row at once (export).
    *
