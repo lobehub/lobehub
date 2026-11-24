@@ -16,6 +16,8 @@ import { useNavLayout } from '@/hooks/useNavLayout';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { isModifierClick } from '@/utils/navigation';
 
+import { NAV_RAIL_WIDTH } from './constants';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
     color: ${cssVar.colorPrimary};
@@ -59,7 +61,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     flex: none;
 
-    width: 56px;
+    width: ${NAV_RAIL_WIDTH}px;
     padding-block: 8px;
     padding-inline: 4px 12px;
   `,

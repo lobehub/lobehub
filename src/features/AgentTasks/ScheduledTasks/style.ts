@@ -1,6 +1,8 @@
 // eslint-disable-next-line stylex-migration/no-emotion-styles -- Enterprise lobe-design mandates createStaticStyles for this UI.
 import { createStaticStyles } from '@lobehub/ui';
 
+import { SCHEDULED_TASKS_COLUMN_WIDTH } from '@/features/NavPanel/hidesNavPanel';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     overflow: hidden;
@@ -14,7 +16,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sidebar: css`
     display: flex;
-    flex: 0 0 248px;
+    flex: 0 0 ${SCHEDULED_TASKS_COLUMN_WIDTH}px;
     flex-direction: column;
     min-width: 0;
 

@@ -1,6 +1,12 @@
 export const TITLE_BAR_HORIZONTAL_PADDING = 12;
 export const WINDOWS_NATIVE_CONTROL_WIDTH = 150;
 export const MAC_TRAFFIC_LIGHT_WIDTH = 80;
+/**
+ * Space left between the panel divider and the first tab in the two-level
+ * navigation (`NAV_RAIL_ENABLED`), so the tab strip reads as part of the content
+ * area instead of sitting flush on the divider.
+ */
+export const NAV_RAIL_TAB_INSET = 12;
 
 export const getMacTrafficLightPadding = (isMac: boolean, isFullScreen: boolean): number => {
   if (!isMac || isFullScreen) return 0;

@@ -6,6 +6,24 @@ import {
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
 
+// The main process appends `lng` to every renderer load (Browser.buildUrlWithLocale)
+// and index.html consumes it before React mounts. It describes the window, not the
+// route, so it must stay out of tab identity — otherwise a plain launch reads as a
+// deep link into `/?lng=…`, matches no persisted tab, and seeds a duplicate one.
+export const readBootUrl = ({
+  hash,
+  pathname,
+  search,
+}: Pick<Location, 'hash' | 'pathname' | 'search'>): string => {
+  const params = new URLSearchParams(search);
+  if (!params.has('lng')) return `${pathname}${search}${hash}`;
+
+  params.delete('lng');
+  const query = params.toString();
+
+  return `${pathname}${query ? `?${query}` : ''}${hash}`;
+};
+
 export type BootAction =
   { type: 'keep' } | { id: string; type: 'activate'; url?: string } | { type: 'add'; url: string };
 

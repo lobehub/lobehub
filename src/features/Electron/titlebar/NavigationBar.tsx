@@ -1,13 +1,18 @@
 'use client';
 
+import { NAV_RAIL_ENABLED } from '@lobechat/business-const';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { hidesNavPanel, pageNavColumnWidth } from '@/features/NavPanel/hidesNavPanel';
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { NAV_RAIL_WIDTH } from '@/features/NavRail/constants';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -18,13 +23,18 @@ import { electronStylish } from '@/styles/electron';
 import { getPlatform, isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
-import { getMacTrafficLightPadding } from './layout';
+import {
+  getMacTrafficLightPadding,
+  NAV_RAIL_TAB_INSET,
+  TITLE_BAR_HORIZONTAL_PADDING,
+} from './layout';
 import RecentlyViewed from './RecentlyViewed';
 import { useTrayMenuSync } from './TrayMenu/useTrayMenuSync';
 import WindowsAppMenu from './WindowsAppMenu';
 
 const isMac = isMacOS();
-const isWindows = getPlatform() === 'Windows';
+const platform = getPlatform();
+const isWindows = platform === 'Windows';
 const COLLAPSED_NAVIGATION_BAR_WIDTH = 150;
 const MAC_COLLAPSED_NAVIGATION_BAR_WIDTH = 116;
 
@@ -68,6 +78,8 @@ const NavigationBar = memo(() => {
   const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
+  const { pathname, search } = useActiveLocation();
+  const isMobile = useIsMobile();
 
   useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
     if (isMac) setIsWindowFullScreen(isFullScreen);
@@ -126,13 +138,26 @@ const NavigationBar = memo(() => {
   // Tooltip content for the clock button
   const tooltipContent = t('navigation.recentView');
 
-  const isLeftPanelVisible = leftPanelWidth > 0;
+  // Pages that own the navigation slot unmount the panel whatever the preference
+  // says; some draw a column of their own there, which the tabs start after just the same.
+  const navColumnWidth = hidesNavPanel(pathname, search)
+    ? isMobile
+      ? 0
+      : pageNavColumnWidth(pathname, search)
+    : leftPanelWidth;
+  const hasNavColumn = navColumnWidth > 0;
   const macTrafficLightPadding = getMacTrafficLightPadding(isMac, isWindowFullScreen);
   const collapsedWidth =
     (isMac ? MAC_COLLAPSED_NAVIGATION_BAR_WIDTH : COLLAPSED_NAVIGATION_BAR_WIDTH) +
     macTrafficLightPadding;
-  const navigationWidth = isLeftPanelVisible
-    ? Math.max(leftPanelWidth - 12, collapsedWidth)
+  // The icon rail sits left of the panel, so the content area starts a rail further right.
+  const navRailWidth = NAV_RAIL_ENABLED ? NAV_RAIL_WIDTH : 0;
+  // In that layout the tabs start a little inside the content area. The inset is
+  // added to the width and to the end padding alike, so the buttons stay put.
+  const tabInset = NAV_RAIL_ENABLED && hasNavColumn ? NAV_RAIL_TAB_INSET : 0;
+  const startPadding = NAV_RAIL_ENABLED && platform === 'Linux' ? 0 : TITLE_BAR_HORIZONTAL_PADDING;
+  const navigationWidth = hasNavColumn
+    ? Math.max(navColumnWidth + navRailWidth - startPadding, collapsedWidth) + tabInset
     : collapsedWidth;
 
   return (
@@ -145,8 +170,9 @@ const NavigationBar = memo(() => {
       justify={isMac || isWindows ? 'space-between' : 'end'}
       style={{
         paddingLeft: macTrafficLightPadding,
-        paddingRight: 8,
-        // Expanded: span the sidebar width so the right group hugs its right edge.
+        paddingRight: 8 + tabInset,
+        // Expanded: span the sidebar (and the icon rail, when on) so the right group
+        // hugs its right edge and the tabs start at (or just inside) the content area.
         // Collapsed: keep a concrete width so the titlebar controls can animate.
         width: navigationWidth,
       }}

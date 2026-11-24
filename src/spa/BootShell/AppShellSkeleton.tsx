@@ -110,7 +110,8 @@ interface AppShellSkeletonProps {
 }
 
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
-  const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
+  const { isDark, navPanelBackground, navPanelWidth, navRailWidth, showLeftPanel } =
+    readBootShellGeometry();
   const [waiting, setWaiting] = useState(false);
 
   useLayoutEffect(retainSkeleton, []);
@@ -128,6 +129,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
         height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
         width={'100%'}
       >
+        {navRailWidth > 0 && <div style={{ flexShrink: 0, width: navRailWidth }} />}
         {showLeftPanel && (
           <div
             style={{
