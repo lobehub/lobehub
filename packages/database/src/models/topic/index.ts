@@ -17,7 +17,7 @@ import * as trash from './trash';
 import * as update from './update';
 
 export type { OwnedWorktreeTopicRow } from './ownedWorktree';
-export { getTopicDeviceId } from './runningOperation';
+export { getTopicDeviceId, LIVE_OPERATION_STATUSES } from './runningOperation';
 export { hasLiveTaskCallbackReservation } from './taskCallback';
 export type {
   CreateTopicParams,
