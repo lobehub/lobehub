@@ -2,6 +2,7 @@ import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
+import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
@@ -41,6 +42,7 @@ import type {
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import { buildArtboardCommentsPrompt } from './artboardContext';
+import { deferUnusedSkillsTool } from './deferUnusedSkillsTool';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
 import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -196,6 +198,8 @@ export interface OperationPrepInput {
   evalAllowedTools?: string[];
   /** Isolated Memory scope of an eval trial; persona is read from it, never the caller. */
   evalMemory?: EvalMemoryReference;
+  /** Exact toolset requested by the caller (e.g. verify agent, goal supervisor). */
+  exclusivePluginIds?: string[];
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
   loadHistoryMessages: () => Promise<any[]>;
@@ -866,6 +870,29 @@ export const prepareOperation = async (
     taskId: input.taskId,
     workspaceInit,
   });
+
+  // 18b. Defer `lobe-skills` when the run has zero available skills and no prior
+  // `lobe-skills` tool calls in history. Keeps its manifest in `toolManifestMap`
+  // so mid-run skill installation (`lobe-skill-store`) can activate it immediately.
+  if (
+    deferUnusedSkillsTool({
+      activatableToolIds,
+      agentChatConfig: agentConfig.chatConfig,
+      allMessages,
+      enabledToolIds: toolsResult.enabledToolIds,
+      evalAllowedTools: input.evalAllowedTools,
+      exclusivePluginIds: input.exclusivePluginIds,
+      executorMap: discovery.toolExecutorMap,
+      isGoalTurn: isGoalPrompt(prompt),
+      isShareRun: Boolean(shareGate),
+      manifestMap: discovery.toolManifestMap,
+      operationSkillSet,
+      sourceMap: discovery.toolSourceMap,
+      tools,
+    })
+  ) {
+    log('execAgent: deferred lobe-skills (0 available skills, no historical skills usage)');
+  }
 
   // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
   // ContextEngine owns the Lab-controlled injection decision via enableExpertise.

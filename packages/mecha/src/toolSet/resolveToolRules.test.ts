@@ -83,6 +83,25 @@ describe('resolveToolRules', () => {
     }
   });
 
+  it('defers lobe-skills in agent mode when hasAvailableSkills is false without excluding it from the pool', () => {
+    const deferred = resolveToolRules(request({ hasAvailableSkills: false }));
+    expect(deferred.rules['lobe-skills']).toBe(false);
+    expect(deferred.excludedIdentifiers.has('lobe-skills')).toBe(false);
+    expect(deferred.rules['lobe-activator']).toBe(true);
+
+    const enabled = resolveToolRules(request({ hasAvailableSkills: true }));
+    expect(enabled.rules['lobe-skills']).toBe(true);
+
+    // Custom mode honors explicit pinning regardless of hasAvailableSkills
+    const customPinned = resolveToolRules(
+      request({
+        agent: { chatConfig: { toolMode: 'custom' }, plugins: ['lobe-skills'] },
+        hasAvailableSkills: false,
+      }),
+    );
+    expect(customPinned.rules['lobe-skills']).toBe(true);
+  });
+
   it('offers image generation only when pinned on a tool-calling model without native output', () => {
     const pinned = { chatConfig: { enableAgentMode: false }, plugins: ['lobe-image-generation'] };
     expect(resolveToolRules(request({ agent: pinned })).rules['lobe-image-generation']).toBe(true);

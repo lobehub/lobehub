@@ -246,4 +246,52 @@ describe('resolveServerCallLlmTooling', () => {
 
     expect(result.activeDeviceId).toBeUndefined();
   });
+
+  it('omits deferred lobe-skills from <available_tools> and injects it once step-activated', () => {
+    const skillsManifest = {
+      api: [{ description: 'Activate skill', name: 'activateSkill', parameters: {} }],
+      identifier: 'lobe-skills',
+      meta: { description: 'Activate and use reusable skill packages', title: 'Skills' },
+      systemRole: 'Skills system role',
+      type: 'builtin' as const,
+    };
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        enabledToolIds: [LobeActivatorManifest.identifier],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+          'lobe-skills': skillsManifest,
+        },
+        sourceMap: { 'lobe-skills': 'builtin' },
+        tools: [],
+      },
+    });
+
+    const before = resolveServerCallLlmTooling(ctx, state);
+    expect(before.resolved.enabledToolIds).not.toContain('lobe-skills');
+    expect(before.resolved.promptManifestMap['lobe-skills']).toBeUndefined();
+    expect(before.toolDiscoveryConfig?.availableTools.map((t) => t.identifier)).toEqual([
+      CredsIdentifier,
+    ]);
+
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'lobe-skills',
+            manifest: skillsManifest,
+            source: 'discovery',
+          },
+        ],
+      },
+    );
+    expect(after.resolved.enabledToolIds).toContain('lobe-skills');
+    expect(after.resolved.promptManifestMap['lobe-skills']).toEqual(skillsManifest);
+    expect(after.tools?.map((t) => t.function.name)).toContain('lobe-skills____activateSkill');
+  });
 });

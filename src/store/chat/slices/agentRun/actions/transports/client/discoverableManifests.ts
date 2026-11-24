@@ -1,4 +1,5 @@
 import { AttachmentsIdentifier } from '@lobechat/builtin-tool-attachments';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 
 import type { RunConnectorsTarget } from '@/services/runConnectors';
@@ -20,6 +21,9 @@ export const buildRunManifestMap = (
     ...toolSelectors.availableToolsForDiscovery(toolState, run).map((t) => t.identifier),
     // Oversized attachments need a reader that is hidden from the global catalog.
     AttachmentsIdentifier,
+    // Deferred on 0-skill turns; keep its manifest in the run map so mid-run
+    // skill installation (`lobe-skill-store`) can activate it immediately.
+    SkillsIdentifier,
   ];
   for (const id of ids) {
     const manifest = eligibleManifests.get(id);

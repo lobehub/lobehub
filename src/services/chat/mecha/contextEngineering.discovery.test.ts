@@ -79,4 +79,33 @@ describe('contextEngineering tool discovery stability', () => {
     expect(beforeInjected?.content).toContain('lobe-web-browsing');
     expect(afterInjected?.content).toBe(beforeInjected?.content);
   });
+
+  it('omits deferred lobe-skills from <available_tools> even when kept in discoveryManifests', async () => {
+    const output = await contextEngineering({
+      discoveryExcludedToolIds: [LobeActivatorIdentifier],
+      discoveryManifests: {
+        ...discoveryManifests,
+        'lobe-skills': {
+          api: [{ description: 'Activate skill', name: 'activateSkill', parameters: {} }],
+          identifier: 'lobe-skills',
+          meta: { description: 'Activate and use reusable skill packages', title: 'Skills' },
+          type: 'builtin',
+        },
+      },
+      messages: baseMessages,
+      model: 'gpt-4o',
+      provider: 'openai',
+      tools: [LobeActivatorIdentifier],
+    });
+
+    const injected = output.find(
+      (m) =>
+        m.role === 'user' &&
+        typeof m.content === 'string' &&
+        m.content.includes('<available_tools'),
+    );
+
+    expect(injected?.content).toContain('lobe-web-browsing');
+    expect(injected?.content).not.toContain('lobe-skills');
+  });
 });

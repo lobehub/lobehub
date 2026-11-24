@@ -10,6 +10,7 @@ import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import {
@@ -99,6 +100,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     ...enableAll(request.runtimePluginIds ?? []),
     ...enableAll(pinnedPluginIds),
     ...enableAll(alwaysOnToolIds),
+    ...(request.hasAvailableSkills === false && { [SkillsIdentifier]: false }),
     // System rules may override the user's selection for specific tools.
     // Auto mode lets the model pick the sandbox or the routed device per
     // call, so the dedicated sandbox tool is offered there too.

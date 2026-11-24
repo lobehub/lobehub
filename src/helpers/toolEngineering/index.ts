@@ -233,6 +233,12 @@ export const createAgentToolsEngine = (
   manifestContext?: BuiltinToolResolveContext,
   options: {
     /**
+     * Whether this run has any skills available (or prior `lobe-skills` usage in
+     * history). When `false`, `lobe-skills` is deferred out of the initial tool set
+     * while staying in the manifest pool for mid-run activation.
+     */
+    hasAvailableSkills?: boolean;
+    /**
      * Whether the conversation has an attachment that can be sent as a preview. Enables
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
@@ -302,6 +308,7 @@ export const createAgentToolsEngine = (
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(targetAgentId)(agentState),
+    hasAvailableSkills: options.hasAvailableSkills,
     hasEnabledKnowledgeBases: options.runAgent?.id
       ? agentSelectors
           .getAgentConfigById(targetAgentId)(agentState)

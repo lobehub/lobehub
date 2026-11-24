@@ -317,3 +317,57 @@ export const extractToolActivationsFromMessages = (
 export const extractActivatedToolIdsFromMessages = (
   messages: UIChatMessage[],
 ): string[] | undefined => extractToolActivationsFromMessages(messages)?.map(({ id }) => id);
+
+const TOOL_NAME_SEPARATOR = '____';
+
+const messageHasToolInvocation = (
+  msg: UIChatMessage,
+  identifier: string,
+  prefix: string,
+): boolean => {
+  if (collectToolInvocations(msg).some((invocation) => invocation.identifier === identifier)) {
+    return true;
+  }
+
+  if (msg.role === 'assistant') {
+    if (Array.isArray(msg.tools) && msg.tools.some((tool) => tool?.identifier === identifier)) {
+      return true;
+    }
+
+    const toolCalls = (msg as { tool_calls?: Array<{ function?: { name?: string } }> }).tool_calls;
+    if (
+      Array.isArray(toolCalls) &&
+      toolCalls.some((call) => {
+        const name = call?.function?.name;
+        return name === identifier || (typeof name === 'string' && name.startsWith(prefix));
+      })
+    ) {
+      return true;
+    }
+  }
+
+  if (Array.isArray(msg.compressedMessages)) {
+    return msg.compressedMessages.some((compressed) =>
+      messageHasToolInvocation(compressed, identifier, prefix),
+    );
+  }
+
+  return false;
+};
+
+/**
+ * Whether the conversation history contains any tool invocation for `identifier`.
+ *
+ * Covers flat DB rows (`role='tool'` and `role='assistant'` with `tools` /
+ * `tool_calls`), grouped `assistantGroup` / `supervisor` nodes, and nested
+ * `compressedGroup` entries. Used to keep a deferred tool (such as
+ * `lobe-skills`) available when earlier turns already called it, avoiding
+ * provider errors on historical tool calls after all skills are removed.
+ */
+export const hasHistoricalToolInvocation = (
+  messages: UIChatMessage[],
+  identifier: string,
+): boolean => {
+  const prefix = `${identifier}${TOOL_NAME_SEPARATOR}`;
+  return messages.some((msg) => messageHasToolInvocation(msg, identifier, prefix));
+};

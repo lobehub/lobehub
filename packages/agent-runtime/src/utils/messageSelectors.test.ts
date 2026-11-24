@@ -8,6 +8,7 @@ import {
   extractTodosFromMessages,
   extractToolActivationsFromMessages,
   findInMessages,
+  hasHistoricalToolInvocation,
   normalizeTodosState,
 } from './messageSelectors';
 
@@ -579,5 +580,86 @@ describe('flat tool rows inside compressedGroup compressedMessages', () => {
       { description: undefined, id: 'skl_old', name: 'xlsx' },
     ]);
     expect(extractTodosFromMessages(messages)).toEqual(todos);
+  });
+});
+
+describe('hasHistoricalToolInvocation', () => {
+  it('returns false when messages contain no matching tool invocations', () => {
+    const messages = [
+      createMessage({ content: 'hello', role: 'user' }),
+      createToolMessage({
+        plugin: { apiName: 'search', identifier: 'lobe-web-browsing' },
+      } as any),
+    ];
+
+    expect(hasHistoricalToolInvocation(messages, 'lobe-skills')).toBe(false);
+  });
+
+  it('detects flat tool messages, assistant tools/tool_calls, assistantGroup children, and compressedGroup entries', () => {
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          createToolMessage({
+            plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+          } as any),
+        ],
+        'lobe-skills',
+      ),
+    ).toBe(true);
+
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          createMessage({
+            role: 'assistant',
+            tools: [{ apiName: 'execScript', id: 'tc-1', identifier: 'lobe-skills' }],
+          } as any),
+        ],
+        'lobe-skills',
+      ),
+    ).toBe(true);
+
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          createMessage({
+            role: 'assistant',
+            tool_calls: [{ function: { name: 'lobe-skills____runCommand' }, id: 'tc-2' }],
+          } as any),
+        ],
+        'lobe-skills',
+      ),
+    ).toBe(true);
+
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          createMessage({
+            children: [
+              { tools: [{ apiName: 'readReference', id: 'tc-3', identifier: 'lobe-skills' }] },
+            ],
+            role: 'assistantGroup',
+          } as any),
+        ],
+        'lobe-skills',
+      ),
+    ).toBe(true);
+
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          createMessage({
+            compressedMessages: [
+              createMessage({
+                role: 'assistant',
+                tools: [{ apiName: 'activateSkill', id: 'tc-4', identifier: 'lobe-skills' }],
+              } as any),
+            ],
+            role: 'compressedGroup',
+          } as any),
+        ],
+        'lobe-skills',
+      ),
+    ).toBe(true);
   });
 });

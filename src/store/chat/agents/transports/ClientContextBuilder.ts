@@ -5,6 +5,12 @@ import type {
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
 import {
+  getSystemPrompt as getActivatorSystemPrompt,
+  LobeActivatorIdentifier,
+  systemPrompt as activatorSystemPrompt,
+} from '@lobechat/builtin-tool-activator';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import {
   ToolResolver,
   type ToolsEngine,
   tryCountRequestPayloadTokens,
@@ -63,9 +69,17 @@ export class ClientContextBuilder implements ContextBuilder {
       [],
       input.payload.allowedToolNames,
     );
+    const hasSkillsTool = resolvedTools.enabledToolIds.includes(SkillsIdentifier);
+    const promptManifests = Object.values(resolvedTools.promptManifestMap).map((manifest) =>
+      !hasSkillsTool &&
+      manifest.identifier === LobeActivatorIdentifier &&
+      manifest.systemRole === activatorSystemPrompt
+        ? { ...manifest, systemRole: getActivatorSystemPrompt({ withSkills: false }) }
+        : manifest,
+    );
     const promptAgentConfig: ResolvedAgentConfig = {
       ...resolvedAgentConfig,
-      enabledManifests: Object.values(resolvedTools.promptManifestMap),
+      enabledManifests: promptManifests,
       enabledToolIds: resolvedTools.enabledToolIds,
       tools: resolvedTools.tools.length > 0 ? resolvedTools.tools : undefined,
     };

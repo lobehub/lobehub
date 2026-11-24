@@ -11,12 +11,14 @@ const skillStoreDiscovery = `<skill_store_discovery>
 For marketplace skill searches, skill install requests (including SKILL.md, GitHub or LobeHub skill URLs), or a specialized task that needs a capability missing from the available tools and skills, use the Skill Store. If lobe-skill-store is in <available_tools>, activate it before browsing or trying a CLI. If already active, call it directly.
 </skill_store_discovery>`;
 
-export const systemPrompt = `${intro}
+export const getSystemPrompt = ({ withSkills }: { withSkills: boolean }) => `${intro}
 
-${guidelines({ withSkills: true })}
+${guidelines({ withSkills })}
 
 ${skillStoreDiscovery}
 `;
+
+export const systemPrompt = getSystemPrompt({ withSkills: true });
 
 /**
  * Agent Share visitors cannot use the Skill Store. Keep discovery scoped to
