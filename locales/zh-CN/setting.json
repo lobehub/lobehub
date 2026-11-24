@@ -2488,6 +2488,8 @@
   "subscriptionAccounts.purchase.purchases.endingSoon_other": "{{count}} 天后到期，续费请联系官方",
   "subscriptionAccounts.purchase.purchases.endsAt": "{{date}} 到期",
   "subscriptionAccounts.purchase.purchases.title": "已购套餐",
+  "subscriptionAccounts.purchase.scope.personal": "个人",
+  "subscriptionAccounts.purchase.scope.personalHint": "设备和 Agent 创建在你的个人账号下，仅你自己使用。",
   "subscriptionAccounts.purchase.scope.title": "归属",
   "subscriptionAccounts.purchase.scope.workspace": "当前 Workspace",
   "subscriptionAccounts.purchase.scope.workspaceHint": "设备和 Agent 创建在当前 Workspace，供成员使用。",

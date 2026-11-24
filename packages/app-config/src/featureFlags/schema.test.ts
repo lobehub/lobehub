@@ -97,6 +97,41 @@ describe('FeatureFlagsSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should keep both purchase entry keys of a published snapshot', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      cloud_device_bundle: ['user-123', 'rollout:10'],
+      cloud_device_bundle_workspaces: ['workspace-123'],
+      webhook: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      cloud_device_bundle: ['user-123', 'rollout:10'],
+      cloud_device_bundle_workspaces: ['workspace-123'],
+      webhook: true,
+    });
+  });
+
+  it('should reject a boolean purchase entry workspace scope', () => {
+    // Like dev_dock_workspaces: the whole snapshot is refused, so publishers must write a list.
+    expect(FeatureFlagsSchema.safeParse({ cloud_device_bundle_workspaces: true }).success).toBe(
+      false,
+    );
+  });
+
+  it('should keep the purchase entry off by default and enable it per user', () => {
+    expect(DEFAULT_FEATURE_FLAGS.cloud_device_bundle).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableCloudDeviceBundle).toBe(
+      false,
+    );
+    const config = { cloud_device_bundle: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableCloudDeviceBundle).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableCloudDeviceBundle).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ cloud_device_bundle: true }).enableCloudDeviceBundle).toBe(
+      true,
+    );
+  });
+
   it('should reject a boolean DevDock workspace scope', () => {
     const result = FeatureFlagsSchema.safeParse({
       dev_dock_workspaces: true,

@@ -5326,6 +5326,9 @@ When I am ___, I need ___
     'Ends in {{count}} days. Contact us to renew.',
   'subscriptionAccounts.purchase.purchases.endsAt': 'Ends {{date}}',
   'subscriptionAccounts.purchase.purchases.title': 'Your bundles',
+  'subscriptionAccounts.purchase.scope.personal': 'You',
+  'subscriptionAccounts.purchase.scope.personalHint':
+    'The device and agent are created under your personal account, for you only.',
   'subscriptionAccounts.purchase.scope.title': 'Owner',
   'subscriptionAccounts.purchase.scope.workspace': 'This workspace',
   'subscriptionAccounts.purchase.scope.workspaceHint':

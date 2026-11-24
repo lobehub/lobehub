@@ -130,6 +130,17 @@ export const FeatureFlagsSchema = z.object({
    */
   managed_cloud_device: FeatureFlagValue.optional(),
 
+  /**
+   * Purchase entry on the subscription accounts page (the optional purchase slot), in personal
+   * settings. Off: the entry is hidden there. Array values are user ids.
+   */
+  cloud_device_bundle: FeatureFlagValue.optional(),
+  /**
+   * Workspace ids whose subscription accounts page shows the purchase entry. Membership is
+   * checked on the server. Empty or unset: no workspace shows it.
+   */
+  cloud_device_bundle_workspaces: z.array(z.string()).optional(),
+
   topic_preview: FeatureFlagValue.optional(),
 
   // internal flag
@@ -247,6 +258,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   managed_cloud_device: false,
 
+  // Off until an admin publishes a user allowlist or flips it to true.
+  cloud_device_bundle: false,
+
   // Off until the backend replaces the preview read; allowlist first.
   topic_preview: false,
 
@@ -316,6 +330,11 @@ export const mapFeatureFlagsEnvToState = (
       config.managed_cloud_device,
       userId,
       'managed_cloud_device',
+    ),
+    enableCloudDeviceBundle: evaluateFeatureFlag(
+      config.cloud_device_bundle,
+      userId,
+      'cloud_device_bundle',
     ),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId, 'topic_preview'),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId, 'provider_settings'),
