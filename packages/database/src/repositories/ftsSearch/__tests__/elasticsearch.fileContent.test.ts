@@ -22,9 +22,10 @@ const createClient = (ids: string[]): ElasticsearchFtsSearchClient => ({
 const documentRequest = (
   documentKind: 'fileContent' | 'page',
   mode?: FtsSearchBackendRequest['mode'],
+  excludeFileDerived?: boolean,
 ): FtsSearchBackendRequest => ({
   entity: 'documents',
-  filters: { documentKind },
+  filters: { documentKind, excludeFileDerived },
   mode,
   pagination: { limit: 5 },
   query: { text: 'kestrel' },
@@ -44,7 +45,7 @@ const insertParsedFile = async (id: string, content: string, source?: FileSource
   await db.insert(documents).values({
     content,
     fileId: id,
-    fileType: 'application/pdf',
+    fileType: 'custom/document',
     filename: `${id}.pdf`,
     id: `doc-${id}`,
     source: `s3://bucket/${id}.pdf`,
@@ -68,9 +69,11 @@ describe('ElasticsearchFtsSearchBackend file content', () => {
     await backend.search(documentRequest('fileContent', 'candidates'));
 
     const { body } = vi.mocked(client.search).mock.calls[0][0];
-    expect(body.query.bool.filter).toContainEqual({ exists: { field: 'file_id' } });
+    expect(body.query.bool.filter).toEqual(
+      expect.arrayContaining([{ exists: { field: 'file_id' } }, { term: { source_type: 'file' } }]),
+    );
     expect(body.query.bool.must_not).toContainEqual({
-      terms: { file_type: ['custom/document', DOCUMENT_FOLDER_TYPE] },
+      term: { file_type: DOCUMENT_FOLDER_TYPE },
     });
     expect(body.query.bool.must[0].multi_match.fields).toEqual(['content']);
   });
@@ -103,6 +106,40 @@ describe('ElasticsearchFtsSearchBackend file content', () => {
     expect(response.items).toEqual([]);
   });
 
+  it('keeps parsed uploads out of page candidates', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace: 'test' });
+
+    await backend.search(documentRequest('page', 'candidates', true));
+
+    const { body } = vi.mocked(client.search).mock.calls[0][0];
+    expect(body.query.bool.must_not).toContainEqual({
+      bool: { filter: [{ term: { source_type: 'file' } }, { exists: { field: 'file_id' } }] },
+    });
+  });
+
+  it('drops a parsed upload from page hydration', async () => {
+    await insertParsedFile('es-fc-as-page', 'kestrel handbook');
+    const backend = new ElasticsearchFtsSearchBackend(db, {
+      client: createClient(['doc-es-fc-as-page']),
+      indexNamespace: 'test',
+    });
+
+    const response = await backend.search(documentRequest('page', undefined, true));
+
+    expect(response.items).toEqual([]);
+  });
+
+  it('keeps parsed uploads in page-only searches', async () => {
+    await insertParsedFile('es-fc-recall', 'kestrel handbook');
+    const client = createClient(['doc-es-fc-recall']);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace: 'test' });
+
+    const response = await backend.search(documentRequest('page'));
+
+    expect(response.items).toEqual([expect.objectContaining({ id: 'doc-es-fc-recall' })]);
+  });
+
   it('shows where a page matched', async () => {
     await db.insert(documents).values({
       content: `${filler}The kestrel section explains the rollout.`,
@@ -110,7 +147,7 @@ describe('ElasticsearchFtsSearchBackend file content', () => {
       filename: 'roadmap.md',
       id: 'es-fc-page',
       source: 'internal://es-fc-page',
-      sourceType: 'file',
+      sourceType: 'api',
       title: 'Roadmap',
       totalCharCount: 100,
       totalLineCount: 1,

@@ -242,6 +242,7 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             limit,
             query,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeFileDerived,
           ),
         ),
       };

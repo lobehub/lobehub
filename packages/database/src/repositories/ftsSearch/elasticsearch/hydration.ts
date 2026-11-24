@@ -604,6 +604,7 @@ export const hydratePages = async (
   limit: number,
   query: string,
   excludeKnowledgeBaseIds: string[] = [],
+  excludeFileDerived = false,
 ): Promise<FtsSearchPageResult[]> => {
   if (hits.length === 0) return [];
 
@@ -626,6 +627,9 @@ export const hydratePages = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, 'custom/document'),
+        excludeFileDerived
+          ? or(ne(documents.sourceType, 'file'), isNull(documents.fileId))
+          : undefined,
         notAgentShareDocument(documents.metadata),
         notAgentShareFileReference(db, documents.fileId),
       ),
@@ -682,7 +686,7 @@ export const hydrateFileContents = async (
         ),
         buildWorkspaceWhere(scope, documents),
         isNotNull(documents.fileId),
-        ne(documents.fileType, 'custom/document'),
+        eq(documents.sourceType, 'file'),
         ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
         notAgentShareDocument(documents.metadata),
       ),

@@ -72,6 +72,7 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
           limit,
           filters.excludeKnowledgeBaseIds,
           filters.timeRange,
+          filters.excludeFileDerived,
         );
       }
       if (filters.documentKind === 'fileContent') {

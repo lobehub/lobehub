@@ -53,7 +53,7 @@ export async function searchFileContents(
     .where(
       and(
         context.scanScopeWhere(documents),
-        ne(documents.fileType, 'custom/document'),
+        eq(documents.sourceType, 'file'),
         ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
         // file_id is not a BM25 field, so ParadeDB keeps it out of its TopN scan.
         context.liftsExclusionFilter

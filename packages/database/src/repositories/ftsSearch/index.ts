@@ -189,6 +189,7 @@ export class FtsSearchRepo {
         this.execute(
           this.createRequest('documents', trimmedQuery, limits.page, {
             documentKind: 'page',
+            excludeFileDerived: !type,
             excludeKnowledgeBaseIds,
             timeRange,
           }),

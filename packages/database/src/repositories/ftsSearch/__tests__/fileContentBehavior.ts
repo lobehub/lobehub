@@ -47,7 +47,7 @@ export const describeFtsSearchFileContentBehavior = ({
       await db.insert(documents).values({
         content,
         fileId: id,
-        fileType: 'application/pdf',
+        fileType: 'custom/document',
         filename: name,
         id: `doc-${id}`,
         source: `s3://bucket/${id}.pdf`,
@@ -155,6 +155,76 @@ export const describeFtsSearchFileContentBehavior = ({
       expect(results.map(({ id }) => id)).toEqual(['fc-open']);
     });
 
+    it('lists a parsed upload as its file, not as a page', async () => {
+      await insertFile('fc-parsed', 'handbook.pdf', 'The kestrel policy applies to every team.');
+
+      const results = await repo.search({ query: 'kestrel' });
+
+      expect(results.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: 'fc-parsed', type: 'file' },
+      ]);
+    });
+
+    it('keeps parsed uploads in page-only searches such as recall', async () => {
+      await insertFile('fc-recall', 'handbook.pdf', 'The kestrel policy applies to every team.');
+
+      const results = await repo.search({ query: 'kestrel', type: 'page' });
+
+      expect(results.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: 'doc-fc-recall', type: 'page' },
+      ]);
+    });
+
+    it('still finds legacy parsed rows stored with the upload mime type', async () => {
+      await insertFile('fc-legacy', 'legacy.pdf', null);
+      await db.insert(documents).values({
+        content: 'Legacy kestrel notes',
+        fileId: 'fc-legacy',
+        fileType: 'application/pdf',
+        filename: 'legacy.pdf',
+        id: 'doc-fc-legacy',
+        source: 's3://bucket/fc-legacy.pdf',
+        sourceType: 'file',
+        totalCharCount: 20,
+        totalLineCount: 1,
+        userId,
+      });
+
+      expect((await searchFiles('kestrel')).map(({ id }) => id)).toEqual(['fc-legacy']);
+    });
+
+    it('keeps a knowledge base page with its mirror file a page', async () => {
+      await db.insert(knowledgeBases).values({ id: 'fc-kb-pages', name: 'Pages', userId });
+      await db.insert(files).values({
+        fileType: 'custom/document',
+        id: 'fc-mirror',
+        name: 'Rollout notes',
+        size: 10,
+        url: 'internal://document/placeholder',
+        userId,
+      });
+      await db.insert(documents).values({
+        content: 'Rollout notes about kestrel',
+        fileId: 'fc-mirror',
+        fileType: 'custom/document',
+        filename: 'Rollout notes',
+        id: 'fc-kb-page',
+        knowledgeBaseId: 'fc-kb-pages',
+        source: 'internal://document/placeholder',
+        sourceType: 'api',
+        title: 'Rollout notes',
+        totalCharCount: 27,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const results = await repo.search({ query: 'kestrel' });
+
+      expect(results.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: 'fc-kb-page', type: 'page' },
+      ]);
+    });
+
     it('shows where a page matched', async () => {
       await db.insert(documents).values({
         content: `${filler}The kestrel section explains the rollout.`,
@@ -162,7 +232,7 @@ export const describeFtsSearchFileContentBehavior = ({
         filename: 'roadmap.md',
         id: 'fc-page',
         source: 'internal://fc-page',
-        sourceType: 'file',
+        sourceType: 'api',
         title: 'Roadmap',
         totalCharCount: 100,
         totalLineCount: 1,
