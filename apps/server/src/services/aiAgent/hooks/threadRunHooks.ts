@@ -361,6 +361,17 @@ export function createThreadHooks(
   ];
 }
 
+const SUB_AGENT_BRIDGE_HOOK_ID = 'sub-agent-bridge';
+
+/**
+ * Whether a run hands its answer back through the sub-agent completion bridge
+ * ({@link createSubAgentBridgeHook}). The bridge then owns the call's tool
+ * result, so nothing else may write the run's answer into a tool message.
+ * Works on the serialized hooks an operation row keeps as well.
+ */
+export const hasSubAgentBridgeHook = (hooks?: ReadonlyArray<{ id: string }> | null): boolean =>
+  !!hooks?.some((hook) => hook.id === SUB_AGENT_BRIDGE_HOOK_ID);
+
 /**
  * Completion bridge for the server `callSubAgent` deferred-tool path.
  *
@@ -401,7 +412,7 @@ export function createSubAgentBridgeHook(
         );
       }
     },
-    id: 'sub-agent-bridge',
+    id: SUB_AGENT_BRIDGE_HOOK_ID,
     type: 'onComplete' as const,
     webhook: {
       body: { parentOperationId, threadId, toolMessageId },
