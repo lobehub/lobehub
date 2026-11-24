@@ -38,7 +38,7 @@ import {
   isMissingDirectoryError,
 } from './directoryAvailability';
 import { openEditDirectoryModal } from './EditDirectoryModal';
-import type { ProjectExecutionEnvironment } from './executionEnvironments';
+import type { ProjectExecutionEnvironment } from './executionEnvironmentOrder';
 import { useProjectExecutionEnvironments } from './useProjectExecutionEnvironments';
 
 /**
