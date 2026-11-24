@@ -45,8 +45,8 @@ export const AGENT_PREVIEW_COUNT = 4;
 export const isMarketplaceCategory = (value?: string): value is MarketplaceCategory =>
   !!value && (AGENT_CATEGORY_ORDER as string[]).includes(value);
 
+/** LobeHub's own picks carry no author line: they are all official. */
 export const fromTemplate = (template: AgentTemplate): MarketAgentSummary => ({
-  author: template.author,
   avatar: template.avatar,
   category: template.category,
   description: template.description,
