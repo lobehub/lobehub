@@ -4881,7 +4881,7 @@ When I am ___, I need ___
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
-  'environments.form.sources': 'Source code',
+  'environments.form.sources': 'Repositories',
   'environments.form.sourcesHint':
     'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
@@ -5476,6 +5476,11 @@ When I am ___, I need ___
   'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
   'environments.form.repositorySetupHint':
     "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.setupAndVariables': 'Setup and environment variables',
+  'environments.form.setupConfigured': 'Setup configured',
+  'environments.form.setupNotConfigured': 'No setup',
+  'environments.form.variablesCount_one': '{{count}} variable',
+  'environments.form.variablesCount_other': '{{count}} variables',
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',

@@ -7,16 +7,15 @@ export default {
   'settings.editDirectoryOtherEnvironment':
     'This folder already belongs to another environment. Choose a different folder or device.',
   'settings.editDirectoryDescription':
-    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+    'Choose the device and folder this device folder points to. Its topics move to the new folder and start new sessions there.',
   'settings.editDirectoryFailed': 'Could not update the folder',
   'settings.removeDirectory': 'Remove folder',
   'settings.removeDirectoryConfirmDescription':
-    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+    '{{path}} on {{device}} will no longer be a device folder of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
   'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
   'settings.removeDirectoryFailed':
     'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
-  'settings.configureDirectory': 'Add a working directory',
-  'settings.addDirectoryFailed': 'Could not add working directory',
+  'settings.addDirectoryFailed': 'Could not add the device folder',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
     'Prefix for this project’s task numbers, set when the project is created. Projects without one use the default prefix.',
@@ -24,26 +23,21 @@ export default {
     'Used in the project URL. Changing it updates the address; leave blank to use the project ID.',
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
-  'settings.workLocations': 'Working directories',
-  'settings.directoryListDescription':
-    'Device folders this project works in. Agents read and change files in them on that device.',
-  'settings.allEnvironments': 'All environments',
-  'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
   'directories.sourceSummary': 'Existing directory',
   'directories.keepFiles':
     'Files stay on {{device}}. Linking only organizes the topics in this directory.',
   'directories.bindFailed': 'Could not link directory',
   'topics.associateFailed': 'Could not add topic to project',
-  'topics.chooseLocation': 'Choose a working directory',
-  'topics.addLocation': 'Add a working directory (optional)',
+  'topics.chooseLocation': 'Choose a device folder',
+  'topics.addLocation': 'Add a device folder (optional)',
 
   'topics.complete': 'Mark completed',
   'topics.resume': 'Resume work',
   'topics.gatewayUnavailable': 'Enable Agent Gateway before using this project work location.',
 
-  'settings.deviceOnline': 'Device connected',
-  'settings.deviceOffline': 'Device disconnected',
+  'settings.deviceOnline': 'Online',
+  'settings.deviceOffline': 'Offline',
   'topics.title': 'Topics',
   'topics.groupBy': 'Group topics',
   'topics.group.status': 'By status',
@@ -70,7 +64,7 @@ export default {
   'topics.subGroup.byStatus': 'By status',
   'settings.addDirectory': 'Add folder',
   'settings.addDirectoryDescription':
-    'Select an environment and a connected device, then enter the full path of an existing folder. Files stay on that device.',
+    'Select a connected device, then enter the full path of an existing folder. Files stay on that device.',
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -94,10 +88,9 @@ export default {
   'settings.advanced': 'Advanced',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
-    'No folders in this environment yet. Add an existing folder on a connected device to start working.',
+    'No device folders yet. Add a folder on a connected device to run this project there.',
   'settings.title': 'Project settings',
   'settings.environments': 'Environment',
-  'settings.addEnvironment': 'Add environment',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -108,14 +101,14 @@ export default {
   'directories.boundTip':
     "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   'directories.boundRoot':
-    'This topic is bound to a project directory. Start a new topic to use a different directory.',
+    'This topic is bound to a device folder of the project. Start a new topic to use a different folder.',
   'directories.detectRepository': 'Detect GitHub repository',
   'directories.stagedNewTopic': 'A new topic will start in <project>{{name}}</project>',
   'directories.unavailable':
     'Device is offline or the directory is unavailable. Reconnect and retry.',
 
-  'directories.title': 'Working directories',
-  'directories.add': 'Add working directory',
+  'directories.title': 'Device folders',
+  'directories.add': 'Add device folder',
   'directories.bind': 'Link to project',
   'directories.bindDescription':
     'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
@@ -227,7 +220,7 @@ export default {
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'delete.confirm.continue': 'Delete project',
-  'delete.confirm.kept.files': 'Files in the working directories on your devices',
+  'delete.confirm.kept.files': "Files in the project's device folders",
   'delete.confirm.kept.work': 'Tasks, goals, topics and channels',
   'delete.confirm.keptLead': 'These are kept, but no longer belong to a project:',
   'delete.confirm.namePrompt': 'Type “{{name}}” to confirm',
@@ -235,8 +228,7 @@ export default {
     'Project widgets and their run history, Linear sync rules, review sites, dashboards and project memories',
   'delete.confirm.removed.bindings':
     'Links to agents, groups and knowledge bases (your agents and knowledge bases are kept)',
-  'delete.confirm.removed.settings':
-    'Project settings, members, working directories and environments',
+  'delete.confirm.removed.settings': 'Project settings, members, device folders and environment',
   'delete.confirm.removedLead': 'Deleting “{{name}}” cannot be undone. It permanently removes:',
   'delete.confirm.title': 'Delete project',
   'delete.description':
@@ -307,15 +299,15 @@ export default {
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
   'overview.context.location.devices': 'Devices',
-  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directories': 'Device folders',
   'overview.context.location.directoryUnavailable':
     "Couldn't reach this folder. Check that the device is online and the folder still exists.",
-  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectories': 'No folders on this device yet.',
   'overview.context.location.noDirectoryTooltip':
-    "This device has no project folder yet, so the conversation starts in the device's default directory.",
-  'overview.context.location.environments': 'Code environments',
-  'overview.context.location.noEnvironments': 'No code environments yet.',
-  'overview.context.location.title': 'Work location',
+    "This device has no folder for the project yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Environment',
+  'overview.context.location.noEnvironments': 'The environment has no repositories yet.',
+  'overview.context.location.title': 'Execution environment',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
   'overview.context.repository.publishHint':
@@ -680,8 +672,6 @@ export default {
   'artboard.question.hint': 'Your answer goes to the agent with the next send.',
   'create.failedRetry': "Couldn't create the project. Check your network and try again.",
   'environment.configure': 'Configure environment',
-  'settings.environmentIntro':
-    'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
   'createFromGithub.addRepository': 'Add',
   'createFromGithub.removeRepository': 'Remove',
   'createFromGithub.openIntegrations': 'Open GitHub settings',
@@ -695,4 +685,25 @@ export default {
   'createFromGithub.extraRepositoriesLabel': 'More repositories',
   'createFromGithub.chooseFromGithub': 'Choose from GitHub',
   'knowledgeBases.addFailedRetry': "Couldn't add this library. Check your network and try again.",
+  'overview.context.location.sandboxes': 'Cloud sandbox',
+  'overview.context.location.emptySandbox': 'Empty sandbox',
+  'overview.context.location.emptySandboxDesc':
+    'Starts in an empty folder, without the project environment',
+  'settings.cloudSandboxGroup': 'Cloud sandbox',
+  'settings.devicesGroup': 'Device working directories',
+  'settings.deviceNoDirectory': 'No folder set',
+  'settings.setDeviceDirectory': 'Set folder',
+  'settings.noDevices':
+    'No connected devices yet. Open the LobeHub desktop app or run lh connect on a machine to add it.',
+  'settings.setDirectoryDescription':
+    'Enter the full path of an existing folder on {{device}}. Files stay on that device.',
+  'settings.directoryUnavailableTag': 'Unavailable',
+  'settings.directoryUnavailable_offline':
+    'The device is offline. The folder becomes usable once the device is online.',
+  'settings.directoryUnavailable_missing':
+    "This folder isn't on the device. Edit its path or remove it.",
+  'settings.directoryUnavailable_failed':
+    "This folder couldn't be set up. Check its path, or try again later.",
+  'settings.directoryUnavailable_needsManager':
+    'A project manager needs to open this page while the device is online.',
 };
