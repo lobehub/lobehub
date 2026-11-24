@@ -1,5 +1,9 @@
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { LobeAgentConfig } from '@lobechat/types';
+import {
+  getSubAgentChatConfigOverride,
+  isHeterogeneousAgentModelId,
+  resolveSubAgentModel,
+} from '@lobechat/const';
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig, LobeAgentConfig } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { getAgentStoreState } from '@/store/agent';
@@ -43,4 +47,37 @@ export const resolveClientSubAgentTarget = async (
   }
 
   return { config: config as LobeAgentConfig, title };
+};
+
+/**
+ * The model and chatConfig a client sub-agent runs on, resolved at the spawn
+ * site (mirrors the server's callSubAgent runner).
+ *
+ * A copy of the parent: an explicit `agencyConfig.subagent` override wins,
+ * otherwise it follows the parent's *effective* model — topic-pinned model
+ * over the agent default, the same precedence internal_createAgentState
+ * applies to the parent run itself.
+ *
+ * A named target runs on its own config. Its model is pinned explicitly: the
+ * run would otherwise follow this topic's pinned model, which is the parent's.
+ */
+export const resolveClientSubAgentRunConfig = (params: {
+  parentEffectiveModel?: { model?: string | null; provider?: string | null };
+  parentSubagent: LobeAgentAgencyConfig['subagent'];
+  target?: { config: Pick<LobeAgentConfig, 'model' | 'provider'> };
+}): {
+  chatConfigOverride?: Partial<LobeAgentChatConfig>;
+  modelOverride?: { model: string; provider: string };
+} => {
+  const { parentEffectiveModel, parentSubagent, target } = params;
+
+  if (!target) {
+    return {
+      chatConfigOverride: getSubAgentChatConfigOverride(parentSubagent),
+      modelOverride: resolveSubAgentModel(parentSubagent, parentEffectiveModel),
+    };
+  }
+
+  const { model, provider } = target.config;
+  return { modelOverride: model && provider ? { model, provider } : undefined };
 };

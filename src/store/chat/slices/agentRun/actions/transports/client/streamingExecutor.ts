@@ -15,12 +15,7 @@ import {
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import {
-  getSubAgentChatConfigOverride,
-  isDesktop,
-  resolveSubAgentChatConfig,
-  resolveSubAgentModel,
-} from '@lobechat/const';
+import { isDesktop, resolveSubAgentChatConfig } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { initialToolSelection } from '@lobechat/mecha';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
@@ -76,7 +71,10 @@ import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { steerQueuedFollowUps } from './clientSteer';
-import { resolveClientSubAgentTarget } from './clientSubAgentTarget';
+import {
+  resolveClientSubAgentRunConfig,
+  resolveClientSubAgentTarget,
+} from './clientSubAgentTarget';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -1099,40 +1097,31 @@ export class StreamingExecutorActionImpl {
         this.#get().replaceMessages(subMessages, { context: subContext });
       }
 
-      // 6. Run the sub-agent with the current client runtime.
-      //    The model is resolved here at the spawn site (mirrors the server's
-      //    callSubAgent runner): an explicit `agencyConfig.subagent` override
-      //    wins, otherwise the sub-agent follows the parent's *effective* model
-      //    — topic-pinned model over the agent default, the same precedence
-      //    internal_createAgentState applies to the parent run itself.
+      // 6. Run the sub-agent with the current client runtime, on the model and
+      //    chatConfig resolved here at the spawn site.
       const parentAgentConfig =
         agentSelectors.getAgentConfigById(parentAgentId)(getAgentStoreState());
-      const parentEffectiveModel =
-        topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
-      const subAgentModel = target
-        ? undefined
-        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
-      // A named target runs on its own model, pinned explicitly: the run would
-      // otherwise follow this topic's pinned model, which is the parent's.
-      const targetModel =
-        target?.config.model && target.config.provider
-          ? { model: target.config.model, provider: target.config.provider }
-          : undefined;
-      const runModel = subAgentModel ?? targetModel;
+      const { chatConfigOverride, modelOverride } = resolveClientSubAgentRunConfig({
+        parentEffectiveModel:
+          topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig,
+        parentSubagent: parentAgentConfig?.agencyConfig?.subagent,
+        target,
+      });
       // Warm the sub-agent model's user-level reasoning config before the run:
       // the ChatInput loader only fetches the parent's effective model, while
       // resolveModelExtendParams reads this cache synchronously mid-run.
-      if (runModel) {
-        await getAiInfraStoreState().ensureModelReasoningConfig(runModel.model, runModel.provider);
+      if (modelOverride) {
+        await getAiInfraStoreState().ensureModelReasoningConfig(
+          modelOverride.model,
+          modelOverride.provider,
+        );
       }
       const runtimeResult = await this.#get().executeClientAgent({
-        chatConfigOverride: target
-          ? undefined
-          : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent),
+        chatConfigOverride,
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
-        modelOverride: runModel,
+        modelOverride,
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',
