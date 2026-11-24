@@ -3,7 +3,7 @@ import type { DesktopDownloadUrls } from '@lobechat/types';
 export type DownloadPlatform = keyof DesktopDownloadUrls;
 
 /** Offered in this order when the visitor's own platform is unknown. */
-const DEFAULT_ORDER: readonly DownloadPlatform[] = ['windows', 'macOS'];
+const DEFAULT_ORDER: readonly DownloadPlatform[] = ['windows', 'macOS', 'linux'];
 
 /**
  * Which platform the visitor is most likely to want.
@@ -15,6 +15,8 @@ const DEFAULT_ORDER: readonly DownloadPlatform[] = ['windows', 'macOS'];
 export const detectPlatform = (userAgent: string): DownloadPlatform | undefined => {
   if (/mac|iphone|ipad|ipod/i.test(userAgent)) return 'macOS';
   if (/win/i.test(userAgent)) return 'windows';
+  // Android reports "Linux" too, and cannot install a desktop package.
+  if (/linux|x11/i.test(userAgent) && !/android/i.test(userAgent)) return 'linux';
 
   return undefined;
 };

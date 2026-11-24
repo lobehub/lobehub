@@ -3,7 +3,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DesktopDownloadUrls } from '@lobechat/types';
 import { Block, Button, createStaticStyles,Flexbox, Icon, Text } from '@lobehub/ui';
-import { AppleIcon, DownloadIcon, MonitorIcon } from 'lucide-react';
+import { AppleIcon, DownloadIcon, MonitorIcon, TerminalIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,6 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const PLATFORM_META: Record<DownloadPlatform, { icon: typeof AppleIcon; label: string }> = {
+  linux: { icon: TerminalIcon, label: 'Linux (.deb)' },
   macOS: { icon: AppleIcon, label: 'macOS' },
   windows: { icon: MonitorIcon, label: 'Windows' },
 };

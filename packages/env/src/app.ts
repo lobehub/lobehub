@@ -117,6 +117,7 @@ export const getAppConfig = () => {
        * `GlobalServerConfig['desktopDownloads']` — the page renders whatever it
        * is given.
        */
+      DESKTOP_DOWNLOAD_URL_LINUX: z.string().url().optional(),
       DESKTOP_DOWNLOAD_URL_MACOS: z.string().url().optional(),
       DESKTOP_DOWNLOAD_URL_WINDOWS: z.string().url().optional(),
       /**
@@ -185,6 +186,7 @@ export const getAppConfig = () => {
       COMMAND_GOVERNANCE_SERVICE_TOKEN: process.env.COMMAND_GOVERNANCE_SERVICE_TOKEN,
       LOBEHUB_CONTROL_PLANE_TOKEN: process.env.LOBEHUB_CONTROL_PLANE_TOKEN,
       LOBEHUB_TENANT_DISCOVERY_TOKEN: process.env.LOBEHUB_TENANT_DISCOVERY_TOKEN,
+      DESKTOP_DOWNLOAD_URL_LINUX: process.env.DESKTOP_DOWNLOAD_URL_LINUX,
       DESKTOP_DOWNLOAD_URL_MACOS: process.env.DESKTOP_DOWNLOAD_URL_MACOS,
       DESKTOP_DOWNLOAD_URL_WINDOWS: process.env.DESKTOP_DOWNLOAD_URL_WINDOWS,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',

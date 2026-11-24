@@ -8,18 +8,22 @@ const WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 const LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0';
 
+const ANDROID =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36';
+
 const BOTH = { macOS: 'https://example.com/app.dmg', windows: 'https://example.com/setup.exe' };
 
 describe('detectPlatform', () => {
   it.each([
     ['macOS', MAC],
     ['windows', WINDOWS],
+    ['linux', LINUX],
   ])('recognises %s', (expected, ua) => {
     expect(detectPlatform(ua)).toBe(expected);
   });
 
   it('gives up rather than guessing on anything else', () => {
-    expect(detectPlatform(LINUX)).toBeUndefined();
+    expect(detectPlatform(ANDROID)).toBeUndefined();
     expect(detectPlatform('')).toBeUndefined();
   });
 });
@@ -33,7 +37,13 @@ describe('orderDownloadPlatforms', () => {
   });
 
   it('falls back to a stable order when the platform is unknown', () => {
-    expect(orderDownloadPlatforms(BOTH, LINUX)).toEqual(['windows', 'macOS']);
+    expect(orderDownloadPlatforms(BOTH, ANDROID)).toEqual(['windows', 'macOS']);
+  });
+
+  it('puts the Linux package first for a Linux visitor', () => {
+    const all = { ...BOTH, linux: 'https://example.com/app.deb' };
+    expect(orderDownloadPlatforms(all, LINUX)).toEqual(['linux', 'windows', 'macOS']);
+    expect(orderDownloadPlatforms(all, MAC)).toEqual(['macOS', 'windows', 'linux']);
   });
 
   it('lists only what this deployment actually publishes', () => {

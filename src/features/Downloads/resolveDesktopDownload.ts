@@ -53,7 +53,7 @@ export const resolveDesktopDownload = ({
   isCustomBranding,
   urls,
 }: ResolveOptions): DesktopDownloadTarget => {
-  const hasOwnDownloads = Boolean(urls && (urls.macOS || urls.windows));
+  const hasOwnDownloads = Boolean(urls && (urls.macOS || urls.windows || urls.linux));
 
   if (hasOwnDownloads) return { available: true, href: `${originOf(appBaseUrl)}/downloads` };
   if (isCustomBranding) return { available: false };

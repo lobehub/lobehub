@@ -125,6 +125,8 @@ export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerMod
  * than compiled in so the addresses can move without a rebuild.
  */
 export interface DesktopDownloadUrls {
+  /** Debian/Ubuntu x64 package. */
+  linux?: string;
   macOS?: string;
   windows?: string;
 }

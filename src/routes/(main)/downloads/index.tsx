@@ -24,7 +24,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 const Downloads = () => {
   const urls = useServerConfigStore(serverConfigSelectors.desktopDownloads);
 
-  if (!urls?.macOS && !urls?.windows) return <Navigate replace to={'/'} />;
+  if (!urls?.macOS && !urls?.windows && !urls?.linux) return <Navigate replace to={'/'} />;
 
   return <DistributionDownloads urls={urls} />;
 };

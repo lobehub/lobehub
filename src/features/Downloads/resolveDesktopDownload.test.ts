@@ -25,6 +25,16 @@ describe('resolveDesktopDownload', () => {
     ).toBe('/downloads');
   });
 
+  it('counts a Linux-only build as publishing installers', () => {
+    expect(
+      resolveDesktopDownload({
+        fallbackUrl: HOSTED,
+        isCustomBranding: true,
+        urls: { linux: 'https://example.com/releases/stable/app.deb' },
+      }),
+    ).toEqual({ available: true, href: '/downloads' });
+  });
+
   it('leaves an upstream build pointing at the hosted page', () => {
     expect(resolveDesktopDownload({ fallbackUrl: HOSTED, isCustomBranding: false })).toEqual({
       available: true,

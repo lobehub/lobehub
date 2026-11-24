@@ -193,9 +193,12 @@ export const getServerGlobalConfig = async () => {
     // Where this deployment serves its own installers. Omitted entirely when
     // none are configured, so the client can tell "we publish builds" from
     // "we publish none" without a second flag.
-    ...(appEnv.DESKTOP_DOWNLOAD_URL_MACOS || appEnv.DESKTOP_DOWNLOAD_URL_WINDOWS
+    ...(appEnv.DESKTOP_DOWNLOAD_URL_MACOS ||
+    appEnv.DESKTOP_DOWNLOAD_URL_WINDOWS ||
+    appEnv.DESKTOP_DOWNLOAD_URL_LINUX
       ? {
           desktopDownloads: cleanObject({
+            linux: appEnv.DESKTOP_DOWNLOAD_URL_LINUX,
             macOS: appEnv.DESKTOP_DOWNLOAD_URL_MACOS,
             windows: appEnv.DESKTOP_DOWNLOAD_URL_WINDOWS,
           }),
