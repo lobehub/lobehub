@@ -429,6 +429,12 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
+    // The prompt editor prefers editorData over systemRole, so a systemRole-only
+    // write must drop the old rich document or the editor shows stale content.
+    if ('systemRole' in value && !('editorData' in value)) {
+      value = { ...value, editorData: null } as PartialDeep<AgentItem>;
+    }
+
     if (AGENT_SHARE_ALLOWED_PROVIDERS && touchesShareModel(value)) {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
         agentId,
