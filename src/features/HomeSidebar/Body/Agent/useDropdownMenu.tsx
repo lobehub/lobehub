@@ -26,8 +26,7 @@ export const useAgentActionsDropdownMenu = ({
   // Create menu items
   const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
   // The workspace sidebar is personal: it only renders the member's private
-  // folders, so a category added from here is private too. Public folders
-  // stay manageable from the same "Manage categories" dialog.
+  // folders, so a category added from here is private too.
   const isWorkspace = !!useActiveWorkspaceId();
 
   return useMemo(() => {

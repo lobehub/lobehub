@@ -2,26 +2,21 @@ import { type SidebarGroup } from '@lobechat/types';
 
 import type { SessionGroupItemBase } from '@/types/session';
 
-export interface ConfigGroupSections {
+export interface ConfigGroupList {
   /** Visibility of a category added from the dialog; `undefined` keeps the server default. */
   createVisibility?: 'private';
-  /** The folders the member's sidebar shows; "Add New Category" appends here. */
-  ownGroups: SessionGroupItemBase[];
-  /** Folders already published to the workspace, managed in their own list. */
-  workspaceGroups: SessionGroupItemBase[];
+  /** The folders the member's sidebar shows. */
+  items: SessionGroupItemBase[];
 }
 
-const toSortableItems = (groups: SidebarGroup[]): SessionGroupItemBase[] =>
-  groups.map((g) => ({ id: g.id, name: g.name, sort: g.sort }));
-
 /**
- * Split the folders for the category dialog.
+ * The folders the category dialog manages: the ones the sidebar shows.
  *
- * In a workspace the sidebar is personal and only lists the member's private
- * folders, so those are "own" and new categories are private. Folders already
- * published to the workspace keep a separate list so they stay manageable.
+ * The workspace sidebar is personal and only lists the member's private
+ * folders, so the dialog manages those and new categories are private.
+ * Folders published to the workspace are browsed on the Agents page.
  */
-export const resolveConfigGroupSections = ({
+export const resolveConfigGroupList = ({
   groups,
   isWorkspace,
   privateGroups,
@@ -29,11 +24,9 @@ export const resolveConfigGroupSections = ({
   groups: SidebarGroup[];
   isWorkspace: boolean;
   privateGroups: SidebarGroup[];
-}): ConfigGroupSections =>
-  isWorkspace
-    ? {
-        createVisibility: 'private',
-        ownGroups: toSortableItems(privateGroups),
-        workspaceGroups: toSortableItems(groups),
-      }
-    : { ownGroups: toSortableItems(groups), workspaceGroups: [] };
+}): ConfigGroupList => {
+  const source = isWorkspace ? privateGroups : groups;
+  const items = source.map((g) => ({ id: g.id, name: g.name, sort: g.sort }));
+
+  return isWorkspace ? { createVisibility: 'private', items } : { items };
+};
