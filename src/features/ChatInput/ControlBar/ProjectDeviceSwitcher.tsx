@@ -238,13 +238,19 @@ const ProjectDeviceSwitcher = ({
   const onSandbox = !!sandbox?.active;
   const trigger = (
     <div {...stylex.props(workingDirectoryChipStyles.chip)}>
-      <ExecutionTargetIcon
-        devicePlatform={onSandbox ? undefined : directory?.platform}
-        target={onSandbox ? 'sandbox' : 'device'}
-      />
+      {/* On the sandbox the chip names it as the menu does: its repositories
+          and the first one's logo, once it has any. */}
+      {onSandbox && sandboxSlug ? (
+        <RepositoryAvatar size={14} url={sandboxSlug} />
+      ) : (
+        <ExecutionTargetIcon
+          devicePlatform={onSandbox ? undefined : directory?.platform}
+          target={onSandbox ? 'sandbox' : 'device'}
+        />
+      )}
       <span {...stylex.props(workingDirectoryChipStyles.label)}>
         {onSandbox
-          ? t('heteroAgent.executionTarget.sandbox')
+          ? sandboxLabel || t('heteroAgent.executionTarget.sandbox')
           : directory
             ? projectDirectoryDeviceName(directory, devices)
             : t('heteroAgent.executionTarget.unknownDevice')}
