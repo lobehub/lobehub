@@ -66,7 +66,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
           'knowledge': t('tab.knowledge'),
           'mail': t('tab.mail'),
           'opening': t('agentTab.opening', { ns: 'setting' }),
-          'permission': t('permission.page.entry', { ns: 'setting' }),
+          'permission': t('permission.page.agentEntry', { ns: 'setting' }),
           // Inside the profile group the whole surface *is* the agent profile,
           // so the first entry is the "basic" tab, not "Agent Profile" again —
           // that broader name stays on the sidebar entry that opens the group.

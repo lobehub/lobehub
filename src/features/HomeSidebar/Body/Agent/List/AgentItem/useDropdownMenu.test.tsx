@@ -489,7 +489,6 @@ describe('useAgentDropdownMenu', () => {
       'copy-agent',
       'divider',
       'permission',
-      'visibility',
       'divider',
       'delete',
     ]);
@@ -542,6 +541,9 @@ describe('useAgentDropdownMenu', () => {
     ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
 
     expect(permissionItem).toBeTruthy();
+    expect((permissionItem as unknown as { label: string }).label).toBe(
+      'permission.page.agentEntry',
+    );
 
     permissionItem?.onClick({ domEvent: { stopPropagation: vi.fn() } });
 

@@ -1,9 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { canGoNative } from '@/libs/contextMenu/canGoNative';
-
-import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
+import { useAgentVisibilityControl } from './useAgentVisibilityControl';
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: 'workspace-1' as string | null,
@@ -11,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   canEditResource: true,
   confirmModal: vi.fn(),
   publishAgentToWorkspace: vi.fn(),
+  refreshAgentConfig: vi.fn(),
   refreshAgentList: vi.fn(),
   refreshWorkspaceUserPreference: vi.fn(),
   setAgentVisibility: vi.fn(),
@@ -67,27 +66,23 @@ vi.mock('@/store/user/selectors', () => ({
   userProfileSelectors: { userId: (s: UserStateMock) => s.userId },
 }));
 
-vi.mock('../../../../hooks', () => ({ useRevealSidebarSection: () => vi.fn() }));
+vi.mock('@/features/HomeSidebar/hooks/useRevealSidebarSection', () => ({
+  useRevealSidebarSection: () => vi.fn(),
+}));
 
-type Params = Parameters<typeof useAgentVisibilityMenu>[0];
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: { internal_refreshAgentConfig: unknown }) => unknown) =>
+    selector({ internal_refreshAgentConfig: mocks.refreshAgentConfig }),
+}));
+
+type Params = Parameters<typeof useAgentVisibilityControl>[0];
 
 const render = (params: Partial<Params> = {}) =>
   renderHook(() =>
-    useAgentVisibilityMenu({ id: 'agent-1', userId: 'me', visibility: 'private', ...params }),
+    useAgentVisibilityControl({ id: 'agent-1', userId: 'me', visibility: 'private', ...params }),
   ).result.current;
 
-type CheckboxOption = {
-  checked: boolean;
-  desc: string;
-  key: string;
-  label: string;
-  onCheckedChange: (checked: boolean) => void;
-};
-
-const options = (menu: ReturnType<typeof useAgentVisibilityMenu>) =>
-  menu.options as unknown as CheckboxOption[];
-
-describe('useAgentVisibilityMenu', () => {
+describe('useAgentVisibilityControl', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.activeWorkspaceId = 'workspace-1';
@@ -95,50 +90,17 @@ describe('useAgentVisibilityMenu', () => {
     mocks.canEditResource = true;
   });
 
-  it('shows the current scope on the Visibility row and checks it in the options', () => {
-    const menu = render({ visibility: 'private' });
-
-    expect(menu.canChange).toBe(true);
-    expect(menu.submenu).toMatchObject({
-      extra: 'agent.visibility.private',
-      key: 'visibility',
-      label: 'agent.visibility',
+  it('reports the current scope and lets the creator change it', () => {
+    expect(render({ visibility: 'private' })).toMatchObject({
+      canChange: true,
+      current: 'private',
+      lockReason: undefined,
     });
-    expect(
-      options(menu).map(({ checked, desc, key, label }) => ({ checked, desc, key, label })),
-    ).toEqual([
-      {
-        checked: true,
-        desc: 'agent.visibility.privateDesc',
-        key: 'visibility-private',
-        label: 'agent.visibility.private',
-      },
-      {
-        checked: false,
-        desc: 'agent.visibility.workspaceDesc',
-        key: 'visibility-public',
-        label: 'agent.visibility.workspace',
-      },
-    ]);
-  });
-
-  it('labels a published Agent as Workspace', () => {
-    const menu = render({ visibility: 'public' });
-
-    expect(menu.submenu).toMatchObject({ extra: 'agent.visibility.workspace' });
-    expect(options(menu).find((o) => o.checked)?.key).toBe('visibility-public');
-  });
-
-  it('stays eligible for the native desktop context menu', () => {
-    const menu = render();
-
-    expect(canGoNative([menu.submenu])).toBe(true);
+    expect(render({ visibility: 'public' })).toMatchObject({ canChange: true, current: 'public' });
   });
 
   it('confirms and publishes when Workspace is picked on a private Agent', async () => {
-    const menu = render({ visibility: 'private' });
-
-    options(menu)[1].onCheckedChange(true);
+    render({ visibility: 'private' }).select('public');
     expect(mocks.confirmModal).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -147,14 +109,14 @@ describe('useAgentVisibilityMenu', () => {
 
     expect(mocks.publishAgentToWorkspace).toHaveBeenCalledWith('agent-1');
     expect(mocks.refreshAgentList).toHaveBeenCalled();
+    // The settings page reads the agent store, so its scope must refresh too.
+    expect(mocks.refreshAgentConfig).toHaveBeenCalledWith('agent-1');
     expect(mocks.refreshWorkspaceUserPreference).toHaveBeenCalled();
     expect(mocks.toastSuccess).toHaveBeenCalledWith('agent.publishToWorkspaceSuccess');
   });
 
   it('confirms and makes private when Private is picked on a published Agent', async () => {
-    const menu = render({ visibility: 'public' });
-
-    options(menu)[0].onCheckedChange(true);
+    render({ visibility: 'public' }).select('private');
     expect(mocks.confirmModal).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -162,34 +124,41 @@ describe('useAgentVisibilityMenu', () => {
     });
 
     expect(mocks.setAgentVisibility).toHaveBeenCalledWith('agent-1', 'private');
+    expect(mocks.refreshAgentConfig).toHaveBeenCalledWith('agent-1');
   });
 
   it('does nothing when the current scope is picked again', () => {
-    const menu = render({ visibility: 'private' });
-
-    options(menu)[0].onCheckedChange(false);
-    options(menu)[0].onCheckedChange(true);
+    render({ visibility: 'private' }).select('private');
 
     expect(mocks.confirmModal).not.toHaveBeenCalled();
   });
 
-  it("does not let a member change another member's published Agent", () => {
-    const menu = render({ userId: 'someone-else', visibility: 'public' });
+  it("locks another member's published Agent and says why", () => {
+    const control = render({ userId: 'someone-else', visibility: 'public' });
 
-    expect(menu).toEqual({ canChange: false, options: [], submenu: null });
+    expect(control).toMatchObject({
+      canChange: false,
+      current: 'public',
+      lockReason: 'notCreator',
+    });
+    control.select('private');
+    expect(mocks.confirmModal).not.toHaveBeenCalled();
   });
 
-  it('is absent outside a workspace', () => {
+  it('has no scope outside a workspace', () => {
     mocks.activeWorkspaceId = null;
 
-    expect(render().canChange).toBe(false);
+    expect(render()).toMatchObject({ canChange: false, current: undefined });
   });
 
-  it('is absent on builtin agents', () => {
-    expect(render({ slug: 'inbox', visibility: 'public' }).canChange).toBe(false);
+  it('locks builtin agents', () => {
+    expect(render({ slug: 'inbox', visibility: 'public' })).toMatchObject({
+      canChange: false,
+      lockReason: 'builtin',
+    });
   });
 
-  it('is absent when the viewer cannot configure the Agent', () => {
+  it('is read-only when the viewer cannot configure the Agent', () => {
     mocks.canEditResource = false;
 
     expect(render().canChange).toBe(false);
