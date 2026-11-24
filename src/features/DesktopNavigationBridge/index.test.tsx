@@ -1,9 +1,12 @@
+import type { MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useElectronStore } from '@/store/electron';
+
 import DesktopNavigationBridge from './index';
 
-type NavigatePayload = { escape?: boolean; path: string; replace?: boolean };
+type NavigatePayload = MainBroadcastParams<'navigate'>;
 type NavigateHandler = (payload: NavigatePayload) => void;
 type OpenDirectoryPayload = { newWindow: boolean; path: string };
 type OpenDirectoryHandler = (payload: OpenDirectoryPayload) => void;
@@ -14,7 +17,6 @@ let openDirectoryHandler: OpenDirectoryHandler | null = null;
 const navigateMock = vi.hoisted(() => vi.fn());
 const openDirectoryInAppMock = vi.hoisted(() => vi.fn());
 const clientReadyMock = vi.hoisted(() => vi.fn());
-const DEVICE_ID = 'device-local';
 
 vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: (event: string, handler: any) => {
@@ -29,14 +31,6 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 vi.mock('@/features/AppLaunch/openDirectory', () => ({
   openDirectoryInApp: openDirectoryInAppMock,
-}));
-
-const getStateMock = vi.hoisted(() =>
-  vi.fn(() => ({ gatewayDeviceInfo: { deviceId: 'device-local' } })),
-);
-
-vi.mock('@/store/electron', () => ({
-  useElectronStore: Object.assign(() => undefined, { getState: getStateMock }),
 }));
 
 vi.mock('@/utils/electron/ipc', () => ({
@@ -64,6 +58,37 @@ describe('DesktopNavigationBridge', () => {
     openDirectoryInAppMock.mockResolvedValue({ status: 'opened-topic' });
     clientReadyMock.mockReset();
     clientReadyMock.mockResolvedValue(false);
+  });
+
+  it('opens a notification in the tab list for its original workspace', () => {
+    localStorage.clear();
+    const target = '/team/agent/a1/t1';
+    const store = useElectronStore.getState();
+    const targetId = store.addTab(target);
+    store.addTab('/team/page/notes');
+    store.addTab('/agent/personal');
+    render(<DesktopNavigationBridge />);
+
+    emitNavigate({ escape: true, path: target, reuseTab: true });
+
+    expect(useElectronStore.getState().activeTabId).toBe(targetId);
+    expect(useElectronStore.getState().tabs.map((tab) => tab.url)).toEqual([
+      target,
+      '/team/page/notes',
+    ]);
+
+    emitNavigate({ escape: true, path: '/team/agent/a1/t2', reuseTab: true });
+
+    expect(useElectronStore.getState().getActiveTab()?.url).toBe('/team/agent/a1/t2');
+    const newTabId = useElectronStore.getState().activeTabId;
+    emitNavigate({ escape: true, path: '/team/agent/a1/t2#message', reuseTab: true });
+    expect(useElectronStore.getState().activeTabId).toBe(newTabId);
+    expect(useElectronStore.getState().getActiveTab()?.url).toBe('/team/agent/a1/t2#message');
+    expect(useElectronStore.getState().tabs).toHaveLength(3);
+    const duplicate = store.addNewTab(target);
+    emitNavigate({ escape: true, path: target, reuseTab: true });
+    expect(useElectronStore.getState().activeTabId).toBe(duplicate);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('uses escaped navigation for literal desktop notification paths', () => {
@@ -140,6 +165,7 @@ describe('DesktopNavigationBridge', () => {
   });
 
   it('reads the device id lazily instead of snapshotting it at mount', () => {
+    const getStateMock = vi.spyOn(useElectronStore, 'getState');
     // On a cold start the launch replays before the identity resolves.
     render(<DesktopNavigationBridge />);
 
@@ -148,7 +174,11 @@ describe('DesktopNavigationBridge', () => {
     const { getDeviceId } = openDirectoryInAppMock.mock.calls[0][0];
     // Nothing is read at mount; the getter answers when the resolver asks.
     expect(getStateMock).not.toHaveBeenCalled();
-    expect(getDeviceId()).toBe(DEVICE_ID);
+    useElectronStore.setState({
+      gatewayDeviceInfo: { deviceId: 'device-local', hostname: 'test', platform: 'darwin' },
+    });
+    expect(getDeviceId()).toBe('device-local');
     expect(getStateMock).toHaveBeenCalled();
+    getStateMock.mockRestore();
   });
 });

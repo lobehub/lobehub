@@ -155,7 +155,10 @@ describe('NotificationCtr.mac', () => {
     handler({ id: 'lobehub-nav', type: 'clicked' });
 
     expect(mockBrowserManager.showMainWindow).toHaveBeenCalled();
-    expect(mockMainWindow.broadcast).toHaveBeenCalledWith('navigate', navigate);
+    expect(mockMainWindow.broadcast).toHaveBeenCalledWith('navigate', {
+      ...navigate,
+      reuseTab: true,
+    });
   });
 
   it('reports permission status from the addon', async () => {
