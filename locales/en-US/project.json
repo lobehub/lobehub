@@ -582,6 +582,7 @@
   "settings.removeDirectoryConfirmTitle": "Remove {{name}} from this project?",
   "settings.removeDirectoryFailed": "Could not remove the folder. If a topic is running here, wait for it to finish and try again.",
   "settings.reorderFailed": "Couldn't save the new order. Try again.",
+  "settings.sandboxNoRepository": "No repository yet",
   "settings.saveFailed": "Could not save the change",
   "settings.saved": "Saved",
   "settings.setDeviceDirectory": "Set folder",

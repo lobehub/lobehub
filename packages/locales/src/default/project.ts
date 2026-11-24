@@ -692,6 +692,7 @@ export default {
   'settings.cloudSandboxGroup': 'Cloud sandbox',
   'settings.addExecutionEnvironment': 'Add execution environment',
   'settings.configureSandbox': 'Configure',
+  'settings.sandboxNoRepository': 'No repository yet',
   'settings.reorderFailed': "Couldn't save the new order. Try again.",
   'settings.setDeviceDirectory': 'Set folder',
   'settings.setDirectoryDescription':

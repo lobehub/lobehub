@@ -16,7 +16,6 @@ import {
   BoxIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  FolderIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
@@ -103,13 +102,16 @@ export function ExecutionEnvironments({
   const isDeviceListLoaded = useDeviceStore(deviceSelectors.isDeviceListLoaded);
   const removeDirectory = useProjectDirectoryStore((s) => s.removeDirectory);
   const bind = useProjectDirectoryStore((s) => s.bind);
-  const [sandboxOpen, setSandboxOpen] = useState(false);
+  const [sandboxOpen, setSandboxOpen] = useState<boolean>();
   // The order being dragged, shown at once; the saved one replaces it.
   const [pendingOrder, setPendingOrder] = useState<string[]>();
 
   const directories = ordered.flatMap((item) =>
     item.kind === 'directory' ? [item.directory] : [],
   );
+  // The sandbox's configuration is open until folded when it is the only
+  // execution environment: there is nothing else on the page to look at.
+  const isSandboxOpen = sandboxOpen ?? directories.length === 0;
 
   // A folder registered before environments existed is not enabled for the
   // project's environment yet, so nothing can start in it. There is nothing to
@@ -194,76 +196,89 @@ export function ExecutionEnvironments({
   };
 
   /**
-   * One execution environment on one line: what it is, where it works — cut
-   * short with the whole text on hover — then its state and its actions.
+   * One execution environment as a card: an icon tile, its name with any
+   * state tag, a quiet line saying where it works, and its actions.
    */
-  const line = (head: ReactNode, place: ReactNode, status: ReactNode, actions: ReactNode) => (
-    <Flexbox horizontal align="center" flex={1} gap={16} style={{ minWidth: 0 }}>
-      <Flexbox horizontal align="center" gap={8} style={{ flex: 'none', maxWidth: '45%' }}>
-        {head}
+  const card = ({
+    actions,
+    icon,
+    meta,
+    tags,
+    title,
+  }: {
+    actions?: ReactNode;
+    icon: ReactNode;
+    meta?: ReactNode;
+    tags?: ReactNode;
+    title: string;
+  }) => (
+    <Flexbox horizontal align="center" flex={1} gap={12} style={{ minWidth: 0 }}>
+      <Flexbox
+        align="center"
+        justify="center"
+        style={{
+          background: cssVar.colorFillTertiary,
+          borderRadius: 10,
+          flex: 'none',
+          height: 40,
+          width: 40,
+        }}
+      >
+        {icon}
       </Flexbox>
-      <Flexbox horizontal align="center" flex={1} gap={6} style={{ minWidth: 0 }}>
-        {place}
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
+          <Text ellipsis fontSize={15} weight={500}>
+            {title}
+          </Text>
+          {tags}
+        </Flexbox>
+        {meta && (
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
+            {meta}
+          </Flexbox>
+        )}
       </Flexbox>
-      <Flexbox horizontal align="center" gap={8} style={{ flex: 'none' }}>
-        {status}
-      </Flexbox>
-      <Flexbox horizontal align="center" gap={4} style={{ flex: 'none' }}>
-        {actions}
-      </Flexbox>
+      {actions && (
+        <Flexbox horizontal align="center" gap={4} style={{ flex: 'none' }}>
+          {actions}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 
-  const placeText = (text: string, icon = FolderIcon) => (
-    <>
-      <Icon icon={icon} size={14} style={{ color: cssVar.colorTextTertiary, flex: 'none' }} />
-      <Text ellipsis={{ tooltip: text, tooltipWhenOverflow: true }} fontSize={12} type="secondary">
-        {text}
-      </Text>
-    </>
+  const metaText = (text: string) => (
+    <Text ellipsis={{ tooltip: text, tooltipWhenOverflow: true }} fontSize={12} type="secondary">
+      {text}
+    </Text>
   );
 
   const renderSandbox = () => (
-    <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
-      {line(
-        <>
-          <Icon icon={BoxIcon} size={16} />
-          <Text ellipsis weight={500}>
-            {t('settings.cloudSandboxGroup')}
-          </Text>
-        </>,
-        sandboxSummary ? (
-          <Text ellipsis fontSize={12} type="secondary">
-            {sandboxSummary}
-          </Text>
-        ) : null,
-        null,
-        <ActionIcon
-          icon={sandboxOpen ? ChevronDownIcon : ChevronRightIcon}
-          size="small"
-          title={t('settings.configureSandbox')}
-          onClick={() => setSandboxOpen((value) => !value)}
-        />,
-      )}
-      {sandboxOpen && <div style={{ paddingBlock: 8 }}>{sandboxDetails}</div>}
+    <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
+      {card({
+        actions: (
+          <ActionIcon
+            icon={isSandboxOpen ? ChevronDownIcon : ChevronRightIcon}
+            size="small"
+            title={t('settings.configureSandbox')}
+            onClick={() => setSandboxOpen(!isSandboxOpen)}
+          />
+        ),
+        icon: <Icon icon={BoxIcon} size={20} />,
+        meta: metaText(sandboxSummary || t('settings.sandboxNoRepository')),
+        title: t('settings.cloudSandboxGroup'),
+      })}
+      {isSandboxOpen && <div style={{ paddingBlockEnd: 4 }}>{sandboxDetails}</div>}
     </Flexbox>
   );
 
   const renderDirectory = (directory: ProjectDirectory) => {
     const device = devices.find((item) => item.deviceId === directory.deviceId);
-    return line(
-      <>
-        {getDeviceIcon(device?.platform ?? directory.platform ?? undefined, 16)}
-        <Text ellipsis weight={500}>
-          {device?.friendlyName || device?.hostname || directory.deviceName || directory.deviceId}
-        </Text>
-      </>,
-      placeText(directory.path),
-      <>
-        {unavailableBadge(directory, device)}
-        <DevicePresence device={device} />
-      </>,
-      canManage ? (
+    const presence = device?.onlineUnknown
+      ? undefined
+      : t(device?.online ? 'settings.deviceOnline' : 'settings.deviceOffline');
+    return card({
+      actions: canManage ? (
         <>
           <ActionIcon
             icon={PencilIcon}
@@ -278,8 +293,25 @@ export function ExecutionEnvironments({
             onClick={() => remove(directory)}
           />
         </>
-      ) : null,
-    );
+      ) : undefined,
+      icon: getDeviceIcon(device?.platform ?? directory.platform ?? undefined, 20),
+      meta: (
+        <>
+          <DevicePresence device={device} />
+          {presence && (
+            <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
+              {presence}
+            </Text>
+          )}
+          <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
+            ·
+          </Text>
+          {metaText(directory.path)}
+        </>
+      ),
+      tags: unavailableBadge(directory, device),
+      title: device?.friendlyName || device?.hostname || directory.deviceName || directory.deviceId,
+    });
   };
 
   const render = (item: ProjectExecutionEnvironment) =>
@@ -302,12 +334,32 @@ export function ExecutionEnvironments({
   });
 
   return (
-    <Flexbox gap={8}>
+    <Flexbox gap={12}>
+      {canManage && (
+        <Flexbox horizontal justify="flex-end">
+          <Button
+            icon={<Icon icon={PlusIcon} />}
+            size="small"
+            onClick={() => openAddDirectoryModal(projectId, environmentId)}
+          >
+            {t('settings.addExecutionEnvironment')}
+          </Button>
+        </Flexbox>
+      )}
       {canManage ? (
         <SortableList
           items={items}
           renderItem={(item: ProjectExecutionEnvironment) => (
-            <SortableList.Item id={item.id} variant="filled">
+            <SortableList.Item
+              id={item.id}
+              variant="filled"
+              style={{
+                // An unfolded sandbox grows downwards; its handle stays by its header.
+                alignItems: item.kind === 'sandbox' && isSandboxOpen ? 'flex-start' : 'center',
+                borderRadius: 16,
+                padding: 16,
+              }}
+            >
               <SortableList.DragHandle />
               {render(item)}
             </SortableList.Item>
@@ -320,24 +372,12 @@ export function ExecutionEnvironments({
             horizontal
             align="center"
             key={item.id}
-            paddingBlock={8}
-            paddingInline={12}
-            style={{ background: cssVar.colorFillQuaternary, borderRadius: cssVar.borderRadius }}
+            padding={16}
+            style={{ background: cssVar.colorFillQuaternary, borderRadius: 16 }}
           >
             {render(item)}
           </Flexbox>
         ))
-      )}
-      {canManage && (
-        <div>
-          <Button
-            icon={<Icon icon={PlusIcon} />}
-            size="small"
-            onClick={() => openAddDirectoryModal(projectId, environmentId)}
-          >
-            {t('settings.addExecutionEnvironment')}
-          </Button>
-        </div>
       )}
     </Flexbox>
   );
