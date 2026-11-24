@@ -632,6 +632,7 @@
   "plans.compare.agentRunFee": "每个智能体任务费用",
   "plans.compare.artifactSiteSize": "单站点大小上限",
   "plans.compare.artifactSites": "在线 Artifact 站点数",
+  "plans.compare.autoFromBalance": "从余额扣除",
   "plans.compare.autoMonthlySpend": "Auto 每月额度",
   "plans.compare.autoMonthlySpend.desc": "每个计费月开始时重置",
   "plans.compare.autoRolling5hSpend": "Auto 5 小时额度",

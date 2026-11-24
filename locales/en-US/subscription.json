@@ -632,6 +632,7 @@
   "plans.compare.agentRunFee": "Fee per agent task",
   "plans.compare.artifactSiteSize": "Max size per site",
   "plans.compare.artifactSites": "Active Artifact sites",
+  "plans.compare.autoFromBalance": "Paid from balance",
   "plans.compare.autoMonthlySpend": "Auto monthly limit",
   "plans.compare.autoMonthlySpend.desc": "Resets at the start of each billing month",
   "plans.compare.autoRolling5hSpend": "Auto 5-hour limit",

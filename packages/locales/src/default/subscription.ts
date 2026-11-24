@@ -611,6 +611,7 @@ export default {
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
+  'plans.compare.autoFromBalance': 'Paid from balance',
   'plans.compare.autoMonthlySpend': 'Auto monthly limit',
   'plans.compare.autoMonthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.autoRolling5hSpend': 'Auto 5-hour limit',
