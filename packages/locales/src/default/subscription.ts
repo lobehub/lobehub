@@ -608,7 +608,7 @@ export default {
   'plans.compare.artifactSites': 'Active Artifact sites',
   'plans.compare.auto': 'Auto',
   'plans.compare.auto.tooltip':
-    "Auto has its own 5-hour, weekly and monthly limits, separate from the other models. Chatting on Auto leaves the other models' limits untouched.",
+    "Auto's model usage has its own 5-hour, weekly and monthly limits, separate from the other models. Agent run fees come from the other models' limits first, and from Auto's once those run out.",
   'plans.compare.autoSeparate': 'Separate limit, about {{multiple}}× the other models',
   'plans.compare.baselineNote':
     'Each limit is shown as a multiple of the plan marked Standard in its row.',

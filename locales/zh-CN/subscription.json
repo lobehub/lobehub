@@ -637,7 +637,7 @@
   "plans.compare.artifactSiteSize": "单站点大小上限",
   "plans.compare.artifactSites": "在线 Artifact 站点数",
   "plans.compare.auto": "Auto",
-  "plans.compare.auto.tooltip": "Auto 有自己的 5 小时、每周和每月限额，与其他模型分开计算。使用 Auto 不会占用其他模型的限额。",
+  "plans.compare.auto.tooltip": "Auto 的模型用量有独立的 5 小时、每周和每月限额，与其他模型分开计算。助理运行费先从其他模型的限额扣除，用完后再从 Auto 限额扣除。",
   "plans.compare.autoFromBalance": "从余额扣除",
   "plans.compare.autoSeparate": "独立额度，约为其他模型的 {{multiple}} 倍",
   "plans.compare.baselineNote": "每行以标有「标准」的套餐为基准，按倍数对比。",
