@@ -6,9 +6,11 @@ import { getTestDB } from '../../../core/getTestDB';
 import { agentOperations, channelMessageReactions, workspaceMembers } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
 import {
+  CHANNEL_REACTION_EMOJI_PER_MESSAGE,
   CHANNEL_REACTIONS_PER_MEMBER,
   frequentReactions,
   normalizeReactionEmoji,
+  REACTION_MEMBER_PREVIEW,
   setReaction,
 } from '../reactions';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
@@ -155,6 +157,67 @@ describe('setReaction for a person', () => {
     expect(await toggle(asOwner, channel.id, sent.id, '😀')).toMatchObject({
       added: false,
     });
+  });
+});
+
+describe('reactions in a large Channel', () => {
+  it(`names at most ${REACTION_MEMBER_PREVIEW} members per emoji, always including the viewer`, async () => {
+    const { asMember, asOwner, channel, member, reactionsOn, sent } = await setup();
+    const agents = [];
+    for (let i = 0; i <= REACTION_MEMBER_PREVIEW; i++)
+      agents.push(await fixture.addAgent(channel.id, `Agent ${i}`));
+    await db.insert(channelMessageReactions).values(
+      agents.map((agent) => ({
+        channelId: channel.id,
+        emoji: '👍',
+        memberId: agent.id,
+        messageId: sent.id,
+      })),
+    );
+    // The member reacts last, past the named preview.
+    await toggle(asMember, channel.id, sent.id, '👍');
+
+    const [thumbs] = (await reactionsOn())!;
+    expect(thumbs.count).toBe(REACTION_MEMBER_PREVIEW + 2);
+    // The Agents reacted in one statement, so which of them are named first is unordered.
+    const agentIds = new Set(agents.map((agent) => agent.id));
+    expect(thumbs.memberIds.slice(0, REACTION_MEMBER_PREVIEW).every((id) => agentIds.has(id))).toBe(
+      true,
+    );
+    expect(thumbs.memberIds).toHaveLength(REACTION_MEMBER_PREVIEW + 1);
+    expect(thumbs.memberIds.at(-1)).toBe(member.id);
+
+    // Someone else sees the same count with only the first members named.
+    const [seen] = (await asOwner.detail(channel.id)).messages.find(
+      ({ id }) => id === sent.id,
+    )!.reactions!;
+    expect(seen.count).toBe(REACTION_MEMBER_PREVIEW + 2);
+    expect(seen.memberIds).toHaveLength(REACTION_MEMBER_PREVIEW);
+  });
+
+  it(`caps a message at ${CHANNEL_REACTION_EMOJI_PER_MESSAGE} different emoji`, async () => {
+    const { asMember, asOwner, channel, owner, sent } = await setup();
+    const agents = [];
+    for (
+      let i = 0;
+      i < Math.ceil(CHANNEL_REACTION_EMOJI_PER_MESSAGE / CHANNEL_REACTIONS_PER_MEMBER);
+      i++
+    )
+      agents.push(await fixture.addAgent(channel.id, `Agent ${i}`));
+    await db.insert(channelMessageReactions).values(
+      Array.from({ length: CHANNEL_REACTION_EMOJI_PER_MESSAGE }, (_, index) => ({
+        channelId: channel.id,
+        emoji: String.fromCodePoint(0x1f600 + index),
+        memberId: agents[Math.floor(index / CHANNEL_REACTIONS_PER_MEMBER)].id,
+        messageId: sent.id,
+      })),
+    );
+    await expect(toggle(asOwner, channel.id, sent.id, '🧀')).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    // Joining an emoji already there is still fine.
+    expect(await toggle(asMember, channel.id, sent.id, '😀')).toMatchObject({ added: true });
+    expect(owner.id).toBeTruthy();
   });
 });
 

@@ -787,6 +787,8 @@ export const readChannelView = async (
       tx,
       channelId,
       [...page, ...(rootMessage ? [rootMessage] : [])].map((message) => message.id),
+      // The viewer's own reaction is always named, so its chip shows as theirs.
+      members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)?.id,
     ),
   ]);
   // A tombstone keeps its row for the Threads and replies that point at it, not its reactions.

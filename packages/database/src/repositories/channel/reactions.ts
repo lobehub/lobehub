@@ -1,6 +1,6 @@
 import type { ChannelMessageReaction } from '@lobechat/types';
 import { channelMessageDeletedAt } from '@lobechat/types';
-import { and, asc, count, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 
 import { channelMembers, channelMessageReactions, channelMessages } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
@@ -8,6 +8,10 @@ import { ChannelError } from './error';
 
 /** Distinct emoji one member may leave on one message. */
 export const CHANNEL_REACTIONS_PER_MEMBER = 20;
+/** Distinct emoji one message may carry, which bounds how many groups a page reads. */
+export const CHANNEL_REACTION_EMOJI_PER_MESSAGE = 50;
+/** Members named per emoji in a view; `count` stays exact. */
+export const REACTION_MEMBER_PREVIEW = 20;
 /** How far back a person's own reactions count toward their quick reactions. */
 export const FREQUENT_REACTION_DAYS = 90;
 export const FREQUENT_REACTION_LIMIT = 5;
@@ -34,36 +38,54 @@ export const normalizeReactionEmoji = (emoji: string) => {
   return value;
 };
 
-/** Every message's reactions, each emoji in the order it was first left on that message. */
+/**
+ * Every message's reactions, each emoji in the order it was first left on that message. Counts
+ * are aggregated in SQL and each emoji names at most its first `REACTION_MEMBER_PREVIEW` members,
+ * plus the viewer's own member when it reacted later, so a page of a large Channel stays small.
+ */
 export const reactionsByMessage = async (
   tx: Transaction | LobeChatDatabase,
   channelId: string,
   messageIds: string[],
+  viewerMemberId?: string | null,
 ): Promise<Map<string, ChannelMessageReaction[]>> => {
   const result = new Map<string, ChannelMessageReaction[]>();
   if (!messageIds.length) return result;
-  const rows = await tx
-    .select({
-      emoji: channelMessageReactions.emoji,
-      memberId: channelMessageReactions.memberId,
-      messageId: channelMessageReactions.messageId,
-    })
-    .from(channelMessageReactions)
-    .where(
-      and(
-        eq(channelMessageReactions.channelId, channelId),
-        inArray(channelMessageReactions.messageId, [...new Set(messageIds)]),
-      ),
+  const r = channelMessageReactions;
+  const scope = and(eq(r.channelId, channelId), inArray(r.messageId, [...new Set(messageIds)]));
+  const [groups, own] = await Promise.all([
+    tx
+      .select({
+        count: sql<number>`count(*)::int`,
+        emoji: r.emoji,
+        memberIds: sql<
+          string[]
+        >`(array_agg(${r.memberId}::text order by ${r.createdAt}, ${r.id}))[1:${sql.raw(String(REACTION_MEMBER_PREVIEW))}]`,
+        messageId: r.messageId,
+      })
+      .from(r)
+      .where(scope)
+      .groupBy(r.messageId, r.emoji)
+      .orderBy(sql`min(${r.createdAt})`, sql`min(${r.id}::text)`),
+    viewerMemberId
+      ? tx
+          .select({ emoji: r.emoji, messageId: r.messageId })
+          .from(r)
+          .where(and(scope, eq(r.memberId, viewerMemberId)))
+      : Promise.resolve([]),
+  ]);
+  const mine = new Set(own.map((row) => `${row.messageId} ${row.emoji}`));
+  for (const group of groups) {
+    const memberIds = group.memberIds ?? [];
+    if (
+      viewerMemberId &&
+      mine.has(`${group.messageId} ${group.emoji}`) &&
+      !memberIds.includes(viewerMemberId)
     )
-    .orderBy(asc(channelMessageReactions.createdAt), asc(channelMessageReactions.id));
-  for (const row of rows) {
-    const reactions = result.get(row.messageId) ?? [];
-    const entry = reactions.find((reaction) => reaction.emoji === row.emoji);
-    if (entry) {
-      entry.count += 1;
-      entry.memberIds.push(row.memberId);
-    } else reactions.push({ count: 1, emoji: row.emoji, memberIds: [row.memberId] });
-    result.set(row.messageId, reactions);
+      memberIds.push(viewerMemberId);
+    const reactions = result.get(group.messageId) ?? [];
+    reactions.push({ count: Number(group.count), emoji: group.emoji, memberIds });
+    result.set(group.messageId, reactions);
   }
   return result;
 };
@@ -107,6 +129,24 @@ export const setReaction = async (
       .where(mine);
     if (total >= CHANNEL_REACTIONS_PER_MEMBER)
       throw new ChannelError('BAD_REQUEST', 'Too many reactions on this message');
+    const [taken] = await tx
+      .select({ id: channelMessageReactions.id })
+      .from(channelMessageReactions)
+      .where(
+        and(
+          eq(channelMessageReactions.messageId, messageId),
+          eq(channelMessageReactions.emoji, value),
+        ),
+      )
+      .limit(1);
+    if (!taken) {
+      const [{ emojis }] = await tx
+        .select({ emojis: sql<number>`count(distinct ${channelMessageReactions.emoji})::int` })
+        .from(channelMessageReactions)
+        .where(eq(channelMessageReactions.messageId, messageId));
+      if (Number(emojis) >= CHANNEL_REACTION_EMOJI_PER_MESSAGE)
+        throw new ChannelError('BAD_REQUEST', 'This message has too many different reactions');
+    }
     await tx
       .insert(channelMessageReactions)
       .values({ channelId, emoji: value, memberId, messageId })
@@ -115,7 +155,7 @@ export const setReaction = async (
     await tx.delete(channelMessageReactions).where(eq(channelMessageReactions.id, existing.id));
   }
 
-  const reactions = await reactionsByMessage(tx, channelId, [messageId]);
+  const reactions = await reactionsByMessage(tx, channelId, [messageId], memberId);
   return { added: add, reactions: reactions.get(messageId) ?? [] };
 };
 
