@@ -674,8 +674,14 @@ export const sendPromptWithAcpSession = async (
       await host.completeCancelledSessionBeforeLaunch(session);
       return;
     }
+    const intervention = host.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'antigravity',
+    );
     const antigravityAcpSession = new AntigravityAcpSession({
       ...createCommonOptions(traceSession),
+      askUserBridge: intervention.bridge,
       onModel: (model) => {
         session.model = model;
         session.modelSource = 'antigravity-acp';
@@ -686,6 +692,7 @@ export const sendPromptWithAcpSession = async (
     await runInteractiveAcpSession(host, {
       acpSession: antigravityAcpSession,
       activeSessionKey: 'antigravityAcpSession',
+      cleanup: intervention.cleanup,
       isResumeError: isAntigravityAcpSessionNotFoundError,
       session,
       stderrChunks,

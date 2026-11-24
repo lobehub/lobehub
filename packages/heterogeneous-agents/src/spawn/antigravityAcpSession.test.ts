@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AskUserBridge } from '../askUser/AskUserBridge';
 import {
   AntigravityAcpSession,
   type AntigravityAcpSessionOptions,
@@ -37,6 +38,8 @@ const MODEL_OPTIONS = [
 ];
 /** Models whose thinking tier is fixed: agy offers no `thought_level` for them. */
 const FIXED_TIER_MODELS = new Set(['gemini-pro-orchestrator', 'gpt-oss-120b-medium']);
+const thinkingLevels = (model: string) =>
+  model === 'gemini-4-neon' ? ['low', 'medium', 'high', 'xhigh'] : ['low', 'medium', 'high'];
 
 const configOptions = (model: string, level: string, mode = 'default') => [
   {
@@ -46,7 +49,13 @@ const configOptions = (model: string, level: string, mode = 'default') => [
   },
   ...(FIXED_TIER_MODELS.has(model)
     ? []
-    : [{ currentValue: level, id: 'thought_level', options: [] }]),
+    : [
+        {
+          currentValue: level,
+          id: 'thought_level',
+          options: thinkingLevels(model).map((value) => ({ name: value, value })),
+        },
+      ]),
   { currentValue: mode, id: 'mode', options: [] },
 ];
 
@@ -60,7 +69,11 @@ const AVAILABLE_MODELS = [
 
 type PromptHandler = (
   prompt: RpcMessage,
-  agent: { finish: (id: RpcMessage['id'], result: unknown) => void; update: (u: unknown) => void },
+  agent: {
+    finish: (id: RpcMessage['id'], result: unknown) => void;
+    request: (request: RpcMessage) => void;
+    update: (u: unknown) => void;
+  },
 ) => void;
 
 /**
@@ -71,6 +84,7 @@ type PromptHandler = (
 const createAgy = ({
   newError,
   loadError,
+  onClientResponse,
   onPrompt,
   replayOnLoad = false,
   resumeError,
@@ -78,6 +92,7 @@ const createAgy = ({
 }: {
   loadError?: { code: number; message: string };
   newError?: { code: number; message: string };
+  onClientResponse?: (message: RpcMessage, finish: () => void) => void;
   onPrompt?: PromptHandler;
   replayOnLoad?: boolean;
   resumeError?: { code: number; message: string };
@@ -120,6 +135,12 @@ const createAgy = ({
         queueMicrotask(() => {
           const params = message.params ?? {};
           switch (message.method) {
+            case undefined: {
+              const prompt = pendingPrompt;
+              if (prompt)
+                onClientResponse?.(message, () => finish(prompt.id, { stopReason: 'end_turn' }));
+              return;
+            }
             case 'initialize': {
               send({
                 id: message.id,
@@ -168,6 +189,7 @@ const createAgy = ({
                 const variant = /^(.*)-(low|medium|high|xhigh)$/.exec(params.value);
                 if (MODEL_OPTIONS.includes(params.value)) {
                   model = params.value;
+                  if (!thinkingLevels(model).includes(level)) level = 'high';
                 } else if (variant && MODEL_OPTIONS.includes(variant[1])) {
                   [, model, level] = variant;
                 } else {
@@ -179,7 +201,7 @@ const createAgy = ({
                 }
               }
               if (params.configId === 'thought_level') {
-                if (FIXED_TIER_MODELS.has(model)) {
+                if (FIXED_TIER_MODELS.has(model) || !thinkingLevels(model).includes(params.value)) {
                   send({
                     error: {
                       code: -32_602,
@@ -229,7 +251,7 @@ const createAgy = ({
                 finish(pendingPrompt.id, ended);
               }
               pendingPrompt = message;
-              onPrompt?.(message, { finish, update });
+              onPrompt?.(message, { finish, request: (request) => send({ ...request }), update });
               return;
             }
           }
@@ -285,6 +307,159 @@ afterEach(() => {
 });
 
 describe('AntigravityAcpSession', () => {
+  it('keeps the new model’s thinking level when the requested tier is unavailable', async () => {
+    const agy = createAgy({
+      onPrompt: (prompt, { finish }) => finish(prompt.id, { stopReason: 'end_turn' }),
+    });
+    const { session } = createSession(agy, {
+      args: ['--model', 'gemini-3.8-flash', '--effort', 'xhigh'],
+    });
+
+    await expect(session.run()).resolves.toBeUndefined();
+    expect(agy.requests.some(({ params }) => params?.configId === 'thought_level')).toBe(false);
+    expect(methods(agy.requests)).toContain('session/prompt');
+  });
+
+  it.each([
+    {
+      answer: { result: { 'Channels?': [' 1', '2'], 'Region?': '2' } },
+      result: { action: 'accept', content: { q1_other: '2', q2: ['1'], q2_other: '2' } },
+    },
+    {
+      answer: { cancelled: true, cancelReason: 'user_cancelled' as const },
+      result: { action: 'decline' },
+    },
+  ])('answers an agy form with the same tool id: $result.action', async ({ answer, result }) => {
+    const toolCallId = 'call-ask-1';
+    const askUserBridge = new AskUserBridge('op-1', {
+      identifier: 'antigravity',
+      provider: 'antigravity',
+    });
+    const onAnswer = vi.fn();
+    const agy = createAgy({
+      onClientResponse: (message, finish) => {
+        onAnswer(message);
+        agy.update({
+          name: 'ask_question',
+          sessionUpdate: 'tool_call_update',
+          status: 'completed',
+          toolCallId,
+        });
+        finish();
+      },
+      onPrompt: (_prompt, { request, update }) => {
+        update({ name: 'read_file', sessionUpdate: 'tool_call', toolCallId: 'previous-tool' });
+        update({
+          sessionUpdate: 'tool_call_update',
+          status: 'completed',
+          toolCallId: 'previous-tool',
+        });
+        update({
+          name: 'ask_question',
+          sessionUpdate: 'tool_call',
+          status: 'in_progress',
+          toolCallId,
+        });
+        request({
+          id: 'elicitation-1',
+          method: 'elicitation/create',
+          params: {
+            mode: 'form',
+            requestedSchema: {
+              properties: {
+                q1: {
+                  oneOf: [
+                    { const: '1', title: 'EU' },
+                    { const: '2', title: 'US' },
+                  ],
+                  title: 'Region?',
+                  type: 'string',
+                },
+                q1_other: { title: 'Other', type: 'string' },
+                q2: {
+                  items: {
+                    anyOf: [
+                      { const: '1', title: 'Email' },
+                      { const: '2', title: 'SMS' },
+                    ],
+                  },
+                  title: 'Channels?',
+                  type: 'array',
+                },
+                q2_other: { title: 'Other', type: 'string' },
+              },
+              type: 'object',
+            },
+            sessionId: SESSION_ID,
+            toolCallId,
+          },
+        });
+      },
+    });
+    const { events: sessionEvents, session } = createSession(agy, { askUserBridge });
+    const run = session.run();
+    try {
+      await vi.waitFor(() => {
+        expect(agy.requests[0]?.params?.clientCapabilities).toMatchObject({
+          elicitation: { form: {} },
+        });
+        expect(sessionEvents.some((event) => event.type === 'agent_intervention_request')).toBe(
+          true,
+        );
+      });
+      const requestIndex = sessionEvents.findIndex(
+        (event) => event.type === 'agent_intervention_request',
+      );
+      const request = sessionEvents[requestIndex];
+      expect(sessionEvents.slice(0, requestIndex)).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ toolCallId }),
+          type: 'tool_start',
+        }),
+      );
+      expect(request.data).toMatchObject({
+        apiName: 'askUserQuestion',
+        provider: 'antigravity',
+        toolCallId,
+      });
+      expect(JSON.parse(request.data.arguments).questions).toMatchObject([
+        {
+          multiSelect: false,
+          options: [
+            { id: ' 1', label: 'EU' },
+            { id: ' 2', label: 'US' },
+          ],
+          question: 'Region?',
+        },
+        { multiSelect: true, question: 'Channels?' },
+      ]);
+      askUserBridge.resolve(toolCallId, answer);
+      await run;
+      expect(onAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'elicitation-1', result }),
+      );
+      expect(
+        sessionEvents.filter(
+          (event) => event.type === 'tool_start' && event.data.toolCallId === toolCallId,
+        ),
+      ).toMatchObject([
+        {
+          data: {
+            toolCallId,
+            toolCalling: { apiName: 'askUserQuestion', identifier: 'antigravity' },
+          },
+        },
+      ]);
+      expect(sessionEvents).toContainEqual(
+        expect.objectContaining({ type: 'tool_end', data: { isSuccess: true, toolCallId } }),
+      );
+    } finally {
+      askUserBridge.cancelAll();
+      session.close();
+      await run.catch(() => {});
+    }
+  });
+
   it('starts agy acp, applies the selected model, effort and mode, then streams the turn', async () => {
     const agy = createAgy({
       onPrompt: (prompt, { finish, update }) => {

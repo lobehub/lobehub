@@ -175,6 +175,7 @@ export const spawnAntigravityAcpAgent = async (
   const bridge = createAcpSpawnBridge();
   const session = new AntigravityAcpSession({
     args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
     clientVersion: 'lobehub-cli',
     commandPath: command,
     cwd,

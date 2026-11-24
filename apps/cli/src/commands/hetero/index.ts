@@ -564,34 +564,32 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (
-    serverIngest &&
-    (agentType === 'claude-code' ||
-      (agentType === 'codex' && options.codexAppServer) ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'droid' ||
-      agentType === 'devin' ||
-      agentType === 'qoder') &&
-    serverIngester
-  ) {
-    if (
-      agentType === 'codex' ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'devin' ||
-      agentType === 'droid'
-    ) {
+  const mcpAskUserProvider =
+    agentType === 'claude-code' || agentType === 'qoder' ? agentType : undefined;
+  const nativeAskUserProvider =
+    agentType === 'antigravity' ||
+    (agentType === 'codex' && options.codexAppServer) ||
+    agentType === 'copilot' ||
+    agentType === 'cursor' ||
+    agentType === 'devin' ||
+    agentType === 'droid'
+      ? agentType
+      : undefined;
+  if (serverIngest && serverIngester && (mcpAskUserProvider || nativeAskUserProvider)) {
+    if (nativeAskUserProvider) {
       askBridge = new AskUserBridge(operationId, {
-        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
-        provider: agentType,
+        identifier: nativeAskUserProvider === 'cursor' ? 'claude-code' : nativeAskUserProvider,
+        provider: nativeAskUserProvider,
       });
-    } else {
+    } else if (mcpAskUserProvider) {
       askServer = new LobeBuiltinMcpServer();
       await askServer.start();
       askBridge = askServer.registerOperation(
         operationId,
-        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+        new AskUserBridge(operationId, {
+          identifier: mcpAskUserProvider,
+          provider: mcpAskUserProvider,
+        }),
       );
       askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
       await writeFile(
