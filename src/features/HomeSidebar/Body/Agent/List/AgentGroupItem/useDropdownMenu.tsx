@@ -81,7 +81,7 @@ export const useGroupDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   // Workspace: personal pin for every member + owner/admin team pin on public
   // groups. Personal mode keeps the single column-backed pin.
-  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
     id,
     pinned,
     type: 'group',
@@ -110,9 +110,7 @@ export const useGroupDropdownMenu = ({
                 },
               ]
             : []),
-        // Team-pinned rows are the fixed section every member sees; hiding
-        // them would do nothing there.
-        ...(isShownInSidebar && !isTeamPinned
+        ...(isShownInSidebar
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -217,7 +215,6 @@ export const useGroupDropdownMenu = ({
       activeWorkspaceId,
       workspacePinItems,
       isShownInSidebar,
-      isTeamPinned,
       setSidebarItemVisible,
       anchor,
       avatar,

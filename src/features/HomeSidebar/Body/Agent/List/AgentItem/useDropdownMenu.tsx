@@ -183,7 +183,7 @@ export const useAgentDropdownMenu = ({
 
   // Workspace: a personal pin for every member plus an owner/admin-only team
   // pin on public rows. Personal mode keeps the single column-backed pin.
-  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
     id,
     pinned,
     type: 'agent',
@@ -206,9 +206,7 @@ export const useAgentDropdownMenu = ({
                 },
               ]
             : []),
-        // Team-pinned rows are the fixed section every member sees; hiding
-        // them would do nothing there.
-        ...(isShownInSidebar && !isTeamPinned
+        ...(isShownInSidebar
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -508,7 +506,6 @@ export const useAgentDropdownMenu = ({
     [
       activeWorkspaceId,
       workspacePinItems,
-      isTeamPinned,
       canCreate,
       canConfigure,
       canEdit,

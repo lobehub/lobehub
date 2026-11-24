@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
     removeAgentGroup: vi.fn(),
   },
   isSidebarItemVisible: vi.fn(() => true),
-  isTeamPinned: false,
   openAgentInNewWindow: vi.fn(),
   setSidebarItemVisible: vi.fn(),
   toastError: vi.fn(),
@@ -70,7 +69,6 @@ vi.mock('../../useSidebarItemVisibility', () => ({
 
 vi.mock('../../useSidebarPinMenuItems', () => ({
   useSidebarPinMenuItems: () => ({
-    isTeamPinned: mocks.isTeamPinned,
     menuItems: mocks.activeWorkspaceId ? [{ key: 'pin', label: 'pin' }] : [],
   }),
 }));
@@ -102,7 +100,6 @@ describe('useGroupDropdownMenu', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
     mocks.isSidebarItemVisible.mockReturnValue(true);
-    mocks.isTeamPinned = false;
   });
 
   it('hides a group through the caller sidebar preference, like an Agent row', async () => {
@@ -159,11 +156,10 @@ describe('useGroupDropdownMenu', () => {
     expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
   });
 
-  it('omits hide on a team-pinned workspace group, which every member sees', () => {
+  it('offers hide on a workspace group that is a default pin for new members', () => {
     mocks.activeWorkspaceId = 'workspace-1';
-    mocks.isTeamPinned = true;
     const { result } = renderGroupMenu({ pinned: true, visibility: 'public' });
 
-    expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
+    expect(getMenuKeys(result.current())).toContain('hideFromSidebar');
   });
 });

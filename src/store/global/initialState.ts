@@ -221,10 +221,22 @@ export interface SystemStatus {
    */
   agentListExpandedGroupKeys?: string[];
   /**
-   * Whether the "in sidebar" overview section of the agent view-all page is
-   * collapsed. Defaults to expanded so the section is discoverable.
+   * Whether the "Recommended agents" section of the agent view-all page is
+   * collapsed. Defaults to expanded: it is how members find what their
+   * workspace recommends.
+   */
+  agentListRecommendedSectionCollapsed?: boolean;
+  /**
+   * @deprecated Read and written by earlier builds only, whose default
+   *   (expanded) was persisted for everyone; replaced by
+   *   `agentListSidebarSectionExpanded` so the section starts collapsed.
    */
   agentListSidebarSectionCollapsed?: boolean;
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * expanded. Defaults to collapsed: the sidebar itself already shows it.
+   */
+  agentListSidebarSectionExpanded?: boolean;
   /**
    * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
@@ -655,7 +667,8 @@ export interface GlobalState {
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
-  agentListSidebarSectionCollapsed: false,
+  agentListRecommendedSectionCollapsed: false,
+  agentListSidebarSectionExpanded: false,
   agentListViewMode: 'card' as const,
   agentListViewOptions: {
     orderBy: 'updatedAt' as const,

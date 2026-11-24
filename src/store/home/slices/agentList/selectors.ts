@@ -11,6 +11,13 @@ import { AGENT_LIST_KEY } from './projection';
 const pinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.pinnedAgents;
 
 /**
+ * Ids of the Agents / chat groups recommended to every workspace member, in
+ * the owners'/admins' order. Empty in personal mode.
+ */
+const EMPTY_IDS: string[] = [];
+const recommendedAgentIds = (s: HomeStore): string[] => s.recommendedAgentIds ?? EMPTY_IDS;
+
+/**
  * Get all agent groups (folders)
  */
 const agentGroups = (s: HomeStore): SidebarGroup[] => s.agentGroups;
@@ -154,6 +161,7 @@ export const homeAgentListSelectors = {
   privateUngroupedAgents,
   privateUngroupedAgentsCount,
   privateUngroupedAgentsLimited,
+  recommendedAgentIds,
   sharedAgents,
   ungroupedAgents,
   ungroupedAgentsCount,

@@ -21,6 +21,30 @@ import {
 } from './systemStatus';
 
 describe('systemStatusSelectors', () => {
+  describe('agent view-all sections', () => {
+    it('starts the "In sidebar" section collapsed, even over a persisted earlier default', () => {
+      expect(systemStatusSelectors.agentListSidebarSectionCollapsed(initialState)).toBe(true);
+      // Earlier builds persisted `agentListSidebarSectionCollapsed: false` for everyone.
+      const persisted: GlobalState = merge(initialState, {
+        status: { agentListSidebarSectionCollapsed: false },
+      });
+      expect(systemStatusSelectors.agentListSidebarSectionCollapsed(persisted)).toBe(true);
+
+      const expanded: GlobalState = merge(initialState, {
+        status: { agentListSidebarSectionExpanded: true },
+      });
+      expect(systemStatusSelectors.agentListSidebarSectionCollapsed(expanded)).toBe(false);
+    });
+
+    it('starts the "Recommended agents" section expanded and remembers a collapse', () => {
+      expect(systemStatusSelectors.agentListRecommendedSectionCollapsed(initialState)).toBe(false);
+      const collapsed: GlobalState = merge(initialState, {
+        status: { agentListRecommendedSectionCollapsed: true },
+      });
+      expect(systemStatusSelectors.agentListRecommendedSectionCollapsed(collapsed)).toBe(true);
+    });
+  });
+
   describe('sessionGroupKeys', () => {
     it('should return expandSessionGroupKeys from status', () => {
       const s: GlobalState = merge(initialState, {

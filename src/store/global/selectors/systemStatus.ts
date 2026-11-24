@@ -600,8 +600,10 @@ const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
 const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListRecommendedSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListRecommendedSectionCollapsed ?? false;
 const agentListSidebarSectionCollapsed = (s: GlobalState) =>
-  s.status.agentListSidebarSectionCollapsed ?? false;
+  !s.status.agentListSidebarSectionExpanded;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const musicTopicViewMode = (s: GlobalState) => s.status.musicTopicViewMode || 'list';
@@ -656,6 +658,7 @@ export const systemStatusSelectors = {
   projectListSortBy,
   projectListViewMode,
   agentListExpandedGroupKeys,
+  agentListRecommendedSectionCollapsed,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
   agentListViewOptions,
