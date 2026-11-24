@@ -5,6 +5,8 @@ export default {
   'people.noMatches': 'No matching workspace members',
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
+  'receipt.errorAttachmentUnavailable':
+    "One or more attachments can't be sent here, for example because they were uploaded in another workspace. Delete this message and attach them again.",
   'receipt.errorReason': 'Failure reason',
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
