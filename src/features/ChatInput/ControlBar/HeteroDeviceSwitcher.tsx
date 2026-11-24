@@ -50,7 +50,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
-import { summarizeAutoTarget } from './autoTargetSummary';
+import { autoDispatchPool, summarizeAutoTarget } from './autoTargetSummary';
 import CloudSandboxOptions from './CloudSandboxOptions';
 import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
@@ -565,11 +565,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipLabel = t('heteroAgent.executionTarget.auto');
     // A bare "Auto" hides three different runs: one online device is used
     // directly, several leave the pick to the Agent, none runs without a
-    // device. Say which one, from the pool the server reads the same way.
+    // device. Say which one, from the pool the server dispatches among.
     if (canShowExecutionTargetSelector) {
       const autoSummary = summarizeAutoTarget({
         isConfirmed: isDeviceListConfirmed,
-        pool: deviceRows,
+        pool: autoDispatchPool({ boundDeviceId, devices, isWorkspaceAgent }),
       });
       if (autoSummary.kind === 'single') {
         const name =
