@@ -9,7 +9,6 @@ import {
 } from '@lobechat/heterogeneous-agents/claudeCodePermission';
 import type {
   AgentStreamEvent,
-  AntigravityLiveInput,
   ClaudeAgentSdkSession,
   ClaudeCodeLiveInput,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -38,11 +37,10 @@ export const attachCliPermissionPrompts = ({
 }: {
   bridge: AskUserBridge;
   emit: (event: AgentStreamEvent) => void;
-  live: AntigravityLiveInput | ClaudeCodeLiveInput;
+  live: ClaudeCodeLiveInput;
   operationId: string;
   permissionMode: HeteroPermissionMode;
 }): void => {
-  if (!('sendControlRequest' in live)) return;
   const isRoot = isRunningAsRoot();
   attachClaudeCodePermissionResponder(live, {
     ask: askThroughBridge(bridge),
@@ -68,7 +66,7 @@ export const attachCliPermissionPrompts = ({
 
 /** The parts of a local run a control request reaches: the SDK query, or the CLI stdin. */
 interface ControllableSession {
-  liveInput?: AntigravityLiveInput | ClaudeCodeLiveInput;
+  liveInput?: ClaudeCodeLiveInput;
   sdkSession?: ClaudeAgentSdkSession;
 }
 
@@ -83,8 +81,7 @@ export const setSessionPermissionMode = async (
 ): Promise<HeteroPermissionMode> => {
   if (session?.sdkSession) return session.sdkSession.setPermissionMode(mode);
   const live = session?.liveInput;
-  if (!live || !('sendControlRequest' in live))
-    throw new Error('This run cannot switch its permission mode');
+  if (!live) throw new Error('This run cannot switch its permission mode');
   return setClaudeCodePermissionMode((request) => live.sendControlRequest(request), mode, {
     isRoot: isRunningAsRoot(),
   });
@@ -100,7 +97,6 @@ export const stopSessionBackgroundTask = async (
 ): Promise<void> => {
   if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
   const live = session?.liveInput;
-  if (!live || !('sendControlRequest' in live))
-    throw new Error('This run cannot stop a single background task');
+  if (!live) throw new Error('This run cannot stop a single background task');
   await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
 };
