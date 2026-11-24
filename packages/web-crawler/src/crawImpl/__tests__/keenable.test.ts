@@ -33,16 +33,23 @@ describe('keenable crawler', () => {
 
   it('should use the keyless public endpoint when no API key is set', async () => {
     fetchMock.mockResolvedValue(
-      createMockResponse({ content: markdown, title: 'Example', url: 'https://example.com/post' }),
+      createMockResponse({
+        results: [{ content: markdown, title: 'Example', url: 'https://example.com/post' }],
+      }),
     );
 
     const result = await keenable('https://example.com/post?a=1&b=2', { filterOptions: {} });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.keenable.ai/v1/fetch/public?url=https%3A%2F%2Fexample.com%2Fpost%3Fa%3D1%26b%3D2',
+      'https://api.keenable.ai/v1/fetch/public',
       expect.objectContaining({
-        headers: { 'Accept': 'application/json', 'X-Keenable-Title': 'LobeHub' },
-        method: 'GET',
+        body: JSON.stringify({ urls: ['https://example.com/post?a=1&b=2'] }),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Keenable-Title': 'LobeHub',
+        },
+        method: 'POST',
       }),
     );
     expect(result).toEqual({
@@ -58,21 +65,29 @@ describe('keenable crawler', () => {
   it('should use the keyed endpoint and send the API key when set', async () => {
     process.env.KEENABLE_API_KEY = 'test-key';
     process.env.KEENABLE_API_URL = 'https://keenable.internal/';
-    fetchMock.mockResolvedValue(createMockResponse({ content: markdown, title: 'Example' }));
+    fetchMock.mockResolvedValue(
+      createMockResponse({ results: [{ content: markdown, title: 'Example' }] }),
+    );
 
     const result = await keenable('https://example.com', { filterOptions: {} });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://keenable.internal/v1/fetch?url=https%3A%2F%2Fexample.com',
+      'https://keenable.internal/v1/fetch',
       expect.objectContaining({
-        headers: { 'Accept': 'application/json', 'X-API-Key': 'test-key' },
+        body: JSON.stringify({ urls: ['https://example.com'] }),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-API-Key': 'test-key',
+        },
+        method: 'POST',
       }),
     );
     expect(result?.url).toBe('https://example.com');
   });
 
   it('should return undefined for short content', async () => {
-    fetchMock.mockResolvedValue(createMockResponse({ content: 'too short', title: '' }));
+    fetchMock.mockResolvedValue(createMockResponse({ results: [{ content: 'too short', title: '' }] }));
 
     await expect(keenable('https://example.com', { filterOptions: {} })).resolves.toBeUndefined();
   });
@@ -83,6 +98,18 @@ describe('keenable crawler', () => {
         { error: 'Not found' },
         { ok: false, status: 404, statusText: 'Not Found' },
       ),
+    );
+
+    await expect(keenable('https://example.com/missing', { filterOptions: {} })).rejects.toThrow(
+      PageNotFoundError,
+    );
+  });
+
+  it('should map a page-level 404 in results[0].error to PageNotFoundError', async () => {
+    fetchMock.mockResolvedValue(
+      createMockResponse({
+        results: [{ url: 'https://example.com/missing', error: { status: 404, error: 'Not found', message: 'The page does not exist at this URL.' } }],
+      }),
     );
 
     await expect(keenable('https://example.com/missing', { filterOptions: {} })).rejects.toThrow(

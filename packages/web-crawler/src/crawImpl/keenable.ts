@@ -5,12 +5,17 @@ import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 const KEENABLE_DEFAULT_BASE_URL = 'https://api.keenable.ai';
 
-interface KeenableFetchResponse {
+interface KeenableFetchPage {
   author?: string;
   content?: string;
   published_at?: string;
   title?: string;
   url?: string;
+  error?: { status?: number; message?: string; error?: string };
+}
+
+interface KeenableFetchResponse {
+  results?: KeenableFetchPage[];
 }
 
 /**
@@ -23,7 +28,7 @@ interface KeenableFetchResponse {
 export const keenable: CrawlImpl = async (url) => {
   const apiKey = process.env.KEENABLE_API_KEY;
   const baseUrl = (process.env.KEENABLE_API_URL || KEENABLE_DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const endpoint = `${baseUrl}/v1/fetch${apiKey ? '' : '/public'}?${new URLSearchParams({ url })}`;
+  const endpoint = `${baseUrl}/v1/fetch${apiKey ? '' : '/public'}`;
 
   let res: Response;
 
@@ -31,10 +36,11 @@ export const keenable: CrawlImpl = async (url) => {
     res = await withTimeout(
       (signal) =>
         fetch(endpoint, {
+          body: JSON.stringify({ urls: [url] }),
           headers: apiKey
-            ? { 'Accept': 'application/json', 'X-API-Key': apiKey }
-            : { 'Accept': 'application/json', 'X-Keenable-Title': 'LobeHub' },
-          method: 'GET',
+            ? { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-API-Key': apiKey }
+            : { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-Keenable-Title': 'LobeHub' },
+          method: 'POST',
           signal,
         }),
       DEFAULT_TIMEOUT,
@@ -44,7 +50,7 @@ export const keenable: CrawlImpl = async (url) => {
   }
 
   if (!res.ok) {
-    // Keenable answers 404 only when the target page itself returned 404
+    // A whole-call 404 is unexpected on POST; keep the mapping anyway.
     if (res.status === 404) {
       throw new PageNotFoundError(res.statusText);
     }
@@ -52,9 +58,24 @@ export const keenable: CrawlImpl = async (url) => {
     throw await createHTTPStatusError(res, 'Keenable');
   }
 
-  const data = await parseJSONResponse<KeenableFetchResponse>(res, 'Keenable');
+  const envelope = await parseJSONResponse<KeenableFetchResponse>(res, 'Keenable');
+  const data = envelope.results?.[0];
+  if (data?.error) {
+    const status = data.error.status ?? 502;
+    if (status === 404) {
+      throw new PageNotFoundError(data.error.message || data.error.error || 'Not Found');
+    }
+    throw await createHTTPStatusError(
+      new Response(JSON.stringify(data.error), {
+        headers: { 'content-type': 'application/json' },
+        status,
+        statusText: data.error.error || 'Error',
+      }),
+      'Keenable',
+    );
+  }
 
-  if (!data.content || data.content.length < 100) {
+  if (!data?.content || data.content.length < 100) {
     return;
   }
 
