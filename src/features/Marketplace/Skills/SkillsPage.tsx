@@ -14,6 +14,7 @@ import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { SkillCategory, SkillSorts } from '@/types/discover';
 
 import BackLink from './BackLink';
+import { CustomSkills, useCustomSkills } from './CustomSkills';
 import GithubImportPage from './github/GithubImportPage';
 import { GithubAddressRow } from './github/GithubRows';
 import {
@@ -195,6 +196,7 @@ const Catalog = memo(() => {
   const { t } = useTranslation('setting');
   const installed = useInstalledSkills();
   const fromGithub = useInstalledGithubSkills();
+  const custom = useCustomSkills();
   const { setGroup: setSkillGroup } = useSkillsNav();
   const useSkillCategories = useDiscoverStore((s) => s.useSkillCategories);
   const { isLoading, queryKey } = useSkillCategories();
@@ -224,6 +226,11 @@ const Catalog = memo(() => {
           <InstalledGithubSkills items={fromGithub} />
         </Group>
       )}
+      {custom.length > 0 && (
+        <Group title={t('market.skills.customGroup')}>
+          <CustomSkills items={custom} />
+        </Group>
+      )}
       {isLoading && !categories ? (
         <>
           <SectionSkeleton count={PREVIEW_COUNT} />
@@ -240,12 +247,13 @@ const Catalog = memo(() => {
 
 Catalog.displayName = 'MarketSkillCatalog';
 
-/** Search results: matching installed skills first, then the market's. */
+/** Search results: matching skills in the library first, then the market's. */
 const SearchResults = memo<{ query: string }>(({ query }) => {
   const { t } = useTranslation('setting');
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const installed = useInstalledSkills().filter((skill) => matches(skill, query));
   const fromGithub = useInstalledGithubSkills(query);
+  const custom = useCustomSkills(query);
   const address = parseGithubSource(query);
   const { setGithubUrl } = useSkillsNav();
   const { isLoading, items, total } = useMarketSkills({ q: query }, pageSize, !address);
@@ -271,6 +279,11 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
       {fromGithub.length > 0 && (
         <Group title={t('market.skills.github.installedGroup')}>
           <InstalledGithubSkills items={fromGithub} />
+        </Group>
+      )}
+      {custom.length > 0 && (
+        <Group title={t('market.skills.customGroup')}>
+          <CustomSkills items={custom} />
         </Group>
       )}
       <Group title={t('market.skills.results')}>
@@ -347,7 +360,7 @@ const GroupPage = memo<{ group: string }>(({ group }) => {
 GroupPage.displayName = 'MarketSkillGroupPage';
 
 /**
- * The Skills page: my skills (from the Market, then from GitHub), then the LobeHub
+ * The Skills page: my skills (from the Market, from GitHub, then custom), then the LobeHub
  * Market's skills by category, each a short preview whose arrow opens the whole
  * group. Searching lists every match, then public GitHub repositories; a pasted
  * GitHub address offers that repository instead. "Add from GitHub" opens the

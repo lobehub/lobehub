@@ -5540,6 +5540,7 @@ When I am ___, I need ___
   'market.skills.agents.removeAll': 'Remove all',
   'market.skills.agents.title': 'Assistants · {{count}}',
   'market.skills.copyPrompt': 'Copy this message',
+  'market.skills.customGroup': 'Custom',
   'market.skills.desc':
     'Reusable ways of working for your assistants. Install one, then turn it on in an assistant.',
   'market.skills.empty': 'No matching skills',
@@ -5616,6 +5617,7 @@ When I am ___, I need ___
   'market.skills.stats.stars': 'GitHub stars',
   'market.skills.title': 'Skills',
   'market.skills.uninstall': 'Uninstall',
+  'market.skills.uninstallFailed': "Couldn't uninstall. Try again later.",
   'market.skills.version': 'Version',
   'workspaceSetting.labels.archive.failedRetry':
     "Couldn't archive the label. Check your network and try again.",
