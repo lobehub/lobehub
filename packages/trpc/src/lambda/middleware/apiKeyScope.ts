@@ -9,7 +9,7 @@ import { trpc } from '../init';
 
 /** What a device run's caller token is told when its scopes do not cover a route. */
 const callerRunRefusal = (path: string) =>
-  `An agent run cannot access '${path}' with its own token: agent runs are limited to tasks, documents and acceptance. Ask the user to do this in LobeHub.`;
+  `An agent run cannot access '${path}' with its own token: agent runs are limited to tasks, documents, files, acceptance, bot messages, the device list and traces. Ask the user to do this in LobeHub.`;
 
 /**
  * Global capability-scope guard for API-key-authenticated requests.

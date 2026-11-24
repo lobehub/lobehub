@@ -49,7 +49,8 @@ import type { AgentTextBlock } from './types';
  *   paths (desktop gateway, `lh connect`) put the run's `hetero-operation`
  *   token in `LOBEHUB_JWT`. Minted with `caller:act`, it acts as the user who
  *   started the run, only in the run's workspace, only while the run lasts and
- *   only within `HETERO_CALLER_SCOPES` (tasks, documents, acceptance);
+ *   only within `HETERO_CALLER_SCOPES` (tasks, documents, files, acceptance,
+ *   bot messages, the device list, traces);
  *   `oidcAuth` refuses a token without it there. `lh topic view` reads through
  *   an operation route first, as the run's own principal, limited to this
  *   conversation and the ones the user names in it

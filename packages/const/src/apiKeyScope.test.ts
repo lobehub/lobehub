@@ -39,6 +39,14 @@ describe('internal scopes', () => {
   });
 });
 
+const reaches = (scopes: readonly string[], path: string, type: 'mutation' | 'query'): boolean => {
+  const decision = requiredApiKeyScopeForTrpc(path, type);
+  return (
+    'open' in decision ||
+    ('scopes' in decision && decision.scopes.every((scope) => hasApiKeyScope([...scopes], scope)))
+  );
+};
+
 describe('HETERO_CALLER_SCOPES', () => {
   it.each([
     ['workspace.delete', 'mutation'],
@@ -46,14 +54,38 @@ describe('HETERO_CALLER_SCOPES', () => {
     ['oauthApp.rotateSecret', 'mutation'],
     ['accountDeletion.requestDeletion', 'mutation'],
     ['subscription.cancelSubscription', 'mutation'],
+    // device reads beyond the list reach other devices' files, git state and terminals
+    ['device.browseDirectory', 'query'],
+    ['device.getGitBranchDiff', 'query'],
+    ['device.readTerminal', 'mutation'],
+    ['device.removeDevice', 'mutation'],
   ] as const)('does not reach %s', (path, type) => {
-    const decision = requiredApiKeyScopeForTrpc(path, type);
-    const allowed =
-      'open' in decision ||
-      ('scopes' in decision &&
-        decision.scopes.every((scope) => hasApiKeyScope([...HETERO_CALLER_SCOPES], scope)));
+    expect(reaches(HETERO_CALLER_SCOPES, path, type)).toBe(false);
+  });
 
-    expect(allowed).toBe(false);
+  /**
+   * Regression: the agent guide sends device runs to `lh bot message`, `lh file`,
+   * `lh trace op` and `lh agent run --device`, which the caller scopes refused.
+   */
+  it.each([
+    ['botMessage.sendMessage', 'mutation'],
+    ['botMessage.readMessages', 'query'],
+    ['device.listDevices', 'query'],
+    ['agentTrace.listOperations', 'query'],
+    ['agentTrace.getSnapshotUrl', 'query'],
+    ['file.createFile', 'mutation'],
+    ['file.removeFile', 'mutation'],
+  ] as const)('reaches %s', (path, type) => {
+    expect(reaches(HETERO_CALLER_SCOPES, path, type)).toBe(true);
+  });
+
+  it.each([
+    ['botMessage.sendMessage', 'mutation'],
+    ['device.listDevices', 'query'],
+    ['agentTrace.listOperations', 'query'],
+  ] as const)('keeps %s closed to a restricted key holding every issuable scope', (path, type) => {
+    const issuable = API_KEY_SCOPES.filter((scope) => !isFullAccessApiKey([scope]));
+    expect(reaches(issuable, path, type)).toBe(false);
   });
 });
 
@@ -335,7 +367,9 @@ describe('requiredApiKeyScopeForTrpc', () => {
       const rule = TRPC_NAMESPACE_API_KEY_RULES[path.split('.')[0]];
       expect(rule).toBeDefined();
       expect(rule).not.toBe('blocked');
-      expect(isValidApiKeyScope(scope)).toBe(true);
+      expect(
+        isValidApiKeyScope(scope) || (INTERNAL_API_KEY_SCOPES as readonly string[]).includes(scope),
+      ).toBe(true);
     }
   });
 

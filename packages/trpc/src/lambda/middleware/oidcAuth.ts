@@ -44,8 +44,36 @@ const authorizeHeteroCaller = async (
   }
 };
 
+/**
+ * Should this request stay on the run's own operation route instead of
+ * acting as the caller?
+ *
+ * `verify.*` always does: a token without the round's `acceptance:evidence` is
+ * refused there, never let through as the user, which would drop the
+ * own-round and evidence-only checks and reach the user's other rounds.
+ * `file.createFile` into a library destination (a knowledge base or a folder)
+ * is ordinary user work and acts as the caller under `file:write`; any other
+ * upload stays a private acceptance or tool-result attachment.
+ * `user.getUserState` is an ordinary user read too, so only a token holding
+ * the evidence capability gets the bound, language-only answer.
+ */
+const staysOnOperationRoute = (
+  path: string,
+  capabilities: readonly string[],
+  input: unknown,
+): boolean => {
+  const accepted = HETERO_OPERATION_ROUTE_CAPABILITIES.get(path);
+  if (!accepted) return false;
+  if (path === 'file.createFile') {
+    const { knowledgeBaseId, parentId } = (input ?? {}) as Record<string, unknown>;
+    return ![knowledgeBaseId, parentId].some((id) => typeof id === 'string' && id.length > 0);
+  }
+  if (path === 'user.getUserState') return accepted.some((item) => capabilities.includes(item));
+  return true;
+};
+
 export const oidcAuth = trpc.middleware(async (opts) => {
-  const { ctx, next, path } = opts;
+  const { ctx, getRawInput, next, path } = opts;
 
   // Check OIDC authentication
   if (ctx.oidcAuth) {
@@ -59,13 +87,12 @@ export const oidcAuth = trpc.middleware(async (opts) => {
     if (ctx.oidcAuth.purpose === 'hetero-operation') {
       const claims = validateHeteroOperationClaims(ctx.oidcAuth as Record<string, unknown>);
       const actsAsCaller = !!claims?.capabilities.includes('caller:act');
-      // A run's own operation routes (evidence, tool-result file store) keep
-      // their binding to the run when the token holds the capability they need.
-      const operationRoute = !!HETERO_OPERATION_ROUTE_CAPABILITIES.get(path)?.some((capability) =>
-        claims?.capabilities.includes(capability),
-      );
 
-      if (!claims || !actsAsCaller || operationRoute) {
+      if (
+        !claims ||
+        !actsAsCaller ||
+        staysOnOperationRoute(path, claims.capabilities, await getRawInput())
+      ) {
         const scope = await authorizeHeteroOperationEvidence({
           oidcAuth: ctx.oidcAuth,
           path,
