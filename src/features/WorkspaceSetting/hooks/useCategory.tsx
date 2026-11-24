@@ -34,6 +34,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -51,6 +52,7 @@ export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
   Connection = 'connection',
+  Data = 'data',
   General = 'general',
   Resource = 'resource',
   Subscription = 'subscription',
@@ -66,6 +68,8 @@ export interface WorkspaceSettingCategoryItem {
 export interface WorkspaceSettingCategoryGroup {
   items: WorkspaceSettingCategoryItem[];
   key: WorkspaceSettingsGroupKey;
+  /** Account settings follow the user; space settings belong to this workspace. */
+  scope: SettingsScope;
   title: string;
 }
 
@@ -101,12 +105,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys)
-        // follow the user, not the workspace. They are mirrored here so members
-        // can reach them without leaving the workspace; the pages are the
-        // personal ones.
-        // Leads the sidebar so the user's own identity stays on top, like the
-        // personal settings sidebar.
+        // ── Account settings (profile / appearance / hotkeys / conversation)
+        // follow the user, not the workspace. They are mirrored under the
+        // workspace prefix so opening them never leaves the workspace; the
+        // pages are the personal ones. The sidebar shows them as their own set.
         {
           items: [
             {
@@ -136,6 +138,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,
+          scope: 'account',
           title: t('group.profile'),
         },
         {
@@ -167,6 +170,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.General,
+          scope: 'space',
           title: t('workspaceSetting.group.workspace'),
         },
         {
@@ -203,6 +207,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
+          scope: 'space',
           title: t('group.subscription'),
         },
         {
@@ -230,6 +235,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
+          scope: 'space',
           title: t('workspaceSetting.group.agent'),
         },
         enableWebhook && {
@@ -249,6 +255,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
+          scope: 'space',
           title: t('group.connection'),
         },
         // What the workspace's agents run on and spend: machines, coding-agent
@@ -278,6 +285,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,
+          scope: 'space',
           title: t('group.resource'),
         },
         // The Admin group is available to Admin and Owner.
@@ -295,14 +303,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Admin,
+          scope: 'space',
           title: t('workspaceSetting.group.admin'),
         },
-        // System & developer sits last and starts collapsed, mirroring the
-        // personal sidebar. Storage stays in Admin because it is
-        // workspace-scoped there. Trash is visible to every role — the server
-        // shows owners the whole bin and members only what they deleted.
-        // Advanced and Labs are user preferences; API Key / OAuth apps keep
-        // their gates.
+        // What the workspace stores and the keys that act on it. Trash is
+        // visible to every role — the server shows owners the whole bin and
+        // members only what they deleted. API Key keeps its member-level gate.
         {
           items: [
             {
@@ -310,15 +316,25 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Trash,
               label: t('tab.trash'),
             },
-            {
-              icon: EllipsisIcon,
-              key: WorkspaceSettingsTabs.Advanced,
-              label: t('tab.advanced'),
-            },
             canCreateContent && {
               icon: KeyIcon,
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Data,
+          scope: 'space',
+          title: t('group.data'),
+        },
+        // App preferences of the account set — low-frequency, so the sidebar
+        // starts it collapsed. Advanced and Labs are user preferences; OAuth
+        // apps keep their Labs gate.
+        {
+          items: [
+            {
+              icon: EllipsisIcon,
+              key: WorkspaceSettingsTabs.Advanced,
+              label: t('tab.advanced'),
             },
             enableOAuthApps && {
               icon: AppWindowIcon,
@@ -337,6 +353,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.System,
+          scope: 'account',
           title: t('group.systemDeveloper'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],

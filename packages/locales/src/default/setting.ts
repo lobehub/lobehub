@@ -1139,6 +1139,7 @@ export default {
   'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.connection': 'Connections',
+  'group.data': 'Data & Developer',
   'group.profile': 'Account',
   'group.resource': 'Runtime',
   'group.subscription': 'Plans & Billing',
@@ -1887,6 +1888,9 @@ export default {
   'settingGraphRuntime.validation.required':
     'A graph snapshot is required before enabling graph runtime.',
   'settingGraphRuntime.validation.unknown': 'Unknown graph validation error',
+  'settingsSwitch.account': 'Account Settings',
+  'settingsSwitch.personalSpace': 'Personal Space Settings',
+  'settingsSwitch.workspace': '{{name}} Settings',
   'settingsSearch.empty': 'No settings found for "{{keyword}}"',
   'settingsSearch.placeholder': 'Search settings...',
   'settingsSearch.tabKeywords.about': 'about, version, changelog, feedback, help',

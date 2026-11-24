@@ -102,12 +102,21 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
     ]);
     expect(result.current.at(-1)?.key).toBe(WorkspaceSettingsGroupKey.System);
+
+    // Account tabs form their own set; Trash stays with the workspace.
+    expect(
+      result.current.filter((group) => group.scope === 'account').map((group) => group.key),
+    ).toEqual([WorkspaceSettingsGroupKey.Account, WorkspaceSettingsGroupKey.System]);
+    expect(
+      result.current
+        .find((group) => group.key === WorkspaceSettingsGroupKey.Data)
+        ?.items.map((item) => item.key),
+    ).toEqual([WorkspaceSettingsTabs.Trash]);
   });
 
   it('groups devices, subscription accounts and environments & credentials under Runtime', () => {
@@ -143,11 +152,9 @@ describe('workspace settings useCategory', () => {
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
-    const systemGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.System,
-    );
+    const dataGroup = result.current.find((group) => group.key === WorkspaceSettingsGroupKey.Data);
 
-    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(dataGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
     expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
 
     const itemKeys = result.current.flatMap((group) => group.items.map((item) => item.key));
@@ -214,7 +221,7 @@ describe('workspace settings useCategory', () => {
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
-  it('hides API Key from viewers but keeps Advanced and Labs in the System group', () => {
+  it('hides API Key from viewers but keeps Advanced and Labs in the account System group', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 
@@ -224,7 +231,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
@@ -247,7 +253,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.OAuthApps,
       WorkspaceSettingsTabs.Labs,
