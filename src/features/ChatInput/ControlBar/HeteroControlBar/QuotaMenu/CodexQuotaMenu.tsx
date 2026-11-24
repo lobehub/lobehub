@@ -490,9 +490,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
       getErrorText={getErrorText}
-      getRefreshErrorText={getErrorText}
       getWindows={getWindows}
       hasExtraData={hasExtraData}
+      retainLastSnapshotOnError={false}
       sourceKey={sourceKey}
       title={t('heteroAgent.codexQuota.title')}
       tooltip={t('heteroAgent.codexQuota.tooltip')}

@@ -118,6 +118,48 @@ describe('account-scoped Codex quota', () => {
     expect(result.status).toBe('error');
   });
 
+  it('returns stale saved windows and credits when the confirmed account refresh fails', async () => {
+    const reader = createCodexQuotaReader({ deviceId: 'device-a' });
+    await reader();
+    vi.mocked(agentQuotaService.refreshCodexQuota).mockResolvedValue({
+      error: 'Codex RPC timed out',
+      identity: sample.identity,
+      provider: 'codex',
+      session: null,
+      status: 'error',
+      updatedAt: sample.updatedAt + 1,
+      weekly: null,
+    });
+
+    expect(await reader({ force: true })).toMatchObject({
+      credits: sample.credits,
+      error: 'Codex RPC timed out',
+      identity: sample.identity,
+      session: { usedPercent: 23 },
+      status: 'error',
+    });
+  });
+
+  it.each([null, { externalAccountId: 'external-b' }])(
+    'does not reuse cached credits after an error for a different or unidentified account (%j)',
+    async (identity) => {
+      const reader = createCodexQuotaReader({ deviceId: 'device-a' });
+      await reader();
+      vi.mocked(agentQuotaService.refreshCodexQuota).mockResolvedValue({
+        error: 'Codex RPC timed out',
+        identity,
+        provider: 'codex',
+        session: null,
+        status: 'error',
+        updatedAt: sample.updatedAt + 1,
+        weekly: null,
+      });
+
+      expect((await reader({ force: true })).credits).toBeUndefined();
+      expect((await reader()).session).toBeNull();
+    },
+  );
+
   it('does not merge the previous account after the device changes login', async () => {
     const reader = createCodexQuotaReader({ deviceId: 'device-a' });
     await reader();

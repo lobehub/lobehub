@@ -85,9 +85,22 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       if (persisted) return persisted;
       throw error;
     }
+    const externalAccountId = live?.identity?.externalAccountId;
+    if (live?.status === 'error') {
+      const fallback = externalAccountId
+        ? [persisted, lastLive].find(
+            (snapshot) => snapshot?.identity?.externalAccountId === externalAccountId,
+          )
+        : null;
+      if (!externalAccountId || externalAccountId !== trustedAccountId) {
+        trustedAccountId = undefined;
+        lastLive = null;
+      }
+      return fallback ? { ...fallback, error: live.error, status: 'error' } : live;
+    }
+
     if (live?.status === 'ok') lastLive = live;
     let ingested = false;
-    const externalAccountId = live?.identity?.externalAccountId;
     if (live?.status === 'ok' && externalAccountId) {
       trustedAccountId = externalAccountId;
       account = accounts.find((item) => item.externalAccountId === externalAccountId);
@@ -132,7 +145,6 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       account = undefined;
       readings = [];
     }
-    if (live?.status === 'error') return live;
     if (account && readings.length)
       return buildCodexPanelSnapshot(account, readings, live ?? lastLive);
     return (
