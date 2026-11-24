@@ -231,7 +231,7 @@ export interface FtsSearchTimeRange {
 
 export interface FtsSearchBackendFilters {
   agentId?: string;
-  documentKind?: 'folder' | 'knowledgeBaseDocument' | 'page';
+  documentKind?: 'fileContent' | 'folder' | 'knowledgeBaseDocument' | 'page';
   excludeKnowledgeBaseIds?: string[];
   excludeVirtual?: boolean;
   knowledgeBaseIds?: string[];

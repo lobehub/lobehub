@@ -5,6 +5,7 @@ import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../sc
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
+import { loadDocumentSnippets } from '../snippet';
 import type {
   FtsSearchBackendResponse,
   FtsSearchFolderResult,
@@ -191,12 +192,17 @@ export async function searchPages(
     )
     .orderBy(desc(hits.score))
     .limit(limit);
+  const snippets = await loadDocumentSnippets(
+    db,
+    rows.map(({ id }) => id),
+    query,
+  );
 
   return buildResponse(rows, (row) => {
     const title = row.title || row.filename || 'Untitled';
     return {
       createdAt: row.createdAt,
-      description: null,
+      description: snippets.get(row.id) ?? null,
       id: row.id,
       relevance: row.relevance,
       title,

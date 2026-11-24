@@ -3,6 +3,7 @@ import { searchElasticsearchCandidates } from './elasticsearch/candidates';
 import {
   hydrateAgents,
   hydrateChatGroups,
+  hydrateFileContents,
   hydrateFiles,
   hydrateFolders,
   hydrateKnowledgeBaseDocuments,
@@ -239,6 +240,22 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             hits,
             request.scope,
             limit,
+            query,
+            request.filters.excludeKnowledgeBaseIds,
+          ),
+        ),
+      };
+    }
+    if (target.documentKind === 'fileContent') {
+      return {
+        candidates,
+        items: await this.observe(entity, 'pg_hydration', () =>
+          hydrateFileContents(
+            this.db,
+            hits,
+            request.scope,
+            limit,
+            query,
             request.filters.excludeKnowledgeBaseIds,
           ),
         ),
