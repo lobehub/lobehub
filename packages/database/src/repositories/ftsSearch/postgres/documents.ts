@@ -1,10 +1,12 @@
 import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
+import { loadDocumentSnippets } from '../snippet';
 import type {
   FtsSearchBackendResponse,
   FtsSearchFolderResult,
@@ -30,6 +32,10 @@ const PAGE_FIELDS: PostgresFtsSearchField[] = [
 ];
 
 const KNOWLEDGE_BASE_DOCUMENT_FIELDS = PAGE_FIELDS;
+
+// The library lists a parsed upload as its file; searches that also return files do the same.
+const notFileDerived = (sourceType: AnyPgColumn, fileId: AnyPgColumn) =>
+  or(ne(sourceType, 'file'), isNull(fileId));
 
 /** Search folders (documents with `file_type=DOCUMENT_FOLDER_TYPE`). */
 export async function searchFolders(
@@ -119,6 +125,7 @@ export async function searchPages(
   limit: number,
   excludeKbIds?: string[],
   timeRange?: FtsSearchTimeRange,
+  excludeFileDerived?: boolean,
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
@@ -151,6 +158,7 @@ export async function searchPages(
       knowledgeBaseId: documents.knowledgeBaseId,
       metadata: documents.metadata,
       score: score.as('score'),
+      sourceType: documents.sourceType,
       title: documents.title,
       updatedAt: documents.updatedAt,
       workspaceId: documents.workspaceId,
@@ -162,7 +170,12 @@ export async function searchPages(
         eq(documents.fileType, 'custom/document'),
         context.liftsExclusionFilter
           ? undefined
-          : excludeKb(documents.knowledgeBaseId, documents.fileId),
+          : and(
+              excludeKb(documents.knowledgeBaseId, documents.fileId),
+              excludeFileDerived
+                ? notFileDerived(documents.sourceType, documents.fileId)
+                : undefined,
+            ),
         timeRangeWhere(documents, timeRange),
         dialect.match(PAGE_FIELDS, preparedQuery),
       ),
@@ -186,17 +199,27 @@ export async function searchPages(
         context.liftedScopeWhere(hits.workspaceId),
         notAgentShareDocument(hits.metadata),
         notAgentShareFileReference(db, hits.fileId),
-        context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId, hits.fileId) : undefined,
+        context.liftsExclusionFilter
+          ? and(
+              excludeKb(hits.knowledgeBaseId, hits.fileId),
+              excludeFileDerived ? notFileDerived(hits.sourceType, hits.fileId) : undefined,
+            )
+          : undefined,
       ),
     )
     .orderBy(desc(hits.score))
     .limit(limit);
+  const snippets = await loadDocumentSnippets(
+    db,
+    rows.map(({ id }) => id),
+    query,
+  );
 
   return buildResponse(rows, (row) => {
     const title = row.title || row.filename || 'Untitled';
     return {
       createdAt: row.createdAt,
-      description: null,
+      description: snippets.get(row.id) ?? null,
       id: row.id,
       relevance: row.relevance,
       title,

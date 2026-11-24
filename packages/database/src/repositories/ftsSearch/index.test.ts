@@ -32,7 +32,6 @@ let ftsSearchRepo: FtsSearchRepo;
 const serverDB: LobeChatDatabase = await getTestDB();
 
 beforeEach(async () => {
-  // Clean up
   await serverDB.delete(users);
 
   // Create test users
@@ -132,6 +131,7 @@ const REWRITTEN_RESULT_TYPES = [
 const SCAN_ALIASES = [
   'agent_hits',
   'chat_group_hits',
+  'file_content_hits',
   'file_hits',
   'folder_hits',
   'knowledge_base_hits',
