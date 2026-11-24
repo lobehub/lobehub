@@ -18,7 +18,7 @@
   "dependencies": {
     "ipaddr.js": "^2.5.0",
     "node-fetch": "^3.3.2",
-    "request-filtering-agent": "^3.2.1",
+    "request-filtering-agent": "^3.3.1",
     "undici": "^7.29.0"
   },
   "devDependencies": {

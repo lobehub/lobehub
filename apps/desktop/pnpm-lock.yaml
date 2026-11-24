@@ -679,8 +679,8 @@ importers:
         specifier: ^3.3.2
         version: 3.3.2
       request-filtering-agent:
-        specifier: ^3.2.1
-        version: 3.2.1
+        specifier: ^3.3.1
+        version: 3.3.1
       undici:
         specifier: ^7.29.0
         version: 7.30.0
@@ -7240,8 +7240,8 @@ packages:
   remend@1.4.0:
     resolution: {integrity: sha512-mHiYhhwphs1IgIZmkToKLwJn0U99IjPXuutkA2acrNcG0vlEq2G4TGnd2eT0saIHwh2KjaCpvleHcsd5SAz96A==}
 
-  request-filtering-agent@3.2.1:
-    resolution: {integrity: sha512-NUz5G9n6GRSgB9JNurHCeeJX60s+qxL/DKTPjC6+fXrQ20w7iQy+ST6h4hKjeu1AjfH7FtIV+uw5eOq4CqWe8Q==}
+  request-filtering-agent@3.3.1:
+    resolution: {integrity: sha512-EMa5wWfqP59Rbb/WKHtkYrqr6y5hYWMDVrkfr1qW6o9rGSDGUnme9Sbm7mUEqskDTyWrRHpaOm08iLSI5u35Qw==}
     engines: {node: '>=20.0.0'}
 
   require-directory@2.1.1:
@@ -9841,7 +9841,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.3(hono@4.13.12)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -11192,8 +11192,8 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@6.15.0:
@@ -11666,7 +11666,7 @@ snapshots:
   conf@13.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 9.0.0
@@ -11678,7 +11678,7 @@ snapshots:
   conf@15.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 10.2.0
@@ -15102,7 +15102,7 @@ snapshots:
 
   remend@1.4.0: {}
 
-  request-filtering-agent@3.2.1:
+  request-filtering-agent@3.3.1:
     dependencies:
       ipaddr.js: 2.5.0
 
