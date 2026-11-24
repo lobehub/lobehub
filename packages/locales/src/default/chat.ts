@@ -985,8 +985,11 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
+  'heteroAgent.executionTarget.autoAgentPicks': 'Auto · Agent picks',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
+  'heteroAgent.executionTarget.autoNoDevice': 'Auto · No device online',
+  'heteroAgent.executionTarget.autoOn': 'Auto · {{name}}',
   'heteroAgent.executionTarget.fixedTip':
     'The execution environment is fixed in the Agent Profile and cannot be switched while chatting.',
   'heteroAgent.executionTarget.infoTooltip':

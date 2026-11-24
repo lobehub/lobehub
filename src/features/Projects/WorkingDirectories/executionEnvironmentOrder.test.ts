@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 
-import { orderExecutionEnvironments, pickExecutionEnvironment } from './executionEnvironments';
+import { orderExecutionEnvironments, pickExecutionEnvironment } from './executionEnvironmentOrder';
 
 const folder = (id: string, sortOrder = 0) => ({ id, sortOrder }) as unknown as ProjectDirectory;
 const ids = (items: { id: string }[]) => items.map((item) => item.id);

@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeteroDeviceSwitcher from '../HeteroDeviceSwitcher';
 
 const state = vi.hoisted(() => ({
+  agentWorkspaceId: undefined as string | undefined,
+  boundDeviceId: undefined as string | undefined,
   devices: [] as object[],
+  executionTarget: 'sandbox',
   selectTarget: vi.fn(),
 }));
 
@@ -49,7 +52,7 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
-    agencyConfig: { executionTarget: 'sandbox' },
+    agencyConfig: { boundDeviceId: state.boundDeviceId, executionTarget: state.executionTarget },
     canDisplayExecutionTarget: true,
     canSelectExecutionTarget: true,
     isPreferenceLoading: false,
@@ -61,7 +64,8 @@ vi.mock('@/hooks/useLocalMachineDeviceIds', () => ({ useLocalMachineDeviceIds: (
 vi.mock('@/services/device', () => ({ deviceService: {} }));
 vi.mock('@/services/electron/localFileService', () => ({ localFileService: {} }));
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (s: object) => unknown) => selector({ agentMap: {} }),
+  useAgentStore: (selector: (s: object) => unknown) =>
+    selector({ agentMap: { 'agent-1': { workspaceId: state.agentWorkspaceId } } }),
 }));
 vi.mock('@/store/device', () => ({
   isDevicePresenceUnknown: () => false,
@@ -97,7 +101,10 @@ vi.mock('../CloudSandboxOptions', () => ({
 const SANDBOX = 'heteroAgent.executionTarget.sandbox';
 
 beforeEach(() => {
+  state.agentWorkspaceId = undefined;
+  state.boundDeviceId = undefined;
   state.devices = [];
+  state.executionTarget = 'sandbox';
   state.selectTarget.mockReset().mockResolvedValue(undefined);
 });
 
@@ -169,5 +176,73 @@ describe('HeteroDeviceSwitcher — first level', () => {
     const devices = screen.getByText('heteroAgent.executionTarget.myDevicesGroup');
     expect(follows(auto, sandbox)).toBe(true);
     expect(follows(sandbox, devices)).toBe(true);
+  });
+});
+
+// A bare "Auto" hid where the run lands: one online device, the Agent's pick
+// among several, or no device at all.
+describe('HeteroDeviceSwitcher — auto chip', () => {
+  const device = (deviceId: string, online: boolean) => ({
+    deviceId,
+    friendlyName: null,
+    hostname: deviceId,
+    online,
+    platform: 'darwin',
+    scope: 'personal',
+  });
+  const chipText = () => screen.getAllByTestId('chip')[0].textContent;
+
+  beforeEach(() => {
+    state.executionTarget = 'auto';
+  });
+
+  it('names the one online device the run will use', () => {
+    state.devices = [device('mac-mini', true), device('old-pc', false)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoOn');
+  });
+
+  it('says the Agent picks when several devices are online', () => {
+    state.devices = [device('mac-mini', true), device('linux-box', true)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoAgentPicks');
+  });
+
+  it('says no device is online instead of a bare Auto', () => {
+    state.devices = [device('old-pc', false)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoNoDevice');
+  });
+
+  // A member who picked "This computer" keeps that personal device bound when
+  // switching to Auto, and the server adds it to the workspace run's pool.
+  describe('workspace agent with a bound personal device', () => {
+    const workspaceDevice = (deviceId: string, online: boolean) => ({
+      ...device(deviceId, online),
+      scope: 'workspace',
+      visibility: 'public',
+    });
+
+    beforeEach(() => {
+      state.agentWorkspaceId = 'ws-1';
+      state.boundDeviceId = 'my-laptop';
+    });
+
+    it('names the personal device when the workspace pool has none online', () => {
+      state.devices = [device('my-laptop', true), workspaceDevice('shared-box', false)];
+      render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+      expect(chipText()).toBe('heteroAgent.executionTarget.autoOn');
+    });
+
+    it('leaves the pick to the Agent when a workspace device is online too', () => {
+      state.devices = [device('my-laptop', true), workspaceDevice('shared-box', true)];
+      render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+      expect(chipText()).toBe('heteroAgent.executionTarget.autoAgentPicks');
+    });
   });
 });

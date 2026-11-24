@@ -50,6 +50,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import { autoDispatchPool, summarizeAutoTarget } from './autoTargetSummary';
 import CloudSandboxOptions from './CloudSandboxOptions';
 import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
@@ -75,13 +76,14 @@ const styles = stylex.create({
     fontSize: '12px',
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     whiteSpace: 'nowrap',
-    transition: 'all 0.2s',
+    transition: 'color 0.2s, background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   buttonLabel: {
     overflow: 'hidden',
-    maxWidth: '120px',
+    // Room for "Auto · <device>" before a long machine name truncates.
+    maxWidth: '160px',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -158,7 +160,7 @@ const styles = stylex.create({
   },
   headerLink: {
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     fontSize: '11px',
     color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
@@ -169,7 +171,7 @@ const styles = stylex.create({
   manageButton: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     padding: '0',
     borderStyle: 'none',
@@ -561,6 +563,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   } else if (chipExecutionTarget === 'auto') {
     chipIcon = <ExecutionTargetIcon target={'auto'} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
+    // A bare "Auto" hides three different runs: one online device is used
+    // directly, several leave the pick to the Agent, none runs without a
+    // device. Say which one, from the pool the server dispatches among.
+    if (canShowExecutionTargetSelector) {
+      const autoSummary = summarizeAutoTarget({
+        isConfirmed: isDeviceListConfirmed,
+        pool: autoDispatchPool({ boundDeviceId, devices, isWorkspaceAgent }),
+      });
+      if (autoSummary.kind === 'single') {
+        const name =
+          isDesktop && isThisComputerDevice(autoSummary.device, localMachineDeviceIds)
+            ? t('heteroAgent.executionTarget.local')
+            : autoSummary.device.friendlyName ||
+              autoSummary.device.hostname ||
+              t('heteroAgent.executionTarget.unknownDevice');
+        chipLabel = t('heteroAgent.executionTarget.autoOn', { name });
+      } else if (autoSummary.kind === 'multiple') {
+        chipLabel = t('heteroAgent.executionTarget.autoAgentPicks');
+      } else if (autoSummary.kind === 'none') {
+        chipLabel = t('heteroAgent.executionTarget.autoNoDevice');
+      }
+    }
   } else if (chipExecutionTarget === 'local') {
     // 本机始终使用通用的本地电脑图标，不区分具体平台
     chipIcon = <ExecutionTargetIcon target={canShowExecutionTargetSelector ? 'local' : 'device'} />;
