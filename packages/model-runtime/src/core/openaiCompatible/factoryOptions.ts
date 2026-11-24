@@ -218,6 +218,11 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       model: string;
     }) => ResponsesToolAnchoringMode | undefined;
   };
+  /**
+   * The provider's endpoint has no Responses API. Chat and structured generation then always
+   * use Chat Completions, even for models OpenAI only serves on Responses (GPT-5.2+, GPT-6).
+   */
+  responsesApiUnsupported?: boolean;
   videoGenerationCapabilities?:
     VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);
 }

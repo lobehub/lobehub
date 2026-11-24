@@ -396,6 +396,8 @@
   "deepseek-v3.2-thinking.description": "DeepSeek-V3.2 Thinking is the thinking mode variant of DeepSeek-V3.2, focused on reasoning tasks.",
   "deepseek-v3.2.description": "DeepSeek-V3.2 is DeepSeek's latest coding model with strong reasoning capabilities.",
   "deepseek-v3.description": "DeepSeek-V3 is a powerful MoE model with 671B total parameters and 37B active per token.",
+  "deepseek-v4-1-flash-economy.description": "DeepSeek V4.1 Flash served on a lower-priced economy tier.",
+  "deepseek-v4-1-flash.description": "DeepSeek V4.1 Flash is the latest fast, cost-efficient member of the V4 family, with a 1M context window and hybrid thinking.",
   "deepseek-v4-flash-0731.description": "DeepSeek V4 Flash 0731 is the July 31 snapshot of the V4 Flash model. It is the fast, cost-efficient member of the V4 family with a 1M context window and hybrid thinking.",
   "deepseek-v4-flash-ga.description": "DeepSeek-V4-Flash GA is the general availability release of DeepSeek’s efficient model on Volcano Ark, with significantly enhanced agent capabilities, balanced speed and cost, and strong reasoning for daily Q&A, lightweight agents, and high-concurrency scenarios.",
   "deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp is an experimental multimodal model built on V4 Flash. It matches V4 Flash on text and adds native image understanding for visual agent workflows, billed at the same rates.",

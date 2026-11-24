@@ -13,6 +13,11 @@ export interface ShouldUseResponsesAPIParams {
   model?: string;
   /** Explicit responseApi flag */
   responseApi?: boolean;
+  /**
+   * The endpoint has no Responses API (`/responses`), so every request uses Chat Completions,
+   * including models that OpenAI itself only serves on Responses.
+   */
+  responsesApiUnsupported?: boolean;
   /** User-specified API mode (highest priority) */
   userApiMode?: string;
 }
@@ -29,12 +34,19 @@ export const shouldUseResponsesAPI = (
     model,
     userApiMode,
     responseApi,
+    responsesApiUnsupported,
     flagUseResponse,
     flagUseResponseModels,
     context = 'operation',
   } = params;
 
   const log = debug(`${logPrefix}:shouldUseResponsesAPI`);
+
+  // An endpoint without `/responses` can only take Chat Completions, whatever the model.
+  if (responsesApiUnsupported) {
+    log('using Chat Completions API: the endpoint has no Responses API (%s)', context);
+    return false;
+  }
 
   // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
   // These models MUST use Responses API regardless of user settings.

@@ -231,7 +231,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     private shouldUseResponsesAPI(params: ShouldUseResponsesAPIParams) {
-      return shouldUseResponsesAPI(params, this.logPrefix);
+      return shouldUseResponsesAPI(
+        { responsesApiUnsupported: factory.responsesApiUnsupported, ...params },
+        this.logPrefix,
+      );
     }
 
     /** What the protocol modules read; built per call so it always reflects current state. */
@@ -357,6 +360,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           processedPayload = { ...payload, apiMode: 'responses' } as any;
+        } else if (factory.responsesApiUnsupported && userApiMode) {
+          // A caller-supplied `apiMode` (e.g. a persisted Responses switch) must not reach an
+          // endpoint that has no Responses API.
+          const { apiMode: _apiMode, ...rest } = payload as any;
+          processedPayload = rest;
         }
 
         // Pre-flight: abort doomed requests before invoking handlePayload so
@@ -375,7 +383,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               stream: processedPayload.stream ?? true,
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
-        if ((handledPayload as any).apiMode === 'responses') {
+        if (!factory.responsesApiUnsupported && (handledPayload as any).apiMode === 'responses') {
           return await chatViaResponses(
             this.context,
             factory,
