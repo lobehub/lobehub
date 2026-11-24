@@ -26,6 +26,7 @@ export const CLI_USER_RATE_LIMIT_PATTERNS = [
   // to the overloaded (retry) guide.
   /you'?ve hit your \S+ limit/i,
   ...CLI_CREDIT_LIMIT_PATTERNS,
+  /\bindividual quota reached\b/i,
   /usage limit reached/i,
   /\blimit reached\b/i,
   // Gateways/proxies in front of the API localize the same quota rejection,
