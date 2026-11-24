@@ -17,6 +17,13 @@ export const HETERO_AGENT_SILENCE_TIMEOUT = 'HeteroAgentSilenceTimeout';
 
 /** Why a reply failed, in the terms the card explains and acts on. */
 export type ChannelReplyFailureKind =
+  /** The Agent's owner declined the requester's request to use it. */
+  | 'access_denied'
+  /**
+   * The requester may not use the Agent as it runs: a local CLI Agent (Claude Code, Codex, …)
+   * whose share does not grant them its owner's device. Only its owner can grant that.
+   */
+  | 'access_required'
   /** The run could not be submitted at all. */
   | 'dispatch'
   /** The device the Agent runs on was offline or could not be reached. */
@@ -48,6 +55,9 @@ const DEVICE_ERROR_TYPES = new Set<string>([
 export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelReplyFailureKind => {
   const type = facts.operation?.error?.type;
   const message = facts.operation?.error?.message;
+  // Checked first: no run, retry or other device helps until the Agent's owner allows it.
+  if (facts.job.blockedCode === 'access_denied') return 'access_denied';
+  if (type === ChatErrorType.ShareHeterogeneousAgentUnsupported) return 'access_required';
   // Checked before `dispatch`: a share limit refuses the run before it takes its input, and
   // "could not start" would hide that only the creator's limit can change the outcome.
   if (type === ChatErrorType.ShareSpendLimitExceeded) return 'share_spend_limit';
@@ -90,6 +100,11 @@ export const replyFailureActions = (
       case 'dispatch': {
         return ['retry'];
       }
+      // Only the Agent's owner can lift it: ask them. Their answer runs the reply again.
+      case 'access_denied':
+      case 'access_required': {
+        return ['request_access'];
+      }
       // Resuming or retrying runs into the same limit; only its creator can lift it.
       case 'share_message_limit':
       case 'share_spend_limit': {
@@ -107,6 +122,8 @@ export const replyFailureActions = (
 type Copy = Record<ChannelReplyFailureKind, (name: string, started: boolean) => string>;
 
 const ZH: Copy = {
+  access_denied: (name) => `${name} 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。`,
+  access_required: (name) => `${name} 需要主人授权后才能使用。申请后，主人同意即可继续。`,
   device: (name, started) =>
     started
       ? `${name} 所在的设备断开了，回复没能完成。`
@@ -125,6 +142,10 @@ const ZH: Copy = {
 };
 
 const EN: Copy = {
+  access_denied: (name) =>
+    `${name}'s owner declined your request to use it, so it did not reply. You can ask again.`,
+  access_required: (name) =>
+    `${name} needs its owner's permission before you can use it. Ask for access; it continues once they allow it.`,
   device: (name, started) =>
     started
       ? `${name}'s device disconnected, so the reply could not finish.`

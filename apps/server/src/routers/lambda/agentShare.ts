@@ -3,7 +3,7 @@ import {
   AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -17,7 +17,7 @@ import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
-import { agents } from '@/database/schemas';
+import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -459,13 +459,35 @@ export const agentShareRouter = router({
       const { book, enabled } = await shareAddressBook(ctx, input.agentId);
       const people = enabled ? await book.listAddressBookPeople() : [];
       const inBook = new Set(people.map((person) => person.id));
-      const unlisted = await pMap(
-        (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id)),
-        (id) => book.findUser(id),
-        { concurrency: 5 },
+      const outside = (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id));
+      // Approved by request: authorized outside the book, so listed as people, not as unlisted.
+      const approvedIds = new Set(
+        await AgentShareModel.requestGrantedUserIds(ctx.serverDB, share.id, outside),
       );
+      const [unlisted, approved] = await Promise.all([
+        pMap(
+          outside.filter((id) => !approvedIds.has(id)),
+          (id) => book.findUser(id),
+          { concurrency: 5 },
+        ),
+        approvedIds.size
+          ? ctx.serverDB
+              .select({
+                avatar: users.avatar,
+                fullName: users.fullName,
+                id: users.id,
+                username: users.username,
+              })
+              .from(users)
+              .where(inArray(users.id, [...approvedIds]))
+          : [],
+      ]);
 
-      return { enabled, people, unlisted: unlisted.filter((user) => !!user) };
+      return {
+        enabled,
+        people: [...people, ...approved],
+        unlisted: unlisted.filter((user) => !!user),
+      };
     }),
 
   updateShareConfig: agentShareProcedure
@@ -497,7 +519,16 @@ export const agentShareRouter = router({
         const inBook = new Set(
           deviceAllowUserIds?.length ? await book.filterAddressBookPeople(deviceAllowUserIds) : [],
         );
-        if (deviceAllowUserIds?.some((id) => !inBook.has(id)))
+        // People the owner let in by approving their request to use the Agent stay listable
+        // outside the book: their request grant admits them (`resolveShareVisitorDeviceAccess`).
+        const outside = deviceAllowUserIds?.filter((id) => !inBook.has(id)) ?? [];
+        const share = outside.length
+          ? await ctx.agentShareModel.getByAgentId(input.agentId)
+          : undefined;
+        const approved = new Set(
+          share ? await AgentShareModel.requestGrantedUserIds(ctx.serverDB, share.id, outside) : [],
+        );
+        if (outside.some((id) => !approved.has(id)))
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Device access can only be granted to people in your contacts',

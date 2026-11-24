@@ -31,6 +31,8 @@
   "autoTitle.empty": "My Channel",
   "autoTitle.more": "{{names}} and {{count}} more",
   "autoTitle.separator": ", ",
+  "blocked.access_denied": "The Agent’s owner declined your request to use it",
+  "blocked.access_request_pending": "Waiting for the Agent’s owner to allow you to use it",
   "blocked.awaiting_primary": "Waiting for another Agent to reply first",
   "blocked.device_approval_pending": "Waiting for device approval",
   "blocked.device_offline": "Waiting for device to connect",

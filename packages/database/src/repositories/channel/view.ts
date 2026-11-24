@@ -50,6 +50,7 @@ import {
 import type { Transaction } from '../../type';
 import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { agentAccessCards } from './agentAccess';
 import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
@@ -774,23 +775,26 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars, grantCards, reactions] = await Promise.all([
-    sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
-    replyWorksByMessage(tx, channelId, replyIds, {
-      includeCanvasWorks: options.includeCanvasWorks,
-      includeFileWorks: options.includeFileWorks,
-      userId: viewerUserId,
-    }),
-    relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
-    deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
-    reactionsByMessage(
-      tx,
-      channelId,
-      [...page, ...(rootMessage ? [rootMessage] : [])].map((message) => message.id),
-      // The viewer's own reaction is always named, so its chip shows as theirs.
-      members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)?.id,
-    ),
-  ]);
+  const [sourceTopics, works, relayAvatars, grantCards, accessCards, reactions] = await Promise.all(
+    [
+      sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
+      replyWorksByMessage(tx, channelId, replyIds, {
+        includeCanvasWorks: options.includeCanvasWorks,
+        includeFileWorks: options.includeFileWorks,
+        userId: viewerUserId,
+      }),
+      relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+      deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
+      agentAccessCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
+      reactionsByMessage(
+        tx,
+        channelId,
+        [...page, ...(rootMessage ? [rootMessage] : [])].map((message) => message.id),
+        // The viewer's own reaction is always named, so its chip shows as theirs.
+        members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)?.id,
+      ),
+    ],
+  );
   // A tombstone keeps its row for the Threads and replies that point at it, not its reactions.
   const reactionsOf = (message: MessageRow) =>
     channelMessageDeletedAt(message.metadata) ? [] : (reactions.get(message.id) ?? []);
@@ -867,6 +871,7 @@ export const readChannelView = async (
             }),
             relayAvatars,
           ),
+          agentAccess: accessCards.get(rootMessage.id) ?? null,
           deviceGrant: grantCards.get(rootMessage.id) ?? null,
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
@@ -882,6 +887,7 @@ export const readChannelView = async (
         }),
         relayAvatars,
       ),
+      agentAccess: accessCards.get(message.id) ?? null,
       deviceGrant: grantCards.get(message.id) ?? null,
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,

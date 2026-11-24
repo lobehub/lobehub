@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelReplyErrorInput } from '@lobechat/prompts';
+import type { ChannelReplyErrorInput, ChannelReplyErrorPromptAction } from '@lobechat/prompts';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
@@ -73,7 +73,8 @@ const refine = async (
       }),
     ]);
     // Only steps the server can carry out for this failure, in the model's order.
-    const actions = refined?.actions.filter((action) => input.allowedActions.includes(action));
+    const allowed: readonly string[] = input.allowedActions;
+    const actions = refined?.actions.filter((action) => allowed.includes(action));
     if (!refined?.summary.trim() || !actions?.length) return false;
     const changed = await new ChannelExecutionRepository(db).refineReplyError(
       channelId,
@@ -128,7 +129,15 @@ export const reportChannelReplyFailure = async (
     );
     await notify(db, channelId);
 
-    if (facts.share || deps.createSummarizer === false || !facts.operation) return posted;
+    // An access card's sentence and its one action are the point; a model adds nothing to them.
+    if (
+      facts.share ||
+      kind === 'access_denied' ||
+      kind === 'access_required' ||
+      deps.createSummarizer === false ||
+      !facts.operation
+    )
+      return posted;
     const summarizer =
       deps.createSummarizer?.(facts) ??
       createChannelReplyErrorSummarizer({
@@ -144,7 +153,9 @@ export const reportChannelReplyFailure = async (
       facts,
       {
         agentName: facts.agent.name || 'Agent',
-        allowedActions: draft.actions,
+        allowedActions: draft.actions.filter(
+          (action): action is ChannelReplyErrorPromptAction => action !== 'request_access',
+        ),
         deviceOffline: kind === 'device',
         errorMessage: draft.errorMessage,
         errorType: draft.errorType,
