@@ -283,6 +283,7 @@
   "builtins.lobe-canvas.apiName.readCanvasGuide": "读取画布指南",
   "builtins.lobe-canvas.apiName.updateCanvas": "更新画布",
   "builtins.lobe-canvas.title": "画布",
+  "builtins.lobe-channel.apiName.askUser": "发起选择题",
   "builtins.lobe-channel.apiName.createThread": "开启子区",
   "builtins.lobe-channel.apiName.listChannels": "列出频道",
   "builtins.lobe-channel.apiName.listPeople": "列出可发消息的人",

@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
 import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
@@ -974,6 +975,8 @@ export interface ChannelPublicMember {
 
 export interface ChannelPublicMessage {
   agentId: string | null;
+  /** An Agent's question with options, on an `ask` message; null otherwise. */
+  ask?: ChannelAsk | null;
   author: {
     avatar: string | null;
     id: string | null;
@@ -997,6 +1000,8 @@ export interface ChannelPublicMessage {
   editedAt?: Date | null;
   fileIds: string[];
   id: string;
+  /** What the message is; its payload, if any, is in the field named after it. */
+  kind?: ChannelMessageKind;
   mentions: string[];
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;

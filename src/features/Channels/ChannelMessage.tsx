@@ -36,6 +36,7 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { AskCard } from './AskCard';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
@@ -150,6 +151,9 @@ export const ChannelMessage = ({
     ? detail.members.find((member) => member.agentId === agentAuthorId)
     : undefined;
   const sourceTopicId = message.sourceTopicId;
+  // A question card shows its options itself; the text fallback after the Agent's words is for
+  // clients that cannot render it.
+  const body = message.ask ? message.content.slice(0, message.ask.bodyLength) : message.content;
   // A direct conversation is a chat with one Agent; folding its answers only adds a click.
   const collapsible = !detail.channel.agentId;
   // Long messages stay open by default; folding one is an explicit choice from "more".
@@ -324,7 +328,7 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {message.content &&
+            {body &&
               (collapsible ? (
                 <CollapsibleContent
                   hideCollapseToggle
@@ -334,11 +338,12 @@ export const ChannelMessage = ({
                   onCollapsedChange={setCollapsed}
                   onOverflowChange={setOverflowing}
                 >
-                  <MessageText content={message.content} names={mentionNames} />
+                  <MessageText content={body} names={mentionNames} />
                 </CollapsibleContent>
               ) : (
-                <MessageText content={message.content} names={mentionNames} />
+                <MessageText content={body} names={mentionNames} />
               ))}
+            {message.ask && <AskCard ask={message.ask} detail={detail} message={message} />}
             {!!message.works?.length && <ReplyWorks works={message.works} />}
             {failures?.map((job) => (
               <ReplyFailureCard job={job} key={job.id} />

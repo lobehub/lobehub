@@ -333,6 +333,7 @@ export const sendMessage = async (
     ...(author ? { agentId: author.agentId } : { userId: member.userId }),
     channelId: channel.id,
     content: card ? contactCardText(card) : input.content,
+    ...(card && { kind: 'contact' as const }),
     mentions,
     ...(metadata && { metadata }),
     requestKey: input.requestKey,

@@ -1,4 +1,4 @@
-import type { ChannelMessageMetadata } from '@lobechat/types';
+import type { ChannelMessageKind, ChannelMessageMetadata } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -12,6 +12,8 @@ export interface ChannelAgentPostInput {
   /** The Agent that wrote it; must be an active member of the Channel. */
   agentId: string;
   content: string;
+  /** What the message is; its payload goes in `metadata.<kind>`. Default `text`. */
+  kind?: ChannelMessageKind;
   metadata?: ChannelMessageMetadata;
   /** Identity of what produced the post (e.g. the run). Posting it again returns the stored one. */
   requestKey: string;
@@ -64,6 +66,7 @@ export const postAgentMessage = async (
     agentId: input.agentId,
     channelId,
     content: input.content,
+    ...(input.kind && { kind: input.kind }),
     metadata: input.metadata ?? {},
     requestKey: input.requestKey,
     routingStatus: 'reply',

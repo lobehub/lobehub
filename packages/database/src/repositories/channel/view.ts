@@ -1,6 +1,7 @@
 import {
   type AgentDeviceOverride,
   type ChannelDeviceGrantCard,
+  channelMessageAsk,
   channelMessageConnector,
   channelMessageDeletedAt,
   channelMessageDeviceGrant,
@@ -141,6 +142,11 @@ export const publicMessage = (
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    // A deleted question keeps its row as a tombstone, but nothing is left to answer.
+    ask:
+      message.kind === 'ask' && !channelMessageDeletedAt(message.metadata)
+        ? (channelMessageAsk(message.metadata) ?? null)
+        : null,
     card: contactCardOf(message.metadata) ?? null,
     // An Agent asking the reader to connect a connector it needs.
     connector: (isAgent && channelMessageConnector(message.metadata)) || null,

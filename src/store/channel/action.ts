@@ -441,6 +441,22 @@ class ChannelActionImpl {
         this.refreshList(),
       ]),
     );
+  /** Answers an Agent's question card; the answer posts as the person's reply to it. */
+  answerAsk = async (
+    input: Parameters<typeof channelService.answerAsk>[0] & { threadId: string | null },
+  ) => {
+    const { threadId, ...answer } = input;
+    await channelService.answerAsk(answer);
+    // The answer is committed once the write returns. A refresh that fails afterwards must not
+    // read back as a failed answer: the card would stay actionable and the question could be
+    // answered twice. Same policy as every other write path: log the refresh, keep the write.
+    await this.#refreshAfterWrite(() =>
+      Promise.all([
+        this.refreshDetail({ channelId: input.channelId, threadId }),
+        this.refreshList(),
+      ]),
+    );
+  };
   stop = async (channelId: string, scope: Parameters<typeof channelService.stop>[1]) => {
     await channelService.stop(channelId, scope);
     await this.refreshDetail({ channelId, threadId: 'threadId' in scope ? scope.threadId : null });
