@@ -106,7 +106,7 @@ export const MarketplaceDetailBodySkeleton = () => (
 /** The detail routes' skeleton: the page chrome, then the detail body in the centered column. */
 export const MarketplaceDetailSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <CommunityPageChrome chrome={chrome}>
-    <div {...stylex.props(catalogStyles.frame)}>
+    <div {...stylex.props(catalogStyles.frame, catalogStyles.pageTop)}>
       <MarketplaceDetailBodySkeleton />
     </div>
   </CommunityPageChrome>

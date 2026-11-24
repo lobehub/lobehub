@@ -1,4 +1,4 @@
-import { ShapesIcon } from 'lucide-react';
+import { LayoutGridPlus } from 'lucide-react';
 import { lazy } from 'react';
 
 import { MarketplaceDetailSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
@@ -18,7 +18,7 @@ const createCommunityDetailRouteMeta = (
     DynamicMeta: lazy(() =>
       import('./CommunityDynamicMeta').then((module) => ({ default: module[name] })),
     ),
-    icon: ShapesIcon,
+    icon: LayoutGridPlus,
     titleKey: 'navigation.marketplace',
   });
 
