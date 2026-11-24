@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
+import { isCurrentMachineDevice, useCurrentMachine } from '@/features/DeviceManager/devicePicker';
+import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
 import { useProjectExecutionEnvironments } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
@@ -102,9 +104,11 @@ const ProjectDeviceSwitcher = ({
   projectId: projectIdProp,
   sandbox,
 }: ProjectDeviceSwitcherProps) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'device']);
   const navigate = useWorkspaceAwareNavigate();
   const [open, setOpen] = useState(false);
+  const [showOffline, setShowOffline] = useState(false);
+  const currentMachine = useCurrentMachine();
   const { canUseResource } = useChatInputResourceAccess();
   const directory = directories.find((d) => d.id === directoryId);
   const projectId = projectIdProp ?? directories[0]?.projectId;
@@ -135,6 +139,13 @@ const ProjectDeviceSwitcher = ({
         { id: 'sandbox', kind: 'sandbox' as const },
         ...targets.map((target) => ({ id: target.directory.id, kind: 'directory' as const })),
       ];
+
+  const isCurrent = (target: ProjectDeviceTarget) =>
+    !!target.device && isCurrentMachineDevice(target.device, currentMachine);
+  // The project's order stays; offline devices fold away at the end unless one is the pick.
+  const isFolded = (target: ProjectDeviceTarget) =>
+    !target.online && !target.onlineUnknown && !target.active;
+  const offlineTargets = targets.filter(isFolded);
 
   const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
@@ -176,7 +187,6 @@ const ProjectDeviceSwitcher = ({
         icon={<ExecutionTargetIcon devicePlatform={target.directory.platform} target={'device'} />}
         key={target.directory.id}
         label={target.label}
-        tags={target.active && activeTag ? [activeTag] : []}
         desc={
           target.allowed ? (
             <>
@@ -195,6 +205,10 @@ const ProjectDeviceSwitcher = ({
             <span {...stylex.props(styles.desc)}>{t('heteroAgent.executionTarget.fixedTip')}</span>
           )
         }
+        tags={[
+          ...(isCurrent(target) ? [t('picker.thisDevice', { ns: 'device' })] : []),
+          ...(target.active && activeTag ? [activeTag] : []),
+        ]}
         onClick={() => (selectable ? handleSelect(target) : undefined)}
       />
     );
@@ -230,8 +244,16 @@ const ProjectDeviceSwitcher = ({
       {rows.map((item) => {
         if (item.kind === 'sandbox') return sandboxRow;
         const target = targetById.get(item.id);
-        return target ? renderTarget(target) : null;
+        return target && !isFolded(target) ? renderTarget(target) : null;
       })}
+      {offlineTargets.length > 0 && (
+        <OfflineDevicesToggle
+          count={offlineTargets.length}
+          expanded={showOffline}
+          onToggle={() => setShowOffline((v) => !v)}
+        />
+      )}
+      {showOffline && offlineTargets.map(renderTarget)}
     </Flexbox>
   );
 

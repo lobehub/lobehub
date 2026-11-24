@@ -1,4 +1,6 @@
 export default {
+  'picker.offlineGroup': 'Offline ({{count}})',
+  'picker.thisDevice': 'This device',
   'workingDirectory.newFolderCreated': 'Created folder: {{path}}',
   'workingDirectory.newFolderInvalidWindowsName':
     'Use a Windows folder name without reserved names (such as CON), special characters (< > : " / \\ | ? *), control characters, or a trailing space or period.',
