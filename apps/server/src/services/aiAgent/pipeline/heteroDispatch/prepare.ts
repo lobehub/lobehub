@@ -195,10 +195,12 @@ export const prepareHeteroRun = async (
   const recentMessagesPromise = traceHeteroStage('history', loadRecentMessages);
   const [resumeSessionId, operationJwt, topic] = await settleInOrder([
     // A sub-agent resumes its own session, never the topic's: the topic's
-    // belongs to the conversation's agent or to another sub-agent.
+    // belongs to the conversation's agent or to another sub-agent. The thread
+    // decides, not `isolationThread`: that flag is only set when the sub-agent
+    // is spawned, and a later message in its thread has to resume it too.
     traceHeteroStage('resume_session', () =>
-      appContext?.isolationThread && appContext.threadId
-        ? heteroService.getIsolationThreadResumeSessionId(appContext.threadId)
+      appContext?.threadId
+        ? heteroService.getThreadResumeSessionId(appContext.threadId, topicId)
         : heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
     traceHeteroStage('sign_operation_jwt', signOperationJwt),

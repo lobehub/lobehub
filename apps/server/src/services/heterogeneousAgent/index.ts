@@ -852,12 +852,17 @@ export class HeterogeneousAgentService {
   }
 
   /**
-   * Resume session of an external agent running in an isolation thread (a
-   * sub-agent). Undefined for a new sub-agent.
+   * Resume session for a run inside a thread. An isolation thread (a
+   * sub-agent) holds its own session, undefined while it is new; any other
+   * thread shares the topic's. The thread's type decides, as it does for the
+   * writes ({@link bindIsolationThreadSession}): a message the user sends in a
+   * sub-agent's thread later is an ordinary run, and still resumes what that
+   * sub-agent started.
    */
-  async getIsolationThreadResumeSessionId(threadId: string): Promise<string | undefined> {
+  async getThreadResumeSessionId(threadId: string, topicId: string): Promise<string | undefined> {
     const thread = await new ThreadModel(this.db, this.userId, this.workspaceId).findById(threadId);
-    return thread?.metadata?.heteroSessionId;
+    if (thread?.type === ThreadType.Isolation) return thread.metadata?.heteroSessionId;
+    return this.getHeterogeneousResumeSessionId(topicId);
   }
 
   /**
