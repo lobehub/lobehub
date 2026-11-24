@@ -482,6 +482,10 @@ export default class HeterogeneousAgentCtr {
       dispatchCodexPrompt(this.codexAppServerHost(), params, session, {
         appServerEnabled: !!(session.useCodexAppServer || this.isCodexAppServerLabEnabled),
       }),
+    'antigravity': async (params, session) => {
+      await this.sendPromptWithAcp(params, session);
+      return true;
+    },
     'copilot': async (params, session) => {
       await this.sendPromptWithAcp(params, session);
       return true;
@@ -2310,16 +2314,11 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code / Antigravity).
+    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code always is).
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
-      session.liveInput = writeCliPrompt(
-        proc.stdin as Writable,
-        spawnPlan.stdinPayload,
-        live,
-        session.agentType,
-      );
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live);
     }
 
     session.process = proc;
@@ -2343,7 +2342,7 @@ export default class HeterogeneousAgentCtr {
     // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
-      ...(session.liveInput && { adapter: createLiveCliAdapter(session.liveInput) }),
+      ...(session.liveInput && { adapter: createLiveCliAdapter() }),
       agentType: session.agentType,
       cwd,
       env: spawnEnv,
