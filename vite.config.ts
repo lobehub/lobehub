@@ -166,14 +166,7 @@ export default defineConfig({
       '@lobehub/ui > dayjs/plugin/weekOfYear.js',
       '@lobehub/ui > dayjs/plugin/weekYear.js',
     ],
-    exclude: [
-      ...sharedOptimizeDeps.exclude,
-      ...lobeUiImportSources,
-      '@lobehub/icons',
-      // UI and app use different ESM virtua versions. A bare optimized id can
-      // resolve UI's virtual list to the app's older dependency and crash on shrink.
-      'virtua',
-    ],
+    exclude: [...sharedOptimizeDeps.exclude, ...lobeUiImportSources, '@lobehub/icons'],
   },
   plugins: [
     isMobile &&

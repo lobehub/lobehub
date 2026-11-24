@@ -33,7 +33,6 @@ const Error = memo<{ error: ChatMessageError }>(({ error }) => {
     <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
         showIcon
-        text={{ detail: t('asyncState.showDetails') }}
         title={getRuntimeErrorMessage(t, error.type, { provider: providerName }, fallbackMessage)}
         type={'error'}
         extra={

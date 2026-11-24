@@ -136,7 +136,7 @@ const Content = memo<ContentProps>(({ id }) => {
 
     // Only show tabs that have models (count > 0), but always show 'all' tab
     return allTabs.filter((tab) => tab.key === 'all' || tab.count > 0);
-  }, [modelCounts, t]);
+  }, [modelCounts]);
 
   // Ensure active tab is available, fallback to 'all' if current tab is hidden
   const availableTabKeys = tabs.map((tab) => tab.key);
