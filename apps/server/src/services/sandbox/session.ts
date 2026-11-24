@@ -273,6 +273,16 @@ const resolvePlacement = async ({
         return fallBack('instanceUnavailable');
       }
 
+      // Renamed or deleted through the drive browser since: the row outlives
+      // the folder, and a run pointed at a missing cwd would fail rather than
+      // fall back the way any other folder does.
+      if (
+        (await driveFolderExists({ claim, path: workingDirectory, userId, workspaceId })) === false
+      ) {
+        log('Legacy instance %s folder %o on topic %s is gone', id, workingDirectory, topicId);
+        return fallBack('directoryMissing');
+      }
+
       log(
         'Drive for topic %s in legacy instance %s, without its environment: cwd=%o drive=%s',
         topicId,

@@ -126,6 +126,23 @@ describe('resolveSandboxSessionConfig', () => {
     });
   });
 
+  // The row outlives a folder renamed or deleted through the drive browser:
+  // the run falls back like any other missing folder instead of a bad cwd.
+  it("falls back when a legacy instance's folder is gone from the drive", async () => {
+    mocks.driveFolderExists.mockResolvedValue(false);
+
+    await expect(resolve()).resolves.toEqual({
+      claim: CLAIM,
+      drive: 'personal',
+      fallback: 'directoryMissing',
+      mode: 'ephemeral',
+    });
+    expect(mocks.driveFolderExists).toHaveBeenCalledWith(
+      expect.objectContaining({ claim: CLAIM, path: 'projects/atlas' }),
+    );
+    expect(mocks.ensureDriveFolder).not.toHaveBeenCalled();
+  });
+
   // Neither the definition the instance was built from, nor its snapshot, nor
   // the checkout its build left on local disk come along.
   it("leaves the instance's definition, snapshot and checkout behind", async () => {
