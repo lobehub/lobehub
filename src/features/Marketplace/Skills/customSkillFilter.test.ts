@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { customSkillsOf } from './customSkills';
+import { customSkillsOf } from './customSkillFilter';
 
 const manifest = { name: 'skill' } as any;
 

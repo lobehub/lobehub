@@ -8,7 +8,7 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import type { AgentSkillListItem } from '@/store/tool/slices/agentSkills/projection';
 
-import { customSkillsOf } from './customSkills';
+import { customSkillsOf } from './customSkillFilter';
 import { Row } from './github/GithubRows';
 import SkillIcon from './SkillIcon';
 import { useUninstallLibrarySkill } from './useUninstallLibrarySkill';
