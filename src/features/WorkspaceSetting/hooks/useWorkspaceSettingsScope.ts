@@ -7,7 +7,7 @@ import { type SettingsSpace } from '@/features/SettingsSwitch/useSettingsScopeTi
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { DEFAULT_WORKSPACE_SETTINGS_TAB, WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
-import { useWorkspaceSettingCategory } from './useCategory';
+import { useWorkspaceSettingCategory, type WorkspaceSettingCategoryItem } from './useCategory';
 import { getWorkspaceSettingsTabUrl } from './useSettingsSearchScope';
 
 const WORKSPACE_TABS = new Set<string>(Object.values(WorkspaceSettingsTabs));
@@ -30,9 +30,12 @@ export const useWorkspaceSettingsScope = () => {
       : DEFAULT_WORKSPACE_SETTINGS_TAB;
   }, [location.pathname, slug]);
 
+  // A personal-only account tab carries the personal page it opens.
   const tabUrl = useCallback(
-    (tab: WorkspaceSettingsTabs) => getWorkspaceSettingsTabUrl(slug ?? '', tab),
-    [slug],
+    (tab: WorkspaceSettingCategoryItem['key']) =>
+      groups.flatMap((group) => group.items).find((item) => item.key === tab)?.href ??
+      getWorkspaceSettingsTabUrl(slug ?? '', tab as WorkspaceSettingsTabs),
+    [groups, slug],
   );
 
   const scopeSwitch = useSettingsScopeSwitch({

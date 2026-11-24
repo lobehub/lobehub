@@ -4,6 +4,7 @@ import {
   AppWindowIcon,
   BellIcon,
   Brain,
+  BrainCircuit,
   Building2,
   ChartColumnBigIcon,
   ChartPieIcon,
@@ -12,8 +13,10 @@ import {
   CreditCard,
   Database,
   EllipsisIcon,
+  EthernetPort,
   FlaskConical,
   GaugeIcon,
+  Gift,
   HandCoins,
   Info,
   KeyboardIcon,
@@ -25,6 +28,7 @@ import {
   ScrollText,
   Sparkles,
   TagIcon,
+  TerminalSquare,
   Trash2,
   Users,
   UsersRound,
@@ -38,6 +42,7 @@ import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
+import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
   serverConfigSelectors,
@@ -59,9 +64,19 @@ export enum WorkspaceSettingsGroupKey {
   System = 'system',
 }
 
+/**
+ * Account tabs that only exist as personal pages. The workspace account set
+ * still lists them so the set is the same in every space; they open the
+ * personal page through `href`.
+ */
+export type PersonalOnlyAccountTab =
+  SettingsTabs.Memory | SettingsTabs.Proxy | SettingsTabs.Referral | SettingsTabs.SystemTools;
+
 export interface WorkspaceSettingCategoryItem {
+  /** Set for a personal-only account tab: the personal page it opens. */
+  href?: string;
   icon: any;
-  key: WorkspaceSettingsTabs;
+  key: WorkspaceSettingsTabs | PersonalOnlyAccountTab;
   label: string;
 }
 
@@ -88,6 +103,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -136,7 +152,21 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Conversation,
               label: t('tab.conversation'),
             },
-          ],
+            // Memory and referral exist only as personal pages; listing them
+            // keeps the account set the same in every space.
+            {
+              href: `/settings/${SettingsTabs.Memory}`,
+              icon: BrainCircuit,
+              key: SettingsTabs.Memory,
+              label: t('tab.memory'),
+            },
+            enableBusinessFeatures && {
+              href: `/settings/${SettingsTabs.Referral}`,
+              icon: Gift,
+              key: SettingsTabs.Referral,
+              label: tSubscription('tab.referral'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Account,
           scope: 'account',
           title: t('group.profile'),
@@ -331,6 +361,18 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         // apps keep their Labs gate.
         {
           items: [
+            isDesktop && {
+              href: `/settings/${SettingsTabs.Proxy}`,
+              icon: EthernetPort,
+              key: SettingsTabs.Proxy,
+              label: t('tab.proxy'),
+            },
+            isDesktop && {
+              href: `/settings/${SettingsTabs.SystemTools}`,
+              icon: TerminalSquare,
+              key: SettingsTabs.SystemTools,
+              label: t('tab.systemTools'),
+            },
             {
               icon: EllipsisIcon,
               key: WorkspaceSettingsTabs.Advanced,
@@ -368,6 +410,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       canCreateContent,
       hideDocs,
       enableWebhook,
+      enableBusinessFeatures,
       avatarUrl,
       username,
     ],

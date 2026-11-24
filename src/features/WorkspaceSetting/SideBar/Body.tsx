@@ -64,7 +64,9 @@ const Body = memo(() => {
                       onClick={(e) => {
                         if (isModifierClick(e)) return;
                         e.preventDefault();
-                        navigate(url);
+                        // Already a full path: a workspace tab carries its
+                        // slug, a personal-only account tab must not get one.
+                        navigate(url, { escape: true });
                       }}
                     >
                       <NavItem

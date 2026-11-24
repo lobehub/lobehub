@@ -2,6 +2,7 @@ import { cleanup, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SettingsTabs } from '@/store/global/initialState';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -92,6 +93,7 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Appearance,
       WorkspaceSettingsTabs.Hotkey,
       WorkspaceSettingsTabs.Conversation,
+      SettingsTabs.Memory,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
@@ -269,6 +271,40 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
+  });
+});
+
+describe('workspace settings useCategory account set', () => {
+  // The account set is the same in every space: tabs that exist only as
+  // personal pages are listed too and open the personal page.
+  it('lists the personal-only account tabs, opening their personal pages', () => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider
+          createStore={() =>
+            initServerConfigStore({
+              serverConfig: { aiProvider: {}, enableBusinessFeatures: true, telemetry: {} },
+            } as never)
+          }
+        >
+          {children}
+        </Provider>
+      ),
+    });
+    const accountItems = result.current
+      .filter((group) => group.scope === 'account')
+      .flatMap((group) => group.items);
+
+    expect(accountItems.find((item) => item.key === SettingsTabs.Memory)?.href).toBe(
+      '/settings/memory',
+    );
+    expect(accountItems.find((item) => item.key === SettingsTabs.Referral)?.href).toBe(
+      '/settings/referral',
+    );
+    // Workspace tabs keep no href: they open under the workspace prefix.
+    expect(
+      accountItems.find((item) => item.key === WorkspaceSettingsTabs.Appearance)?.href,
+    ).toBeUndefined();
   });
 });
 
