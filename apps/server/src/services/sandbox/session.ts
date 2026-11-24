@@ -81,7 +81,8 @@ export interface SandboxSessionConfig {
   /**
    * The environment to initialize the working directory from — a project
    * conversation's, its project's: applied once to a folder on the drive, and
-   * once per sandbox in a temporary one. Never set outside a project.
+   * once per sandbox in a temporary one. Never set outside a project, nor on a
+   * legacy instance's folder.
    */
   initialization?: SandboxInitialization;
   mode: SandboxMode;
@@ -364,6 +365,13 @@ const resolveInitialization = async ({
     );
     const environmentId = topic?.metadata?.sandboxEnvironmentId;
     if (!environmentId) return undefined;
+    // A legacy environment directory runs as a plain folder, without any
+    // environment — not even its project's: setting one up there would clone
+    // or bootstrap into a folder that already holds that conversation's work.
+    if (topic.metadata?.sandboxInstanceId) {
+      log('Not initializing legacy instance folder on topic %s', topicId);
+      return undefined;
+    }
     if (!topic.projectId) {
       log(
         'Ignoring sandboxEnvironmentId outside a project on topic %s: %s',

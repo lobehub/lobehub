@@ -738,5 +738,23 @@ describe('resolveSandboxSessionConfig', () => {
       expect(config).not.toHaveProperty('initialization');
       expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
     });
+
+    // A project conversation keeps its project's environment, but a legacy
+    // instance's folder already holds that conversation's work: cloning or
+    // bootstrapping into it is not "running without the environment".
+    it("never initializes a legacy instance's folder, even in a project", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: 'atlas' });
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
+        projectId: 'project-1',
+      });
+
+      const config = await resolve();
+
+      expect(config).toMatchObject({ cwd: 'atlas', mode: 'drive' });
+      expect(config).not.toHaveProperty('initialization');
+      expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+    });
   });
 });

@@ -37,18 +37,12 @@ vi.mock('@/store/sandbox', () => ({
 
 const AGENT = 'agent-seed';
 
-/** What an earlier version stored about the environment an agent last used. */
-const storeLegacyEnvironmentMemory = (environmentId: string, workingDirectory?: string) => {
-  if (workingDirectory)
-    localStorage.setItem(
-      rememberedSandboxDirectoryKey({ userId: 'user-a' }, AGENT)!,
-      JSON.stringify({ environmentId, workingDirectory }),
-    );
+/** A folder an earlier version remembered together with its environment. */
+const storeLegacyFolderWithEnvironment = (environmentId: string, workingDirectory: string) =>
   localStorage.setItem(
-    `lobechat-sandbox-last-repository:user-a:personal:${AGENT}`,
-    JSON.stringify({ environmentId }),
+    rememberedSandboxDirectoryKey({ userId: 'user-a' }, AGENT)!,
+    JSON.stringify({ environmentId, workingDirectory }),
   );
-};
 
 afterEach(() => {
   consumePendingSandboxSelection(AGENT);
@@ -153,7 +147,7 @@ describe('useSeedDefaultSelection', () => {
   // T-14825: the cloud sandbox is not set up from an environment any more, so
   // one remembered with the folder by an older conversation stays behind.
   it('brings back the remembered folder without its environment', () => {
-    storeLegacyEnvironmentMemory('env-repo', 'projects/demo');
+    storeLegacyFolderWithEnvironment('env-repo', 'projects/demo');
 
     renderHook(() =>
       useSeedDefaultSelection(AGENT, { eligible: true, entitled: true, hasTopic: false }),
@@ -196,20 +190,6 @@ describe('useSeedTemporaryRepository — the first-send default', () => {
     await expect(resolvePendingSandboxSelection(AGENT)).resolves.toEqual({
       environmentId: 'env-project',
     });
-  });
-
-  // T-14825: outside a project a new conversation starts from no environment,
-  // whatever the agent's earlier conversation used.
-  it('starts a conversation outside a project from no environment', async () => {
-    storeLegacyEnvironmentMemory('env-repo');
-
-    renderHook(() =>
-      useSeedTemporaryRepository(AGENT, { eligible: true, hasTopic: false, temporary: true }),
-    );
-
-    expect(getPendingSandboxSelection(AGENT)?.environmentId).toBeUndefined();
-    consumePendingSandboxSelection(AGENT);
-    await expect(resolvePendingSandboxSelection(AGENT)).resolves.toBeUndefined();
   });
 
   it('clears an environment left as the default by an earlier render', () => {

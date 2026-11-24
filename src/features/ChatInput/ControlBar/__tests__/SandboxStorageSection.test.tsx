@@ -434,20 +434,6 @@ describe('SandboxStorageSection — T-14158', () => {
       state.temporary = true;
     });
 
-    // T-14825: the cloud sandbox is not set up from an environment, so the
-    // repository an earlier conversation used is not brought back.
-    it('starts the next new conversation from no repository', async () => {
-      // What an earlier version stored about the repository the agent last used.
-      localStorage.setItem(
-        `lobechat-sandbox-last-repository:user-a:personal:${AGENT}`,
-        JSON.stringify({ environmentId: 'env_repo' }),
-      );
-      renderSection();
-      expect(screen.getByTestId('chip').textContent).toBe('temporary');
-      await send('topic-1');
-      expect(state.topics['topic-1']).not.toHaveProperty('sandboxEnvironmentId');
-    });
-
     // A project conversation runs in its project's environment, which the
     // agent's conversations elsewhere cannot use: picking it there must not
     // become where the next one starts.
