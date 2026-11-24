@@ -1,5 +1,6 @@
 import { isRecord } from '@lobechat/utils/object';
 
+import type { AskUserBridge } from '../askUser/AskUserBridge';
 import type { AgentPromptInput } from '../protocol';
 import type { AcpAgentSessionOptions } from './acpAgentSession';
 import {
@@ -10,6 +11,10 @@ import {
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpRpcResponseError, AcpServerRequestError } from './acpStdioClient';
 import { buildAntigravityAcpLaunch } from './antigravity';
+import {
+  buildAntigravityElicitationResponse,
+  parseAntigravityQuestions,
+} from './antigravityAcpElicitation';
 import type { BuildAgentInputOptions } from './input';
 import type { TraeAcpPromptBlock } from './traeAcpSession';
 import { buildTraeAcpPrompt } from './traeAcpSession';
@@ -107,6 +112,7 @@ const resolveModelValue = (
 };
 
 export interface AntigravityAcpSessionOptions extends AcpAgentSessionOptions {
+  askUserBridge?: AskUserBridge;
   onModel?: (model: string) => void;
   prompt: AntigravityAcpPromptBlock[];
 }
@@ -210,7 +216,11 @@ export class AntigravityAcpSession extends AcpAgentSession<
 
   protected buildInitializeParams(): unknown {
     return {
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+      clientCapabilities: {
+        ...(this.options.askUserBridge && { elicitation: { form: {} } }),
+        fs: { readTextFile: false, writeTextFile: false },
+        terminal: false,
+      },
       clientInfo: { name: 'lobehub', title: 'LobeHub', version: this.options.clientVersion },
       protocolVersion: ACP_PROTOCOL_VERSION,
     };
@@ -318,6 +328,17 @@ export class AntigravityAcpSession extends AcpAgentSession<
     if (!isRecord(params?.update)) return;
     // Subagent conversations must never leak into the parent's assistant bubble.
     if (typeof params.sessionId === 'string' && params.sessionId !== this.acpSessionId) return;
+    // agy starts the raw tool before the form request, whose schema supplies
+    // the arguments for the same card. A terminal update still closes it or
+    // shows the original tool when agy fell back to asking in chat.
+    const { name, sessionUpdate, status } = params.update;
+    if (
+      this.options.askUserBridge &&
+      name === 'ask_question' &&
+      (sessionUpdate === 'tool_call' || sessionUpdate === 'tool_call_update') &&
+      (status === 'in_progress' || status === 'pending' || status === undefined)
+    )
+      return;
     await this.pushToPipeline(params.update);
   }
 
@@ -326,6 +347,7 @@ export class AntigravityAcpSession extends AcpAgentSession<
    * still ask, approve as the print-mode runs did.
    */
   protected handleServerRequest(message: AcpRpcMessage): unknown {
+    if (message.method === 'elicitation/create') return this.handleElicitation(message.params);
     if (message.method !== 'session/request_permission') {
       throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
     }
@@ -336,6 +358,37 @@ export class AntigravityAcpSession extends AcpAgentSession<
     return optionId
       ? { outcome: { optionId, outcome: 'selected' } }
       : { outcome: { outcome: 'cancelled' } };
+  }
+
+  private async handleElicitation(params: unknown): Promise<unknown> {
+    const bridge = this.options.askUserBridge;
+    if (!bridge || !isRecord(params) || params.mode !== 'form') {
+      throw new AcpServerRequestError(-32_602, 'Unsupported Antigravity elicitation mode');
+    }
+    if (!this.steerable || params.sessionId !== this.acpSessionId) return { action: 'cancel' };
+    const { toolCallId } = params;
+    const questions = parseAntigravityQuestions(params.requestedSchema);
+    if (typeof toolCallId !== 'string' || !toolCallId || !questions) return { action: 'decline' };
+
+    const args = { questions: questions.map(({ question }) => question) };
+    await this.pushToPipeline({
+      name: 'askUserQuestion',
+      rawInput: args,
+      sessionUpdate: 'tool_call',
+      toolCallId,
+    });
+    if (!this.steerable) return { action: 'cancel' };
+    const answer = await bridge.pending(
+      { arguments: args, toolCallId },
+      {
+        // Queue the request and ACK alongside the tool events. An independent
+        // bridge pump can persist the question before the new assistant step.
+        onEvent: (event) => {
+          void this.emitEvents([event]).catch(() => this.interrupt());
+        },
+      },
+    );
+    return buildAntigravityElicitationResponse(questions, answer);
   }
 
   /**
@@ -394,9 +447,8 @@ export class AntigravityAcpSession extends AcpAgentSession<
         ? resolveModelValue(this.launch.model, effort, sessionResult)
         : undefined;
     if (model) await set('model', model);
-    // Models with a fixed thinking tier (GPT-OSS, Orchestrator) offer no
-    // thought_level, and agy rejects setting one.
-    if (effort && findConfigOption(configOptions, 'thought_level')) {
+    // Changing models can replace or remove the thinking-level choices.
+    if (effort && configOptionValues(configOptions, 'thought_level').includes(effort)) {
       await set('thought_level', effort);
     }
     if (mode) await set('mode', mode);
