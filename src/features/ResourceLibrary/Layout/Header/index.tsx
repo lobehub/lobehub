@@ -8,6 +8,7 @@ import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import SortDropdown from '@/features/ResourceManager/components/Explorer/ToolBar/SortDropdown';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
 
+import LibraryFavoriteButton from './LibraryFavoriteButton';
 import LibraryHead from './LibraryHead';
 import LibrarySearchBar from './LibrarySearchBar';
 import { useActiveLibraryId } from './useActiveLibraryId';
@@ -20,6 +21,7 @@ const Header = memo(() => {
       <SideBarHeaderLayout
         backTo="/resource"
         left={<LibraryHead id={id} />}
+        right={<LibraryFavoriteButton id={id} />}
         breadcrumb={[
           {
             href: `/resource/library/${id}`,

@@ -87,6 +87,7 @@ const LibraryList = memo(() => {
       <Flexbox gap={1} paddingInline={4}>
         {recent?.map((item) => (
           <Item
+            avatar={item.avatar}
             description={item.description}
             id={item.id}
             key={item.id}
