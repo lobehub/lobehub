@@ -2,7 +2,6 @@ import { type DropdownMenuPlacement } from '@lobehub/ui';
 import { type AiModelForSelect } from 'model-bank';
 import { type ComponentType } from 'react';
 
-import { type BusinessFeaturedModel } from '@/business/client/hooks/useBusinessModelListGuard';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 export type GroupMode = 'byModel' | 'byProvider';
@@ -10,10 +9,15 @@ export type GroupMode = 'byModel' | 'byProvider';
 export type PricingMode = 'image' | 'video';
 
 /**
- * A model listed in its own section above the provider list. Shares the business guard's
- * contract, which every business override of that module exports.
+ * A model listed in its own section above the provider list. Declared here rather than imported
+ * from the business guard, because a host overriding that module may not export the type.
  */
-export type FeaturedModel = BusinessFeaturedModel;
+export interface FeaturedModel {
+  /** One line under the model name saying what it is for. */
+  description?: string;
+  modelId: string;
+  providerId: string;
+}
 
 export interface ModelWithProviders {
   displayName: string;
