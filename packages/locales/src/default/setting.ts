@@ -5522,6 +5522,7 @@ When I am ___, I need ___
   'market.skills.agents.removeAll': 'Remove all',
   'market.skills.agents.title': 'Assistants · {{count}}',
   'market.skills.copyPrompt': 'Copy this message',
+  'market.skills.customGroup': 'Custom',
   'market.skills.desc':
     'Reusable ways of working for your assistants. Install one, then turn it on in an assistant.',
   'market.skills.empty': 'No matching skills',

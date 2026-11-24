@@ -1384,6 +1384,7 @@
   "market.skills.agents.removeAll": "全部移除",
   "market.skills.agents.title": "助手 · {{count}}",
   "market.skills.copyPrompt": "复制这条消息",
+  "market.skills.customGroup": "自定义",
   "market.skills.desc": "给助手装上可复用的工作方法，安装后在助手里开启即可使用。",
   "market.skills.empty": "没有匹配的技能",
   "market.skills.github.add": "添加所选（{{count}}）",
