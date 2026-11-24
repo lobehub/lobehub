@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, SettingsIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,8 @@ import { isCurrentMachineDevice, useCurrentMachine } from '@/features/DeviceMana
 import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
+import { useCanManageProject } from '@/features/Projects/useCanManageProject';
+import { openAddDirectoryModal } from '@/features/Projects/WorkingDirectories/AddDirectoryModal';
 import { useProjectExecutionEnvironments } from '@/features/Projects/WorkingDirectories/useProjectExecutionEnvironments';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
@@ -114,6 +116,7 @@ const ProjectDeviceSwitcher = ({
   const [showOffline, setShowOffline] = useState(false);
   const currentMachine = useCurrentMachine();
   const { canUseResource } = useChatInputResourceAccess();
+  const canManageProject = useCanManageProject();
   const directory = directories.find((d) => d.id === directoryId);
   const projectId = projectIdProp ?? directories[0]?.projectId;
   const { ordered } = useProjectExecutionEnvironments(projectId, !!projectId);
@@ -258,6 +261,17 @@ const ProjectDeviceSwitcher = ({
         />
       )}
       {showOffline && offlineTargets.map(renderTarget)}
+      {projectId && canManageProject && (
+        <OptionRow
+          compact
+          icon={<Icon icon={PlusIcon} size={16} />}
+          label={t('settings.addExecutionEnvironment', { ns: 'project' })}
+          onClick={() => {
+            setOpen(false);
+            openAddDirectoryModal(projectId, projectEnvironment?.id);
+          }}
+        />
+      )}
     </Flexbox>
   );
 
