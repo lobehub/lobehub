@@ -9,9 +9,8 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { rememberSandboxSelection } from './rememberedSandboxDirectory';
 import type { SandboxDriveFolderPick } from './SandboxDriveMenu';
 import { isOnPublicDrive, selectionWithFolder } from './sandboxEnvironmentOptions';
-import type { SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
-import { useIsSharedAgent, useSandboxEnvironmentList } from './useSandboxEnvironmentList';
+import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
 import {
   isPersistentSelection,
   type SandboxSelection,
@@ -40,11 +39,16 @@ const useSandboxDriveStatus = (enabled: boolean): SandboxDriveStatus => {
 };
 
 /**
- * The cloud sandbox's two options — whether it keeps its files on the drive
- * (and in which folder), and the environment it is set up from — read and
- * written from one place. The execution-environment menu offers them under
- * its 云端沙箱 row and its chip names them; new conversations are seeded by
- * `SandboxStorageSection`, which this hook leaves alone.
+ * The cloud sandbox's one option — whether it keeps its files on the drive,
+ * and in which folder — read and written from one place. The
+ * execution-environment menu offers it under its 云端沙箱 row; new
+ * conversations are seeded by `SandboxStorageSection`, which this hook leaves
+ * alone.
+ *
+ * The sandbox is not set up from an environment any more: only a project
+ * conversation still carries one — its project's, applied by the server — and
+ * a pick keeps it there. Anywhere else an environment left on the topic from
+ * before is dropped with the next pick.
  *
  * `topicId` is the conversation the caller belongs to; `null` means it has no
  * topic yet.
@@ -61,54 +65,36 @@ export const useSandboxOptions = (
   const workspaceId = useActiveWorkspaceId();
   const userId = useUserStore(userProfileSelectors.userId);
   const sharedAgent = useIsSharedAgent(agentId);
-  const environmentList = useSandboxEnvironmentList({
-    enabled,
-    projectId,
-    sharedAgent,
-    workspaceId,
-  });
-  const { environments } = environmentList;
+  // Only a project's own environment can still apply, so only its visibility
+  // is asked: a private one is not carried into a public-drive folder.
+  const { environments } = useProjectSandboxEnvironments(projectId, sharedAgent, enabled);
 
-  // Every pick that lands is remembered for the next conversation: the folder,
-  // and the environment (or none). A failed save is not, and neither is an
-  // environment picked inside a project: it belongs to that project, and the
-  // agent's next conversation elsewhere could not use it. A drive folder is
-  // usable anywhere.
+  // Every pick that lands is remembered for the next conversation — the
+  // folder, which is usable anywhere, inside a project or not. A failed save
+  // is not.
   //
   // Every member can browse the workspace's public drive, so a private
   // environment — or one not known to be published — is not carried into a
-  // folder there: the server would not apply it, and the menu would name a
-  // setup that never runs.
+  // folder there: the server would not apply it.
   const pick = useCallback(
-    async (
-      picked: SandboxSelection,
-      { environment: given }: { environment?: SandboxRepositoryOption } = {},
-    ) => {
-      // An environment whose visibility is not known — the list still loading
-      // or failed — is treated as private: it is only known to be published
-      // once the list, or the pick itself (one just created, which this
-      // render's list cannot hold yet), says so.
-      const environment =
-        given?.id === picked.environmentId
-          ? given
-          : environments.find((item) => item.id === picked.environmentId);
+    async (picked: SandboxSelection): Promise<SandboxSelection> => {
+      const environment = environments.find((item) => item.id === picked.environmentId);
       const next =
         picked.environmentId &&
-        environment?.visibility !== 'public' &&
-        isOnPublicDrive(picked, workspaceId)
+        (!projectId ||
+          (environment?.visibility !== 'public' && isOnPublicDrive(picked, workspaceId)))
           ? { ...picked, environmentId: undefined }
           : picked;
       await setSelection(next);
-      rememberSandboxSelection({ userId, workspaceId }, agentId, next, {
-        folderOnly: !!projectId,
-      });
+      rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+      return next;
     },
     [agentId, environments, projectId, setSelection, userId, workspaceId],
   );
 
-  // Storage is picked one level under its row: a temporary sandbox, or a
-  // folder of the drive. Either keeps the environment. Outside a project the
-  // pick is also where the agent's new conversations start.
+  // Storage is picked under the cloud sandbox's row: a temporary sandbox, or a
+  // folder of the drive. Either keeps a project's environment. Outside a
+  // project the pick is also where the agent's new conversations start.
   const toTemporary = useCallback(async () => {
     await pick(selection.environmentId ? { environmentId: selection.environmentId } : {});
     if (!projectId) setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
@@ -116,8 +102,7 @@ export const useSandboxOptions = (
 
   const pickFolder = useCallback(
     async (folder: SandboxDriveFolderPick) => {
-      const next = selectionWithFolder(selection, folder);
-      await pick(next);
+      const next = await pick(selectionWithFolder(selection, folder));
       if (!projectId) setPrefersTemporarySandbox({ userId, workspaceId }, agentId, false);
       return next;
     },
@@ -133,14 +118,11 @@ export const useSandboxOptions = (
   return {
     driveStatus,
     entitled,
-    environmentList,
     onDrive,
-    onPublicDrive: onDrive && isOnPublicDrive(selection, workspaceId),
     pick,
     pickFolder,
     projectId,
     selection,
-    sharedAgent,
     toTemporary,
     topicId,
     workspaceId,

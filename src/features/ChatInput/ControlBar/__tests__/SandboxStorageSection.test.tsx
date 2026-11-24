@@ -26,7 +26,6 @@ const state = vi.hoisted(() => {
     // The agent's drive switched off for its new conversations.
     temporary: false,
     workspaceId: null as string | null,
-    environmentsLoaded: true,
     setPrefersTemporary: vi.fn(),
     topicId: null as string | null,
     userId: 'user-a' as string | undefined,
@@ -38,7 +37,10 @@ const state = vi.hoisted(() => {
     /** The blank project draft a sidebar "+" staged. */
     draft: undefined as { agentId: string; projectId: string } | undefined,
     /** Each project's environments. */
-    projectEnvironments: {} as Record<string, { configuration?: unknown; id: string }[]>,
+    projectEnvironments: {} as Record<
+      string,
+      { configuration?: unknown; id: string; visibility?: string }[]
+    >,
     updateTopicMetadata: vi.fn(),
     version: 0,
   };
@@ -98,21 +100,8 @@ vi.mock('../temporarySandboxPreference', () => ({
   usePrefersTemporarySandbox: () => state.temporary,
 }));
 vi.mock('../useFollowSandboxModePreference', () => ({ useFollowSandboxModePreference: () => {} }));
-const ENVIRONMENTS = [
-  {
-    configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobe-chat' }] },
-    id: 'env_repo',
-    name: 'Chat',
-    visibility: 'private',
-  },
-];
-
 vi.mock('../useSandboxEnvironmentList', () => ({
   useIsSharedAgent: () => false,
-  useSandboxEnvironmentList: () => ({
-    environments: state.environmentsLoaded ? ENVIRONMENTS : [],
-    loaded: state.environmentsLoaded,
-  }),
   useProjectSandboxEnvironments: (projectId?: string) => ({
     environments: projectId ? (state.projectEnvironments[projectId] ?? []) : [],
   }),
@@ -145,7 +134,9 @@ const label = (value: SandboxSelection) =>
 
 // The menu's rows are covered by their own tests; here a stand-in makes the
 // picks a person would through the same hook, and names the placement. The
-// real menu catches a failed save and says so.
+// real menu catches a failed save and says so. The menu no longer offers an
+// environment: `pick-repo` stands for one a topic carries from before — or,
+// in a project, the project's own.
 const Options = () => {
   const topicId = useTopicId();
   const options = useSandboxOptions(AGENT, { enabled: true, topicId });
@@ -163,23 +154,12 @@ const Options = () => {
         pick-public-folder
       </button>
       <button onClick={() => toTemporary().catch(() => {})}>drive-off</button>
-      {/* A published environment just created: not in the list this render holds. */}
-      <button
-        onClick={() =>
-          pick(
-            { ...value, environmentId: 'env_new', workingDirectory: 'new-env' },
-            { environment: { id: 'env_new', name: 'New', visibility: 'public' } },
-          ).catch(() => {})
-        }
-      >
-        create-public-env
-      </button>
       <button
         onClick={() =>
           pick(
             value.workingDirectory === undefined
-              ? { environmentId: 'env_repo' }
-              : { ...value, environmentId: 'env_repo' },
+              ? { environmentId: 'env-project' }
+              : { ...value, environmentId: 'env-project' },
           ).catch(() => {})
         }
       >
@@ -211,7 +191,6 @@ const renderSection = () =>
 beforeEach(() => {
   state.temporary = false;
   state.workspaceId = null;
-  state.environmentsLoaded = true;
   state.setPrefersTemporary.mockReset();
   state.topicId = null;
   state.userId = 'user-a';
@@ -323,10 +302,11 @@ describe('SandboxStorageSection — T-14158', () => {
   });
 
   // Every member browses the workspace's public drive: a private environment
-  // is not carried into a folder there.
-  it("drops a private environment when a folder on the workspace's public drive is picked", async () => {
+  // — or one not known to be published — is not carried into a folder there.
+  it("drops a project's private environment when a folder on the workspace's public drive is picked", async () => {
     state.workspaceId = 'ws-1';
     renderSection();
+    state.topicProjects['topic-1'] = 'project-1';
     send('topic-1');
     await act(async () => fireEvent.click(screen.getByText('pick-repo')));
 
@@ -337,60 +317,66 @@ describe('SandboxStorageSection — T-14158', () => {
     );
   });
 
-  it('drops an environment not known to be published when a public-drive folder is picked', async () => {
+  it("keeps a project's published environment on a public-drive folder", async () => {
     state.workspaceId = 'ws-1';
+    state.projectEnvironments['project-1'][0].visibility = 'public';
     renderSection();
+    state.topicProjects['topic-1'] = 'project-1';
     send('topic-1');
     await act(async () => fireEvent.click(screen.getByText('pick-repo')));
-    act(() => {
-      state.environmentsLoaded = false;
-      commit();
-    });
 
     await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
-    expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
-      'topic-1',
-      expect.objectContaining({ sandboxEnvironmentId: undefined, sandboxWorkingDirectory: 'team' }),
-    );
-  });
-
-  it('keeps a published environment just created on a public-drive folder', async () => {
-    state.workspaceId = 'ws-1';
-    renderSection();
-    send('topic-1');
-    await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
-
-    await act(async () => fireEvent.click(screen.getByText('create-public-env')));
     expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
       'topic-1',
       expect.objectContaining({
-        sandboxEnvironmentId: 'env_new',
-        sandboxWorkingDirectory: 'new-env',
+        sandboxEnvironmentId: 'env-project',
+        sandboxWorkingDirectory: 'team',
       }),
     );
   });
 
-  // T-14791: storage is picked as a folder or 临时; a folder keeps the
-  // environment and is where the agent's new conversations start.
-  it('keeps the environment when a folder is picked from a temporary sandbox', async () => {
+  // T-14791: storage is picked as a folder or 临时, and a folder is where the
+  // agent's new conversations start. T-14825: the cloud sandbox is not set up
+  // from an environment any more — one a conversation carries from before is
+  // dropped with the pick.
+  it('drops an environment from before when a folder is picked from a temporary sandbox', async () => {
     renderSection();
     send('topic-1');
     await act(async () => fireEvent.click(screen.getByText('drive-off')));
-    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+    act(() => {
+      state.topics['topic-1'] = { sandboxEnvironmentId: 'env_repo' };
+      commit();
+    });
+    expect(screen.getByTestId('chip').textContent).toBe('repo:env_repo');
 
     await act(async () => fireEvent.click(screen.getByText('pick-folder')));
-    expect(screen.getByTestId('chip').textContent).toBe('projects/demo+repo:env_repo');
+    expect(screen.getByTestId('chip').textContent).toBe('projects/demo');
     expect(state.setPrefersTemporary).toHaveBeenLastCalledWith(expect.anything(), AGENT, false);
   });
 
-  it('keeps the environment when the drive is switched off', async () => {
+  it('drops an environment from before when the drive is switched off', async () => {
     renderSection();
     send('topic-1');
-    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
-    expect(screen.getByTestId('chip').textContent).toBe('.+repo:env_repo');
+    act(() => {
+      state.topics['topic-1'] = { sandboxEnvironmentId: 'env_repo', sandboxWorkingDirectory: '.' };
+      commit();
+    });
 
     await act(async () => fireEvent.click(screen.getByText('drive-off')));
-    expect(screen.getByTestId('chip').textContent).toBe('repo:env_repo');
+    expect(screen.getByTestId('chip').textContent).toBe('temporary');
+  });
+
+  it("keeps a project's environment when the drive is switched on and off", async () => {
+    renderSection();
+    state.topicProjects['topic-1'] = 'project-1';
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+
+    await act(async () => fireEvent.click(screen.getByText('pick-folder')));
+    expect(screen.getByTestId('chip').textContent).toBe('projects/demo+repo:env-project');
+
+    await act(async () => fireEvent.click(screen.getByText('drive-off')));
+    expect(screen.getByTestId('chip').textContent).toBe('repo:env-project');
   });
 
   // A project conversation starts off the drive, in its project's
@@ -448,20 +434,18 @@ describe('SandboxStorageSection — T-14158', () => {
       state.temporary = true;
     });
 
-    it('starts the next new conversation from the repository the last one used', async () => {
+    // T-14825: the cloud sandbox is not set up from an environment, so the
+    // repository an earlier conversation used is not brought back.
+    it('starts the next new conversation from no repository', async () => {
+      // What an earlier version stored about the repository the agent last used.
+      localStorage.setItem(
+        `lobechat-sandbox-last-repository:user-a:personal:${AGENT}`,
+        JSON.stringify({ environmentId: 'env_repo' }),
+      );
       renderSection();
       expect(screen.getByTestId('chip').textContent).toBe('temporary');
       await send('topic-1');
-
-      await act(async () => fireEvent.click(screen.getByText('pick-repo')));
-
-      openNewConversation();
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env_repo');
-      await send('topic-2');
-      expect(state.topics['topic-2']).toMatchObject({
-        sandboxEnvironmentId: 'env_repo',
-        sandboxSeeded: true,
-      });
+      expect(state.topics['topic-1']).not.toHaveProperty('sandboxEnvironmentId');
     });
 
     // A project conversation runs in its project's environment, which the
@@ -476,7 +460,7 @@ describe('SandboxStorageSection — T-14158', () => {
       await act(async () => fireEvent.click(screen.getByText('pick-repo')));
       expect(state.updateTopicMetadata).toHaveBeenCalledWith(
         'topic-1',
-        expect.objectContaining({ sandboxEnvironmentId: 'env_repo' }),
+        expect.objectContaining({ sandboxEnvironmentId: 'env-project' }),
       );
 
       openNewConversation();
@@ -489,10 +473,9 @@ describe('SandboxStorageSection — T-14158', () => {
     it("starts a project draft on the project's environment", async () => {
       renderSection();
       await send('topic-1');
-      await act(async () => fireEvent.click(screen.getByText('pick-repo')));
 
       openNewConversation();
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env_repo');
+      expect(screen.getByTestId('chip').textContent).toBe('temporary');
 
       act(() => {
         state.draft = { agentId: AGENT, projectId: 'project-1' };

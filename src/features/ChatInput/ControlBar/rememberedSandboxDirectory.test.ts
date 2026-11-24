@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   getRememberedSandboxDirectory,
-  getRememberedSandboxDirectoryEnvironment,
-  getRememberedSandboxRepository,
   rememberedSandboxDirectoryKey,
   rememberSandboxSelection,
 } from './rememberedSandboxDirectory';
@@ -57,65 +55,22 @@ describe('rememberedSandboxDirectory', () => {
     expect(getRememberedSandboxDirectory({ workspaceId: 'ws_1' }, 'agent-1')).toBeUndefined();
   });
 
-  // The folder and the environment are remembered each on its own: switching
-  // the drive off never erases the folder.
-  it('remembers the environment apart from the folder', () => {
-    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
+  // T-14825: the cloud sandbox is not set up from an environment, so only the
+  // folder is remembered; picking a temporary sandbox leaves it alone.
+  it('remembers the folder alone, whatever environment the pick carried', () => {
+    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1', workingDirectory: 'code' });
     rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
 
-    expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'code' });
-    expect(getRememberedSandboxDirectoryEnvironment(ME, 'agent-1')).toBeUndefined();
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
-  });
-
-  // T-14791: a folder and an environment picked together are both remembered.
-  it('remembers a folder and its environment together', () => {
-    rememberSandboxSelection(ME, 'agent-1', {
-      environmentId: 'env_1',
-      workingDirectory: 'lobehub',
-    });
-
-    expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'lobehub' });
-    expect(getRememberedSandboxDirectoryEnvironment(ME, 'agent-1')).toBe('env_1');
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
-  });
-
-  // An environment remembered apart from the folder is not the folder's: the
-  // pair was never set up together.
-  it('pairs the folder only with an environment picked together with it', () => {
-    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'notes' });
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
-
-    expect(getRememberedSandboxDirectoryEnvironment(ME, 'agent-1')).toBeUndefined();
-  });
-
-  it('remembers a pick that used no environment', () => {
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
-    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
-
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({});
-  });
-
-  it('leaves the environment alone for a folder-only memory', () => {
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
-    rememberSandboxSelection(
-      ME,
-      'agent-1',
-      { environmentId: 'env_project', workingDirectory: 'code' },
-      { folderOnly: true },
-    );
-
-    expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'code' });
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
+    const key = rememberedSandboxDirectoryKey(ME, 'agent-1')!;
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ workingDirectory: 'code' });
+    expect(localStorage.length).toBe(1);
   });
 
   it('changes nothing for a legacy environment directory', () => {
     rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'code' });
-    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_1' });
     rememberSandboxSelection(ME, 'agent-1', { instanceId: 'inst_1' });
 
     expect(getRememberedSandboxDirectory(ME, 'agent-1')).toEqual({ workingDirectory: 'code' });
-    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_1' });
   });
 
   it('ignores a corrupted entry', () => {

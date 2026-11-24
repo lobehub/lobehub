@@ -366,8 +366,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [selectTarget],
   );
 
-  // The cloud sandbox's options — storage and environment — are picked one
-  // level under its row. Asked once the menu could show them.
+  // The cloud sandbox's storage — temporary, or a drive folder — is picked one
+  // level under its row. Asked once the menu could show it.
   const sandboxOptions = useSandboxOptions(agentId, {
     enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
     topicId,
@@ -727,9 +727,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {/* One cloud sandbox, its options one level down: whether it keeps its
-          files on the drive (and where), and the environment it is set up
-          from. A runtime that cannot use it gets a disabled row saying why. */}
+      {/* One cloud sandbox, its storage one level down: a temporary sandbox,
+          or a folder on the drive. A runtime that cannot use it gets a
+          disabled row saying why. */}
       {supportsSandbox ? (
         <GroupSubmenu
           active={isActive('sandbox')}
