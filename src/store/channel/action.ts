@@ -258,6 +258,20 @@ class ChannelActionImpl {
       Promise.all([this.refreshList(), this.#private.joinable.fetch({ search }, { fresh: true })]),
     );
   };
+  /**
+   * Joins the Channel being read, from its own page. The conversation (and the thread beside it)
+   * turns writable once its detail refreshes, so callers can carry on with what they started.
+   */
+  joinOpen = async (channelId: string, threadId?: string | null) => {
+    await channelService.join(channelId);
+    await this.#refreshAfterWrite(() =>
+      Promise.all([
+        this.refreshList(),
+        this.refreshDetail({ channelId }),
+        ...(threadId ? [this.refreshDetail({ channelId, threadId })] : []),
+      ]),
+    );
+  };
   useFetchAgentEnvironment = (channelId: string, memberId: string) =>
     useClientDataSWR(channelKeys.agentEnvironment(channelId, memberId), () =>
       channelService.agentEnvironment(channelId, memberId),
