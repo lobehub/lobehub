@@ -48,16 +48,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
   const addMenuItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
-  const handleOpenConfigGroupModal = useCallback(
-    (scope?: 'private' | 'public') => {
-      openConfigGroupModal(scope);
-    },
-    [openConfigGroupModal],
-  );
-
-  const dropdownMenu = useAgentActionsDropdownMenu({
-    openConfigGroupModal: handleOpenConfigGroupModal,
-  });
+  const dropdownMenu = useAgentActionsDropdownMenu({ openConfigGroupModal });
 
   const navigate = useWorkspaceAwareNavigate();
   const handleViewAll = useCallback(
