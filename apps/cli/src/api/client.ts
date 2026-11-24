@@ -129,9 +129,8 @@ export function createLambdaClient(
   /** When set, scopes the request to a workspace (e.g. workspace-device enrollment). */
   workspaceId?: string,
 ): TrpcClient {
-  const headers: Record<string, string> = {
-    ...(auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token }),
-  };
+  const headers: Record<string, string> =
+    auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token };
 
   return createTRPCClient<LambdaRouter>({
     links: [

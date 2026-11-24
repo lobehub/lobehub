@@ -153,6 +153,19 @@ export const channelHistoryProcedures = {
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
     ),
+  /** The run's Agent adds (or with `remove`, removes) its own reaction on a message it can read. */
+  react: historyProcedure
+    .input(
+      z
+        .object({
+          emoji: z.string().min(1).max(32),
+          messageId: z.string().min(1),
+          remove: z.boolean().optional(),
+          threadId: z.string().min(1).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { remove, ...params } }) => ctx.channelHistory.react(params, !remove)),
   sendMessage: messagingProcedure
     .input(
       z

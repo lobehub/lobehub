@@ -34,6 +34,7 @@ import {
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
+import { frequentReactions, setReaction } from '@/database/repositories/channel/reactions';
 import {
   findShareVisitorTopic,
   listShareVisitorConversations,
@@ -478,6 +479,18 @@ export class ChannelService {
     await this.changed(channelId);
     return message;
   };
+
+  /** Reactions only repaint the message: no unread, notification or routing. */
+  toggleReaction = async (channelId: string, messageId: string, emoji: string) => {
+    const result = await this.repository.write(channelId, (tx, { member }) =>
+      setReaction(tx, channelId, member.id, messageId, emoji),
+    );
+    await this.changed(channelId);
+    return result;
+  };
+
+  /** The caller's most used reactions lately, for their quick reactions. */
+  frequentReactions = () => frequentReactions(this.db, this.userId);
 
   /** Replies the message asked for stop with it; the coordinator stops those still writing. */
   deleteMessage = async (channelId: string, messageId: string) => {

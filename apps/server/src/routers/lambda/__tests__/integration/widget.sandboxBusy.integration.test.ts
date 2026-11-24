@@ -108,7 +108,11 @@ describe('widget scheduled runs when the sandbox is busy', { timeout: 60_000 }, 
       userId: ownerId,
     } as any);
     const widget = (await owner.create({ title: 'Open PRs' }))!.data;
-    await owner.setSchedule({ id: widget.id, pattern: '0 * * * *' });
+    // Hourly, but at the minute half an hour from now: a busy run may only stay
+    // deferred until the next slot, so a fixed `0 * * * *` makes these tests
+    // fail whenever a reservation lands just before the top of the hour.
+    const minute = (new Date().getUTCMinutes() + 30) % 60;
+    await owner.setSchedule({ id: widget.id, pattern: `${minute} * * * *`, timezone: 'UTC' });
     const draft = (await owner.saveDraft({ widgetId: widget.id, ...statScript }))!.data;
     runSandbox.mockResolvedValue(ok(5));
     await owner.dryRun({ widgetId: widget.id });

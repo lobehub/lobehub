@@ -202,3 +202,31 @@ describe('Channel connector requests', () => {
     });
   });
 });
+
+describe('Channel reactions', () => {
+  const history = () => ({ readMessage: vi.fn(), readMessages: vi.fn() });
+
+  it('adds and removes the Agent’s own reaction', async () => {
+    const react = vi
+      .fn()
+      .mockResolvedValueOnce({ added: true, emoji: '👀', messageId: 'm1' })
+      .mockResolvedValueOnce({ added: false, emoji: '👀', messageId: 'm1' });
+    const runtime = new ChannelExecutionRuntime({ ...history(), react });
+
+    const added = await runtime.addReaction({ emoji: '👀', messageId: 'm1' });
+    expect(react).toHaveBeenLastCalledWith({ emoji: '👀', messageId: 'm1' }, true);
+    expect(added).toMatchObject({ content: 'Reacted with 👀.', success: true });
+
+    const removed = await runtime.removeReaction({ emoji: '👀', messageId: 'm1' });
+    expect(react).toHaveBeenLastCalledWith({ emoji: '👀', messageId: 'm1' }, false);
+    expect(removed.success).toBe(true);
+  });
+
+  it('fails as a tool error when the run cannot react', async () => {
+    const runtime = new ChannelExecutionRuntime(history());
+    expect(await runtime.addReaction({ emoji: '👀', messageId: 'm1' })).toMatchObject({
+      error: { type: 'ChannelReactionError' },
+      success: false,
+    });
+  });
+});
