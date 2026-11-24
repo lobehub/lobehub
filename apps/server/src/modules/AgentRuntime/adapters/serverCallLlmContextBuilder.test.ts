@@ -2,6 +2,8 @@ import type { AgentState, AgentWorldSnapshot, CallLLMPayload } from '@lobechat/a
 import type { ResolvedToolSet } from '@lobechat/context-engine';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ServerContextFactProviders from '@/server/modules/Mecha/ContextEngineering/providers';
+
 import type { RuntimeExecutorContext } from '../context';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
@@ -11,6 +13,7 @@ const getInfoForAIGenerationMock = vi.hoisted(() => vi.fn());
 const getUserSettingsMock = vi.hoisted(() => vi.fn());
 const resolveServerCallLlmContextHintsMock = vi.hoisted(() => vi.fn());
 const serverMessagesEngineMock = vi.hoisted(() => vi.fn());
+const createServerContextFactProvidersSpy = vi.hoisted(() => vi.fn());
 const marketCredsListMock = vi.hoisted(() => vi.fn());
 const workspaceFindByIdMock = vi.hoisted(() => vi.fn());
 
@@ -57,6 +60,12 @@ vi.mock('./serverCallLlmContextHints', () => ({
 vi.mock('@/server/modules/Mecha/ContextEngineering', () => ({
   serverMessagesEngine: serverMessagesEngineMock,
 }));
+
+vi.mock('@/server/modules/Mecha/ContextEngineering/providers', async (importOriginal) => {
+  const actual = await importOriginal<typeof ServerContextFactProviders>();
+  createServerContextFactProvidersSpy.mockImplementation(actual.createServerContextFactProviders);
+  return { ...actual, createServerContextFactProviders: createServerContextFactProvidersSpy };
+});
 
 const createCtx = (overrides: Partial<RuntimeExecutorContext> = {}): RuntimeExecutorContext =>
   ({
@@ -335,5 +344,83 @@ describe('buildServerCallLlmContext - workspace context', () => {
     expect(serverMessagesEngineMock).toHaveBeenCalledWith(
       expect.not.objectContaining({ workspaceContext: expect.anything() }),
     );
+  });
+});
+
+describe('buildServerCallLlmContext - prompt-cache TTL', () => {
+  it("prices the stale-tool-result trim with the model's cache TTL", async () => {
+    resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      contextCachingTTL: '1h',
+      messagesForContext: [],
+      resolvedExtendParams: { contextCachingTTL: '1h' },
+      shouldReplayAssistantReasoning: false,
+    });
+
+    const result = await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      state,
+      tooling,
+    });
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contextCachingTTL: '1h' }),
+    );
+    // The same extend params become the LLM call's `modelParameters`.
+    expect(result.resolvedExtendParams).toEqual({ contextCachingTTL: '1h' });
+  });
+
+  it("keeps the agent document snapshot warm for the model's cache TTL", async () => {
+    // Anthropic's static default is 5m; the model's resolved 1h must reach the
+    // document-index turn too, or a 30-minute follow-up refreshes the snapshot.
+    resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      contextCachingTTL: '1h',
+      messagesForContext: [],
+      shouldReplayAssistantReasoning: false,
+    });
+
+    await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      state,
+      tooling,
+    });
+
+    expect(createServerContextFactProvidersSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentIndexTurn: expect.objectContaining({ cacheTtlMs: 3_600_000 }),
+      }),
+    );
+  });
+
+  it('uses the TTL for providers whose request carries none (DeepSeek 72h)', async () => {
+    resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      contextCachingTTL: '72h',
+      messagesForContext: [],
+      shouldReplayAssistantReasoning: false,
+    });
+
+    const result = await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'deepseek-v4-pro',
+      provider: 'deepseek',
+      state,
+      tooling,
+    });
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contextCachingTTL: '72h' }),
+    );
+    expect(createServerContextFactProvidersSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentIndexTurn: expect.objectContaining({ cacheTtlMs: 72 * 3_600_000 }),
+      }),
+    );
+    expect(result.resolvedExtendParams?.contextCachingTTL).toBeUndefined();
   });
 });

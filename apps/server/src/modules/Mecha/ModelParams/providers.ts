@@ -13,14 +13,17 @@ export interface ServerModelParamsSource {
   workspaceId?: string;
 }
 
+const settingsOf = (item: LobeDefaultAiModelListItem) =>
+  'settings' in item && item.settings && typeof item.settings === 'object'
+    ? (item.settings as { contextCachingTTL?: string; extendParams?: string[] })
+    : undefined;
+
 const toModelCard = (item: LobeDefaultAiModelListItem): ModelCardFacts => ({
   abilities: item.abilities,
+  contextCachingTTL: settingsOf(item)?.contextCachingTTL ?? undefined,
   deploymentName: item.config?.deploymentName,
   displayName: item.displayName,
-  extendParams:
-    'settings' in item && item.settings && typeof item.settings === 'object'
-      ? ((item.settings as { extendParams?: string[] }).extendParams ?? undefined)
-      : undefined,
+  extendParams: settingsOf(item)?.extendParams ?? undefined,
   id: item.id,
   knowledgeCutoff: item.knowledgeCutoff,
   providerId: item.providerId,
@@ -69,6 +72,7 @@ export const createServerModelParamsProviders = ({
       if (!row) return null;
       return {
         abilities: row.abilities,
+        contextCachingTTL: row.settings?.contextCachingTTL ?? undefined,
         // Deployment-catalog providers resolve the request model by this alias
         // (merged over the bundled card when the facts freeze); without it the
         // transport injects the catalog default instead of the user's endpoint.

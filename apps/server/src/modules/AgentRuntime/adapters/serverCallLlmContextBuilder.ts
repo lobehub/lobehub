@@ -98,6 +98,7 @@ export const buildServerCallLlmContext = async ({
   });
   const {
     capabilities,
+    contextCachingTTL,
     enableAgentMode,
     historyCount,
     messagesForContext,
@@ -154,7 +155,10 @@ export const buildServerCallLlmContext = async ({
     createServerContextFactProviders({
       ctx,
       documentIndexTurn: {
-        cacheTtlMs: cacheEconomicsForProvider(provider).ttlMs,
+        // The same cache window as the message engine: with a model's own TTL (Anthropic's 1h
+        // default), a 5–60 min gap must stay warm here too, or the snapshot refreshes and
+        // rewrites the cached prefix.
+        cacheTtlMs: cacheEconomicsForProvider(provider, { cacheTTL: contextCachingTTL }).ttlMs,
         messages: messagesForContext,
         // The engine drops older messages when history is limited; a change note
         // on a dropped message no longer reaches the model.
@@ -232,6 +236,10 @@ export const buildServerCallLlmContext = async ({
     },
     messages: messagesForContext,
     model,
+    // The model's cache lifetime, resolved together with the TTL the payload writes
+    // (`resolvedExtendParams`), so the stale-tool-result trim prices warmth against the
+    // cache actually kept.
+    contextCachingTTL,
     modelDisplayName,
     modelKnowledgeCutoff,
     provider,

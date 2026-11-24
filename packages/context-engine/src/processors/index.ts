@@ -43,6 +43,7 @@ export {
 } from './RevokedDocumentResultFilter';
 export {
   cacheEconomicsForProvider,
+  type CacheTTL,
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,
 } from './StaleToolResultTrim';
