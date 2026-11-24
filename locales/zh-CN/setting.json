@@ -1550,6 +1550,7 @@
   "notification.item.image_generation_completed": "图片生成完成",
   "notification.item.storage_overage_cap_reached": "存储按量付费上限已触达",
   "notification.item.subscription_one_time_expired": "一次性套餐到期",
+  "notification.item.subscription_one_time_expiring": "一次性套餐即将到期",
   "notification.item.subscription_payment_failed": "订阅续费扣款失败",
   "notification.item.subscription_plan_changed": "订阅套餐变更",
   "notification.item.subscription_renewed": "订阅续费成功",

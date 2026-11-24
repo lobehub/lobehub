@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Bonus bakiye eklendi",
   "storage_overage_cap_reached": "Depolama kullanımına göre ödeme aylık sınırınız olan ${{monthlyCap}}'a ulaşıldı. Bu döngüdeki tahmini ücretler ${{estimatedCycleCharge}}. Dahil edilen depolama alanınızın ötesindeki yeni yüklemeler bir sonraki fatura döngüsüne kadar veya sınırı artırana kadar engellenecektir.",
   "storage_overage_cap_reached_title": "Depolama kullanımına göre ödeme sınırına ulaşıldı",
-  "subscription_one_time_expired": "Tek seferlik {{plan}} planınız sona erdi ve hesabınız şu anda Ücretsiz plana geçti. {{plan}} planını yenileyerek avantajlarınızı geri alabilirsiniz.",
   "subscription_one_time_expired_action": "{{plan}} planını yenile",
   "subscription_one_time_expired_title": "{{plan}} planınız sona erdi",
   "subscription_payment_failed": "Abonelik yenileme ödemeniz başarısız oldu. Aboneliğinizi aktif tutmak için lütfen ödeme yöntemini güncelleyin.",

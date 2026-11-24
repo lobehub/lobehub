@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "موجودی هدیه اضافه شد",
   "storage_overage_cap_reached": "سقف ماهانه پرداخت به ازای مصرف ذخیره‌سازی شما به مبلغ ${{monthlyCap}} رسیده است. هزینه‌های تخمینی این دوره ${{estimatedCycleCharge}} می‌باشد. بارگذاری‌های جدید فراتر از ذخیره‌سازی شامل‌شده تا دوره صورتحساب بعدی یا افزایش سقف مسدود خواهد شد.",
   "storage_overage_cap_reached_title": "سقف پرداخت به ازای مصرف ذخیره‌سازی رسید",
-  "subscription_one_time_expired": "طرح یک‌باره {{plan}} شما به پایان رسیده است و حساب شما اکنون در طرح رایگان قرار دارد. با تمدید {{plan}} مزایای خود را بازگردانید.",
   "subscription_one_time_expired_action": "تمدید {{plan}}",
   "subscription_one_time_expired_title": "طرح {{plan}} شما به پایان رسیده است",
   "subscription_payment_failed": "پرداخت تمدید اشتراک شما ناموفق بود. لطفاً روش پرداخت خود را به‌روزرسانی کنید تا اشتراک شما فعال بماند.",
