@@ -1,6 +1,6 @@
 import type { AgentInterventionStatus, AgentOperationStatus } from '@lobechat/types';
 import debug from 'debug';
-import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 
 import { AgentInterventionModel } from '@/database/models/agentIntervention';
 import { HumanApprovalAlreadyResolvedError, MessageModel } from '@/database/models/message';
@@ -126,6 +126,7 @@ export class ParkedInterventionExpiry {
   private listExpired(staleBefore: Date, limit: number) {
     return this.db
       .select({
+        createdAt: agentOperations.createdAt,
         id: agentOperations.id,
         /** Durable bridge copy written at start (`createOperation`). */
         isGroupMember: sql<boolean>`coalesce(${agentOperations.metadata} ? 'groupMemberBridge', false)`,
@@ -161,11 +162,20 @@ export class ParkedInterventionExpiry {
       .limit(1);
     if (answering) return 'answered';
 
+    let answeredByUser = false;
     if (topicId) {
-      const cardIds = await this.listPendingCards(topicId, operationId);
+      const cards = await this.listCards(topicId, operationId);
+      const pendingIds = cards.filter(({ status }) => status === 'pending').map(({ id }) => id);
+      // An approved or rejected card is a user answer. Its continuation is a
+      // new operation created before this one is retired, and it inherits the
+      // group bridge, so it owns the run from here. Until that operation
+      // exists the answer may still be in flight: leave the run alone.
+      answeredByUser = cards.some(({ status }) => status !== 'pending' && status !== 'aborted');
+      if (answeredByUser && !(await this.hasLaterOperation(candidate))) return 'answered';
+
       try {
         await new MessageModel(this.db, userId, workspaceId).resolveHumanApproval(
-          cardIds.map((id) => ({
+          pendingIds.map((id) => ({
             content: EXPIRED_TOOL_CONTENT,
             id,
             intervention: { status: 'aborted' as const },
@@ -184,7 +194,7 @@ export class ParkedInterventionExpiry {
     }
 
     if (topicId) await this.releaseTopic(candidate);
-    if (candidate.isGroupMember) await this.reportToSupervisor(candidate);
+    if (candidate.isGroupMember && !answeredByUser) await this.reportToSupervisor(candidate);
 
     // Claimed last so every earlier step is retried while this still holds.
     const claimed = await this.db
@@ -204,10 +214,13 @@ export class ParkedInterventionExpiry {
     return 'expired';
   }
 
-  /** Cards of this run still waiting for an answer, located through the topic's messages. */
-  private async listPendingCards(topicId: string, operationId: string): Promise<string[]> {
-    const rows = await this.db
-      .select({ id: messagePlugins.id })
+  /** Every card of this run with its status, located through the topic's messages. */
+  private listCards(topicId: string, operationId: string) {
+    return this.db
+      .select({
+        id: messagePlugins.id,
+        status: sql<string | null>`${messagePlugins.intervention}->>'status'`,
+      })
       .from(messages)
       .innerJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .where(
@@ -215,10 +228,24 @@ export class ParkedInterventionExpiry {
           eq(messages.topicId, topicId),
           eq(messages.role, 'tool'),
           sql`${messagePlugins.intervention}->>'operationId' = ${operationId}`,
-          sql`${messagePlugins.intervention}->>'status' = 'pending'`,
         ),
       );
-    return rows.map(({ id }) => id);
+  }
+
+  /** Whether the topic got an operation after this one, e.g. an answer's continuation. */
+  private async hasLaterOperation({ createdAt, id, topicId }: Candidate): Promise<boolean> {
+    const [later] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId!),
+          ne(agentOperations.id, id),
+          gt(agentOperations.createdAt, createdAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(later);
   }
 
   private async listOpenBatches(operationId: string): Promise<string[]> {

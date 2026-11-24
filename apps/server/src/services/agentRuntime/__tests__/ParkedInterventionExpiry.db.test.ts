@@ -275,8 +275,10 @@ describe('ParkedInterventionExpiry (real database)', () => {
     expect(runtime.loadGroupMemberBridge).not.toHaveBeenCalled();
   });
 
-  it('retires a parked run whose cards were already settled', async () => {
-    await seedParkedRun();
+  it('leaves a run alone while an answer has no continuation yet', async () => {
+    const bridge = { groupToolMessageId: 'msg_group_tool', parentOperationId: 'op_supervisor' };
+    await seedParkedRun({ metadata: { groupMemberBridge: bridge } });
+    // The answer claimed the card; its continuation is not created yet.
     await db
       .update(messagePlugins)
       .set({ intervention: { batchId, operationId, status: 'approved' } } as never)
@@ -284,10 +286,33 @@ describe('ParkedInterventionExpiry (real database)', () => {
 
     const result = await new ParkedInterventionExpiry(db).sweep();
 
+    expect(result).toMatchObject({ answered: 1, expired: 0 });
+    expect((await snapshot()).operation.status).toBe('waiting_for_human');
+    expect(runtime.loadGroupMemberBridge).not.toHaveBeenCalled();
+  });
+
+  it('retires an answered run whose continuation exists, leaving the member to it', async () => {
+    const bridge = { groupToolMessageId: 'msg_group_tool', parentOperationId: 'op_supervisor' };
+    await seedParkedRun({ metadata: { groupMemberBridge: bridge } });
+    await db
+      .update(messagePlugins)
+      .set({ intervention: { batchId, operationId, status: 'approved' } } as never)
+      .where(eq(messagePlugins.id, cardId));
+    await db.insert(agentOperations).values({
+      createdAt: hoursAgo(24.5),
+      id: 'op_continuation',
+      status: 'done',
+      topicId,
+      userId,
+    });
+
+    const result = await new ParkedInterventionExpiry(db).sweep();
+
     expect(result.expired).toBe(1);
     const after = await snapshot();
     expect(after.card.intervention?.status).toBe('approved');
     expect(after.operation.status).toBe('interrupted');
+    expect(runtime.loadGroupMemberBridge).not.toHaveBeenCalled();
   });
 
   it('honours a custom TTL', async () => {
