@@ -8,7 +8,10 @@ import {
   setPendingSandboxSelection,
 } from '@/store/chat/pendingSandboxSelection';
 
-import { rememberSandboxSelection } from './rememberedSandboxDirectory';
+import {
+  rememberedSandboxDirectoryKey,
+  rememberSandboxSelection,
+} from './rememberedSandboxDirectory';
 import { useSeedDefaultSelection, useSeedTemporaryRepository } from './useSeedDefaultSelection';
 
 const getEntitlement = vi.hoisted(() => vi.fn());
@@ -33,6 +36,13 @@ vi.mock('@/store/sandbox', () => ({
 }));
 
 const AGENT = 'agent-seed';
+
+/** A folder an earlier version remembered together with its environment. */
+const storeLegacyFolderWithEnvironment = (environmentId: string, workingDirectory: string) =>
+  localStorage.setItem(
+    rememberedSandboxDirectoryKey({ userId: 'user-a' }, AGENT)!,
+    JSON.stringify({ environmentId, workingDirectory }),
+  );
 
 afterEach(() => {
   consumePendingSandboxSelection(AGENT);
@@ -133,6 +143,18 @@ describe('useSeedDefaultSelection', () => {
 
     expect(getPendingSandboxSelection(AGENT)).toEqual({ workingDirectory: 'projects/demo' });
   });
+
+  // T-14825: the cloud sandbox is not set up from an environment any more, so
+  // one remembered with the folder by an older conversation stays behind.
+  it('brings back the remembered folder without its environment', () => {
+    storeLegacyFolderWithEnvironment('env-repo', 'projects/demo');
+
+    renderHook(() =>
+      useSeedDefaultSelection(AGENT, { eligible: true, entitled: true, hasTopic: false }),
+    );
+
+    expect(getPendingSandboxSelection(AGENT)).toEqual({ workingDirectory: 'projects/demo' });
+  });
 });
 
 describe('useSeedTemporaryRepository — the first-send default', () => {
@@ -168,5 +190,23 @@ describe('useSeedTemporaryRepository — the first-send default', () => {
     await expect(resolvePendingSandboxSelection(AGENT)).resolves.toEqual({
       environmentId: 'env-project',
     });
+  });
+
+  it('clears an environment left as the default by an earlier render', () => {
+    const { rerender } = renderHook(
+      ({ project }: { project?: { environmentId: string } }) =>
+        useSeedTemporaryRepository(AGENT, {
+          eligible: true,
+          hasTopic: false,
+          project,
+          temporary: true,
+        }),
+      { initialProps: { project: { environmentId: 'env-project' } } },
+    );
+    expect(getPendingSandboxSelection(AGENT)?.environmentId).toBe('env-project');
+
+    rerender({ project: undefined });
+
+    expect(getPendingSandboxSelection(AGENT)?.environmentId).toBeUndefined();
   });
 });

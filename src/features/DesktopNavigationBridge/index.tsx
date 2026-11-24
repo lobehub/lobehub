@@ -1,10 +1,13 @@
 'use client';
 
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { type MainBroadcastParams, useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { memo, useCallback, useEffect } from 'react';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { openDirectoryInApp } from '@/features/AppLaunch/openDirectory';
+import { getTabRouter } from '@/features/Electron/TabHost/tabRouterManager';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useElectronStore } from '@/store/electron';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -20,8 +23,23 @@ const DesktopNavigationBridge = memo(() => {
   );
 
   const handleNavigate = useCallback(
-    ({ escape, path, replace }: { escape?: boolean; path: string; replace?: boolean }) => {
+    ({ escape, path, replace, reuseTab }: MainBroadcastParams<'navigate'>) => {
       if (!path) return;
+      if (reuseTab) {
+        const url = buildWorkspaceAwarePath(path, getActiveWorkspaceSlug(), { escape });
+        const current = useElectronStore.getState();
+        if (current.getActiveTab()?.url === url) return;
+        const id = current.addTab(url);
+        // Tab identity ignores fragments. Deliver the exact deep link to a
+        // matching live router, or seed its next mount if it was evicted.
+        const state = useElectronStore.getState();
+        if (state.getActiveTab()?.url !== url) {
+          const router = getTabRouter(id);
+          if (router) void router.navigate(url, { replace });
+          else state.updateTab(id, url);
+        }
+        return;
+      }
       if (escape || replace !== undefined) {
         navigate(path, { escape: !!escape, replace: !!replace });
         return;

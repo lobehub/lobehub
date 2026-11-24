@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "En ligne · {{count}} connexions",
   "heteroAgent.executionTarget.personalGroup": "Appareils privés",
   "heteroAgent.executionTarget.presenceChecking": "Vérification du statut…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Seuls les appareils avec le répertoire de travail de ce projet sont listés. Ajoutez un répertoire pour un autre appareil dans les paramètres du projet.",
   "heteroAgent.executionTarget.reconnect": "Reconnecter",
   "heteroAgent.executionTarget.reconnectFailed": "Impossible de reconnecter cet appareil. Assurez-vous que l'application de bureau est en cours d'exécution, puis réessayez.",
   "heteroAgent.executionTarget.sandbox": "Bac à sable cloud",

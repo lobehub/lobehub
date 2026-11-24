@@ -50,11 +50,13 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import { autoDispatchPool, summarizeAutoTarget } from './autoTargetSummary';
 import CloudSandboxOptions from './CloudSandboxOptions';
 import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import GroupSubmenu from './GroupSubmenu';
+import { LOCAL_SANDBOX_ENTRY_ENABLED } from './localSandboxEntry';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
@@ -75,13 +77,14 @@ const styles = stylex.create({
     fontSize: '12px',
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     whiteSpace: 'nowrap',
-    transition: 'all 0.2s',
+    transition: 'color 0.2s, background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   buttonLabel: {
     overflow: 'hidden',
-    maxWidth: '120px',
+    // Room for "Auto · <device>" before a long machine name truncates.
+    maxWidth: '160px',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -158,7 +161,7 @@ const styles = stylex.create({
   },
   headerLink: {
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     fontSize: '11px',
     color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
@@ -169,7 +172,7 @@ const styles = stylex.create({
   manageButton: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     padding: '0',
     borderStyle: 'none',
@@ -332,17 +335,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // exactly when a command would actually be fenced.
   const localSandboxEnabled = isLocalSandboxEnabled(agencyConfig, executionTarget);
   const localSandboxNetwork = agencyConfig?.localSandboxNetwork === true;
+  // The entry can be switched off as a whole (T-14823). Hidden, it is not
+  // probed either: the capability only ever decides how that row looks.
+  const showLocalSandboxRow = isDesktop && LOCAL_SANDBOX_ENTRY_ENABLED;
   const { data: sandboxCapability, mutate: revalidateSandboxCapability } =
-    useLocalSandboxCapability();
+    useLocalSandboxCapability(showLocalSandboxRow);
   const canUseLocalSandbox = sandboxCapability?.available === true;
 
   // The desktop downgrades its own verdict when a fence fails to establish (the
   // cheap probe can't see that far), so re-ask each time the picker opens
   // instead of showing a stale "available" for the rest of the session.
   useEffect(() => {
-    if (!isDesktop || !open) return;
+    if (!showLocalSandboxRow || !open) return;
     void revalidateSandboxCapability();
-  }, [open, revalidateSandboxCapability]);
+  }, [open, revalidateSandboxCapability, showLocalSandboxRow]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const { selectTarget, topicDeviceId } = useTopicAwareTargetSelect({
@@ -366,8 +372,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [selectTarget],
   );
 
-  // The cloud sandbox's options — storage and environment — are picked one
-  // level under its row. Asked once the menu could show them.
+  // The cloud sandbox's storage — temporary, or a drive folder — is picked one
+  // level under its row. Asked once the menu could show it.
   const sandboxOptions = useSandboxOptions(agentId, {
     enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
     topicId,
@@ -561,6 +567,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   } else if (chipExecutionTarget === 'auto') {
     chipIcon = <ExecutionTargetIcon target={'auto'} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
+    // A bare "Auto" hides three different runs: one online device is used
+    // directly, several leave the pick to the Agent, none runs without a
+    // device. Say which one, from the pool the server dispatches among.
+    if (canShowExecutionTargetSelector) {
+      const autoSummary = summarizeAutoTarget({
+        isConfirmed: isDeviceListConfirmed,
+        pool: autoDispatchPool({ boundDeviceId, devices, isWorkspaceAgent }),
+      });
+      if (autoSummary.kind === 'single') {
+        const name =
+          isDesktop && isThisComputerDevice(autoSummary.device, localMachineDeviceIds)
+            ? t('heteroAgent.executionTarget.local')
+            : autoSummary.device.friendlyName ||
+              autoSummary.device.hostname ||
+              t('heteroAgent.executionTarget.unknownDevice');
+        chipLabel = t('heteroAgent.executionTarget.autoOn', { name });
+      } else if (autoSummary.kind === 'multiple') {
+        chipLabel = t('heteroAgent.executionTarget.autoAgentPicks');
+      } else if (autoSummary.kind === 'none') {
+        chipLabel = t('heteroAgent.executionTarget.autoNoDevice');
+      }
+    }
   } else if (chipExecutionTarget === 'local') {
     // 本机始终使用通用的本地电脑图标，不区分具体平台
     chipIcon = <ExecutionTargetIcon target={canShowExecutionTargetSelector ? 'local' : 'device'} />;
@@ -727,9 +755,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {/* One cloud sandbox, its options one level down: whether it keeps its
-          files on the drive (and where), and the environment it is set up
-          from. A runtime that cannot use it gets a disabled row saying why. */}
+      {/* One cloud sandbox, its storage one level down: a temporary sandbox,
+          or a folder on the drive. A runtime that cannot use it gets a
+          disabled row saying why. */}
       {supportsSandbox ? (
         <GroupSubmenu
           active={isActive('sandbox')}
@@ -760,8 +788,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
           "not installed yet" and silently hiding the feature would strand the
-          user with no way to find out why. */}
-      {isDesktop ? (
+          user with no way to find out why. Hidden as a whole while the entry is
+          switched off; see `LOCAL_SANDBOX_ENTRY_ENABLED`. */}
+      {showLocalSandboxRow ? (
         <OptionRow
           compact
           active={isLocalSandboxActive}

@@ -407,7 +407,7 @@ describe('Agent profile Header', () => {
     render(<Header />);
 
     const settings = screen.getByRole('button', { name: 'advancedSettings' });
-    const permissionEntry = screen.getByRole('button', { name: 'permission.page.entry' });
+    const permissionEntry = screen.getByRole('button', { name: 'permission.page.agentEntry' });
 
     expect(settings).toBeDisabled();
     expect(permissionEntry).toBeDisabled();
@@ -450,7 +450,7 @@ describe('Agent profile Header', () => {
     render(<Header />);
 
     expect(screen.queryByRole('button', { name: 'advancedSettings' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'permission.page.entry' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'permission.page.agentEntry' })).toBeNull();
   });
 
   it('shows workspace resource permission controls for the LobeAI inbox agent', () => {
@@ -459,7 +459,7 @@ describe('Agent profile Header', () => {
 
     render(<Header />);
 
-    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'permission.page.agentEntry' })).toBeInTheDocument();
     expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
   });
 
@@ -467,7 +467,7 @@ describe('Agent profile Header', () => {
     vi.stubGlobal('__MOBILE__', true);
     render(<Header />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'permission.page.entry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'permission.page.agentEntry' }));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agent-1/permission');
   });
@@ -478,7 +478,7 @@ describe('Agent profile Header', () => {
 
     render(<Header />);
 
-    expect(screen.getByRole('button', { name: 'permission.page.entry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'permission.page.agentEntry' })).toBeInTheDocument();
     // Member access is meaningless while private, so the tag stays unbound.
     expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('');
   });

@@ -38,7 +38,13 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * own topic; a share visitor's run included, whose Works stay fenced to that
  * visitor topic exactly like the ones its completion scan registers.
  *
- * Renewal copies the minted claims, so a run never gains either later.
+ * `caller:act` lets the agent's own `lh` commands use ordinary user endpoints
+ * as the user who started the run, in the run's workspace, while the run lasts.
+ * Without it they were refused, and on a shared device the only other identity
+ * at hand is the login of whoever enrolled it. A share visitor's run never gets
+ * it: the visitor is not a member who may act in the workspace.
+ *
+ * Renewal copies the minted claims, so a run never gains any of them later.
  */
 export const heteroOperationCapabilities = (
   prompt: unknown,
@@ -61,6 +67,7 @@ export const heteroOperationCapabilities = (
 
   const directUserTurn = !!options.userTurn && !options.channel && !options.taskId;
   return [
+    'caller:act',
     'hetero:ingest',
     ...(options.channel
       ? (['channel:read', 'channel:message'] as const)

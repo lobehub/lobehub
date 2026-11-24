@@ -110,4 +110,19 @@ describe('Channel completion of a wake that may stay silent', () => {
     expect(findLatest).not.toHaveBeenCalled();
     expect(executions.publish).not.toHaveBeenCalled();
   });
+
+  it('still posts a question the run asked, even when it ended in silence or a tool call', async () => {
+    const ask = { questions: [{ options: [{ label: 'A' }, { label: 'B' }], question: 'Which?' }] };
+    findLatest.mockResolvedValue({ content: 'NO_REPLY' });
+    await coordinator({ ask, wake: { kind: 'followup' } }).complete('channel', 'job', 'op');
+    expect(executions.silence).not.toHaveBeenCalled();
+    expect(executions.saveDraft).toHaveBeenCalledWith('channel', 'job', '');
+    expect(executions.publish).toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    findLatest.mockResolvedValue({ content: '', tools: [{ id: 'call' }] });
+    await coordinator({ ask, wake: null }).complete('channel', 'job', 'op');
+    expect(executions.saveDraft).toHaveBeenCalledWith('channel', 'job', '');
+    expect(executions.publish).toHaveBeenCalled();
+  });
 });

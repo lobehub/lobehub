@@ -4,14 +4,14 @@ import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLinkIcon, MoreHorizontalIcon, StarIcon, Trash2Icon } from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useToolStore } from '@/store/tool';
 import type { AgentSkillListItem } from '@/store/tool/slices/agentSkills/projection';
 
 import IconTile from '../IconTile';
 import SkillIcon from '../SkillIcon';
+import { useUninstallLibrarySkill } from '../useUninstallLibrarySkill';
 import { githubSkillRepo } from './githubInstalled';
 import type { GithubRepoHit } from './searchGithubRepos';
 import { useApplyGithubUpdate } from './useGithubSkillUpdates';
@@ -46,7 +46,7 @@ const styles = stylex.create({
 });
 
 /** The cell every GitHub row shares with the Market's skill rows: icon, two lines, an action. */
-const Row = ({
+export const Row = ({
   action,
   icon,
   onOpen,
@@ -140,22 +140,10 @@ export const GithubSkillRow = memo<{
   skill: AgentSkillListItem;
 }>(({ check, onOpen, skill }) => {
   const { t } = useTranslation('setting');
-  const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const { error, pending, update } = useApplyGithubUpdate(skill.id, check);
-  const [removing, setRemoving] = useState(false);
+  const { failed: uninstallFailed, removing, uninstall } = useUninstallLibrarySkill(skill.id);
   const repo = githubSkillRepo(skill);
   const sourceUrl = skill.manifest?.sourceUrl ?? (repo ? `https://github.com/${repo}` : undefined);
-
-  const uninstall = async () => {
-    setRemoving(true);
-    try {
-      await deleteAgentSkill(skill.id);
-    } catch (cause) {
-      console.warn('[Market] Failed to uninstall skill:', cause);
-    } finally {
-      setRemoving(false);
-    }
-  };
 
   return (
     <Row
@@ -195,10 +183,12 @@ export const GithubSkillRow = memo<{
         </>
       }
       subtitle={
-        <Text ellipsis fontSize={12} type={error ? 'danger' : 'secondary'}>
-          {error
-            ? t('market.skills.github.updateFailed')
-            : [repo, skill.description].filter(Boolean).join(' · ')}
+        <Text ellipsis fontSize={12} type={error || uninstallFailed ? 'danger' : 'secondary'}>
+          {uninstallFailed
+            ? t('market.skills.uninstallFailed')
+            : error
+              ? t('market.skills.github.updateFailed')
+              : [repo, skill.description].filter(Boolean).join(' · ')}
         </Text>
       }
       onOpen={onOpen}

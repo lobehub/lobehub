@@ -42,9 +42,9 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
   });
   const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
   const { customList, pinnedList, defaultList, inboxItem } = useAgentList();
-  // Personal pins are the user's own, so they can always be reordered. A
-  // workspace caller (compact switchers) gets the team pins here, whose order
-  // only owners/admins may change from the sidebar's own section.
+  // Personal pins are the user's own, so they can always be reordered.
+  // Workspaces render `WorkspaceAgentListContent` instead, where each member
+  // arranges their own pinned list.
   const isWorkspace = !!useActiveWorkspaceId();
   const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents);
   const reorderPinnedAgents = useHomeStore((s) => s.reorderPinnedAgents);

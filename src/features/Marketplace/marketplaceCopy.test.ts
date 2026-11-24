@@ -63,9 +63,9 @@ describe('Marketplace page copy', () => {
   it('names the Marketplace as the place an agent is published before social sharing', () => {
     const hint = (locale: string) => readNs(locale, 'chat')['shareModal.social.agent.disabledHint'];
 
-    // The entry is named Plugins, but publishing still targets the public Marketplace.
-    expect(readNs('en-US', 'common')['tab.marketplace']).toBe('Plugins');
-    expect(readNs('zh-CN', 'common')['tab.marketplace']).toBe('插件');
+    // The entry carries the same name as Lobot's Market.
+    expect(readNs('en-US', 'common')['tab.marketplace']).toBe('Marketplace');
+    expect(readNs('zh-CN', 'common')['tab.marketplace']).toBe('市场');
     expect(hint('en-US')).toContain('Marketplace');
     expect(hint('zh-CN')).toContain('市场');
     for (const locale of locales) {

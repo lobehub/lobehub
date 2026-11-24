@@ -72,6 +72,8 @@ export const channelHistoryProcedures = {
         .object({
           beforeSequence: z.number().int().positive().optional(),
           limit: z.number().int().min(1).max(20).optional(),
+          /** Another Thread of the run's Channel, from `listThreads`. */
+          threadId: z.string().min(1).optional(),
         })
         .strict(),
     )
@@ -79,10 +81,25 @@ export const channelHistoryProcedures = {
   readMessage: historyProcedure
     .input(
       z
-        .object({ messageId: z.string().min(1), offset: z.number().int().nonnegative().optional() })
+        .object({
+          messageId: z.string().min(1),
+          offset: z.number().int().nonnegative().optional(),
+          threadId: z.string().min(1).optional(),
+        })
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelHistory.readMessage(input)),
+  listThreads: historyProcedure
+    .input(
+      z
+        .object({
+          activeOnly: z.boolean().optional(),
+          before: z.string().min(1).optional(),
+          limit: z.number().int().min(1).max(20).optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => ctx.channelHistory.listThreads(input)),
   listChannels: messagingProcedure
     .input(
       z
@@ -136,6 +153,19 @@ export const channelHistoryProcedures = {
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
     ),
+  /** The run's Agent adds (or with `remove`, removes) its own reaction on a message it can read. */
+  react: historyProcedure
+    .input(
+      z
+        .object({
+          emoji: z.string().min(1).max(32),
+          messageId: z.string().min(1),
+          remove: z.boolean().optional(),
+          threadId: z.string().min(1).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { remove, ...params } }) => ctx.channelHistory.react(params, !remove)),
   sendMessage: messagingProcedure
     .input(
       z

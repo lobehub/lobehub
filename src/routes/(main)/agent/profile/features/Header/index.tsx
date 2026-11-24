@@ -309,7 +309,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
             disabled: !canConfigure,
             icon: <Icon icon={UsersIcon} />,
             key: 'permission',
-            label: t('permission.page.entry', { ns: 'setting' }),
+            label: t('permission.page.agentEntry', { ns: 'setting' }),
             onClick: () => {
               if (!canConfigure) return;
               if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);

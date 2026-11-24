@@ -25,6 +25,8 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
+import { answerAsk } from '@/database/repositories/channel/ask';
 import {
   projectDefaultChannelMetadata,
   withDisplayTitle,
@@ -32,6 +34,7 @@ import {
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
+import { frequentReactions, setReaction } from '@/database/repositories/channel/reactions';
 import {
   findShareVisitorTopic,
   listShareVisitorConversations,
@@ -477,6 +480,18 @@ export class ChannelService {
     return message;
   };
 
+  /** Reactions only repaint the message: no unread, notification or routing. */
+  toggleReaction = async (channelId: string, messageId: string, emoji: string) => {
+    const result = await this.repository.write(channelId, (tx, { member }) =>
+      setReaction(tx, channelId, member.id, messageId, emoji),
+    );
+    await this.changed(channelId);
+    return result;
+  };
+
+  /** The caller's most used reactions lately, for their quick reactions. */
+  frequentReactions = () => frequentReactions(this.db, this.userId);
+
   /** Replies the message asked for stop with it; the coordinator stops those still writing. */
   deleteMessage = async (channelId: string, messageId: string) => {
     const writers = await this.repository.deleteMessage(channelId, messageId);
@@ -692,6 +707,15 @@ export class ChannelService {
     // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return message;
+  };
+
+  /** Answers an Agent's question as the person it asked; the answer wakes that Agent. */
+  answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
+    const message = await this.repository.write(channelId, (tx, access) =>
+      answerAsk(tx, access, input, channelContacts),
+    );
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
   };
 

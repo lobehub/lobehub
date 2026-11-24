@@ -25,11 +25,10 @@ interface GroupItemProps {
 }
 
 const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, description, title, pinned, userId, visibility } = item;
+  const { id, avatar, backgroundColor, title, pinned, userId, visibility } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
+  const { isMyPinned, isPrivate } = useSidebarPinState({ id, pinned, visibility });
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -78,15 +77,15 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   // can't truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
+      isMyPinned || isPrivate ? (
         <>
           {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
+          {isMyPinned && (
             <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
           )}
         </>
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [isMyPinned, isPrivate],
   );
 
   // Memoize avatar icon (show loader when updating)
@@ -117,7 +116,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
-    description,
     id,
     memberAvatars,
     pinned: pinned ?? false,

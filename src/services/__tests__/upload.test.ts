@@ -2,7 +2,7 @@ import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lob
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileEnv } from '@/envs/file';
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, scopedLambdaClient } from '@/libs/trpc/client';
 
 import { hashFile } from '../hashFile';
 import { UPLOAD_NETWORK_ERROR, UploadRequestError, uploadService } from '../upload';
@@ -20,8 +20,8 @@ vi.mock('@lobechat/utils', () => ({
   uuid: () => 'mock-uuid',
 }));
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
+vi.mock('@/libs/trpc/client', () => {
+  const lambdaClient = {
     upload: {
       abortS3MultipartUpload: {
         mutate: vi.fn(),
@@ -42,8 +42,10 @@ vi.mock('@/libs/trpc/client', () => ({
         mutate: vi.fn(),
       },
     },
-  },
-}));
+  };
+  // Every scope shares one mock, so the assertions below see each call whichever scope made it.
+  return { lambdaClient, scopedLambdaClient: vi.fn(() => lambdaClient) };
+});
 
 vi.mock('js-sha256', () => ({
   sha256: {
@@ -447,6 +449,22 @@ describe('UploadService', () => {
       });
 
       expect(result.path).toBe(customPath);
+    });
+
+    it('reserves the upload in the pinned workspace instead of the active one', async () => {
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event === 'load') {
+          // @ts-expect-error - mock implementation
+          handler({ target: { status: 200 } });
+        }
+      });
+      vi.mocked(scopedLambdaClient).mockClear();
+
+      await uploadService.uploadToServerS3(mockFile, { workspaceId: 'ws-channel' });
+
+      expect(scopedLambdaClient).toHaveBeenCalledWith('ws-channel');
+      expect(scopedLambdaClient).not.toHaveBeenCalledWith(undefined);
     });
 
     it('should upload large files as sequential S3 parts without buffering the whole file', async () => {

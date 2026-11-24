@@ -13,7 +13,7 @@ import { shinyTextStyles } from '@/styles';
 import { useDensity } from '@/styles/density';
 
 import StepStatusBox from '../../../components/StepStatusBox';
-import { STEP_TRIGGER_STYLES } from '../../../components/stepTriggerStyles';
+import { STEP_ACTION_ICON_SIZE, STEP_TRIGGER_STYLES } from '../../../components/stepTriggerStyles';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import {
   TIME_MS_PER_SECOND,
@@ -43,17 +43,13 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
   ease: [0.4, 0, 0.2, 1],
 } as const;
 
-const COMPACT_WORKFLOW_STYLES = {
-  ...STEP_TRIGGER_STYLES.compact,
-  header: { background: 'transparent' },
-};
 // Animating the panel height re-lays out every mounted row on each frame; a
 // long list opens and closes in one step instead.
 const INSTANT_PANEL = { panel: { transitionDuration: '0s' } };
 const WORKFLOW_STYLES = {
   compact: {
-    default: COMPACT_WORKFLOW_STYLES,
-    large: { ...COMPACT_WORKFLOW_STYLES, ...INSTANT_PANEL },
+    default: STEP_TRIGGER_STYLES.compact,
+    large: { ...STEP_TRIGGER_STYLES.compact, ...INSTANT_PANEL },
   },
   loose: {
     default: STEP_TRIGGER_STYLES.loose,
@@ -173,7 +169,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     workflowChromeComplete = false,
   }) => {
     const { t } = useTranslation('chat');
-    const { density } = useDensity();
+    const { compact, density } = useDensity();
     const toolCallsUnit = t('task.metrics.toolCallsShort');
     const allTools = useMemo(() => collectTools(blocks), [blocks]);
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
@@ -466,8 +462,14 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           >
             <ActionIcon
               icon={expandToggleIcon}
-              size={{ blockSize: 24, size: WORKFLOW_EXPAND_TOGGLE_ICON_SIZE }}
               title={expandToggleLabel}
+              size={
+                // The toggle always sits in the row, so in compact it is bounded
+                // by the row's height rather than adding to it.
+                compact
+                  ? STEP_ACTION_ICON_SIZE.compact
+                  : { blockSize: 24, size: WORKFLOW_EXPAND_TOGGLE_ICON_SIZE }
+              }
               onClick={handleToggleExpand}
             />
           </motion.div>

@@ -1,44 +1,41 @@
 'use client';
 
-import { Accordion, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useExpandedSettingsGroups } from '@/features/Settings/hooks/useExpandedSettingsGroups';
 import { SearchSection } from '@/features/SettingsSearch';
+import { useSettingsScopeTitle } from '@/features/SettingsSwitch/useSettingsScopeTitle';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { DEFAULT_WORKSPACE_SETTINGS_TAB, WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { isModifierClick } from '@/utils/navigation';
 
-import { useWorkspaceSettingCategory, WorkspaceSettingsGroupKey } from '../hooks/useCategory';
-import {
-  getWorkspaceSettingsTabUrl,
-  useWorkspaceSettingsSearchScope,
-} from '../hooks/useSettingsSearchScope';
+import { WorkspaceSettingsGroupKey } from '../hooks/useCategory';
+import { useWorkspaceSettingsSearchScope } from '../hooks/useSettingsSearchScope';
+import { useWorkspaceSettingsScope } from '../hooks/useWorkspaceSettingsScope';
 
 const Body = memo(() => {
   const sectionTriggerStyle = useSectionTriggerStyle();
   const navigate = useWorkspaceAwareNavigate();
-  const location = useActiveLocation();
-  const slug = useActiveWorkspaceSlug();
-  const groups = useWorkspaceSettingCategory();
-  const searchScope = useWorkspaceSettingsSearchScope(slug, groups);
-
-  const activeTab = useMemo(() => {
-    if (!slug) return DEFAULT_WORKSPACE_SETTINGS_TAB;
-    const parts = location.pathname.split('/').filter(Boolean);
-    const tab = parts[2];
-    return tab && (Object.values(WorkspaceSettingsTabs) as string[]).includes(tab)
-      ? (tab as WorkspaceSettingsTabs)
-      : DEFAULT_WORKSPACE_SETTINGS_TAB;
-  }, [location.pathname, slug]);
+  const { activeTab, groups, scopeGroups, slug, space, tabUrl } = useWorkspaceSettingsScope();
+  const accountTitle = useSettingsScopeTitle('account', space);
+  const spaceTitle = useSettingsScopeTitle('space', space);
+  // Search covers both sets; each result names the set it lives in, and
+  // opening it switches the sidebar to that set.
+  const searchGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        ...group,
+        title: `${group.scope === 'account' ? accountTitle : spaceTitle} › ${group.title}`,
+      })),
+    [groups, accountTitle, spaceTitle],
+  );
+  const searchScope = useWorkspaceSettingsSearchScope(slug, searchGroups);
 
   const { expandedGroups, onExpandedGroupsChange } = useExpandedSettingsGroups(
-    groups,
+    scopeGroups,
     activeTab,
     WorkspaceSettingsGroupKey.System,
   );
@@ -53,13 +50,13 @@ const Body = memo(() => {
           indicatorPlacement="inline"
           styles={{ trigger: sectionTriggerStyle }}
           value={expandedGroups}
-          items={groups.map((group) => ({
+          items={scopeGroups.map((group) => ({
             key: group.key,
             title: <SectionTitle>{group.title}</SectionTitle>,
             children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {
-                  const url = getWorkspaceSettingsTabUrl(slug, item.key);
+                  const url = item.href ?? tabUrl(item.key);
                   return (
                     <Link
                       key={item.key}
@@ -67,11 +64,13 @@ const Body = memo(() => {
                       onClick={(e) => {
                         if (isModifierClick(e)) return;
                         e.preventDefault();
-                        navigate(url);
+                        // Already a full path: a workspace tab carries its
+                        // slug, a personal-only account tab must not get one.
+                        navigate(url, { escape: true });
                       }}
                     >
                       <NavItem
-                        active={activeTab === item.key}
+                        active={!item.href && activeTab === item.key}
                         icon={item.icon}
                         title={item.label}
                       />

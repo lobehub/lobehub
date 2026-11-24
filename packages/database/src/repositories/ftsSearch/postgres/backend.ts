@@ -17,6 +17,7 @@ import type { PostgresFtsSearchContext } from './context';
 import { createPostgresFtsSearchContext } from './context';
 import type { PostgresFtsSearchDialect } from './dialect';
 import { searchFolders, searchKnowledgeBaseDocuments, searchPages } from './documents';
+import { searchFileContents } from './fileContents';
 import { searchMemories } from './memories';
 
 /**
@@ -71,7 +72,11 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
           limit,
           filters.excludeKnowledgeBaseIds,
           filters.timeRange,
+          filters.excludeFileDerived,
         );
+      }
+      if (filters.documentKind === 'fileContent') {
+        return searchFileContents(this.context, query, limit, filters.excludeKnowledgeBaseIds);
       }
       if (filters.documentKind === 'knowledgeBaseDocument') {
         return searchKnowledgeBaseDocuments(

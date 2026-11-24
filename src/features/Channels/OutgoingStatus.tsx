@@ -1,3 +1,4 @@
+import { ChatErrorType } from '@lobechat/types';
 import { Button, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { CircleAlert } from 'lucide-react';
@@ -21,15 +22,19 @@ export function OutgoingStatus({
   // A message still sending shows faded in place (`ChannelMessage` `pending`), with no line here.
   if (message.status !== 'failed') return null;
   const reasonKey = receiptErrorKey(message.errorType);
+  // A retry resends the same files, so a refused attachment can only be deleted and reattached.
+  const canRetry = message.errorType !== ChatErrorType.ChannelAttachmentUnavailable;
   return (
     <span role="alert" {...stylex.props(statusStyles.receipts, statusStyles.state)}>
       <span {...stylex.props(statusStyles.state, toneStyles.error)}>
         <Icon icon={CircleAlert} size={12} />
         {reasonKey ? t(reasonKey) : t('outgoing.failed')}
       </span>
-      <Button size="small" type="text" onClick={() => onRetry(message)}>
-        {t('outgoing.retry')}
-      </Button>
+      {canRetry && (
+        <Button size="small" type="text" onClick={() => onRetry(message)}>
+          {t('outgoing.retry')}
+        </Button>
+      )}
       <Button size="small" type="text" onClick={() => channelActions.discardSend(message)}>
         {t('outgoing.discard')}
       </Button>

@@ -815,6 +815,9 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.calendar.title': 'Codex usage calendar',
+  'heteroAgent.codexQuota.creditsBalance': 'Credits balance',
+  'heteroAgent.codexQuota.creditsUnlimited': 'Unlimited',
+  'heteroAgent.codexQuota.creditsUsdEstimate': '≈ {{amount}}',
   'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
   'heteroAgent.codexQuota.errorConnection':
     "Couldn't reach the Codex quota endpoint. Check your network or LobeHub proxy settings.",
@@ -982,8 +985,11 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
+  'heteroAgent.executionTarget.autoAgentPicks': 'Auto · Agent picks',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
+  'heteroAgent.executionTarget.autoNoDevice': 'Auto · No device online',
+  'heteroAgent.executionTarget.autoOn': 'Auto · {{name}}',
   'heteroAgent.executionTarget.fixedTip':
     'The execution environment is fixed in the Agent Profile and cannot be switched while chatting.',
   'heteroAgent.executionTarget.infoTooltip':
@@ -1013,8 +1019,6 @@ export default {
   'heteroAgent.executionTarget.onlineConnections_one': 'Online · {{count}} connection',
   'heteroAgent.executionTarget.onlineConnections_other': 'Online · {{count}} connections',
   'heteroAgent.executionTarget.presenceChecking': 'Checking status…',
-  'heteroAgent.executionTarget.projectDevicesHint':
-    "Only devices with this project's working directory are listed. Add a directory for another device in the project settings.",
   'heteroAgent.executionTarget.switchProjectTopic.content':
     'This topic will run in the project directory "{{directory}}" on {{device}}. Its next turn starts a fresh session there.',
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
@@ -1794,9 +1798,12 @@ export default {
   'textSelection.quote': 'Quote',
   'pin': 'Pin',
   'pinOff': 'Unpin',
-  'pinForTeam': 'Pin for team',
-  'pinForTeamForbidden': 'Only workspace owners and admins can change team pins',
-  'unpinForTeam': 'Unpin for team',
+  'recommendAgent': 'Add to recommended agents',
+  'recommendAgentSuccess':
+    'Added to recommended agents. New members will start with it in their sidebar',
+  'recommendAgentForbidden': 'Only workspace owners and admins can change recommended agents',
+  'unrecommendAgent': 'Remove from recommended agents',
+  'unrecommendAgentSuccess': 'Removed from recommended agents',
   'rag.referenceChunks': 'Reference Source',
   'rag.userQuery.actions.delete': 'Delete Query Rewrite',
   'rag.userQuery.actions.regenerate': 'Regenerate Query',
@@ -1831,12 +1838,6 @@ export default {
   'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxStorage.setUpEnvironment': 'Set up an environment',
   'sandboxStorage.manage': 'Manage',
-  // The menu lists environments: a person picks the environment, and which
-  // copy (instance) of it the conversation lands in is only asked about when
-  // there is more than one. "Copy" is the product's word for an instance.
-  'sandboxStorage.pickerTitle': 'Environment',
-  'sandboxStorage.pickerInfoTooltip':
-    'An environment describes what a run needs around it — files, or repositories, setup and variables. Conversations run inside one of its copies and keep what they leave there; a second copy only appears when two conversations need the same environment at once.',
   'sandboxStorage.kind.files': 'Files',
   'sandboxStorage.kind.code': 'Code',
   'sandboxStorage.copies': 'Copies',
@@ -4740,40 +4741,18 @@ export default {
     'The worktree is still being cleaned up. Try sending again in a moment.',
   'worktreeRestore.waiting': 'Waiting for the worktree cleanup to finish before restoring it…',
   'you': 'You',
-  'sandboxDrive.manageEnvironments': 'Settings',
-  'sandboxEnvironment.none': 'No environment',
-  'sandboxEnvironment.missing': 'Environment unavailable',
-  'sandboxEnvironment.loading': 'Loading environment…',
-  'sandboxEnvironment.title': 'Environment',
-  'sandboxEnvironment.empty': 'No environments yet. Create one to get started.',
-  'sandboxEnvironment.add': 'New environment',
-  'sandboxEnvironment.loadFailed': "Couldn't load environments",
-  'sandboxEnvironment.retry': 'Retry',
-  'sandboxEnvironment.saveFailed': 'Could not change the environment. Try again.',
   'sandboxDrive.root': 'Root',
-  'sandboxOptions.storage': 'Storage',
   'sandboxOptions.temporary': 'Temporary',
-  'sandboxOptions.folder': 'Folder',
-  'sandboxOptions.environment': 'Environment',
-  'sandboxDrive.setupSkipped':
-    "This folder already has files, so the environment won't be set up in it.",
-  'sandboxDrive.building': '{{name}} · building',
   'sandboxDrive.title': 'Cloud drive',
   'sandboxDrive.browseOther': 'Choose another folder…',
-  'sandboxDrive.environmentBuildingDesc':
-    'Environment directory · building, usable once it finishes',
   'sandboxDrive.fallback.directoryMissing':
     'This folder no longer exists on the drive. Runs use a temporary sandbox until you pick another folder.',
   'sandboxDrive.fallback.instanceUnavailable':
-    'This environment directory can’t be used here any more. Runs use a temporary sandbox until you pick another one.',
+    'This folder can’t be used here any more. Runs use a temporary sandbox until you pick another folder.',
   'sandboxDrive.fallback.rootNotAllowed':
     'The public drive’s root cannot be a working folder. This run will use a temporary sandbox; pick a folder.',
-  'sandboxDrive.fallbackChip.directoryMissing': 'Folder no longer exists',
-  'sandboxDrive.fallbackChip.instanceUnavailable': 'Environment unavailable',
-  'sandboxDrive.fallbackChip.rootNotAllowed': 'Pick a folder',
   'sandboxDrive.fallback.instanceRebuildRequired':
-    'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
-  'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
+    'This private folder is on the public drive and can’t be used there. This run will use a temporary sandbox; pick another folder.',
   'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
   'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
   'resource.artifacts.history.restoreFailedRetry':
@@ -4814,7 +4793,6 @@ export default {
   'taskList.find.open': 'Find in view',
   'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
-  'sandboxEnvironment.noRepository': 'No repository',
   'sessionGroup.createFailedRetry':
     "Couldn't create the category. Check your network and try again.",
   'shareModal.downloadFailedRetry': "Couldn't download the PDF. Check your network and try again.",

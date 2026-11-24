@@ -162,7 +162,7 @@ const SandboxDriveMenu = memo<SandboxDriveMenuProps>(
                 <Text className={stylex.props(styles.hint).className} type={'danger'}>
                   {t('workingDirectory.drive.foldersLoadFailed', { ns: 'device' })}
                 </Text>
-                <Button onClick={() => void mutate()}>{t('sandboxEnvironment.retry')}</Button>
+                <Button onClick={() => void mutate()}>{t('retry', { ns: 'common' })}</Button>
               </Flexbox>
             )}
 

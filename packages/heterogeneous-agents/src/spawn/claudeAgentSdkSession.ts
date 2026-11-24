@@ -176,6 +176,7 @@ export interface HeterogeneousAgentRuntimeStatus {
   state: HeterogeneousAgentRuntimeState;
   transport:
     | 'acp-stdio'
+    | 'antigravity-acp'
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'

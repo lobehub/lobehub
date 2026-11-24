@@ -30,6 +30,9 @@ export default {
   'agentViewAll.orderBy.updatedAt': 'Updated at',
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
+  'agentViewAll.recommendedSection.title': 'Recommended agents',
+  'agentViewAll.recommendedSection.empty':
+    'No recommended agents yet. Use “Add to recommended agents” in an agent’s menu.',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
   'agentViewAll.sidebarSection.title': 'In Sidebar',
@@ -85,7 +88,7 @@ export default {
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Plugins',
+  'cmdk.context.community': 'Marketplace',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -211,7 +214,7 @@ export default {
 
   'cmdk.search.loading': 'Searching...',
 
-  'cmdk.search.market': 'Plugins',
+  'cmdk.search.market': 'Marketplace',
 
   'cmdk.search.mcp': 'MCP Server',
 
@@ -448,15 +451,7 @@ export default {
   'gotIt': 'Got it',
   'more': 'More',
   'navPanel.agent': 'Agents',
-  'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.managePrivateFolders': 'Manage private categories',
-  'navPanel.myPinned': 'Pinned',
-  'navPanel.newChat': 'New chat',
   'navPanel.privateTooltip': 'Private · only you can see this',
-  'navPanel.showLessTeamPinned': 'Show less',
-  'navPanel.showMoreTeamPinned': 'Show {{count}} more',
-  'navPanel.teamPinned': 'Pinned for team',
-  'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
@@ -634,7 +629,7 @@ export default {
   'tab.goals': 'Goals',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
-  'tab.marketplace': 'Plugins',
+  'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',

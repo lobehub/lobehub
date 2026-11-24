@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
 import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
@@ -486,6 +487,29 @@ export interface ChannelReadMessagesParams {
    * message instead of the run's request cutoff. Omit for the run's own conversation.
    */
   threadId?: string;
+}
+
+/** One emoji on a message: who left it, by member, in the order they did. */
+export interface ChannelMessageReaction {
+  count: number;
+  /** A Unicode emoji. */
+  emoji: string;
+  /** People and Agents alike, by their member in the Channel. */
+  memberIds: string[];
+}
+
+/** An Agent adding or removing its own reaction on a message of its current conversation. */
+export interface ChannelReactParams {
+  emoji: string;
+  messageId: string;
+  /** The Thread `readMessages({ threadId })` returned the message from. */
+  threadId?: string;
+}
+
+export interface ChannelReacted {
+  added: boolean;
+  emoji: string;
+  messageId: string;
 }
 
 export interface ChannelReadMessageParams {
@@ -974,6 +998,8 @@ export interface ChannelPublicMember {
 
 export interface ChannelPublicMessage {
   agentId: string | null;
+  /** An Agent's question with options, on an `ask` message; null otherwise. */
+  ask?: ChannelAsk | null;
   author: {
     avatar: string | null;
     id: string | null;
@@ -997,6 +1023,8 @@ export interface ChannelPublicMessage {
   editedAt?: Date | null;
   fileIds: string[];
   id: string;
+  /** What the message is; its payload, if any, is in the field named after it. */
+  kind?: ChannelMessageKind;
   mentions: string[];
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;

@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "방문자는 이 에이전트를 단순히 읽는 것이 아니라 실행합니다. 모든 응답은 작업 공간에서 생성되며 공유 예산에서 청구됩니다. 에이전트는 아래에서 부여한 방문자 액세스 권한으로만 작동합니다.",
   "share.settings.notice.workspaceTitle": "방문자는 작업 공간 예산으로 이 에이전트를 실행합니다",
   "share.settings.permissions.allowCreatorViewSessions": "방문자 대화를 읽을 수 있도록 허용",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "기본적으로 꺼져 있음: 방문자 대화는 방문자에게만 비공개로 유지됩니다.",
   "share.settings.permissions.allowReadMemory": "내 메모리 읽기 허용",
   "share.settings.permissions.allowReadMemoryHint": "에이전트는 방문자에게 답변할 때 장기 메모리를 활용할 수 있습니다.",
   "share.settings.permissions.desc": "방문자의 실행이 읽을 수 있는 것과 방문자가 볼 수 있는 것.",

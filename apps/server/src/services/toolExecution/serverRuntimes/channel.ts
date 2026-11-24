@@ -27,6 +27,7 @@ export const channelRuntime: ServerRuntimeRegistration = {
     );
     return new ChannelExecutionRuntime(
       {
+        react: history.react,
         readMessage: history.readMessage,
         readMessages: history.readMessages,
         requestConnector: (params) => {

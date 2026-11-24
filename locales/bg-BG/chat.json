@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Онлайн · {{count}} връзки",
   "heteroAgent.executionTarget.personalGroup": "Лични устройства",
   "heteroAgent.executionTarget.presenceChecking": "Проверка на статуса...",
-  "heteroAgent.executionTarget.projectDevicesHint": "Само устройства с работната директория на този проект са изброени. Добавете директория за друго устройство в настройките на проекта.",
   "heteroAgent.executionTarget.reconnect": "Свържи отново",
   "heteroAgent.executionTarget.reconnectFailed": "Неуспешно свързване на това устройство. Уверете се, че настолното приложение работи, след това опитайте отново.",
   "heteroAgent.executionTarget.sandbox": "Облачен пясъчник",

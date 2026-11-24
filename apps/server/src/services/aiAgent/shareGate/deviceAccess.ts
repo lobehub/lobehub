@@ -41,6 +41,9 @@ export interface ShareDeviceAccessSubject {
  * The only place `shareConfig.deviceAccess` is interpreted; every share-gate
  * builder calls it so a fresh turn and a deferred init decide alike.
  *
+ * `everyone` grants every visitor: the share link (which requires sign-in)
+ * is the whole grant, so it reads neither the list nor the address book.
+ *
  * `contacts` grants every visitor currently in the address book of the
  * Agent's scope. `allowlist` grants a listed visitor only while they are still
  * in that address book (`AddressBook.filterAddressBookPeople`):
@@ -56,6 +59,7 @@ export const resolveShareVisitorDeviceAccess = async (
   visitorUserId: string,
 ): Promise<boolean> => {
   const { deviceAccess, deviceAllowUserIds } = share.shareConfig;
+  if (deviceAccess === 'everyone') return true;
   if (deviceAccess !== 'allowlist' && deviceAccess !== 'contacts') return false;
 
   // `contacts` skips the list: being in the address book is the whole grant.

@@ -93,7 +93,9 @@ export const defaultToolIds = [
 
 /**
  * Builtins enabled by default in Agent mode. The activator loads other tools
- * on demand, and Skills loads skill instructions.
+ * on demand, and Skills loads skill instructions and carries the sandbox
+ * shell. A run with no skill to offer keeps only that shell until a skill
+ * arrives (`planSkillsToolDeferral` in `@lobechat/mecha`).
  */
 export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 

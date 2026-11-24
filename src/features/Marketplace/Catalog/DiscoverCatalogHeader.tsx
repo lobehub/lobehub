@@ -82,6 +82,8 @@ const SkillImportAction = () => {
 };
 
 interface DiscoverCatalogHeaderProps {
+  /** Replaces the kind's own button beside the search (a skill catalog's "Add from GitHub"). */
+  action?: ReactNode;
   group?: { backTo: string; title: string };
   kind: Exclude<CatalogKind, 'connector'> | 'agent' | 'app';
   sortControl?: ReactNode;
@@ -89,6 +91,7 @@ interface DiscoverCatalogHeaderProps {
 }
 
 const DiscoverCatalogHeader = ({
+  action,
   group,
   kind,
   sortControl,
@@ -188,7 +191,9 @@ const DiscoverCatalogHeader = ({
             search(value);
           }}
         />
-        {group || isAgent || isApp ? (
+        {action !== undefined ? (
+          action
+        ) : group || isAgent || isApp ? (
           sortControl
         ) : isMcp ? (
           <ConnectorAddAction />

@@ -88,7 +88,7 @@ export default {
   'assistants.withKnowledge': 'This Agent includes Libraries',
   'assistants.withPlugin': 'This Agent includes Skills',
   'back': 'Back to Discovery',
-  'apps.addMcp': 'Add custom MCP server',
+  'apps.addMcp': 'Custom',
   'apps.back': 'Back',
   'apps.detail.category': 'Category',
   'apps.detail.connected': 'Connected',
@@ -291,7 +291,7 @@ export default {
   'fork.forksCount_other': '{{count}} forks',
 
   'fork.orgSetupRequired.memberContent':
-    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Plugins → Workspace.",
+    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Marketplace → Workspace.",
   'fork.orgSetupRequired.ownerContent':
     'This workspace has not yet set up a Community profile. Set one up to fork agents from the marketplace into your workspace.',
   'fork.orgSetupRequired.ownerOk': 'Go to setup',

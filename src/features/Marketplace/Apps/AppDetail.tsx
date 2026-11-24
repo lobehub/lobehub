@@ -11,7 +11,7 @@ import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import { MarketplaceDetailBodySkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { ConnectorDetailEmbeddedContext } from '@/features/Connectors/ConnectorDetail';
 import { hasConnectorPage } from '@/features/Integrations/connectorPage';
 import InstallResult from '@/features/Messenger/InstallResult';
@@ -23,6 +23,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors, isIntegrationInConnectorTab } from '@/store/tool/slices/connector';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { catalogStyles } from '../Catalog/styles';
 import { MARKETPLACE_APPS_PATH } from '../paths';
@@ -218,7 +219,12 @@ export default function AppDetail() {
   const inlineTool = app && getInlineConnectTool(app, lobehubEnabled);
 
   return (
-    <div {...stylex.props(catalogStyles.frame)}>
+    <div
+      {...stylex.props(
+        catalogStyles.frame,
+        isMobileSurface() ? catalogStyles.pageTopMobile : catalogStyles.pageTop,
+      )}
+    >
       {(appId === 'slack' || appId === 'discord') && <InstallResult key={appId} platform={appId} />}
       <Flexbox gap={12}>
         <BackLink onClick={onBack} />
@@ -228,7 +234,7 @@ export default function AppDetail() {
           error={error}
           isEmpty={!app}
           isLoading={loading}
-          loading={<CatalogRowsSkeleton />}
+          loading={<MarketplaceDetailBodySkeleton />}
           onRetry={retry}
         >
           {app && (

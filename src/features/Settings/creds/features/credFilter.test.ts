@@ -14,10 +14,13 @@ describe('filterCreds', () => {
     expect(filterCreds([...creds], { keyword: '  ', type: 'all' })).toHaveLength(3);
   });
 
-  it('matches the keyword against name, key and description, ignoring case', () => {
+  it('matches the keyword against name and description, ignoring case', () => {
     expect(filterCreds([...creds], { keyword: 'OPENAI' }).map((c) => c.key)).toEqual(['openai']);
-    expect(filterCreds([...creds], { keyword: 'gcp-sa' }).map((c) => c.key)).toEqual(['gcp-sa']);
     expect(filterCreds([...creds], { keyword: 'coder' }).map((c) => c.key)).toEqual(['openai']);
+  });
+
+  it('does not match the hidden key', () => {
+    expect(filterCreds([...creds], { keyword: 'gcp-sa' })).toEqual([]);
   });
 
   it('narrows by type and combines with the keyword', () => {

@@ -2,6 +2,7 @@ import type {
   ChannelAgentGrantMetadata,
   ChannelAgentGrantRevokeReason,
   ChannelAgentGrantStatus,
+  ChannelAskInput,
   ChannelAuditDetails,
   ChannelConfig,
   ChannelExecutionConfig,
@@ -17,6 +18,7 @@ import type {
   ChannelMemberMetadata,
   ChannelMemberRole,
   ChannelMemberStatus,
+  ChannelMessageKind,
   ChannelMessageMetadata,
   ChannelMessageRoutingSource,
   ChannelMessageRoutingStatus,
@@ -436,6 +438,8 @@ export const channelMessages = pgTable(
       .notNull(),
     threadId: text('thread_id'),
     sequence: integer('sequence').notNull(),
+    /** What the message is (`ChannelMessageKind`); its payload is `metadata.<kind>`. */
+    kind: text('kind').$type<ChannelMessageKind>().notNull().default('text'),
     content: text('content').notNull(),
     /** Actual human sender, not the owner/requester of an Agent reply. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -513,6 +517,43 @@ export const channelMessageFiles = pgTable(
 );
 
 /**
+ * One member's emoji reaction to a message. People and Agents react through their member row,
+ * so an Agent can acknowledge with 👀 and finish with ✅ instead of posting a message.
+ */
+export const channelMessageReactions = pgTable(
+  'channel_message_reactions',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    channelId: text('channel_id')
+      .references(() => channels.id, { onDelete: 'cascade' })
+      .notNull(),
+    messageId: uuid('message_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    /** A Unicode emoji (`👍`) or a custom emoji id (`emj_xxx`). */
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('channel_message_reactions_message_member_emoji_unique').on(
+      t.messageId,
+      t.memberId,
+      t.emoji,
+    ),
+    index('channel_message_reactions_channel_member_idx').on(t.channelId, t.memberId),
+    foreignKey({
+      columns: [t.channelId, t.messageId],
+      foreignColumns: [channelMessages.channelId, channelMessages.id],
+      name: 'channel_message_reactions_message_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.memberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_message_reactions_member_fk',
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
  * One delivery of one message to one Agent member; each member drains its jobs FIFO.
  *
  * Claiming a job reserves one canonical `agent_operations` row in a normal Agent
@@ -582,6 +623,8 @@ export const channelJobs = pgTable(
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
     draft: text('draft'),
+    /** Questions the run asked (`lobe-channel.askUser`), posted with its reply as an `ask`. */
+    ask: jsonb('ask').$type<ChannelAskInput>(),
     /** A revoked job never publishes. Set by stops, failures and isolation. */
     publicationRevoked: boolean('publication_revoked').notNull().default(false),
     publishedMessageId: uuid('published_message_id'),

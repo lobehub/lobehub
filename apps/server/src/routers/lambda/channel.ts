@@ -1,5 +1,5 @@
 import type { BotWakeDecisionPage } from '@lobechat/types';
-import { CHANNEL_LIMITS, SIGNAL_DECISION_OUTCOMES } from '@lobechat/types';
+import { CHANNEL_ASK_LIMITS, CHANNEL_LIMITS, SIGNAL_DECISION_OUTCOMES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -446,6 +446,18 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  /** Adds the caller's reaction, or removes it when they already left that emoji. */
+  toggleReaction: externalChannelProcedure
+    .input(z.object({ channelId, emoji: z.string().min(1).max(32), messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.toggleReaction(input.channelId, input.messageId, input.emoji),
+      success: true,
+    })),
+  /** The caller's most used reactions lately, most used first; the client pads its defaults. */
+  frequentReactions: externalChannelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.frequentReactions(),
+    success: true,
+  })),
   deleteMessage: channelProcedure
     .input(z.object({ channelId, messageId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -494,6 +506,29 @@ export const channelRouter = router({
     .input(z.object({ channelId, messageId: z.uuid() }))
     .mutation(async ({ ctx, input }) => ({
       data: await ctx.channelService.retryRouting(input.channelId, input.messageId),
+      success: true,
+    })),
+  answerAsk: channelProcedure
+    .input(
+      z.object({
+        answers: z
+          .array(
+            z.object({
+              other: z.string().max(CHANNEL_ASK_LIMITS.otherLength).optional(),
+              selected: z
+                .array(z.string().max(CHANNEL_ASK_LIMITS.labelLength))
+                .max(CHANNEL_ASK_LIMITS.maxOptions),
+            }),
+          )
+          .min(1)
+          .max(CHANNEL_ASK_LIMITS.maxQuestions),
+        channelId,
+        messageId: z.uuid(),
+        requestKey: z.string().min(1).max(200),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.answerAsk(input.channelId, input),
       success: true,
     })),
   send: externalChannelProcedure

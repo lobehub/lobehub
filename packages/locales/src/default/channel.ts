@@ -5,6 +5,8 @@ export default {
   'people.noMatches': 'No matching workspace members',
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
+  'receipt.errorAttachmentUnavailable':
+    "One or more attachments can't be sent here, for example because they were uploaded in another workspace. Delete this message and attach them again.",
   'receipt.errorReason': 'Failure reason',
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
@@ -124,6 +126,13 @@ export default {
   'copyThreadIdSuccess': 'Thread ID copied',
   'copyThreadLink': 'Copy link',
   'copyThreadLinkSuccess': 'Thread link copied',
+  'ask.answeredBy': 'Answered by {{name}}',
+  'ask.failed': "Couldn't send your answer. Try again.",
+  'ask.multiSelect': 'Choose all that apply',
+  'ask.other': 'Other',
+  'ask.otherPlaceholder': 'Type your answer',
+  'ask.submit': 'Send answer',
+  'ask.waitingFor': 'Waiting for {{name}} to answer',
   'actionFailed': 'Something went wrong. Try again.',
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',

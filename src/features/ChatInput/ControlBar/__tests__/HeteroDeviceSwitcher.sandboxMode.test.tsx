@@ -5,8 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeteroDeviceSwitcher from '../HeteroDeviceSwitcher';
 
 const state = vi.hoisted(() => ({
+  agencyConfig: { executionTarget: 'sandbox' } as Record<string, unknown>,
+  agentWorkspaceId: undefined as string | undefined,
+  capability: undefined as object | undefined,
   devices: [] as object[],
+  isDesktop: false,
+  localSandboxEntryEnabled: false,
+  revalidateCapability: vi.fn(),
   selectTarget: vi.fn(),
+  useLocalSandboxCapability: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -27,14 +34,24 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  isDesktop: false,
+  get isDesktop() {
+    return state.isDesktop;
+  },
+}));
+vi.mock('../localSandboxEntry', () => ({
+  get LOCAL_SANDBOX_ENTRY_ENABLED() {
+    return state.localSandboxEntryEnabled;
+  },
 }));
 
 vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
   useChatInputResourceAccess: () => ({ canUseResource: true }),
 }));
 vi.mock('@/features/ChatInput/hooks/useLocalSandboxCapability', () => ({
-  useLocalSandboxCapability: () => ({ data: undefined, mutate: vi.fn() }),
+  useLocalSandboxCapability: (enabled?: boolean) => {
+    state.useLocalSandboxCapability(enabled);
+    return { data: state.capability, mutate: state.revalidateCapability };
+  },
 }));
 vi.mock('@/features/ChatInput/hooks/useSelectExecutionTarget', () => ({
   useSelectExecutionTarget: () => vi.fn(),
@@ -49,7 +66,7 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
-    agencyConfig: { executionTarget: 'sandbox' },
+    agencyConfig: state.agencyConfig,
     canDisplayExecutionTarget: true,
     canSelectExecutionTarget: true,
     isPreferenceLoading: false,
@@ -61,7 +78,8 @@ vi.mock('@/hooks/useLocalMachineDeviceIds', () => ({ useLocalMachineDeviceIds: (
 vi.mock('@/services/device', () => ({ deviceService: {} }));
 vi.mock('@/services/electron/localFileService', () => ({ localFileService: {} }));
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (s: object) => unknown) => selector({ agentMap: {} }),
+  useAgentStore: (selector: (s: object) => unknown) =>
+    selector({ agentMap: { 'agent-1': { workspaceId: state.agentWorkspaceId } } }),
 }));
 vi.mock('@/store/device', () => ({
   isDevicePresenceUnknown: () => false,
@@ -97,8 +115,15 @@ vi.mock('../CloudSandboxOptions', () => ({
 const SANDBOX = 'heteroAgent.executionTarget.sandbox';
 
 beforeEach(() => {
+  state.agencyConfig = { executionTarget: 'sandbox' };
+  state.agentWorkspaceId = undefined;
+  state.capability = undefined;
   state.devices = [];
+  state.isDesktop = false;
+  state.localSandboxEntryEnabled = false;
+  state.revalidateCapability.mockReset();
   state.selectTarget.mockReset().mockResolvedValue(undefined);
+  state.useLocalSandboxCapability.mockReset();
 });
 
 // T-14791: one cloud sandbox. Whether it keeps files on the drive and what it
@@ -169,5 +194,137 @@ describe('HeteroDeviceSwitcher — first level', () => {
     const devices = screen.getByText('heteroAgent.executionTarget.myDevicesGroup');
     expect(follows(auto, sandbox)).toBe(true);
     expect(follows(sandbox, devices)).toBe(true);
+  });
+});
+
+// A bare "Auto" hid where the run lands: one online device, the Agent's pick
+// among several, or no device at all.
+describe('HeteroDeviceSwitcher — auto chip', () => {
+  const device = (deviceId: string, online: boolean) => ({
+    deviceId,
+    friendlyName: null,
+    hostname: deviceId,
+    online,
+    platform: 'darwin',
+    scope: 'personal',
+  });
+  const chipText = () => screen.getAllByTestId('chip')[0].textContent;
+
+  beforeEach(() => {
+    state.agencyConfig = { executionTarget: 'auto' };
+  });
+
+  it('names the one online device the run will use', () => {
+    state.devices = [device('mac-mini', true), device('old-pc', false)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoOn');
+  });
+
+  it('says the Agent picks when several devices are online', () => {
+    state.devices = [device('mac-mini', true), device('linux-box', true)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoAgentPicks');
+  });
+
+  it('says no device is online instead of a bare Auto', () => {
+    state.devices = [device('old-pc', false)];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(chipText()).toBe('heteroAgent.executionTarget.autoNoDevice');
+  });
+
+  // A member who picked "This computer" keeps that personal device bound when
+  // switching to Auto, and the server adds it to the workspace run's pool.
+  describe('workspace agent with a bound personal device', () => {
+    const workspaceDevice = (deviceId: string, online: boolean) => ({
+      ...device(deviceId, online),
+      scope: 'workspace',
+      visibility: 'public',
+    });
+
+    beforeEach(() => {
+      state.agentWorkspaceId = 'ws-1';
+      state.agencyConfig = { boundDeviceId: 'my-laptop', executionTarget: 'auto' };
+    });
+
+    it('names the personal device when the workspace pool has none online', () => {
+      state.devices = [device('my-laptop', true), workspaceDevice('shared-box', false)];
+      render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+      expect(chipText()).toBe('heteroAgent.executionTarget.autoOn');
+    });
+
+    it('leaves the pick to the Agent when a workspace device is online too', () => {
+      state.devices = [device('my-laptop', true), workspaceDevice('shared-box', true)];
+      render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+      expect(chipText()).toBe('heteroAgent.executionTarget.autoAgentPicks');
+    });
+  });
+});
+
+// T-14823: the desktop does not offer Local Sandbox for now. The entry is off
+// by a switch, so the row comes back unchanged when it is turned on.
+describe('HeteroDeviceSwitcher — local sandbox entry on desktop', () => {
+  const LOCAL_SANDBOX = 'heteroAgent.executionTarget.localSandbox';
+  const SET_UP = 'heteroAgent.executionTarget.localSandboxSetUp';
+
+  beforeEach(() => {
+    state.isDesktop = true;
+  });
+
+  it('hides the row, its Set up button and its network switch, and never probes', () => {
+    state.capability = { available: false, canInstall: true };
+
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.queryByText(LOCAL_SANDBOX)).toBeNull();
+    expect(screen.queryByText(SET_UP)).toBeNull();
+    expect(screen.queryByText('heteroAgent.executionTarget.localSandboxDesc')).toBeNull();
+    // Asked with `false`, the hook keys its fetch to null: nothing is probed.
+    expect(state.useLocalSandboxCapability).toHaveBeenCalled();
+    for (const [enabled] of state.useLocalSandboxCapability.mock.calls) expect(enabled).toBe(false);
+    expect(state.revalidateCapability).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cloud sandbox and this computer on offer', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByTestId('cloud-sandbox-row')).toBeInTheDocument();
+    expect(screen.getByText('heteroAgent.executionTarget.local')).toBeInTheDocument();
+    expect(screen.getByText('heteroAgent.executionTarget.auto')).toBeInTheDocument();
+  });
+
+  // An agent already set to the fenced local run keeps running fenced, so the
+  // chip keeps saying so; only a new pick is no longer offered.
+  it('still names an existing local sandbox pick on the chip', () => {
+    state.agencyConfig = { executionTarget: 'local', localSandbox: true };
+
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getAllByTestId('chip')[0].textContent).toBe(LOCAL_SANDBOX);
+    expect(screen.getAllByText(LOCAL_SANDBOX)).toHaveLength(1);
+  });
+
+  it('can leave an existing local sandbox pick for plain local', () => {
+    state.agencyConfig = { executionTarget: 'local', localSandbox: true };
+
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+    fireEvent.click(screen.getByText('heteroAgent.executionTarget.local'));
+
+    expect(state.selectTarget).toHaveBeenCalledWith('local', undefined, false, undefined);
+  });
+
+  it('offers the row again, and probes for it, once the entry is switched on', () => {
+    state.localSandboxEntryEnabled = true;
+    state.capability = { available: false, canInstall: true };
+
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByText(LOCAL_SANDBOX)).toBeInTheDocument();
+    expect(screen.getByText(SET_UP)).toBeInTheDocument();
+    expect(state.useLocalSandboxCapability).toHaveBeenCalledWith(true);
   });
 });

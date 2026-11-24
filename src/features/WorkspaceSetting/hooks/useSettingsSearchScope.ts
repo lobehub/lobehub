@@ -21,6 +21,11 @@ const ITEM_TABS: ReadonlySet<SettingsSearchTab> = new Set<SettingsSearchTab>([
   SettingsTabs.Profile,
   SettingsTabs.Provider,
   SettingsTabs.ServiceModel,
+  // Personal-only account tabs: their items link into the personal page.
+  SettingsTabs.Memory,
+  SettingsTabs.Proxy,
+  SettingsTabs.Referral,
+  SettingsTabs.SystemTools,
 ]);
 
 /**
@@ -50,9 +55,13 @@ export const useWorkspaceSettingsSearchScope = (
     () => ({
       categoryGroups: groups.map((group) => ({
         items: group.items.map((item) => ({
-          href: slug ? getWorkspaceSettingsTabUrl(slug, item.key) : undefined,
+          href:
+            item.href ??
+            (slug
+              ? getWorkspaceSettingsTabUrl(slug, item.key as WorkspaceSettingsTabs)
+              : undefined),
           icon: item.icon,
-          key: SEARCH_TAB_ALIASES[item.key] ?? item.key,
+          key: SEARCH_TAB_ALIASES[item.key as WorkspaceSettingsTabs] ?? item.key,
           label: item.label,
         })),
         key: group.key,

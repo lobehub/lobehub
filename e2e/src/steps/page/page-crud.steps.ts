@@ -8,7 +8,6 @@
  * - Delete
  */
 import { Given, Then, When } from '@cucumber/cucumber';
-import type { Locator } from '@playwright/test';
 import { expect } from '@playwright/test';
 
 import type { CustomWorld } from '../../support/world';
@@ -95,24 +94,6 @@ async function inputPageName(
   console.log(`   ✅ 已输入新名称 "${newName}"`);
 }
 
-/**
- * The sidebar header renders its own SquarePen action for "New chat", so an
- * icon-only locator matches whichever of the two mounted first in the DOM.
- * Clicking that one navigates away from Docs and the step then fails on a
- * control that is no longer visible, so every candidate has to prove it is not
- * a chat shortcut before it is used.
- */
-const CHAT_ACTION_LABEL = /new chat|new conversation|start a chat|新建对话|新对话|发起对话/i;
-
-async function namesChatAction(candidate: Locator): Promise<boolean> {
-  const labels = [
-    await candidate.getAttribute('aria-label'),
-    await candidate.getAttribute('title'),
-  ];
-
-  return labels.some((label) => label !== null && CHAT_ACTION_LABEL.test(label));
-}
-
 async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
   const loadingSelectors = ['[aria-label="Loading"]', '.lobe-brand-loading'];
   const timeout = WAIT_TIMEOUT;
@@ -147,12 +128,9 @@ async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
     ];
 
     for (const candidate of readyCandidates) {
-      if ((await candidate.count()) === 0) continue;
-      if (!(await candidate.isVisible())) continue;
-      // A visible "New chat" says nothing about the Docs surface being ready.
-      if (await namesChatAction(candidate)) continue;
-
-      return;
+      if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
+        return;
+      }
     }
 
     await world.page.waitForTimeout(300);
@@ -187,41 +165,27 @@ async function clickNewPageButton(world: CustomWorld): Promise<void> {
       .first(),
   ];
 
-  const clickErrors: Error[] = [];
-
   for (const candidate of candidates) {
     if ((await candidate.count()) === 0) continue;
     if (!(await candidate.isVisible())) continue;
-    // `svg.lucide-square-pen` also sits on the sidebar "New chat" action; skip it
-    // instead of clicking a button that takes the run out of Docs.
-    if (await namesChatAction(candidate)) continue;
 
     // The notice can mount after the dismissal above (it waits for the user
     // preference and the Docs home list), and then its mask swallows the click
     // until the step times out. Dismiss it again and retry instead.
-    let clicked = false;
-    for (let attempt = 1; attempt <= NEW_PAGE_CLICK_ATTEMPTS; attempt++) {
+    for (let attempt = 1; ; attempt++) {
       try {
         await candidate.click({ timeout: 5000 });
-        clicked = true;
         break;
       } catch (error) {
-        clickErrors.push(error as Error);
-        // The control can also unmount between the visibility check and the
-        // click; the remaining candidates are then the better bet.
-        if (attempt < NEW_PAGE_CLICK_ATTEMPTS) await dismissDocsMergeNotice(world, 1500);
+        if (attempt >= NEW_PAGE_CLICK_ATTEMPTS) throw error;
+        await dismissDocsMergeNotice(world, 1500);
       }
     }
-
-    if (!clicked) continue;
-
     await world.page.waitForTimeout(500);
     return;
   }
 
-  throw new Error(
-    `Could not find new page button${clickErrors.length > 0 ? ` (last error: ${clickErrors.at(-1)?.message})` : ''}`,
-  );
+  throw new Error('Could not find new page button');
 }
 
 /**

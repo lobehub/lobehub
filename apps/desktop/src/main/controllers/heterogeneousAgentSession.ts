@@ -7,7 +7,6 @@ import type { AskUserBridge, AskUserBridgeOptions } from '@lobechat/heterogeneou
 import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protocol';
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
-  AntigravityLiveInput,
   ClaudeAgentSdkSession,
   ClaudeCodeLiveInput,
   CodexThreadSession,
@@ -15,6 +14,9 @@ import type {
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
+  AntigravityAcpSession,
+  buildAntigravityAcpLaunch,
+  buildAntigravityAcpPrompt,
   buildCopilotAcpArgs,
   buildCopilotAcpPrompt,
   buildCursorAcpArgs,
@@ -32,6 +34,7 @@ import {
   DevinAcpSession,
   DroidAcpSession,
   GrokAcpSession,
+  isAntigravityAcpSessionNotFoundError,
   isCopilotAcpSessionNotFoundError,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
@@ -134,6 +137,8 @@ export interface SendPromptParams {
 export interface AgentSession {
   agentSessionId?: string;
   agentType: HeterogeneousAgentType;
+  /** Active Antigravity ACP run; follow-ups are steered into it. */
+  antigravityAcpSession?: AntigravityAcpSession;
   appServerSession?: CodexThreadSession;
   args: string[];
   /**
@@ -157,8 +162,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
-  /** Open input of a live CLI run (Claude Code or Antigravity). */
-  liveInput?: AntigravityLiveInput | ClaudeCodeLiveInput;
+  /** Open input of a live CLI run (Claude Code). */
+  liveInput?: ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -227,6 +232,20 @@ export const getAcpResumeError = (
   session: AgentSession,
 ): HeterogeneousAgentSessionError | undefined => {
   if (!session.resumeSessionId) return;
+
+  if (session.agentType === 'antigravity' && isAntigravityAcpSessionNotFoundError(error)) {
+    return {
+      agentType: 'antigravity',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: { code: error.rpcError.code, message: error.rpcError.message },
+      message:
+        'The saved Antigravity conversation could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
 
   if (session.agentType === 'copilot' && isCopilotAcpSessionNotFoundError(error)) {
     return {
@@ -319,6 +338,10 @@ export const getAcpResumeError = (
 };
 
 export const interruptActiveAcpSession = async (session: AgentSession): Promise<boolean> => {
+  if (session.antigravityAcpSession) {
+    session.antigravityAcpSession.interrupt();
+    return true;
+  }
   if (session.copilotAcpSession) {
     session.copilotAcpSession.interrupt();
     return true;
@@ -348,6 +371,7 @@ export const interruptActiveAcpSession = async (session: AgentSession): Promise<
 
 export const closeActiveAcpSessions = (session: AgentSession): void => {
   for (const active of [
+    session.antigravityAcpSession,
     session.copilotAcpSession,
     session.devinAcpSession,
     session.grokAcpSession,
@@ -426,6 +450,7 @@ const runInteractiveAcpSession = async (
   }: {
     acpSession: InteractiveAcpSession;
     activeSessionKey:
+      | 'antigravityAcpSession'
       | 'copilotAcpSession'
       | 'cursorAcpSession'
       | 'devinAcpSession'
@@ -436,7 +461,8 @@ const runInteractiveAcpSession = async (
     session: AgentSession;
     stderrChunks: string[];
     traceSession: CliTraceSession | undefined;
-    transport: 'copilot-acp' | 'cursor-acp' | 'devin-acp' | 'droid-acp' | 'trae-acp';
+    transport:
+      'antigravity-acp' | 'copilot-acp' | 'cursor-acp' | 'devin-acp' | 'droid-acp' | 'trae-acp';
   },
 ): Promise<void> => {
   try {
@@ -475,7 +501,15 @@ const runInteractiveAcpSession = async (
     });
   } finally {
     await cleanup?.();
-    if (activeSessionKey === 'copilotAcpSession' && session.copilotAcpSession === acpSession) {
+    if (
+      activeSessionKey === 'antigravityAcpSession' &&
+      session.antigravityAcpSession === acpSession
+    ) {
+      session.antigravityAcpSession = undefined;
+    } else if (
+      activeSessionKey === 'copilotAcpSession' &&
+      session.copilotAcpSession === acpSession
+    ) {
       session.copilotAcpSession = undefined;
     } else if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
       session.cursorAcpSession = undefined;
@@ -624,6 +658,49 @@ export const sendPromptWithAcpSession = async (
     resumeSessionId: session.agentSessionId,
     sessionId: session.sessionId,
   });
+
+  if (session.agentType === 'antigravity') {
+    const prompt = await buildAntigravityAcpPrompt(promptInput, { cacheDir: host.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await host.createCliTraceSession({
+      cliArgs: buildAntigravityAcpLaunch(session.args).args,
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void host.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+    if (session.cancelledByUs) {
+      await host.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+    const intervention = host.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'antigravity',
+    );
+    const antigravityAcpSession = new AntigravityAcpSession({
+      ...createCommonOptions(traceSession),
+      askUserBridge: intervention.bridge,
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'antigravity-acp';
+      },
+      prompt,
+    });
+    session.antigravityAcpSession = antigravityAcpSession;
+    await runInteractiveAcpSession(host, {
+      acpSession: antigravityAcpSession,
+      activeSessionKey: 'antigravityAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isAntigravityAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'antigravity-acp',
+    });
+    return;
+  }
 
   if (session.agentType === 'cursor') {
     const prompt = buildCursorAcpPrompt(promptInput);

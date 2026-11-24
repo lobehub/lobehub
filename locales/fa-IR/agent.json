@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "بازدیدکنندگان فقط این آژان را نمی‌خوانند — آن را اجرا می‌کنند. هر پاسخ در فضای کاری تولید می‌شود و به بودجه مشترک آن محاسبه می‌شود، بدون مصرف سهمیه سازنده یا عضو دیگر. آژان فقط با دسترسی بازدیدکننده‌ای که در زیر اعطا می‌کنید عمل می‌کند.",
   "share.settings.notice.workspaceTitle": "بازدیدکنندگان این آژان را با بودجه فضای کاری اجرا می‌کنند",
   "share.settings.permissions.allowCreatorViewSessions": "اجازه دهید مکالمات بازدیدکنندگان را بخوانم",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "به‌طور پیش‌فرض غیرفعال: مکالمات بازدیدکنندگان خصوصی باقی می‌مانند.",
   "share.settings.permissions.allowReadMemory": "اجازه خواندن حافظه من",
   "share.settings.permissions.allowReadMemoryHint": "عامل ممکن است هنگام پاسخ به بازدیدکننده از حافظه بلندمدت شما استفاده کند.",
   "share.settings.permissions.desc": "آنچه اجرای بازدیدکننده ممکن است بخواند و آنچه بازدیدکننده می‌تواند ببیند.",

@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   canManage: false,
   currentUserId: 'user-current',
+  // Off by default so the ownership cases below read without the favorite group.
+  favoriteItem: null as { key: string; label: string } | null,
+  favoriteMenuItem: vi.fn(),
   openEditor: vi.fn(),
   transferItems: [
     { key: 'transfer-knowledge-base', label: 'Move to…' },
@@ -28,6 +31,13 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 
 vi.mock('@/business/client/hooks/useKnowledgeBaseTransferMenuItem', () => ({
   useKnowledgeBaseTransferMenuItem: () => mocks.transferItems,
+}));
+
+vi.mock('@/features/Favorites', () => ({
+  useFavoriteMenuItem: (...args: unknown[]) => {
+    mocks.favoriteMenuItem(...args);
+    return mocks.favoriteItem;
+  },
 }));
 
 vi.mock('@/features/LibraryModal', () => ({
@@ -102,6 +112,37 @@ describe('Knowledge base list item dropdown menu', () => {
     mocks.canEdit = true;
     mocks.canManage = false;
     mocks.currentUserId = 'user-current';
+    mocks.favoriteItem = null;
+  });
+
+  it('leads with the favorite toggle for the row, without the page hotkey', () => {
+    mocks.favoriteItem = { key: 'toggleFavorite', label: 'Add to Favorites' };
+
+    expect(getMenuStructure(getItems())).toEqual([
+      'toggleFavorite',
+      'divider',
+      'rename',
+      'editDescription',
+      'divider',
+      'delete',
+    ]);
+    expect(mocks.favoriteMenuItem).toHaveBeenCalledWith(
+      {
+        icon: null,
+        path: '/resource/library/kb-1',
+        targetId: 'kb-1',
+        title: 'Shared library',
+        type: 'library',
+      },
+      { showHotkey: false },
+    );
+  });
+
+  it('lets a member who cannot edit content still favorite the library', () => {
+    mocks.canEdit = false;
+    mocks.favoriteItem = { key: 'toggleFavorite', label: 'Add to Favorites' };
+
+    expect(getMenuStructure(getItems())).toEqual(['toggleFavorite']);
   });
 
   it('lets workspace members edit and delete a shared knowledge base', () => {

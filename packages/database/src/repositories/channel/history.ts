@@ -1,5 +1,6 @@
 import type {
   ChannelAgentExchange,
+  ChannelAskInput,
   ChannelConnectorRequest,
   ChannelContextMessage,
   ChannelExecutionConfig,
@@ -10,6 +11,8 @@ import type {
   ChannelJobStatus,
   ChannelListThreadsParams,
   ChannelMessageVia,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelThreadPage,
@@ -25,6 +28,7 @@ import {
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { isEqual } from 'es-toolkit';
 
 import {
   agentOperations,
@@ -40,11 +44,13 @@ import {
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { isUuid } from '../../utils/uuid';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
 import { channelUserNameSql } from './nickname';
+import { normalizeReactionEmoji, setReaction } from './reactions';
 import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
@@ -276,6 +282,41 @@ export class ChannelHistoryRepository {
       const asked = await message(request.replyToId);
       const exchange = channelAgentExchange(asked?.metadata);
       return { channelId, ...(exchange && { exchange }), manifest };
+    });
+
+  /**
+   * Holds the questions a run asks its requester (`lobe-channel.askUser`) on its job; publishing
+   * the reply posts them with it as an `ask` message. One ask per run: a retried call with the
+   * same questions is a no-op, different ones are refused. Only a person's own request can be
+   * asked back: an Agent's request has nobody to answer the card.
+   */
+  ask = async (operationId: string, input: ChannelAskInput): Promise<void> =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [request] = await tx
+        .select({ agentId: channelMessages.agentId, metadata: channelMessages.metadata })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, manifest.requestMessageId),
+          ),
+        )
+        .limit(1);
+      if (!request || request.agentId || channelMessageVia(request.metadata))
+        throw new ChannelError(
+          'FORBIDDEN',
+          'Only a request a person wrote can be asked back; answer this one instead',
+        );
+      const [job] = await tx
+        .select({ ask: channelJobs.ask, id: channelJobs.id })
+        .from(channelJobs)
+        .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channelId)))
+        .limit(1);
+      if (job.ask) {
+        if (isEqual(job.ask, input)) return;
+        throw new ChannelError('CONFLICT', 'This reply already asks its questions');
+      }
+      await tx.update(channelJobs).set({ ask: input }).where(eq(channelJobs.id, job.id));
     });
 
   /**
@@ -682,9 +723,10 @@ export class ChannelHistoryRepository {
             ? await findThread(tx, channelId, params.threadId)
             : null;
         const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
-        const [message] = await readManifestMessages(tx, channelId, manifest, {
-          messageId: params.messageId,
-        });
+        // Message ids are uuids; anything else (a Thread id, say) would abort the query.
+        const [message] = isUuid(params.messageId)
+          ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+          : [];
         if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
         if (offset > message.content.length)
           throw new ChannelError('BAD_REQUEST', 'Offset exceeds message length');
@@ -697,6 +739,40 @@ export class ChannelHistoryRepository {
       },
       { allowShared: true },
     );
+  };
+
+  /**
+   * The run's Agent adds (`add`) or removes its own reaction on a message it can read: in its own
+   * conversation up to the request cutoff, or in another Thread it read. Like a person's, the
+   * reaction posts nothing, wakes nobody and leaves read state alone.
+   */
+  react = async (
+    operationId: string,
+    params: ChannelReactParams,
+    add: boolean,
+  ): Promise<ChannelReacted & { channelId: string }> => {
+    if (!params.messageId?.trim()) throw new ChannelError('BAD_REQUEST', 'messageId is required');
+    const emoji = normalizeReactionEmoji(params.emoji ?? '');
+    return this.read(operationId, async (tx, channelId, runManifest) => {
+      const other =
+        params.threadId && params.threadId !== runManifest.threadId
+          ? await findThread(tx, channelId, params.threadId)
+          : null;
+      const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
+      const [message] = isUuid(params.messageId)
+        ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+        : [];
+      if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
+      const { added } = await setReaction(
+        tx,
+        channelId,
+        manifest.self.memberId,
+        message.id,
+        emoji,
+        add,
+      );
+      return { added, channelId, emoji, messageId: message.id };
+    });
   };
 }
 

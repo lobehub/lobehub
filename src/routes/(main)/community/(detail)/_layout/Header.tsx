@@ -11,10 +11,6 @@ import urlJoin from 'url-join';
 import { MARKETPLACE_MCP_PATH, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import StoreSearchBar from '@/routes/(main)/community/features/Search';
-import UserAvatar from '@/routes/(main)/community/features/UserAvatar';
-import { useDiscoverStore } from '@/store/discover';
-import { userSelectors } from '@/store/discover/selectors';
 
 import { styles } from './Header/style';
 
@@ -25,19 +21,8 @@ const Header = memo(() => {
   const path = location.pathname.split('/').filter(Boolean);
   const communityIndex = path.indexOf(MARKETPLACE_SEGMENT);
   const detailType = communityIndex >= 0 ? path[communityIndex + 1] : undefined;
-  const detailSlug = communityIndex >= 0 ? path[communityIndex + 2] : undefined;
-  const profileUsername =
-    (detailType === 'user' || detailType === 'org') && detailSlug
-      ? decodeURIComponent(detailSlug)
-      : '';
 
-  const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { queryKey: detailProfileQueryKey } = useUserProfile({ username: profileUsername });
-  // The replica view of this profile; the sync hook only reports the fetch flags.
-  const detailProfile = useDiscoverStore(userSelectors.userProfile(detailProfileQueryKey));
-  const detailAvatar =
-    detailProfile?.user.avatarUrl || detailProfile?.user.userName || detailProfile?.user.namespace;
-
+  // A detail page's bar only goes back: no store search or account entry.
   const handleGoBack = () => {
     const catalog = location.state?.marketplaceCatalog;
     if (typeof catalog === 'string') {
@@ -72,12 +57,10 @@ const Header = memo(() => {
   return (
     <NavHeader
       className={stylex.props(styles.headerContainer).className}
-      right={<UserAvatar avatarOverride={detailAvatar} />}
       style={cssVariables}
       left={
         <Flexbox horizontal align={'center'} flex={1} gap={8}>
           <ActionIcon icon={ArrowLeft} size={'small'} title={t('back')} onClick={handleGoBack} />
-          <StoreSearchBar />
         </Flexbox>
       }
       styles={{

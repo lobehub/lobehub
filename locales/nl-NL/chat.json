@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} verbindingen",
   "heteroAgent.executionTarget.personalGroup": "Privéapparaten",
   "heteroAgent.executionTarget.presenceChecking": "Status controleren…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Alleen apparaten met de werkmap van dit project worden weergegeven. Voeg een map toe voor een ander apparaat in de projectinstellingen.",
   "heteroAgent.executionTarget.reconnect": "Opnieuw verbinden",
   "heteroAgent.executionTarget.reconnectFailed": "Kan dit apparaat niet opnieuw verbinden. Zorg ervoor dat de desktop-app actief is en probeer het opnieuw.",
   "heteroAgent.executionTarget.sandbox": "Cloud-sandbox",
