@@ -1,12 +1,13 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Avatar, Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
+import { Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
 import { EyeOffIcon, GlobeIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import Avatar from '@/components/Avatar';
 import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { matchesVisibilityFilter, type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -201,7 +202,8 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
                     <Tooltip title={author.name}>
                       <span data-testid={`cred-author-${cred.id}`} style={{ display: 'flex' }}>
                         <Avatar
-                          avatar={author.avatar || author.name}
+                          avatar={author.avatar}
+                          name={author.name}
                           size={24}
                           title={author.name}
                         />
