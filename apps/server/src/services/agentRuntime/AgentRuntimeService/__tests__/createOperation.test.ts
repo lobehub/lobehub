@@ -241,6 +241,56 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    describe('run-tree root agent (origin.lineage.rootAgentId)', () => {
+      const createWith = async (overrides: Partial<OperationCreationParams>) => {
+        mockCoordinator.saveAgentState.mockClear();
+        await service.createOperation({ ...mockParams, autoStart: false, ...overrides });
+        return mockCoordinator.saveAgentState.mock.calls[0][1].origin.lineage.rootAgentId;
+      };
+
+      it('makes a root run its own root', async () => {
+        expect(await createWith({ appContext: { agentId: 'agt_public' } })).toBe('agt_public');
+      });
+
+      it("inherits the parent's root through nested children", async () => {
+        await mockCoordinator.saveAgentState('root-op', {
+          origin: { agentId: 'agt_public', lineage: { rootAgentId: 'agt_public' } },
+        });
+        await mockCoordinator.saveAgentState('child-op', {
+          origin: {
+            agentId: 'agt_child',
+            lineage: { parentOperationId: 'root-op', rootAgentId: 'agt_public' },
+          },
+        });
+
+        expect(
+          await createWith({
+            appContext: { agentId: 'agt_grandchild' },
+            parentOperationId: 'child-op',
+          }),
+        ).toBe('agt_public');
+      });
+
+      it('falls back to the parent agent for a parent created before roots were recorded', async () => {
+        await mockCoordinator.saveAgentState('legacy-root-op', {
+          origin: { agentId: 'agt_public', lineage: {} },
+        });
+
+        expect(
+          await createWith({
+            appContext: { agentId: 'agt_child' },
+            parentOperationId: 'legacy-root-op',
+          }),
+        ).toBe('agt_public');
+      });
+
+      it('records no root when the parent state is gone', async () => {
+        expect(
+          await createWith({ appContext: { agentId: 'agt_child' }, parentOperationId: 'gone-op' }),
+        ).toBeUndefined();
+      });
+    });
+
     describe('file Works declaration (host.acceptsFileWorks)', () => {
       it('stores the declaration the client made', async () => {
         await service.createOperation({ ...mockParams, acceptsFileWorks: true, autoStart: false });

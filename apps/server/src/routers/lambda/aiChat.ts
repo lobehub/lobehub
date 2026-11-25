@@ -7,6 +7,7 @@ import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/t
 import {
   AiSendMessageServerSchema,
   DecisionOutputSchema,
+  omitServerSpendOrigin,
   RequestTrigger,
   StructureOutputSchema,
 } from '@lobechat/types';
@@ -179,7 +180,8 @@ export const aiChatRouter = router({
         {
           metadata: {
             trigger: RequestTrigger.Chat,
-            ...input.metadata,
+            // Billing attribution is server-only; a client must not choose who pays.
+            ...omitServerSpendOrigin(input.metadata),
             userAgent: ctx.userAgent,
           },
           tracing: { ...input.tracing, tracingId },
@@ -224,7 +226,8 @@ export const aiChatRouter = router({
         {
           metadata: {
             trigger: RequestTrigger.Chat,
-            ...input.metadata,
+            // Billing attribution is server-only; a client must not choose who pays.
+            ...omitServerSpendOrigin(input.metadata),
             // Preserve extensible metadata while using the originating request's UA.
             userAgent: ctx.userAgent,
           },

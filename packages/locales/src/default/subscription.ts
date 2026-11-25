@@ -270,6 +270,42 @@ export default {
   'credits.dedicatedBudget.saveSuccess': 'Dedicated budget saved',
   'credits.dedicatedBudget.userPanel.label': 'Dedicated budget',
   'credits.dedicatedBudget.emptyTitle': 'No dedicated budgets yet',
+  'credits.agentBudget.actions.add': 'Agent budget',
+  'credits.agentBudget.actions.edit': 'Edit Agent budget',
+  'credits.agentBudget.agent': 'Agent',
+  'credits.agentBudget.agentPlaceholder': 'Select a public Agent',
+  'credits.agentBudget.createTitle': 'New Agent budget',
+  'credits.agentBudget.deletedAgent': 'Deleted Agent',
+  'credits.agentBudget.desc':
+    "Give a shared Agent its own allowance — its runs draw on it instead of the author's or users' quotas",
+  'credits.agentBudget.editTitle': 'Edit Agent budget',
+  'credits.agentBudget.empty':
+    "Give a public Agent its own allowance. Every run of it, by any member, uses this budget instead of the member's own.",
+  'credits.agentBudget.emptyTitle': 'No Agent budgets yet',
+  'credits.agentBudget.hint':
+    "Resets with the Workspace billing cycle. When it runs out, the Agent stops instead of using members' own quotas.",
+  'credits.agentBudget.noAgentsAvailable':
+    'Every public Agent already has a budget, or the Workspace has no public Agent yet.',
+  'credits.agentBudget.removeConfirm.desc':
+    "Later runs of this Agent will use each member's own quota again.",
+  'credits.agentBudget.removeConfirm.title': 'Remove this Agent budget?',
+  'credits.agentBudget.reserved':
+    'This Agent has runs in progress. Lower or remove its budget after they finish.',
+  'credits.agentBudget.removeSuccess': 'Agent budget removed',
+  'credits.agentBudget.saveFailed':
+    "Couldn't save the Agent budget. Check your connection and try again.",
+  'credits.agentBudget.saveSuccess': 'Agent budget saved',
+  'credits.agentBudget.status.desc':
+    'Runs of this Agent use this budget, not your own quota. Resets with the Workspace billing cycle.',
+  'credits.agentBudget.status.title': 'Agent budget',
+  'credits.agentBudget.title': 'Agent budgets',
+  'credits.agentBudget.untitled': 'Untitled Agent',
+  'limitation.workspace.agentBudget.adminDesc':
+    'Raise its Agent budget in the budget settings to keep using it.',
+  'limitation.workspace.agentBudget.manage': 'Adjust in budget settings',
+  'limitation.workspace.agentBudget.memberDesc':
+    'Ask a Workspace admin to raise it. Your own quota is never used for this Agent.',
+  'limitation.workspace.agentBudget.title': "This Agent's budget has run out",
   'credits.teamBudget.actions.add': 'Team budget',
   'credits.teamBudget.actions.edit': 'Edit team budget',
   'credits.teamBudget.createTitle': 'New team budget',

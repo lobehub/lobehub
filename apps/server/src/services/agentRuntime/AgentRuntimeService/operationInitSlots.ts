@@ -44,11 +44,14 @@ export const buildPreInitState = (
     artboardWorksAccepted,
     fileWorksAccepted,
     llmExecutor,
+    rootAgentId,
   }: {
     /** The client's `file` Works declaration, inherited by a group member. */
     fileWorksAccepted?: boolean;
     artboardWorksAccepted?: boolean;
     llmExecutor?: NonNullable<AgentState['host']>['llmExecutor'];
+    /** See `AgentRunLineage.rootAgentId`; resolved from the parent by `createOperation`. */
+    rootAgentId?: string;
   },
 ): Partial<AgentState> => {
   const {
@@ -112,6 +115,7 @@ export const buildPreInitState = (
         orchestrationRole: appContext?.orchestrationRole,
         parentOperationId,
         progressAnchor: appContext?.subAgentProgress,
+        rootAgentId,
       },
       projectId: appContext?.projectId,
       scope: appContext?.scope ?? undefined,

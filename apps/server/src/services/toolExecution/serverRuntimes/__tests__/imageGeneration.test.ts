@@ -7,8 +7,9 @@ import { imageGenerationRuntime } from '../imageGeneration';
 // assertions below without pulling in the full tRPC caller context type.
 interface ImageCallerContext {
   spendOrigin?: {
-    agentShare: { agentId: string; shareId: string; visitorUserId: string };
-    trigger: string;
+    agentShare?: { agentId: string; shareId: string; visitorUserId: string };
+    billingAgentId?: string;
+    trigger?: string;
   };
 }
 
@@ -97,6 +98,35 @@ describe('imageGenerationRuntime', () => {
     // Permission fields of the runtime object must never leak into billing metadata.
     expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('allowReadMemory');
     expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('toolGrants');
+  });
+
+  it('carries the run root agent so generated images count toward that agent', () => {
+    imageGenerationRuntime.factory({
+      billingAgentId: 'agt_root',
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toEqual({ billingAgentId: 'agt_root' });
+  });
+
+  it('keeps share attribution, not the billing agent, for a share-visitor run', () => {
+    imageGenerationRuntime.factory({
+      agentShareVisitor: {
+        agentId: 'agent-1',
+        allowReadMemory: false,
+        toolGrants: [{ identifier: 'lobe-image-generation' }],
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      billingAgentId: 'agent-1',
+      toolManifestMap: {},
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).not.toHaveProperty('billingAgentId');
   });
 
   it('omits spend attribution for a non-share run', () => {

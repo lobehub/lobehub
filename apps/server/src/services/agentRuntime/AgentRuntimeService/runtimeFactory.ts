@@ -1,5 +1,10 @@
 import type { AgentRunLlmExecutor, AgentState } from '@lobechat/agent-runtime';
-import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import {
+  AgentRuntime,
+  findInMessages,
+  GeneralChatAgent,
+  resolveRunRootAgentId,
+} from '@lobechat/agent-runtime';
 import {
   AGENT_ACCOUNT_OUTBOUND_AUDIT,
   createAgentAccountOutboundAudit,
@@ -351,6 +356,7 @@ export async function createAgentRuntime(
     // can exist. Deferring to the terminal `visible_output_end` lets loading
     // cover the export and the card land with `agent_runtime_end`.
     agentShareVisitor: principal?.actor?.shareVisitor,
+    billingAgentId: resolveRunRootAgentId(state?.origin),
     allowEarlyFinalAnswerVisibleOutputEnd:
       agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
     botContext: principal?.actor?.bot,
