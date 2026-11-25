@@ -19,6 +19,11 @@ vi.mock('@/database/models/agent');
 vi.mock('@/database/models/message');
 vi.mock('@/database/models/project');
 vi.mock('@/database/models/thread');
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    resolveConversationMode = async (_id: string, fallback: string) => fallback;
+  },
+}));
 vi.mock('@/database/repositories/topic');
 vi.mock('@/server/services/aiChat');
 vi.mock('@/server/services/file', () => ({ FileService: vi.fn() }));
@@ -29,6 +34,7 @@ const findProject = vi.fn();
 
 const send = () =>
   aiChatRouter.createCaller({ userId: 'u1' } as any).sendMessageInServer({
+    conversationMode: 'agent',
     newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
     newTopic: { projectId: 'prj_1', title: 'T' },
     newUserMessage: { content: 'hi' },

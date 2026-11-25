@@ -18,6 +18,7 @@ import {
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
   resolveHeterogeneousTopicRuntimeSnapshot,
+  resolveToolMode,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -994,7 +995,13 @@ export const setupTurn = async (
         // branch), so a group turn must stamp groupId or the message never
         // shows when the topic is reopened (group topic sidebar + ownership fix).
         groupId: appContext?.groupId ?? undefined,
-        metadata: requestTriggerMetadata,
+        metadata: {
+          ...requestTriggerMetadata,
+          conversationMode:
+            resolveToolMode(agentConfig.chatConfig) === 'chat'
+              ? ('chat' as const)
+              : ('agent' as const),
+        },
         parentId: userMessageParentId,
         role: 'user' as const,
         threadId: appContext?.threadId ?? undefined,

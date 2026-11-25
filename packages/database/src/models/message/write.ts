@@ -100,7 +100,8 @@ export class MessageWriteMutations extends MessageScope {
       .for('update');
     if (!topic) throw new Error('Conversation topic is unavailable');
     const lockedMode = topic.metadata?.conversationMode;
-    if (lockedMode && lockedMode !== mode) throw new Error('Conversation mode is locked');
+    if (lockedMode && lockedMode !== mode)
+      throw Object.assign(new Error('Conversation mode is locked'), { status: 409 });
     if (!lockedMode) {
       await trx
         .update(topics)

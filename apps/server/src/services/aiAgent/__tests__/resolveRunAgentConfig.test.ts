@@ -6,10 +6,18 @@ import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnaps
 
 import { resolveRunAgentConfig } from '../pipeline/resolveRunAgentConfig';
 
-const { getInfoForAIGeneration, getPreference, isResourceAuthorOrAdmin } = vi.hoisted(() => ({
-  getInfoForAIGeneration: vi.fn(),
-  getPreference: vi.fn(),
-  isResourceAuthorOrAdmin: vi.fn(),
+const { getInfoForAIGeneration, getPreference, isResourceAuthorOrAdmin, resolveConversationMode } =
+  vi.hoisted(() => ({
+    getInfoForAIGeneration: vi.fn(),
+    getPreference: vi.fn(),
+    isResourceAuthorOrAdmin: vi.fn(),
+    resolveConversationMode: vi.fn(),
+  }));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    resolveConversationMode = resolveConversationMode;
+  },
 }));
 
 vi.mock('@/database/models/workspaceUserSettings', () => ({
@@ -53,6 +61,31 @@ describe('resolveRunAgentConfig', () => {
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
     getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
+    resolveConversationMode.mockImplementation(async (_topicId, fallback) => fallback);
+  });
+
+  it('uses a committed topic mode before filtering plugins despite a stale IM override', async () => {
+    resolveConversationMode.mockResolvedValue('chat');
+    const { agentConfig } = await resolveRunAgentConfig(
+      {
+        ...deps,
+        resolveAgentConfigOrThrow: async () =>
+          ({
+            ...(webOnboardingRow() as object),
+            id: 'agent-regular',
+            slug: null,
+            chatConfig: { enableAgentMode: true },
+          }) as never,
+      },
+      {
+        appContext: { topicId: 'topic-locked' },
+        identifier: 'agent-regular',
+        toolModeOverride: 'agent',
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    expect(agentConfig.chatConfig?.enableAgentMode).toBe(false);
+    expect(agentConfig.chatConfig?.toolMode).toBe('chat');
   });
 
   it('keeps a builtin runtime execution target over a saved member device override', async () => {

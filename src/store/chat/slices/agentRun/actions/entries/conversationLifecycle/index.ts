@@ -133,6 +133,7 @@ import { type ContextCompressionOptions, executeContextCompression } from './com
 import { getOptimisticMessageMedia } from './optimisticMessageMedia';
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
+import { getSendConversationMode } from './sendConversationMode';
 import { showSendErrorInContext } from './sendErrorNotice';
 import { submitFirstSendWorktree } from './submitFirstSendWorktree';
 
@@ -1275,11 +1276,9 @@ export class ConversationLifecycleActionImpl {
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
+            conversationMode: getSendConversationMode(operationContext.agentId!, boundTopic),
             groupId: operationContext.groupId ?? undefined,
-            // External CLIs own model selection and may reroute independently
-            // from the agent's requested model. Persist only the runtime
-            // provider up front; the adapter backfills the actual model later
-            // if the CLI reports it.
+            // External CLIs report their selected model after execution.
             newAssistantMessage: {
               agentId: directMentionRoute ? agentId : undefined,
               id: tempAssistantId,
@@ -1790,6 +1789,7 @@ export class ConversationLifecycleActionImpl {
       const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
       data = await aiChatService.sendMessageInServer(
         {
+          conversationMode: getSendConversationMode(operationContext.agentId!, boundTopic),
           newUserMessage: {
             content: persistedContent,
             editorData,

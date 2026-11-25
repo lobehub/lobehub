@@ -244,6 +244,7 @@ type SystemStrings = {
   cmdModeSetAgent: string;
   cmdModeSetChat: string;
   cmdModeStatus: (mode?: 'agent' | 'chat') => string;
+  cmdModeLockedStatus: (mode: 'agent' | 'chat') => string;
   cmdModeUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
@@ -335,8 +336,10 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
     cmdFeedbackUsage:
       'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
-    cmdModeSetAgent: 'Switched to Agent Mode — replies can use tools and run multi-step tasks.',
-    cmdModeSetChat: 'Switched to Chat Mode — replies are plain conversation without tools.',
+    cmdModeSetAgent: 'Selected Agent Mode for the next conversation.',
+    cmdModeSetChat: 'Selected Chat Mode for the next conversation.',
+    cmdModeLockedStatus: (mode) =>
+      `Current mode: ${mode === 'chat' ? 'Chat' : 'Agent'} Mode. This conversation's mode is fixed. Use /new to start another conversation.`,
     cmdModeStatus: (mode) =>
       mode
         ? `Current mode: ${mode === 'agent' ? 'Agent Mode' : 'Chat Mode'}. Use \`/mode agent\` or \`/mode chat\` to switch.`
@@ -469,8 +472,10 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
     cmdFeedbackUsage:
       '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
-    cmdModeSetAgent: '已切换到 Agent 模式 —— 回复可调用工具并执行多步任务。',
-    cmdModeSetChat: '已切换到 Chat 模式 —— 仅进行纯对话，不调用工具。',
+    cmdModeSetAgent: '已为新对话选择 Agent 模式。',
+    cmdModeSetChat: '已为新对话选择 Chat 模式。',
+    cmdModeLockedStatus: (mode) =>
+      `当前模式：${mode === 'chat' ? 'Chat' : 'Agent'}。本对话模式已固定，使用 /new 开始新对话后可重新选择。`,
     cmdModeStatus: (mode) =>
       mode
         ? `当前模式：${mode === 'agent' ? 'Agent 模式' : 'Chat 模式'}。使用 \`/mode agent\` 或 \`/mode chat\` 切换。`
@@ -914,7 +919,12 @@ export function renderWhoami(params: WhoamiReplyParams, lng?: BotReplyLocale): s
  * per-conversation override when one was set via `/mode agent|chat`; undefined
  * means the conversation follows the agent's configured default.
  */
-export function renderModeStatus(mode?: 'agent' | 'chat', lng?: BotReplyLocale): string {
+export function renderModeStatus(
+  mode?: 'agent' | 'chat',
+  lng?: BotReplyLocale,
+  locked = false,
+): string {
+  if (locked && mode) return getSystemStrings(lng).cmdModeLockedStatus(mode);
   return getSystemStrings(lng).cmdModeStatus(mode);
 }
 

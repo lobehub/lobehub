@@ -259,6 +259,7 @@ describe('native Session to Agent compatibility', () => {
         ),
       ).toContain('Native message');
       const send = await caller.aiChat.sendMessageInServer({
+        conversationMode: 'agent',
         sessionId: id,
         newUserMessage: { content: 'Native send' },
         newAssistantMessage: { agentId: id, model: 'model-market', provider: 'openai' },

@@ -13,6 +13,8 @@ export interface RecordTracingFeedbackParams {
 }
 
 class AiChatService {
+  resolveConversationMode = (topicId: string, fallback: 'agent' | 'chat') =>
+    lambdaClient.aiChat.resolveConversationMode.mutate({ topicId, fallback });
   sendMessageInServer = async (
     params: SendMessageServerParams,
     abortController: AbortController,

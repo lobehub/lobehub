@@ -24,6 +24,15 @@ afterEach(async () => {
 const topic = async () => (await db.select().from(topics).where(eq(topics.id, 'mode-topic')))[0];
 
 describe('conversation mode commit', () => {
+  it('only snapshots a legacy mode when the topic already has a user turn', async () => {
+    const topicModel = new TopicModel(db, userId);
+    expect(await topicModel.resolveConversationMode('mode-topic', 'chat')).toBe('chat');
+    expect((await topic()).metadata?.conversationMode).toBeUndefined();
+    await model.create({ content: 'legacy', role: 'user', topicId: 'mode-topic' });
+    expect(await topicModel.resolveConversationMode('mode-topic', 'chat')).toBe('chat');
+    expect(await topicModel.resolveConversationMode('mode-topic', 'agent')).toBe('chat');
+    expect((await topic()).metadata?.conversationMode).toBe('chat');
+  });
   it('locks the first user intent and rejects a conflicting turn without inserting either message', async () => {
     await model.create({
       content: 'hello',

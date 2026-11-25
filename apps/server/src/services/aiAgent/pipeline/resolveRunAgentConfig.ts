@@ -2,12 +2,7 @@ import { getUserDisabledToolIds, isOnDemandBuiltinTool } from '@lobechat/builtin
 import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
-import type {
-  AgentModelOverride,
-  LobeAgentAgencyConfig,
-  LobeAgentChatConfig,
-  MessageMapScope,
-} from '@lobechat/types';
+import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
   getAutoPluginIds,
@@ -15,9 +10,12 @@ import {
   getPinnedPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
+  resolveToolMode,
+  withConversationMode,
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import type { AgentConfigWithId } from '@/server/services/agent';
@@ -54,17 +52,6 @@ export interface ResolveRunAgentConfigInput {
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   toolModeOverride?: InternalExecAgentParams['toolModeOverride'];
 }
-
-// The IM /mode switch controls both the toolset and agentic context injection.
-// Returning to Agent mode keeps an explicitly custom toolset instead of widening it.
-const withConversationMode = (
-  config: LobeAgentChatConfig,
-  mode: NonNullable<ResolveRunAgentConfigInput['toolModeOverride']>,
-): LobeAgentChatConfig => ({
-  ...config,
-  enableAgentMode: mode === 'agent',
-  toolMode: mode === 'agent' && config?.toolMode === 'custom' ? 'custom' : mode,
-});
 
 export interface ResolvedRunAgentConfig {
   /**
@@ -245,6 +232,22 @@ export const resolveRunAgentConfig = async (
     workspaceId: agentWorkspaceId,
   });
 
+  const preferredMode =
+    toolModeOverride ??
+    (!canManageAgent && overrides.mode !== undefined
+      ? overrides.mode
+        ? 'agent'
+        : 'chat'
+      : resolveToolMode(row.chatConfig) === 'chat'
+        ? 'chat'
+        : 'agent');
+  const conversationMode =
+    appContext?.topicId && !appContext.isSubAgent
+      ? await new TopicModel(deps.db, deps.userId, deps.workspaceId, undefined, {
+          includeShareVisitor: !!shareVisitorUserId,
+        }).resolveConversationMode(appContext.topicId, preferredMode)
+      : toolModeOverride;
+
   const snapshot: AgentConfigSnapshot = {
     agent: {
       name: row.name ?? null,
@@ -256,15 +259,11 @@ export const resolveRunAgentConfig = async (
       workspaceId: agentWorkspaceId ?? null,
     },
     agentConfig: row,
+    conversationMode,
     canManage: canManageAgent,
     // The shared resolver filters saved pins before composing runtime tools.
     // Give it the conversation's mode now; filtered pins cannot be recovered later.
-    chatConfig: toolModeOverride
-      ? withConversationMode(
-          resolveSubAgentChatConfig(row.chatConfig, chatConfigOverride) ?? row.chatConfig,
-          toolModeOverride,
-        )
-      : row.chatConfig,
+    chatConfig: resolveSubAgentChatConfig(row.chatConfig, chatConfigOverride) ?? row.chatConfig,
     memberModeOverride: overrides.mode,
     memberModelOverride: overrides.model,
     slug: row.slug ?? undefined,
@@ -347,8 +346,8 @@ export const resolveRunAgentConfig = async (
 
   // Builtin and sub-agent patches can also declare a mode. The conversation
   // switch wins for the final context just as it does for saved pin selection.
-  if (toolModeOverride)
-    agentConfig.chatConfig = withConversationMode(agentConfig.chatConfig, toolModeOverride);
+  if (conversationMode)
+    agentConfig.chatConfig = withConversationMode(agentConfig.chatConfig, conversationMode);
 
   // Persistence-attribution agent id. Background Agent Signal runs (memory /
   // skill / self-reflection) execute under a builtin slug, so `resolvedAgentId`

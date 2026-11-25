@@ -24,6 +24,7 @@ import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ProjectModel } from '@/database/models/project';
 import { ThreadModel } from '@/database/models/thread';
+import { TopicModel } from '@/database/models/topic';
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -59,6 +60,8 @@ const rethrowIdConflict = (error: unknown): never => {
       message: 'This message has already been created.',
     });
   }
+  const runtimeError = createRuntimeTRPCError(error);
+  if (runtimeError) throw runtimeError;
   throw error;
 };
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
@@ -157,6 +160,15 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:create'));
 
 export const aiChatRouter = router({
+  resolveConversationMode: aiChatWriteProcedure
+    .input(z.object({ topicId: z.string(), fallback: z.enum(['agent', 'chat']) }))
+    .mutation(({ ctx, input }) =>
+      new TopicModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).resolveConversationMode(input.topicId, input.fallback),
+    ),
   /**
    * Asks a decision model (e.g. `lobehub/jev-1.14.0`) typed questions about one state and returns
    * its answers with probabilities: `lh generate decide`. The same `runtime.decide` call bot wake
@@ -255,6 +267,11 @@ export const aiChatRouter = router({
   sendMessageInServer: aiChatWriteProcedure
     .input(AiSendMessageServerSchema)
     .mutation(async ({ input: rawInput, ctx }) => {
+      if (!rawInput.conversationMode)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Update this client to continue with the conversation mode contract.',
+        });
       const context = await resolveContext(
         rawInput,
         ctx.serverDB,
@@ -371,6 +388,17 @@ export const aiChatRouter = router({
           log('agent updatedAt touch scheduled for agentId: %s', input.agentId);
         }
       }
+
+      const conversationMode = await new TopicModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).resolveConversationMode(topicId, input.conversationMode!);
+      if (conversationMode !== input.conversationMode)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Conversation mode is locked. Reload the conversation before sending.',
+        });
 
       // create thread if there should be a new thread
       if (input.newThread) {
@@ -518,7 +546,7 @@ export const aiChatRouter = router({
             editorData: input.newUserMessage.editorData,
             files: input.newUserMessage.files,
             groupId: input.groupId,
-            metadata: userMessageMetadata,
+            metadata: { ...userMessageMetadata, conversationMode },
             parentId,
             role: 'user',
             sessionId,
@@ -605,6 +633,7 @@ export const aiChatRouter = router({
       });
 
       return {
+        conversationMode,
         assistantMessageId: assistantMessageItem.id,
         createdThreadId,
         isCreateNewTopic,

@@ -13,6 +13,7 @@ import {
   type AgentModelConfig,
   type AgentModelOverride,
   type ChatCompletionTool,
+  type ConversationMode,
   getActivePluginIds,
   getOptedInPluginIds,
   type LobeAgentChatConfig,
@@ -20,6 +21,7 @@ import {
   type MessageMapScope,
   resolveAgentModelConfig,
   resolveToolMode,
+  withConversationMode,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
@@ -111,6 +113,8 @@ export interface AgentConfigSnapshot {
   canManage: boolean;
   /** The agent's stored chat config. */
   chatConfig: LobeAgentChatConfig;
+  /** Committed topic intent, applied after personal preferences. */
+  conversationMode?: ConversationMode;
   /** The group named by `groupId`, when the caller is running in group scope. */
   group?: {
     agents?: unknown[];
@@ -324,10 +328,11 @@ export const resolveAgentConfig = (
   // Runtime templates render `{{model}}` for the model the run will actually use.
   const model = ctx.model ?? agentConfig.model;
   const sharedChatConfig = snapshot.chatConfig;
-  const chatConfig =
+  const preferredChatConfig =
     memberModeOverride === undefined
       ? sharedChatConfig
       : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
+  const chatConfig = withConversationMode(preferredChatConfig, snapshot.conversationMode);
 
   // Base plugins from agent config: Agent mode loads on-demand builtins and `auto`
   // entries through the activator; Chat and Custom modes have no activator by default,
@@ -555,10 +560,13 @@ export const resolveAgentConfig = (
       : basePlugins;
 
   // Merge chatConfig: runtime chatConfig overrides base chatConfig
-  let resolvedChatConfig: LobeAgentChatConfig = {
-    ...chatConfig,
-    ...runtimeConfig?.chatConfig,
-  };
+  let resolvedChatConfig: LobeAgentChatConfig = withConversationMode(
+    {
+      ...chatConfig,
+      ...runtimeConfig?.chatConfig,
+    },
+    snapshot.conversationMode,
+  );
   const resolvedAgencyConfig = runtimeConfig?.agencyConfig
     ? {
         ...agentConfig.agencyConfig,

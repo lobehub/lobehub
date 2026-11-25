@@ -61,6 +61,8 @@ export interface CreateThreadWithMessageParams {
 
 export interface SendMessageServerParams {
   agentId?: string;
+  /** Explicit first-turn intent; required by current local-runtime clients. */
+  conversationMode?: 'agent' | 'chat';
   /**
    * Group ID for group chat scenarios
    * Used to associate the topic with a specific group
@@ -174,6 +176,7 @@ const clientEntityId = (entity: ClientAllocatableEntity) =>
   z.string().regex(entityIdPattern(entity)).optional();
 
 export const AiSendMessageServerSchema = z.object({
+  conversationMode: z.enum(['agent', 'chat']).optional(),
   agentId: z.string().optional(),
   groupId: z.string().optional(),
   newAssistantMessage: z.object({
@@ -190,7 +193,14 @@ export const AiSendMessageServerSchema = z.object({
   newTopic: z
     .object({
       id: clientEntityId('topics'),
-      metadata: z.custom<ChatTopicMetadata>().optional(),
+      metadata: z
+        .custom<ChatTopicMetadata>()
+        .optional()
+        .transform((metadata) => {
+          if (!metadata) return metadata;
+          const { conversationMode: _conversationMode, ...writable } = metadata;
+          return writable;
+        }),
       model: z.string().optional(),
       projectId: z.string().optional(),
       provider: z.string().optional(),
@@ -226,6 +236,7 @@ export const AiSendMessageServerSchema = z.object({
 
 export interface SendMessageServerResponse {
   assistantMessageId: string;
+  conversationMode: 'agent' | 'chat';
   /**
    * If a new thread was created, this will be the thread ID
    */

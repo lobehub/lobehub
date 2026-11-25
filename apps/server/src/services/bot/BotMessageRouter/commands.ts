@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveToolMode } from '@/helpers/executionTarget';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -110,6 +111,29 @@ export function buildCommands(
       handler: async (ctx) => {
         log('command /mode: agent=%s, platform=%s, args=%s', agentId, platform, ctx.args);
         const arg = ctx.args.trim().toLowerCase();
+        const conversationState = await ctx.getState();
+        if (typeof conversationState?.topicId === 'string') {
+          const topics = new TopicModel(serverDB, userId, info.workspaceId);
+          const configured =
+            conversationState.toolMode === 'agent' || conversationState.toolMode === 'chat'
+              ? conversationState.toolMode
+              : resolveToolMode(
+                  (
+                    await new AgentModel(serverDB, userId, info.workspaceId).getAgentConfigById(
+                      agentId,
+                    )
+                  )?.chatConfig,
+                );
+          const fallback = configured === 'chat' ? 'chat' : 'agent';
+          await topics.resolveConversationMode(conversationState.topicId, fallback);
+          const topic = await topics.findById(conversationState.topicId);
+          if (topic?.metadata?.conversationMode) {
+            await ctx.post(
+              renderModeStatus(topic.metadata.conversationMode, ctx.replyLocale, true),
+            );
+            return;
+          }
+        }
         if (!arg) {
           let override: 'agent' | 'chat' | undefined;
           try {
