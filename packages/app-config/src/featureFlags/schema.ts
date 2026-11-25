@@ -130,6 +130,17 @@ export const FeatureFlagsSchema = z.object({
    */
   managed_cloud_device: FeatureFlagValue.optional(),
 
+  /**
+   * Optional business settings tab, read by the server for personal settings. Off: hidden.
+   * Array values are user ids.
+   */
+  cloud_device_bundle: FeatureFlagValue.optional(),
+  /**
+   * Workspace ids whose settings list the optional business settings tab. Membership is checked
+   * on the server. Empty or unset: no workspace lists it.
+   */
+  cloud_device_bundle_workspaces: z.array(z.string()).optional(),
+
   topic_preview: FeatureFlagValue.optional(),
 
   // internal flag
@@ -246,6 +257,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   managed_cloud_device: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
+  cloud_device_bundle: false,
 
   // Off until the backend replaces the preview read; allowlist first.
   topic_preview: false,
