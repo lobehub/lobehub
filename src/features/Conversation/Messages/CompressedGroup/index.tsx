@@ -25,6 +25,7 @@ import { operationSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore } from '../../store';
+import { useCompressedHistoryInline } from '../Contexts/CompressedHistoryInlineContext';
 import CompressedMessageItem from './CompressedMessageItem';
 import {
   getCompressedTurnCount,
@@ -51,6 +52,7 @@ const styles = stylex.create({
   },
   container: { marginBlockEnd: '8px' },
   divider: { margin: '0' },
+  summaryTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
   messagesContainer: { paddingBlock: '8px' },
 });
 
@@ -62,6 +64,9 @@ export interface CompressedGroupMessageProps {
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
+  // The chat list renders the original conversation as rows above this group,
+  // so the group is just the divider at the compression point plus its summary.
+  const historyInline = useCompressedHistoryInline();
 
   const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
@@ -141,6 +146,55 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     );
   }
 
+  const turnsLabel = (inline: boolean) =>
+    compressedTurnCount > 0
+      ? t(inline ? 'compression.dividerAbove' : 'compression.collapsed', {
+          turns: compressedTurnCount,
+        })
+      : t(inline ? 'compression.dividerAboveUnknown' : 'compression.collapsedUnknown');
+
+  const cancelAction = (
+    <ActionIcon
+      icon={Undo2}
+      size={'small'}
+      title={t('compression.cancel')}
+      onClick={handleCancelCompression}
+    />
+  );
+
+  // The original conversation sits right above as ordinary rows, so the
+  // divider stays put as the compression marker and only toggles the summary.
+  if (historyInline) {
+    return (
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
+        <Divider className={stylex.props(styles.divider).className}>
+          <button
+            {...stylex.props(styles.collapsedButton)}
+            aria-expanded={expanded}
+            type={'button'}
+            onClick={toggleExpanded}
+          >
+            <Icon icon={History} size={14} />
+            <span>{turnsLabel(true)}</span>
+            <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
+          </button>
+        </Divider>
+        {showPanelContent && (
+          <Flexbox gap={8}>
+            <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
+              <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.summaryTitle)}>
+                <Icon icon={Sparkles} size={14} />
+                <span>{t('compression.summary')}</span>
+              </Flexbox>
+              {cancelAction}
+            </Flexbox>
+            <Markdown variant={'chat'}>{content}</Markdown>
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  }
+
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={8}>
       {expanded ? (
@@ -153,12 +207,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
               onChange={setActiveTab}
             />
             <Flexbox horizontal gap={4}>
-              <ActionIcon
-                icon={Undo2}
-                size={'small'}
-                title={t('compression.cancel')}
-                onClick={handleCancelCompression}
-              />
+              {cancelAction}
               <ActionIcon icon={ChevronUp} size={'small'} onClick={toggleExpanded} />
             </Flexbox>
           </Flexbox>
@@ -180,11 +229,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             onClick={toggleExpanded}
           >
             <Icon icon={History} size={14} />
-            <span>
-              {compressedTurnCount > 0
-                ? t('compression.collapsed', { turns: compressedTurnCount })
-                : t('compression.collapsedUnknown')}
-            </span>
+            <span>{turnsLabel(false)}</span>
             <Icon icon={ChevronDown} size={14} />
           </button>
         </Divider>

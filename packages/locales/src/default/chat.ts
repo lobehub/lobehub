@@ -394,6 +394,8 @@ export default {
     'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.collapsed': 'Compressed {{turns}} earlier turns · View summary',
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
+  'compression.dividerAbove': '{{turns}} turns above were compressed · View summary',
+  'compression.dividerAboveUnknown': 'History above was compressed · View summary',
   'compression.emptySummary': 'The model returned an empty summary',
   'compression.failed': 'Context compression failed, original messages kept',
   'compression.failedReason': 'Summary generation failed: {{reason}}',

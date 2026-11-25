@@ -265,3 +265,11 @@ export interface SoftDeletedMessage {
   role: string;
   topicId: string | null;
 }
+
+/** One page of a compression group's older members, see `queryCompressedGroupMembers`. */
+export interface CompressedGroupMembersPage {
+  /** The page's members, parsed into display nodes (oldest first). */
+  messages: UIChatMessage[];
+  /** Ids of the group's members still older than this page, ascending. */
+  omittedIds: string[];
+}

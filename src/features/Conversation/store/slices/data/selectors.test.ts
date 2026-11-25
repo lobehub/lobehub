@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { State } from '../../initialState';
 import { dataSelectors } from './selectors';
 
-const stateWith = (displayMessages: unknown[]): State => ({ displayMessages }) as unknown as State;
+const stateWith = (
+  displayMessages: unknown[],
+  compressedHistoryPages: Record<string, { messages: unknown[]; omittedIds: string[] }> = {},
+): State => ({ compressedHistoryPages, displayMessages }) as unknown as State;
 
 describe('taskCallbackTaskIds', () => {
   it('collects task ids from landed taskCallback messages only', () => {
@@ -126,6 +129,28 @@ describe('getBlockMetadata', () => {
 
   it('returns undefined for an unknown block', () => {
     expect(dataSelectors.getBlockMetadata('missing')(stateWith([]))).toBeUndefined();
+  });
+});
+
+describe('getBlockContent', () => {
+  it('resolves compression members paged in on scroll', () => {
+    const state = stateWith([{ id: 'compressed-1', role: 'compressedGroup' }], {
+      'compressed-1': {
+        messages: [
+          { content: 'paged answer', id: 'a0', role: 'assistant' },
+          {
+            children: [{ content: 'paged step', id: 'step-0', tools: [{ id: 'call-0' }] }],
+            id: 'group-0',
+            role: 'assistantGroup',
+          },
+        ],
+        omittedIds: [],
+      },
+    });
+
+    expect(dataSelectors.getBlockContent('a0')(state)).toBe('paged answer');
+    expect(dataSelectors.getBlockContent('step-0')(state)).toBe('paged step');
+    expect(dataSelectors.getBlockHasTools('step-0')(state)).toBe(true);
   });
 });
 

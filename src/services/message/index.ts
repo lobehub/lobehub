@@ -277,6 +277,21 @@ export class MessageService {
     return { messages: data as unknown as UIChatMessage[] };
   };
 
+  /**
+   * One older page of a compression group's members (see the
+   * `getCompressedGroupMembers` procedure), oldest first, plus the ids still
+   * older than it.
+   */
+  getCompressedGroupMembers = async (params: {
+    groupId: string;
+    topicId: string;
+    untilId: string;
+  }): Promise<{ messages: UIChatMessage[]; omittedIds: string[] }> => {
+    const page = await lambdaClient.message.getCompressedGroupMembers.query(params);
+
+    return page as unknown as { messages: UIChatMessage[]; omittedIds: string[] };
+  };
+
   searchInTopic = async (params: {
     keyword: string;
     topicId: string;

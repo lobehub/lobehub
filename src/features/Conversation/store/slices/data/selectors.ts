@@ -240,16 +240,23 @@ const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
  * subtrees self-subscribe to their own data instead of receiving it as props
  * from the message-level renderer. O(1) per call: the index is built once per
  * displayMessages snapshot (see `messageIndex.ts`).
+ *
+ * Compression members paged in on scroll live in `compressedHistoryPages`, not
+ * in displayMessages, and their rows read content and tools through here too.
  */
-const findBlockById = (
-  blockId: string,
-  messages: UIChatMessage[],
-): AssistantContentBlock | undefined => findBlockInDisplayMessages(messages, blockId);
+const findBlockById = (blockId: string, s: State): AssistantContentBlock | undefined => {
+  const block = findBlockInDisplayMessages(s.displayMessages, blockId);
+  if (block) return block;
+  for (const page of Object.values(s.compressedHistoryPages)) {
+    const paged = findBlockInDisplayMessages(page.messages, blockId);
+    if (paged) return paged;
+  }
+};
 
 const getToolsInBlock =
   (blockId: string) =>
   (s: State): ChatToolPayloadWithResult[] | undefined => {
-    const block = findBlockById(blockId, s.displayMessages);
+    const block = findBlockById(blockId, s);
     return block?.tools;
   };
 
@@ -263,7 +270,7 @@ const getToolInBlock =
 const getBlockContent =
   (blockId: string) =>
   (s: State): string | undefined =>
-    findBlockById(blockId, s.displayMessages)?.content;
+    findBlockById(blockId, s)?.content;
 
 /**
  * Block metadata from the same recursive lookup as {@link getBlockContent}, so blocks nested in
@@ -272,12 +279,12 @@ const getBlockContent =
 const getBlockMetadata =
   (blockId: string) =>
   (s: State): AssistantContentBlock['metadata'] =>
-    findBlockById(blockId, s.displayMessages)?.metadata;
+    findBlockById(blockId, s)?.metadata;
 
 const getBlockHasTools =
   (blockId: string) =>
   (s: State): boolean => {
-    const tools = findBlockById(blockId, s.displayMessages)?.tools;
+    const tools = findBlockById(blockId, s)?.tools;
     return !!tools && tools.length > 0;
   };
 

@@ -24,7 +24,9 @@ import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
+import CompressedMessageItem from '../Messages/CompressedGroup/CompressedMessageItem';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
+import { CompressedHistoryInlineContext } from '../Messages/Contexts/CompressedHistoryInlineContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import {
   dataSelectors,
@@ -48,6 +50,7 @@ import { type InitialScrollPosition } from './hooks/useTopicScrollPersist';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import { hoistCompressedGroups } from './utils/compressedGroupOrder';
+import { expandCompressedRows } from './utils/compressedHistory';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 import { resolveRefreshingRowId } from './utils/refreshingRow';
@@ -219,20 +222,32 @@ const ChatList = memo<ChatListProps>(
       [orderedMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
-    // Steered follow-up turns fold into the turn they interrupted. Custom item
-    // renderers address messages by id, so they keep the flat list.
-    const rows = useMemo(
-      () => (itemContent ? undefined : buildChatRows(displayMessages)),
-      [displayMessages, itemContent],
+    const compressedHistoryPages = useConversationStore((s) => s.compressedHistoryPages);
+    // Steered follow-up turns fold into the turn they interrupted, and a
+    // compression group's original conversation unfolds into rows above the
+    // group. Custom item renderers address messages by id, so they keep the
+    // flat list (and the group keeps its own history view).
+    const expandedRows = useMemo(
+      () =>
+        itemContent
+          ? undefined
+          : expandCompressedRows(
+              buildChatRows(displayMessages),
+              displayMessages,
+              compressedHistoryPages,
+            ),
+      [compressedHistoryPages, displayMessages, itemContent],
     );
+    const rows = expandedRows?.rows;
     const rowIds = useMemo(
       () => rows?.map((row) => row.id) ?? displayMessageIds,
       [displayMessageIds, rows],
     );
     const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () => resolveMessageDeepLink(displayMessages, rowIds, messageDeepLink),
-      [displayMessages, messageDeepLink, rowIds],
+      () =>
+        resolveMessageDeepLink(expandedRows?.messages ?? displayMessages, rowIds, messageDeepLink),
+      [displayMessages, expandedRows, messageDeepLink, rowIds],
     );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
@@ -288,6 +303,9 @@ const ChatList = memo<ChatListProps>(
       (index: number, id: string) => {
         const isLatestItem = rowIds.length === index + 1;
         const row = rowById.get(id);
+        // A compressed member is history the model no longer sees in full:
+        // read-only, without the live row's actions.
+        if (row?.compressedMember) return <CompressedMessageItem message={row.compressedMember} />;
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -425,17 +443,19 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <BackgroundRunHintContext value={!hideBackgroundRunHint}>
-            <VirtualizedList
-              dataSource={rowIds}
-              footerSlot={footerSlot}
-              headerSlot={headerSlot}
-              initialScrollPosition={initialScrollPosition}
-              itemContent={itemContent ?? defaultItemContent}
-              messageDeepLink={resolvedMessageDeepLink}
-              paging={paging}
-              printable={printable}
-              rememberReadingPosition={rememberReadingPosition}
-            />
+            <CompressedHistoryInlineContext value={!itemContent}>
+              <VirtualizedList
+                dataSource={rowIds}
+                footerSlot={footerSlot}
+                headerSlot={headerSlot}
+                initialScrollPosition={initialScrollPosition}
+                itemContent={itemContent ?? defaultItemContent}
+                messageDeepLink={resolvedMessageDeepLink}
+                paging={paging}
+                printable={printable}
+                rememberReadingPosition={rememberReadingPosition}
+              />
+            </CompressedHistoryInlineContext>
           </BackgroundRunHintContext>
         </MessageActionProvider>
       );

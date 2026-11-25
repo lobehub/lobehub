@@ -1,3 +1,4 @@
+import { parse } from '@lobechat/conversation-flow';
 import type {
   ChatAudioItem,
   ChatFileItem,
@@ -6,6 +7,7 @@ import type {
   ThreadStatus,
   UIChatMessage,
 } from '@lobechat/types';
+import { MessageGroupType } from '@lobechat/types';
 import { logTimingSink as logTiming, runTimedSinkStage as runTimedStage } from '@lobechat/utils';
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -43,11 +45,16 @@ import {
   compressedStateMarkerColumns,
   loadCompressedStateRows,
   planMessageGroupHydration,
+  selectCompressedGroupMembers,
 } from './groupNodes';
 import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
-import type { MessageGroupNodeWindow, ModelTimingContext } from './types';
+import type {
+  CompressedGroupMembersPage,
+  MessageGroupNodeWindow,
+  ModelTimingContext,
+} from './types';
 import { viewModelPluginState } from './viewModelPluginState';
 
 export class MessageByIdsQueries extends MessageScope {
@@ -516,5 +523,70 @@ export class MessageByIdsQueries extends MessageScope {
     // 4. Build MessageGroup nodes
     const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
     return groups.map((group) => buildMessageGroupNode(group, plan, messageMap, stateRows));
+  };
+
+  /**
+   * Page backwards through a compression group's members that its node left
+   * out (`compressedOmittedIds`), so a reader scrolling up the transcript can
+   * keep going past the newest `MAX_COMPRESSED_GROUP_MEMBERS`.
+   *
+   * The page ends at `untilId` (inclusive, normally the newest omitted id the
+   * client holds) and uses the same newest-slice + round-start trim as the node
+   * itself, so consecutive pages parse as whole turns. A group outside the
+   * caller's scope or topic, or an `untilId` that is not one of its members,
+   * yields an empty page rather than an error: the client simply stops paging.
+   */
+  queryCompressedGroupMembers = async (
+    params: { groupId: string; topicId: string; untilId: string },
+    options: {
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
+    } = {},
+  ): Promise<CompressedGroupMembersPage> => {
+    const empty: CompressedGroupMembersPage = { messages: [], omittedIds: [] };
+    const [group] = await this.db
+      .select({ id: messageGroups.id })
+      .from(messageGroups)
+      .where(
+        and(
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            messageGroups,
+          ),
+          eq(messageGroups.id, params.groupId),
+          eq(messageGroups.topicId, params.topicId),
+          eq(messageGroups.type, MessageGroupType.Compression),
+          notShareVisitorTopicRef(messageGroups.topicId),
+        ),
+      )
+      .limit(1);
+    if (!group) return empty;
+
+    const records = await this.db
+      .select({ id: messages.id, role: messages.role })
+      .from(messages)
+      .where(and(this.ownership(), eq(messages.messageGroupId, group.id)))
+      .orderBy(asc(messages.createdAt));
+
+    const until = records.findIndex((record) => record.id === params.untilId);
+    if (until < 0) return empty;
+
+    const candidates = records.slice(0, until + 1);
+    const page = selectCompressedGroupMembers(candidates);
+    const fullMessages = await this.queryByIds(
+      page.map((record) => record.id),
+      { postProcessUrl: options.postProcessUrl },
+    );
+    const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
+    const ordered = page
+      .map((record) => messageMap.get(record.id))
+      .filter(Boolean) as UIChatMessage[];
+
+    return {
+      messages: parse(ordered).flatList,
+      omittedIds: candidates.slice(0, candidates.length - page.length).map((record) => record.id),
+    };
   };
 }

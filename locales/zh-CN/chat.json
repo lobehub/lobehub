@@ -237,6 +237,8 @@
   "compression.cancelConfirm": "确定要取消压缩吗？这将恢复原始消息。",
   "compression.collapsed": "已压缩前 {{turns}} 轮对话 · 查看摘要",
   "compression.collapsedUnknown": "已压缩历史对话 · 查看摘要",
+  "compression.dividerAbove": "以上 {{turns}} 轮对话已压缩 · 查看摘要",
+  "compression.dividerAboveUnknown": "以上对话已压缩 · 查看摘要",
   "compression.emptySummary": "模型没有返回摘要内容",
   "compression.failed": "压缩上下文失败，原始消息已保留",
   "compression.failedReason": "生成摘要失败：{{reason}}",

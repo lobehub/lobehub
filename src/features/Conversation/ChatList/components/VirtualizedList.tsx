@@ -529,8 +529,17 @@ const VirtualizedList = memo<VirtualizedListProps>(
         >
           {(messageId, index): ReactElement => {
             if (messageId === CONVERSATION_HEADER_ID) {
+              // `shift` makes virtua unshift unmeasured sizes at index 0, so this
+              // pinned row inherits the 300px estimate. While idle it stays
+              // zero-height and its ResizeObserver never fires again, leaving
+              // that much blank above the oldest message once the reader
+              // reaches the top. Re-keying it per first message remounts the
+              // row, and virtua measures a newly mounted row.
               return (
-                <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                <WideScreenContainer
+                  key={`${messageId}:${firstMessageId}`}
+                  style={{ position: 'relative' }}
+                >
                   {headerSlot}
                   <HistoryPageSkeleton side={'earlier'} />
                   <HistoryPageError side={'earlier'} />
