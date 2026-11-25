@@ -42,7 +42,7 @@ interface ListItemRendererProps {
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
-  onRestrictedModelClick?: () => void;
+  onRestrictedModelClick?: (modelId: string, providerId: string) => void;
   subscribeScroll?: (cb: () => void) => () => void;
 }
 
@@ -175,7 +175,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.model.id, item.provider.id);
                     onClose();
                     return;
                   }
@@ -227,7 +227,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.data.model.id, singleProvider.id);
                     onClose();
                     return;
                   }

@@ -19,7 +19,8 @@ export interface BusinessModelListGuard {
   isModelHidden?: (modelId: string, providerId: string) => boolean;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
-  onRestrictedModelClick?: () => void;
+  /** Called with the restricted model the user clicked, so each model can open its own upsell. */
+  onRestrictedModelClick?: (modelId: string, providerId: string) => void;
   /**
    * Badge shown on a restricted model. Returning `undefined` keeps the common `pro`
    * label; a business override names a different tier per model.
