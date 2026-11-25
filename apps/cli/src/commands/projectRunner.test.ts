@@ -26,6 +26,19 @@ describe('parseRepositoryArg', () => {
     });
   });
 
+  it('reads a branch that contains slashes', () => {
+    expect(parseRepositoryArg('https://github.com/lobehub/lobe-pet@feature/foo')).toEqual({
+      ref: 'feature/foo',
+      url: 'https://github.com/lobehub/lobe-pet',
+    });
+  });
+
+  it('does not read userinfo before the host as a ref', () => {
+    expect(parseRepositoryArg('https://token@github.com/lobehub/lobe-pet')).toEqual({
+      url: 'https://token@github.com/lobehub/lobe-pet',
+    });
+  });
+
   it('keeps an ssh url whole when it has no ref', () => {
     expect(parseRepositoryArg('git@github.com:lobehub/lobe-pet.git')).toEqual({
       url: 'git@github.com:lobehub/lobe-pet.git',

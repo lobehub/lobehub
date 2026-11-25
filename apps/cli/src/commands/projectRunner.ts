@@ -42,13 +42,18 @@ export const orderRunners = (directories: RunnerRow[], sandboxOrder: number): Or
     .sort((a, b) => a.sortOrder - b.sortOrder || a.index - b.index)
     .map(({ runner }) => runner);
 
-/** `url` or `url@ref`; the ref is whatever follows the last `@` after the host. */
+/**
+ * `url` or `url@ref`. The ref starts at the first `@` inside the repository
+ * path, so a ref may contain slashes (`feature/foo`) and an `@` before the
+ * path (userinfo, `git@github.com:`) never counts as one.
+ */
 export const parseRepositoryArg = (value: string): { ref?: string; url: string } => {
-  const at = value.lastIndexOf('@');
-  const slash = value.lastIndexOf('/');
-  return at > slash
-    ? { ref: value.slice(at + 1) || undefined, url: value.slice(0, at) }
-    : { url: value };
+  const scheme = value.indexOf('://');
+  const pathStart = value.indexOf('/', scheme === -1 ? 0 : scheme + 3);
+  const at = pathStart === -1 ? -1 : value.indexOf('@', pathStart);
+  return at === -1
+    ? { url: value }
+    : { ref: value.slice(at + 1) || undefined, url: value.slice(0, at) };
 };
 
 type GitSource = { kind: 'git'; path?: string; ref?: string; setupCommand?: string; url: string };
