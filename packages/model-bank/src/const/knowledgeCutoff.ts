@@ -92,6 +92,7 @@ export const MODEL_KNOWLEDGE_CUTOFFS: Record<string, string> = {
   'gemini-3.6-flash': '2026-03',
   'gemini-3.7-flash': '2026-03',
   'gemini-3.8-flash': '2026-03',
+  'gemini-4-neon': '2026-03',
   'gemma-4-26b-a4b-it': '2025-01',
   'gemma-4-31b-it': '2025-01',
 
