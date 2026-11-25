@@ -334,7 +334,7 @@
   "knowledgeBases.description": "Agent 处理本项目的任务时可以检索这些知识库。",
   "knowledgeBases.empty": "还没有关联知识库。关联后，项目任务就能参考你的资料。",
   "knowledgeBases.enabled": "可在项目任务中检索",
-  "knowledgeBases.libraryEmpty": "还没有知识库，请先在「资料」中创建。",
+  "knowledgeBases.libraryEmpty": "还没有知识库，请先在资料库中创建。",
   "knowledgeBases.link": "关联知识库",
   "knowledgeBases.noMatch": "没有匹配的知识库",
   "knowledgeBases.remove": "取消关联",
