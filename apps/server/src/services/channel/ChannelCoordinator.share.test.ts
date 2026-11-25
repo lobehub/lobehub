@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { openChannelReply } from './replyOpening';
 
 const {
   admitsVisitor,
@@ -403,5 +404,85 @@ describe('dispatching a contact’s shared Agent', () => {
       message: 'You have sent all the messages this shared Agent allows',
       type: 'ShareMessageLimitExceeded',
     });
+  });
+});
+
+// A visitor DMing someone's link-shared Claude Code Agent without its device grant used to get
+// an opening ("I'll help you…") and then a "could not start" card offering a retry that could
+// never succeed: the share admitted the request and only the run's own gate refused it.
+describe('a shared local CLI Agent whose share does not grant the visitor its device', () => {
+  const cliShare = {
+    ...liveShare,
+    agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+    shareConfig: { ...liveShare.shareConfig, deviceAccess: 'allowlist', deviceAllowUserIds: [] },
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    getScopedOnlineDevices.mockResolvedValue([]);
+    executions.input.mockResolvedValue([]);
+    executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
+    executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
+    executions.openingReply.mockResolvedValue(undefined);
+    executions.heartbeat.mockResolvedValue(true);
+    findShare.mockResolvedValue(cliShare);
+    admitsVisitor.mockResolvedValue(true);
+    checkSpend.mockResolvedValue({ allowed: true });
+    countMessagesBySender.mockResolvedValue(0);
+    findOperation.mockResolvedValue({ status: 'idle' });
+    executions.claim.mockResolvedValue({
+      job: {
+        channelId: 'channel',
+        executionConfig: { runtime: 'claude-code', share },
+        id: 'job',
+        leaseOwner: 'dispatcher',
+        manifest: {
+          cutoffSequence: 1,
+          requestMessageId: 'message',
+          requesterMemberId: 'visitor-member',
+          self: { agentId: 'agt_shared', memberId: 'member', name: 'LobeVideo' },
+          threadId: null,
+          threadRootSequence: null,
+        },
+        operationId: 'op',
+      },
+      member: { agentId: 'agt_shared' },
+      topic: { id: 'topic', senderId: 'visitor', userId: 'owner' },
+    });
+  });
+
+  it('refuses the request at admission, so no opening acknowledges it', async () => {
+    await coordinator().advance('channel');
+
+    const deps = vi.mocked(openChannelReply).mock.calls[0][3]!;
+    await expect(
+      deps.admitShare!({
+        agent: { id: 'agt_shared', name: 'LobeVideo', title: null },
+        request: { content: 'Make a video' },
+        requesterUserId: 'visitor',
+        share,
+      } as never),
+    ).resolves.toBe(false);
+  });
+
+  it('fails the reply as a missing grant the visitor can ask the owner for, never running it', async () => {
+    await coordinator().advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'This shared Agent cannot run for visitors in its current setup',
+      type: 'ShareHeterogeneousAgentUnsupported',
+    });
+  });
+
+  it('runs on the owner’s device once the share grants it', async () => {
+    findShare.mockResolvedValue({
+      ...cliShare,
+      shareConfig: { ...cliShare.shareConfig, deviceAccess: 'everyone' },
+    });
+    await coordinator().advance('channel');
+
+    expect(execAgent.mock.calls[0][0].shareGate).toMatchObject({ canUseDevice: true });
   });
 });

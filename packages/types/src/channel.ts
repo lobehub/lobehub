@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAgentAccessCard } from './agentAccess';
 import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
 import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
@@ -187,8 +188,9 @@ export type ChannelMessageMetadata = Record<string, unknown> & {
  *   Agent's session where it stopped.
  * - `retry`: run it again from the start (`channel.retryJob`).
  * - `switch_device`: the device was the cause; pick another one for the Agent, then retry.
+ * - `request_access`: the requester may not use the Agent; ask its owner (`channel.requestAgentAccess`).
  */
-export type ChannelReplyErrorAction = 'resume' | 'retry' | 'switch_device';
+export type ChannelReplyErrorAction = 'request_access' | 'resume' | 'retry' | 'switch_device';
 
 /**
  * `metadata.replyError` of an Agent's message that stands in its reply slot (the request and the
@@ -435,6 +437,9 @@ export interface ChannelJobWake {
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** The requester may not use the Agent: its owner was asked, or declined (a failed job). */
+  | 'access_denied'
+  | 'access_request_pending'
   /** A deferred `followup` waiting for the message's primary responder to settle. */
   | 'awaiting_primary'
   | 'device_approval_pending'
@@ -997,6 +1002,8 @@ export interface ChannelPublicMember {
 }
 
 export interface ChannelPublicMessage {
+  /** An Agent's card asking its owner (the reader) to let someone use it, with its status. */
+  agentAccess?: ChannelAgentAccessCard | null;
   agentId: string | null;
   /** An Agent's question with options, on an `ask` message; null otherwise. */
   ask?: ChannelAsk | null;

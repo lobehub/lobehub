@@ -99,8 +99,8 @@ A link share is open to anyone signed in, so neither friendship nor a contact en
 `createSharedDirect` from an Agent the person added to their contacts (which shows they reached the
 share). Only those paths pass `sharedAgent` to `create`; a bare Agent id never binds someone else's
 Agent. `requireChannelAgent` and `resolveExecutionConfig` then accept it for that conversation
-shape only, while the share is `link` and the Agent is not trashed; groups and workspace channels
-never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
+shape only, while the share admits the requester and the Agent is not trashed; a group runs one
+only for a requester its owner allowed there (see Access requests). The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
 
 - The run executes as the owner, like a visit to the share page. Its topic and operation belong
   to the owner and the Agent's scope, with the requester as `topics.senderId`, so the owner's own
@@ -113,6 +113,27 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
   (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
   `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
 - Each requester can send at most the share's `maxMessagesPerVisitor` messages in total, counted across all their topics with this Agent; sending refuses the next one. Topics still roll over only after the staleness window.
+
+## Access requests
+
+A requester who may not use an Agent member asks its owner instead of failing (`agentAccess.ts`).
+`resolveChannelAgentAccess` is the database half of the one access answer (the server's
+`resolveAgentAccess` adds the device half of a share): `own` (`agentUsableByWhere`), `share` (a
+share that admits them, `agentShareAdmits`, in their direct conversation with it or in a group
+under an approved `channel_agent_grants` row for them), `request` (what is missing and their
+latest request), or `unavailable` (trashed, gone, or theirs in another scope).
+
+The claim checks it before any ordering. Without access it files a pending grant for the
+requester (`fileAgentAccessRequest`, one live request per person and Agent member) and blocks the
+job as `access_request_pending`; such a job is out of the member's queue order (`notAwaitingAccess`
+in the head check and `candidates`), so it never holds back the people who may use the Agent, and
+is tried on its own until the owner answers. A declined request settles the job `failed` with
+`blockedCode: 'access_denied'` and the manifest its reply card is written from; it never ran, so
+it has no operation. The owner decides on a card the Agent posts in the owner's direct
+conversation with it (`metadata.agentAccess`, request key `agent-access:<grantId>`, kind
+`agentAccess`); the view adds the request's live status for the owner only. An approval also
+grants the share (a request grant, `AgentShareGrantSource.type = 'request'`), so a later
+`share` path admits them; a revoked share grant retires the approval at the next request.
 
 ## Conversations between contacts
 

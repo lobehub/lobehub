@@ -21,7 +21,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
-import { claimJob } from './claim';
+import { claimJob, notAwaitingAccess } from './claim';
 import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
@@ -228,7 +228,7 @@ export class ChannelExecutionRepository {
    * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
-    const [inFlight, heads] = await Promise.all([
+    const [inFlight, heads, awaitingAccess] = await Promise.all([
       this.db
         .select()
         .from(channelJobs)
@@ -247,7 +247,13 @@ export class ChannelExecutionRepository {
         .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-        .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            notAwaitingAccess(),
+          ),
+        )
         // Same order as the head check in claimJob.
         .orderBy(
           channelJobs.memberId,
@@ -255,11 +261,25 @@ export class ChannelExecutionRepository {
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
+      // Out of the queue order while their requester waits for the Agent owner's answer, so each
+      // is tried on its own: the answer moves it on.
+      this.db
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            eq(channelJobs.blockedCode, 'access_request_pending'),
+          ),
+        )
+        .orderBy(asc(channelJobs.createdAt))
+        .limit(limit),
     ]);
     return {
-      heads: heads
-        .map(({ job }) => job)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      heads: [...heads.map(({ job }) => job), ...awaitingAccess].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
       inFlight,
     };
   };

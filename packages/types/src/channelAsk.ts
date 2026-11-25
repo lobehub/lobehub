@@ -6,7 +6,14 @@
  * contact card keeps its earlier `metadata.card`, and the error card `metadata.replyError`. `content` always holds a plain-text fallback, so
  * a client that does not know a kind, the model's history and search all still read it as text.
  */
-export const CHANNEL_MESSAGE_KINDS = ['text', 'contact', 'ask', 'error', 'deviceGrant'] as const;
+export const CHANNEL_MESSAGE_KINDS = [
+  'text',
+  'contact',
+  'ask',
+  'error',
+  'deviceGrant',
+  'agentAccess',
+] as const;
 
 /**
  * - `text`: an ordinary message.
@@ -15,6 +22,7 @@ export const CHANNEL_MESSAGE_KINDS = ['text', 'contact', 'ask', 'error', 'device
  * - `error`: a reply that failed, shown as a card in its slot (`metadata.replyError`); the reply
  *   that later succeeds replaces it and its kind.
  * - `deviceGrant`: an Agent's request to use a device (`metadata.deviceGrant`).
+ * - `agentAccess`: an Agent asking its owner to let someone use it (`metadata.agentAccess`).
  */
 export type ChannelMessageKind = (typeof CHANNEL_MESSAGE_KINDS)[number];
 

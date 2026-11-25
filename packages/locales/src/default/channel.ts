@@ -199,6 +199,8 @@ export default {
   'status.cancelled': 'Stopped',
   'status.silent': 'Stayed quiet',
   'status.merged': 'Answered with an earlier message',
+  'blocked.access_denied': 'The Agent’s owner declined your request to use it',
+  'blocked.access_request_pending': 'Waiting for the Agent’s owner to allow you to use it',
   'blocked.awaiting_primary': 'Waiting for another Agent to reply first',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',

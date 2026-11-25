@@ -11,7 +11,7 @@ import type {
   AgentShareVisibility,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -693,6 +693,55 @@ export class AgentShareModel {
       )
       .limit(1);
     return !!live;
+  };
+
+  /**
+   * Admit a person because the share's owner approved their request to use the Agent
+   * (`channel_agent_grants`). The owner's decision is newer than any earlier withdrawal, so it
+   * restores a revoked grant, and it takes over the source of a live one: a request grant is also
+   * what lets {@link resolveShareVisitorDeviceAccess} admit the person to the device without being
+   * in the owner's address book. Idempotent.
+   */
+  static grantByRequest = async (
+    db: Pick<LobeChatDatabase, 'insert'>,
+    params: { channelId: string; grantId: string; shareId: string; userId: string },
+  ): Promise<void> => {
+    const source: AgentShareGrantSource = {
+      channelId: params.channelId,
+      grantId: params.grantId,
+      type: 'request',
+    };
+    await db
+      .insert(agentShareGrants)
+      .values({ shareId: params.shareId, source, userId: params.userId })
+      .onConflictDoUpdate({
+        set: { revokedAt: null, source },
+        target: [agentShareGrants.shareId, agentShareGrants.userId],
+      });
+  };
+
+  /**
+   * Of `userIds`, those a live grant admits because the owner approved their request (see
+   * {@link grantByRequest}), rather than a card they added the Agent from.
+   */
+  static requestGrantedUserIds = async (
+    db: LobeChatDatabase,
+    shareId: string,
+    userIds: string[],
+  ): Promise<string[]> => {
+    if (!userIds.length) return [];
+    const rows = await db
+      .select({ userId: agentShareGrants.userId })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, shareId),
+          inArray(agentShareGrants.userId, userIds),
+          isNull(agentShareGrants.revokedAt),
+          sql`${agentShareGrants.source} ->> 'type' = 'request'`,
+        ),
+      );
+    return rows.map((row) => row.userId);
   };
 
   /** The people this Agent's share admits by card, newest first, for its owner. */

@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { getAddressBook } from '@/business/server/contact/addressBook';
+import { AgentShareModel } from '@/database/models/agentShare';
 import type { AgentShareConfig } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
@@ -32,6 +33,8 @@ export const isShareDeviceBuiltin = (identifier: string) =>
 export interface ShareDeviceAccessSubject {
   ownerId: string;
   shareConfig: Pick<AgentShareConfig, 'deviceAccess' | 'deviceAllowUserIds'>;
+  /** The share, whose request grants admit a listed person outside the address book. */
+  shareId?: string;
   workspaceId?: string | null;
 }
 
@@ -52,6 +55,12 @@ export interface ShareDeviceAccessSubject {
  * again here makes removing a contact, or leaving the workspace, revoke the
  * grant without anyone editing the share. The address book exists only while
  * Channels are enabled for the owner, so turning them off grants nothing.
+ *
+ * A listed visitor outside the book is still granted (under `allowlist` or
+ * `contacts`) while they hold the share grant the owner gave them by approving
+ * their request to use the Agent (`AgentShareModel.grantByRequest`): that
+ * approval names them as explicitly as a contact does, and revoking the grant
+ * (or unlisting them) withdraws it.
  */
 export const resolveShareVisitorDeviceAccess = async (
   db: LobeChatDatabase,
@@ -62,8 +71,9 @@ export const resolveShareVisitorDeviceAccess = async (
   if (deviceAccess === 'everyone') return true;
   if (deviceAccess !== 'allowlist' && deviceAccess !== 'contacts') return false;
 
+  const listed = !!deviceAllowUserIds?.includes(visitorUserId);
   // `contacts` skips the list: being in the address book is the whole grant.
-  if (deviceAccess === 'allowlist' && !deviceAllowUserIds?.includes(visitorUserId)) {
+  if (deviceAccess === 'allowlist' && !listed) {
     log('allowlist denied visitor %s: not listed', visitorUserId);
     return false;
   }
@@ -78,8 +88,15 @@ export const resolveShareVisitorDeviceAccess = async (
     share.ownerId,
     share.workspaceId,
   ).filterAddressBookPeople([visitorUserId]);
+  if (inBook) return true;
+  if (
+    listed &&
+    share.shareId &&
+    (await AgentShareModel.requestGrantedUserIds(db, share.shareId, [visitorUserId])).length
+  )
+    return true;
   // The most likely creator complaint ("I listed them but it doesn't work"),
   // so it gets its own line.
-  if (!inBook) log('allowlist denied visitor %s: no longer in the address book', visitorUserId);
-  return !!inBook;
+  log('allowlist denied visitor %s: no longer in the address book', visitorUserId);
+  return false;
 };

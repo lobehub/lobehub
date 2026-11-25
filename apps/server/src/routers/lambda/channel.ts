@@ -9,8 +9,10 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SCOPE_READ_MAX_LIMIT, SignalDecisionModel } from '@/database/models/signalDecision';
 import { ChannelError } from '@/database/repositories/channel';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentAccessService } from '@/server/services/channel/agentAccess';
 import { ChannelService } from '@/server/services/channel/ChannelService';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import {
@@ -66,6 +68,12 @@ const channelBaseProcedure = wsExternalCompatProcedure
 const externalChannelProcedure = channelBaseProcedure;
 /** Everything else is for members (and the personal space) only. */
 const channelProcedure = channelBaseProcedure.use(denyExternalContact);
+
+const agentAccessService = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => new AgentAccessService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
@@ -130,6 +138,30 @@ export const channelRouter = router({
         input.memberId,
         input.environment,
       ),
+      success: true,
+    })),
+  /**
+   * Whether the caller may use an Agent: in a Channel (a group, or their conversation with it),
+   * or without one before they open a conversation. See `resolveAgentAccess`.
+   */
+  agentAccess: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), channelId: channelId.optional() }))
+    .query(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).check(input),
+      success: true,
+    })),
+  /** Ask the Agent's owner to let the caller use it; `jobId` is a failed reply to run again. */
+  requestAgentAccess: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), channelId, jobId: z.uuid().optional() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).request(input),
+      success: true,
+    })),
+  /** Only the Agent's owner named on the request decides it; both decisions are idempotent. */
+  decideAgentAccess: channelProcedure
+    .input(z.object({ decision: z.enum(['approve', 'deny']), grantId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).decide(input.grantId, input.decision),
       success: true,
     })),
   /** Requests to run Channel Agents on the caller's private devices, for them to decide. */

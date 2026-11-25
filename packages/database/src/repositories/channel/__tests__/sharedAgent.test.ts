@@ -247,7 +247,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     },
   );
 
-  it('is blocked once the owner pauses the share', async () => {
+  it('waits for its owner once the owner pauses the share', async () => {
     const { channel } = await visitor.create({
       agentId,
       sharedAgent: true,
@@ -258,7 +258,8 @@ describe('a contact’s shared Agent in a direct conversation', () => {
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
-    expect(blocked.blockedCode).toBe('unavailable');
+    // The visitor may ask its owner again: the paused share is what is missing.
+    expect(blocked.blockedCode).toBe('access_request_pending');
   });
 
   it('refuses attachments, which the owner’s run could not read', async () => {
