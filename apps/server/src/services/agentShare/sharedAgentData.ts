@@ -13,6 +13,7 @@ import {
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
 
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import type { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AiModelModel } from '@/database/models/aiModel';
@@ -59,7 +60,6 @@ const resolveVisitorUploadAbility = async (
   },
 ): Promise<SharedAgentUploadAbility> => {
   try {
-    const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const [builtinModels, { model, provider }] = await Promise.all([
       loadModels(),
       new AgentService(db, share.ownerId, share.workspaceId ?? undefined).resolveModelSelection({
