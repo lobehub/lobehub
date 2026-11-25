@@ -15,7 +15,6 @@ import {
 import { retryJob } from '@/database/repositories/channel/retry';
 import { withChannelLock } from '@/database/repositories/channel/transaction';
 import { channelJobs, channelMembers } from '@/database/schemas';
-import { assertAgentShareCreationEnabled } from '@/server/routers/lambda/_helpers/agentShareFeatureGate';
 import { AgentService } from '@/server/services/agent';
 
 import { notifyChannel } from '../notify';
@@ -111,7 +110,11 @@ export class AgentAccessService {
     if (!row?.agentId || row.grant.ownerId !== this.userId || row.ownerId !== this.userId)
       throw new ChannelError('NOT_FOUND', 'Access request not found');
     if (decision === 'approve' && ['approved', 'pending'].includes(row.grant.status)) {
-      if (!row.requesterUserId)
+      // Fail closed: the approval rests on the Agent being pulled into this Channel and the
+      // requester still being in it, which is what lets it skip the share-creation gate.
+      if (row.agentMemberStatus !== 'active')
+        throw new ChannelError('CONFLICT', 'The Agent is no longer in this Channel');
+      if (!row.requesterUserId || row.requesterStatus !== 'active')
         throw new ChannelError('CONFLICT', 'The requester is no longer in this Channel');
       await grantAgentAccess(this.db, {
         agentId: row.agentId,
@@ -157,6 +160,11 @@ export class AgentAccessService {
  * (`deviceAllowUserIds`, with `deviceAccess` at least `allowlist`), which their request grant
  * admits without being in the owner's address book (`resolveShareVisitorDeviceAccess`).
  * Idempotent.
+ *
+ * Not behind the share-creation feature gate (`assertAgentShareCreationEnabled`), which guards a
+ * person publishing a share from share settings: here the owner already pulled the Agent into the
+ * Channel and approves one person there, and the share row is only how that grant is recorded.
+ * Only called for an Agent that is an active member of the request's Channel (`decide`).
  */
 export const grantAgentAccess = async (
   db: LobeChatDatabase,
@@ -174,7 +182,6 @@ export const grantAgentAccess = async (
   const shareId = await agentService.withShareModelLock(agentId, async (service, shares) => {
     let share = await shares.getByAgentId(agentId);
     if (!share || !isLiveAgentShareVisibility(share.visibility)) {
-      await assertAgentShareCreationEnabled(ownerId);
       await service.prepareShareModel(agentId);
       const created = await shares.create(agentId, 'card');
       share =

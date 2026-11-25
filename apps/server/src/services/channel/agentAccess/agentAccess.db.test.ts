@@ -15,6 +15,7 @@ import {
   agentShareGrants,
   agentShares,
   channelAgentGrants,
+  channelMembers,
   channelMessages,
   channels,
 } from '@/database/schemas';
@@ -34,8 +35,13 @@ vi.mock('../featureGate', () => ({
   assertChannelEnabled: vi.fn(),
   isChannelEnabled: vi.fn(async () => true),
 }));
-vi.mock('@/server/routers/lambda/_helpers/agentShareFeatureGate', () => ({
-  assertAgentShareCreationEnabled: vi.fn(),
+// The owner has no Agent Share feature: approving in a Channel must not need it.
+vi.mock('@/server/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn(async () => ({
+    enableAgentShare: false,
+    enableChannels: true,
+  })),
 }));
 
 const db = await getTestDB();
@@ -220,6 +226,41 @@ describe('a friend mentions the owner’s personal Agent in a group', () => {
     expect(
       await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
     ).toMatchObject({ missing: [], state: 'ok', via: 'share' });
+  });
+
+  // Approving failed with FORBIDDEN ("Agent sharing is not enabled for this account") for an owner
+  // without the Agent Share feature, so the friend's reply never ran.
+  it('runs the friend’s reply after approval even though the owner cannot publish shares', async () => {
+    const { agent, agentId, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'no share feature');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+
+    await expect(
+      new AgentAccessService(db, ownerId).decide(request.id, 'approve'),
+    ).resolves.toMatchObject({ grant: { status: 'approved' } });
+    expect(wakeChannel).toHaveBeenCalledWith(channel.id);
+    expect(await jobById(db, job.id)).toMatchObject({ status: 'queued' });
+    const claim = await execution.claim(channel.id, job.id, lease);
+    expect(claim?.job.executionConfig).toMatchObject({ share: { ownerId } });
+    expect(
+      await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
+    ).toMatchObject({ state: 'ok', via: 'share' });
+  });
+
+  it('refuses to approve once the Agent left the Channel', async () => {
+    const { agent, asVisitor, channel, mention } = await personalGroup();
+    const job = await mention(asVisitor, 'then removed');
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+    await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, agent.id));
+
+    await expect(
+      new AgentAccessService(db, ownerId).decide(request.id, 'approve'),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(
+      await db.select().from(agentShares).where(eq(agentShares.agentId, agent.agentId!)),
+    ).toEqual([]);
   });
 
   it('holds back no one who may use the Agent while the friend waits', async () => {

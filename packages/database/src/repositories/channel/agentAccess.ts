@@ -282,9 +282,11 @@ export const findAgentAccessRequest = async (db: LobeChatDatabase, grantId: stri
   const [row] = await db
     .select({
       agentId: channelMembers.agentId,
+      agentMemberStatus: channelMembers.status,
       agentWorkspaceId: agents.workspaceId,
       grant: channelAgentGrants,
       ownerId: agents.userId,
+      requesterStatus: grantees.status,
       requesterUserId: grantees.userId,
     })
     .from(channelAgentGrants)
