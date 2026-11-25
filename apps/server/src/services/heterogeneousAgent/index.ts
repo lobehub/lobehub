@@ -29,6 +29,7 @@ import type { OperationCompletionShareVisitor } from '@/server/services/agentRun
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
+import { mirrorInterventionsToChannel } from '@/server/services/channel/interventionAsk';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -98,6 +99,9 @@ export interface HeterogeneousFinishParams {
 }
 
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+const isInterventionEvent = (event: AgentStreamEvent) =>
+  event.type === 'agent_intervention_request' || event.type === 'agent_intervention_response';
 
 /**
  * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
@@ -307,6 +311,11 @@ export class HeterogeneousAgentService {
       }
       throw err;
     }
+
+    // A run answering a Channel request asks its questions there too. Before publishing, so a
+    // topic card refetched on the request event already knows it is asked in the Channel.
+    if (events.some(isInterventionEvent))
+      await mirrorInterventionsToChannel(this.db, { events, operationId, topicId });
 
     // Publish only events not yet delivered to the stream. The publish gate
     // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester

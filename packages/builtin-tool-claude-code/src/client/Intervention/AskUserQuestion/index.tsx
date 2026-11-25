@@ -56,6 +56,12 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     )?.heterogeneousIntervention?.deadline;
     return typeof stored === 'number' ? stored : undefined;
   });
+  // Also asked in the Channel the run answers: the person may answer there, so the clock only
+  // closes the question instead of answering option 1 for them.
+  const askedInChannel = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    return !!(msg?.pluginState as { channelAsk?: unknown } | undefined)?.channelAsk;
+  });
   const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
   // Stream events normally settle the card; a missed ACK is re-read.
   useSubmissionReconcile(messageId);
@@ -70,6 +76,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     countdownMs: DEFAULT_COUNTDOWN_MS,
     deadlineAt,
     disabled,
+    noAnswerOnTimeout: askedInChannel,
     onInteractionAction,
     persistedDraft,
     writeDraft,
