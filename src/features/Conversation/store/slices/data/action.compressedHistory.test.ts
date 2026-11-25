@@ -140,6 +140,45 @@ describe('loadEarlierMessages through a compression group', () => {
     expect(store.getState().compressedHistoryPages.group.messages.map((m) => m.id)).toEqual(['u2']);
   });
 
+  it('keeps a later group failure on that group, apart from the top-of-list retry', async () => {
+    const context = { agentId: 'agent-compressed', topicId: 'topic-compressed-6' };
+    const store = createStore({ context });
+    const [question, group] = windowRows(context.topicId);
+    store.getState().replaceMessages([
+      {
+        ...row('older', 'compressedGroup', 50),
+        compressedMessages: [row('u0', 'user', 10)],
+        topicId: context.topicId,
+      } as UIChatMessage,
+      question,
+      group,
+    ]);
+    noOlderTranscriptPage();
+
+    getMembers.mockRejectedValueOnce(new Error('network'));
+    await store.getState().loadCompressedGroupHistory('group');
+
+    expect(store.getState().compressedHistoryError).toEqual({
+      error: expect.any(Error),
+      groupId: 'group',
+    });
+    // The top of the list has nothing failed to retry.
+    expect(store.getState().earlierMessagesError).toBeUndefined();
+
+    // A plain click does not refire; the gap's Retry pages the same group.
+    await store.getState().loadCompressedGroupHistory('group');
+    expect(getMembers).toHaveBeenCalledTimes(1);
+
+    getMembers.mockResolvedValueOnce({ messages: [row('u2', 'user', 200)] });
+    await store.getState().loadCompressedGroupHistory('group', { retry: true });
+
+    expect(getMembers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ groupId: 'group', untilId: 'a2' }),
+    );
+    expect(store.getState().compressedHistoryError).toBeUndefined();
+    expect(store.getState().compressedHistoryPages.group.messages.map((m) => m.id)).toEqual(['u2']);
+  });
+
   it('drops a page that a newer request superseded after leaving and reopening the topic', async () => {
     const context = { agentId: 'agent-compressed', topicId: 'topic-compressed-5' };
     const store = createStore({ context });

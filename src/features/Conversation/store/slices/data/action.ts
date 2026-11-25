@@ -209,7 +209,12 @@ export const dataSlice: StateCreator<
     if (transcriptSource !== 'chat' || !context.topicId) return;
     if (context.agentShareId || context.topicShareId) return;
     if (get().isLoadingEarlierMessages) return;
-    if (get().earlierMessagesError !== undefined && !options?.retry) return;
+    // A gap's failure stays with its group, so the gap (not the top of the
+    // list, which pages the oldest group) is where the reader retries it.
+    const failed = groupId
+      ? get().compressedHistoryError?.groupId === groupId
+      : get().earlierMessagesError !== undefined;
+    if (failed && !options?.retry) return;
 
     const group = groupId ? displayMessages.find((message) => message.id === groupId) : undefined;
     const target = groupId
@@ -223,7 +228,10 @@ export const dataSlice: StateCreator<
     const targetId = target.group.id;
     const request = ++compressedHistoryRequest;
     set(
-      { earlierMessagesError: undefined, isLoadingEarlierMessages: true },
+      {
+        ...(groupId ? { compressedHistoryError: undefined } : { earlierMessagesError: undefined }),
+        isLoadingEarlierMessages: true,
+      },
       false,
       'compressedHistory/start',
     );
@@ -256,7 +264,12 @@ export const dataSlice: StateCreator<
       if (!isSameConversationContext(context, get().context)) return;
       log('[loadCompressedHistory] failed | group=%s | %O', targetId, error);
       set(
-        { earlierMessagesError: error, isLoadingEarlierMessages: false },
+        {
+          ...(groupId
+            ? { compressedHistoryError: { error, groupId } }
+            : { earlierMessagesError: error }),
+          isLoadingEarlierMessages: false,
+        },
         false,
         'compressedHistory/error',
       );

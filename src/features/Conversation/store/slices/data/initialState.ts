@@ -4,6 +4,13 @@ import { type CompressedHistoryPage } from '../../../ChatList/utils/compressedHi
 
 export interface DataState {
   /**
+   * A later group's member page, requested from its gap row, failed. Kept
+   * apart from `earlierMessagesError` so the gap shows the failure and
+   * retries that group, while the top-of-list row keeps paging the oldest one.
+   */
+  compressedHistoryError?: { error: unknown; groupId: string };
+
+  /**
    * Older members of compression groups loaded on scroll, past the newest
    * slice the group node carries, keyed by group id. Kept apart from the
    * transcript rows so a head refetch (which returns the node with only its
