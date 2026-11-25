@@ -45,6 +45,15 @@ describe('redisService.linkPreview', () => {
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a failed fetch after five minutes instead of an hour', async () => {
+    const resolve = vi.fn().mockRejectedValue(new Error('timeout'));
+
+    await expect(linkPreview.remember(URL, resolve)).resolves.toBe(null);
+    expect(set).toHaveBeenCalledWith(KEY, JSON.stringify({ preview: null }), {
+      px: 5 * 60 * 1000,
+    });
+  });
+
   it('reads live without Redis or when Redis fails', async () => {
     redisAvailable = false;
     const resolve = vi.fn().mockResolvedValue(null);

@@ -1,6 +1,7 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useMemo, useState } from 'react';
+import { useInViewport } from 'ahooks';
+import { useMemo, useRef, useState } from 'react';
 
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { parseInternalLink } from '@/features/EntityLink/internalLink';
@@ -9,6 +10,13 @@ import { linkPreviewActions, linkPreviewSelectors, useLinkPreviewStore } from '@
 import { extractLinkPreviewUrls } from './linkPreviewUrls';
 
 const styles = stylex.create({
+  // Out of flow, so it adds no gap to the message body while it waits to be seen.
+  sentinel: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    pointerEvents: 'none',
+  },
   list: {
     display: 'flex',
     flexDirection: 'column',
@@ -87,8 +95,13 @@ const styles = stylex.create({
   },
 });
 
-const LinkPreviewCard = ({ url }: { url: string }) => {
+/** Keeps one page's card in sync; renders nothing itself. */
+const LinkPreviewSync = ({ url }: { url: string }) => {
   linkPreviewActions.useFetchLinkPreview({ url });
+  return null;
+};
+
+const LinkPreviewCard = ({ url }: { url: string }) => {
   const preview = useLinkPreviewStore(linkPreviewSelectors.getPreview({ url }));
   // A page may refuse to be embedded elsewhere (hotlink protection, a
   // same-origin resource policy): the card then stands without its image.
@@ -166,13 +179,33 @@ export const LinkPreviews = ({ content }: { content: string }) => {
     return extractLinkPreviewUrls(content, (url) => !!parseInternalLink(url, origin, slugs));
   }, [content, slugKey]);
 
+  // A Channel opens on up to 100 messages; reading the cards of history far
+  // off screen would fan out hundreds of page fetches. Ask for a message's
+  // cards once it comes near the viewport, and keep them from then on.
+  const sentinelRef = useRef<HTMLSpanElement>(null);
+  const [seen, setSeen] = useState(false);
+  useInViewport(sentinelRef, {
+    callback: (entry) => {
+      if (entry.isIntersecting) setSeen(true);
+    },
+    rootMargin: '400px 0px',
+  });
+  // Cards already known (this session, or restored from the last one) paint at once.
+  const ready = useLinkPreviewStore(linkPreviewSelectors.readyUrls(urls));
+
   if (urls.length === 0) return null;
 
   return (
-    <div {...stylex.props(styles.list)}>
-      {urls.map((url) => (
-        <LinkPreviewCard key={url} url={url} />
-      ))}
-    </div>
+    <>
+      <span aria-hidden ref={sentinelRef} {...stylex.props(styles.sentinel)} />
+      {seen && urls.map((url) => <LinkPreviewSync key={url} url={url} />)}
+      {ready.length > 0 && (
+        <div {...stylex.props(styles.list)}>
+          {ready.map((url) => (
+            <LinkPreviewCard key={url} url={url} />
+          ))}
+        </div>
+      )}
+    </>
   );
 };

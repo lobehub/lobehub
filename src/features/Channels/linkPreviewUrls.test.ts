@@ -17,6 +17,18 @@ describe('extractLinkPreviewUrls', () => {
     ]);
   });
 
+  it('keeps characters that end the address itself, as the rendered link does', () => {
+    const content = [
+      '[build](https://example.com/releases/build_)',
+      'https://en.wikipedia.org/wiki/Bracket_(disambiguation)',
+    ].join('\n');
+
+    expect(extractLinkPreviewUrls(content)).toEqual([
+      'https://example.com/releases/build_',
+      'https://en.wikipedia.org/wiki/Bracket_(disambiguation)',
+    ]);
+  });
+
   it('ignores links quoted in code', () => {
     const content = [
       'run `curl https://inline.example.com/a`',

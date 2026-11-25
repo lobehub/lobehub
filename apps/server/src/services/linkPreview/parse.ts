@@ -47,9 +47,14 @@ const toHttpUrl = (value: string | undefined, base: string): string | undefined 
  * a page from its markup. Only the `<head>` is read when the page closes it,
  * so a `<meta>` quoted inside an article body cannot stand in for the page's.
  * Returns `null` when the page names neither a title nor a description: a
- * card with nothing to say is not shown.
+ * card with nothing to say is not shown. Relative image paths resolve against
+ * `pageUrl`, the address that served the markup after any redirect.
  */
-export const parseLinkPreview = (html: string, url: string): LinkPreview | null => {
+export const parseLinkPreview = (
+  html: string,
+  url: string,
+  pageUrl: string = url,
+): LinkPreview | null => {
   const headEnd = html.search(HEAD_END);
   const head = headEnd === -1 ? html : html.slice(0, headEnd);
 
@@ -79,7 +84,7 @@ export const parseLinkPreview = (html: string, url: string): LinkPreview | null 
       meta['og:image:url'] ||
       meta['twitter:image'] ||
       meta['twitter:image:src'],
-    url,
+    pageUrl,
   );
 
   return {

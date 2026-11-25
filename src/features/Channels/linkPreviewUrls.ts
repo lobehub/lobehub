@@ -1,39 +1,43 @@
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { EXIT, visit } from 'unist-util-visit';
+
 /** A message shows at most this many link cards, like Discord's embeds. */
 export const MAX_LINK_PREVIEWS = 3;
 
-const FENCED_CODE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm;
-const INLINE_CODE = /(`+)[\s\S]*?\1/g;
-const URL_PATTERN = /https?:\/\/[^\s"'()<>[\]`{}]+/gi;
-/** Sentence punctuation and Markdown emphasis that follow a link are not part of it. */
-const TRAILING_PUNCTUATION = /[!*,.:;?_~]+$/;
+// The same GFM parse the message renderer runs, so a card previews exactly the
+// address its link opens: trailing punctuation, balanced parentheses and
+// characters such as `_` at the end follow the autolink rules, and links
+// quoted inside code are text, not links.
+const markdown = unified().use(remarkParse).use(remarkGfm);
 
 /**
  * The web addresses a message links, in order and without repeats, that can
- * get a card: links quoted inside code are text, not something being shared.
- * `skip` drops the ones another renderer already owns (internal app links).
+ * get a card. `skip` drops the ones another renderer already owns (internal
+ * app links).
  */
 export const extractLinkPreviewUrls = (
   content: string,
   skip: (url: string) => boolean = () => false,
 ): string[] => {
-  const prose = content.replaceAll(FENCED_CODE, '\n').replaceAll(INLINE_CODE, ' ');
   const urls: string[] = [];
 
-  for (const [match] of prose.matchAll(URL_PATTERN)) {
-    const candidate = match.replace(TRAILING_PUNCTUATION, '');
+  visit(markdown.parse(content), 'link', (node: { url: string }) => {
     let url: string;
     try {
-      const parsed = new URL(candidate);
-      if (!parsed.hostname.includes('.')) continue;
+      const parsed = new URL(node.url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+      if (!parsed.hostname.includes('.')) return;
       parsed.hash = '';
       url = parsed.toString();
     } catch {
-      continue;
+      return;
     }
-    if (urls.includes(url) || skip(url)) continue;
+    if (urls.includes(url) || skip(url)) return;
     urls.push(url);
-    if (urls.length === MAX_LINK_PREVIEWS) break;
-  }
+    if (urls.length === MAX_LINK_PREVIEWS) return EXIT;
+  });
 
   return urls;
 };

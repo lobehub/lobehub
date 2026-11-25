@@ -9,6 +9,13 @@ const getPreview =
   (s: LinkPreviewState): LinkPreview | undefined =>
     params ? s.linkPreviewMap[linkPreviewKey(params)] : undefined;
 
+/** The pages among `urls` whose card is known, in the given order. */
+const readyUrls =
+  (urls: string[]) =>
+  (s: LinkPreviewState): string[] =>
+    urls.filter((url) => !!s.linkPreviewMap[linkPreviewKey({ url })]);
+
 export const linkPreviewSelectors = {
   getPreview,
+  readyUrls,
 };

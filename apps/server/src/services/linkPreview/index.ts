@@ -42,18 +42,46 @@ const charsetOf = (contentType: string) => {
   }
 };
 
-const readPreview = async (url: string): Promise<LinkPreview | null> => {
-  const response = await ssrfSafeFetch(
-    url,
-    {
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
-        'User-Agent': USER_AGENT,
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
+
+/**
+ * Fetch `url`, following redirects here rather than inside the fetch: the
+ * SSRF-safe Response does not carry the final address, and relative image
+ * paths must resolve against the page that actually answered. Every hop goes
+ * through the same SSRF guard.
+ */
+const fetchPage = async (url: string, signal: AbortSignal) => {
+  let current = url;
+  for (let hop = 0; ; hop++) {
+    const response = await ssrfSafeFetch(
+      current,
+      {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
+          'User-Agent': USER_AGENT,
+        },
+        redirect: 'manual',
+        signal,
       },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    },
-    { maxContentLength: MAX_HTML_BYTES },
-  );
+      { maxContentLength: MAX_HTML_BYTES },
+    );
+
+    const location = response.headers.get('location');
+    if (!REDIRECT_STATUSES.has(response.status) || !location) return { response, url: current };
+
+    await response.body?.cancel().catch(() => undefined);
+    if (hop === MAX_REDIRECTS) return null;
+    const next = normalizeLinkPreviewUrl(new URL(location, current).toString());
+    if (!next) return null;
+    current = next;
+  }
+};
+
+const readPreview = async (url: string): Promise<LinkPreview | null> => {
+  const page = await fetchPage(url, AbortSignal.timeout(FETCH_TIMEOUT_MS));
+  if (!page) return null;
+  const { response } = page;
 
   const contentType = response.headers.get('content-type') ?? '';
   if (!response.ok || !/^(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
@@ -63,7 +91,8 @@ const readPreview = async (url: string): Promise<LinkPreview | null> => {
 
   const bytes = await response.arrayBuffer();
   const html = new TextDecoder(charsetOf(contentType)).decode(bytes);
-  return parseLinkPreview(html, url);
+  // The card links what the message linked; its image is relative to the page that answered.
+  return parseLinkPreview(html, url, page.url);
 };
 
 /**
@@ -77,12 +106,17 @@ export const getLinkPreview = async (input: string): Promise<LinkPreview | null>
   const url = normalizeLinkPreviewUrl(input);
   if (!url) return null;
 
-  return redisService.linkPreview.remember(url, async () => {
-    try {
-      return await readPreview(url);
-    } catch (error) {
-      log('preview of %s failed: %O', new URL(url).origin, error);
-      return null;
-    }
-  });
+  try {
+    return await redisService.linkPreview.remember(url, async () => {
+      try {
+        return await readPreview(url);
+      } catch (error) {
+        log('preview of %s failed: %O', new URL(url).origin, error);
+        throw error;
+      }
+    });
+  } catch {
+    // Without Redis the failure reaches here; either way the message shows no card.
+    return null;
+  }
 };

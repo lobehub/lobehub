@@ -47,6 +47,47 @@ describe('getLinkPreview', () => {
     );
   });
 
+  it('resolves a relative image against the page a redirect landed on', async () => {
+    ssrfSafeFetch
+      .mockResolvedValueOnce(
+        new Response(null, {
+          headers: { location: 'https://www.example.com/articles/x' },
+          status: 301,
+        }),
+      )
+      .mockResolvedValueOnce(
+        htmlResponse(
+          '<head><meta property="og:title" content="X"><meta property="og:image" content="cover.jpg"></head>',
+        ),
+      );
+
+    await expect(getLinkPreview('https://example.com/x')).resolves.toEqual({
+      image: 'https://www.example.com/articles/cover.jpg',
+      title: 'X',
+      url: 'https://example.com/x',
+    });
+    expect(ssrfSafeFetch).toHaveBeenLastCalledWith(
+      'https://www.example.com/articles/x',
+      expect.objectContaining({ redirect: 'manual' }),
+      expect.anything(),
+    );
+  });
+
+  it('gives up on redirect loops and redirects to non-web addresses', async () => {
+    ssrfSafeFetch.mockImplementation(
+      async () => new Response(null, { headers: { location: '/again' }, status: 302 }),
+    );
+    await expect(getLinkPreview('https://loop.example.com/')).resolves.toBe(null);
+    expect(ssrfSafeFetch).toHaveBeenCalledTimes(6);
+
+    ssrfSafeFetch.mockReset();
+    ssrfSafeFetch.mockResolvedValueOnce(
+      new Response(null, { headers: { location: 'file:///etc/passwd' }, status: 302 }),
+    );
+    await expect(getLinkPreview('https://example.com/')).resolves.toBe(null);
+    expect(ssrfSafeFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('decodes the charset the page declares', async () => {
     // "标题" in GBK.
     const gbk = new Uint8Array([
