@@ -170,12 +170,10 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     );
   }
 
-  const turnsLabel = (inline: boolean) =>
+  const collapsedLabel =
     compressedTurnCount > 0
-      ? t(inline ? 'compression.dividerAbove' : 'compression.collapsed', {
-          turns: compressedTurnCount,
-        })
-      : t(inline ? 'compression.dividerAboveUnknown' : 'compression.collapsedUnknown');
+      ? t('compression.collapsed', { turns: compressedTurnCount })
+      : t('compression.collapsedUnknown');
 
   const cancelAction = (
     <ActionIcon
@@ -199,7 +197,8 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             onClick={toggleExpanded}
           >
             <Icon icon={FoldVertical} size={14} />
-            <span>{turnsLabel(true)}</span>
+            {/* The reader scrolls through the history right above; a turn count adds nothing. */}
+            <span>{t('compression.dividerAbove')}</span>
             <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
           </button>
         </Divider>
@@ -253,7 +252,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             onClick={toggleExpanded}
           >
             <Icon icon={FoldVertical} size={14} />
-            <span>{turnsLabel(false)}</span>
+            <span>{collapsedLabel}</span>
             <Icon icon={ChevronDown} size={14} />
           </button>
         </Divider>

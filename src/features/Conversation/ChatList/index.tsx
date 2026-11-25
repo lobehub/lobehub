@@ -52,6 +52,7 @@ import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import { hoistCompressedGroups } from './utils/compressedGroupOrder';
 import { expandCompressedRows } from './utils/compressedHistory';
+import { keepRowInPlace } from './utils/keepRowInPlace';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 import { resolveRefreshingRowId } from './utils/refreshingRow';
@@ -258,6 +259,30 @@ const ChatList = memo<ChatListProps>(
         })?.index ?? -1,
       [displayMessages, expandedRows, rowIds],
     );
+    const storeApi = useConversationStoreApi();
+    const rowIdsRef = useRef(rowIds);
+    useEffect(() => {
+      rowIdsRef.current = rowIds;
+    });
+    // A later group's gap loads members above the row the reader is on.
+    const loadCompressedGap = useCallback(
+      (groupId: string, anchorId: string | undefined, retry: boolean) => {
+        const run = () => storeApi.getState().loadCompressedGroupHistory(groupId, { retry });
+        if (!anchorId) return run();
+        return keepRowInPlace({
+          anchorId,
+          getRowIds: () => rowIdsRef.current,
+          getScrollMethods: () => storeApi.getState().virtuaScrollMethods,
+          // One frame commits the new rows, the next lets virtua lay them out.
+          nextRender: () =>
+            new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            }),
+          run,
+        });
+      },
+      [storeApi],
+    );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
@@ -315,7 +340,14 @@ const ChatList = memo<ChatListProps>(
         // A compressed member is history the model no longer sees in full:
         // read-only, without the live row's actions.
         if (row?.compressedMember) return <CompressedMessageItem message={row.compressedMember} />;
-        if (row?.compressedGap) return <CompressedHistoryGap groupId={row.compressedGap} />;
+        if (row?.compressedGap)
+          return (
+            <CompressedHistoryGap
+              anchorId={rowIds[index + 1]}
+              groupId={row.compressedGap}
+              onLoad={loadCompressedGap}
+            />
+          );
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -333,7 +365,7 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+      [rowIds, rowById, defaultWorkflowExpandLevel, loadCompressedGap, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -399,7 +431,6 @@ const ChatList = memo<ChatListProps>(
         feedback.showRefreshing ? resolveRefreshingRowId(displayMessages, !itemContent) : undefined,
       [displayMessages, feedback.showRefreshing, itemContent],
     );
-    const storeApi = useConversationStoreApi();
     useEffect(() => {
       storeApi.setState({ refreshingRowId });
     }, [refreshingRowId, storeApi]);
