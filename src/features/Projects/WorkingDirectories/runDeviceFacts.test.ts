@@ -1,7 +1,7 @@
 import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { runDeviceFacts } from './runDeviceFacts';
+import { runDeviceFacts, runDevicePlatform } from './runDeviceFacts';
 
 const enroller = (userId: string, fullName: string | null = null) => ({
   avatar: null,
@@ -56,5 +56,20 @@ describe('runDeviceFacts', () => {
         'me',
       ),
     ).toEqual({ managed: false });
+  });
+});
+
+describe('runDevicePlatform', () => {
+  it('names the OS with its CPU architecture', () => {
+    expect(runDevicePlatform({ architecture: 'arm64', platform: 'darwin' })).toBe('macOS · arm64');
+  });
+
+  it('falls back to the platform the folder remembered', () => {
+    expect(runDevicePlatform(undefined, 'win32')).toBe('Windows');
+    expect(runDevicePlatform({ architecture: 'x64', platform: null }, 'linux')).toBe('Linux · x64');
+  });
+
+  it('says nothing when no platform is known', () => {
+    expect(runDevicePlatform(undefined, null)).toBeUndefined();
   });
 });

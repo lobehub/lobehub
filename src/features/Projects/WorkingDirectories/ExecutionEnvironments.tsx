@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useDeviceMetricSeries } from '@/features/DeviceManager/DeviceHealth/shared';
-import { getDeviceIcon, getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
+import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
@@ -36,7 +36,7 @@ import {
 } from './directoryAvailability';
 import { openEditDirectoryModal } from './EditDirectoryModal';
 import type { ProjectExecutionEnvironment } from './executionEnvironmentOrder';
-import { runDeviceFacts } from './runDeviceFacts';
+import { runDeviceFacts, runDevicePlatform } from './runDeviceFacts';
 import { useProjectExecutionEnvironments } from './useProjectExecutionEnvironments';
 
 /**
@@ -289,7 +289,7 @@ export function ExecutionEnvironments({
     const presence = device?.onlineUnknown
       ? undefined
       : t(device?.online ? 'settings.deviceOnline' : 'settings.deviceOffline');
-    const platform = getPlatformLabel(device?.platform ?? directory.platform);
+    const platform = runDevicePlatform(device, directory.platform);
     const facts = runDeviceFacts(device, currentUserId);
     const separator = (
       <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
