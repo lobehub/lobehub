@@ -32,6 +32,11 @@ import type {
   ChannelWatchThreadsParams,
 } from '@lobechat/types';
 
+import type { ChannelPostingService } from './posting';
+import { postChannelMessage } from './posting';
+
+export type { ChannelPostingService } from './posting';
+
 export interface ChannelHistoryService {
   /** Holds the run's questions for its reply; see `ChannelHistoryRepository.ask`. */
   askUser?: (params: ChannelAskUserParams) => Promise<ChannelAskedUser>;
@@ -74,6 +79,7 @@ export class ChannelExecutionRuntime {
     private readonly service: ChannelHistoryService,
     private readonly messaging?: ChannelMessagingService,
     private readonly threads?: ChannelThreadService,
+    private readonly posting?: ChannelPostingService,
   ) {}
 
   private async thread(
@@ -201,4 +207,6 @@ export class ChannelExecutionRuntime {
     this.thread((threads) => threads.watchThreads(params));
   unwatchThreads = (params: ChannelUnwatchThreadsParams) =>
     this.thread((threads) => threads.unwatchThreads(params));
+  postMessage = (params: Parameters<ChannelPostingService['postMessage']>[0] = {}) =>
+    postChannelMessage(this.posting, params);
 }

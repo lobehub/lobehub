@@ -17,6 +17,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelApiName } from '../../types';
+import { PostMessageRender } from './PostMessage';
 
 /** One readable line saying what failed and what to do; the raw message stays folded. */
 const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail, summary }) => {
@@ -50,6 +51,7 @@ const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail,
   );
 });
 ChannelErrorDetail.displayName = 'ChannelErrorDetail';
+export { ChannelErrorDetail };
 
 const ChannelHistoryRender = memo<
   BuiltinRenderProps<unknown, ChannelHistoryPage | ChannelHistoryMessageDetail, string>
@@ -225,4 +227,5 @@ export const ChannelRenders = {
   [ChannelApiName.readMessage]: ChannelHistoryRender,
   [ChannelApiName.readMessages]: ChannelHistoryRender,
   [ChannelApiName.sendMessage]: SendMessageRender,
+  [ChannelApiName.postMessage]: PostMessageRender,
 };
