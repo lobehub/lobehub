@@ -21,6 +21,7 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
+  codingPlans: false,
   canCreateContent: true,
   canManageWorkspace: true,
   canViewBilling: true,
@@ -30,6 +31,10 @@ const permissionFlags: Record<string, () => boolean> = {
   create_content: () => mocks.canCreateContent,
   view_billing: () => mocks.canViewBilling,
 };
+
+vi.mock('@/business/client/hooks/useCodingPlansEnabled', () => ({
+  useCodingPlansEnabled: () => mocks.codingPlans,
+}));
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => ({
@@ -61,6 +66,7 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
+  mocks.codingPlans = false;
   mocks.canCreateContent = true;
   mocks.canManageWorkspace = true;
   mocks.canViewBilling = true;
@@ -271,6 +277,19 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
+  });
+
+  it('lists Coding Plans only where the business slot enables it, after Usage, for every role', () => {
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.CodingPlans);
+
+    mocks.codingPlans = true;
+    mocks.canViewBilling = false;
+    mocks.canManageWorkspace = false;
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys.indexOf(WorkspaceSettingsTabs.CodingPlans)).toBe(
+      itemKeys.indexOf(WorkspaceSettingsTabs.Usage) + 1,
+    );
   });
 });
 

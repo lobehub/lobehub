@@ -97,7 +97,7 @@ describe('FeatureFlagsSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should keep both purchase entry keys of a published snapshot', () => {
+  it('should keep both Coding Plans keys of a published snapshot', () => {
     const result = FeatureFlagsSchema.safeParse({
       cloud_device_bundle: ['user-123', 'rollout:10'],
       cloud_device_bundle_workspaces: ['workspace-123'],
@@ -112,14 +112,14 @@ describe('FeatureFlagsSchema', () => {
     });
   });
 
-  it('should reject a boolean purchase entry workspace scope', () => {
+  it('should reject a boolean Coding Plans workspace scope', () => {
     // Like dev_dock_workspaces: the whole snapshot is refused, so publishers must write a list.
     expect(FeatureFlagsSchema.safeParse({ cloud_device_bundle_workspaces: true }).success).toBe(
       false,
     );
   });
 
-  it('should keep the purchase entry off by default and enable it per user', () => {
+  it('should keep the Coding Plans tab off by default and enable it per user', () => {
     expect(DEFAULT_FEATURE_FLAGS.cloud_device_bundle).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableCloudDeviceBundle).toBe(
       false,

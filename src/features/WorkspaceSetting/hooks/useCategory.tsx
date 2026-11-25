@@ -8,6 +8,7 @@ import {
   Building2,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   Coins,
   ContainerIcon,
   CreditCard,
@@ -38,6 +39,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansEnabled } from '@/business/client/hooks/useCodingPlansEnabled';
 import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
@@ -108,6 +110,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableCodingPlans = useCodingPlansEnabled();
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -226,6 +229,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ChartPieIcon,
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
+            },
+            // Readable by every member; the page keeps buying behind the admin role.
+            enableCodingPlans && {
+              icon: CodeXmlIcon,
+              key: WorkspaceSettingsTabs.CodingPlans,
+              label: t('tab.codingPlans'),
             },
             // Credits / Billing are readable by Admin-or-higher; the pages
             // themselves keep the money-moving controls (top-up, payment
@@ -423,6 +432,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       hideDocs,
       enableWebhook,
       enableBusinessFeatures,
+      enableCodingPlans,
       avatarUrl,
       username,
     ],

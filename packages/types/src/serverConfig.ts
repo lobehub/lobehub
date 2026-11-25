@@ -33,7 +33,7 @@ export type IFeatureFlagsState = {
   enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Purchase entry on the personal subscription accounts page (`cloud_device_bundle`). Off by
+   * Optional Coding Plans settings tab in personal settings (`cloud_device_bundle`). Off by
    * default. Workspaces are opted in separately (`cloud_device_bundle_workspaces`).
    */
   enableCloudDeviceBundle: boolean | undefined;

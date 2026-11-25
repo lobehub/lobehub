@@ -131,13 +131,13 @@ export const FeatureFlagsSchema = z.object({
   managed_cloud_device: FeatureFlagValue.optional(),
 
   /**
-   * Purchase entry on the subscription accounts page (the optional purchase slot), in personal
-   * settings. Off: the entry is hidden there. Array values are user ids.
+   * Optional Coding Plans settings tab, in personal settings. Off: the tab is hidden there.
+   * Array values are user ids.
    */
   cloud_device_bundle: FeatureFlagValue.optional(),
   /**
-   * Workspace ids whose subscription accounts page shows the purchase entry. Membership is
-   * checked on the server. Empty or unset: no workspace shows it.
+   * Workspace ids whose settings list the optional Coding Plans tab. Membership is checked on the
+   * server. Empty or unset: no workspace lists it.
    */
   cloud_device_bundle_workspaces: z.array(z.string()).optional(),
 

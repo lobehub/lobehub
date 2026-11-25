@@ -195,6 +195,19 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/coding-plans'),
+        'Desktop > Workspace > Settings > Coding Plans',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.CodingPlans,
+          createSurfaceSkeleton('grid'),
+        ),
+      },
+      path: 'coding-plans',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
         'Desktop > Workspace > Settings > Service Model',
       ),
