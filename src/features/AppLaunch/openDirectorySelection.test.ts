@@ -125,20 +125,18 @@ describe('resolveDirectoryMatch', () => {
     await expect(resolveDirectoryMatch({ ...base, getDeviceId, list })).resolves.toEqual({
       directory: directory('a', '/repo'),
       matchedParent: false,
+      status: 'matched',
     });
     expect(getDeviceId).toHaveBeenCalledTimes(2);
   });
 
-  it('should retry an empty list instead of treating it as unbound', async () => {
-    const list = vi
-      .fn()
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([directory('a', '/repo')]);
+  it('should report unbound as soon as one list answer has no match', async () => {
+    const list = vi.fn().mockResolvedValue([directory('a', '/elsewhere')]);
 
     await expect(
-      resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list }),
-    ).resolves.toMatchObject({ directory: { id: 'a' } });
-    expect(list).toHaveBeenCalledTimes(2);
+      resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list, timeoutMs: 10_000 }),
+    ).resolves.toEqual({ deviceId: LOCAL, status: 'unbound' });
+    expect(list).toHaveBeenCalledTimes(1);
   });
 
   it('should survive a failing call', async () => {
@@ -149,15 +147,24 @@ describe('resolveDirectoryMatch', () => {
 
     await expect(
       resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list }),
-    ).resolves.toMatchObject({ directory: { id: 'a' } });
+    ).resolves.toMatchObject({ directory: { id: 'a' }, status: 'matched' });
   });
 
-  it('should give up at the deadline and report no match', async () => {
-    const list = vi.fn().mockResolvedValue([]);
+  it('should report unavailable when the device identity never arrives', async () => {
+    const list = vi.fn().mockResolvedValue([directory('a', '/repo')]);
+
+    await expect(
+      resolveDirectoryMatch({ ...base, getDeviceId: () => undefined, list, timeoutMs: 5 }),
+    ).resolves.toEqual({ status: 'unavailable' });
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('should report unavailable when every list call fails', async () => {
+    const list = vi.fn().mockRejectedValue(new Error('401'));
 
     await expect(
       resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list, timeoutMs: 5 }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: 'unavailable' });
   });
 });
 

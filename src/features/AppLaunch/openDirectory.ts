@@ -1,6 +1,10 @@
 import { getProjectDraftPath, getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { projectService } from '@/services/project';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useProjectStore } from '@/store/project';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import {
   type BoundDirectoryLike,
@@ -14,9 +18,52 @@ export interface OpenDirectoryResult {
   directory?: BoundDirectoryLike;
   /** Matched by an ancestor rather than the path itself. */
   matchedParent?: boolean;
-  status: 'directory-not-bound' | 'opened-draft' | 'opened-topic';
+  projectId?: string;
+  status:
+    | 'created-project'
+    | 'created-project-unbound'
+    | 'directory-not-bound'
+    | 'directory-unavailable'
+    | 'opened-draft'
+    | 'opened-topic';
   topicId?: string;
 }
+
+const folderName = (path: string) => path.split(/[/\\]/).findLast(Boolean) || path;
+
+// Without a known LobeAI id (still loading on a cold start) the server creates
+// the main agent, so the launch never waits on the agent store.
+const createProjectForDirectory = async ({
+  deviceId,
+  navigate,
+  path,
+}: {
+  deviceId: string;
+  navigate: (path: string) => void;
+  path: string;
+}): Promise<OpenDirectoryResult> => {
+  const name = folderName(path);
+  const inboxAgentId = builtinAgentSelectors.inboxAgentId(useAgentStore.getState());
+  const project = await useProjectStore
+    .getState()
+    .createProject(inboxAgentId ? { coordinatorAgentId: inboxAgentId, name } : { name });
+
+  try {
+    const directory = await useProjectDirectoryStore
+      .getState()
+      .bind({ deviceId, name, path, projectId: project.id });
+
+    if (project.coordinatorAgentId) {
+      navigate(getProjectDraftPath(project.id, project.coordinatorAgentId, directory.id));
+      return { projectId: project.id, status: 'created-project' };
+    }
+  } catch (error) {
+    console.error(`[openDirectory] Failed to bind ${path} to project ${project.id}`, error);
+  }
+
+  navigate(`/project/${project.id}`);
+  return { projectId: project.id, status: 'created-project-unbound' };
+};
 
 /**
  * Land a shell launch on the right conversation.
@@ -32,6 +79,7 @@ export const openDirectoryInApp = async ({
   navigate,
   reuseExisting = true,
   targetPath,
+  timeoutMs,
 }: {
   /** Polled until known: device identity arrives after the renderer boots. */
   getDeviceId: () => string | undefined;
@@ -39,23 +87,29 @@ export const openDirectoryInApp = async ({
   /** `false` for `lh app --new-window`: stage a fresh conversation instead. */
   reuseExisting?: boolean;
   targetPath: string;
+  timeoutMs?: number;
 }): Promise<OpenDirectoryResult> => {
   const target = normalizeComparablePath(targetPath);
-  const match = await resolveDirectoryMatch({
+  const resolution = await resolveDirectoryMatch({
     getDeviceId,
     list: async () => (await projectWorkingDirectoryService.list()).data,
     targetPath: target,
+    timeoutMs,
   });
 
-  if (!match) {
-    console.warn(`[openDirectory] No project directory is bound to ${target}`);
-    // Land where binding happens instead of a silent no-op. The list route is
-    // `/projects` — `/project` renders the not-found page.
+  if (resolution.status === 'unavailable') {
+    console.warn(
+      `[openDirectory] Could not resolve ${target}: no device identity or server answer`,
+    );
+    // The list route is `/projects` — `/project` renders the not-found page.
     navigate('/projects');
-    return { status: 'directory-not-bound' };
+    return { status: 'directory-unavailable' };
   }
 
-  const { directory, matchedParent } = match;
+  if (resolution.status === 'unbound')
+    return createProjectForDirectory({ deviceId: resolution.deviceId, navigate, path: target });
+
+  const { directory, matchedParent } = resolution;
   const { data: topics } = await projectWorkingDirectoryService.listTopics(directory.id);
   const latest = reuseExisting ? pickLatestTopic(topics ?? []) : undefined;
 

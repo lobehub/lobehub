@@ -90,15 +90,19 @@ export const pickDirectoryForPath = <T extends BoundDirectoryLike>(
   return best ? { directory: best.directory, matchedParent: true } : undefined;
 };
 
+export type DirectoryResolution<T extends BoundDirectoryLike> =
+  | { directory: T; matchedParent: boolean; status: 'matched' }
+  | { deviceId: string; status: 'unbound' }
+  | { status: 'unavailable' };
+
 /**
  * Resolve a launch to a bound directory, tolerating a cold start.
  *
- * A launch replays as soon as the navigation bridge mounts, which can beat both
- * the session's first data fetch and the local device identity — and a missing
- * device id or an empty list is indistinguishable from "nothing is bound" at a
- * single point in time. This keeps asking until the device is known and the
- * list has an answer, then stops at the deadline so a genuinely unbound
- * directory still reaches the project list.
+ * A launch replays as soon as the navigation bridge mounts, which can beat the
+ * local device identity and the first authenticated request. Only those are
+ * waited for: once the device is known and the list has answered, that answer
+ * decides, so an unbound directory is reported at once instead of after the
+ * deadline. The deadline only bounds a device or server that never answers.
  */
 export const resolveDirectoryMatch = async <T extends BoundDirectoryLike>({
   getDeviceId,
@@ -113,7 +117,7 @@ export const resolveDirectoryMatch = async <T extends BoundDirectoryLike>({
   pollMs?: number;
   targetPath: string;
   timeoutMs?: number;
-}): Promise<undefined | { directory: T; matchedParent: boolean }> => {
+}): Promise<DirectoryResolution<T>> => {
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
@@ -123,13 +127,13 @@ export const resolveDirectoryMatch = async <T extends BoundDirectoryLike>({
       try {
         const directories = await list();
         const match = pickDirectoryForPath(directories ?? [], targetPath, { deviceId });
-        if (match) return match;
+        return match ? { ...match, status: 'matched' } : { deviceId, status: 'unbound' };
       } catch (error) {
         console.warn('[openDirectory] Failed to list project directories', error);
       }
     }
 
-    if (Date.now() >= deadline) return undefined;
+    if (Date.now() >= deadline) return { status: 'unavailable' };
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 };
