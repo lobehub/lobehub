@@ -9,6 +9,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import { AgentShareModel } from '@/database/models/agentShare';
@@ -117,6 +118,9 @@ export const importShareAttachments = async (
   const s3 = new FileS3();
   const fileModel = new FileModel(db, target.ownerId, workspaceId);
   const uploadModel = new FileUploadModel(db, target.ownerId, workspaceId);
+  /** Best-effort cleanup of objects no row references; a few deletes at a time. */
+  const deleteObjects = (pathnames: string[]) =>
+    pMap(pathnames, (pathname) => s3.deleteFile(pathname).catch(() => {}), { concurrency: 5 });
   const provenance = { shareId: target.shareId, visitorUserId: target.visitorUserId };
 
   /** Each source's copies live under their own folder, so a redispatch finds the one it made. */
@@ -230,11 +234,11 @@ export const importShareAttachments = async (
       return ids;
     });
   } catch (error) {
-    await Promise.all(attempted.map((pathname) => s3.deleteFile(pathname).catch(() => {})));
+    await deleteObjects(attempted);
     throw error;
   }
 
   // A source a concurrent dispatch settled first leaves this attempt's object unreferenced.
-  await Promise.all(orphaned.map((pathname) => s3.deleteFile(pathname).catch(() => {})));
+  await deleteObjects(orphaned);
   return sources.map((source) => reused.get(source.id) ?? created.get(source.id)!);
 };
