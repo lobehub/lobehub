@@ -1009,4 +1009,27 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## MartLLM
+
+### `MARTLLM_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in MartLLM.
+- Default: -
+- Example: `xxxxxx...xxxxxx`
+
+### `MARTLLM_PROXY_URL`
+
+- Type: Optional
+- Description: The base URL the server sends MartLLM requests to. Leave it unset to use MartLLM's own endpoint.
+- Default: `https://api.martllm.com/v1`
+- Example: `https://your-proxy.example.com/v1`
+
+### `MARTLLM_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the MartLLM model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+openai/gpt-4o-mini,+deepseek/deepseek-v3.2=DeepSeek V3.2`
+
 [model-list]: /docs/self-hosting/advanced/model-list

@@ -1,0 +1,61 @@
+---
+title: 在 LobeHub 中使用 MartLLM
+description: 在 LobeHub 中配置 MartLLM API 密钥，并获取它提供的模型列表。
+tags:
+  - LobeHub
+  - MartLLM
+  - API 密钥
+  - OpenAI 兼容
+---
+
+# 在 LobeHub 中使用 MartLLM
+
+[MartLLM](https://martllm.com) 是一个 AI 模型市场 API。一个 API 密钥即可通过兼容 OpenAI 的接口 `https://api.martllm.com/v1` 调用第三方服务商在其上提供的模型。MartLLM 不是任何模型厂商的官方 API：每个请求都会发送给提供该模型的第三方服务商。
+
+本文将指导你如何在 LobeHub 中使用 MartLLM：
+
+<Steps>
+  ### 步骤一：获取 MartLLM API 密钥
+
+  - 在 [martllm.com/signup](https://martllm.com/signup) 使用邮箱（6 位验证码）或 Google 注册
+  - 充值预付费额度。账户初始余额为 $0，无订阅
+  - 在控制台创建 API 密钥并复制
+
+  ### 步骤二：在 LobeHub 中配置 MartLLM
+
+  - 打开 **设置 → AI 服务商**，找到 `MartLLM`
+  - 开启该服务商并粘贴你的 API 密钥
+  - **API 代理地址** 留空即可使用 `https://api.martllm.com/v1`
+  - 点击 **获取模型列表** 读取当前模型列表，然后启用需要的模型
+
+  <Callout type={'info'}>
+    模型 id 的格式为 `厂商/模型`，例如 `openai/gpt-4o-mini` 或
+    `deepseek/deepseek-v3.2`。列表会随服务商提供的模型变化，请以获取到的列表为准，也可以在
+    [martllm.com/models](https://martllm.com/models) 查看。
+  </Callout>
+
+  ### 步骤三：开始对话
+
+  在模型切换面板中选择一个 MartLLM 模型并发送消息。
+
+  <Callout type={'warning'}>
+    请求会从你的 MartLLM 额度中扣费。每个请求的费用等于实际处理它的服务商的收费，因此同一模型的价格可能变化。计费方式见
+    [MartLLM 文档](https://martllm.com/docs/quickstart)。
+  </Callout>
+</Steps>
+
+## 自部署
+
+如需为自部署实例的所有用户提供 MartLLM，请在服务端设置密钥：
+
+```bash
+MARTLLM_API_KEY=your_martllm_api_key
+```
+
+`MARTLLM_PROXY_URL` 与 `MARTLLM_MODEL_LIST` 为可选项，见[模型服务商环境变量](/docs/self-hosting/environment-variables/model-provider#martllm)。
+
+## 常见问题
+
+- **401 Unauthorized**：请确认 API 密钥已完整复制。
+- **找不到某个模型**：再次点击 **获取模型列表**；列表以服务商当前提供的模型为准。
+- **额度不足**：在 MartLLM 控制台充值。

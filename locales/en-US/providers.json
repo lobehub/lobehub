@@ -41,6 +41,7 @@
   "lobehub.description": "LobeHub Cloud uses official APIs to access AI models and bills usage in US dollars based on model tokens.",
   "longcat.description": "LongCat is a series of generative AI large models independently developed by Meituan. It is designed to enhance internal enterprise productivity and enable innovative applications through an efficient computational architecture and strong multimodal capabilities.",
   "magpie.description": "magpie is an LLM gateway: every model and subscription you have there is served on one endpoint.",
+  "martllm.description": "MartLLM is a marketplace of third-party model providers behind one OpenAI-compatible API, with prepaid credit and no subscription.",
   "meta.description": "Meta builds AI models and products that help people connect, create, and get things done, including the Llama and Muse model families.",
   "minimax.description": "Founded in 2021, MiniMax builds general-purpose AI with multimodal foundation models, including trillion-parameter MoE text models, speech models, and vision models, along with apps like Hailuo AI.",
   "minimaxcodingplan.description": "MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.",
