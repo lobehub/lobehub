@@ -19,6 +19,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
+import { taskChannelDeliveryRun } from '@/server/services/task/channelDelivery';
 import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnapshot';
 import { createTaskRunHooks } from '@/server/services/task/runHooks';
 import { readTaskSkillIds } from '@/server/services/userSkill';
@@ -349,6 +350,9 @@ export class TaskRunnerService {
       // Skills the task itself names for every run — a goal batch's units name
       // the batch's plan skill — so a re-run or a manual run loads them too.
       pluginIds.push(...readTaskSkillIds(taskConfig));
+      // A task whose results post to a Channel is told so, and may answer with a card.
+      const channelDelivery = taskChannelDeliveryRun(taskConfig);
+      if (channelDelivery) pluginIds.push(...channelDelivery.additionalPluginIds);
 
       // The pin never follows later Agent changes, so a stale pin is corrected
       // here. A model-only override drops the previous provider and resolves one
@@ -430,6 +434,7 @@ export class TaskRunnerService {
         }),
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
         ...(maxSteps ? { maxSteps } : {}),
+        ...(channelDelivery && { instructions: channelDelivery.instructions }),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,

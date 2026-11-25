@@ -51,6 +51,7 @@ import type {
   DeleteTaskCommentParams,
   ListWorkspaceMembersParams,
   RunTasksItemResult,
+  SetTaskScheduleParams,
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
@@ -599,14 +600,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   setTaskSchedule = async (
-    params: {
-      automationMode?: TaskAutomationMode | null;
-      heartbeatInterval?: number;
-      identifier: string;
-      maxExecutions?: number | null;
-      schedulePattern?: string | null;
-      scheduleTimezone?: string | null;
-    },
+    params: SetTaskScheduleParams,
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -693,6 +687,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
             ? 'max executions cleared (unlimited)'
             : `max executions → ${params.maxExecutions}`,
         );
+      }
+
+      // The server checks a Channel delivery (which needs its channelId here) before storing it.
+      if (params.channelDelivery !== undefined) {
+        ops.push(taskService.updateConfig(identifier, { delivery: params.channelDelivery }));
+        changes.push(params.channelDelivery ? 'Channel delivery set' : 'Channel delivery cleared');
       }
 
       if (ops.length === 0) {
