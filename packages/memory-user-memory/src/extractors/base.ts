@@ -137,6 +137,20 @@ export abstract class BaseMemoryExtractor<
 
   protected abstract buildUserPrompt(options: TExtractorTemplateProps): string;
 
+  /**
+   * The system prompt already renders the whole instruction template, including the dynamic
+   * context (conversation and retrieved memories). Rendering the same template again as the user
+   * message sent the entire payload twice on every extraction call, so the user turn only
+   * restates the task now.
+   */
+  protected buildTaskPrompt(layer: string, emptyReturn: string): string {
+    return [
+      `Extract the **${layer}** layer information from the conversation in the context above.`,
+      'Follow the system instructions and the output contract exactly.',
+      emptyReturn,
+    ].join('\n');
+  }
+
   async structuredCall(options?: TExtractorOptions): Promise<TOutput> {
     return tracer.startActiveSpan(`structuredCall: ${this.getPromptName()}`, async (span) => {
       await this.ensurePromptTemplate();
