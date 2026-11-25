@@ -198,15 +198,22 @@ export const installAgentCredential = async (
     };
     await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
   } else {
-    const replacing = await fileExists(paths.metadataFile);
     await ensurePrivateDir(paths.codexHome);
+    // The auth.json this install replaces, restored if the install fails, so
+    // a failed install never leaves the device running on the new login.
+    const previousAuthJson = (await fileExists(paths.codexAuthFile))
+      ? await readFile(paths.codexAuthFile, 'utf8')
+      : undefined;
     try {
       await writePrivateFile(paths.codexAuthFile, secret.authJson);
       const metadata: StoredMetadata = { installedAt, provider, version: STORE_VERSION };
       await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
     } catch (error) {
-      // A first install that failed half-way must not leave a secret behind.
-      if (!replacing) await rm(paths.codexAuthFile, { force: true }).catch(() => {});
+      await (
+        previousAuthJson === undefined
+          ? rm(paths.codexAuthFile, { force: true })
+          : writePrivateFile(paths.codexAuthFile, previousAuthJson)
+      ).catch(() => {});
       throw error;
     }
   }

@@ -151,11 +151,13 @@ describe('spawnHeteroAgentRun with an installed agent credential', () => {
       { rootDir: credentialRoot.dir },
     );
     vi.stubEnv('CODEX_API_KEY', 'sk-local');
+    vi.stubEnv('OPENAI_API_KEY', 'sk-openai-local');
 
     const env = await spawnedEnv({ ...baseParams, agentType: 'codex' });
 
     expect(env.CODEX_HOME).toBe(path.join(credentialRoot.dir, 'codex', 'home'));
     expect(env).not.toHaveProperty('CODEX_API_KEY');
+    expect(env).not.toHaveProperty('OPENAI_API_KEY');
   });
 
   it('keeps the device login and account routing when nothing is installed', async () => {

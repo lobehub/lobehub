@@ -23,8 +23,12 @@ const CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV = [
   'CLAUDE_CODE_USE_VERTEX',
 ] as const;
 
-/** `codex exec` prefers this API key over the `auth.json` login. */
-const CODEX_CREDENTIAL_OVERRIDDEN_ENV = ['CODEX_API_KEY'] as const;
+/**
+ * API keys that would authenticate (and bill) instead of the `auth.json`
+ * login: `codex exec` prefers `CODEX_API_KEY`, and `OPENAI_API_KEY` reaches
+ * the OpenAI provider. The managed Desktop Codex driver drops it too.
+ */
+const CODEX_CREDENTIAL_OVERRIDDEN_ENV = ['CODEX_API_KEY', 'OPENAI_API_KEY'] as const;
 
 export type AgentCredentialSpawnEnv =
   /** No credential installed for this agent: spawn as before. */

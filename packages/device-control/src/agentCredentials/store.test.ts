@@ -96,6 +96,22 @@ describe('installAgentCredential', () => {
     expect(await exists(path.join(codexDir(), 'home', 'auth.json'))).toBe(false);
   });
 
+  it('keeps the earlier Codex login when a replacement fails half-way', async () => {
+    await installAgentCredential(codexParams, options());
+    // A directory where the metadata file goes makes the replacement's write fail.
+    await rm(path.join(codexDir(), 'credential.json'));
+    await mkdir(path.join(codexDir(), 'credential.json'));
+    const replacement = JSON.stringify({ tokens: { access_token: 'replacement-token' } });
+
+    await expect(
+      installAgentCredential(
+        { provider: 'codex', secret: { authJson: replacement, type: 'codex-auth-json' } },
+        options(),
+      ),
+    ).rejects.toThrow();
+    expect(await readFile(path.join(codexDir(), 'home', 'auth.json'), 'utf8')).toBe(AUTH_JSON);
+  });
+
   it.each([
     [{ provider: 'gemini', secret: { token: TOKEN, type: 'claude-oauth-token' } }, 'provider'],
     [{ provider: 'codex', secret: claudeParams().secret }, 'codex-auth-json'],
