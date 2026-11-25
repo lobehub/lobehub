@@ -80,18 +80,18 @@ interface OverviewProps {
   /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
   deviceId?: string;
   environmentAvailable: boolean;
-  /** Better Coding Experience: remove one of {@link pullRequests} from the topic. */
+  /** Remove one of {@link pullRequests} from the topic. */
   onDismissPullRequest?: (pullRequest: TopicPullRequestView) => Promise<void>;
-  /** Better Coding Experience: link a PR by URL; resolves to its `owner/repo#n`. */
+  /** Link a PR by URL; resolves to its `owner/repo#n`. */
   onLinkPullRequest?: (url: string) => Promise<string | undefined>;
-  /** Better Coding Experience: open one of {@link pullRequests}. */
+  /** Open one of {@link pullRequests}. */
   onOpenPullRequest?: (pullRequest: TopicPullRequestView) => void;
   onOpenTab: (tab: string) => void;
   onRefreshPullRequest: () => Promise<unknown>;
   /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
   pullRequest?: DeviceGitLinkedPullRequest | null;
   /**
-   * Better Coding Experience: every PR the topic's Work rows link, listed
+   * Every PR the topic's Work rows link, listed
    * under Changes in place of the single branch PR.
    */
   pullRequests?: TopicPullRequestView[];
@@ -293,7 +293,7 @@ const Overview = memo<OverviewProps>(
       />
     );
 
-    // Better Coding Experience PRs are server records: they stay listed with
+    // A topic's PRs are server records: they stay listed with
     // their last known state even when the working directory cannot be read.
     const topicPullRequestRows = pullRequests && (
       <>

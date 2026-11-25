@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   Block,
   DropdownMenu,
   Flexbox,
@@ -31,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -131,7 +131,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/agent', identifier),
+        url: urlJoin('/marketplace/agent', identifier),
       },
       { skipNull: true },
     );
@@ -140,7 +140,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const isUnderReview = isValidated === false;
 
     const handleViewDetail = useCallback(() => {
-      window.open(urlJoin('/community/agent', identifier), '_blank');
+      window.open(urlJoin('/marketplace/agent', identifier), '_blank');
     }, [identifier]);
 
     const handleEdit = useCallback(async () => {

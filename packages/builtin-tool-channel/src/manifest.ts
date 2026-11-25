@@ -1,4 +1,5 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
+import { CHANNEL_ASK_LIMITS } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { ChannelApiName, ChannelIdentifier } from './types';
@@ -14,6 +15,63 @@ export const ChannelManifest: BuiltinToolManifest = {
       'Read the current shared conversation, message Agents in your other Channels, and message people for your requester.',
   },
   api: [
+    {
+      name: ChannelApiName.askUser,
+      description:
+        "Ask your requester to choose, as a card of options posted with your final answer. Use it when you need their decision to go on and the choices can be listed, e.g. which area to start with. The run does not wait: after calling it, end your turn with a short lead-in to the question (do not repeat the options, the card shows them). Their pick arrives later as a new request replying to your question, and you continue from there. Every card also offers 'Other' for their own words. Once per reply; only for a person's own request.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['questions'],
+        properties: {
+          questions: {
+            type: 'array',
+            minItems: 1,
+            maxItems: CHANNEL_ASK_LIMITS.maxQuestions,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['question', 'options'],
+              properties: {
+                question: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.questionLength,
+                  description: "The question, in your requester's language.",
+                },
+                header: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.headerLength,
+                  description: 'Optional short label above the question.',
+                },
+                multiSelect: {
+                  type: 'boolean',
+                  description: 'Allow picking several options. Default false.',
+                },
+                options: {
+                  type: 'array',
+                  minItems: CHANNEL_ASK_LIMITS.minOptions,
+                  maxItems: CHANNEL_ASK_LIMITS.maxOptions,
+                  description: "Distinct choices; do not add an 'Other' option, the card has one.",
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['label'],
+                    properties: {
+                      label: { type: 'string', maxLength: CHANNEL_ASK_LIMITS.labelLength },
+                      description: {
+                        type: 'string',
+                        maxLength: CHANNEL_ASK_LIMITS.descriptionLength,
+                        description: 'Optional one-line explanation.',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     {
       name: ChannelApiName.readMessages,
       description:
@@ -85,6 +143,81 @@ export const ChannelManifest: BuiltinToolManifest = {
             minimum: 1,
             maximum: 20,
             description: 'Number of Channels; default 10.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.requestConnector,
+      description:
+        'Ask the person to connect a connector (an app or MCP server) you need, as a card in this conversation with a one-click Connect button; they authorize in place and need no URL or key from you. Use it whenever the person asks you to connect something or a task needs a connector that is not connected yet, instead of pasting an authorization link. Pass a catalog identifier (e.g. github, linear, notion, sentry, stripe); for an MCP server outside the catalog also pass its https url. The card is posted right away; finish your answer by saying it is there, and use the connector from your next turn once connected.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['identifier'],
+        properties: {
+          auth: {
+            type: 'string',
+            enum: ['oauth', 'none'],
+            description: 'Only with url: how the server authorizes. Default oauth.',
+          },
+          identifier: {
+            type: 'string',
+            description: 'Catalog identifier, or a short id (letters, digits, _ and -) for a url.',
+          },
+          name: { type: 'string', description: 'Only with url: display name of the server.' },
+          reason: {
+            type: 'string',
+            description: 'One short sentence on what you will do with it, shown on the card.',
+          },
+          url: {
+            type: 'string',
+            description: 'The https MCP endpoint of a server outside the catalog.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.addReaction,
+      description:
+        'React to a message in the current conversation with an emoji, as yourself, the way a person would: it posts nothing, notifies nobody and does not replace your answer. Any emoji; you can leave several different ones on one message.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.removeReaction,
+      description: 'Remove a reaction you left on a message in the current conversation.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
           },
         },
       },

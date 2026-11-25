@@ -11,6 +11,7 @@ import type {
 import {
   applyTopicModelToHeterogeneousProvider,
   getAutoPluginIds,
+  getBuiltinOverrides,
   getPinnedPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
@@ -77,6 +78,7 @@ export interface ResolvedRunAgentConfig {
   assistantAgentId: string;
   /** Library skills the agent set to `auto`, captured before pinned-id collapse. */
   autoSkillIds: string[];
+  builtinOverrides: string[];
   canManageAgent: boolean;
   /** Agent id stamped on the user row (conversation-aware). */
   conversationAgentId: string;
@@ -164,7 +166,7 @@ const loadUserLocale = async (
 ): Promise<string | undefined> => {
   try {
     const userInfo = await UserModel.getInfoForAIGeneration(deps.db, userId);
-    return userInfo.responseLanguage;
+    return userInfo.preferredReplyLanguage;
   } catch (error) {
     log('execAgent: failed to load user locale for agent config resolution: %O', error);
     return undefined;
@@ -288,6 +290,7 @@ export const resolveRunAgentConfig = async (
   // Capture disabled identifiers off the row before the resolved config
   // collapses plugins to pinned ids: they later filter the auto-discovery
   // candidate pool so a disabled plugin can't be rediscovered.
+  const builtinOverrides = getBuiltinOverrides(row.plugins);
   const disabledPluginIds = getUserDisabledToolIds(row.plugins, resolved.chatConfig);
   // Same for the explicit `auto` entries: a library skill is opt-in per agent,
   // so the skill pool needs the ones this agent opted into without pinning.
@@ -381,6 +384,7 @@ export const resolveRunAgentConfig = async (
     agentSlug: row.slug,
     assistantAgentId,
     autoSkillIds,
+    builtinOverrides,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,

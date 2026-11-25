@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { libraryCoverOf } from '@/features/LibraryCover/presets';
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { libraryFavoriteTarget } from '@/features/ResourceLibrary/libraryFavorite';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -17,6 +19,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 interface ActionProps {
+  avatar?: string | null;
   description?: string | null;
   id: string;
   name: string;
@@ -28,6 +31,7 @@ interface ActionProps {
 }
 
 export const useDropdownMenu = ({
+  avatar,
   id,
   name,
   description,
@@ -50,6 +54,10 @@ export const useDropdownMenu = ({
   // compact menu instead of leaving members with disabled dead ends.
   const canManage = useResourceManageable(userId);
   const transferMenuItems = useKnowledgeBaseTransferMenuItem(id);
+  // A row menu toggles that row, not the open page, so it does not show the page hotkey.
+  const favoriteMenuItem = useFavoriteMenuItem(libraryFavoriteTarget({ avatar, id, name }), {
+    showHotkey: false,
+  });
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Only the creator of a still-private KB sees the "Publish to workspace" entry.
   // Mirrors the file / agent / task one-way publish pattern.
@@ -166,6 +174,8 @@ export const useDropdownMenu = ({
     // groups survived. Hand-wiring a divider next to each entry silently drops
     // or duplicates separators as soon as one capability combination changes.
     const groups: NonNullable<DropdownItem[]>[] = [
+      // Favorites are per member, so every member who sees the row can pin it.
+      favoriteMenuItem ? [favoriteMenuItem] : [],
       // Content edits: gated by the workspace role only. Row ownership no longer
       // gates them — the server accepts any member holding an `edit` grant.
       canEdit
@@ -244,6 +254,7 @@ export const useDropdownMenu = ({
   }, [
     canEdit,
     canManage,
+    favoriteMenuItem,
     t,
     toggleEditing,
     handleDelete,

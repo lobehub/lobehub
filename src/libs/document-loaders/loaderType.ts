@@ -10,51 +10,37 @@ import { type FileLoaderType } from './types';
  * `undefined` means the chunking task is guaranteed to fail.
  */
 export const getChunkingLoaderType = (filename: string): FileLoaderType | undefined => {
-  const name = filename.toLowerCase();
+  const name = filename.split(/[/\\]/).at(-1) ?? '';
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return;
 
-  if (name.endsWith('pptx')) {
-    return 'ppt';
+  const extension = name.slice(dot + 1).toLowerCase();
+  switch (extension) {
+    case 'csv':
+    case 'doc':
+    case 'docx':
+    case 'epub':
+    case 'ipynb':
+    case 'pdf': {
+      return extension;
+    }
+    case 'md':
+    case 'mdx': {
+      return 'markdown';
+    }
+    case 'pptx': {
+      return 'ppt';
+    }
+    case 'tex': {
+      return 'latex';
+    }
+    case 'xlsx': {
+      return 'excel';
+    }
   }
 
-  if (name.endsWith('docx') || name.endsWith('doc')) {
-    return 'doc';
-  }
-
-  if (name.endsWith('.xlsx')) {
-    return 'excel';
-  }
-
-  if (name.endsWith('pdf')) {
-    return 'pdf';
-  }
-
-  if (name.endsWith('tex')) {
-    return 'latex';
-  }
-
-  if (name.endsWith('md') || name.endsWith('mdx')) {
-    return 'markdown';
-  }
-
-  if (name.endsWith('csv')) {
-    return 'csv';
-  }
-
-  if (name.endsWith('epub')) {
-    return 'epub';
-  }
-
-  if (name.endsWith('ipynb')) {
-    return 'ipynb';
-  }
-
-  const ext = name.split('.').pop();
-
-  if (ext && SUPPORTED_LANGUAGES.includes(ext as SupportedLanguage)) {
-    return 'code';
-  }
-
-  if (ext && SUPPORT_TEXT_LIST.includes(ext)) return 'text';
+  if (SUPPORTED_LANGUAGES.includes(extension as SupportedLanguage)) return 'code';
+  if (SUPPORT_TEXT_LIST.includes(extension)) return 'text';
 };
 
 /**

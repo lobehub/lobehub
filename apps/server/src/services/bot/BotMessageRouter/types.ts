@@ -158,6 +158,10 @@ export interface BotHandlerContext {
     thread: { id: string },
     threadSubscribed?: boolean,
   ) => Promise<WakeInitiation | undefined>;
+  /** Whether everyone in a thread may use the devices because its channel is granted. */
+  isDeviceChannelGrantedFor: (thread: { id: string; isDM?: boolean }) => boolean;
+  /** Whether a thread is outside the channels the owner limited device use to. */
+  isDeviceChannelRestrictedFor: (thread: { id: string; isDM?: boolean }) => boolean;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
   nameKeywords: ReadonlyArray<string>;

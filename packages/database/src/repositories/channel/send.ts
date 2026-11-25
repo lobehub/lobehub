@@ -1,15 +1,15 @@
 import type { ChannelMessageMetadata, ChannelRoutingMode, ContactCardInput } from '@lobechat/types';
-import { CHANNEL_LIMITS, contactCardOf, contactCardText } from '@lobechat/types';
+import { CHANNEL_LIMITS, ChatErrorType, contactCardOf, contactCardText } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
-import { ContactModel } from '../../models/contact';
 import type { ChannelMessageItem } from '../../schemas';
 import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
-import type { LobeChatDatabase, Transaction } from '../../type';
+import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
+import type { ChannelContacts } from './contacts';
 import {
   activeMembers,
   appendMessage,
@@ -21,7 +21,6 @@ import {
 } from './delivery';
 import { ChannelError } from './error';
 import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
-import { assertSharedAgentAdmission } from './shareLimits';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -76,8 +75,8 @@ export const validateSendInput = (input: ChannelSendInput) => {
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
-  if (input.silent && (input.replyToId || input.mentions?.length))
-    throw new ChannelError('BAD_REQUEST', 'A message for the record neither replies nor mentions');
+  if (input.silent && input.mentions?.length)
+    throw new ChannelError('BAD_REQUEST', 'A message for the record mentions no one');
   const fileIds = [...new Set(input.fileIds ?? [])];
   if (input.card && fileIds.length)
     throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');
@@ -113,6 +112,7 @@ export const sendMessage = async (
   tx: Transaction,
   { channel, member }: ChannelAccess,
   input: ChannelSendInput,
+  contacts: ChannelContacts,
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
   const author = await requestAuthor(tx, channel, input.authorAgentMemberId);
@@ -195,28 +195,19 @@ export const sendMessage = async (
   if (channel.peerUserId && member.userId)
     await requirePeerRelation(
       tx,
+      contacts,
       channel.workspaceId,
       member.userId,
       peerOf(channel, member.userId)!,
     );
 
-  if (channel.agentId) {
-    // The same test the Channel list uses, so a workspace conversation with a shared Agent is
-    // treated like a personal one, while a colleague's public workspace Agent (the workspace's
-    // own) is not.
-    const agentOwnerId = await sharedAgentOwner(tx, channel, member.userId!);
-    if (agentOwnerId) {
-      // Another person's shared Agent runs as its owner, who cannot read the sender's files.
-      if (fileIds.length)
-        throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
-      await assertSharedAgentAdmission(tx, {
-        agentId: channel.agentId,
-        content: input.content,
-        ownerId: agentOwnerId,
-        visitorId: member.userId!,
-      });
-    }
-  }
+  // Another person's shared Agent runs as its owner, who cannot read the sender's files. The test
+  // is the one the Channel list uses, so a workspace conversation with a shared Agent is treated
+  // like a personal one, while a colleague's public workspace Agent (the workspace's own) is not.
+  // The share's limits (prompt length, messages per visitor, monthly spend) never refuse the send:
+  // the reply fails with the limit's type when dispatched (`ChannelCoordinator.shareGate`).
+  if (channel.agentId && fileIds.length && (await sharedAgentOwner(tx, channel, member.userId!)))
+    throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
 
   if (fileIds.length) {
     // A workspace's public files are its members'. An external contact talking in it attaches
@@ -241,7 +232,7 @@ export const sendMessage = async (
       .orderBy(asc(files.id))
       .for('update');
     if (accessible.length !== fileIds.length)
-      throw new ChannelError('BAD_REQUEST', 'One or more attachments are unavailable');
+      throw new ChannelError('BAD_REQUEST', ChatErrorType.ChannelAttachmentUnavailable);
   }
 
   const mentioned = quoteOnly ? [] : await activeMembers(tx, channel.id, mentions);
@@ -335,18 +326,14 @@ export const sendMessage = async (
 
   // Resolved only for a new message: a retry returns the original card as it was sent.
   const card =
-    input.card &&
-    (await new ContactModel(
-      tx as unknown as LobeChatDatabase,
-      member.userId!,
-      channel.workspaceId,
-    ).resolveCard(input.card));
+    input.card && (await contacts.resolveCard(tx, member.userId!, channel.workspaceId, input.card));
   const metadata = card ? { ...input.metadata, card } : input.metadata;
 
   const message = await appendMessage(tx, {
     ...(author ? { agentId: author.agentId } : { userId: member.userId }),
     channelId: channel.id,
     content: card ? contactCardText(card) : input.content,
+    ...(card && { kind: 'contact' as const }),
     mentions,
     ...(metadata && { metadata }),
     requestKey: input.requestKey,

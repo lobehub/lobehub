@@ -14,6 +14,8 @@ import {
   toast,
 } from '@lobehub/ui';
 import {
+  ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   FolderIcon,
   GitBranchIcon,
@@ -27,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 import { densityVars } from '@/styles/densityVars';
@@ -56,12 +59,23 @@ export type EnvironmentFormValue = Pick<SandboxEnvironment, 'configuration' | 'n
 };
 
 interface EnvironmentFormProps {
+  /**
+   * Folds the setup command and the variables into one row with a summary.
+   * They are set once and rarely touched, so on a page that also lists the
+   * project's devices they should not push those out of view.
+   */
+  collapseSetup?: boolean;
   environment: EnvironmentFormValue;
   /**
    * Hides the name and description: a project's environment is named after
    * the project and edited as part of it.
    */
   hideBasics?: boolean;
+  /**
+   * Leaves out how repositories are cloned and when an edit takes effect: a
+   * project's page keeps to the repositories themselves.
+   */
+  hideRepositoryHints?: boolean;
   onSave: (params: {
     configuration?: SandboxEnvironmentSpecification;
     description?: string;
@@ -278,188 +292,228 @@ BranchField.displayName = 'EnvironmentBranchField';
  * at the bottom of four sections, and changes typed above it were lost to a
  * tab switch before anyone scrolled down to it.
  */
-const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, onSave }) => {
-  const { t } = useTranslation('setting');
-  const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
-  const [pickingRepository, setPickingRepository] = useState(false);
-  const [busy, setBusy] = useState(false);
+const EnvironmentForm = memo<EnvironmentFormProps>(
+  ({ collapseSetup, environment, hideBasics, hideRepositoryHints, onSave }) => {
+    const { t } = useTranslation('setting');
+    const [setupOpen, setSetupOpen] = useState(false);
+    const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
+    const [pickingRepository, setPickingRepository] = useState(false);
+    const [busy, setBusy] = useState(false);
+    /**
+     * Failure of a repository add / remove, shown in the Sources section: the page stays open and
+     * the control that failed has no confirm step of its own to hang an error on.
+     */
+    const [repositoryError, setRepositoryError] = useState('');
 
-  // Every field saves the whole specification, so two saves in flight at once
-  // would each start from the same snapshot and the later one would undo the
-  // earlier. Saves run one after another, each on top of the last one saved;
-  // while none is running, the snapshot follows what the server returned.
-  const latest = useRef(configuration);
-  const pending = useRef(0);
-  const queue = useRef<Promise<unknown> | undefined>(undefined);
-  const stored = environment.configuration;
-  useEffect(() => {
-    if (pending.current === 0) latest.current = (stored ?? {}) as SandboxEnvironmentSpecification;
-  }, [stored]);
+    // Every field saves the whole specification, so two saves in flight at once
+    // would each start from the same snapshot and the later one would undo the
+    // earlier. Saves run one after another, each on top of the last one saved;
+    // while none is running, the snapshot follows what the server returned.
+    const latest = useRef(configuration);
+    const pending = useRef(0);
+    const queue = useRef<Promise<unknown> | undefined>(undefined);
+    const stored = environment.configuration;
+    useEffect(() => {
+      if (pending.current === 0) latest.current = (stored ?? {}) as SandboxEnvironmentSpecification;
+    }, [stored]);
 
-  type Changes = Partial<SandboxEnvironmentSpecification>;
+    type Changes = Partial<SandboxEnvironmentSpecification>;
 
-  /** Write one change to the specification; the toast is the only trace a per-field save leaves. */
-  const saveConfiguration = async (
-    changes: Changes | ((current: SandboxEnvironmentSpecification) => Changes),
-  ) => {
-    pending.current++;
-    const task = (queue.current ?? Promise.resolve())
-      .catch(() => {})
-      .then(async () => {
-        const current = latest.current;
-        const next = compact({
-          ...current,
-          ...(typeof changes === 'function' ? changes(current) : changes),
-        });
-        await onSave({ configuration: next });
-        latest.current = next;
-      })
-      .finally(() => {
-        pending.current--;
-      });
-    queue.current = task;
-    await task;
-    toast.success(t('environments.form.saved'));
-  };
-
-  /** For controls with no confirm step of their own: a switch, a disconnect. */
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    try {
-      await action();
-    } catch (error) {
-      toast.error(describeError(error, t, t('environments.saveFailed')));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Every repository, in the order they are checked out; anything that is
-  // not a git source (an old `files` one) is kept as it is.
-  const sources = configuration.sources ?? [];
-  const repositories = sources.filter((source): source is GitSource => source.kind === 'git');
-  /** Rewrites the repositories as they stand when the save runs, keeping other sources. */
-  const saveRepositories = (update: (current: GitSource[]) => GitSource[]) =>
-    saveConfiguration((current) => {
-      const all = current.sources ?? [];
-      const git = all.filter((source): source is GitSource => source.kind === 'git');
-      return { sources: [...update(git), ...all.filter((source) => source.kind !== 'git')] };
-    });
-
-  const folderOf = (path: string | undefined) =>
-    path
-      ?.trim()
-      .replace(/^\.?\/+/, '')
-      .replace(/\/+$/, '') || undefined;
-
-  const updateRepository = (url: string, changes: Partial<Omit<GitSource, 'kind' | 'url'>>) => {
-    // Two checkouts in one folder would merge into each other.
-    const folder = changes.path === undefined ? undefined : folderOf(changes.path);
-    if (
-      folder &&
-      repositories.some((source) => source.url !== url && folderOf(source.path) === folder)
-    )
-      return Promise.reject(new Error(t('environments.form.duplicateFolder')));
-
-    return saveRepositories((current) =>
-      current.map((source) => {
-        if (source.url !== url) return source;
-        const next = { ...source, ...changes };
-        // A blank field means "the default", which is the key left out.
-        if (!next.ref) delete next.ref;
-        if (!next.path) delete next.path;
-        if (!next.setupCommand?.trim()) delete next.setupCommand;
-        return next;
-      }),
-    );
-  };
-
-  // The last repository left goes back to the top of the working directory
-  // when its folder was only the one it got for sitting beside another.
-  const removeRepository = (url: string) =>
-    run(() =>
-      saveRepositories((current) => {
-        const rest = current.filter((source) => source.url !== url);
-        if (rest.length === 1 && rest[0].path === repositoryFolderName(rest[0].url)) {
-          const { path: _path, ...only } = rest[0];
-          return [only];
-        }
-        return rest;
-      }),
-    );
-
-  const [pastedUrl, setPastedUrl] = useState('');
-
-  const pasted = parseGithubRepository(pastedUrl);
-
-  const pastedInvalid = Boolean(pastedUrl.trim()) && !pasted;
-
-  const addPasted = () => {
-    if (!pasted) return;
-
-    const [owner, repository] = pasted.fullName.split('/');
-
-    addRepository({ owner, repository });
-
-    setPastedUrl('');
-  };
-
-  const addRepository = (picked: GithubRepositorySelection | undefined) => {
-    if (!picked) return;
-    setPickingRepository(false);
-    const url = `https://github.com/${picked.owner}/${picked.repository}`;
-    if (
-      repositories.some(
-        (source) =>
-          repositoryPathOf(source.url)?.repository === picked.repository &&
-          repositoryPathOf(source.url)?.owner === picked.owner,
-      )
-    )
-      return;
-    // One repository is checked out at the top of the working directory;
-    // several sit side by side, each in a folder named after it.
-    void run(() =>
-      saveRepositories(
-        (current) =>
-          layoutRepositorySources([
+    /** Write one change to the specification; the toast is the only trace a per-field save leaves. */
+    const saveConfiguration = async (
+      changes: Changes | ((current: SandboxEnvironmentSpecification) => Changes),
+    ) => {
+      pending.current++;
+      const task = (queue.current ?? Promise.resolve())
+        .catch(() => {})
+        .then(async () => {
+          const current = latest.current;
+          const next = compact({
             ...current,
-            {
-              kind: 'git' as const,
-              url,
-              ...(picked.defaultBranch && { ref: picked.defaultBranch }),
-            },
-          ]) as GitSource[],
-      ),
+            ...(typeof changes === 'function' ? changes(current) : changes),
+          });
+          await onSave({ configuration: next });
+          latest.current = next;
+        })
+        .finally(() => {
+          pending.current--;
+        });
+      queue.current = task;
+      await task;
+      toast.success(t('environments.form.saved'));
+    };
+
+    /** For controls with no confirm step of their own: a switch, a disconnect. */
+    const run = async (action: () => Promise<void>) => {
+      setBusy(true);
+      setRepositoryError('');
+      try {
+        await action();
+      } catch (error) {
+        console.error('[EnvironmentForm] Save failed:', error);
+        setRepositoryError(describeError(error, t, t('environments.saveFailedRetry')));
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    // Every repository, in the order they are checked out; anything that is
+    // not a git source (an old `files` one) is kept as it is.
+    const sources = configuration.sources ?? [];
+    const repositories = sources.filter((source): source is GitSource => source.kind === 'git');
+    /** Rewrites the repositories as they stand when the save runs, keeping other sources. */
+    const saveRepositories = (update: (current: GitSource[]) => GitSource[]) =>
+      saveConfiguration((current) => {
+        const all = current.sources ?? [];
+        const git = all.filter((source): source is GitSource => source.kind === 'git');
+        return { sources: [...update(git), ...all.filter((source) => source.kind !== 'git')] };
+      });
+
+    const folderOf = (path: string | undefined) =>
+      path
+        ?.trim()
+        .replace(/^\.?\/+/, '')
+        .replace(/\/+$/, '') || undefined;
+
+    const updateRepository = (url: string, changes: Partial<Omit<GitSource, 'kind' | 'url'>>) => {
+      // Two checkouts in one folder would merge into each other.
+      const folder = changes.path === undefined ? undefined : folderOf(changes.path);
+      if (
+        folder &&
+        repositories.some((source) => source.url !== url && folderOf(source.path) === folder)
+      )
+        return Promise.reject(new Error(t('environments.form.duplicateFolder')));
+
+      return saveRepositories((current) =>
+        current.map((source) => {
+          if (source.url !== url) return source;
+          const next = { ...source, ...changes };
+          // A blank field means "the default", which is the key left out.
+          if (!next.ref) delete next.ref;
+          if (!next.path) delete next.path;
+          if (!next.setupCommand?.trim()) delete next.setupCommand;
+          return next;
+        }),
+      );
+    };
+
+    // The last repository left goes back to the top of the working directory
+    // when its folder was only the one it got for sitting beside another.
+    const removeRepository = (url: string) =>
+      run(() =>
+        saveRepositories((current) => {
+          const rest = current.filter((source) => source.url !== url);
+          if (rest.length === 1 && rest[0].path === repositoryFolderName(rest[0].url)) {
+            const { path: _path, ...only } = rest[0];
+            return [only];
+          }
+          return rest;
+        }),
+      );
+
+    const [pastedUrl, setPastedUrl] = useState('');
+
+    const pasted = parseGithubRepository(pastedUrl);
+
+    const pastedInvalid = Boolean(pastedUrl.trim()) && !pasted;
+
+    const addPasted = () => {
+      if (!pasted) return;
+
+      const [owner, repository] = pasted.fullName.split('/');
+
+      addRepository({ owner, repository });
+
+      setPastedUrl('');
+    };
+
+    const addRepository = (picked: GithubRepositorySelection | undefined) => {
+      if (!picked) return;
+      setPickingRepository(false);
+      const url = `https://github.com/${picked.owner}/${picked.repository}`;
+      if (
+        repositories.some(
+          (source) =>
+            repositoryPathOf(source.url)?.repository === picked.repository &&
+            repositoryPathOf(source.url)?.owner === picked.owner,
+        )
+      )
+        return;
+      // One repository is checked out at the top of the working directory;
+      // several sit side by side, each in a folder named after it.
+      void run(() =>
+        saveRepositories(
+          (current) =>
+            layoutRepositorySources([
+              ...current,
+              {
+                kind: 'git' as const,
+                url,
+                ...(picked.defaultBranch && { ref: picked.defaultBranch }),
+              },
+            ]) as GitSource[],
+        ),
+      );
+    };
+
+    // The setup that runs after the repositories, and the variables every
+    // command sees.
+    const setupSections = (
+      <>
+        <PanelSection
+          title={t('environments.form.setup')}
+          desc={
+            repositories.length > 0 ? t('environments.form.bootstrapAfterRepositories') : undefined
+          }
+        >
+          <InlineField
+            multiline
+            desc={t('environments.form.bootstrapHint')}
+            label={t('environments.form.bootstrap')}
+            value={configuration.bootstrapCommand ?? ''}
+            onSave={(bootstrapCommand) => saveConfiguration({ bootstrapCommand })}
+          />
+        </PanelSection>
+
+        {/* Said plainly because the shape cannot enforce it: a text field
+            cannot tell a region from a token. */}
+        <PanelSection desc={t('environments.form.envHint')} title={t('environments.form.env')}>
+          <EnvironmentVariables
+            entries={Object.entries(configuration.env ?? {})}
+            onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}
+          />
+        </PanelSection>
+      </>
     );
-  };
 
-  const basics = (
-    <PanelSection title={t('environments.form.basics')}>
-      <InlineField
-        required
-        label={t('environments.nameLabel')}
-        placeholder={t('environments.namePlaceholder')}
-        value={environment.name}
-        onSave={(name) => onSave({ name })}
-      />
-      <InlineField
-        label={t('environments.form.description')}
-        placeholder={t('environments.form.descriptionPlaceholder')}
-        value={environment.description ?? ''}
-        onSave={(description) => onSave({ description })}
-      />
-    </PanelSection>
-  );
+    const basics = (
+      <PanelSection title={t('environments.form.basics')}>
+        <InlineField
+          required
+          label={t('environments.nameLabel')}
+          placeholder={t('environments.namePlaceholder')}
+          value={environment.name}
+          onSave={(name) => onSave({ name })}
+        />
+        <InlineField
+          label={t('environments.form.description')}
+          placeholder={t('environments.form.descriptionPlaceholder')}
+          value={environment.description ?? ''}
+          onSave={(description) => onSave({ description })}
+        />
+      </PanelSection>
+    );
 
-  return (
-    <Flexbox>
-      {!hideBasics && basics}
+    return (
+      <Flexbox>
+        {!hideBasics && basics}
 
-      <PanelSection
-        desc={t('environments.form.sourcesHint')}
-        title={t('environments.form.sources')}
-        notice={
-          /* When an edit here reaches an instance, which is the question this
+        <PanelSection
+          desc={hideRepositoryHints ? undefined : t('environments.form.sourcesHint')}
+          title={t('environments.form.sources')}
+          notice={
+            hideRepositoryHints ? undefined : (
+              /* When an edit here reaches an instance, which is the question this
              panel otherwise leaves open. An instance keeps the definition it
              was created with — `configurationSnapshot`, taken once at creation
              — and a rebuild replays that one rather than reading the
@@ -467,103 +521,121 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
              saying "rebuild to apply" would send people to a button that
              cannot do it. Said once, here at the top: setup and variables are
              governed by the same snapshot. */
-          <Text fontSize={12} type={'secondary'}>
-            {t('environments.form.appliesOnInit')}
-          </Text>
-        }
-      >
-        {repositories.length === 0 && !pickingRepository && (
-          <Text fontSize={13} type={'secondary'}>
-            {t('environments.form.noRepositories')}
-          </Text>
-        )}
-        {repositories.length > 0 && (
-          <Flexbox gap={8}>
-            {repositories.map((source) => (
-              <RepositoryRow
-                busy={busy}
-                key={source.url}
-                source={source}
-                onChange={(changes) => updateRepository(source.url, changes)}
-                onRemove={() => removeRepository(source.url)}
-              />
-            ))}
-          </Flexbox>
-        )}
-        {pickingRepository ? (
-          <Flexbox gap={8}>
-            <GithubRepositoryPicker onChange={addRepository} />
-            {/* Any public repository, whether or not GitHub is connected —
-                  the same fallback the create dialog offers. */}
-            <Flexbox gap={6}>
               <Text fontSize={12} type={'secondary'}>
-                {t('environments.form.pasteRepository')}
+                {t('environments.form.appliesOnInit')}
               </Text>
-              <Flexbox horizontal gap={8}>
-                <Input
-                  aria-invalid={pastedInvalid}
-                  placeholder={'https://github.com/owner/repo'}
-                  style={pastedInvalid ? { borderColor: cssVar.colorError } : undefined}
-                  value={pastedUrl}
-                  onChange={(event) => setPastedUrl(event.target.value)}
-                  onPressEnter={addPasted}
+            )
+          }
+        >
+          {repositories.length === 0 && !pickingRepository && (
+            <Text fontSize={13} type={'secondary'}>
+              {t('environments.form.noRepositories')}
+            </Text>
+          )}
+          {repositories.length > 0 && (
+            <Flexbox gap={8}>
+              {repositories.map((source) => (
+                <RepositoryRow
+                  busy={busy}
+                  key={source.url}
+                  source={source}
+                  onChange={(changes) => updateRepository(source.url, changes)}
+                  onRemove={() => removeRepository(source.url)}
                 />
-                <Button disabled={!pasted} onClick={addPasted}>
-                  {t('environments.form.addPastedRepository')}
+              ))}
+            </Flexbox>
+          )}
+          {repositoryError && <InlineErrorText>{repositoryError}</InlineErrorText>}
+          {pickingRepository ? (
+            <Flexbox gap={8}>
+              <GithubRepositoryPicker onChange={addRepository} />
+              {/* Any public repository, whether or not GitHub is connected —
+                  the same fallback the create dialog offers. */}
+              <Flexbox gap={6}>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('environments.form.pasteRepository')}
+                </Text>
+                <Flexbox horizontal gap={8}>
+                  <Input
+                    aria-invalid={pastedInvalid}
+                    placeholder={'https://github.com/owner/repo'}
+                    style={pastedInvalid ? { borderColor: cssVar.colorError } : undefined}
+                    value={pastedUrl}
+                    onChange={(event) => setPastedUrl(event.target.value)}
+                    onPressEnter={addPasted}
+                  />
+                  <Button disabled={!pasted} onClick={addPasted}>
+                    {t('environments.form.addPastedRepository')}
+                  </Button>
+                </Flexbox>
+                {pastedInvalid && (
+                  <Text fontSize={12} type={'danger'}>
+                    {t('environments.form.repositoryUrlInvalid')}
+                  </Text>
+                )}
+              </Flexbox>
+              <Flexbox horizontal>
+                <Button size={'small'} onClick={() => setPickingRepository(false)}>
+                  {t('cancel', { ns: 'common' })}
                 </Button>
               </Flexbox>
-              {pastedInvalid && (
-                <Text fontSize={12} type={'danger'}>
-                  {t('environments.form.repositoryUrlInvalid')}
-                </Text>
-              )}
             </Flexbox>
+          ) : (
             <Flexbox horizontal>
-              <Button size={'small'} onClick={() => setPickingRepository(false)}>
-                {t('cancel', { ns: 'common' })}
+              <Button
+                icon={<Icon icon={PlusIcon} />}
+                loading={busy}
+                size={'small'}
+                onClick={() => setPickingRepository(true)}
+              >
+                {t('environments.form.addRepository')}
               </Button>
             </Flexbox>
+          )}
+        </PanelSection>
+
+        {collapseSetup ? (
+          <Flexbox>
+            <Flexbox
+              horizontal
+              align={'center'}
+              aria-expanded={setupOpen}
+              gap={8}
+              paddingBlock={16}
+              role={'button'}
+              style={{ cursor: 'pointer' }}
+              tabIndex={0}
+              onClick={() => setSetupOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                setSetupOpen((open) => !open);
+              }}
+            >
+              <Icon icon={setupOpen ? ChevronDownIcon : ChevronRightIcon} size={14} />
+              <Text weight={500}>{t('environments.form.setupAndVariables')}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {[
+                  t(
+                    configuration.bootstrapCommand?.trim()
+                      ? 'environments.form.setupConfigured'
+                      : 'environments.form.setupNotConfigured',
+                  ),
+                  t('environments.form.variablesCount', {
+                    count: Object.keys(configuration.env ?? {}).length,
+                  }),
+                ].join(' · ')}
+              </Text>
+            </Flexbox>
+            {setupOpen && setupSections}
           </Flexbox>
         ) : (
-          <Flexbox horizontal>
-            <Button
-              icon={<Icon icon={PlusIcon} />}
-              loading={busy}
-              size={'small'}
-              onClick={() => setPickingRepository(true)}
-            >
-              {t('environments.form.addRepository')}
-            </Button>
-          </Flexbox>
+          setupSections
         )}
-      </PanelSection>
-
-      <PanelSection
-        title={t('environments.form.setup')}
-        desc={
-          repositories.length > 0 ? t('environments.form.bootstrapAfterRepositories') : undefined
-        }
-      >
-        <InlineField
-          multiline
-          desc={t('environments.form.bootstrapHint')}
-          label={t('environments.form.bootstrap')}
-          value={configuration.bootstrapCommand ?? ''}
-          onSave={(bootstrapCommand) => saveConfiguration({ bootstrapCommand })}
-        />
-      </PanelSection>
-
-      {/* Said plainly because the shape cannot enforce it: a text field
-            cannot tell a region from a token. */}
-      <PanelSection desc={t('environments.form.envHint')} title={t('environments.form.env')}>
-        <EnvironmentVariables
-          entries={Object.entries(configuration.env ?? {})}
-          onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}
-        />
-      </PanelSection>
-    </Flexbox>
-  );
-});
+      </Flexbox>
+    );
+  },
+);
 
 EnvironmentForm.displayName = 'EnvironmentForm';
 

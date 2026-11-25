@@ -89,6 +89,7 @@ export interface SkillRuntimeService {
  * `DeviceFileAccess.listFiles` — keeping it out of the op param payload.
  */
 export interface ProjectSkillRuntimeItem {
+  description?: string;
   /** Absolute path to the skill's SKILL.md on the device. */
   location: string;
   name: string;
@@ -124,6 +125,12 @@ export interface SkillsExecutionRuntimeOptions {
   builtinSkills?: BuiltinSkill[];
   /** Reads project skill files from the device (local-system over the gateway). */
   deviceFileAccess?: DeviceFileAccess;
+  /**
+   * Lists metadata for skills resolved lazily via `resolveSkill` (e.g. the
+   * user's skill library). Invoked only when `activateSkill` misses, so the
+   * not-found candidate list stays complete without loading the library up front.
+   */
+  listAvailableSkills?: () => Promise<Array<{ description?: string; name: string }>>;
   /** Filesystem skills discovered on the execution device. */
   projectSkills?: ProjectSkillRuntimeItem[];
   /**
@@ -178,6 +185,36 @@ const findByNameCI = <T extends { name: string }>(items: T[], target: string): T
   return items.find((s) => s.name.toLowerCase() === lower);
 };
 
+/** How many skills an `activateSkill` miss lists, and how much of each description. */
+const MAX_MISS_CANDIDATES = 30;
+const MAX_MISS_DESCRIPTION_LENGTH = 160;
+
+const truncate = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/** A skill name without its source prefix (`user-skills:`, `agent-skills:`). */
+const bareName = (name: string): string => name.toLowerCase().slice(name.lastIndexOf(':') + 1);
+
+/**
+ * Skills whose name shares a word with the requested one, then the rest, each
+ * group keeping its order. A missed name is usually a near miss: a dropped
+ * prefix (`weekly-report` for `user-skills:weekly-report`) or a reworded one.
+ * Prefixes and the word "skill" say nothing about which skill was meant, so
+ * neither counts as a shared word.
+ */
+const rankByResemblance = <T extends { name: string }>(items: T[], requested: string): T[] => {
+  const words = bareName(requested)
+    .split(/[^\da-z]+/)
+    .filter((word) => word.length > 2 && word !== 'skill' && word !== 'skills');
+  if (words.length === 0) return items;
+
+  const resembles = (item: T) => {
+    const bare = bareName(item.name);
+    return words.some((word) => bare.includes(word));
+  };
+  return [...items.filter((item) => resembles(item)), ...items.filter((item) => !resembles(item))];
+};
+
 /**
  * Hint appended to activated filesystem-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
@@ -187,13 +224,14 @@ const findByNameCI = <T extends { name: string }>(items: T[], target: string): T
 const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
   `## Skill resources
 
-This filesystem skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
+This filesystem skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with id="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
   private activatedSkills?: ExecScriptActivatedSkill[];
   private builtinSkills: BuiltinSkill[];
   private projectSkills: ProjectSkillRuntimeItem[];
   private deviceFileAccess?: DeviceFileAccess;
+  private listAvailableSkills?: () => Promise<Array<{ description?: string; name: string }>>;
   private resolveSkill?: (name: string) => Promise<BuiltinSkill | undefined>;
   private service: SkillRuntimeService;
 
@@ -203,14 +241,18 @@ export class SkillsExecutionRuntime {
     this.builtinSkills = options.builtinSkills || [];
     this.projectSkills = options.projectSkills || [];
     this.deviceFileAccess = options.deviceFileAccess;
+    this.listAvailableSkills = options.listAvailableSkills;
     this.resolveSkill = options.resolveSkill;
   }
 
-  /** A preloaded builtin-shaped skill, else one the resolver reads on demand. */
-  private findBuiltinSkill = async (name: string): Promise<BuiltinSkill | undefined> => {
-    const preloaded = findByNameCI(this.builtinSkills, name);
+  /** A preloaded builtin-shaped skill (by name or identifier), else one the resolver reads on demand. */
+  private findBuiltinSkill = async (target: string): Promise<BuiltinSkill | undefined> => {
+    const lower = target.toLowerCase();
+    const preloaded = this.builtinSkills.find(
+      (s) => s.name.toLowerCase() === lower || s.identifier.toLowerCase() === lower,
+    );
     if (preloaded || !this.resolveSkill) return preloaded;
-    const resolved = await this.resolveSkill(name);
+    const resolved = await this.resolveSkill(target);
     if (resolved) this.builtinSkills = [...this.builtinSkills, resolved];
     return resolved;
   };
@@ -323,7 +365,21 @@ export class SkillsExecutionRuntime {
   }
 
   async readReference(args: ReadReferenceParams): Promise<BuiltinServerRuntimeOutput> {
-    const { id, path } = args;
+    const { id, path } = args ?? {};
+
+    if (!id || typeof id !== 'string') {
+      return {
+        content: 'Invalid arguments: "id" (the skill ID or name) is required.',
+        success: false,
+      };
+    }
+
+    if (!path || typeof path !== 'string') {
+      return {
+        content: 'Invalid arguments: "path" (the reference file path) is required.',
+        success: false,
+      };
+    }
 
     try {
       // Project/device skills resolve references relative to the SKILL.md
@@ -384,14 +440,21 @@ export class SkillsExecutionRuntime {
         };
       }
 
+      const normalizedPath = normalizeRelativePath(path);
+
       // DB (user-level) skills win over builtins on name collision — matches
       // the `<available_skills>` dedupe precedence (project > user > agent >
       // builtin) in `aiAgent/index.ts`. Without this, the model would see a
       // user skill in the list but `readReference` would silently read the
-      // shadowed builtin's resources.
-      const skill = await this.service.findByName(id);
+      // shadowed builtin's resources. Accept either skill name or DB id to
+      // match the manifest contract ("The skill ID or name returned by activateSkill").
+      const skill = (await this.service.findByName(id)) ?? (await this.service.findById(id));
       if (skill) {
-        const resource = await this.service.readResource(skill.id, path);
+        const resourcePath =
+          skill.resources && !(path in skill.resources) && normalizedPath in skill.resources
+            ? normalizedPath
+            : path;
+        const resource = await this.service.readResource(skill.id, resourcePath);
         return {
           content: resource.content,
           state: {
@@ -408,15 +471,21 @@ export class SkillsExecutionRuntime {
       // Fall back to builtin skills (includes agent-document skill bundles
       // via the `agent-skills:` identifier prefix).
       const builtinSkill = await this.findBuiltinSkill(id);
-      if (builtinSkill?.resources) {
-        const meta = builtinSkill.resources[path];
+      if (builtinSkill) {
+        const resolvedPath =
+          builtinSkill.resources &&
+          !(path in builtinSkill.resources) &&
+          normalizedPath in builtinSkill.resources
+            ? normalizedPath
+            : path;
+        const meta = builtinSkill.resources?.[resolvedPath];
         if (meta?.content !== undefined) {
           return {
             content: meta.content,
             state: {
               encoding: 'utf8',
               fileType: 'text/plain',
-              path,
+              path: resolvedPath,
               size: meta.size,
             },
             success: true,
@@ -441,7 +510,14 @@ export class SkillsExecutionRuntime {
   }
 
   async activateSkill(args: ActivateSkillParams): Promise<BuiltinServerRuntimeOutput> {
-    const { name } = args;
+    const { name } = args ?? {};
+
+    if (!name || typeof name !== 'string') {
+      return {
+        content: 'Invalid arguments: "name" (the skill name) is required.',
+        success: false,
+      };
+    }
 
     // Filesystem skills (project/device SKILL.md) take precedence over db/builtin.
     const projectSkill = findByNameCI(this.projectSkills, name);
@@ -545,14 +621,44 @@ export class SkillsExecutionRuntime {
       };
     }
 
-    const { data: allSkills } = await this.service.findAll();
-    const availableSkills = allSkills.map((s) => ({
-      description: s.description,
-      name: s.name,
-    }));
+    const [{ data: dbSkills }, extraSkills] = await Promise.all([
+      this.service.findAll(),
+      this.listAvailableSkills ? this.listAvailableSkills() : Promise.resolve([]),
+    ]);
+
+    // Aggregate every skill source in activation-precedence order
+    // (project/device > DB > builtin/agent > lazy user-skill library),
+    // deduplicating by case-insensitive name so the model can recover from a
+    // miss regardless of where the skill lives.
+    const seen = new Set<string>();
+    const availableSkills: Array<{ description?: string; name: string }> = [];
+    const addCandidate = (candidate: { description?: string | null; name: string }) => {
+      const key = candidate.name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      availableSkills.push({
+        ...(candidate.description
+          ? { description: truncate(candidate.description, MAX_MISS_DESCRIPTION_LENGTH) }
+          : {}),
+        name: candidate.name,
+      });
+    };
+
+    for (const projectSkill of this.projectSkills) addCandidate(projectSkill);
+    for (const dbSkill of dbSkills) addCandidate(dbSkill);
+    for (const builtin of this.builtinSkills) addCandidate(builtin);
+    for (const extra of extraSkills) addCandidate(extra);
+
+    // A skill library has no size limit and a miss is paid for in tokens, so
+    // the list is capped. Names that resemble the request go first: a cap in
+    // source order alone could cut off the very skill a typo was aiming at.
+    const listed = rankByResemblance(availableSkills, name).slice(0, MAX_MISS_CANDIDATES);
+    const omitted = availableSkills.length - listed.length;
 
     return {
-      content: `Skill not found: "${name}". Available skills: ${JSON.stringify(availableSkills)}`,
+      content:
+        `Skill not found: "${name}". Available skills: ${JSON.stringify(listed)}` +
+        (omitted > 0 ? ` (${omitted} more not listed)` : ''),
       success: false,
     };
   }

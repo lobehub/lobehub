@@ -612,6 +612,46 @@ describe('BriefModel', () => {
     });
   });
 
+  describe('findTaskIdsWithUnresolvedUrgent', () => {
+    it('names only the tasks held back by an unresolved, non-excluded urgent brief', async () => {
+      await serverDB.insert(tasks).values(
+        ['waiting', 'answered', 'errored', 'normal'].map((key, index) => ({
+          createdByUserId: userId,
+          id: `task-batch-${key}`,
+          identifier: `TASK-BATCH-${index}`,
+          instruction: 'do work',
+          seq: 10 + index,
+          status: 'scheduled',
+        })),
+      );
+
+      const model = new BriefModel(serverDB, userId);
+      const brief = (taskId: string, priority: string, type: string) =>
+        model.create({ priority, summary: 's', taskId, title: 't', type });
+      await brief('task-batch-waiting', 'urgent', 'decision');
+      // Two briefs on one task still name it once.
+      await brief('task-batch-waiting', 'urgent', 'decision');
+      const answered = await brief('task-batch-answered', 'urgent', 'decision');
+      await model.resolve(answered.id);
+      await brief('task-batch-errored', 'urgent', 'error');
+      await brief('task-batch-normal', 'normal', 'decision');
+
+      const ids = [
+        'task-batch-waiting',
+        'task-batch-answered',
+        'task-batch-errored',
+        'task-batch-normal',
+      ];
+      expect(await model.findTaskIdsWithUnresolvedUrgent(ids, { excludeTypes: ['error'] })).toEqual(
+        new Set(['task-batch-waiting']),
+      );
+      expect(await model.findTaskIdsWithUnresolvedUrgent(ids)).toEqual(
+        new Set(['task-batch-waiting', 'task-batch-errored']),
+      );
+      expect(await model.findTaskIdsWithUnresolvedUrgent([])).toEqual(new Set());
+    });
+  });
+
   describe('findByCronJobId', () => {
     it('should return briefs for a cron job ordered newest first', async () => {
       await serverDB.insert(agents).values({ id: 'agent-cron', title: 'Cron Agent', userId });

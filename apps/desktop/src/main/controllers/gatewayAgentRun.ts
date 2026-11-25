@@ -95,6 +95,7 @@ export const executeGatewayAgentRun = async (
       agentType: request.agentType,
       assistantMessageId: request.assistantMessageId,
       args: request.args,
+      collaborationMode: request.collaborationMode,
       cwd: request.cwd,
       imageList: request.imageList,
       jwt: request.jwt,

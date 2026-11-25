@@ -54,6 +54,36 @@ export interface WebBrowsingDocumentService {
   }) => Promise<{ id: string }>;
 }
 
+const NON_ESCALATABLE_ERROR_TYPES = new Set([
+  'InvalidUrlError',
+  'PageNotFoundError',
+  'UnsupportedContentError',
+]);
+
+const NON_EXISTENT_DOMAIN_RE =
+  /\b(?:ENOTFOUND|ERR_NAME_NOT_RESOLVED|EAI_NONAME|NXDOMAIN)\b|domain does not exist/i;
+
+const isEscalatableCrawlError = (data: Record<string, any>): boolean => {
+  if (!('errorMessage' in data)) return false;
+  if (data.retryable === false) return false;
+  if (typeof data.errorType === 'string' && NON_ESCALATABLE_ERROR_TYPES.has(data.errorType)) {
+    return false;
+  }
+  const detail = `${data.errorMessage ?? ''} ${data.content ?? ''}`;
+  if (NON_EXISTENT_DOMAIN_RE.test(detail)) return false;
+  return true;
+};
+
+const formatCrawlFailureGuidance = (canUseBrowserSkill: boolean | undefined): string => {
+  if (canUseBrowserSkill === true) {
+    return '<guidance>Do not keep retrying failed crawls with different queries or sources — activate the `agent-browser` skill and re-fetch with a real browser (anti-bot walls often masquerade as timeouts or generic errors).</guidance>';
+  }
+  if (canUseBrowserSkill === false) {
+    return '<guidance>Do not keep retrying failed crawls with the same URL — no browser fallback is available in this environment; try a different source or explain the crawl failure to the user.</guidance>';
+  }
+  return '<guidance>Do not keep retrying failed crawls — if the `agent-browser` skill is available, activate it and re-fetch with a real browser (anti-bot walls often masquerade as timeouts or generic errors); otherwise try another source or explain the failure.</guidance>';
+};
+
 export interface WebBrowsingRuntimeOptions {
   agentId?: string;
   /**
@@ -62,6 +92,12 @@ export interface WebBrowsingRuntimeOptions {
    * tool set with browsing alone still saves the page but reports what was left out instead.
    */
   canReadSavedDocuments?: boolean;
+  /**
+   * Whether a device-capable browser fallback (`agent-browser` skill) is available in this run.
+   * When `false`, crawl-failure guidance omits `agent-browser` so the model does not hunt for
+   * an unavailable skill; when `undefined`, uses conditional phrasing.
+   */
+  canUseBrowserSkill?: boolean;
   documentService?: WebBrowsingDocumentService;
   searchService: SearchServiceImpl;
   topicId?: string;
@@ -70,6 +106,7 @@ export interface WebBrowsingRuntimeOptions {
 export class WebBrowsingExecutionRuntime {
   private agentId?: string;
   private canReadSavedDocuments: boolean;
+  private canUseBrowserSkill?: boolean;
   private documentService?: WebBrowsingDocumentService;
   private searchService: SearchServiceImpl;
   private topicId?: string;
@@ -78,6 +115,7 @@ export class WebBrowsingExecutionRuntime {
     this.searchService = options.searchService;
     this.documentService = options.documentService;
     this.canReadSavedDocuments = options.canReadSavedDocuments ?? false;
+    this.canUseBrowserSkill = options.canUseBrowserSkill;
     this.agentId = options.agentId;
     this.topicId = options.topicId;
   }
@@ -193,9 +231,13 @@ export class WebBrowsingExecutionRuntime {
       };
     });
     const xmlContent = crawlResultsPrompt(content as any);
+    const hasEscalatableError = results.some((item) => isEscalatableCrawlError(item.data as any));
+    const finalContent = hasEscalatableError
+      ? `${xmlContent}\n${formatCrawlFailureGuidance(this.canUseBrowserSkill)}`
+      : xmlContent;
 
     return {
-      content: xmlContent,
+      content: finalContent,
       state: response,
       success: true,
     };

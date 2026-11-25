@@ -1,22 +1,19 @@
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { FolderIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import {
+  repositoriesLabel,
+  repositorySlug,
+} from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import EnvironmentForm, {
   type EnvironmentFormValue,
 } from '@/features/EnvironmentManager/EnvironmentForm';
 import EnvironmentSummary from '@/features/EnvironmentManager/EnvironmentSummary';
 import { EnvironmentListSkeleton } from '@/features/EnvironmentManager/Skeleton';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { SandboxEnvironmentSpecification } from '@/services/environment';
-import {
-  useProjectDirectories,
-  useProjectDirectoryStore,
-  useProjectEnvironments,
-} from '@/store/projectWorkingDirectory';
-import { useDensityTokens } from '@/styles/density';
+import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
+
+import { ExecutionEnvironments } from './ExecutionEnvironments';
 
 interface ProjectWorkingDirectoriesProps {
   /** Whether the caller may change the project, and so its environment. */
@@ -25,24 +22,18 @@ interface ProjectWorkingDirectoriesProps {
 }
 
 /**
- * The project's environment, laid out in full and flat — the same form an
- * environment's own page shows: the repositories it checks out (any number, or
- * none, each with its own setup), the setup that runs after, and the variables
- * every command sees. Every project has exactly one, made with it — there is nothing
- * to link, pick or create here, only the environment itself to fill in.
+ * The project's execution environments, in the priority a new conversation
+ * follows: the cloud sandbox — whose row unfolds into the project's
+ * environment, the repositories it clones, the setup that runs and the
+ * variables every command sees — and the device folders someone added.
  */
 export function ProjectWorkingDirectories({
   canManage,
   projectId,
 }: ProjectWorkingDirectoriesProps) {
-  const { t } = useTranslation(['project', 'setting']);
-  const { pageTitleFontSize } = useDensityTokens();
-  const navigate = useWorkspaceAwareNavigate();
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
-  const directories = useProjectDirectories(projectId);
 
   const save = async (changes: {
     configuration?: SandboxEnvironmentSpecification;
@@ -55,43 +46,39 @@ export function ProjectWorkingDirectories({
     });
   };
 
-  let content: ReactNode;
+  let cloud: ReactNode;
   if (request.error && !environment) {
-    content = <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
+    cloud = <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
   } else if (!request.hasData || !environment) {
-    content = <EnvironmentListSkeleton />;
+    cloud = <EnvironmentListSkeleton />;
   } else {
     const value: EnvironmentFormValue = environment;
-    content = canManage ? (
-      <EnvironmentForm hideBasics environment={value} onSave={save} />
+    cloud = canManage ? (
+      <EnvironmentForm
+        collapseSetup
+        hideBasics
+        hideRepositoryHints
+        environment={value}
+        onSave={save}
+      />
     ) : (
       <EnvironmentSummary environment={value} />
     );
   }
 
-  const folderCount = directoriesRequest.hasData ? directories.length : undefined;
+  // The sandbox is told apart by the repositories it clones: their name and
+  // the first one's logo on its card.
+  const sandboxRepository = environment
+    ? { label: repositoriesLabel(environment), slug: repositorySlug(environment) }
+    : undefined;
 
   return (
-    <Flexbox gap={16}>
-      <Flexbox gap={8}>
-        <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
-          <Text fontSize={pageTitleFontSize} weight={600}>
-            {t('settings.environments')}
-          </Text>
-          {folderCount !== undefined && (
-            <Button
-              icon={<Icon icon={FolderIcon} />}
-              onClick={() => navigate(`/project/${projectId}/settings/directories`)}
-            >
-              {t(folderCount ? 'settings.viewDirectories' : 'settings.configureDirectory', {
-                count: folderCount,
-              })}
-            </Button>
-          )}
-        </Flexbox>
-        <Text type="secondary">{t('settings.environmentIntro')}</Text>
-      </Flexbox>
-      {content}
-    </Flexbox>
+    <ExecutionEnvironments
+      canManage={!!canManage}
+      environmentId={environment?.id}
+      projectId={projectId}
+      sandboxDetails={cloud}
+      sandboxRepository={sandboxRepository}
+    />
   );
 }

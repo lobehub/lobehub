@@ -59,6 +59,7 @@ const SendErrorAlert = memo<SendErrorAlertProps>(({ errorMessage, onClose }) => 
         closable
         action={business.action}
         description={description}
+        icon={business.icon}
         title={title}
         type={'secondary'}
         onClose={onClose}

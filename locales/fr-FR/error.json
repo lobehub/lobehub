@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Impossible de joindre un appareil d'exécution pour cet agent. Connectez un appareil ou configurez la passerelle de périphérique sur le serveur, puis réessayez.",
   "response.DeviceResponseTimeout": "L'appareil n'a pas répondu à temps. Il peut être hors ligne ou en veille, ou il peut encore être en train de démarrer cette exécution. Vérifiez que l'appareil est connecté et si cette exécution est déjà en cours, puis réessayez.",
   "response.ExceededContextWindowCloud": "La conversation est trop longue pour être traitée. Veuillez modifier votre dernier message pour réduire l'entrée ou supprimer certains messages, puis réessayez.",
-  "response.FreePlanLimit": "Vous utilisez actuellement un plan gratuit et ne pouvez pas accéder à cette fonctionnalité. Veuillez passer à un plan payant.",
   "response.GoogleAIBlockReason.BLOCKLIST": "Le contenu contient des termes bloqués. Veuillez reformuler et réessayer.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "L'image générée a été bloquée pour des raisons de sécurité. Veuillez modifier votre demande et réessayer.",
   "response.GoogleAIBlockReason.LANGUAGE": "La langue demandée n'est pas prise en charge. Veuillez réessayer dans une langue prise en charge.",

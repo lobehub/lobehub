@@ -55,7 +55,7 @@ const UserSkillCard = memo<UserSkillCardProps>(
   }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/skill', identifier);
+    const link = urlJoin('/marketplace/skill', identifier);
 
     const handleClick = useCallback(() => {
       discoverService

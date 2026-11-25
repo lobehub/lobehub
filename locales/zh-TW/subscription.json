@@ -657,7 +657,6 @@
   "plansModal.creditLimit.title": "您已達到用量上限",
   "plansModal.default.desc": "解鎖更多容量和進階功能。",
   "plansModal.default.title": "升級您的方案",
-  "plansModal.fileStorageLimit.desc": "您的檔案存儲已滿。升級以繼續上傳和管理檔案。",
   "plansModal.fileStorageLimit.title": "存儲限制已達",
   "plansModal.messengerWechat.desc": "微信系統機器人僅適用於付費個人方案。升級以連接並使用。",
   "plansModal.messengerWechat.title": "升級後連接微信",

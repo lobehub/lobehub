@@ -30,6 +30,9 @@ export default {
   'agentViewAll.orderBy.updatedAt': 'Updated at',
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
+  'agentViewAll.recommendedSection.title': 'Recommended agents',
+  'agentViewAll.recommendedSection.empty':
+    'No recommended agents yet. Use “Add to recommended agents” in an agent’s menu.',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
   'agentViewAll.sidebarSection.title': 'In Sidebar',
@@ -82,11 +85,10 @@ export default {
   'cmdk.askAgentHeading': 'Ask Agent',
   'cmdk.askAgentPlaceholder': 'Ask {{agent}} something...',
   'cmdk.askLobeAI': 'Ask Lobe AI',
-  'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Community',
+  'cmdk.context.community': 'Marketplace',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -107,7 +109,8 @@ export default {
 
   'cmdk.keywords.billing': 'billing payment invoice transaction',
 
-  'cmdk.keywords.community': 'discover market assistant model provider mcp',
+  'cmdk.keywords.marketplace':
+    'plugin plugins marketplace market community discover agent skill connector model provider mcp',
 
   // CMDK search keywords (space-separated for i18n)
   'cmdk.keywords.contactUs': 'feedback issue bug problem',
@@ -162,7 +165,7 @@ export default {
 
   'cmdk.newAgentTeam': 'Create New Group',
 
-  'cmdk.newLibrary': 'Create New Library',
+  'cmdk.newLibrary': 'Create New Knowledge Base',
 
   'cmdk.newPage': 'Create New Page',
   'cmdk.newTask': 'Create New Task',
@@ -177,7 +180,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Docs',
+  'cmdk.resource': 'Library',
 
   'cmdk.search.agent': 'Agent',
 
@@ -191,7 +194,7 @@ export default {
 
   'cmdk.search.chatGroups': 'Groups',
 
-  'cmdk.search.communityAgent': 'Community Agent',
+  'cmdk.search.communityAgent': 'Marketplace Agent',
 
   'cmdk.search.file': 'File',
 
@@ -205,13 +208,13 @@ export default {
 
   'cmdk.search.goals': 'Goals',
 
-  'cmdk.search.knowledgeBase': 'Library',
+  'cmdk.search.knowledgeBase': 'Knowledge Base',
 
-  'cmdk.search.knowledgeBases': 'Libraries',
+  'cmdk.search.knowledgeBases': 'Knowledge Bases',
 
   'cmdk.search.loading': 'Searching...',
 
-  'cmdk.search.market': 'Community',
+  'cmdk.search.market': 'Marketplace',
 
   'cmdk.search.mcp': 'MCP Server',
 
@@ -448,17 +451,7 @@ export default {
   'gotIt': 'Got it',
   'more': 'More',
   'navPanel.agent': 'Agents',
-  'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.createWorkspaceAgent': 'New workspace agent',
-  'navPanel.managePrivateFolders': 'Manage private categories',
-  'navPanel.myPinned': 'Pinned',
-  'navPanel.newChat': 'New chat',
   'navPanel.privateTooltip': 'Private · only you can see this',
-  'navPanel.showLessTeamPinned': 'Show less',
-  'navPanel.showMoreTeamPinned': 'Show {{count}} more',
-  'navPanel.teamPinned': 'Pinned for team',
-  'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
-  'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
@@ -466,7 +459,7 @@ export default {
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
   'navPanel.hideSection': 'Hide Section',
-  'navPanel.library': 'Library',
+  'navPanel.library': 'Knowledge Base',
   'navPanel.moveDown': 'Move Down',
   'navPanel.pinned': 'Pinned',
   'navPanel.privateAgents': 'Private',
@@ -510,7 +503,7 @@ export default {
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
   'visibilityConfirm.makePrivate.itemLibrary':
-    'It stays in the library you filed it in — other members just stop seeing it there',
+    'It stays in the knowledge base you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
@@ -627,7 +620,6 @@ export default {
   'tab.chat': 'Chat',
   'tab.projects': 'Projects',
   'recents': 'Recents',
-  'tab.community': 'Community',
   'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',
@@ -636,13 +628,13 @@ export default {
   'tab.generation': 'Generation',
   'tab.goals': 'Goals',
   'tab.home': 'Home',
-  'tab.knowledgeBase': 'Library',
+  'tab.knowledgeBase': 'Knowledge Base',
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',
   'tab.pages': 'Pages',
-  'tab.resource': 'Docs',
+  'tab.resource': 'Library',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',
@@ -703,5 +695,10 @@ export default {
   'userPanel.workspaceSetting': 'Workspace Settings',
   'userPanel.workspaceUsage': 'Workspace Usage',
   'version': 'Version',
+  'visibilityFilter.all': 'All',
+  'visibilityFilter.empty': 'Nothing matches this filter',
+  'visibilityFilter.label': 'Filter by visibility',
+  'visibilityFilter.private': 'Private',
+  'visibilityFilter.workspace': 'Workspace',
   'zoom': 'Zoom',
 };

@@ -14,16 +14,16 @@ import {
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { HashIcon } from 'lucide-react';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useHomeStore } from '@/store/home';
 
 import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
 import SessionList from '../List';
-import PrivateLockIcon from '../PrivateLockIcon';
 import Actions from './Actions';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
@@ -42,16 +42,12 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   // Create menu items
   const { isLoading } = useCreateMenuItems();
 
-  const handleOpenConfigGroupModal = useCallback(() => {
-    openConfigGroupModal(visibility);
-  }, [openConfigGroupModal, visibility]);
-
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
     id,
     isCustomGroup: true,
     name,
-    openConfigGroupModal: handleOpenConfigGroupModal,
+    openConfigGroupModal,
     visibility,
   });
 

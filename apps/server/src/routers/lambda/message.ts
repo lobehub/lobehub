@@ -64,7 +64,9 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
-      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId, {
+        workTypeOptIn: ctx.workTypeOptIn,
+      }),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -422,6 +424,28 @@ export const messageRouter = router({
     }),
 
   /**
+   * Change probe for a topic waiting on approval cards, for the client poll
+   * that waits for an answer from another device. A topic's full message page
+   * can be megabytes; this answers "did anything change?" in a few bytes: each
+   * card's intervention status (`null` when deleted or not visible) and a
+   * revision that moves on any message or card-argument change. The client
+   * re-reads the page only when a card settled or the revision moved.
+   */
+  getInterventionSnapshot: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(50), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await Promise.all([
+        assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]),
+        assertCanViewMessageTargets(guardCtx(ctx), input.messageIds),
+      ]);
+
+      return ctx.messageModel.getInterventionSnapshot({
+        ids: input.messageIds,
+        topicId: input.topicId,
+      });
+    }),
+
+  /**
    * Where a message came from, for answering it: its conversation and, for a
    * message another agent sent, that agent and its conversation
    * (`metadata.agentSender`). Read by `lh message reply`.
@@ -479,6 +503,7 @@ export const messageRouter = router({
         before: z.object({ createdAt: z.date(), id: z.string() }).optional(),
         current: z.number().optional(),
         groupId: z.string().nullish(),
+        includeArtboardWorks: z.boolean().optional(),
         // Opt-in for `file` work summaries in the payload. Absent → the legacy
         // set, so already-deployed clients (no `file` descriptor) never receive
         // a `file` summary that would crash their works UI. New clients set it.

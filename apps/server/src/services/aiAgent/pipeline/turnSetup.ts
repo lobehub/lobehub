@@ -356,6 +356,8 @@ export interface TurnSetupInput {
   cronJobId?: string;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
+  /** Whether the turn @-mentions agents in a non-group conversation. */
+  hasMentionedAgents?: boolean;
   modelOverride?: string;
   /** See `ExecAgentParams.openedByTopicId`. */
   openedByTopicId?: string;
@@ -374,6 +376,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
+  /** Tools the user selected for this turn; see `ExecAgentParams.selectedToolIds`. */
+  selectedToolIds?: string[];
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
   /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
@@ -473,6 +477,7 @@ export const setupTurn = async (
     webhookThread,
     openedByTopicId,
     files,
+    hasMentionedAgents,
     modelOverride,
     operationTaskId,
     parentMessageId,
@@ -486,6 +491,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     selectedSkillIds,
+    selectedToolIds,
     shareGate,
     steer,
     throwIfExecutionAborted,
@@ -555,7 +561,7 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share visitors run Claude Code / Codex only on the granted device. Checked
+  // Share visitors run a local CLI Agent only on the granted device. Checked
   // against the agent-level config before any row is written, and re-asserted
   // once a reused topic's pinned model and device are applied.
   const assertShareHetero = async (runModel: string) => {
@@ -708,6 +714,7 @@ export const setupTurn = async (
               db: deps.db,
               expectedShareId: shareGate.shareId,
               ownerId: deps.userId,
+              visitorUserId: shareGate.visitorUserId,
               workspaceId: deps.workspaceId,
             },
             newTopicParams,
@@ -922,7 +929,9 @@ export const setupTurn = async (
     botSender,
     composerMetadata: userMessage?.metadata,
     externalOrigin,
+    hasMentionedAgents,
     selectedSkillIds,
+    selectedToolIds,
     steer,
     trigger,
   });

@@ -208,6 +208,63 @@ describe('Channel in-progress refresh without gateway notifications', () => {
     expect(channelService.detail).toHaveBeenCalledTimes(calls);
   });
 
+  // Regression: the page header and the conversation both mount this view, each on its own
+  // timer, and every extra mount doubled the fast poll.
+  it('shares one fast poll between views mounted on the same channel', async () => {
+    response = detail({ messages: [message('pending')] });
+    const cache = new Map();
+    const shared = ({ children }: PropsWithChildren) =>
+      createElement(SWRConfig, {
+        children,
+        value: {
+          dedupingInterval: 0,
+          isOnline: () => true,
+          isVisible: () => true,
+          provider: () => cache,
+        },
+      });
+    renderHook(() => channelActions.useFetchDetail(params), { wrapper: shared });
+    await tick(1000);
+    renderHook(() => channelActions.useFetchDetail(params), { wrapper: shared });
+    await tick(0);
+    const calls = vi.mocked(channelService.detail).mock.calls.length;
+    await tick(10 * CHANNEL_ACTIVE_REFRESH_MS);
+    expect(vi.mocked(channelService.detail).mock.calls.length - calls).toBeLessThanOrEqual(11);
+  });
+
+  // Regression: SWR keeps the dedupe window of a key's first mount, so views mounted while idle
+  // (no window) each kept their own 3s poll once the channel turned active.
+  it('shares one fast poll between staggered idle views once the channel turns active', async () => {
+    const cache = new Map();
+    const shared = ({ children }: PropsWithChildren) =>
+      createElement(SWRConfig, {
+        children,
+        value: {
+          dedupingInterval: 0,
+          isOnline: () => true,
+          isVisible: () => true,
+          provider: () => cache,
+        },
+      });
+    renderHook(() => channelActions.useFetchDetail(params), { wrapper: shared });
+    await tick(1500);
+    // The conversation browsed an older page, then returns to the latest one.
+    const conversation = renderHook(
+      ({ view }: { view: typeof params | null }) => channelActions.useFetchDetail(view),
+      { initialProps: { view: null as typeof params | null }, wrapper: shared },
+    );
+    await tick(700);
+    conversation.rerender({ view: params });
+    await tick(0);
+
+    // The channel turns active on a regular poll.
+    response = detail({ messages: [message('pending')] });
+    await tick(60_000);
+    const calls = vi.mocked(channelService.detail).mock.calls.length;
+    await tick(10 * CHANNEL_ACTIVE_REFRESH_MS);
+    expect(vi.mocked(channelService.detail).mock.calls.length - calls).toBeLessThanOrEqual(11);
+  });
+
   it('does not fetch a disabled view', async () => {
     renderHook(() => channelActions.useFetchDetail(null), { wrapper });
     await tick(5000);

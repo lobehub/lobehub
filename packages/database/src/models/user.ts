@@ -12,7 +12,11 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
-import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
+} from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -83,6 +87,9 @@ export type ListUsersForMemoryExtractorOptions = {
 export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
+  /** Only a saved user choice may become a chat instruction. */
+  preferredReplyLanguage?: string;
+  /** Resolved locale for generators that require a concrete output language. */
   responseLanguage: string;
   userName: string;
 }
@@ -591,6 +598,16 @@ export class UserModel {
     })) ?? [];
 
   /**
+   * Personal-mode Codex Plan switch remembered for one directory; returns the
+   * stored list, capped here like the worktree switch.
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPlanModeDirs = applyHeteroPlanModeDir(prev.heteroPlanModeDirs, key, enabled);
+      return { next: { ...prev, heteroPlanModeDirs }, result: heteroPlanModeDirs };
+    })) ?? [];
+
+  /**
    * Personal-mode Claude Code permission mode remembered for one directory;
    * returns the stored list. The cap is applied here (`applyHeteroPermissionModeDir`).
    */
@@ -1081,6 +1098,7 @@ export class UserModel {
     const general = user?.general as UserGeneralConfig | undefined;
 
     return {
+      preferredReplyLanguage: general?.responseLanguage || undefined,
       responseLanguage: general?.responseLanguage || 'en-US',
       userName: user?.fullName || user?.firstName || 'User',
     };

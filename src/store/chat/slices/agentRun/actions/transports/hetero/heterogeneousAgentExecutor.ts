@@ -18,7 +18,6 @@ import {
   type SubagentRunSnapshot,
   usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
-import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import type {
   ChatMessageError,
   ChatToolPayload,
@@ -63,11 +62,8 @@ import {
 import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjectedTools';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
-import {
-  applyPermissionModeReport,
-  registerLocalPermissionModeSwitcher,
-  resolveRunPermissionMode,
-} from '@/store/chat/heteroPermissionMode';
+import { resolveRunPermissionMode } from '@/store/chat/heteroPermissionMode';
+import { resolveRunCollaborationMode } from '@/store/chat/heteroPlanMode';
 import { topicSelectors } from '@/store/chat/selectors';
 import { type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
@@ -84,7 +80,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
-import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
+import { writeBackgroundTaskSnapshot } from './backgroundTasks';
 import { markUnfinishedToolsCancelled } from './cancelledTools';
 import {
   shouldSuppressTerminalErrorEcho,
@@ -92,6 +88,7 @@ import {
 } from './heteroMessageError';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
+import { applyLocalModeReport, registerLocalRunControls } from './localRunControls';
 import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
 import { type LocalSteer, startLocalSteer } from './localSteer';
 import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
@@ -105,6 +102,7 @@ import {
   shouldHydrateResumeReplay,
 } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
+import { createShellWorkScan } from './shellWorkScan';
 import {
   createSubagentStoreDispatcher,
   type SubagentStoreDispatcher,
@@ -813,6 +811,12 @@ export const executeHeterogeneousAgent = async (
     createMessage: messageService.createMessage,
     flush: messageWriteBatcher.flush,
   });
+  const shellWorkScan = createShellWorkScan({
+    persist: pendingCreateLedger.ensureParentPersisted,
+    refresh: workService.refreshConversation,
+    register: workService.registerShellWorksForRun,
+    topicId: context.topicId,
+  });
 
   /**
    * Retry each failed row create, then each stashed main-assistant patch, once.
@@ -1500,6 +1504,7 @@ export const executeHeterogeneousAgent = async (
           });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
+          shellWorkScan.track(x.payload.id, intent.assistantMessageId, x.payload.arguments);
           createClientRow(x.toolMessageId, toolMsg, { operationId });
         }
 
@@ -1532,6 +1537,7 @@ export const executeHeterogeneousAgent = async (
           intent.pluginState,
         );
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        shellWorkScan.resolve(intent.toolCallId, toolMsgId, intent.isError);
         if (toolMsgId && mainToolCallIds.has(intent.toolCallId)) {
           const update: Partial<UIChatMessage> = { content: intent.content };
           if (intent.pluginState) (update as any).pluginState = intent.pluginState;
@@ -1943,10 +1949,9 @@ export const executeHeterogeneousAgent = async (
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
-      if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
-        void applyPermissionModeReport(get, context.topicId, event.data, { persist: true });
+      // Claude Code's permission mode, Codex's collaboration mode.
+      if (event.type === 'step_complete' && applyLocalModeReport(get, context.topicId, event.data))
         return;
-      }
 
       // ─── stream_start with newStep: new LLM turn ───
       // The reducer flushes the prior turn's content/reasoning/model and opens
@@ -2238,36 +2243,11 @@ export const executeHeterogeneousAgent = async (
               status: 'completed',
             });
 
-            // Shell Work scan for this LOCAL run: no server operation exists, so
-            // the completion-time scan (`registerWorksForOperation`) can never
-            // fire — report the run's persisted tool message ids to the server,
-            // which replays the same scan (gh CLI → github Work cards) under a
-            // synthetic anchor-derived rootOperationId. Best-effort and
-            // idempotent server-side; a failure only costs the card, never the
-            // run. Mirrors the gateway path's error-skip: only clean completions
-            // scan. Capped to the server's input limit — a >500-tool run keeps
-            // its most recent calls, which are the ones that own trailing
-            // create/edit output.
-            const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
-            // Topicless runs can't scan: the server validates the anchor against
-            // the claimed topic, and a card has no conversation to render in.
-            if (toolMessageIds.length > 0 && mainState.currentAssistantId && context.topicId) {
-              try {
-                const scan = await workService.registerShellWorksForRun({
-                  anchorMessageId: mainState.currentAssistantId,
-                  messageIds: toolMessageIds,
-                  topicId: context.topicId,
-                });
-                if (scan.registered > 0) {
-                  // Re-pull the message list so the anchor's fresh
-                  // `metadata.work.rootOperationId` (and its works payload)
-                  // renders without a manual refresh.
-                  await workService.refreshConversation(context.topicId);
-                }
-              } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to register shell works:', err);
-              }
-            }
+            // Shell Work scan for this LOCAL run (no server operation exists to
+            // run it); see `createShellWorkScan`. Only clean completions scan.
+            await shellWorkScan.complete(mainState.currentAssistantId, [
+              ...new Set(toolMsgIdByCallId.values()),
+            ]);
           }
         });
       },
@@ -2392,32 +2372,24 @@ export const executeHeterogeneousAgent = async (
         set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
       },
     });
-    // Claude Code keeps its input (SDK stream or CLI stdin) open in every Follow-up mode.
-    if (adapterType === 'claude-code') {
-      const unregisterStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
-        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
-      );
-      // The mode chip switches this run's permission mode mid-run.
-      const unregisterSwitcher = registerLocalPermissionModeSwitcher(context.topicId, (mode) =>
-        heterogeneousAgentService.setPermissionMode(sidForCancel, mode),
-      );
-      unregisterTaskStopper = () => {
-        unregisterStopper();
-        unregisterSwitcher();
-      };
-    }
+    unregisterTaskStopper = registerLocalRunControls({
+      adapterType,
+      operationId,
+      sessionId: sidForCancel,
+      topicId: context.topicId,
+    });
+    const runTopicMetadata = getTopicMetadataById(get(), context.topicId ?? undefined);
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
       assistantMessageId,
+      // The Codex Plan switch.
+      collaborationMode: resolveRunCollaborationMode(adapterType, runTopicMetadata),
       imageList,
       userId: userProfileSelectors.userId(getUserStoreState()),
       workspaceId: workspaceId ?? undefined,
       operationId,
-      permissionMode: resolveRunPermissionMode(
-        adapterType,
-        getTopicMetadataById(get(), context.topicId ?? undefined),
-      ),
+      permissionMode: resolveRunPermissionMode(adapterType, runTopicMetadata),
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: appendAttachedFilesToPrompt(stripGoalCommand(message), attachedFiles),

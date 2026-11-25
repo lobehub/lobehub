@@ -29,6 +29,7 @@ import {
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import FileIcon from '@/components/FileIcon';
 import { describeError } from '@/features/EnvironmentManager/errorMessage';
 import {
@@ -49,7 +50,7 @@ import {
   entrySize,
   sortDriveEntries,
 } from './entryColumns';
-import { useDriveFiles, useRefreshDrive } from './useDriveData';
+import { useDriveFiles, useRefreshDrive, useRemeasureDrive } from './useDriveData';
 import { useDriveDownload } from './useDriveDownload';
 
 /**
@@ -148,6 +149,7 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
   const [creating, setCreating] = useState(false);
   const files = useDriveFiles(drive, path);
   const refreshDrive = useRefreshDrive();
+  const remeasureDrive = useRemeasureDrive();
   const download = useDriveDownload(drive);
 
   const tSetting = (key: string, options?: Record<string, unknown>) =>
@@ -193,6 +195,8 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
       okButtonProps: { danger: true },
       okText: t('drive.explorer.delete'),
       onOk: async () => {
+        // The workspace the delete is made in; see `useRemeasureDrive`.
+        const workspaceId = getActiveWorkspaceId();
         try {
           await sandboxStorageService.removeFile({
             drive,
@@ -200,6 +204,9 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
             recursive: entry.isDirectory,
           });
           await refreshDrive();
+          // See `useRemeasureDrive`: the usage figure would otherwise stay at
+          // what was measured before the delete.
+          void remeasureDrive(drive, workspaceId);
         } catch (error) {
           failed(error, t('workingDirectory.drive.actionFailed', { ns: 'device' }));
         }

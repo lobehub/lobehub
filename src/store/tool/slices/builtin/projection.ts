@@ -1,8 +1,12 @@
 import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import {
   getImplicitBuiltinSkillIds,
+  getLegacyDisabledBuiltinSkillIds,
+  legacyBuiltinSkillIds,
   type SkillDiscoveryChatConfig,
 } from '@lobechat/mecha/builtinSkillGate';
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getBuiltinOverrides } from '@lobechat/types';
 
 import { defineReplica } from '@/libs/replica';
 
@@ -72,3 +76,13 @@ export const installedImplicitBuiltinSkillIds = (
   const uninstalled = confirmedUninstalledBuiltinTools(state);
   return uninstalled ? implicit.filter((id) => !uninstalled.includes(id)) : [];
 };
+
+/** A legacy uninstall remains off until this agent explicitly chooses the bundled skill. */
+export const legacyDisabledBuiltinSkillsForRun = (
+  state: BuiltinToolState,
+  plugins: AgentPluginEntry[] | undefined,
+) =>
+  getLegacyDisabledBuiltinSkillIds(
+    confirmedUninstalledBuiltinTools(state) ?? legacyBuiltinSkillIds,
+    getBuiltinOverrides(plugins),
+  );

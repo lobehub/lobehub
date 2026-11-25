@@ -159,9 +159,7 @@ describe('TaskService', () => {
     batchDeleteIncludingTrashed: vi.fn().mockResolvedValue(undefined),
   };
 
-  const mockBriefModel = {
-    findByTaskId: vi.fn(),
-  };
+  const mockBriefModel = { findByTaskId: vi.fn() };
 
   const mockRbacModel = {
     hasAnyPermission: vi.fn().mockResolvedValue(true),
@@ -169,6 +167,7 @@ describe('TaskService', () => {
 
   const mockWorkspaceMemberModel = {
     getMember: vi.fn().mockResolvedValue({ role: 'member', userId: 'member-1' }),
+    getNicknames: vi.fn().mockResolvedValue(new Map()),
   };
 
   beforeEach(() => {

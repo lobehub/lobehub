@@ -92,35 +92,6 @@ describe('getQueuedHintKey by Follow-up behavior', () => {
   });
 });
 
-describe('getQueuedHintKey', () => {
-  it('promises the next step boundary for the built-in runtime', () => {
-    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: false })).toBe('inputQueue.queuedHint');
-    expect(getQueuedHintKey({ count: 2, waitsForRunEnd: false })).toBe(
-      'inputQueue.queuedMergeHint',
-    );
-  });
-
-  /**
-   * @example A follow-up is queued while a Claude Code run is still calling tools.
-   */
-  it('promises the end of the whole run for heterogeneous agents', () => {
-    // ROOT CAUSE:
-    //
-    // A Claude Code / Codex CLI turn cannot be handed back at a step boundary:
-    // the queue drains only once the CLI run ends. QueueTray still captioned
-    // the row "Sends when the current step finishes".
-    //
-    // Before: one caption for every runtime.
-    // After: heterogeneous agents say the follow-up waits for the current run.
-    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: true })).toBe(
-      'inputQueue.queuedRunEndHint',
-    );
-    expect(getQueuedHintKey({ count: 3, waitsForRunEnd: true })).toBe(
-      'inputQueue.queuedRunEndMergeHint',
-    );
-  });
-});
-
 describe('toChatInputMessages', () => {
   it('preserves user, assistant, and tool messages with their real roles', () => {
     expect(toChatInputMessages(tokenMessages).map((message) => message.role)).toEqual([

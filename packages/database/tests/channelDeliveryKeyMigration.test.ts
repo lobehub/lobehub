@@ -53,10 +53,13 @@ describe('Channel delivery key retirement', () => {
     if (last < 0) throw new Error('Channel delivery key migration not found');
     const entries = journal.entries.slice(0, last);
     // The fixture writes through today's schema, so the old database also needs every column a
-    // later migration adds. Those migrations are idempotent and replay as no-ops during the test.
+    // later migration adds. Those migrations are idempotent and replay as no-ops during the test —
+    // except the cleanup releases that drop columns: the later `migrate` re-applies the earlier
+    // migration, whose constraints would then point at a column the cleanup already removed.
     laterStatements = readMigrationFiles({ migrationsFolder })
       .slice(last + 1)
-      .flatMap(({ sql }) => sql);
+      .flatMap(({ sql }) => sql)
+      .filter((statement) => !/\bDROP\s+COLUMN\b/i.test(statement));
     await Promise.all([
       writeFile(
         path.join(historicalFolder, 'meta/_journal.json'),

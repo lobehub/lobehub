@@ -322,6 +322,22 @@ export class ModelRuntime {
 
     try {
       const hooksStartedAt = Date.now();
+      // Messages carry the plan between the context engine and server. Keep it off
+      // vendor payloads, including when a hosted route retries another provider.
+      const plan = payload.messages?.find(
+        (message) => message.toolActivationPlan,
+      )?.toolActivationPlan;
+      if (plan) {
+        payload = {
+          ...payload,
+          messages: payload.messages.map((message) => {
+            if (!message.toolActivationPlan) return message;
+            const { toolActivationPlan: _plan, ...rest } = message;
+            return rest;
+          }),
+        };
+        options = { ...options, toolActivationPlan: plan };
+      }
       const finalOptions = await this.applyHooks(payload, options);
       if (metadata) {
         timing(
@@ -871,13 +887,23 @@ export class ModelRuntime {
     >,
     hooks?: ModelRuntimeHooks,
   ) {
+    return new ModelRuntime(ModelRuntime.createProviderRuntime(provider, params), hooks);
+  }
+
+  /**
+   * Construct the bare provider implementation without wrapping it in a
+   * ModelRuntime, so callers can decorate it (e.g. the server's SSRF guard)
+   * before attaching hooks.
+   */
+  static createProviderRuntime(
+    provider: string,
+    params: Parameters<typeof ModelRuntime.initializeWithProvider>[1],
+  ): LobeRuntimeAI {
     // runtime map does not include every provider id (e.g. vertex), so index loosely
     const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
       providerRuntimeMap;
     const providerAI = runtimeMap[provider] ?? LobeOpenAI;
 
-    const runtimeModel: LobeRuntimeAI = new providerAI(params);
-
-    return new ModelRuntime(runtimeModel, hooks);
+    return new providerAI(params);
   }
 }

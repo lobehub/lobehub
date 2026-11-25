@@ -3,9 +3,6 @@ import { Link2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
-
 import { useConversationStore } from '../../../store';
 import { usePullRequestLink } from './usePullRequestLink';
 
@@ -63,12 +60,11 @@ const Toolbar = ({
 };
 
 export const PullRequestLinkToolbar = (props: PullRequestLinkToolbarProps) => {
-  const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
   const topicId = useConversationStore(({ context, skipFetch }) =>
     skipFetch || context.topicShareId || context.agentShareId ? undefined : context.topicId,
   );
 
-  if (!enabled || !topicId) return props.children;
+  if (!topicId) return props.children;
 
   return <Toolbar key={`${topicId}:${props.identifier}`} {...props} topicId={topicId} />;
 };

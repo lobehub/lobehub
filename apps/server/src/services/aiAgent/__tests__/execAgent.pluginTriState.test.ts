@@ -38,7 +38,7 @@ vi.mock('@/server/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getServerFeatureFlagsStateFromRuntimeConfig: vi
     .fn()
-    .mockResolvedValue({ enableDashboard: true, enableWebhook: true }),
+    .mockResolvedValue({ enableArtboard: true, enableDashboard: true, enableWebhook: true }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({

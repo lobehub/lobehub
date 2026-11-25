@@ -32,7 +32,7 @@ PushTokenRoutes.put(
   '/:deviceId',
   routeDoc({
     data: PushTokenRegistrationSchema,
-    operationId: 'registerPushToken',
+    operationId: 'pushTokens.register',
     summary: "Register or rotate this device's push token",
     tags: ['push-tokens'],
   }),
@@ -50,7 +50,7 @@ PushTokenRoutes.delete(
     data: DeletedResourceSchema,
     description:
       '`id` is the device id. Idempotent: a stale `expoToken` removes nothing and leaves the rotated registration in place.',
-    operationId: 'unregisterPushToken',
+    operationId: 'pushTokens.unregister',
     summary: 'Stop pushing to this device (sign-out)',
     tags: ['push-tokens'],
   }),

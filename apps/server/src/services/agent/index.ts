@@ -6,6 +6,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
   type CreateAgentConfig,
+  isLiveAgentShareVisibility,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
 } from '@lobechat/types';
@@ -128,7 +129,7 @@ export class AgentService {
    * Validate the effective selection at configuration boundaries, including inherited defaults.
    *
    * Returns the resolved selection to pin, or `undefined` when there is nothing to check.
-   * A Claude Code / Codex agent is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
+   * A locally executed CLI agent (Claude Code, Codex, …) is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
    * creator's device and calls none of `provider`'s models. The decision reads the effective
    * driver, the stored one merged with the patch, so switching back to LobeHub
    * (`heterogeneousProvider: null`) is checked as usual, and a real provider saved next to the
@@ -428,11 +429,17 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
+    // The prompt editor prefers editorData over systemRole, so a systemRole-only
+    // write must drop the old rich document or the editor shows stale content.
+    if ('systemRole' in value && !('editorData' in value)) {
+      value = { ...value, editorData: null } as PartialDeep<AgentItem>;
+    }
+
     if (AGENT_SHARE_ALLOWED_PROVIDERS && touchesShareModel(value)) {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
         agentId,
       );
-      if (share?.visibility === 'link') {
+      if (isLiveAgentShareVisibility(share?.visibility)) {
         const selection = await this.assertShareModelAllowed(agentId, value);
         value = { ...value, ...selection };
       }

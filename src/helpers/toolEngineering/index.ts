@@ -21,6 +21,7 @@ import {
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
   getActivePluginIds,
+  getBuiltinOverrides,
   getOptedInPluginIds,
   type LobeAgentChatConfig,
   resolveToolMode,
@@ -274,9 +275,9 @@ export const createAgentToolsEngine = (
       chatConfig,
       plugins: applyAgentConnectorActivation(
         options.runAgent?.enabledPluginIds ??
-          getActivePluginIds(agent.plugins).filter(
-            (id) => resolveToolMode(chatConfig) !== 'agent' || !isOnDemandBuiltinTool(id),
-          ),
+          (resolveToolMode(chatConfig) === 'agent'
+            ? getActivePluginIds(agent.plugins).filter((id) => !isOnDemandBuiltinTool(id))
+            : getOptedInPluginIds(agent.plugins)),
         connectors,
       ),
     },
@@ -293,6 +294,7 @@ export const createAgentToolsEngine = (
         ],
         chatConfig,
         options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
+        getBuiltinOverrides(agent.plugins),
       ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.

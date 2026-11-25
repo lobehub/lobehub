@@ -10,7 +10,6 @@ import {
   Select,
   Text,
   TextArea,
-  toast,
 } from '@lobehub/ui';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
@@ -67,7 +66,7 @@ interface InlineFieldProps {
   onEditingChange?: (editing: boolean) => void;
   /**
    * Write the confirmed value. Rejecting keeps the field open with the
-   * person's text still in it, and the reason goes to a toast.
+   * person's text still in it, and the reason shows under the field.
    */
   onSave: (value: string) => Promise<void>;
   /** Shown in place of an empty value, muted. Omit when no example fits every case. */
@@ -98,15 +97,22 @@ const InlineField = memo<InlineFieldProps>(
     const { t: tSetting } = useTranslation('setting');
     const [draft, setDraft] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    /**
+     * Save failure, shown under the open field: the field stays open with the user's text,
+     * so the reason belongs next to it rather than in a corner toast.
+     */
+    const [error, setError] = useState('');
     const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const editing = draft !== null;
 
     const open = () => {
+      setError('');
       setDraft(value);
       onEditingChange?.(true);
     };
     const cancel = () => {
+      setError('');
       setDraft(null);
       onEditingChange?.(false);
     };
@@ -118,11 +124,13 @@ const InlineField = memo<InlineFieldProps>(
         return;
       }
       setSaving(true);
+      setError('');
       try {
         await onSave(next);
         cancel();
-      } catch (error) {
-        toast.error(describeError(error, tSetting, String(error)));
+      } catch (err) {
+        console.error('[InlineField] Save failed:', err);
+        setError(describeError(err, tSetting, tSetting('environments.saveFailedRetry')));
       } finally {
         setSaving(false);
       }
@@ -190,22 +198,32 @@ const InlineField = memo<InlineFieldProps>(
             {multiline ? (
               <TextArea
                 autoFocus
+                aria-invalid={!!error}
                 autoSize={{ maxRows: 10, minRows: 2 }}
+                data-invalid={error ? '' : undefined}
                 placeholder={placeholder}
                 style={{ flex: 1 }}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onKeyDown}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setError('');
+                }}
                 {...compositionProps}
               />
             ) : (
               <Input
                 autoFocus
+                aria-invalid={!!error}
+                data-invalid={error ? '' : undefined}
                 placeholder={placeholder}
                 style={{ flex: 1 }}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onKeyDown}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setError('');
+                }}
                 {...compositionProps}
               />
             )}
@@ -232,6 +250,11 @@ const InlineField = memo<InlineFieldProps>(
             </span>
             <ActionIcon icon={PencilIcon} size={'small'} title={t('edit')} onClick={open} />
           </div>
+        )}
+        {editing && error && (
+          <Text fontSize={12} role={'alert'} type={'danger'}>
+            {error}
+          </Text>
         )}
       </Flexbox>
     );

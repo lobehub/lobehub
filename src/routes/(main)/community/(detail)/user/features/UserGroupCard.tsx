@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   Block,
   DropdownMenu,
   Flexbox,
@@ -29,6 +28,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -116,7 +116,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/group_agent', identifier),
+        url: urlJoin('/marketplace/group_agent', identifier),
       },
       { skipNull: true },
     );

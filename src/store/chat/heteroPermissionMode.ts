@@ -11,11 +11,9 @@ import { DEFAULT_HETERO_PERMISSION_MODE, isHeteroPermissionMode } from '@lobecha
 
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
-import { getUserStoreState } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 /*
- * Claude Code permission modes (Better Coding Experience lab), renderer side.
+ * Claude Code permission modes, renderer side.
  *
  * A topic's mode lives in `metadata.heteroPermissionMode`: the composer chip
  * writes it, every run starts in it, and Claude Code's own reports (leaving
@@ -24,10 +22,9 @@ import { labPreferSelectors } from '@/store/user/selectors';
  * `takePendingHeteroPermissionMode`).
  */
 
-/** Whether runs of `agentType` have permission modes: Claude Code with the lab on. */
+/** Whether runs of `agentType` have permission modes: Claude Code only. */
 export const hasHeteroPermissionModes = (agentType: string | undefined): boolean =>
-  agentType === 'claude-code' &&
-  labPreferSelectors.enableBetterCodingExperience(getUserStoreState());
+  agentType === 'claude-code';
 
 /** The mode a topic's runs start in; the default when it has none. */
 export const readTopicPermissionMode = (
@@ -37,7 +34,7 @@ export const readTopicPermissionMode = (
   return isHeteroPermissionMode(mode) ? mode : DEFAULT_HETERO_PERMISSION_MODE;
 };
 
-/** The mode a local run starts in, or undefined to allow every action (lab off, other agents). */
+/** The mode a local run starts in, or undefined to allow every action (other agents). */
 export const resolveRunPermissionMode = (
   agentType: string | undefined,
   metadata: ChatTopicMetadata | null | undefined,
@@ -58,8 +55,8 @@ export const setPendingHeteroPermissionMode = (
 
 /**
  * Metadata a new Claude Code topic is born with: the mode its chip showed.
- * Empty when no chip showed one (the lab off, another agent, a send from
- * elsewhere), so the topic starts in the default.
+ * Empty when no chip showed one (another agent, a send from elsewhere), so
+ * the topic starts in the default.
  */
 export const pendingHeteroPermissionModeMetadata = (
   agentId: string,

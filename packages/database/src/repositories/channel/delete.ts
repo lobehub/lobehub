@@ -53,7 +53,53 @@ export const deleteMessage = async (
       ),
     );
   const writers: ChannelJobItem[] = [];
-  for (const job of open) writers.push(...(await stopScope(tx, channelId, { jobId: job.id })));
+  const stopped = new Set<string>();
+  const stop = async (jobId: string) => {
+    if (stopped.has(jobId)) return;
+    stopped.add(jobId);
+    writers.push(...(await stopScope(tx, channelId, { jobId })));
+  };
+
+  // An earlier run may already answer this request as part of a batch (`requestMessageIds`), in
+  // which case no job row points at it any more. That owner has to stop too, or it publishes an
+  // answer over a withdrawn request; the requests it absorbed go back to the queue so their
+  // senders still get one. Read the open batches before any job is cancelled below.
+  const batches = await tx
+    .select({
+      id: channelJobs.id,
+      manifest: channelJobs.manifest,
+      memberId: channelJobs.memberId,
+      messageId: channelJobs.messageId,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        inArray(channelJobs.status, OPEN_JOB_STATUSES),
+        sql`${channelJobs.manifest} IS NOT NULL`,
+      ),
+    );
+
+  for (const job of open) await stop(job.id);
+
+  for (const batch of batches) {
+    const requested = batch.manifest?.requestMessageIds;
+    if (!requested?.includes(messageId)) continue;
+    const absorbed = requested.filter((id) => id !== messageId && id !== batch.messageId);
+    if (absorbed.length)
+      await tx
+        .update(channelJobs)
+        .set({ status: 'queued' })
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.memberId, batch.memberId),
+            inArray(channelJobs.messageId, absorbed),
+            eq(channelJobs.status, 'merged'),
+          ),
+        );
+    await stop(batch.id);
+  }
 
   await tx
     .update(channelMessages)

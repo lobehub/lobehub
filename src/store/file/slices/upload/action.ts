@@ -10,6 +10,7 @@ import type { StoreSetter } from '@/store/types';
 import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
+import { getImageThumbhash } from '@/utils/client/imageThumbhash';
 
 import type { FileStore } from '../../store';
 import { audioMimeFromExtension } from '../chat/uploadGuard';
@@ -62,6 +63,11 @@ interface UploadWithProgressParams {
    * `'private'`, children inherit their parent document's visibility).
    */
   visibility?: 'private' | 'public';
+  /**
+   * Pins the scope every step of the upload runs in, `null` being the personal one. `undefined`
+   * follows the active workspace; a surface owned by a known scope (a Channel) passes its own.
+   */
+  workspaceId?: string | null;
 }
 
 interface UploadWithProgressResult {
@@ -120,8 +126,11 @@ export class FileUploadActionImpl {
   ): Promise<UploadWithProgressResult | undefined> => {
     let uploadedPathname: string | undefined;
     try {
-      // Extract image dimensions from base64 data
-      const dimensions = await getImageDimensions(base64);
+      // Extract image dimensions and the blurred placeholder from base64 data
+      const [dimensions, thumbhash] = await Promise.all([
+        getImageDimensions(base64),
+        getImageThumbhash(base64),
+      ]);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
       uploadedPathname = metadata.path;
@@ -129,7 +138,7 @@ export class FileUploadActionImpl {
       const res = await fileService.createFile({
         fileType,
         hash,
-        metadata: { ...metadata, ...dimensions },
+        metadata: { ...metadata, ...dimensions, ...(thumbhash && { thumbhash }) },
         name: metadata.filename,
         size,
         url: metadata.path,
@@ -156,6 +165,7 @@ export class FileUploadActionImpl {
     visibility,
     fileMetadata,
     conversationAgentId,
+    workspaceId,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
     let uploadedPathname: string | undefined;
@@ -168,8 +178,11 @@ export class FileUploadActionImpl {
           ? getAudioDuration(normalizedFile).catch(() => undefined)
           : undefined;
 
-      // 1. extract image dimensions if applicable
-      const dimensions = await getImageDimensions(normalizedFile);
+      // 1. extract image dimensions and the blurred placeholder if applicable
+      const [dimensions, thumbhash] = await Promise.all([
+        getImageDimensions(normalizedFile),
+        getImageThumbhash(normalizedFile),
+      ]);
 
       // 2. check file hash
       const hash = await hashFile(normalizedFile, abortController?.signal, (progress) => {
@@ -180,7 +193,7 @@ export class FileUploadActionImpl {
         });
       });
 
-      const checkStatus = await fileService.checkFileHash(hash);
+      const checkStatus = await fileService.checkFileHash(hash, workspaceId);
       let metadata: ExistingFileMetadata;
 
       // 3. if file exist, just skip upload
@@ -215,6 +228,7 @@ export class FileUploadActionImpl {
             });
           },
           skipCheckFileType,
+          workspaceId,
         });
         if (!success) return;
 
@@ -248,6 +262,7 @@ export class FileUploadActionImpl {
             ...fileMetadata,
             ...metadata,
             ...dimensions,
+            ...(thumbhash && { thumbhash }),
             ...(durationMs === undefined ? {} : { durationMs }),
           },
           name: normalizedFile.name,
@@ -258,6 +273,7 @@ export class FileUploadActionImpl {
           visibility,
         },
         knowledgeBaseId,
+        workspaceId,
       );
       uploadedPathname = undefined;
 
@@ -276,7 +292,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
-      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname, workspaceId);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({
           id: statusId,

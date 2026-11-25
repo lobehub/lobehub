@@ -12,6 +12,27 @@ export const API_ERROR_REF = '#/components/schemas/ApiError';
 export type SuccessStatus = 200 | 201 | 202;
 
 /**
+ * Carries `routeDoc({ requestExample })` to `buildSpecDocument`, which moves
+ * it onto the JSON request body the validator documents (the body schema is
+ * not known when `routeDoc` runs).
+ */
+export const REQUEST_EXAMPLE_EXTENSION = 'x-request-example';
+
+/**
+ * Documentation mistakes found while routes are declared (an example that does
+ * not match its schema, an undocumentable scope gate). Recorded here instead of
+ * thrown, so a doc slip can never stop the API server from booting;
+ * `buildSpecDocument` fails on them, which CI runs on every PR.
+ */
+export const SPEC_ERROR_EXTENSION = 'x-spec-error';
+
+/** A request body example plus, when it does not match its schema, why. */
+export interface RequestExample {
+  error?: string;
+  value: unknown;
+}
+
+/**
  * Error statuses a route may declare on top of the ones every authenticated
  * route shares. `400` is also derived automatically for any route with a
  * request validator, so declare it only when the handler itself rejects input.
@@ -76,12 +97,22 @@ export interface RouteDocOptions extends Omit<DescribeRouteOptions, 'responses'>
   errors?: RouteErrorStatus[];
   /** Error body schema for routes speaking another protocol; defaults to `ApiError`. */
   errorSchema?: z.ZodType;
+  /**
+   * `<resource>.<method>` when the mechanical name from `{method} {path}` reads
+   * wrong (see `common/operation-id.ts`). It is the SDK method name: never
+   * rename one that has shipped.
+   */
+  operationId?: `${string}.${string}`;
   /** Public routes skip the shared authenticated errors (401/403/500). */
   public?: boolean;
+  /** Example JSON request body, built with `example(schema, value)` from `common/examples.ts`. */
+  requestExample?: RequestExample;
+  /** Example success payload (`data`); wrapped in the success envelope like the schema. */
+  responseExample?: unknown;
   /** The success status the handler answers with. Defaults to 200. */
   status?: SuccessStatus;
   /** Extra success media types, e.g. `text/event-stream` for streaming routes. */
-  streamContent?: Record<string, { schema: Record<string, unknown> }>;
+  streamContent?: Record<string, { schema: z.ZodType }>;
   summary: string;
 }
 
@@ -97,22 +128,51 @@ export const routeDoc = ({
   errorSchema,
   errors = [],
   public: isPublic = false,
+  requestExample,
+  responseExample,
   status = 200,
   streamContent,
   ...rest
 }: RouteDocOptions) => {
   const errorStatuses = new Set<number>([...(isPublic ? [] : AUTHENTICATED_ERRORS), ...errors]);
+  const specErrors: string[] = [];
+  if (requestExample?.error) specErrors.push(requestExample.error);
+  if (responseExample !== undefined) {
+    const parsed = data.safeParse(responseExample);
+    if (!parsed.success)
+      specErrors.push(`responseExample does not match data: ${parsed.error.message}`);
+  }
+  const example =
+    responseExample === undefined
+      ? undefined
+      : envelope
+        ? {
+            data: responseExample,
+            success: true,
+            timestamp: '2026-01-01T00:00:00.000Z',
+          }
+        : responseExample;
 
   return describeRoute({
     // Public routes need no credentials, so they also skip the API-key rate
     // limit and Idempotency-Key the spec builder adds to authenticated ones.
     ...(isPublic ? { security: [] } : {}),
     ...rest,
+    ...(requestExample === undefined ? {} : { [REQUEST_EXAMPLE_EXTENSION]: requestExample.value }),
+    ...(specErrors.length > 0 ? { [SPEC_ERROR_EXTENSION]: specErrors } : {}),
     responses: {
       [status]: {
         content: {
-          'application/json': { schema: resolver(envelope ? successEnvelope(data) : data) },
-          ...streamContent,
+          'application/json': {
+            schema: resolver(envelope ? successEnvelope(data) : data),
+            ...(example === undefined ? {} : { example }),
+          },
+          ...Object.fromEntries(
+            Object.entries(streamContent ?? {}).map(([type, media]) => [
+              type,
+              { schema: resolver(media.schema) },
+            ]),
+          ),
         },
         description: 'Successful response',
       },

@@ -39,7 +39,7 @@ const AgentPermission = memo(() => {
         styles={{ left: { paddingInlineStart: 24 } }}
         left={
           activeAgentId ? (
-            <AgentBreadcrumb agentId={activeAgentId} title={t('permission.page.title')} />
+            <AgentBreadcrumb agentId={activeAgentId} title={t('permission.page.agentEntry')} />
           ) : null
         }
       />

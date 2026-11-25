@@ -25,7 +25,7 @@ interface SlackDetailProps {
   appId?: string;
   botUsername?: string;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }) => {

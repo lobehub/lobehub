@@ -23,6 +23,8 @@ export enum FileSource {
   Acceptance = 'acceptance',
   /** Original upload owned by an agent's document tree rather than the resource library. */
   AgentDocument = 'agent-document',
+  /** A file in an artboard's folder; counted toward storage, owned by the artboard. */
+  Artboard = 'artboard',
   Canvas = 'canvas',
   /** Attachment sent in a public agent's conversation; shared with the conversation, not the library. */
   ChatAttachment = 'chat-attachment',
@@ -60,6 +62,7 @@ export enum FileSource {
 export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Acceptance,
   FileSource.AgentDocument,
+  FileSource.Artboard,
   FileSource.Canvas,
   FileSource.Meeting,
   FileSource.ToolResult,

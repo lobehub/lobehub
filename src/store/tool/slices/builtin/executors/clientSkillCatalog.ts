@@ -13,11 +13,11 @@ import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getAgentStoreState } from '@/store/agent';
 import { getChatStoreState } from '@/store/chat';
-import { parseSelectedSkillsFromEditorData } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
+import { collectSelectedSkillIds } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getToolStoreState } from '@/store/tool';
 
-import { installedImplicitBuiltinSkillIds } from '../projection';
+import { installedImplicitBuiltinSkillIds, legacyDisabledBuiltinSkillsForRun } from '../projection';
 
 /** Bind both name lookup and the fallback catalog to the calling agent, not the active tab. */
 export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
@@ -44,17 +44,12 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
       ] ?? [])
     : [];
   const userTurns = messages.filter((message) => message.role === 'user');
-  const selected = new Set(
-    userTurns.flatMap(
-      (message) =>
-        message.metadata?.selectedSkillIds ??
-        parseSelectedSkillsFromEditorData(message.editorData ?? undefined).map(
-          (skill) => skill.identifier,
-        ),
-    ),
-  );
+  const selected = new Set(collectSelectedSkillIds(userTurns));
   if (mentionsTopic(userTurns)) selected.add(LobeHubIdentifier);
-  const disabled = new Set(getDisabledPluginIds(plugins));
+  const disabled = new Set([
+    ...getDisabledPluginIds(plugins),
+    ...legacyDisabledBuiltinSkillsForRun(getToolStoreState(), plugins),
+  ]);
   const offered = (id: string) =>
     !disabled.has(id) && (selected.has(id) || getLibrarySkillMode(plugins, id) !== 'disabled');
   const lookup: Pick<SkillRuntimeService, 'findAll' | 'findById' | 'findByName'> = {

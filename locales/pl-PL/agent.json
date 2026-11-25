@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Odwiedzający nie tylko czytają tego Agenta — uruchamiają go. Każda odpowiedź jest generowana w obszarze roboczym i obciąża jego wspólny budżet, bez zużywania kwoty twórcy lub innego członka. Agent działa tylko z dostępem odwiedzającego, który przyznasz poniżej.",
   "share.settings.notice.workspaceTitle": "Odwiedzający uruchamiają tego Agenta na budżecie obszaru roboczego",
   "share.settings.permissions.allowCreatorViewSessions": "Pozwól mi czytać rozmowy odwiedzających",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Domyślnie wyłączone: rozmowy odwiedzających pozostają prywatne dla odwiedzającego.",
   "share.settings.permissions.allowReadMemory": "Zezwól na odczyt mojej pamięci",
   "share.settings.permissions.allowReadMemoryHint": "Agent może korzystać z Twojej pamięci długoterminowej podczas odpowiadania odwiedzającemu.",
   "share.settings.permissions.desc": "Co może odczytać uruchomienie odwiedzającego i co odwiedzający może zobaczyć w odpowiedzi.",

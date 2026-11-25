@@ -14,7 +14,7 @@ import type {
 import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { ContactModel } from '@/database/models/contact';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import { WorkspaceModel } from '@/database/models/workspace';
 import {
   ChannelError,
@@ -27,6 +27,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 
 import { ChannelService } from './ChannelService';
+import { channelContacts } from './contacts';
 import { assertChannelEnabled } from './featureGate';
 
 const DEFAULT_LIMIT = 10;
@@ -90,10 +91,10 @@ const findAgent = (
  * `metadata.via` only records which Agent relayed it. The run itself (live, unrevoked, requester
  * still a member) is checked first, exactly as a history read checks it.
  *
- * The bot's owner messaging their Agent on an IM platform may do the same from that bot run. It
- * has no Channel of its own, so nothing is current, and the reply stays in the target Channel:
- * there is no origin to deliver a receipt back to. Only the CLI route, which has checked the
- * run's operation token for `channel:message`, opts in (`allowBotRun`).
+ * The requester's own direct run may do the same: a chat turn they sent, or the bot's owner
+ * messaging their Agent on an IM platform. It has no Channel of its own, so nothing is current,
+ * and the reply stays in the target Channel: there is no origin to deliver a receipt back to. Only the CLI route, which has checked the
+ * run's operation token for `channel:message`, opts in (`allowDirectRun`).
  */
 export class ChannelMessagingService {
   private readonly history: ChannelHistoryRepository;
@@ -104,10 +105,10 @@ export class ChannelMessagingService {
     private readonly userId: string,
     private readonly operationId: string,
     private readonly workspaceId?: string,
-    private readonly options: { allowBotRun?: boolean } = {},
+    private readonly options: { allowDirectRun?: boolean } = {},
   ) {
     this.history = new ChannelHistoryRepository(db, userId, workspaceId);
-    this.channels = new ChannelRepository(db, userId, workspaceId);
+    this.channels = new ChannelRepository(db, userId, workspaceId, channelContacts);
   }
 
   listChannels = async (params: ChannelListChannelsParams = {}): Promise<ChannelDirectoryPage> => {
@@ -252,7 +253,7 @@ export class ChannelMessagingService {
     const limit = params.limit ?? DEFAULT_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT)
       throw new ChannelError('BAD_REQUEST', `Expected a limit between 1 and ${MAX_LIMIT}`);
-    const page = await new ContactModel(this.db, this.userId, this.workspaceId).listPeople({
+    const page = await getAddressBook(this.db, this.userId, this.workspaceId).listPeople({
       limit,
       query: params.query,
     });
@@ -311,7 +312,7 @@ export class ChannelMessagingService {
       },
       requestKey: `agent-dm:${this.operationId}:${requestId}`,
     });
-    const person = await new ContactModel(this.db, this.userId, this.workspaceId).findUser(userId);
+    const person = await getAddressBook(this.db, this.userId, this.workspaceId).findUser(userId);
 
     return {
       channelId: access.channel.id,

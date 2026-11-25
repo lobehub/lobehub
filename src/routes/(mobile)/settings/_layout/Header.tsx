@@ -33,7 +33,6 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
 const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
   'audit-log': 'setting:workspaceSetting.tab.auditLog',
   'budget': 'subscription:tab.budget',
-  'chat-preference': 'setting:tab.chatPreference',
   'connector': 'setting:workspaceSetting.tab.connector',
   'credential': 'setting:tab.creds',
   'general': 'setting:workspaceSetting.tab.general',

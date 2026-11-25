@@ -189,7 +189,7 @@ describe('application generation chains', () => {
       ],
     });
 
-    expect(CHANNEL_REPLY_OPENER_PROMPT_VERSION).toBe('v1');
+    expect(CHANNEL_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
     expect(CHANNEL_REPLY_OPENER_JSON_SCHEMA.name).toBe('channel_reply_opener');
     expect(CHANNEL_REPLY_OPENER_JSON_SCHEMA.schema.properties.placement.enum).toEqual([
       'channel',
@@ -207,6 +207,26 @@ describe('application generation chains', () => {
     expect(
       chainBotReplyOpener({ canOpenThread: true, message: 'hi' }).messages[0].content,
     ).not.toContain('existing_thread');
+  });
+
+  it('shows the Channel opener the quoted message and the attachments it cannot see', () => {
+    const { messages } = chainChannelReplyOpener({
+      attachmentCount: 2,
+      canOpenThread: true,
+      message: '你看下这个的 UI，咋还没改啊？',
+      quoted: 'Arvin: 个人空间下，群成员模式应该和这个一样才对',
+      threads: [{ label: 'T1', title: '优化 Loading 加载样式' }],
+    });
+
+    expect(messages[0].content).toContain('a new task, even when it touches the same product area');
+    expect(messages[0].content).toContain('"this" and "that" refer to the quoted message');
+    expect(messages[1].content).toContain(
+      'The message quotes:\n"""\nArvin: 个人空间下，群成员模式应该和这个一样才对\n"""',
+    );
+    expect(messages[1].content).toContain('2 attachment(s)');
+    expect(
+      chainChannelReplyOpener({ canOpenThread: true, message: 'hi' }).messages[1].content,
+    ).not.toMatch(/quotes:|attachment/);
   });
 
   it('offers no existing Thread to a Channel opener asked with others or without threads', () => {

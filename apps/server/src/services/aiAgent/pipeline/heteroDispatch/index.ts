@@ -19,6 +19,7 @@ import type { ExecRunContext } from '../../types';
 import { traceHeteroStage } from '../sendTracing';
 import { isDeferredHeteroDispatchEnabled, shouldDeferHeteroDispatch } from './deferDispatchGate';
 import { deferCliDeviceDispatch, dispatchToCliDevice, dispatchToWakingCliDevice } from './device';
+import { recordHeteroDeviceRoute } from './deviceRoute';
 import { prepareHeteroRun } from './prepare';
 import { dispatchToPlatformDevice } from './remote';
 import { resolveHeteroRouting } from './routing';
@@ -78,12 +79,7 @@ const dispatchHeteroAgentImpl = async (
   // visitor: the gateway registers the op under this id, the token it returns
   // is the visitor's, and `streamOwnerUserId` on the op metadata is what tells
   // the ingest/finish requests (other processes) to redact for a visitor.
-  const shareStream = shareGate
-    ? {
-        streamOwnerUserId: shareGate.visitorUserId,
-        visitorRedaction: { showErrorDetails: shareGate.shareConfig.showErrorDetails },
-      }
-    : undefined;
+  const shareStream = shareGate ? { streamOwnerUserId: shareGate.visitorUserId } : undefined;
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
   const operationId =
@@ -238,6 +234,16 @@ const dispatchHeteroAgentImpl = async (
     scope: appContext?.scope ?? undefined,
     threadId: appContext?.threadId ?? undefined,
   };
+  // A sub-agent child is only in the marker while its parent's turn runs;
+  // keep the device route on its own row for a Stop that comes later.
+  if (appContext?.isolationThread && childOperation.deviceId) {
+    await recordHeteroDeviceRoute(deps, operationId, {
+      deviceId: childOperation.deviceId,
+      deviceUserId: childOperation.deviceUserId,
+      deviceWorkspaceId: childOperation.deviceWorkspaceId,
+      heteroType,
+    });
+  }
   if (topicStartOwnerOperationId) {
     const attached = await traceHeteroStage('running_marker', () =>
       deps.topicModel.appendRunningOperationChild(

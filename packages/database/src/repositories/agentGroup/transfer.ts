@@ -428,11 +428,7 @@ export const transferGroupToWorkspace = async (
     let transferJobId: string | null = null;
     if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
       await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
-      await rewriteResidualMessageScope(
-        trx,
-        { agentIds: [], groupIds: [groupId], sessionIds: [] },
-        targetScope,
-      );
+      await rewriteResidualMessageScope(trx, { agentIds: [], groupIds: [groupId] }, targetScope);
       await remapMessageAgentIdsForTopics(trx, movedTopicIds, agentRemapPairs);
       await remapResidualMessageAgentIds(trx, [groupId], agentRemapPairs);
     } else {
@@ -459,7 +455,6 @@ export const transferGroupToWorkspace = async (
         // the guards and the badge, but their own topicless messages are
         // not part of what a group transfer moves.
         residualAgentIds: [],
-        sessionIds: [],
         source: { userId: scope.userId, workspaceId: scope.workspaceId ?? null },
         target: targetScope,
         topics: movedTopics.map((topic) => ({

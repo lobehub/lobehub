@@ -34,6 +34,12 @@ export interface GeneralAgentCallLLMInstructionPayload {
 
 export interface GeneralAgentCallLLMResultPayload {
   hasToolsCalling: boolean;
+  /**
+   * The calls in `toolsCalling` that exceed their API's
+   * `maxCallsPerOperation`, with the limit they hit. The agent answers them
+   * with a rejected tool result instead of dispatching them.
+   */
+  overBudgetToolCalls?: Array<{ id: string; limit: number }>;
   parentMessageId: string;
   result: { content: string; tool_calls: MessageToolCall[] };
   toolsCalling: ChatToolPayload[];

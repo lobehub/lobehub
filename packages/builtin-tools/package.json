@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./agentShare": "./src/agentShare.ts",
     "./renders": "./src/renders.ts",
     "./register": "./src/register.ts",
     "./displayControls": "./src/displayControls.ts",
@@ -31,6 +32,7 @@
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-agent-signal": "workspace:*",
+    "@lobechat/builtin-tool-artboard": "workspace:*",
     "@lobechat/builtin-tool-attachments": "workspace:*",
     "@lobechat/builtin-tool-auv": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
@@ -65,6 +67,7 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/builtin-tool-webhook": "workspace:*",
+    "@lobechat/builtin-tool-work": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobehub/icons": "^6.0.0"
   },

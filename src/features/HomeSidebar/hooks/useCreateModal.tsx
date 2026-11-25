@@ -18,6 +18,11 @@ import {
   ChatInputProvider,
   DesktopChatInput,
 } from '@/features/ChatInput';
+import CreateVisibilityField, {
+  type CreateVisibility,
+  type CreateVisibilityOptions,
+  useCreateVisibility,
+} from '@/features/CreateVisibilityField';
 import { useRandomQuestions } from '@/features/Home/SuggestQuestions/useRandomQuestions';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
@@ -312,6 +317,11 @@ const Examples = memo<ExamplesProps>(({ suggestMode, onExampleClick }) => {
   );
 });
 
+export interface CreateAgentModalSubmitOptions {
+  /** The visibility the user settled on; only set when the field was shown. */
+  visibility?: CreateVisibility;
+}
+
 export interface CreateAgentModalProps {
   agentId?: string;
   /**
@@ -321,16 +331,37 @@ export interface CreateAgentModalProps {
    */
   modalRef?: { current?: ModalInstance };
   onClose: () => void;
-  onCreateBlank: () => Promise<void> | void;
+  onCreateBlank: (options?: CreateAgentModalSubmitOptions) => Promise<void> | void;
   onOpenSkills?: (identifier: string) => void;
-  onSubmit: (prompt: string) => Promise<void> | void;
+  onSubmit: (prompt: string, options?: CreateAgentModalSubmitOptions) => Promise<void> | void;
   onTryInLobeAI?: () => Promise<void> | void;
   type: 'agent' | 'group';
+  /**
+   * Shows the "Private / Workspace" field, starting from this context (the
+   * group dialog passes it; workspace only). Omitted, no field is shown.
+   */
+  visibility?: CreateVisibilityOptions;
 }
 
 export const CreateAgentModal = memo<CreateAgentModalProps>(
-  ({ type, agentId, modalRef, onClose, onOpenSkills, onSubmit, onCreateBlank, onTryInLobeAI }) => {
+  ({
+    type,
+    agentId,
+    modalRef,
+    onClose,
+    onOpenSkills,
+    onSubmit,
+    onCreateBlank,
+    onTryInLobeAI,
+    visibility,
+  }) => {
     const { t } = useTranslation('chat');
+    const visibilityState = useCreateVisibility(visibility);
+    const showVisibility = !!visibility && visibilityState.show;
+    const submitOptions = useMemo<CreateAgentModalSubmitOptions | undefined>(
+      () => (visibility ? { visibility: visibilityState.value } : undefined),
+      [visibility, visibilityState.value],
+    );
     const editorRef = useRef<ChatInputEditor | null>(null);
     const contentRef = useRef('');
     const examplePromptRef = useRef('');
@@ -424,7 +455,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             }
           }
 
-          await onSubmit(text);
+          await (submitOptions ? onSubmit(text, submitOptions) : onSubmit(text));
           void trackCreateAgentModalCreationSucceeded({
             source: getSubmitSource(text),
             type,
@@ -434,7 +465,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
           setLoading(false);
         }
       },
-      [getSubmitSource, handleClose, isAgent, loading, onSubmit, type],
+      [getSubmitSource, handleClose, isAgent, loading, onSubmit, submitOptions, type],
     );
 
     const handleContinueCreate = useCallback(() => {
@@ -498,7 +529,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
       if (loading) return;
       setLoading(true);
       try {
-        await onCreateBlank();
+        await (submitOptions ? onCreateBlank(submitOptions) : onCreateBlank());
         void trackCreateAgentModalCreationSucceeded({
           source: 'blank',
           type,
@@ -507,7 +538,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
       } finally {
         setLoading(false);
       }
-    }, [handleClose, loading, onCreateBlank, type]);
+    }, [handleClose, loading, onCreateBlank, submitOptions, type]);
 
     const handleExampleClick = useCallback((prompt: string) => {
       examplePromptRef.current = prompt.trim();
@@ -600,6 +631,8 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
                 }
               />
             </ChatInputProvider>
+
+            {showVisibility && <CreateVisibilityField state={visibilityState} />}
 
             {isAgent && skillSuggestion && (
               <SkillSuggestionPanel

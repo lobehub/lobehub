@@ -64,6 +64,7 @@ describe('Channel public view', () => {
     expect(view.hasMore).toBe(true);
     expect(view.members.find((member) => member.id === agent.id)?.name).toBe('Researcher');
     expect(view.jobs[0]).not.toHaveProperty('topicId');
+    expect(view.jobs[0]).not.toHaveProperty('topicTitle');
     expect(view.jobs[0]).not.toHaveProperty('operationId');
     expect(view.jobs[0]).not.toHaveProperty('executionConfig');
     expect(view).not.toHaveProperty('member');

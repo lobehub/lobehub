@@ -12,20 +12,30 @@ export const channelRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.serverDB || !context.userId || !context.operationId)
       throw new Error('Channel history requires an authenticated running operation');
+    const { toolCallId } = context;
     const messaging = new ChannelMessagingService(
       context.serverDB,
       context.userId,
       context.operationId,
       context.workspaceId,
     );
-    const { toolCallId } = context;
+    const history = new ChannelHistoryService(
+      context.serverDB,
+      context.userId,
+      context.operationId,
+      context.workspaceId,
+    );
     return new ChannelExecutionRuntime(
-      new ChannelHistoryService(
-        context.serverDB,
-        context.userId,
-        context.operationId,
-        context.workspaceId,
-      ),
+      {
+        react: history.react,
+        readMessage: history.readMessage,
+        readMessages: history.readMessages,
+        requestConnector: (params) => {
+          // The tool call id keys the card, so a retried call returns the card it already posted.
+          if (!toolCallId) throw new Error('Asking for a connector requires a tool call id');
+          return history.requestConnector(params, toolCallId);
+        },
+      },
       {
         listChannels: messaging.listChannels,
         listPeople: messaging.listPeople,

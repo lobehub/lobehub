@@ -22,10 +22,16 @@ Authorization: Bearer <token>
 
 服务端根据令牌的形态判断其类型：
 
-- 符合 API Key 格式（`sk-lh-` 加 16 位小写字母和数字）的令牌按 **API Key** 查找。Key 必须处于启用状态且未过期。
+- 符合 API Key 格式（`sk-lh-` 加 58 位小写字母和数字，较早创建的 Key 为 16 位）的令牌按 **API Key** 查找。Key 必须处于启用状态且未过期。
 - 其他令牌一律按 **OIDC 访问令牌** 校验（受众为 `urn:lobehub:chat` 的 RS256 JWT），由部署自身的 OIDC 提供方签发。自托管实例只有在配置了 `JWKS_KEY` 时才接受 OIDC 令牌。
 
-不存在 `X-API-Key` 请求头。缺少令牌或令牌无效时返回 `401`。
+不存在 `X-API-Key` 请求头。缺少令牌或令牌无效时返回 `401`，并附带一个说明去哪里认证的质询头：
+
+```http
+WWW-Authenticate: Bearer realm="LobeHub API", resource_metadata="https://app.lobehub.com/.well-known/oauth-protected-resource/api/v1"
+```
+
+该地址是 API 的 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) 受保护资源元数据：资源（`<origin>/api/v1`）、它的授权服务器（启用 OIDC 时为 `<origin>/oidc`）以及令牌的携带方式。授权服务器的 [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) 元数据位于 `<origin>/.well-known/oauth-authorization-server/oidc`，内容与下文的 OIDC 发现文档相同。
 
 ## 选择凭证
 

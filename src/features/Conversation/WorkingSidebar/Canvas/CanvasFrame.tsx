@@ -39,108 +39,119 @@ interface CanvasError {
 
 const MAX_ERRORS = 10;
 
-const CanvasDocumentFrame = memo<{ project: CanvasPreviewProject }>(({ project }) => {
-  const { t } = useTranslation('portal');
-  const ref = useRef<HTMLIFrameElement>(null);
-  const { isDarkMode } = useThemeMode();
-  const primaryColor = useUserStore(userGeneralSettingsSelectors.primaryColor);
-  const neutralColor = useUserStore(userGeneralSettingsSelectors.neutralColor);
-  const [errors, setErrors] = useState<CanvasError[]>([]);
-  const [location, setLocation] = useState({ path: project.entry, hash: '' });
-  // Serializing a project can include megabytes of assets; themes and errors must not rebuild it.
-  const srcDoc = useMemo(
-    () => createCanvasPreviewDocument(project, location.path, location.hash),
-    [project, location],
-  );
-
-  const theme = useMemo(
-    () => ({ appearance: isDarkMode ? 'dark' : 'light', neutralColor, primaryColor }),
-    [isDarkMode, neutralColor, primaryColor],
-  );
-
-  const postTheme = useCallback(() => {
-    ref.current?.contentWindow?.postMessage(
-      { source: 'lobe-canvas-host', theme, type: 'theme' },
-      '*',
-    );
-  }, [theme]);
-
-  useEffect(postTheme, [postTheme]);
-
-  useEffect(() => setErrors([]), [srcDoc]);
-
-  useEffect(() => {
-    const frame = ref.current;
-    if (!frame) return;
-    return attachCanvasRuntime(frame, (error) => {
-      console.error('[lobe-canvas]', error);
-      setErrors((current) => [...current, { message: String(error) }].slice(-MAX_ERRORS));
+const CanvasDocumentFrame = memo<{ path?: string; project: CanvasPreviewProject }>(
+  ({ path, project }) => {
+    const { t } = useTranslation('portal');
+    const ref = useRef<HTMLIFrameElement>(null);
+    const { isDarkMode } = useThemeMode();
+    const primaryColor = useUserStore(userGeneralSettingsSelectors.primaryColor);
+    const neutralColor = useUserStore(userGeneralSettingsSelectors.neutralColor);
+    const [errors, setErrors] = useState<CanvasError[]>([]);
+    const [location, setLocation] = useState({
+      hash: '',
+      path: path && project.files[path] ? path : project.entry,
     });
-  }, [project]);
+    // Serializing a project can include megabytes of assets; themes and errors must not rebuild it.
+    const srcDoc = useMemo(
+      () => createCanvasPreviewDocument(project, location.path, location.hash),
+      [project, location],
+    );
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== ref.current?.contentWindow || event.data?.source !== 'lobe-canvas')
-        return;
-      if (event.data.type === 'ready') postTheme();
-      if (
-        event.data.type === 'navigate' &&
-        typeof event.data.path === 'string' &&
-        event.data.path.toLowerCase().endsWith('.html') &&
-        project.files[event.data.path]
-      )
-        setLocation({
-          path: event.data.path,
-          hash: typeof event.data.hash === 'string' ? event.data.hash : '',
-        });
-      if (event.data.type === 'error') {
-        setErrors((current) =>
-          current.length >= MAX_ERRORS
-            ? current
-            : [
-                ...current,
-                { component: event.data.component, message: String(event.data.message) },
-              ],
-        );
-      }
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [postTheme, project]);
+    const theme = useMemo(
+      () => ({ appearance: isDarkMode ? 'dark' : 'light', neutralColor, primaryColor }),
+      [isDarkMode, neutralColor, primaryColor],
+    );
 
-  return (
-    <>
-      {errors.length > 0 && (
-        <Alert
-          description={t('canvas.runtimeErrorsHint')}
-          title={t('canvas.runtimeErrors', { count: errors.length })}
-          type={'warning'}
-          extra={
-            <pre {...stylex.props(styles.details)}>
-              {errors
-                .map((error) =>
-                  error.component ? `<${error.component}> ${error.message}` : error.message,
-                )
-                .join('\n')}
-            </pre>
-          }
+    const postTheme = useCallback(() => {
+      ref.current?.contentWindow?.postMessage(
+        { source: 'lobe-canvas-host', theme, type: 'theme' },
+        '*',
+      );
+    }, [theme]);
+
+    useEffect(postTheme, [postTheme]);
+
+    useEffect(() => setErrors([]), [srcDoc]);
+
+    useEffect(() => {
+      const frame = ref.current;
+      if (!frame) return;
+      return attachCanvasRuntime(frame, (error) => {
+        console.error('[lobe-canvas]', error);
+        setErrors((current) => [...current, { message: String(error) }].slice(-MAX_ERRORS));
+      });
+    }, [project]);
+
+    useEffect(() => {
+      const onMessage = (event: MessageEvent) => {
+        if (event.source !== ref.current?.contentWindow || event.data?.source !== 'lobe-canvas')
+          return;
+        if (event.data.type === 'ready') postTheme();
+        if (
+          event.data.type === 'navigate' &&
+          typeof event.data.path === 'string' &&
+          event.data.path.toLowerCase().endsWith('.html') &&
+          project.files[event.data.path]
+        )
+          setLocation({
+            path: event.data.path,
+            hash: typeof event.data.hash === 'string' ? event.data.hash : '',
+          });
+        if (event.data.type === 'error') {
+          setErrors((current) =>
+            current.length >= MAX_ERRORS
+              ? current
+              : [
+                  ...current,
+                  { component: event.data.component, message: String(event.data.message) },
+                ],
+          );
+        }
+      };
+      window.addEventListener('message', onMessage);
+      return () => window.removeEventListener('message', onMessage);
+    }, [postTheme, project]);
+
+    return (
+      <>
+        {errors.length > 0 && (
+          <Alert
+            description={t('canvas.runtimeErrorsHint')}
+            title={t('canvas.runtimeErrors', { count: errors.length })}
+            type={'warning'}
+            extra={
+              <pre {...stylex.props(styles.details)}>
+                {errors
+                  .map((error) =>
+                    error.component ? `<${error.component}> ${error.message}` : error.message,
+                  )
+                  .join('\n')}
+              </pre>
+            }
+          />
+        )}
+        <iframe
+          {...stylex.props(styles.frame)}
+          ref={ref}
+          sandbox="allow-scripts allow-popups allow-forms allow-downloads"
+          srcDoc={srcDoc}
+          title={t('canvas.frameTitle')}
+          onLoad={postTheme}
         />
-      )}
-      <iframe
-        {...stylex.props(styles.frame)}
-        ref={ref}
-        sandbox="allow-scripts allow-popups allow-forms allow-downloads"
-        srcDoc={srcDoc}
-        title={t('canvas.frameTitle')}
-        onLoad={postTheme}
-      />
-    </>
-  );
-});
+      </>
+    );
+  },
+);
 
 CanvasDocumentFrame.displayName = 'CanvasDocumentFrame';
 
-const CanvasProjectFrame = ({ canvasId, version }: { canvasId: string; version: number }) => {
+interface CanvasFrameProps {
+  canvasId: string;
+  path?: string;
+  version: number;
+}
+
+const CanvasProjectFrame = ({ canvasId, path, version }: CanvasFrameProps) => {
   const { data, error, isLoading, mutate } = useFetchCanvasProject(canvasId, version);
   return (
     <AsyncBoundary
@@ -151,14 +162,14 @@ const CanvasProjectFrame = ({ canvasId, version }: { canvasId: string; version: 
         void mutate();
       }}
     >
-      {data && <CanvasDocumentFrame project={data} />}
+      {data && <CanvasDocumentFrame path={path} project={data} />}
     </AsyncBoundary>
   );
 };
 
 // Project bytes belong to this mounted preview, rather than the application's long-lived SWR cache.
 const previewCache = { provider: () => new Map() };
-const CanvasFrame = (props: { canvasId: string; version: number }) => (
+const CanvasFrame = (props: CanvasFrameProps) => (
   <SWRConfig value={previewCache}>
     <CanvasProjectFrame {...props} />
   </SWRConfig>

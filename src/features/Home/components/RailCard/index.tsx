@@ -19,6 +19,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
     backdrop-filter: saturate(150%) blur(12px);
+
+    html[data-density='compact'] & {
+      padding-block: 10px;
+      border-radius: 12px;
+    }
   `,
   // The whole heading is the hit target, not just the chevron — a 14px glyph is
   // a poor thing to ask someone to aim at, and the label is already there.

@@ -43,6 +43,8 @@ export interface CodexRateLimitResetCredits {
 }
 
 export interface CodexQuotaSnapshot {
+  /** Credit balance reported by Codex, independent of rate-limit reset credits. */
+  credits?: { balance: string | null; unlimited: boolean };
   error: string | null;
   identity?: QuotaAccountIdentity | null;
   provider: 'codex';

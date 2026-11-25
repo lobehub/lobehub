@@ -12,13 +12,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useNavLayout', () => ({
   useNavLayout: () => ({
     bottomMenuItems: [
-      { icon: FileText, key: 'community', title: 'Community', url: '/community' },
+      { icon: FileText, key: 'community', title: 'Community', url: '/marketplace' },
       { icon: FileText, key: 'pages', title: 'Pages', url: '/page' },
     ],
     topNavItems: [
       { icon: SearchIcon, key: 'search', onClick: vi.fn(), title: 'Search' },
       { icon: HomeIcon, key: 'home', title: 'Home', url: '/' },
       { icon: ListTodo, key: 'tasks', title: 'Tasks', url: '/tasks' },
+      ...(mocks.workspaceSlug
+        ? [{ icon: Target, key: 'goals', title: 'Goals', url: '/goals' }]
+        : []),
       // `useNavLayout` hides projects while the lab is off.
       {
         hidden: !mocks.enableProjects,
@@ -27,8 +30,6 @@ vi.mock('@/hooks/useNavLayout', () => ({
         title: 'Projects',
         url: '/projects',
       },
-      // `useNavLayout` hides goals while the lab is off.
-      { hidden: true, icon: Target, key: 'goals', title: 'Goals', url: '/goals' },
     ],
   }),
 }));
@@ -60,7 +61,7 @@ describe('useFeatureNavItems', () => {
   it('adds the workspace settings entry inside a workspace', () => {
     mocks.workspaceSlug = 'acme';
 
-    expect(keysOf()).toEqual(['tasks', 'pages', 'settings']);
+    expect(keysOf()).toEqual(['tasks', 'goals', 'pages', 'settings']);
   });
 
   it('gives every item a destination the shortcut can navigate to', () => {

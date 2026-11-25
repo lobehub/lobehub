@@ -262,5 +262,124 @@ describe('WebBrowsingExecutionRuntime', () => {
         consoleError.mockRestore();
       }
     });
+
+    it('appends browser escalation guidance once for multiple retryable failures without mutating state', async () => {
+      const response = {
+        results: [
+          {
+            crawler: 'browserless',
+            data: {
+              content: 'Fail to crawl the page. Error type: TimeoutError, error message: timed out',
+              errorMessage: 'timed out',
+              errorType: 'TimeoutError',
+            },
+            originalUrl: 'https://blocked1.example.com',
+          },
+          {
+            crawler: 'browserless',
+            data: {
+              content: 'Fail to crawl the page. Error type: CrawlError, error message: 403',
+              errorMessage: '403',
+              errorType: 'CrawlError',
+            },
+            originalUrl: 'https://blocked2.example.com',
+          },
+        ],
+      };
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        searchService: { crawlPages: vi.fn().mockResolvedValue(response), webSearch: vi.fn() },
+      });
+
+      const result = await runtime.crawlMultiPages({
+        urls: ['https://blocked1.example.com', 'https://blocked2.example.com'],
+      });
+
+      expect(result.content.match(/<guidance>/g)).toHaveLength(1);
+      expect(result.content).toContain('activate the `agent-browser` skill');
+      // Portal UI reads raw `state.results[i].data.content` and must never see model guidance.
+      expect(response.results[0].data.content).not.toContain('agent-browser');
+      expect(response.results[1].data.content).not.toContain('agent-browser');
+    });
+
+    it('omits agent-browser guidance when canUseBrowserSkill is false', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: false,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'browserless',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: TimeoutError, error message: timeout',
+                  errorMessage: 'timeout',
+                  errorType: 'TimeoutError',
+                },
+                originalUrl: 'https://blocked.example.com',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://blocked.example.com'] });
+
+      expect(result.content).toContain('<guidance>');
+      expect(result.content).not.toContain('agent-browser');
+      expect(result.content).toContain('no browser fallback is available');
+    });
+
+    it('does not append escalation guidance for non-retryable 404 or non-existent domain DNS errors', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'naive',
+                data: {
+                  content: 'Dead link (HTTP 404)',
+                  errorMessage: 'Not Found',
+                  errorType: 'PageNotFoundError',
+                  retryable: false,
+                },
+                originalUrl: 'https://example.com/missing',
+              },
+              {
+                crawler: 'naive',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: NetworkConnectionError, error message: getaddrinfo ENOTFOUND nope.invalid',
+                  errorMessage: 'getaddrinfo ENOTFOUND nope.invalid',
+                  errorType: 'NetworkConnectionError',
+                },
+                originalUrl: 'https://nope.invalid/',
+              },
+              {
+                crawler: 'search1api',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: HTTPStatusError, error message: Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorMessage:
+                    'Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorType: 'HTTPStatusError',
+                },
+                originalUrl: 'https://www.nope.invalid/',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({
+        urls: ['https://example.com/missing', 'https://nope.invalid/'],
+      });
+
+      expect(result.content).not.toContain('<guidance>');
+      expect(result.content).not.toContain('agent-browser');
+    });
   });
 });

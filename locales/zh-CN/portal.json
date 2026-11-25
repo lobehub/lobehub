@@ -19,7 +19,7 @@
   "artifacts.deploy.outdated": "旧版本已上线",
   "artifacts.deploy.publish": "发布",
   "artifacts.deploy.publishNewVersion": "发布此版本",
-  "artifacts.deploy.quotaUnavailable": "暂时无法校验部署限额，请稍后重试。",
+  "artifacts.deploy.quotaUnavailable": "暂时无法校验部署额度，请稍后重试。",
   "artifacts.deploy.serviceOverloaded": "Artifact 托管服务当前繁忙，请稍后重新发布。",
   "artifacts.deploy.success": "已发布",
   "artifacts.deploy.writeInProgress": "另一个部署变更正在进行，请稍后重试。",

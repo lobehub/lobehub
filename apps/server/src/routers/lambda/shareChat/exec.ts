@@ -303,11 +303,7 @@ export const execRouter = router({
         // still be consumed as if the run started, opening a WebSocket for an
         // operation that never began.
         if (!result.success) {
-          throw toVisitorSafeStartupError(
-            'execAgent',
-            { message: result.error },
-            { showErrorDetails: share.shareConfig.showErrorDetails },
-          );
+          throw toVisitorSafeStartupError('execAgent', { message: result.error });
         }
 
         return result;
@@ -321,9 +317,7 @@ export const execRouter = router({
           });
         }
 
-        throw toVisitorSafeStartupError('execAgent', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('execAgent', error);
       }
     }),
 });

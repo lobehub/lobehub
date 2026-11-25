@@ -1,3 +1,5 @@
+import { getUnavailableBuiltinToolIds } from '@lobechat/builtin-tools';
+import { getBuiltinOverrides } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { createElement, Fragment } from 'react';
@@ -32,7 +34,8 @@ const mocks = vi.hoisted(() => ({
   lobehubEnabled: false,
   lobehubSkillServers: [] as LobehubSkillServer[],
   chatMode: false,
-  plugins: [] as { identifier: string; mode: string }[],
+  uninstalled: [] as string[],
+  plugins: [] as { builtinOverride?: true; identifier: string; mode: string }[],
   skills: [
     { id: 'market-row', identifier: 'excel-analysis', name: 'Excel Analysis', source: 'market' },
     { id: 'user-row', identifier: 'custom-writing', name: 'Custom Writing', source: 'user' },
@@ -91,6 +94,7 @@ vi.mock('@/store/tool', () => ({
       composioServers: mocks.composioServers,
       connectors: mocks.connectors,
       isConnectorsInit: true,
+      uninstalledBuiltinTools: mocks.uninstalled,
       lobehubSkillServers: mocks.lobehubSkillServers,
       useFetchAgentSkills: vi.fn(),
       useFetchLobehubSkillConnections: vi.fn(),
@@ -108,12 +112,12 @@ vi.mock('@/store/tool/selectors', () => ({
     installedBuiltinSkills: () => mocks.builtinSkills,
     // The real metadata inventory mixes tools and skill manifests.
     metaList: () => [
-      { identifier: 'builtin-tool', meta: { title: 'Builtin Tool' } },
+      { identifier: 'lobe-calculator', meta: { title: 'Builtin Tool' } },
       ...mocks.builtinSkills,
       ...mocks.skills,
     ],
     metaListIncludingHidden: () => [
-      { identifier: 'builtin-tool', meta: { title: 'Builtin Tool' } },
+      { identifier: 'lobe-calculator', meta: { title: 'Builtin Tool' } },
       ...mocks.builtinSkills,
       ...mocks.skills,
     ],
@@ -139,7 +143,7 @@ const leafKeys = (items: ItemType[]): string[] =>
     return [String(item.key)];
   });
 
-const toolIds = ['builtin-tool', 'community-mcp', 'custom-mcp'];
+const toolIds = ['lobe-calculator', 'community-mcp', 'custom-mcp'];
 const libraryIds = [
   'excel-analysis',
   'custom-writing',
@@ -159,6 +163,7 @@ describe('chat input tool picker', () => {
     mocks.lobehubEnabled = false;
     mocks.lobehubSkillServers = [];
     mocks.plugins = [];
+    mocks.uninstalled = [];
     mocks.chatMode = false;
   });
 
@@ -166,7 +171,7 @@ describe('chat input tool picker', () => {
 
   it.each([
     { id: 'gmail', pin: false },
-    { id: 'builtin-tool', pin: false },
+    { id: 'lobe-calculator', pin: false },
   ])('offers the applicable activation actions on the $id row', async ({ id, pin }) => {
     mocks.composioEnabled = true;
     mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
@@ -181,8 +186,8 @@ describe('chat input tool picker', () => {
     render(createElement(Row));
     fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
 
-    expect(await screen.findByRole('button', { name: 'tools.loading.onDemand' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'tools.loading.never' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'tools.status.enabled' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.status.disabled' })).toBeTruthy();
     expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
   });
 
@@ -193,26 +198,65 @@ describe('chat input tool picker', () => {
     expect(leafKeys(result.current.marketItems)).not.toContain('lobe-skills');
   });
 
+  it('keeps an uninstalled calculator selectable and re-enables it for just the edited agent', async () => {
+    const id = 'lobe-calculator';
+    const previous = [{ identifier: id, mode: 'auto' as const }];
+    mocks.plugins = previous;
+    mocks.uninstalled = [id];
+    const { result, rerender } = renderHook(() => useControls());
+    const option = () => result.current.toolOptions.find((row) => row.id === id);
+    expect(option()?.enabled).toBe(false);
+
+    await act(() => result.current.setPolicy(id, 'auto'));
+    const { plugins } = mocks.updateConfig.mock.lastCall![0];
+    mocks.plugins = plugins;
+    rerender();
+    expect(option()?.enabled).toBe(true);
+    for (const toolMode of ['agent', 'chat'] as const) {
+      expect(
+        getUnavailableBuiltinToolIds([id], { toolMode }, [id], getBuiltinOverrides(plugins)),
+      ).not.toContain(id);
+      expect(
+        getUnavailableBuiltinToolIds([id], { toolMode }, [id], getBuiltinOverrides(previous)),
+      ).toContain(id);
+    }
+    await act(() => result.current.setPolicy(id, 'disabled'));
+    mocks.plugins = mocks.updateConfig.mock.lastCall![0].plugins;
+    rerender();
+    expect(option()?.enabled).toBe(false);
+  });
+
   it.each(['lobe-image-generation', 'lobe-video-generation'])(
-    're-enables %s as a pin in either mode, so a later switch to Chat keeps it callable',
+    're-enables %s as mode auto with builtinOverride in either mode',
     async (id) => {
       mocks.plugins = [{ identifier: id, mode: 'disabled' }];
       const { result } = renderHook(() => useControls());
 
-      // Agent mode: Chat requires a pin, and switching modes does not rewrite plugins.
       mocks.chatMode = false;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'auto' }],
       });
 
       mocks.chatMode = true;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'auto' }],
       });
     },
   );
+
+  it('writes an explicit auto entry when re-enabling a connector in agent mode', async () => {
+    mocks.composioEnabled = true;
+    mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
+    mocks.plugins = [{ identifier: 'gmail', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls());
+
+    await act(() => result.current.setPolicy('gmail', 'auto'));
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith({
+      plugins: [{ identifier: 'gmail', mode: 'auto' }],
+    });
+  });
 
   it('only shows connectors with connection records and keeps rows needing authorization', () => {
     mocks.composioEnabled = true;
@@ -253,8 +297,8 @@ describe('chat input tool picker', () => {
     for (const identifier of ['google-drive', 'notion', 'twitter'])
       expect(keys).not.toContain(identifier);
 
-    act(() => result.current.marketHeader.props.onSearchChange('builtin-tool'));
-    expect(leafKeys(result.current.marketItems)).toEqual(['builtin-tool']);
+    act(() => result.current.marketHeader.props.onSearchChange('lobe-calculator'));
+    expect(leafKeys(result.current.marketItems)).toEqual(['lobe-calculator']);
     act(() => result.current.marketHeader.props.onSearchChange(''));
     expect(leafKeys(result.current.marketItems)).toContain('slack');
     act(() => result.current.marketHeader.props.onSearchChange('Google Drive'));
@@ -317,7 +361,6 @@ describe('chat input tool picker', () => {
   it('derives the profile summary from the same unfiltered options as chat', () => {
     const { result } = renderHook(() => useControls());
     const active = leafKeys(result.current.marketItems);
-    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
     act(() => result.current.marketHeader.props.onFilterChange('disabled'));
     const disabled = leafKeys(result.current.marketItems);
     expect(disabled).toContain('lobe-web-browsing');
@@ -329,7 +372,9 @@ describe('chat input tool picker', () => {
     );
     expect(result.current.totalCount).toBe(active.length + disabled.length);
     act(() => result.current.marketHeader.props.onSearchChange('no such tool'));
-    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
+    expect(
+      result.current.toolOptions.filter((tool) => tool.enabled).map((tool) => tool.id),
+    ).toEqual(active);
   });
 
   it('offers only tool management in the footer, without an add-tools action', () => {
@@ -389,4 +434,27 @@ describe('chat input tool picker', () => {
       expect(leafKeys(result.current.marketItems)).toEqual([]);
     },
   );
+
+  it('hides the status filter, row controls, and extra tags and groups enabled tools by category when enabledOnly is true', () => {
+    mocks.plugins = [{ identifier: 'alpha', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls({ enabledOnly: true }));
+
+    expect(result.current.marketHeader.props.showFilter).toBe(false);
+    expect(leafKeys(result.current.marketItems)).not.toContain('alpha');
+    expect(leafKeys(result.current.marketItems)).not.toContain('lobe-web-browsing');
+    expect(result.current.enabledSections.map((section) => section.key)).toEqual([
+      'builtin',
+      'community',
+      'custom',
+    ]);
+    const firstRow = result.current.enabledSections[0].items[0] as {
+      label?: { props?: Record<string, unknown> };
+    };
+    expect(firstRow.label?.props?.trailing).toBeUndefined();
+    expect(firstRow.label?.props?.onContextMenu).toBeUndefined();
+
+    act(() => result.current.marketHeader.props.onSearchChange('alpha'));
+    expect(result.current.marketItems).toEqual([]);
+    expect(result.current.enabledSections).toEqual([]);
+  });
 });

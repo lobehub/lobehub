@@ -1,20 +1,26 @@
 // @vitest-environment node
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { openChannelReply } from './replyOpening';
 
 const {
+  admitsVisitor,
   checkSpend,
+  countMessagesBySender,
   execAgent,
   executions,
   findOperation,
   findShare,
   getScopedOnlineDevices,
+  recordShareRunResult,
   resolveChannelAttachments,
   serviceOptions,
 } = vi.hoisted(() => ({
   checkSpend: vi.fn(),
+  countMessagesBySender: vi.fn(),
   getScopedOnlineDevices: vi.fn(),
   execAgent: vi.fn(),
   executions: {
@@ -31,8 +37,13 @@ const {
     recentContext: vi.fn(),
     retireReservation: vi.fn(),
   },
+  // The grant lookup itself is the model's test; here a live share admits the requester.
+  admitsVisitor: vi.fn(async (_db: unknown, share: { visibility: string }) =>
+    ['card', 'link'].includes(share.visibility),
+  ),
   findOperation: vi.fn(),
   findShare: vi.fn(),
+  recordShareRunResult: vi.fn(),
   resolveChannelAttachments: vi.fn(),
   serviceOptions: [] as Array<{ options: unknown; userId: string }>,
 }));
@@ -43,10 +54,17 @@ vi.mock('@/database/repositories/channel', () => ({
     }
   },
 }));
-vi.mock('@/database/models/agentShare', () => ({ AgentShareModel: { findByShareId: findShare } }));
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: { admitsVisitor, findByShareId: findShare },
+}));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: class {
     findById = findOperation;
+  },
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    countMessagesBySender = countMessagesBySender;
   },
 }));
 vi.mock('@/business/server/agent-share/spendGate', () => ({
@@ -60,6 +78,7 @@ vi.mock('@/server/services/aiAgent', () => ({
     }
   },
 }));
+vi.mock('@/server/services/aiAgent/shareGate/runMetrics', () => ({ recordShareRunResult }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultAgentConfig: () => ({}) }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: {} }));
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({ getScopedOnlineDevices }));
@@ -79,7 +98,7 @@ const share = { ownerId: 'owner', shareId: 'share-1', workspaceId: 'owner-ws' };
 const liveShare = {
   agentId: 'agt_shared',
   ownerId: 'owner',
-  shareConfig: { monthlySpendLimit: 5, toolGrants: [] },
+  shareConfig: { maxMessagesPerVisitor: 2, monthlySpendLimit: 5, toolGrants: [] },
   shareId: 'share-1',
   visibility: 'link',
   workspaceId: 'owner-ws',
@@ -127,6 +146,7 @@ describe('dispatching a contact’s shared Agent', () => {
     execAgent.mockResolvedValue({ success: true });
     findShare.mockResolvedValue(liveShare);
     checkSpend.mockResolvedValue({ allowed: true });
+    countMessagesBySender.mockResolvedValue(1);
     findOperation.mockResolvedValue({ status: 'idle' });
     executions.claim.mockResolvedValue({
       job: {
@@ -187,10 +207,29 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(params.shareGate).toBeDefined();
   });
 
+  it('runs a card-only share for a requester its owner granted it to', async () => {
+    findShare.mockResolvedValue({ ...liveShare, visibility: 'card' });
+    await coordinator().advance('channel');
+
+    expect(admitsVisitor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ visibility: 'card' }),
+      expect.any(String),
+    );
+    expect(execAgent).toHaveBeenCalled();
+  });
+
   it.each([
     [
       'the share was paused',
       () => findShare.mockResolvedValue({ ...liveShare, visibility: 'private' }),
+    ],
+    [
+      'a card-only share no longer admits the requester',
+      () => {
+        findShare.mockResolvedValue({ ...liveShare, visibility: 'card' });
+        admitsVisitor.mockResolvedValueOnce(false);
+      },
     ],
     [
       'the share moved to another owner',
@@ -220,6 +259,81 @@ describe('dispatching a contact’s shared Agent', () => {
     });
   });
 
+  // A refusal before the run starts never reaches the runtime's completion, so the share's
+  // failure dashboard missed every limit refusal (trigger stays `channel` on these rows).
+  it('counts a refused reply as a share admission refusal by its type', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue('error');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      errorType: 'ShareSpendLimitExceeded',
+      outcome: 'refused',
+      stage: 'admission',
+    });
+  });
+
+  it('counts an untyped dispatch failure as an admission error', async () => {
+    findShare.mockResolvedValue({ ...liveShare, ownerId: 'x' });
+    executions.retireReservation.mockResolvedValue('error');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      errorType: undefined,
+      outcome: 'error',
+      stage: 'admission',
+    });
+  });
+
+  it('counts nothing at dispatch for a run that started', async () => {
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).not.toHaveBeenCalled();
+  });
+
+  it('counts a reply its requester cancelled before the run as interrupted, not a failure', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue('interrupted');
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).toHaveBeenCalledExactlyOnceWith({
+      outcome: 'interrupted',
+      stage: 'admission',
+    });
+  });
+
+  // The visitor pressed Stop after the reply was reserved but before its run started.
+  it.each([
+    [{ share }, 1],
+    [{ runtime: 'native' }, 0],
+  ])('counts a reply stopped before its run started (%o)', async (config, calls) => {
+    executions.retireReservation.mockResolvedValue('interrupted');
+    const row = { config, operation: { userId: 'owner' } };
+    const query = Object.assign(Promise.resolve([row]), {
+      from: () => query,
+      innerJoin: () => query,
+      where: () => query,
+    });
+    await new ChannelCoordinator({ select: () => query } as never).stopWriters([
+      { channelId: 'channel', id: 'job', operationId: 'op' },
+    ]);
+
+    expect(recordShareRunResult).toHaveBeenCalledTimes(calls);
+    if (calls)
+      expect(recordShareRunResult).toHaveBeenCalledWith({
+        outcome: 'interrupted',
+        stage: 'admission',
+      });
+  });
+
+  it('counts nothing when another worker already settled the reservation', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    executions.retireReservation.mockResolvedValue(false);
+    await coordinator().advance('channel');
+
+    expect(recordShareRunResult).not.toHaveBeenCalled();
+  });
+
   // A shared Claude Code / Codex Agent's run stops at the share gate when the share grants the
   // visitor no device, or the owner's device is offline; the visitor must learn which.
   it.each(['ShareHeterogeneousAgentUnsupported', 'ShareHeteroDeviceUnavailable'])(
@@ -229,13 +343,57 @@ describe('dispatching a contact’s shared Agent', () => {
       await coordinator().advance('channel');
 
       expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
-        message: type,
+        message: expect.not.stringContaining(type),
         type,
       });
     },
   );
+
+  // Sending no longer refuses for a share's limits: the reply fails here, so the visitor's message
+  // stays and its failure explains the limit after a reload.
+  it('refuses a prompt beyond the share’s length cap before submission', async () => {
+    executions.input.mockResolvedValue([
+      { content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), id: 'message' },
+    ]);
+    await coordinator().advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
+      type: 'SharePromptTooLong',
+    });
+  });
+
+  // The quoted message rides in the input beside the request, but only the request is the prompt.
+  it('admits a short request quoting a message beyond the length cap', async () => {
+    const author = { id: 'visitor', name: 'Visitor', type: 'user' };
+    executions.input.mockResolvedValue([
+      { author, content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), id: 'quoted' },
+      { author, content: 'Summarize this', id: 'message' },
+    ]);
+    await coordinator().advance('channel');
+
+    expect(execAgent).toHaveBeenCalledOnce();
+    expect(executions.retireReservation).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the visitor sent maxMessagesPerVisitor, counted as the owner', async () => {
+    countMessagesBySender.mockResolvedValue(2);
+    await coordinator().advance('channel');
+
+    expect(countMessagesBySender).toHaveBeenCalledWith({
+      agentId: 'agt_shared',
+      senderId: 'visitor',
+    });
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(checkSpend).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'You have sent all the messages this shared Agent allows',
+      type: 'ShareMessageLimitExceeded',
+    });
+  });
   // A visitor past the owner's message cap is refused by the atomic turn guard inside execAgent
-  // (the admission pre-check can race it); the receipt must still say why.
+  // (the gate's count can race it); the receipt must still say why, as readable text.
   it('records the message-limit refusal raised by the turn guard', async () => {
     execAgent.mockRejectedValue(
       new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' }),
@@ -243,8 +401,88 @@ describe('dispatching a contact’s shared Agent', () => {
     await coordinator().advance('channel');
 
     expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
-      message: 'ShareMessageLimitExceeded',
+      message: 'You have sent all the messages this shared Agent allows',
       type: 'ShareMessageLimitExceeded',
     });
+  });
+});
+
+// A visitor DMing someone's link-shared Claude Code Agent without its device grant used to get
+// an opening ("I'll help you…") and then a "could not start" card offering a retry that could
+// never succeed: the share admitted the request and only the run's own gate refused it.
+describe('a shared local CLI Agent whose share does not grant the visitor its device', () => {
+  const cliShare = {
+    ...liveShare,
+    agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+    shareConfig: { ...liveShare.shareConfig, deviceAccess: 'allowlist', deviceAllowUserIds: [] },
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    getScopedOnlineDevices.mockResolvedValue([]);
+    executions.input.mockResolvedValue([]);
+    executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
+    executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
+    executions.openingReply.mockResolvedValue(undefined);
+    executions.heartbeat.mockResolvedValue(true);
+    findShare.mockResolvedValue(cliShare);
+    admitsVisitor.mockResolvedValue(true);
+    checkSpend.mockResolvedValue({ allowed: true });
+    countMessagesBySender.mockResolvedValue(0);
+    findOperation.mockResolvedValue({ status: 'idle' });
+    executions.claim.mockResolvedValue({
+      job: {
+        channelId: 'channel',
+        executionConfig: { runtime: 'claude-code', share },
+        id: 'job',
+        leaseOwner: 'dispatcher',
+        manifest: {
+          cutoffSequence: 1,
+          requestMessageId: 'message',
+          requesterMemberId: 'visitor-member',
+          self: { agentId: 'agt_shared', memberId: 'member', name: 'LobeVideo' },
+          threadId: null,
+          threadRootSequence: null,
+        },
+        operationId: 'op',
+      },
+      member: { agentId: 'agt_shared' },
+      topic: { id: 'topic', senderId: 'visitor', userId: 'owner' },
+    });
+  });
+
+  it('refuses the request at admission, so no opening acknowledges it', async () => {
+    await coordinator().advance('channel');
+
+    const deps = vi.mocked(openChannelReply).mock.calls[0][3]!;
+    await expect(
+      deps.admitShare!({
+        agent: { id: 'agt_shared', name: 'LobeVideo', title: null },
+        request: { content: 'Make a video' },
+        requesterUserId: 'visitor',
+        share,
+      } as never),
+    ).resolves.toBe(false);
+  });
+
+  it('fails the reply as a missing grant the visitor can ask the owner for, never running it', async () => {
+    await coordinator().advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'This shared Agent cannot run for visitors in its current setup',
+      type: 'ShareHeterogeneousAgentUnsupported',
+    });
+  });
+
+  it('runs on the owner’s device once the share grants it', async () => {
+    findShare.mockResolvedValue({
+      ...cliShare,
+      shareConfig: { ...cliShare.shareConfig, deviceAccess: 'everyone' },
+    });
+    await coordinator().advance('channel');
+
+    expect(execAgent.mock.calls[0][0].shareGate).toMatchObject({ canUseDevice: true });
   });
 });

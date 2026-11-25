@@ -1,4 +1,4 @@
-import type { ChannelMessageMetadata } from '@lobechat/types';
+import type { ChannelMessageKind, ChannelMessageMetadata } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -12,7 +12,11 @@ export interface ChannelAgentPostInput {
   /** The Agent that wrote it; must be an active member of the Channel. */
   agentId: string;
   content: string;
+  /** What the message is; its payload goes in `metadata.<kind>`. Default `text`. */
+  kind?: ChannelMessageKind;
   metadata?: ChannelMessageMetadata;
+  /** The message it answers, e.g. the request a run's question card belongs to. */
+  replyToId?: string;
   /** Identity of what produced the post (e.g. the run). Posting it again returns the stored one. */
   requestKey: string;
   /** The Thread to post in; one that is gone or closed falls back to the main timeline. */
@@ -64,7 +68,9 @@ export const postAgentMessage = async (
     agentId: input.agentId,
     channelId,
     content: input.content,
+    ...(input.kind && { kind: input.kind }),
     metadata: input.metadata ?? {},
+    ...(input.replyToId && { replyToId: input.replyToId }),
     requestKey: input.requestKey,
     routingStatus: 'reply',
     threadId: thread?.status === 'archived' ? null : (thread?.id ?? null),

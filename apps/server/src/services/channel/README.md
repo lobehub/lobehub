@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -145,8 +145,28 @@ select that member. Explicit mentions cannot overtake those decisions; unrelated
 and other Channels remain independent. A failed, skipped or stopped decision releases the wait.
 `channel.retryRouting({ channelId, messageId })` lets the author/admin retry an unassigned message;
 sending a new message with an explicit mention remains available.
-`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue a reply that failed
-because its device could not be reached; it waits for the device like any queued reply.
+`channel.retryJob({ channelId, jobId })` lets the requester/admin run a failed reply again from
+the start; it waits for its device like any queued reply. `channel.resumeJob({ channelId, jobId })`
+runs it again in the topic it stopped in, so a CLI Agent resumes its session
+(`topic.metadata.heteroSessionId`); the run gets the request with a short continuation block
+(`channel_resume`) instead of the full context.
+
+A reply that fails for a system reason (error, interruption, the inactivity watchdog, a
+dispatch or device failure, a run that ended without text) gets a card in the Agent's reply slot,
+not a job-level note only. `reportChannelReplyFailure` (`replyError/`) posts a rule-based card per
+failure kind right away, in the requester's language, then lets the deployment's mini model
+(`channel_reply_error` tracing scenario, 10 s budget) rewrite the sentence and order the allowed
+actions in place. A shared Agent's card keeps the visitor-safe error projection and gets no model
+rewrite. A stop through the Channel cancels the job and writes no card. The job's own
+`errorMessage` / `errorType` / `deviceId` stay in the detail view for older clients.
+
+Each member answers a branch in message order, but not one run per message: when a job is
+claimed, the same person's owed answers queued right behind it from that member in that branch
+are merged into the run (`claim.ts`, `merge.ts`). The manifest's cutoff and `requestMessageId`
+move to the newest of them and `requestMessageIds` lists them all; their jobs settle as `merged`,
+and only the first opens a reply. Merging stops at someone else's request, a `followup` wake, a
+relay or brought-back answer, or a message whose routing is still undecided, and never applies
+to a shared Agent, whose visitors are metered per request. Retrying the run re-queues them.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive
@@ -269,8 +289,7 @@ chosen Agents (`ChannelMessagingService`).
 
 "Let Alice know when you are done" is a message to a person, not a request for an Agent.
 `lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
-the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
-and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
+the run's scope (`AddressBook.listPeople`, a business slot that lists nobody by default). `lobe-channel.messagePerson` (`lh channel dm`)
 posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
 first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
 

@@ -118,6 +118,7 @@ import {
   hasNonActionContent,
   injectReferTopicNode,
   mergeLocalFileReferences,
+  parseGatewaySkillIdsFromEditorData,
   parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
@@ -338,6 +339,7 @@ export class ConversationLifecycleActionImpl {
     const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
+    const selectedSkillIds = parseGatewaySkillIdsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
     if (
       isGoalPrompt(message) &&
@@ -685,7 +687,7 @@ export class ConversationLifecycleActionImpl {
             mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
             message,
             pageSelections,
-            selectedSkillIds: selectedSkills.map((skill) => skill.identifier),
+            selectedSkillIds,
             selectedToolIds: selectedTools.map((tool) => tool.identifier),
             trigger: requestTrigger,
           }),
@@ -1241,7 +1243,7 @@ export class ConversationLifecycleActionImpl {
           fileIds: fileIdList,
           mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
           prompt: message,
-          selectedSkillIds: selectedSkills.map(({ identifier }) => identifier),
+          selectedSkillIds,
           selectedToolIds: selectedTools.map(({ identifier }) => identifier),
           topicId: mintedTopicId ?? generateEntityId('topics'),
           userInterventionConfig: resolveUserInterventionConfig(),
@@ -1645,10 +1647,8 @@ export class ConversationLifecycleActionImpl {
           // selection (only the client runtime did). Omit when empty.
           selectedToolIds:
             selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
-          // Forward selected skills so the server injects their bodies, as the
-          // client runtime does by persisting them into the message content.
-          selectedSkillIds:
-            selectedSkills.length > 0 ? selectedSkills.map((skill) => skill.identifier) : undefined,
+          // Forward both library and filesystem skill selections to the server.
+          selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
           // Forward @-mentioned agents so the server supervisor can delegate to
           // them (multi-mention). Mirrors the client runtime's `initialContext`
           // injection: the server enables the callAgent tool and injects the

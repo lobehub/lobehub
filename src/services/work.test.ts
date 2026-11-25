@@ -136,7 +136,7 @@ describe('workService.refreshConversationViews', () => {
     expect(typeof versionMatcher).toBe('function');
     expect(versionMatcher(workKeys.versions('w1'))).toBe(true);
     expect(versionMatcher(workKeys.conversation('t1', 'th1'))).toBe(false);
-    // The topic's linked pull requests (Better Coding Experience) ride the same scan.
+    // The topic's linked pull requests ride the same scan.
     const prMatcher = mutate.mock.calls[2][0] as (key: unknown) => boolean;
     expect(prMatcher(topicPullRequestsSync('t1'))).toBe(true);
     expect(prMatcher(topicPullRequestsSync('t2'))).toBe(false);

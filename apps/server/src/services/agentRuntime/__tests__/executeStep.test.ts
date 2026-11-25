@@ -558,7 +558,7 @@ describe('AgentRuntimeService.executeStep - durable Review lifecycle retry', () 
       runtime: { step: runtimeStep },
     });
     vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
-    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue({});
     const notifyPendingReview = vi
       .spyOn(completionLifecycle as any, 'notifyPendingAgentIntervention')
       .mockRejectedValueOnce(

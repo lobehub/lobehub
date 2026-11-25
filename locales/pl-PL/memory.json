@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Materiał jest długi; odczytano tylko jego początek.",
   "rules.distill.untitled": "Bez tytułu",
   "rules.distill.upload": "Prześlij plik",
-  "rules.distill.uploadFailed": "Nie udało się przesłać pliku.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint lub zwykły tekst",
   "rules.enforcement.block": "Blokuj",
   "rules.enforcement.blockDesc": "Wstrzyma dostawę, dopóki jej nie przepuścisz. Jeszcze nie działa: na razie tylko przypomina",

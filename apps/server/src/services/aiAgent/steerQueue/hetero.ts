@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata, ChatImageItem, FollowUpMode } from '@lobechat/types';
+import type { AgentSenderMetadata, ChatImageItem } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
@@ -43,7 +43,7 @@ export interface HeteroSteerDelivery {
   drainId: string;
   editorData?: unknown;
   entryId: string;
-  /** Every follow-up merged into this delivery, when there were several (Steer mode). */
+  /** Every follow-up merged into this delivery, when there were several. */
   entryIds?: string[];
   fileIds?: string[];
   groupId?: string;
@@ -136,9 +136,8 @@ const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) 
  * attachment, a tool selection…) stops the take, and it and everything behind
  * it wait for the run to end.
  *
- * In Steer mode (`mode: 'steer'`) every leading follow-up that can join, from
- * one author, goes as one merged message; otherwise one goes per delivery.
- * Either way the agent reads it when it is ready (Claude Code: at its next
+ * Every leading follow-up that can join, from one author, goes as one merged
+ * message. The agent reads it when it is ready (Claude Code: at its next
  * tool boundary), so a running tool is never cut short.
  *
  * Images pasted into the body go along as `imageList` when the session takes
@@ -154,13 +153,11 @@ export const takeHeteroSteer = async (
     acceptsImageAttachments?: boolean;
     acceptsImages?: boolean;
     agentId: string | null;
-    mode?: FollowUpMode;
     operationId: string;
     scope: SteerQueueScope;
   },
 ): Promise<HeteroSteerMessage | undefined> => {
   const { acceptsImageAttachments, acceptsImages, agentId, operationId, scope } = params;
-  const merging = params.mode === 'steer';
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
   if (drained.entries.length === 0) return;
@@ -191,7 +188,7 @@ export const takeHeteroSteer = async (
     fitsSession(entry, acceptsImages);
   const firstHeld = drained.entries.findIndex((entry) => !canGo(entry));
   const ready = firstHeld === -1 ? drained.entries : drained.entries.slice(0, firstHeld);
-  const candidates = merging ? takeSameSenderFollowUps(ready).taken : ready.slice(0, 1);
+  const candidates = takeSameSenderFollowUps(ready).taken;
 
   // Resolve only the files this poll could deliver. The metadata lookup checks
   // file ownership without parsing documents that must wait for another turn.
@@ -236,12 +233,7 @@ export const takeHeteroSteer = async (
     }
   }
   const rest = drained.entries.filter((entry) => !joining.includes(entry));
-  await returnFollowUps(
-    scope,
-    drained,
-    rest,
-    merging ? 'waits for the next join' : 'delivered one at a time',
-  );
+  await returnFollowUps(scope, drained, rest, 'waits for the next join');
 
   const messageId = queuedUserMessageId(ctx.userId, joining, request);
 

@@ -4,6 +4,7 @@ import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import { AgentMigrationBadge, useAgentTransferJob } from '@/features/AgentTransferMigration';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import NavHeader from '@/features/NavHeader';
@@ -147,6 +148,8 @@ const Header = memo(() => {
   // the rest of the migration UI, so this adds no extra polling.
   const { data: transferJob } = useAgentTransferJob({ agentId });
 
+  const avatarActivity = useAgentAvatarActivity(splitView ? agentId : undefined);
+
   return (
     <div className={headerStyles.container}>
       <NavHeader
@@ -160,6 +163,8 @@ const Header = memo(() => {
           >
             {splitView && agentMeta && (
               <AgentAvatar
+                {...avatarActivity.avatar}
+                {...avatarActivity.hover}
                 agentId={agentId}
                 alt={agentMeta.title}
                 avatar={agentMeta.avatar}

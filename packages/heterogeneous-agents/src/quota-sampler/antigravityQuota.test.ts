@@ -1,6 +1,6 @@
 import * as childProcess from 'node:child_process';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchAntigravityQuota, parseAntigravityQuota } from './antigravityQuota';
 
@@ -35,6 +35,20 @@ const respond = (stdout: string, error: Error | null = null) =>
 
 describe('Antigravity quota sampler', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('uses the same local authentication environment when probing service quota', async () => {
+    vi.stubEnv('LOBEHUB_CONNECT_SERVICE', '1');
+    vi.stubEnv('SSH_TTY', '/dev/pts/1');
+    vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus');
+    respond(JSON.stringify(envelope()));
+
+    await expect(fetchAntigravityQuota()).resolves.toMatchObject({ status: 'ok' });
+
+    const subprocessEnv = vi.mocked(childProcess.execFile).mock.calls[0][2]?.env;
+    expect(subprocessEnv).not.toHaveProperty('SSH_TTY');
+    expect(subprocessEnv?.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/run/user/1000/bus');
+  });
 
   it('preserves native groups and bucket ids without rolling expired readings to full', () => {
     expect(parseAntigravityQuota(envelope([bucket]))).toEqual([
@@ -118,6 +132,10 @@ describe('Antigravity quota sampler', () => {
     [Object.assign(new Error('missing'), { code: 'ENOENT' }), 'cli_not_found'],
     [Object.assign(new Error('timeout'), { killed: true }), 'timeout'],
     [Object.assign(new Error('failed'), { stderr: 'authentication required' }), 'auth_required'],
+    [
+      Object.assign(new Error('killed'), { killed: true, stderr: 'Authentication required.' }),
+      'auth_required',
+    ],
   ])('classifies process failures without exposing raw stderr', async (error, code) => {
     respond('', error);
     expect(await fetchAntigravityQuota()).toMatchObject({ errorCode: code, groups: [] });

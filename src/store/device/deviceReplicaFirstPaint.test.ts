@@ -2,8 +2,8 @@
  * @vitest-environment happy-dom
  *
  * Device reads that used to live only in SWR's memory cache — the base-ref
- * pickers' remote branches, the Ports row's tunnel links and listening ports,
- * and a topic's linked-PR refresh — are replicas: after a reload they paint the
+ * pickers' remote branches, and the Ports row's tunnel links and listening
+ * ports — are replicas: after a reload they paint the
  * persisted copy before the device answers, and the answer replaces it.
  */
 import { randomUUID } from 'node:crypto';
@@ -19,10 +19,8 @@ import { AppIndexedDBStorage, cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { deviceService } from '@/services/device';
 import { gitService } from '@/services/git';
-import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
 
-import { useFetchGitLinkedPR, useGitRemoteBranches } from './gitHooks';
+import { useGitRemoteBranches } from './gitHooks';
 import { useFetchDeviceListeningPorts, useFetchDeviceTunnels } from './tunnelHooks';
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -32,7 +30,6 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 
 vi.mock('@/services/git', () => ({
   gitService: {
-    getLinkedPullRequest: vi.fn(),
     listGitRemoteBranches: vi.fn(),
   },
 }));
@@ -192,106 +189,5 @@ describe('device replicas paint from storage first', () => {
     answer({ ports: [port(3000)], supported: true });
     await waitFor(() => expect(result.current.data?.ports.map((p) => p.port)).toEqual([3000]));
     expect((result.current as { isConfirmed?: boolean }).isConfirmed).toBe(true);
-  });
-
-  // Review P2: a topic hook that mounts after the composer already fetched the
-  // shared row (e.g. hovering a background topic) gets no new response inside
-  // the dedupe window; it must still write the confirmed PR back to the topic.
-  it('writes a PR the composer already confirmed back to a topic that mounts later', async () => {
-    vi.mocked(gitService.getLinkedPullRequest).mockResolvedValue({
-      ghMissing: false,
-      pullRequest: { number: 9, state: 'open', title: 'feat', url: 'https://x/9' } as any,
-      pullRequestStatus: 'ok',
-    });
-    useChatStore.setState({ activeAgentId: 'agent-1' });
-    const metadata = {
-      workingDirectory: CWD,
-      workingDirectoryConfig: { git: { branch: 'feat/late' }, path: CWD, repoType: 'github' },
-    } as any;
-    const update = vi.fn().mockResolvedValue(undefined);
-    useChatStore.setState({ internal_updateTopicLinkedPullRequest: update } as any);
-
-    const { result, rerender } = renderHook(
-      ({ withTopic }: { withTopic: boolean }) => {
-        useChatStore
-          .getState()
-          .useFetchTopicLinkedPullRequest(withTopic ? 'topic-late' : undefined, metadata);
-        return useFetchGitLinkedPR(undefined, CWD, 'feat/late', true);
-      },
-      { initialProps: { withTopic: false }, wrapper },
-    );
-    await waitFor(() => expect(result.current.data?.pullRequest?.number).toBe(9));
-    expect(update).not.toHaveBeenCalled();
-
-    rerender({ withTopic: true });
-
-    await waitFor(() => expect(update).toHaveBeenCalled());
-    expect(update.mock.calls[0][0]).toMatchObject({ branch: 'feat/late', topicId: 'topic-late' });
-    expect(update.mock.calls[0][1]).toMatchObject({ pullRequest: { number: 9 } });
-    expect(gitService.getLinkedPullRequest).toHaveBeenCalledTimes(1);
-  });
-
-  // Regression: the topic refresh and the composer's lookup used the same SWR
-  // key with different fetchers and value shapes, so whichever ran first owned
-  // the cache — and each still sent its own `gh pr list`.
-  it('shares one linked-PR read between a topic refresh and the composer', async () => {
-    vi.mocked(gitService.getLinkedPullRequest).mockResolvedValue({
-      ghMissing: false,
-      pullRequest: { number: 7, state: 'open', title: 'feat', url: 'https://x/7' } as any,
-      pullRequestStatus: 'ok',
-    });
-    useChatStore.setState({ activeAgentId: 'agent-1' });
-    const metadata = {
-      workingDirectory: CWD,
-      workingDirectoryConfig: { git: { branch: 'feat/x' }, path: CWD, repoType: 'github' },
-    } as any;
-    const update = vi
-      .spyOn(useChatStore.getState(), 'internal_updateTopicLinkedPullRequest')
-      .mockResolvedValue();
-    useChatStore.setState({ internal_updateTopicLinkedPullRequest: update } as any);
-
-    const { result } = renderHook(
-      () => {
-        useChatStore.getState().useFetchTopicLinkedPullRequest('topic-1', metadata);
-        return useFetchGitLinkedPR(undefined, CWD, 'feat/x', true);
-      },
-      { wrapper },
-    );
-
-    await waitFor(() => expect(result.current.data?.pullRequest?.number).toBe(7));
-    await waitFor(() => expect(update).toHaveBeenCalled());
-    expect(update.mock.calls[0][1]).toMatchObject({ pullRequest: { number: 7 } });
-    expect(gitService.getLinkedPullRequest).toHaveBeenCalledTimes(1);
-  });
-
-  it('neither refreshes nor writes back the branch-guessed PR under Better Coding Experience', async () => {
-    const preference = useUserStore.getState().preference;
-    useUserStore.setState({
-      preference: { ...preference, lab: { ...preference.lab, enableBetterCodingExperience: true } },
-    });
-    const metadata = {
-      workingDirectory: CWD,
-      workingDirectoryConfig: { git: { branch: 'feat/x' }, path: CWD, repoType: 'github' },
-    } as any;
-    const update = vi.fn().mockResolvedValue(undefined);
-    useChatStore.setState({
-      activeAgentId: 'agent-1',
-      internal_updateTopicLinkedPullRequest: update,
-    } as any);
-
-    try {
-      renderHook(
-        () => useChatStore.getState().useFetchTopicLinkedPullRequest('topic-1', metadata),
-        {
-          wrapper,
-        },
-      );
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      expect(gitService.getLinkedPullRequest).not.toHaveBeenCalled();
-      expect(update).not.toHaveBeenCalled();
-    } finally {
-      useUserStore.setState({ preference });
-    }
   });
 });

@@ -223,6 +223,7 @@ describe('connect command', () => {
   let signalListeners: Map<NodeJS.Signals, Set<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
+    vi.stubEnv('LOBEHUB_CONNECT_SERVICE', undefined);
     signalListeners = new Map(
       (['SIGINT', 'SIGTERM'] as const).map((signal) => [
         signal,
@@ -246,6 +247,7 @@ describe('connect command', () => {
       }
     }
     exitSpy.mockRestore();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -256,6 +258,14 @@ describe('connect command', () => {
     registerConnectCommand(program);
     return program;
   }
+
+  it('marks a service child for downstream agent launches', async () => {
+    vi.stubEnv('SSH_CONNECTION', 'test-ssh-session');
+    await createProgram().parseAsync(['node', 'test', 'connect', '--service-child']);
+
+    expect(process.env.LOBEHUB_CONNECT_SERVICE).toBe('1');
+    expect(process.env.SSH_CONNECTION).toBe('test-ssh-session');
+  });
 
   it('should persist deviceId in status for foreground connections', async () => {
     const program = createProgram();

@@ -140,6 +140,28 @@ export class S3 {
     return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
   }
 
+  /** Like listFileKeys, with each object's ETag (unquoted) and size. */
+  public async listFileObjects(
+    prefix: string,
+    limit = 1000,
+  ): Promise<{ etag: string; key: string; size: number }[]> {
+    const response = await this.client.send(
+      new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: limit, Prefix: prefix }),
+    );
+
+    return (response.Contents ?? []).flatMap((object) =>
+      object.Key
+        ? [
+            {
+              etag: (object.ETag ?? '').replaceAll('"', ''),
+              key: object.Key,
+              size: object.Size ?? 0,
+            },
+          ]
+        : [],
+    );
+  }
+
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
     const boundedLength = byteLength ? Math.max(1, Math.floor(byteLength)) : undefined;
     const command = new GetObjectCommand({

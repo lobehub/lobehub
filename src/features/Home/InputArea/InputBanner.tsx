@@ -24,6 +24,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: 20px;
 
+    html[data-density='compact'] & {
+      margin-block: -36px -6px;
+      padding-block: 34px 6px;
+      padding-inline: ${densityVars.cardPadding} 8px;
+      border-radius: 16px;
+    }
+
     background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
 
     &[data-clickable='true'] {

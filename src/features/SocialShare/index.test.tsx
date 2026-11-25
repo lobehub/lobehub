@@ -68,21 +68,22 @@ describe('SocialShare', () => {
     expect(screen.queryByTestId('qrcode')).not.toBeInTheDocument();
   });
 
-  it('opens the X intent in a new window with the encoded link', () => {
+  it('opens the X intent in a new tab with the copy and link prefilled', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<SocialShare shareUrl={shareUrl} title={'My topic'} />);
 
     fireEvent.click(tile('x'));
 
     const [href, target, features] = open.mock.calls[0];
-    expect(String(href)).toMatch(/^https:\/\/twitter\.com\/intent\/tweet\?/);
-    expect(String(href)).toContain(`url=${encodeURIComponent(shareUrl)}`);
-    expect(new URL(String(href)).searchParams.get('text')).toContain('My topic');
+    expect(String(href)).toMatch(/^https:\/\/x\.com\/intent\/post\?/);
+    expect(new URL(String(href)).searchParams.get('text')).toBe(
+      `My topic via LobeHub\n${shareUrl}`,
+    );
     expect(target).toBe('_blank');
-    expect(features).toContain('noopener');
+    expect(features).toBe('noopener,noreferrer');
   });
 
-  it('opens the Weibo share page in a new window with the encoded link', () => {
+  it('opens the Weibo share page in a new tab with the encoded link', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<SocialShare shareUrl={shareUrl} title={'My topic'} />);
 

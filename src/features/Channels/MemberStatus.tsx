@@ -1,5 +1,6 @@
 import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
+import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -42,9 +43,15 @@ const DIRECT_MENU_KEYS = new Set(['copyId', 'unarchive']);
 export function MemberStatus({
   detail,
   memberPanel,
+  threadMenu,
 }: {
   detail: ChannelDetail;
   memberPanel?: { id: string; open: boolean; onToggle: () => void };
+  /**
+   * The open thread page's actions. They join the Channel's in one menu, titled by what each
+   * group acts on, so the header keeps a single `…`.
+   */
+  threadMenu?: DropdownItem[];
 }) {
   const { t } = useTranslation('channel');
   const [open, setOpen] = useState(false);
@@ -107,6 +114,15 @@ export function MemberStatus({
         ]
       : []),
   ];
+
+  const ownMenu = direct ? directMenu() : groupMenu();
+  const menuItems: DropdownItem[] = threadMenu?.length
+    ? [
+        { children: threadMenu, key: 'threadGroup', label: t('thread'), type: 'group' },
+        { type: 'divider' },
+        { children: ownMenu, key: 'channelGroup', label: t('channel'), type: 'group' },
+      ]
+    : ownMenu;
 
   return (
     <Flexbox horizontal align="center" gap={4}>
@@ -194,7 +210,7 @@ export function MemberStatus({
           }
         />
       )}
-      <DropdownMenu items={direct ? directMenu() : groupMenu()}>
+      <DropdownMenu items={menuItems}>
         <ActionIcon
           aria-label={t('more', { ns: 'common' })}
           icon={MoreHorizontal}

@@ -13,6 +13,13 @@ import { knownQuotaReset } from './quotaReset';
 const log = debug('lobe-server:channel:reply-opening');
 
 export interface OpenChannelReplyDeps {
+  /**
+   * Whether a shared Agent's share admits the request. A refused one does not open: its reply
+   * fails at dispatch where it was asked, instead of acknowledging work it will not do.
+   */
+  admitShare?: (
+    candidate: ChannelOpeningCandidate & Required<Pick<ChannelOpeningCandidate, 'share'>>,
+  ) => Promise<boolean>;
   /** Builds the opener for a candidate; defaults to the Channel's, run as the requester. */
   createOpener?: (candidate: ChannelOpeningCandidate) => ChannelReplyOpener;
   /** When the Agent's usage window reopens, if a known one is still closed; see `knownQuotaReset`. */
@@ -81,10 +88,16 @@ const decide = async (
             name: agentDisplayName(agent) || undefined,
             title: agent.title ?? undefined,
           })),
+          ...(candidate.request.fileIds?.length && {
+            attachmentCount: candidate.request.fileIds.length,
+          }),
           message: candidate.request.content,
           // Woken by its own rules, not asked: it acknowledges only a clear request for work.
           ...(!candidate.addressed && { notAddressed: true }),
           recentMessages: candidate.recent.map((message) => describe(message, candidate.agent.id)),
+          ...(candidate.quoted && {
+            quoted: excerpt(describe(candidate.quoted, candidate.agent.id)),
+          }),
           threads: candidate.threads.map((thread, index) => ({
             label: threadLabel(index),
             lastMessage: excerpt(thread.lastMessage),
@@ -125,6 +138,12 @@ export const openChannelReply = async (
   try {
     const candidate = await executions.openingCandidate(channelId, jobId);
     if (!candidate) return;
+    if (
+      candidate.share &&
+      deps.admitShare &&
+      !(await deps.admitShare({ ...candidate, share: candidate.share }))
+    )
+      return;
 
     // The Agent's last reply on the same login was refused by a usage window that is still
     // closed: an acknowledgement would promise work the run cannot do. It opens with nothing and

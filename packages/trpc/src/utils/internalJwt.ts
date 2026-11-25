@@ -26,15 +26,23 @@ export const HETERO_OPERATION_JWT_ISSUER = 'urn:lobehub:internal';
 export const HETERO_OPERATION_JWT_AUDIENCE = 'urn:lobehub:hetero-operation';
 export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
 
+/**
+ * `caller:act` lets the token act as its `sub` on ordinary user endpoints, for
+ * the `lh` commands an agent runs during a device run. It is accepted only
+ * while the operation is running and only in the operation's workspace (see
+ * `authorizeHeteroCallerToken`).
+ */
 export type HeteroOperationCapability =
   | 'acceptance:evidence'
+  | 'caller:act'
   | 'channel:message'
   | 'channel:read'
   | 'goal:manage'
   | 'hetero:finish'
   | 'hetero:ingest'
   | 'hetero:intervention:read'
-  | 'model:invoke';
+  | 'model:invoke'
+  | 'work:write';
 
 export interface HeteroOperationJwtClaims {
   aud: typeof HETERO_OPERATION_JWT_AUDIENCE;
@@ -176,7 +184,9 @@ export const signUserJWT = async (
 /**
  * Sign a long-lived OIDC-compatible JWT for hetero-agent operations.
  * Claude Code / Codex tasks can run for hours; this 4-hour token prevents
- * heteroIngest / heteroFinish from returning 401 mid-execution.
+ * heteroIngest / heteroFinish from returning 401 mid-execution. A token with
+ * `caller:act` is refused on user endpoints as soon as its run ends, so the
+ * expiry only bounds a run that never ends.
  */
 export const signHeteroOperationJWT = async (params: {
   capabilities: HeteroOperationCapability[];
@@ -232,6 +242,7 @@ export const validateHeteroOperationClaims = (
     !capabilities.every((capability) =>
       [
         'acceptance:evidence',
+        'caller:act',
         'channel:message',
         'channel:read',
         'goal:manage',
@@ -239,6 +250,7 @@ export const validateHeteroOperationClaims = (
         'hetero:ingest',
         'hetero:finish',
         'hetero:intervention:read',
+        'work:write',
       ].includes(capability as string),
     ) ||
     (payload.model !== undefined && typeof payload.model !== 'string') ||

@@ -1,6 +1,7 @@
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useProjectStore } from '@/store/project';
@@ -42,20 +43,27 @@ const useProjectAgents = (projectId?: string) => {
 
 /**
  * Every Agent the user can add, from the full sidebar list rather than the recent
- * delegation targets, so older Agents stay reachable. Lobe AI cannot join a Channel.
+ * delegation targets, so older Agents stay reachable. Lobe AI cannot join a Channel, nor can a
+ * private Agent in a workspace: a group would show it to every member, so the server refuses it.
  * Inside a project, `projectAgentIds` names the project's Agents to list first, and `project`
  * says which Agents are already its members: a project Channel seats only those, so picking
  * anyone else adds them to the project too.
  */
 export const useChannelAgentOptions = (projectId?: string) => {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const inWorkspace = !!useActiveWorkspaceId();
   const sync = useHomeStore((s) => s.useFetchAgentList)(isLogin);
   const ready = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents);
   const project = useProjectAgents(projectId);
   const agents: ChannelAgentOption[] | undefined = ready
     ? items
-        .filter((item) => item.type === 'agent' && item.slug !== INBOX_SESSION_ID)
+        .filter(
+          (item) =>
+            item.type === 'agent' &&
+            item.slug !== INBOX_SESSION_ID &&
+            !(inWorkspace && item.visibility === 'private'),
+        )
         .map((item) => ({ ...item, runtime: agentRuntime(item) }))
     : undefined;
   return {
