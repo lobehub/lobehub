@@ -1,3 +1,4 @@
+import { A2uiManifest } from '@lobechat/builtin-tool-a2ui';
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
@@ -50,6 +51,7 @@ export const builtinToolIdentifiers: string[] = [
   WebhookManifest.identifier,
   WorkManifest.identifier,
   ChannelManifest.identifier,
+  A2uiManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,

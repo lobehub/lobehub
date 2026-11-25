@@ -8,6 +8,7 @@ import {
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageReplyError,
+  channelMessageSurfaces,
   channelMessageVia,
   type ChannelReplyError,
   type ChatMessageError,
@@ -163,6 +164,16 @@ export const publicMessage = (
     })(),
     // An Agent's failed reply, shown as a card in its reply slot.
     replyError,
+    // Cards the Agent drew in this reply.
+    // A deleted reply is a tombstone: its cards are gone with its text.
+    surfaces:
+      isAgent && !channelMessageDeletedAt(message.metadata)
+        ? channelMessageSurfaces(message.metadata)
+        : [],
+    surfacesBodyLength:
+      typeof message.metadata?.surfacesBodyLength === 'number'
+        ? message.metadata.surfacesBodyLength
+        : undefined,
     via: isAgent
       ? null
       : (() => {

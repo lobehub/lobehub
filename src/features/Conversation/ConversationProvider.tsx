@@ -10,6 +10,7 @@ import { useParams } from 'react-router';
 import { useFetchAvailableAgents } from '@/hooks/useFetchAvailableAgents';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { A2uiConversationHost } from './A2uiConversationHost';
 import AssistantTurnSettledWatcher from './AssistantTurnSettledWatcher';
 import { McpAppHostRegistration } from './McpAppHostRegistration';
 import { createStore, Provider } from './store';
@@ -139,7 +140,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
         <AssistantTurnSettledWatcher />
         <McpAppHostRegistration />
         <ConversationContextPrefetcher context={context} />
-        {children}
+        <A2uiConversationHost>{children}</A2uiConversationHost>
       </Provider>
     );
   },

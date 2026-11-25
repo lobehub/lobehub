@@ -11,6 +11,7 @@ import { LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
 
 import type { ToolExecutionContext } from '../types';
+import { a2uiRuntime } from './a2ui';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
 import { agentAccountRuntime } from './agentAccount';
@@ -87,6 +88,7 @@ registerRuntimes([
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,
+  a2uiRuntime,
   calculatorRuntime,
   agentDocumentsRuntime,
   agentManagementRuntime,
