@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   FolderIcon,
   InfinityIcon,
+  LockIcon,
   MessageCircleIcon,
   SearchIcon,
   TerminalIcon,
@@ -122,12 +123,19 @@ const AgentMode = memo(() => {
   const { allowed: canCreateContent, reason } = usePermission('create_content');
   const { canUseResource, isAccessLoading, isGroupContext } = useChatInputResourceAccess();
 
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
-    useEffectiveAgentMode(agentId);
-  const disabled = !canCreateContent || !canUseResource;
+  const {
+    canSelectAgentMode,
+    currentMode,
+    isAgentModeUnavailable,
+    isPreferenceLoading,
+    isModeLocked,
+  } = useEffectiveAgentMode(agentId);
+  const disabled = !canCreateContent || !canUseResource || isModeLocked;
   const disabledReason = !canCreateContent
     ? reason
-    : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
+    : isModeLocked
+      ? t('chatMode.locked')
+      : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
   const CurrentIcon = currentMode === 'agent' ? InfinityIcon : MessageCircleIcon;
 
   const handleSelect = useCallback(
@@ -231,7 +239,7 @@ const AgentMode = memo(() => {
     <div {...stylex.props(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
-      <Icon icon={ChevronDownIcon} size={12} />
+      <Icon icon={isModeLocked ? LockIcon : ChevronDownIcon} size={12} />
     </div>
   );
 

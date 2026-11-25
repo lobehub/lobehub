@@ -141,6 +141,7 @@
   "chatMode.agentUnsupported": "当前模型不支持工具调用",
   "chatMode.chat": "对话",
   "chatMode.chatDesc": "不启用运行环境和自主执行，更省 Token",
+  "chatMode.locked": "首条消息发送后，模式即固定。新建话题可重新选择模式。",
   "chatMode.select": "切换模式",
   "claudeCodeInstallGuide.actions.openDocs": "打开安装指南",
   "claudeCodeInstallGuide.actions.openSystemTools": "打开系统工具",

@@ -1912,6 +1912,8 @@ export default {
   'chatMode.chat': 'Chat',
   'chatMode.chatDesc': 'No runtime environment or autonomy; uses fewer tokens',
   'chatMode.select': 'Switch Mode',
+  'chatMode.locked':
+    'The mode is fixed after the first message. Start a new topic to choose another mode.',
   'runtimeEnv.mode.cloud': 'Cloud Sandbox',
   'runtimeEnv.mode.cloudDesc': 'Run in a secure cloud sandbox',
   'runtimeEnv.mode.local': 'Local',

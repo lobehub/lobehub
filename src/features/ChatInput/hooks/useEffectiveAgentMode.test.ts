@@ -24,6 +24,8 @@ const testState = vi.hoisted(() => ({
   /** Tool-use capability keyed by `provider/model`; unknown models lack tool use. */
   toolUseByModel: {} as Record<string, boolean>,
   topic: {
+    mode: undefined as 'agent' | 'chat' | undefined,
+    hasUserTurn: false,
     pinned: undefined as { model: string; provider: string } | undefined,
     useFetchTopicDetail: vi.fn(),
   },
@@ -71,7 +73,10 @@ vi.mock('@/store/aiInfra', () => ({
 
 vi.mock('../store', () => ({
   useChatInputStore: (selector: (s: { topicId: string }) => unknown) =>
-    selector({ topicId: 'topic-1' }),
+    selector({
+      topicId: 'topic-1',
+      contextWindow: { history: testState.topic.hasUserTurn ? [{ role: 'user' }] : [] },
+    } as never),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -80,7 +85,8 @@ vi.mock('@/store/chat', () => ({
 
 vi.mock('@/store/chat/slices/topic/selectors', () => ({
   topicSelectors: {
-    getTopicById: () => (s: typeof testState.topic) => s.pinned,
+    getTopicById: () => (s: typeof testState.topic) =>
+      s.pinned || s.mode ? { ...s.pinned, metadata: { conversationMode: s.mode } } : undefined,
     getTopicModelById: () => (s: typeof testState.topic) => s.pinned,
   },
 }));
@@ -99,6 +105,8 @@ beforeEach(() => {
   testState.aiInfra.isReady = true;
   testState.toolUseByModel = { 'provider-1/model-1': true };
   testState.topic.pinned = undefined;
+  testState.topic.mode = undefined;
+  testState.topic.hasUserTurn = false;
   testState.user.fetchedPreference = undefined;
   testState.user.isLoading = false;
   testState.user.workspaceUserPreference = {};
@@ -115,10 +123,10 @@ describe('resolveEffectiveAgentMode', () => {
     });
   });
 
-  it('falls back to chat mode without changing the stored mode when the model lacks tool use', () => {
+  it('keeps Agent intent while disabling runtime tools when the model lacks tool use', () => {
     expect(resolveEffectiveAgentMode({ enableAgentMode: true, supportToolUse: false })).toEqual({
       canSelectAgentMode: false,
-      currentMode: 'chat',
+      currentMode: 'agent',
       isAgentModeUnavailable: true,
       isAgentRuntimeMode: false,
       supportToolUse: false,
@@ -179,7 +187,7 @@ describe('resolveEffectiveAgentMode', () => {
         }),
       ).toEqual({
         canSelectAgentMode: false,
-        currentMode: 'chat',
+        currentMode: 'agent',
         isAgentModeUnavailable: true,
         isAgentRuntimeMode: false,
         supportToolUse: false,
@@ -189,6 +197,16 @@ describe('resolveEffectiveAgentMode', () => {
 });
 
 describe('useEffectiveAgentMode', () => {
+  it('shows the committed topic mode over an Agent default', () => {
+    testState.topic.mode = 'chat';
+    const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
+    expect(result.current).toMatchObject({ currentMode: 'chat', isModeLocked: true });
+  });
+
+  it('keeps a precreated empty topic selectable', () => {
+    const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
+    expect(result.current.isModeLocked).toBe(false);
+  });
   it('uses an ordinary member personal mode for a public Workspace Agent', () => {
     testState.agent.agent = { visibility: 'public', workspaceId: 'workspace-1' };
     testState.user.workspaceUserPreference = {
@@ -257,7 +275,7 @@ describe('model used for the tool-use capability', () => {
 
       expect(result.current).toMatchObject({
         canSelectAgentMode: false,
-        currentMode: 'chat',
+        currentMode: 'agent',
         isAgentModeUnavailable: true,
         isAgentRuntimeMode: false,
       });
@@ -283,7 +301,7 @@ describe('model used for the tool-use capability', () => {
 
       expect(result.current).toMatchObject({
         canSelectAgentMode: false,
-        currentMode: 'chat',
+        currentMode: 'agent',
         isAgentModeUnavailable: true,
         isAgentRuntimeMode: false,
       });

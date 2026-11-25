@@ -9,6 +9,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 
 import { useAgentId } from './useAgentId';
+import { useTopicConversationMode } from './useTopicConversationMode';
 import { useUpdateAgentConfig } from './useUpdateAgentConfig';
 
 /**
@@ -19,6 +20,7 @@ import { useUpdateAgentConfig } from './useUpdateAgentConfig';
  * untouched — chat mode is enforced at the runtime tools engine layer.
  */
 export const useToggleAgentMode = () => {
+  const { isModeLocked } = useTopicConversationMode();
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const canEnableBusinessAgentMode = useBusinessCanEnableAgentMode(agentId);
@@ -30,7 +32,7 @@ export const useToggleAgentMode = () => {
 
   return useCallback(
     async (enable: boolean) => {
-      if (isAccessLoading) return;
+      if (isAccessLoading || isModeLocked) return;
 
       const enableAgentMode = enable && canEnableBusinessAgentMode;
       if (usesWorkspaceMemberMode) {
@@ -46,6 +48,7 @@ export const useToggleAgentMode = () => {
       agentId,
       canEnableBusinessAgentMode,
       isAccessLoading,
+      isModeLocked,
       updateAgentChatConfig,
       updateWorkspaceUserPreference,
       usesWorkspaceMemberMode,
