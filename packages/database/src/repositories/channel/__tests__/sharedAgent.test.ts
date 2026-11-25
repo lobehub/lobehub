@@ -262,7 +262,8 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     expect(blocked.blockedCode).toBe('access_request_pending');
   });
 
-  it('refuses attachments, which the owner’s run could not read', async () => {
+  // The reply's dispatch copies them into the share for the owner's run.
+  it('sends the visitor’s own attachments', async () => {
     const { channel } = await visitor.create({
       agentId,
       sharedAgent: true,
@@ -278,14 +279,19 @@ describe('a contact’s shared Agent in a direct conversation', () => {
         userId: visitorId,
       })
       .returning();
-    await expect(
-      visitor.send(channel.id, {
-        content: 'See file',
-        fileIds: [file.id],
-        requestKey: 'file',
-        routing: 'fallback',
-      }),
-    ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
+    const message = await visitor.send(channel.id, {
+      content: 'See file',
+      fileIds: [file.id],
+      requestKey: 'file',
+      routing: 'fallback',
+    });
+
+    const [job] = await jobsOf(db, message.id);
+    await execution.claim(channel.id, job.id, lease);
+
+    expect(await execution.input(channel.id, job.id)).toEqual([
+      expect.objectContaining({ fileIds: [file.id], id: message.id }),
+    ]);
   });
 
   it('keeps continuing its topic however many messages it holds', async () => {
@@ -462,23 +468,22 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       expect(await jobsOf(db, message.id)).toHaveLength(1);
     });
 
-    it.each(['ShareMessageLimitExceeded', 'SharePromptTooLong', 'ShareSpendLimitExceeded'])(
-      'keeps the %s refusal of its reply readable after a reload',
-      async (type) => {
-        const channel = await open();
-        const claim = (await execution.claim(
-          channel.id,
-          (await send(channel.id, 'hi')).id,
-          lease,
-        ))!;
-        await execution.retireReservation(channel.id, claim.job.id, { message: 'Readable', type });
-        const job = (await visitor.detail(channel.id))!.jobs.find(
-          (item) => item.id === claim.job.id,
-        )!;
+    it.each([
+      'ShareAttachmentTooLarge',
+      'ShareFileStorageExceeded',
+      'ShareMessageLimitExceeded',
+      'SharePromptTooLong',
+      'ShareSpendLimitExceeded',
+    ])('keeps the %s refusal of its reply readable after a reload', async (type) => {
+      const channel = await open();
+      const claim = (await execution.claim(channel.id, (await send(channel.id, 'hi')).id, lease))!;
+      await execution.retireReservation(channel.id, claim.job.id, { message: 'Readable', type });
+      const job = (await visitor.detail(channel.id))!.jobs.find(
+        (item) => item.id === claim.job.id,
+      )!;
 
-        expect(job).toMatchObject({ errorMessage: 'Readable', errorType: type, status: 'failed' });
-      },
-    );
+      expect(job).toMatchObject({ errorMessage: 'Readable', errorType: type, status: 'failed' });
+    });
   });
 
   describe('reading its conversation history', () => {
@@ -591,7 +596,7 @@ describe('a shared Agent in the visitor’s workspace', () => {
     ).rejects.toThrow('Channel operation not found');
   });
 
-  it('refuses attachments, like a personal conversation', async () => {
+  it('sends the visitor’s own attachments, like a personal conversation', async () => {
     const channel = await open();
     const [file] = await db
       .insert(files)
@@ -604,14 +609,14 @@ describe('a shared Agent in the visitor’s workspace', () => {
         workspaceId: fixture.workspaceId,
       })
       .returning();
-    await expect(
-      inWorkspace.send(channel.id, {
-        content: 'See file',
-        fileIds: [file.id],
-        requestKey: 'ws-file',
-        routing: 'fallback',
-      }),
-    ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
+    const message = await inWorkspace.send(channel.id, {
+      content: 'See file',
+      fileIds: [file.id],
+      requestKey: 'ws-file',
+      routing: 'fallback',
+    });
+
+    expect(await jobsOf(db, message.id)).toHaveLength(1);
   });
 
   it('still cannot join a workspace group', async () => {

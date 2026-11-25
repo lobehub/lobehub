@@ -1,10 +1,11 @@
 // @vitest-environment node
-import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import { SHARE_VISITOR_MAX_FILE_SIZE, SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 import { openChannelReply } from './replyOpening';
+import type * as ShareAttachments from './shareAttachments';
 
 const {
   admitsVisitor,
@@ -15,6 +16,8 @@ const {
   findOperation,
   findShare,
   getScopedOnlineDevices,
+  importShareAttachments,
+  readVisitorFiles,
   recordShareRunResult,
   resolveChannelAttachments,
   serviceOptions,
@@ -43,6 +46,8 @@ const {
   ),
   findOperation: vi.fn(),
   findShare: vi.fn(),
+  importShareAttachments: vi.fn(),
+  readVisitorFiles: vi.fn(),
   recordShareRunResult: vi.fn(),
   resolveChannelAttachments: vi.fn(),
   serviceOptions: [] as Array<{ options: unknown; userId: string }>,
@@ -84,6 +89,12 @@ vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: {} }));
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({ getScopedOnlineDevices }));
 vi.mock('@/server/services/queue/impls', () => ({ isQueueAgentRuntimeEnabled: () => false }));
 vi.mock('./attachments', () => ({ resolveChannelAttachments }));
+type ShareAttachmentsModule = typeof ShareAttachments;
+vi.mock('./shareAttachments', async (importOriginal) => ({
+  ...(await importOriginal<ShareAttachmentsModule>()),
+  importShareAttachments,
+  readVisitorFiles,
+}));
 vi.mock('./ChannelRoutingService', () => ({
   ChannelRoutingService: class {
     advance = vi.fn().mockResolvedValue(undefined);
@@ -145,6 +156,8 @@ describe('dispatching a contact’s shared Agent', () => {
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     findShare.mockResolvedValue(liveShare);
+    readVisitorFiles.mockResolvedValue([]);
+    importShareAttachments.mockResolvedValue([]);
     checkSpend.mockResolvedValue({ allowed: true });
     countMessagesBySender.mockResolvedValue(1);
     findOperation.mockResolvedValue({ status: 'idle' });
@@ -353,7 +366,11 @@ describe('dispatching a contact’s shared Agent', () => {
   // stays and its failure explains the limit after a reload.
   it('refuses a prompt beyond the share’s length cap before submission', async () => {
     executions.input.mockResolvedValue([
-      { content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), id: 'message' },
+      {
+        author: { id: 'visitor', name: 'Visitor', type: 'user' },
+        content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1),
+        id: 'message',
+      },
     ]);
     await coordinator().advance('channel');
 
@@ -361,6 +378,97 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
       message: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
       type: 'SharePromptTooLong',
+    });
+  });
+
+  describe('with the visitor’s attachments', () => {
+    const visitor = { id: 'visitor', name: 'Visitor', type: 'user' };
+    const pptx = {
+      fileType: 'application/vnd.ms-powerpoint',
+      id: 'file_pptx',
+      name: 'slides.pptx',
+      size: 1_300_000,
+      url: 'files/visitor/slides.pptx',
+    };
+
+    beforeEach(() => {
+      executions.input.mockResolvedValue([
+        // An Agent's message in the input is not the visitor's to attach.
+        {
+          author: { id: 'agt_other', name: 'Other', type: 'agent' },
+          content: 'x',
+          fileIds: ['file_agent'],
+          id: 'other',
+        },
+        {
+          author: visitor,
+          content: 'What is on the first slide?',
+          fileIds: [pptx.id],
+          id: 'message',
+        },
+      ]);
+      readVisitorFiles.mockResolvedValue([pptx]);
+    });
+
+    it('copies them into the share and hands the copies to the owner’s run', async () => {
+      importShareAttachments.mockResolvedValue(['file_copy']);
+      await coordinator().advance('channel');
+
+      expect(readVisitorFiles).toHaveBeenCalledWith(expect.anything(), 'visitor', [pptx.id]);
+      expect(importShareAttachments).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          agentId: 'agt_shared',
+          maxFileStorage: undefined,
+          ownerId: 'owner',
+          shareId: 'share-1',
+          visitorUserId: 'visitor',
+          workspaceId: 'owner-ws',
+        },
+        [pptx],
+      );
+      expect(resolveChannelAttachments).not.toHaveBeenCalled();
+      expect(execAgent.mock.calls[0][0].fileIds).toEqual(['file_copy']);
+    });
+
+    it('refuses a file beyond the share page’s size cap before copying anything', async () => {
+      readVisitorFiles.mockResolvedValue([{ ...pptx, size: SHARE_VISITOR_MAX_FILE_SIZE + 1 }]);
+      await coordinator().advance('channel');
+
+      expect(importShareAttachments).not.toHaveBeenCalled();
+      expect(execAgent).not.toHaveBeenCalled();
+      expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+        message: expect.any(String),
+        type: 'ShareAttachmentTooLarge',
+      });
+    });
+
+    it('refuses when the creator turned visitor attachments off', async () => {
+      findShare.mockResolvedValue({
+        ...liveShare,
+        shareConfig: { ...liveShare.shareConfig, maxFileStorage: 0 },
+      });
+      await coordinator().advance('channel');
+
+      expect(importShareAttachments).not.toHaveBeenCalled();
+      expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+        message: 'This shared Agent has no room for more attachments',
+        type: 'ShareFileStorageExceeded',
+      });
+    });
+
+    it('refuses when the copy finds the share’s storage full', async () => {
+      const { ShareAttachmentRefusal } = await import('./shareAttachments');
+      importShareAttachments.mockRejectedValue(
+        new ShareAttachmentRefusal('ShareFileStorageExceeded'),
+      );
+      await coordinator().advance('channel');
+
+      expect(execAgent).not.toHaveBeenCalled();
+      expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+        message: 'This shared Agent has no room for more attachments',
+        type: 'ShareFileStorageExceeded',
+      });
     });
   });
 

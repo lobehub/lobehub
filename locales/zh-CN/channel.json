@@ -209,6 +209,8 @@
   "projectAgents": "项目 Agent",
   "receipt.errorAttachmentUnavailable": "有附件无法在这里发送，可能是在其他工作区上传的。请删除这条消息后重新添加附件。",
   "receipt.errorReason": "失败原因",
+  "receipt.errorShareAttachmentTooLarge": "发给分享 Agent 的一条消息最多带 10 个文件，每个不超过 32 MB。请减少附件后重新发送。",
+  "receipt.errorShareFileStorage": "这个分享 Agent 的附件空间已满。可以不带附件发送，或请创建者提高上限。",
   "receipt.errorShareHeteroDevice": "创建者的设备当前离线，请稍后再试。",
   "receipt.errorShareHeteroUnsupported": "这个 Agent 需要创建者授权后才能为你运行，请联系创建者开通。",
   "receipt.errorShareMessageLimit": "你发给这个分享 Agent 的消息已达到创建者设置的上限。",

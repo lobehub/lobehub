@@ -148,8 +148,7 @@ export function Composer({
   const attachments = useAttachments(draftKey, uploadWorkspaceId);
   const { allowed } = usePermission('create_content');
   const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
-  /** Files sent to another person's shared Agent are refused server-side, so offer no upload. */
-  const enableUpload = knowledgeBase && !channel?.sharedAgent;
+  const enableUpload = knowledgeBase;
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
     if (!sending.current && canUpload) return attachments.upload(files);
