@@ -19,10 +19,11 @@ const replaceMetadataKeepingOwnedWorktrees = (
   next: ChatTopicMetadata | null | undefined,
   existing: ChatTopicMetadata | null | undefined,
 ) => {
-  if (!next) return next;
+  if (!next && !existing?.conversationMode) return next;
+  const { conversationMode: _ignoredMode, ...writable } = next ?? {};
   // A legacy topic's claim lives only in the markers this snapshot replaces.
-  const claimed = withOwnedWorktreeClaim({ ...next, ...carriedOwnedWorktrees(existing) });
-  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end`;
+  const claimed = withOwnedWorktreeClaim({ ...writable, ...carriedOwnedWorktrees(existing) });
+  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end || case when coalesce(jsonb_exists(${topics.metadata}, 'conversationMode'), false) then jsonb_build_object('conversationMode', ${topics.metadata} -> 'conversationMode') else '{}'::jsonb end`;
 };
 
 const readMetadata = async (ctx: TopicModelContext, id: string) => {
@@ -188,9 +189,10 @@ export const updateMetadata = async (
           }
         : metadata.onboardingSession;
 
+    const { conversationMode: _ignoredMode, ...writable } = metadata;
     const mergedMetadata = withOwnedWorktreeClaim({
       ...existing.metadata,
-      ...metadata,
+      ...writable,
       ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
       // Server-owned: a patch never replaces it (see `./ownedWorktree`), and a
       // legacy topic's claim is resolved from its old markers first.
