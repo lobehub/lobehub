@@ -719,4 +719,6 @@ export default {
   'settings.environmentNotesPlaceholder': 'For example: running dev needs at least 8 GB of memory',
   'settings.runners': 'Runners',
   'settings.sandboxRunnerDesc': 'A temporary cloud machine, removed after use',
+  'settings.envSandboxOnly':
+    'These variables are set only in the cloud sandbox, never on your devices. For runs on a device, set the variables you need on that device yourself.',
 };

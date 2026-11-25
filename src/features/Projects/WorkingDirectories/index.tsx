@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import EnvironmentForm, {
@@ -42,6 +43,7 @@ export function ProjectRunners({ canManage, projectId }: ProjectSettingsTabProps
  * command sees — and notes on what a run needs from a machine.
  */
 export function ProjectEnvironment({ canManage, projectId }: ProjectSettingsTabProps) {
+  const { t } = useTranslation('project');
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
@@ -63,7 +65,13 @@ export function ProjectEnvironment({ canManage, projectId }: ProjectSettingsTabP
 
   const value: EnvironmentFormValue = environment;
   const form: ReactNode = canManage ? (
-    <EnvironmentForm hideBasics hideRepositoryHints environment={value} onSave={save} />
+    <EnvironmentForm
+      hideBasics
+      hideRepositoryHints
+      envNotice={t('settings.envSandboxOnly')}
+      environment={value}
+      onSave={save}
+    />
   ) : (
     <EnvironmentSummary environment={value} />
   );

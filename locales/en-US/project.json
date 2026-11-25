@@ -561,6 +561,7 @@
   "settings.editDirectoryDescription": "Choose the device and folder this device folder points to. Its topics move to the new folder and start new sessions there.",
   "settings.editDirectoryFailed": "Could not update the folder",
   "settings.editDirectoryOtherEnvironment": "This folder already belongs to another environment. Choose a different folder or device.",
+  "settings.envSandboxOnly": "These variables are set only in the cloud sandbox, never on your devices. For runs on a device, set the variables you need on that device yourself.",
   "settings.environment": "Environment",
   "settings.environmentNotes": "Run notes",
   "settings.environmentNotesEmpty": "No notes",
