@@ -33,6 +33,7 @@ import {
 } from '@/database/repositories/channel/displayTitle';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
+import { createNamedThread } from '@/database/repositories/channel/namedThread';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import { frequentReactions, setReaction } from '@/database/repositories/channel/reactions';
 import {
@@ -679,6 +680,17 @@ export class ChannelService {
         console.error('[ChannelService] thread-archived follow-up failed (non-fatal):', error),
       ),
     ]);
+  };
+
+  /** A Thread a person opens by name; posting its root wakes no Agent. */
+  createThread = async (channelId: string, input: { requestKey: string; title: string }) => {
+    const thread = await this.repository.write(
+      channelId,
+      (tx, access) => createNamedThread(tx, access, input, channelContacts),
+      { joinOpen: true },
+    );
+    await this.changed(channelId);
+    return thread;
   };
 
   unarchiveThread = async (channelId: string, threadId: string) => {
