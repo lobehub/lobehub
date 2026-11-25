@@ -1,5 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
 
+import {
+  type AgentCredentialSpawnEnv,
+  defaultAgentCredentialRootDir,
+  resolveAgentCredentialSpawnEnv,
+} from '@lobechat/device-control/agent-credentials';
 import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
 import { buildClaudeCodeEntrypointEnv } from '@lobechat/heterogeneous-agents/protocol';
@@ -31,7 +36,15 @@ export interface GatewayAgentRunDeps {
   >;
   /** Gateway-run processes by operationId, so `cancelHeteroTask` can kill them. */
   platformTasks: Map<string, PlatformTaskEntry>;
+  /**
+   * The provider credential a server installed on this machine, as spawn env.
+   * Defaults to the store `lh connect` shares; tests inject it.
+   */
+  resolveAgentCredential?: (agentType: string) => Promise<AgentCredentialSpawnEnv>;
 }
+
+const resolveInstalledCredential = (agentType: string) =>
+  resolveAgentCredentialSpawnEnv(agentType, { rootDir: defaultAgentCredentialRootDir() });
 
 export interface GatewayAgentRunAck {
   reason?: string;
@@ -77,7 +90,18 @@ export const executeGatewayAgentRun = async (
       return { reason: 'Missing operation token', status: 'rejected' };
     }
 
-    const account = await resolveClaudeAccountEnv(heterogeneousAgentCtr, request);
+    // Same precedence as `lh connect`: an installed credential wins over the
+    // desktop's own logins and account routing; an expired or unreadable one
+    // rejects the run instead of falling back to another login.
+    const credential = await (deps.resolveAgentCredential ?? resolveInstalledCredential)(
+      request.agentType,
+    );
+    if (credential.kind === 'reject') return { reason: credential.reason, status: 'rejected' };
+
+    const account =
+      credential.kind === 'spawn'
+        ? { env: credential.env, kind: 'spawn' as const }
+        : await resolveClaudeAccountEnv(heterogeneousAgentCtr, request);
     if (account.kind === 'reject') return { reason: account.reason, status: 'rejected' };
 
     // The embedded CLI handles spawn -> adapt -> BatchIngester ->
@@ -91,6 +115,7 @@ export const executeGatewayAgentRun = async (
           ? buildClaudeCodeEntrypointEnv(request.claudeCodeEntrypoint)
           : {}),
       },
+      accountUnsetEnv: credential.kind === 'spawn' ? credential.unsetEnv : undefined,
       agentId: request.agentId,
       agentType: request.agentType,
       assistantMessageId: request.assistantMessageId,

@@ -66,6 +66,11 @@ const spawnedEnv = async (params: Parameters<typeof spawnHeteroAgentRun>[0]) => 
 describe('spawnHeteroAgentRun with an installed agent credential', () => {
   beforeEach(async () => {
     credentialRoot.dir = await mkdtemp(path.join(os.tmpdir(), 'lh-agent-cred-run-'));
+    // Profile seeding reads the user's own config from HOME: keep it hermetic.
+    vi.stubEnv('HOME', credentialRoot.dir);
+    vi.stubEnv('USERPROFILE', credentialRoot.dir);
+    vi.stubEnv('CLAUDE_CONFIG_DIR', undefined);
+    vi.stubEnv('CODEX_HOME', undefined);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
     identityMock.mockResolvedValue({ externalAccountId: 'acc-default' });
     hasLoginMock.mockResolvedValue(true);

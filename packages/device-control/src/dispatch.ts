@@ -42,7 +42,7 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
-import type { DeviceCliRestartParams } from '@lobechat/types';
+import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
 import { toRedactedAgentCredentialError } from './agentCredentials/redact';
 import { getAntigravityQuota } from './antigravityQuota';
@@ -176,12 +176,7 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
 
-/**
- * Why a client that does not apply installed credentials to its agent runs
- * rejects the agent-credential RPCs.
- */
-export const AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE =
-  'This device client does not support installed agent credentials';
+export { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE };
 
 /**
  * Run an agent-credential handler so its failure can never carry the secret

@@ -59,3 +59,16 @@ export interface CheckAgentCredentialResult {
   /** Why `ok` is false (or a caveat when true). Never contains the secret. */
   reason?: string;
 }
+
+/**
+ * Why a device client that cannot hold installed credentials refuses the
+ * agent-credential RPCs. Shared so the server can tell "unsupported" apart.
+ */
+export const AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE =
+  'This device client does not support installed agent credentials';
+
+/**
+ * Prefix of every error the device's agent-credential handlers return, so the
+ * server can tell a device-side failure from a gateway / transport one.
+ */
+export const AGENT_CREDENTIAL_ERROR_PREFIX = 'Agent credential error:';

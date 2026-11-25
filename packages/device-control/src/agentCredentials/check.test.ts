@@ -4,11 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  checkAgentCredential,
-  CLAUDE_CREDENTIAL_CHECK_URL,
-  CODEX_CREDENTIAL_CHECK_URL,
-} from './check';
+import { checkAgentCredential } from './check';
 import { installAgentCredential } from './store';
 
 const TOKEN = 'sk-ant-oat01-secret-token-value';
@@ -69,7 +65,7 @@ describe('checkAgentCredential', () => {
       ok: true,
     });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe(CLAUDE_CREDENTIAL_CHECK_URL);
+    expect(url).toBe('https://api.anthropic.com/v1/messages/count_tokens');
     expect(init.headers).toMatchObject({
       'Authorization': `Bearer ${TOKEN}`,
       'anthropic-beta': 'oauth-2025-04-20',
@@ -93,6 +89,34 @@ describe('checkAgentCredential', () => {
     expect(result.installed).toBe(true);
     expect(result.reason).toContain('HTTP 401');
     expect(result.reason).not.toContain(TOKEN);
+  });
+
+  it('treats another 4xx as authenticated but inconclusive, not a broken token', async () => {
+    await installClaude();
+    const fetch = vi.fn(async () =>
+      jsonResponse(404, { error: { message: 'model not found', type: 'not_found_error' } }),
+    );
+
+    const result = await checkAgentCredential(
+      { provider: 'claude-code' },
+      { fetch, now: () => NOW, rootDir },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.reason).toContain('inconclusive');
+    expect(result.reason).toContain('HTTP 404');
+  });
+
+  it('keeps 403 as a failed check', async () => {
+    await installClaude();
+    const fetch = vi.fn(async () => jsonResponse(403, { error: { message: 'forbidden' } }));
+
+    const result = await checkAgentCredential(
+      { provider: 'claude-code' },
+      { fetch, now: () => NOW, rootDir },
+    );
+
+    expect(result).toMatchObject({ installed: true, ok: false });
   });
 
   it('reports an expired Claude Code token without a network call', async () => {
@@ -129,7 +153,7 @@ describe('checkAgentCredential', () => {
 
     expect(result).toMatchObject({ installed: true, ok: true });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe(CODEX_CREDENTIAL_CHECK_URL);
+    expect(url).toBe('https://chatgpt.com/backend-api/wham/usage');
     expect(init.headers).toMatchObject({
       'Authorization': `Bearer ${ACCESS}`,
       'ChatGPT-Account-Id': 'acct-1',

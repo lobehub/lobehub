@@ -32,7 +32,6 @@ describe('agent credential relays', () => {
     expect(result).toEqual({ data: { installed: true, provider: 'claude-code' }, status: 'ok' });
     expect(invokeRpc).toHaveBeenCalledWith(
       {
-        channel: 'cli',
         deviceId: 'device-1',
         timeout: 15_000,
         userId: 'user-1',
@@ -57,7 +56,7 @@ describe('agent credential relays', () => {
 
   it('reports a device-side failure as failed and a thrown transport as unavailable', async () => {
     const failing = vi.fn(async () => ({
-      error: 'Invalid agent credential params',
+      error: 'Agent credential error: Invalid agent credential params: provider',
       success: false,
     }));
     expect(
@@ -70,6 +69,18 @@ describe('agent credential relays', () => {
     expect(
       await checkAgentCredential(clientWith(throwing), address, { provider: 'codex' }),
     ).toEqual({ message: 'net down', status: 'unavailable' });
+  });
+
+  it('reports a gateway failure without the device marker as unavailable', async () => {
+    const invokeRpc = vi.fn(async () => ({ error: 'DEVICE_OFFLINE', success: false }));
+    expect(
+      (
+        await installAgentCredential(clientWith(invokeRpc), address, {
+          provider: 'claude-code',
+          secret,
+        })
+      ).status,
+    ).toBe('unavailable');
   });
 
   it('is unavailable without a configured gateway', async () => {

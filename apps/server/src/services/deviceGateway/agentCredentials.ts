@@ -3,13 +3,15 @@
  * (Claude Code, Codex). Server-internal: the install params carry a secret, so
  * these relays never log params and are not reachable from LLM-facing tools.
  */
-import type {
-  CheckAgentCredentialParams,
-  CheckAgentCredentialResult,
-  InstallAgentCredentialParams,
-  InstallAgentCredentialResult,
-  RemoveAgentCredentialParams,
-  RemoveAgentCredentialResult,
+import {
+  AGENT_CREDENTIAL_ERROR_PREFIX,
+  AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE,
+  type CheckAgentCredentialParams,
+  type CheckAgentCredentialResult,
+  type InstallAgentCredentialParams,
+  type InstallAgentCredentialResult,
+  type RemoveAgentCredentialParams,
+  type RemoveAgentCredentialResult,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -26,18 +28,16 @@ export interface AgentCredentialRpcAddress {
 }
 
 /**
- * - `unsupported`: the device client cannot hold installed credentials (an
- *   older `lh connect`, or only the desktop app is connected).
- * - `unavailable`: the gateway or the device could not be reached.
- * - `failed`: the device ran the method and it failed (e.g. invalid params).
+ * - `unsupported`: the device client is too old to hold installed credentials.
+ * - `unavailable`: the gateway or the device could not be reached, or the
+ *   failure did not come from the device's credential handler.
+ * - `failed`: the device's credential handler ran and failed (e.g. invalid
+ *   params, a write error).
  */
 export type AgentCredentialRpcResult<T> =
   { data: T; status: 'ok' } | { message: string; status: 'failed' | 'unavailable' | 'unsupported' };
 
-const UNSUPPORTED_MARKERS = [
-  'does not support installed agent credentials',
-  'Unknown device RPC method',
-];
+const UNSUPPORTED_MARKERS = [AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, 'Unknown device RPC method'];
 
 const invokeAgentCredentialRpc = async <T>(
   getClient: DeviceClientGetter,
@@ -51,10 +51,10 @@ const invokeAgentCredentialRpc = async <T>(
   if (!client) return { message: 'Device Gateway is not configured', status: 'unavailable' };
 
   try {
-    // Only `lh connect` applies installed credentials to agent runs, so ask
-    // for the CLI connection when the device also runs the desktop app.
+    // Either client may answer: the desktop app and `lh connect` share one
+    // credential store on the machine and both apply it to agent runs.
     const result = await client.invokeRpc<T>(
-      { channel: 'cli', deviceId, timeout, userId, workspaceId },
+      { deviceId, timeout, userId, workspaceId },
       { method, params },
     );
     if (result.success && result.data !== undefined) return { data: result.data, status: 'ok' };
@@ -65,7 +65,12 @@ const invokeAgentCredentialRpc = async <T>(
     if (UNSUPPORTED_MARKERS.some((marker) => message.includes(marker))) {
       return { message, status: 'unsupported' };
     }
-    return { message, status: result.errorData ? 'unavailable' : 'failed' };
+    // Only an error the device's handler marked is a device-side failure;
+    // anything else (offline, timeout, gateway error) is a reachability one.
+    return {
+      message,
+      status: message.startsWith(AGENT_CREDENTIAL_ERROR_PREFIX) ? 'failed' : 'unavailable',
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log('%s: error for deviceId=%s — %s', method, deviceId, message);

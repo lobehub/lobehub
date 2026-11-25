@@ -1,4 +1,5 @@
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
@@ -22,26 +23,35 @@ export interface AgentCredentialStoreOptions {
   now?: () => number;
   /**
    * Directory holding every installed credential, one subdirectory per
-   * provider. The host chooses it under its own data dir (the CLI uses
-   * `~/.lobehub/agent-credentials`).
+   * provider. Every client on a device must use the same one, because the
+   * client that installs a credential may not be the one that runs the agent.
    */
   rootDir: string;
 }
 
-/** Where one provider's credential and managed config live. */
-export const agentCredentialPaths = (rootDir: string, provider: DeviceAgentCredentialProvider) => {
+/** `~/.lobehub/agent-credentials`, shared by the desktop app and `lh connect`. */
+export const defaultAgentCredentialRootDir = () =>
+  path.join(os.homedir(), '.lobehub', 'agent-credentials');
+
+/**
+ * Where one provider's credential and managed profile live. Only
+ * `credential.json` and the Codex `home/auth.json` hold secrets; the profile
+ * dirs keep transcripts and memory, so removal leaves them.
+ */
+const agentCredentialPaths = (rootDir: string, provider: DeviceAgentCredentialProvider) => {
   const dir = path.join(rootDir, provider);
   return {
     /** `CLAUDE_CONFIG_DIR` for runs on the installed Claude Code credential. */
     claudeConfigDir: path.join(dir, 'config'),
     /** `CODEX_HOME` holding the installed Codex `auth.json`. */
     codexHome: path.join(dir, 'home'),
+    codexAuthFile: path.join(dir, 'home', 'auth.json'),
     dir,
     metadataFile: path.join(dir, CREDENTIAL_FILE),
   };
 };
 
-export const isAgentCredentialProvider = (value: unknown): value is DeviceAgentCredentialProvider =>
+const isAgentCredentialProvider = (value: unknown): value is DeviceAgentCredentialProvider =>
   typeof value === 'string' &&
   (DEVICE_AGENT_CREDENTIAL_PROVIDERS as readonly string[]).includes(value);
 
@@ -137,6 +147,21 @@ const writePrivateFile = async (file: string, content: string) => {
   }
 };
 
+const pathExists = (target: string) =>
+  lstat(target).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    },
+  );
+
+const fileExists = (file: string) =>
+  lstat(file).then(
+    (stat) => stat.isFile(),
+    () => false,
+  );
+
 interface StoredMetadata {
   expiresAt?: string;
   installedAt: string;
@@ -145,13 +170,6 @@ interface StoredMetadata {
   token?: string;
   version: number;
 }
-
-/**
- * Codex reads the login from `auth.json` only when its credential store is the
- * file; pin it so a keyring default on some platforms cannot shadow the
- * installed credential.
- */
-const CODEX_MANAGED_CONFIG = 'cli_auth_credentials_store = "file"\n';
 
 export const installAgentCredential = async (
   params: unknown,
@@ -177,33 +195,42 @@ export const installAgentCredential = async (
     };
     await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
   } else {
+    const replacing = await fileExists(paths.metadataFile);
     await ensurePrivateDir(paths.codexHome);
-    await writePrivateFile(path.join(paths.codexHome, 'auth.json'), secret.authJson);
-    await writePrivateFile(path.join(paths.codexHome, 'config.toml'), CODEX_MANAGED_CONFIG);
-    const metadata: StoredMetadata = { installedAt, provider, version: STORE_VERSION };
-    await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
+    try {
+      await writePrivateFile(paths.codexAuthFile, secret.authJson);
+      const metadata: StoredMetadata = { installedAt, provider, version: STORE_VERSION };
+      await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
+    } catch (error) {
+      // A first install that failed half-way must not leave a secret behind.
+      if (!replacing) await rm(paths.codexAuthFile, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   return { installed: true, provider };
 };
 
-/** Delete the provider's credential and its managed config dir. Idempotent. */
+/**
+ * Delete the provider's secret files. The managed profile (transcripts,
+ * memory, seeded config) stays, so a later reinstall can resume its sessions;
+ * without the secret it is never used for a run. Idempotent.
+ */
 export const removeAgentCredential = async (
   params: unknown,
   options: AgentCredentialStoreOptions,
 ): Promise<RemoveAgentCredentialResult> => {
   const { provider } = parseAgentCredentialProviderParams(params);
-  const { dir } = agentCredentialPaths(options.rootDir, provider);
-  const existed = await lstat(dir).then(
-    () => true,
-    (error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return false;
-      throw error;
-    },
-  );
-  if (!existed) return { removed: false };
-  await rm(dir, { force: true, recursive: true });
-  return { removed: true };
+  const paths = agentCredentialPaths(options.rootDir, provider);
+  const secretFiles =
+    provider === 'codex' ? [paths.metadataFile, paths.codexAuthFile] : [paths.metadataFile];
+  let removed = false;
+  for (const file of secretFiles) {
+    if (!(await pathExists(file))) continue;
+    await rm(file, { force: true });
+    removed = true;
+  }
+  return { removed };
 };
 
 export type InstalledAgentCredential =
@@ -228,19 +255,20 @@ const readJson = async (file: string): Promise<unknown> => {
   }
 };
 
-const fileExists = (file: string) =>
-  lstat(file).then(
-    (stat) => stat.isFile(),
-    () => false,
-  );
-
 export const readInstalledAgentCredential = async (
   provider: DeviceAgentCredentialProvider,
   options: AgentCredentialStoreOptions,
 ): Promise<InstalledAgentCredential> => {
   const paths = agentCredentialPaths(options.rootDir, provider);
   const metadata = (await readJson(paths.metadataFile)) as Partial<StoredMetadata> | null;
-  if (metadata === undefined) return { status: 'missing' };
+  if (metadata === undefined) {
+    // A Codex secret without its metadata is a damaged install, not "none":
+    // treating it as missing would run on the device's own login instead.
+    if (provider === 'codex' && (await fileExists(paths.codexAuthFile))) {
+      return { status: 'invalid' };
+    }
+    return { status: 'missing' };
+  }
   if (!metadata || metadata.provider !== provider) return { status: 'invalid' };
 
   if (provider === 'claude-code') {
@@ -261,7 +289,7 @@ export const readInstalledAgentCredential = async (
     };
   }
 
-  if (!(await fileExists(path.join(paths.codexHome, 'auth.json')))) return { status: 'invalid' };
+  if (!(await fileExists(paths.codexAuthFile))) return { status: 'invalid' };
   return { codexHome: paths.codexHome, provider, status: 'installed' };
 };
 

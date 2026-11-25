@@ -18,7 +18,7 @@ import {
  * `/api/oauth/usage` needs the profile scope those tokens may lack, so it
  * would report a working token as broken.
  */
-export const CLAUDE_CREDENTIAL_CHECK_URL = 'https://api.anthropic.com/v1/messages/count_tokens';
+const CLAUDE_CREDENTIAL_CHECK_URL = 'https://api.anthropic.com/v1/messages/count_tokens';
 const CLAUDE_CREDENTIAL_CHECK_MODEL = 'claude-haiku-5-5';
 /**
  * Subscription OAuth tokens are issued for Claude Code; the probe identifies
@@ -30,9 +30,9 @@ const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI
  * Codex probe: the same ChatGPT backend usage read the Codex CLI makes for its
  * rate-limit status; it reads limits and spends none.
  */
-export const CODEX_CREDENTIAL_CHECK_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const CODEX_CREDENTIAL_CHECK_URL = 'https://chatgpt.com/backend-api/wham/usage';
 /** An `auth.json` holding only an API key: listing models is free. */
-export const OPENAI_API_KEY_CHECK_URL = 'https://api.openai.com/v1/models';
+const OPENAI_API_KEY_CHECK_URL = 'https://api.openai.com/v1/models';
 
 const CHECK_TIMEOUT_MS = 15_000;
 const REASON_MAX_LENGTH = 300;
@@ -91,7 +91,15 @@ const runProbe = async (
   if (response.status === 401 || response.status === 403) {
     return { ok: false, reason: `${rejectedReason} (${failure})` };
   }
-  return { ok: false, reason: `The provider did not accept the check (${failure})` };
+  // Any other 4xx came after authentication (e.g. a retired probe model):
+  // the credential works, only this check could not complete.
+  if (response.status >= 400 && response.status < 500) {
+    return {
+      ok: true,
+      reason: `Credential authenticated; the check request itself was refused, so this result is inconclusive (${failure})`,
+    };
+  }
+  return { ok: false, reason: `The provider could not check the credential (${failure})` };
 };
 
 const probeClaude = (token: string, options: CheckAgentCredentialOptions) =>

@@ -60,7 +60,7 @@ describe('agent credential RPCs', () => {
       makeDeps({ installAgentCredential }),
     ).catch((e: Error) => e);
 
-    expect((error as Error).message).toContain('EACCES');
+    expect((error as Error).message).toContain('Agent credential error: EACCES');
     expect((error as Error).message).not.toContain(TOKEN);
   });
 });

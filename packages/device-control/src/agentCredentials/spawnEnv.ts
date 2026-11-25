@@ -1,3 +1,4 @@
+import { seedClaudeProfile, seedCodexProfile } from './profile';
 import {
   type AgentCredentialStoreOptions,
   isAgentCredentialExpired,
@@ -9,7 +10,7 @@ import {
  * bearer token, a proxy base URL, or a third-party cloud backend. A run on an
  * installed credential drops them so it cannot quietly bill something else.
  */
-export const CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV = [
+const CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_BASE_URL',
@@ -20,7 +21,7 @@ export const CLAUDE_CODE_CREDENTIAL_OVERRIDDEN_ENV = [
 ] as const;
 
 /** `codex exec` prefers this API key over the `auth.json` login. */
-export const CODEX_CREDENTIAL_OVERRIDDEN_ENV = ['CODEX_API_KEY'] as const;
+const CODEX_CREDENTIAL_OVERRIDDEN_ENV = ['CODEX_API_KEY'] as const;
 
 export type AgentCredentialSpawnEnv =
   /** No credential installed for this agent: spawn as before. */
@@ -31,6 +32,13 @@ export type AgentCredentialSpawnEnv =
   | { kind: 'reject'; reason: string };
 
 const NONE: AgentCredentialSpawnEnv = { kind: 'none' };
+
+export interface ResolveAgentCredentialSpawnEnvOptions extends AgentCredentialStoreOptions {
+  /** Home directory override for tests. */
+  homeDir?: string;
+  /** Env the agent would inherit; locates the user's own config to seed from. */
+  inheritedEnv?: Record<string, string | undefined>;
+}
 
 /**
  * Turn the credential installed for `agentType` into spawn env for its run.
@@ -43,7 +51,7 @@ const NONE: AgentCredentialSpawnEnv = { kind: 'none' };
  */
 export const resolveAgentCredentialSpawnEnv = async (
   agentType: string,
-  options: AgentCredentialStoreOptions,
+  options: ResolveAgentCredentialSpawnEnvOptions,
 ): Promise<AgentCredentialSpawnEnv> => {
   if (agentType !== 'claude-code' && agentType !== 'codex') return NONE;
 
@@ -51,6 +59,7 @@ export const resolveAgentCredentialSpawnEnv = async (
     () => ({ status: 'invalid' }) as const,
   );
   const label = agentType === 'claude-code' ? 'Claude Code' : 'Codex';
+  const seed = { env: options.inheritedEnv ?? process.env, homeDir: options.homeDir };
   if (credential.status === 'missing') return NONE;
   if (credential.status === 'invalid') {
     return {
@@ -67,6 +76,7 @@ export const resolveAgentCredentialSpawnEnv = async (
         reason: `The Claude Code credential installed on this device expired at ${credential.expiresAt}. Reinstall it from LobeHub, or remove it to use this device's own login.`,
       };
     }
+    await seedClaudeProfile(credential.claudeConfigDir, seed);
     return {
       env: {
         CLAUDE_CODE_OAUTH_TOKEN: credential.token,
@@ -77,6 +87,14 @@ export const resolveAgentCredentialSpawnEnv = async (
     };
   }
 
+  try {
+    await seedCodexProfile(credential.codexHome, seed);
+  } catch {
+    return {
+      kind: 'reject',
+      reason: `Could not prepare the Codex profile for the credential installed on this device. Reinstall it from LobeHub, or remove it to use this device's own login.`,
+    };
+  }
   return {
     env: { CODEX_HOME: credential.codexHome },
     kind: 'spawn',

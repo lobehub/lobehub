@@ -1,4 +1,6 @@
-export const REDACTED = '[redacted]';
+import { AGENT_CREDENTIAL_ERROR_PREFIX } from '@lobechat/types';
+
+const REDACTED = '[redacted]';
 
 /** Secret values carried by agent-credential params, for scrubbing text. */
 const secretValues = (params: unknown): string[] => {
@@ -23,22 +25,6 @@ const secretValues = (params: unknown): string[] => {
   return values.sort((a, b) => b.length - a.length);
 };
 
-/**
- * A copy of agent-credential RPC params that is safe for logs and debug
- * output: the provider and secret type stay, every secret field is replaced.
- */
-export const redactAgentCredentialParams = (params: unknown): unknown => {
-  if (!params || typeof params !== 'object') return params;
-  const { secret, ...rest } = params as { secret?: unknown };
-  if (secret === undefined) return rest;
-  if (!secret || typeof secret !== 'object') return { ...rest, secret: REDACTED };
-  const redacted: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(secret)) {
-    redacted[key] = key === 'type' || key === 'expiresAt' ? value : REDACTED;
-  }
-  return { ...rest, secret: redacted };
-};
-
 /** Replace every secret value from `params` (and any extra secrets) found in `text`. */
 export const scrubAgentCredentialText = (
   text: string,
@@ -53,11 +39,18 @@ export const scrubAgentCredentialText = (
 };
 
 /**
- * Rethrow an agent-credential failure without any secret in its message, so
+ * Rebuild an agent-credential failure without any secret in its message, so
  * the RPC error that travels back over the gateway (and lands in device and
- * server logs) never carries it.
+ * server logs) never carries it. The prefix marks it as a device-side failure.
  */
 export const toRedactedAgentCredentialError = (error: unknown, params: unknown): Error => {
-  const message = error instanceof Error ? error.message : String(error);
-  return new Error(scrubAgentCredentialText(message, params));
+  const message = scrubAgentCredentialText(
+    error instanceof Error ? error.message : String(error),
+    params,
+  );
+  return new Error(
+    message.startsWith(AGENT_CREDENTIAL_ERROR_PREFIX)
+      ? message
+      : `${AGENT_CREDENTIAL_ERROR_PREFIX} ${message}`,
+  );
 };

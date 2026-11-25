@@ -1,22 +1,18 @@
-import os from 'node:os';
-import path from 'node:path';
-
 import type { DeviceControlDeps } from '@lobechat/device-control';
 import {
   checkAgentCredential,
+  defaultAgentCredentialRootDir,
   installAgentCredential,
   removeAgentCredential,
 } from '@lobechat/device-control/agent-credentials';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
-
 /**
- * Where `lh connect` keeps provider credentials the server installed for
- * heterogeneous agent runs: `~/.lobehub/agent-credentials/<provider>/`, owner
- * access only.
+ * Where provider credentials the server installed for heterogeneous agent runs
+ * live: `~/.lobehub/agent-credentials/<provider>/`, owner access only. The
+ * desktop app reads the same store, because a credential installed through one
+ * client must apply to runs the other one spawns on the same machine.
  */
-export const agentCredentialRootDir = () =>
-  path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'agent-credentials');
+export const agentCredentialRootDir = () => defaultAgentCredentialRootDir();
 
 /** The device-control handlers that let the server manage those credentials. */
 export const createAgentCredentialDeps = (

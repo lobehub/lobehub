@@ -360,10 +360,10 @@ export interface TrashLocalFilesResult {
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
    * Prove the installed agent credential works without spending model quota.
-   * Optional like the other agent-credential handlers: only a host that
-   * applies installed credentials when it spawns agent runs provides them
-   * (the CLI daemon), so any other client refuses with a stable reason
-   * instead of storing a credential nothing would use.
+   * Optional like the other agent-credential handlers: a host provides them
+   * only when its agent runs apply installed credentials (the desktop app and
+   * `lh connect` both do, from the same store), so any other client refuses
+   * with a stable reason instead of storing a credential nothing would use.
    */
   checkAgentCredential?: (params: unknown) => Promise<CheckAgentCredentialResult>;
   /**
