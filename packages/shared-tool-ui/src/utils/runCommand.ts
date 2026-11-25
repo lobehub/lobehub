@@ -44,17 +44,11 @@ interface RunCommandOutputState {
  * backends that never report `stdout` still fall back to `output`, then to the
  * tool message body.
  *
- * An empty `stdout` next to a non-empty `stderr` yields no text: the legacy
- * `output` would only repeat the stderr block the card already renders.
+ * An empty `stdout` keeps falling back even when `stderr` is set: the body
+ * carries the exit code and failure header (e.g. a stderr-only non-zero exit),
+ * which the card would otherwise not show anywhere.
  */
 export const getRunCommandStdout = (
   state: RunCommandOutputState | null | undefined,
   content?: string | null,
-): string => {
-  if (typeof state?.stdout === 'string') {
-    if (state.stdout) return state.stdout;
-    if (state.stderr?.trim()) return '';
-  }
-
-  return state?.output || content || '';
-};
+): string => state?.stdout || state?.output || content || '';

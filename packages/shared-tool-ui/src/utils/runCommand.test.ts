@@ -45,10 +45,18 @@ describe('getRunCommandStdout', () => {
     expect(getRunCommandStdout({ output: 'only output' }, 'body')).toBe('only output');
   });
 
-  it('shows nothing extra when stdout is empty and stderr is rendered on its own', () => {
-    expect(getRunCommandStdout({ output: 'boom\n', stderr: 'boom\n', stdout: '' }, 'body')).toBe(
-      '',
-    );
+  it('keeps the exit-code diagnostics of a stderr-only failure', () => {
+    // Sandbox backends report `output` as stdout, so both are empty here.
+    const body = 'Command failed with exit code 2\nStderr:\nboom';
+    expect(getRunCommandStdout({ output: '', stderr: 'boom\n', stdout: '' }, body)).toBe(body);
+    // New local rows drop the derived `output`, so the body is the fallback.
+    expect(getRunCommandStdout({ stderr: 'boom\n', stdout: '' }, body)).toBe(body);
+  });
+
+  it('keeps a legacy output that differs from the empty stdout', () => {
+    expect(
+      getRunCommandStdout({ output: 'notice\nboom\n', stderr: 'boom\n', stdout: '' }, 'body'),
+    ).toBe('notice\nboom\n');
   });
 
   it('falls back to the message body when state has no output at all', () => {
