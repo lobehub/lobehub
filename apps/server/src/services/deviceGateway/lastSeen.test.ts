@@ -42,7 +42,11 @@ describe('recordDevicesSeen', () => {
       now,
     );
 
-    expect(markSeen).toHaveBeenCalledWith(['row-a'], now);
+    expect(markSeen).toHaveBeenCalledWith(
+      ['row-a'],
+      now,
+      new Date(now.getTime() - DEVICE_LAST_SEEN_REFRESH_MS),
+    );
   });
 
   it('does not fail the read when the write fails', async () => {

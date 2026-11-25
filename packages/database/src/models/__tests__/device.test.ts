@@ -629,6 +629,9 @@ describe('DeviceModel', () => {
   describe('markSeen', () => {
     const registeredAt = new Date('2026-01-01T00:00:00.000Z');
     const seenAt = new Date('2026-03-01T00:00:00.000Z');
+    const windowMs = 5 * 60_000;
+    /** The refresh cutoff the server passes alongside `at`. */
+    const staleBefore = (at: Date) => new Date(at.getTime() - windowMs);
 
     const insertRows = async (rows: (typeof devices.$inferInsert)[]) =>
       serverDB
@@ -642,7 +645,7 @@ describe('DeviceModel', () => {
     it('stamps the given rows without touching updatedAt', async () => {
       const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
 
-      await deviceModel.markSeen([row.id], seenAt);
+      await deviceModel.markSeen([row.id], seenAt, staleBefore(seenAt));
 
       const stored = await serverDB.query.devices.findFirst({ where: eq(devices.id, row.id) });
       expect(stored?.lastSeenAt).toEqual(seenAt);
@@ -651,9 +654,25 @@ describe('DeviceModel', () => {
 
     it('never moves lastSeenAt backwards', async () => {
       const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
-      await deviceModel.markSeen([row.id], seenAt);
+      await deviceModel.markSeen([row.id], seenAt, staleBefore(seenAt));
 
-      await deviceModel.markSeen([row.id], registeredAt);
+      await deviceModel.markSeen([row.id], registeredAt, staleBefore(registeredAt));
+
+      expect(await lastSeenOf(row.id)).toEqual(seenAt);
+    });
+
+    /**
+     * @example Several tabs polling one shared workspace device all see the same stale
+     * snapshot; only the first write lands in that refresh window.
+     */
+    it('writes a row once per refresh window when stale reads race', async () => {
+      // Before: the UPDATE only required the stored stamp to precede each read's own
+      // `seenAt`, so every concurrent read with a later clock rewrote the row.
+      const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
+      const secondRead = new Date(seenAt.getTime() + 1000);
+
+      await deviceModel.markSeen([row.id], seenAt, staleBefore(seenAt));
+      await deviceModel.markSeen([row.id], secondRead, staleBefore(secondRead));
 
       expect(await lastSeenOf(row.id)).toEqual(seenAt);
     });
@@ -671,6 +690,7 @@ describe('DeviceModel', () => {
       await new DeviceModel(serverDB, userId, wsId).markSeen(
         rows.map((row) => row.id),
         seenAt,
+        staleBefore(seenAt),
       );
 
       expect(await lastSeenOf(idOf('pub'))).toEqual(seenAt);

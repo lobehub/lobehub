@@ -61,7 +61,7 @@ describe('getScopedOnlineDevices', () => {
     await getScopedOnlineDevices(serverDB, 'user-1');
 
     expect(mocks.markSeen).toHaveBeenCalledTimes(1);
-    expect(mocks.markSeen).toHaveBeenCalledWith(['row-online'], expect.any(Date));
+    expect(mocks.markSeen).toHaveBeenCalledWith(['row-online'], expect.any(Date), expect.any(Date));
   });
 
   /**

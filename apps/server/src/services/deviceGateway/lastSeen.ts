@@ -50,7 +50,9 @@ export const recordDevicesSeen = async (
   if (rowIds.length === 0) return;
 
   try {
-    await deviceModel.markSeen(rowIds, now);
+    // The same cutoff guards the write, so concurrent reads of one stale row
+    // stamp it once per window rather than once per read.
+    await deviceModel.markSeen(rowIds, now, new Date(now.getTime() - DEVICE_LAST_SEEN_REFRESH_MS));
   } catch (error) {
     log('Failed to record %d device(s) as seen: %O', rowIds.length, error);
   }
