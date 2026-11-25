@@ -37,6 +37,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { AskCard } from './AskCard';
+import { LinkPreviews } from './LinkPreviews';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
@@ -349,6 +350,7 @@ export const ChannelMessage = ({
               ) : (
                 <MessageText content={body} names={mentionNames} />
               ))}
+            {body && <LinkPreviews content={body} />}
             {!!message.surfaces?.length && (
               <MessageSurfaces detail={detail} message={message} threadId={threadId} />
             )}

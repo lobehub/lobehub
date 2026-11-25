@@ -86,6 +86,7 @@ import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
+import { linkPreviewRouter } from './linkPreview';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
 import { meetingRouter } from './meeting';
@@ -202,6 +203,7 @@ export const lambdaRouter = router({
   knowledge: knowledgeRouter,
   knowledgeBase: knowledgeBaseRouter,
   linear: linearRouter,
+  linkPreview: linkPreviewRouter,
   llmGenerationTracing: llmGenerationTracingRouter,
   market: marketRouter,
   meeting: meetingRouter,

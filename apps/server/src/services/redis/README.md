@@ -26,6 +26,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
 - `gitHubRefs`: the commit a public GitHub ref points at, shared by every user's skill update
   check for five minutes. `record` replaces it with a commit an import just resolved live.
   Without Redis each check resolves live.
+- `linkPreview`: the Open Graph card of a public page messages link, keyed by the SHA-256 of
+  its address and shared by every viewer — a day for a card, an hour for "no card". Without Redis
+  each render reads the page live.
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.
 - `agentDocumentIndex`: the agent-document index snapshot and change notes one conversation
