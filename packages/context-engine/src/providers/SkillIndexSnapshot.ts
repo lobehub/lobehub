@@ -211,6 +211,34 @@ const restoredSinceNoted = (
   return [...restored.values()];
 };
 
+/**
+ * A removal revokes every name the model was given for the skill. The row diff
+ * only knows the snapshot name, so a skill renamed in an earlier note and then
+ * disabled would keep its newer name reading as available — and `activateSkill`
+ * resolves by name.
+ */
+const revokeAdvertisedNames = (
+  snapshot: SkillIndexSnapshot,
+  changes: SkillIndexChange[],
+): SkillIndexChange[] => {
+  const advertised = new Map<string, Set<string>>();
+  for (const note of snapshot.notes) {
+    for (const change of note.changes) {
+      if (change.kind === 'removed') continue;
+      const names = advertised.get(change.identifier) ?? new Set<string>();
+      advertised.set(change.identifier, names.add(change.name));
+    }
+  }
+
+  return changes.flatMap((change) => {
+    if (change.kind !== 'removed') return [change];
+    const otherNames = [...(advertised.get(change.identifier) ?? [])].filter(
+      (name) => name !== change.name,
+    );
+    return [change, ...otherNames.map((name) => ({ ...change, name }))];
+  });
+};
+
 const sameChanges = (a: SkillIndexChange[], b: SkillIndexChange[]) =>
   JSON.stringify(a) === JSON.stringify(b);
 
@@ -231,7 +259,10 @@ export function noteSkillChanges(
 ): SkillIndexSnapshot {
   if (snapshot.notes.some((note) => note.messageId === messageId)) return snapshot;
 
-  const diffed = [...diffSkillIndex(snapshot.rows, skills), ...removedSinceNoted(snapshot, skills)];
+  const diffed = revokeAdvertisedNames(snapshot, [
+    ...diffSkillIndex(snapshot.rows, skills),
+    ...removedSinceNoted(snapshot, skills),
+  ]);
   const changes = [...diffed, ...restoredSinceNoted(snapshot, skills, diffed)];
   if (changes.length === 0) return snapshot;
 

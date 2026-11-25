@@ -307,6 +307,30 @@ describe('SkillIndexSnapshot', () => {
     expect(later).toBe(restored);
   });
 
+  it('revokes every advertised name when a skill renamed on an earlier turn is removed', () => {
+    const base = takeSkillIndexSnapshot([docWriter(), chartMaker()], { takenAt: new Date(at(0)) });
+    const renamed = noteSkillChanges(base, [docWriter({ name: 'doc-author' }), chartMaker()], {
+      messageId: 'u2',
+      presentMessageIds: new Set(['u1', 'u2']),
+    });
+    expect(renamed.notes[0].changes).toMatchObject([{ kind: 'updated', name: 'doc-author' }]);
+
+    const removed = noteSkillChanges(renamed, [chartMaker()], {
+      messageId: 'u3',
+      presentMessageIds: new Set(['u1', 'u2', 'u3']),
+    });
+
+    expect(removed.notes).toHaveLength(2);
+    expect(removed.notes[1].changes).toEqual([
+      { identifier: 'doc-writer', kind: 'removed', name: 'doc-writer' },
+      { identifier: 'doc-writer', kind: 'removed', name: 'doc-author' },
+    ]);
+
+    const rendered = formatSkillChanges(removed.notes[1].changes);
+    expect(rendered).toContain('<skill name="doc-writer" />');
+    expect(rendered).toContain('<skill name="doc-author" />');
+  });
+
   it('keeps live pre-activated skills without duplicating them or marking them removed', () => {
     const base = takeSkillIndexSnapshot([docWriter(), chartMaker()], { takenAt: new Date(at(0)) });
     const live: SkillMeta[] = [
