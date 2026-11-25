@@ -252,6 +252,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             {mode === 'chat' ? (
               <ProjectDeviceSwitcher
                 agentId={agentId}
+                auto={{ active: environment.auto, onSelect: environment.pickAuto }}
                 directories={environment.directories}
                 directoryId={environment.directoryId}
                 placement={'bottomRight'}

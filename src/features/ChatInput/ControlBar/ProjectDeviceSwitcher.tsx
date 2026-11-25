@@ -3,11 +3,10 @@
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon, SettingsIcon, SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
 import { isCurrentMachineDevice, useCurrentMachine } from '@/features/DeviceManager/devicePicker';
@@ -35,7 +34,6 @@ import {
   type ProjectDeviceTarget,
   projectDirectoryDeviceName,
 } from './projectDeviceTargets';
-import { repositoriesLabel, repositorySlug } from './sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 const styles = stylex.create({
@@ -74,6 +72,12 @@ interface ProjectDeviceSwitcherProps {
   /** Tag on the current directory's row, naming what runs there. */
   activeTag?: string;
   agentId: string;
+  /**
+   * The automatic choice, offered above the runners: the conversation starts on
+   * whichever runner the project's order picks — the sandbox or `directoryId`
+   * as passed — and the row names it, so the person still sees where.
+   */
+  auto?: { active: boolean; onSelect: () => void };
   directories: ProjectDirectory[];
   directoryId?: string;
   /** Picked another device's project directory; absent when folders can't be picked here. */
@@ -103,6 +107,7 @@ interface ProjectDeviceSwitcherProps {
 const ProjectDeviceSwitcher = ({
   activeTag,
   agentId,
+  auto,
   directories,
   directoryId,
   onSelect,
@@ -154,33 +159,30 @@ const ProjectDeviceSwitcher = ({
     !target.online && !target.onlineUnknown && !target.active;
   const offlineTargets = targets.filter(isFolded);
 
+  // On the automatic choice, every runner row is a pick of its own, the one
+  // it resolves to included: picking it pins the conversation there.
+  const autoActive = !!auto?.active;
   const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
-    if (!target.active) onSelect?.(target);
+    if (!target.active || autoActive) onSelect?.(target);
   };
 
-  // Named after the repositories it clones, as on the project's settings.
-  const sandboxLabel = projectEnvironment ? repositoriesLabel(projectEnvironment) : undefined;
-  const sandboxSlug = projectEnvironment ? repositorySlug(projectEnvironment) : undefined;
+  // A runner like any device: the repositories belong to the project's
+  // environment, which every runner prepares, so they no longer name it.
+  const sandboxName = t('heteroAgent.executionTarget.sandbox');
   const sandboxRow = sandbox ? (
     <OptionRow
-      active={sandbox.active}
-      desc={sandboxLabel ? t('heteroAgent.executionTarget.sandbox') : undefined}
+      active={sandbox.active && !autoActive}
+      desc={t('settings.sandboxRunnerDesc', { ns: 'project' })}
       disabled={isProjectSandboxRowDisabled(sandbox)}
+      icon={<ExecutionTargetIcon target={'sandbox'} />}
       key="sandbox"
-      label={sandboxLabel || t('heteroAgent.executionTarget.sandbox')}
+      label={sandboxName}
       tags={sandbox.active && activeTag ? [activeTag] : []}
-      icon={
-        sandboxSlug ? (
-          <RepositoryAvatar size={16} url={sandboxSlug} />
-        ) : (
-          <ExecutionTargetIcon target={'sandbox'} />
-        )
-      }
       onClick={() => {
         if (isProjectSandboxRowDisabled(sandbox)) return;
         setOpen(false);
-        if (!sandbox.active) sandbox.onSelect?.();
+        if (!sandbox.active || autoActive) sandbox.onSelect?.();
       }}
     />
   ) : null;
@@ -189,7 +191,7 @@ const ProjectDeviceSwitcher = ({
     const selectable = !!onSelect && target.online && target.allowed;
     const row = (
       <OptionRow
-        active={target.active}
+        active={target.active && !autoActive}
         disabled={!selectable}
         icon={<ExecutionTargetIcon devicePlatform={target.directory.platform} target={'device'} />}
         key={target.directory.id}
@@ -233,7 +235,7 @@ const ProjectDeviceSwitcher = ({
   const content = (
     <Flexbox style={{ maxWidth: 400, minWidth: 280 }}>
       <div {...stylex.props(styles.header)}>
-        <span {...stylex.props(styles.title)}>{t('heteroAgent.executionTarget.title')}</span>
+        <span {...stylex.props(styles.title)}>{t('settings.runners', { ns: 'project' })}</span>
         {projectId && (
           <button
             {...stylex.props(styles.manage)}
@@ -248,6 +250,29 @@ const ProjectDeviceSwitcher = ({
           </button>
         )}
       </div>
+      {auto && (
+        <OptionRow
+          active={auto.active}
+          icon={<Icon icon={SparklesIcon} size={16} />}
+          key="auto"
+          label={t('runnerPicker.auto', { ns: 'project' })}
+          desc={
+            auto.active
+              ? t('runnerPicker.autoResolved', {
+                  ns: 'project',
+                  runner:
+                    sandbox?.active || !directory
+                      ? sandboxName
+                      : projectDirectoryDeviceName(directory, devices),
+                })
+              : t('runnerPicker.autoDesc', { ns: 'project' })
+          }
+          onClick={() => {
+            setOpen(false);
+            if (!auto.active) auto.onSelect();
+          }}
+        />
+      )}
       {rows.map((item) => {
         if (item.kind === 'sandbox') return sandboxRow;
         const target = targetById.get(item.id);
@@ -280,8 +305,8 @@ const ProjectDeviceSwitcher = ({
     <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       {/* On the sandbox the chip names it as the menu does: its repositories
           and the first one's logo, once it has any. */}
-      {onSandbox && sandboxSlug ? (
-        <RepositoryAvatar size={14} url={sandboxSlug} />
+      {autoActive ? (
+        <Icon icon={SparklesIcon} size={14} />
       ) : (
         <ExecutionTargetIcon
           devicePlatform={onSandbox ? undefined : directory?.platform}
@@ -289,11 +314,13 @@ const ProjectDeviceSwitcher = ({
         />
       )}
       <span {...stylex.props(workingDirectoryChipStyles.label)}>
-        {onSandbox
-          ? sandboxLabel || t('heteroAgent.executionTarget.sandbox')
-          : directory
-            ? projectDirectoryDeviceName(directory, devices)
-            : t('heteroAgent.executionTarget.unknownDevice')}
+        {autoActive
+          ? t('runnerPicker.auto', { ns: 'project' })
+          : onSandbox
+            ? sandboxName
+            : directory
+              ? projectDirectoryDeviceName(directory, devices)
+              : t('heteroAgent.executionTarget.unknownDevice')}
       </span>
       {load && <DeviceLoadMeter load={load} />}
       <Icon icon={ChevronDownIcon} size={12} />

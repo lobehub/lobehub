@@ -55,6 +55,9 @@ export const useProjectHomeEnvironment = (projectId: string, agentId: string) =>
     /** The folder the conversation starts in; none in the cloud sandbox. */
     directoryId: environment.kind === 'directory' ? environment.id : undefined,
     onSandbox: environment.kind === 'sandbox',
+    /** Nothing picked by hand: the project's order decides where it starts. */
+    auto: pickedId === undefined,
     pick: setPickedId,
+    pickAuto: () => setPickedId(undefined),
   };
 };
