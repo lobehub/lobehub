@@ -421,5 +421,35 @@ export const ChannelManifest: BuiltinToolManifest = {
         },
       },
     },
+    {
+      name: ChannelApiName.postMessage,
+      description:
+        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            type: 'string',
+            description:
+              'Another Channel from listChannels that you are a member of. Omit for the current Channel.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              "A Thread of that Channel, from listThreads. Omit for the Channel's main timeline.",
+          },
+          content: {
+            type: 'string',
+            description:
+              'The message, written for the people there; self-contained, as they do not see this conversation. May be empty when it carries cards.',
+          },
+          includeCards: {
+            type: 'boolean',
+            description: 'Carry the cards you drew in this run. Default true.',
+          },
+        },
+      },
+    },
   ],
 };

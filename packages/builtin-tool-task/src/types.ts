@@ -1,4 +1,4 @@
-import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type { TaskAutomationMode, TaskChannelDeliveryInput, TaskStatus } from '@lobechat/types';
 
 export const TaskApiName = {
   /** Add a comment to a task */
@@ -305,6 +305,11 @@ export interface RunTasksState {
 export interface SetTaskScheduleParams {
   /** Switch automation mode. Pass null to disable automation entirely. */
   automationMode?: TaskAutomationMode | null;
+  /**
+   * Where each run's answer is also posted: `{}` = where the caller is answering now, otherwise
+   * `channelId` (+ `threadId`). Pass null to stop posting.
+   */
+  channelDelivery?: TaskChannelDeliveryInput | null;
   /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
   heartbeatInterval?: number;
   identifier: string;

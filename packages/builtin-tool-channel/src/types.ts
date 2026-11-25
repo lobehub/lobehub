@@ -16,4 +16,5 @@ export const ChannelApiName = {
   stopThread: 'stopThread',
   unwatchThreads: 'unwatchThreads',
   watchThreads: 'watchThreads',
+  postMessage: 'postMessage',
 } as const;

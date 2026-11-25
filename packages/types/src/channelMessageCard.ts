@@ -185,3 +185,30 @@ export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) =>
     .filter(Boolean)
     .map((line) => `[Card] ${line}`)
     .join('\n');
+
+/**
+ * A message the running Agent posts as itself (`lobe-channel.postMessage`): on the main timeline
+ * or a Thread of its current Channel, or of another Channel where it is an active member.
+ */
+export interface ChannelPostMessageParams {
+  /** Another Channel the Agent is a member of; omit for the Channel it is answering in. */
+  channelId?: string;
+  /** The post's own words; may be empty when it carries cards. */
+  content?: string;
+  /** Carry the cards this run drew (`lobe-a2ui.renderUI`). Default true. */
+  includeCards?: boolean;
+  /** A Thread of that Channel; omit for its main timeline. */
+  threadId?: string;
+}
+
+/** Where a `postMessage` landed. */
+export interface ChannelPostedMessage {
+  /** How many cards went out with it. */
+  cards: number;
+  channelId: string;
+  channelTitle: string;
+  messageId: string;
+  /** The Thread it is in; null on the main timeline. */
+  threadId: string | null;
+  url: string;
+}
