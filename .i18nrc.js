@@ -52,7 +52,7 @@ module.exports = defineConfig({
     'Traditional Chinese (zh-TW) glossary and rules:',
     '- Agent -> 助手. Not 代理, 助理 or 智慧體. "助理" is reserved for "Assistant".',
     '- Assistant -> 助理',
-    '- Agentic (adjective) -> 自主... (e.g. Agentic dimension -> 自主性, agentic tool calling -> 自主工具調用, agentic coding -> 自主程式碼). Do not translate Agentic as 助手.',
+    '- Agentic (adjective) -> 自主... (e.g. Agentic dimension -> 自主性, agentic tool calling -> 自主工具呼叫, agentic coding -> 自主程式碼). Do not translate Agentic as 助手.',
     '- Use idiomatic Traditional Chinese phrasing suitable for Taiwan and Hong Kong (avoid raw simplified-to-traditional conversions).',
     '- Use full-width punctuation marks (，、。？！：；「」『』（）), except for code, tags, and interpolation variables.',
     '- Add a half-width space between Chinese characters and English words or numbers (Pangu spacing), e.g. "使用 GPT-4o 建立 3 個助手".',
