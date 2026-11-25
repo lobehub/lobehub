@@ -1,0 +1,120 @@
+import { A2uiApiName, A2uiIdentifier, systemPrompt } from '@lobechat/builtin-tool-a2ui';
+import { A2uiExecutionRuntime } from '@lobechat/builtin-tool-a2ui/executionRuntime';
+import { eq } from 'drizzle-orm';
+
+import { MessageModel } from '@/database/models/message';
+import { ChannelError } from '@/database/repositories/channel';
+import { channelJobs } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+
+import { assertChannelEnabled } from './featureGate';
+
+/** The same validator the builtin `renderUI` runs; stateless. */
+const runtime = new A2uiExecutionRuntime();
+
+/** How `lh card guide` turns the builtin tool's guide into one for the command line. */
+const CLI_CARD_GUIDE_PREFIX = `<card_cli>
+You draw cards from the command line. Wherever the guide below says to call renderUI, write its operations (the JSON array of A2UI messages for one surface) to a file and run \`lh card render --file card.json --json\` (\`--file -\` reads stdin). An invalid card comes back with errors: fix them and run it again. Rendering the same surfaceId again replaces that card. The cards you draw are posted with your reply, so do not repeat their content in text.
+</card_cli>
+
+`;
+
+/**
+ * One tool call per surface and run: rendering the surface again finds and replaces it. Not a
+ * provider id, so it never collides with a call the runtime records.
+ */
+export const cliCardToolCallId = (operationId: string, surfaceId: string) =>
+  `lh_card_${operationId}_${surfaceId}`;
+
+export type ChannelCardRenderResult =
+  | { errors: string[]; message: string; ok: false }
+  | { message: string; ok: true; replaced: boolean; surfaceId: string };
+
+/**
+ * Cards an external CLI runtime draws with `lh card render`. A card is stored exactly as a builtin
+ * `lobe-a2ui.renderUI` result: a tool message with the validated surface as its state, under the
+ * run's latest step in its Topic. The reply's publish (and every other path that reads a run's
+ * cards) finds it with no special case.
+ */
+export class ChannelCardService {
+  private readonly messages: MessageModel;
+
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly operationId: string,
+    workspaceId?: string,
+  ) {
+    this.messages = new MessageModel(db, userId, workspaceId);
+  }
+
+  /** The card-drawing guide and component catalog, current with the server's validator. */
+  guide = async () => {
+    await assertChannelEnabled(this.userId);
+    return { guide: CLI_CARD_GUIDE_PREFIX + systemPrompt };
+  };
+
+  render = async (operations: unknown): Promise<ChannelCardRenderResult> => {
+    await assertChannelEnabled(this.userId);
+    const output = await runtime.renderUI({ operations });
+    if (!output.success) {
+      const errors = (output.error?.body as { errors?: string[] } | undefined)?.errors ?? [];
+      return {
+        errors,
+        message: `The card was not drawn. Fix these and run \`lh card render\` again:\n- ${errors.join('\n- ')}`,
+        ok: false,
+      };
+    }
+    const state = output.state as { surface: { surfaceId: string } };
+    const { surfaceId } = state.surface;
+
+    // The Topic the reply's publish reads cards from: the run's Channel job's.
+    const [job] = await this.db
+      .select({ topicId: channelJobs.topicId })
+      .from(channelJobs)
+      .where(eq(channelJobs.operationId, this.operationId))
+      .limit(1);
+    if (!job?.topicId)
+      throw new ChannelError('CONFLICT', 'This run has no Channel reply to draw a card in');
+    const step = await this.messages.findLatestAssistantByOperationId({
+      operationId: this.operationId,
+      topicId: job.topicId,
+    });
+    if (!step) throw new ChannelError('CONFLICT', 'This run has not started a step yet');
+
+    const toolCallId = cliCardToolCallId(this.operationId, surfaceId);
+    const args = JSON.stringify({ operations });
+    const existing = await this.messages.findToolMessageIdByToolCallId(toolCallId);
+    if (existing) {
+      await this.messages.updateMessagePlugin(existing, { arguments: args });
+      await this.messages.updateToolMessage(existing, {
+        content: output.content,
+        pluginState: state,
+        replacePluginState: true,
+      });
+    } else {
+      await this.messages.create({
+        agentId: step.agentId ?? undefined,
+        content: output.content,
+        parentId: step.id,
+        plugin: {
+          apiName: A2uiApiName.renderUI,
+          arguments: args,
+          identifier: A2uiIdentifier,
+          type: 'builtin',
+        },
+        pluginState: state,
+        role: 'tool',
+        threadId: step.threadId ?? undefined,
+        tool_call_id: toolCallId,
+        topicId: job.topicId,
+      });
+    }
+    return {
+      message: `Card "${surfaceId}" ${existing ? 'replaced' : 'drawn'}; it is posted with your reply. Do not repeat its content in text.`,
+      ok: true,
+      replaced: !!existing,
+      surfaceId,
+    };
+  };
+}
