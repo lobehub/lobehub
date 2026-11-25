@@ -1,13 +1,9 @@
-import { A2uiApiName, A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
+import { A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
-import type {
-  ChannelExecutionConfig,
-  ChannelMessageSurface,
-  ChannelSharedAgentAccess,
-} from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
 import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -49,6 +45,7 @@ import { deliverRelayReceipt } from './relayReceipt';
 import { reportChannelReplyFailure } from './replyError';
 import { openChannelReply } from './replyOpening';
 import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
+import { runSurfaces } from './runSurfaces';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
@@ -803,25 +800,3 @@ export class ChannelCoordinator {
 registerLocalChannelAdvance(async (channelId) => {
   await new ChannelCoordinator(await getServerDB()).advance(channelId);
 });
-
-/** The cards one run drew, in the order it drew them; malformed states are skipped. */
-const runSurfaces = async (
-  messages: MessageModel,
-  operationId: string,
-  topicId: string,
-): Promise<ChannelMessageSurface[]> => {
-  const states = await messages.listToolStatesByOperationId({
-    apiName: A2uiApiName.renderUI,
-    identifier: A2uiIdentifier,
-    operationId,
-    topicId,
-  });
-  return states
-    .map((state) => (isRecord(state) ? state.surface : undefined))
-    .filter(
-      (surface): surface is ChannelMessageSurface =>
-        isRecord(surface) &&
-        typeof surface.surfaceId === 'string' &&
-        Array.isArray(surface.operations),
-    );
-};
