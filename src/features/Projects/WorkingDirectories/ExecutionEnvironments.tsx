@@ -12,19 +12,11 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
-import {
-  BoxIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { BoxIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -74,13 +66,6 @@ interface ExecutionEnvironmentsProps {
   /** The project's environment, which a new folder is linked to. */
   environmentId?: string;
   projectId: string;
-  /** What the cloud sandbox row unfolds into: the project environment's form. */
-  sandboxDetails: ReactNode;
-  /**
-   * The repositories the cloud sandbox clones: `owner/name` (`+N` for more)
-   * as its card's name, and the first one's slug for its logo.
-   */
-  sandboxRepository?: { label?: string; slug?: string };
 }
 
 /**
@@ -95,8 +80,6 @@ export function ExecutionEnvironments({
   canManage,
   environmentId,
   projectId,
-  sandboxDetails,
-  sandboxRepository,
 }: ExecutionEnvironmentsProps) {
   const { t } = useTranslation('project');
   const { error, loaded, ordered, reorder, revalidate } =
@@ -106,16 +89,12 @@ export function ExecutionEnvironments({
   const isDeviceListLoaded = useDeviceStore(deviceSelectors.isDeviceListLoaded);
   const removeDirectory = useProjectDirectoryStore((s) => s.removeDirectory);
   const bind = useProjectDirectoryStore((s) => s.bind);
-  const [sandboxOpen, setSandboxOpen] = useState<boolean>();
   // The order being dragged, shown at once; the saved one replaces it.
   const [pendingOrder, setPendingOrder] = useState<string[]>();
 
   const directories = ordered.flatMap((item) =>
     item.kind === 'directory' ? [item.directory] : [],
   );
-  // The sandbox's configuration is open until folded when it is the only
-  // execution environment: there is nothing else on the page to look at.
-  const isSandboxOpen = sandboxOpen ?? directories.length === 0;
 
   // A folder registered before environments existed is not enabled for the
   // project's environment yet, so nothing can start in it. There is nothing to
@@ -262,34 +241,15 @@ export function ExecutionEnvironments({
     </Text>
   );
 
-  const renderSandbox = () => (
-    <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
-      {card({
-        actions: (
-          <ActionIcon
-            icon={isSandboxOpen ? ChevronDownIcon : ChevronRightIcon}
-            size="small"
-            title={t('settings.configureSandbox')}
-            onClick={() => setSandboxOpen(!isSandboxOpen)}
-          />
-        ),
-        icon: sandboxRepository?.slug ? (
-          <RepositoryAvatar size={24} url={sandboxRepository.slug} />
-        ) : (
-          <Icon icon={BoxIcon} size={20} />
-        ),
-        // Named after its repositories once it has some, so two sandboxes
-        // would never read alike; "cloud sandbox" then says what it is.
-        meta: metaText(
-          sandboxRepository?.label
-            ? t('settings.cloudSandboxGroup')
-            : t('settings.sandboxNoRepository'),
-        ),
-        title: sandboxRepository?.label || t('settings.cloudSandboxGroup'),
-      })}
-      {isSandboxOpen && <div style={{ paddingBlockEnd: 4 }}>{sandboxDetails}</div>}
-    </Flexbox>
-  );
+  // A runner like any device: where the work happens. What it checks out and
+  // how it is set up is the project's environment, on its own tab, the same
+  // for every runner.
+  const renderSandbox = () =>
+    card({
+      icon: <Icon icon={BoxIcon} size={20} />,
+      meta: metaText(t('settings.sandboxRunnerDesc')),
+      title: t('settings.cloudSandboxGroup'),
+    });
 
   const renderDirectory = (directory: ProjectDirectory) => {
     const device = devices.find((item) => item.deviceId === directory.deviceId);
