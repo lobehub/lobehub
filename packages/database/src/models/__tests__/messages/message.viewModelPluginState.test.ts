@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { LOADING_FLAT } from '@lobechat/const';
-import { listProjectedTools, projectToolViewModels } from '@lobechat/tool-view-model';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -125,6 +125,27 @@ const toolRows: ToolRow[] = [
     identifier: 'lobe-local-system',
     state: ['not', 'an', 'object'],
   },
+  // One row for EVERY tool the SQL reduces, carrying every key any reduction
+  // removes. The projection-equivalence case then fails for any of them whose
+  // projector stops dropping what the SQL drops (or disappears).
+  ...VIEW_MODEL_REDUCED_TOOLS.map((tool): ToolRow => {
+    const [identifier, apiName] = tool.split('/');
+    return {
+      apiName,
+      content: big(`${tool} body`),
+      id: `every-${tool.replaceAll('/', '-')}`,
+      identifier,
+      state: {
+        charCount: 5000,
+        content: big('content'),
+        matches: [big('match')],
+        output: big('output'),
+        results: [{ data: { content: big('page'), length: 5000, title: 'P' } }],
+        stdout: big('stdout'),
+        xml: big('xml'),
+      },
+    };
+  }),
 ];
 
 beforeEach(async () => {
@@ -201,7 +222,12 @@ describe('MessageModel.query viewModelPluginState', () => {
     expect(pages[4].data.content).toBe(big('err'));
     expect(pages[5]).toBe('not-an-object');
 
-    const stateBytes = (list: typeof full) => bytes(list.map((message) => message.pluginState));
+    const stateBytes = (list: typeof full) =>
+      bytes(
+        list
+          .filter((message) => !message.id.startsWith('every-'))
+          .map((message) => message.pluginState),
+      );
     expect(stateBytes(reduced)).toBeLessThan(stateBytes(full) / 2);
   });
 
@@ -219,8 +245,16 @@ describe('MessageModel.query viewModelPluginState', () => {
       expect(stateOf(reduced, id)).toEqual(stateOf(full, id));
   });
 
-  it('only reduces tools that have a view-model projector', () => {
-    const projected = new Set(listProjectedTools());
-    for (const tool of VIEW_MODEL_REDUCED_TOOLS) expect(projected.has(tool), tool).toBe(true);
+  it('reduces every listed tool while its projection stays the same', async () => {
+    const full = await messageModel.query({ topicId });
+    const reduced = await messageModel.query({ topicId, viewModelPluginState: true });
+
+    for (const tool of VIEW_MODEL_REDUCED_TOOLS) {
+      const id = `every-${tool.replaceAll('/', '-')}`;
+      expect(bytes(stateOf(reduced, id)), tool).toBeLessThan(bytes(stateOf(full, id)));
+      expect(projectToolViewModels(reduced.filter((message) => message.id === id)), tool).toEqual(
+        projectToolViewModels(full.filter((message) => message.id === id)),
+      );
+    }
   });
 });
