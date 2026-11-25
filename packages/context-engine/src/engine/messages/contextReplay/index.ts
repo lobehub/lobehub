@@ -6,6 +6,7 @@ import type {
   OpenAIChatMessage,
 } from '@lobechat/types';
 
+import { PlaceholderVariablesProcessor } from '../../../processors/PlaceholderVariables';
 import type { ContextProcessor, Message } from '../../../types';
 
 declare module '../../../types' {
@@ -25,6 +26,9 @@ const sessionProviders = new Set([
   'UserMemoryInjector',
   'KnowledgeInjector',
   'AgentDocumentContextInjector',
+  'AgentDocumentMessageInjector',
+  'AgentDocumentChangesInjector',
+  'SkillChangesInjector',
   'ProjectContextInjector',
   'ActiveTopicDocumentContextInjector',
   'TaskManagerContextInjector',
@@ -74,7 +78,20 @@ export class ContextReplayCoordinator {
   constructor(
     private input: ContextReplayInput,
     private sessionKey: string,
+    private variables: Record<string, () => string> = {},
   ) {
+    if (input.runtimeContext)
+      this.candidates.set('runtime_configuration', {
+        key: 'runtime_configuration',
+        sourceIds: [],
+        messages: [
+          {
+            id: 'runtime_configuration',
+            role: 'user',
+            content: JSON.stringify(input.runtimeContext),
+          },
+        ],
+      });
     if (input.committedSnapshot && input.committedSnapshot.invocationId !== input.invocationId)
       throw new Error('Context snapshot belongs to another invocation');
   }
@@ -150,12 +167,21 @@ export class ContextReplayCoordinator {
       const latest = new Map<string, ContextReplaySegment>();
       for (const entry of history)
         for (const change of entry.snapshot.changes) latest.set(change.key, change);
+      const candidates = await Promise.all(
+        [...this.candidates.values()].map(async (candidate) => {
+          const resolved = await new PlaceholderVariablesProcessor({
+            variableGenerators: this.variables,
+          }).process({ ...context, messages: candidate.messages });
+          return { ...candidate, messages: resolved.messages as ContextReplaySegment['messages'] };
+        }),
+      );
       const changes =
         own?.changes ??
-        [...this.candidates.values()].filter(
+        candidates.filter(
           (candidate) =>
+            !(messageProviders.has(candidate.key.split(':')[0]) && latest.has(candidate.key)) &&
             comparable(candidate.messages) !==
-            comparable(latest.get(candidate.key)?.messages ?? []),
+              comparable(latest.get(candidate.key)?.messages ?? []),
         );
       const canonicalChanges = own ? changes : this.canonicalize(changes);
       const sourceIds = [

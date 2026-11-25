@@ -86,7 +86,9 @@ import {
 } from '../../providers';
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
+import { parseReferDocumentTags } from '../documentReference';
 import { ToolNameResolver } from '../tools';
+import { parseReferTopicTags } from '../topicReference';
 import { ContextReplayCoordinator } from './contextReplay';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
@@ -162,6 +164,7 @@ export class MessagesEngine {
       const replay = new ContextReplayCoordinator(
         this.params.contextReplay,
         this.params.contextReplay.sessionKey ?? `${this.params.provider}:${this.params.model}`,
+        this.params.variableGenerators,
       );
       processors = processors.map((processor) => replay.wrap(processor));
       processors.splice(
@@ -245,6 +248,21 @@ export class MessagesEngine {
     // agent-management context (<current_agent> + <available_agents>).
     // Anything else — system role, knowledge bases, memory, web-browsing tool
     // prompts — remains untouched.
+    const referenceMessages = this.params.contextReplay
+      ? [messages.findLast((message) => message.role === 'user')].filter((message) => !!message)
+      : messages;
+    const documentIds = new Set(
+      parseReferDocumentTags(referenceMessages).map((reference) => reference.documentId),
+    );
+    const topicIds = new Set(
+      parseReferTopicTags(referenceMessages).map((reference) => reference.topicId),
+    );
+    const scopedDocuments = this.params.contextReplay
+      ? documentReferences?.filter((reference) => documentIds.has(reference.documentId))
+      : documentReferences;
+    const scopedTopics = this.params.contextReplay
+      ? topicReferences?.filter((reference) => topicIds.has(reference.topicId))
+      : topicReferences;
     const isAgentMode = enableAgentMode !== false;
     const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
@@ -536,12 +554,12 @@ export class MessagesEngine {
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
-        topicReferences,
+        topicReferences: scopedTopics,
       }),
       // Document Reference context (dragged/referenced agent documents to last user message)
       new DocumentReferenceContextInjector({
         canReadDocuments,
-        documentReferences,
+        documentReferences: scopedDocuments,
         enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 

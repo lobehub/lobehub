@@ -404,7 +404,13 @@ export const contextEngineeringDetailed = async ({
       provider,
     },
     run: {
-      contextReplay,
+      contextReplay: contextReplay && {
+        ...contextReplay,
+        runtimeContext: {
+          ...contextReplay.runtimeContext,
+          replyLanguage: userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()),
+        },
+      },
       enableMcpAppContext:
         !!getServerConfigStoreState() &&
         serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),

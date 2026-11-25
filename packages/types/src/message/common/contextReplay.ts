@@ -27,6 +27,7 @@ export interface ContextReplayInput {
   invocationId: string;
   /** Current access decisions, checked again even when retrying a committed snapshot. */
   revokedSourceIds?: string[];
+  runtimeContext?: Record<string, string | number | boolean | string[] | undefined>;
   sessionKey?: string;
   sourceIdsByProvider?: Record<string, string[]>;
 }

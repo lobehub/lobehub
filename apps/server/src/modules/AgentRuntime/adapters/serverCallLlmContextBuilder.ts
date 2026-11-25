@@ -210,7 +210,16 @@ export const buildServerCallLlmContext = async ({
     : {};
   const contextEngineInput = {
     ...(contextReplay && {
-      contextReplay: { ...contextReplay, committedSnapshot: snapshots[contextReplay.invocationId] },
+      contextReplay: {
+        ...contextReplay,
+        committedSnapshot: snapshots[contextReplay.invocationId],
+        runtimeContext: {
+          environment: executionTarget,
+          deviceId: activeDeviceId,
+          replyLanguage:
+            typeof facts.variables.language === 'string' ? facts.variables.language : undefined,
+        },
+      },
     }),
     enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
     additionalContexts: llmPayload.additionalContexts,

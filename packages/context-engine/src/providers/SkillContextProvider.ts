@@ -81,7 +81,7 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     super(options);
   }
 
-  protected buildSystemRoleContent(_context: PipelineContext): string | null {
+  protected buildSystemRoleContent(context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
     const { enabledSkills } = this.config;
@@ -92,7 +92,16 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     }
 
     // Separate activated skills (inject content directly) from available skills (list only)
-    const activatedSkills = selectActivatedSkills(enabledSkills);
+    const activatedSkills = selectActivatedSkills(enabledSkills).filter(
+      (skill) =>
+        !context.messages.some(
+          (message) =>
+            typeof message.content === 'string' &&
+            message.content.includes('<selected_skill_context>') &&
+            message.content.includes(`identifier="${skill.identifier}"`) &&
+            message.content.includes(skill.content!),
+        ),
+    );
     const availableSkills = enabledSkills.filter((s) => !s.activated);
 
     const contentParts: string[] = [];

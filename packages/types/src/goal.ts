@@ -926,6 +926,7 @@ export const buildGoalOverviewContext = (
 ): InitialGoalOverviewContext => {
   let taskSeq = 0;
   return {
+    goalId: snapshot.goal.id,
     findings: snapshot.nodes.filter((node) => node.kind === 'finding').map((node) => node.title),
     goal: {
       requirement: snapshot.goal.requirement,

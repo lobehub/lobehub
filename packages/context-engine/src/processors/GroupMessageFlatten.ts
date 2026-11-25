@@ -64,6 +64,7 @@ export class GroupMessageFlattenProcessor extends BaseProcessor {
             content: child.content || '',
             createdAt: message.createdAt,
             id: child.id,
+            metadata: child.metadata,
             meta: message.meta,
             role: 'assistant',
             updatedAt: message.updatedAt,

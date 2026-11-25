@@ -98,6 +98,10 @@ export class ClientContextBuilder implements ContextBuilder {
         ...(input.contextReplay && {
           contextReplay: {
             ...input.contextReplay,
+            runtimeContext: {
+              environment: input.state.plan?.execution?.kind,
+              deviceId: input.state.binding?.device?.id,
+            },
             committedSnapshot: snapshots[input.contextReplay.invocationId],
           },
         }),
