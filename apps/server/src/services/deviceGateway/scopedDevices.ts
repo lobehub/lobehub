@@ -1,6 +1,6 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { sortDevicesByActivity } from '@lobechat/types';
+import { isManagedCloudDevice, sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
@@ -27,8 +27,9 @@ const log = debug('lobe-server:device-scope');
  *   `VM-6-209-ubuntu` and the user can't recognise which machine it is.
  *
  * Rows include offline DB devices (`online: false`); callers that only want live
- * devices filter on `online` (both `listOnlineDevices` and the systemRole
- * snapshot already do).
+ * devices filter on `online`. Managed cloud devices carry `managed: true`: the
+ * model-facing device tool treats them as always online (`toAvailableDevices`),
+ * while `online` stays the live gateway presence that routing reads.
  *
  * The **gateway is authoritative** for liveness, while the database is
  * authoritative for workspace enrollment and visibility. Personal lookups may
@@ -81,6 +82,7 @@ export const getScopedOnlineDevices = async (
       friendlyName: row.friendlyName ?? null,
       hostname: live?.hostname ?? row.hostname ?? '',
       lastSeen: live?.lastSeen ?? row.lastSeenAt.toISOString(),
+      ...(isManagedCloudDevice(row) && { managed: true }),
       online: !!live,
       platform: live?.platform ?? row.platform ?? '',
       scope,

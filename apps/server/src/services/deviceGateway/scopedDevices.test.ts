@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -74,6 +75,22 @@ describe('getScopedOnlineDevices', () => {
     ]);
     expect(result[0]).toMatchObject({ online: true, scope: 'workspace' });
     expect(result[1]).toMatchObject({ online: false, scope: 'workspace' });
+  });
+
+  it('marks managed cloud devices so the device tool treats them as always online', async () => {
+    mocks.queryPersonal.mockResolvedValue([
+      { ...row('cloud-asleep'), identitySource: MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE },
+      { ...row('desktop'), identitySource: 'machine-id' },
+    ]);
+
+    const result = await getScopedOnlineDevices(serverDB, 'user-1');
+
+    // `online` stays the live presence routing reads.
+    expect(result.find((d) => d.deviceId === 'cloud-asleep')).toMatchObject({
+      managed: true,
+      online: false,
+    });
+    expect(result.find((d) => d.deviceId === 'desktop')).not.toHaveProperty('managed');
   });
 
   /**
