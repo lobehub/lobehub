@@ -46,7 +46,7 @@ import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { syncMemberGrant } from './grants';
 import { channelLastMessages } from './lastMessage';
-import { leaveChannel, removeChannelMember } from './membership';
+import { leaveChannel, removeChannelMember, setChannelMemberRole } from './membership';
 import { setMemberMuted } from './mute';
 import { notificationsMutedSql, setNotificationsMuted } from './notificationMute';
 import { openPeerConversation, peerOf } from './peer';
@@ -423,6 +423,12 @@ export class ChannelRepository {
     this.write(channelId, (tx, access) => removeChannelMember(tx, access, memberId), {
       allowArchived: true,
       minRole: 'admin',
+    });
+
+  /** The owner makes a person an admin or a plain member. See {@link setChannelMemberRole}. */
+  setMemberRole = async (channelId: string, memberId: string, role: 'admin' | 'member') =>
+    this.write(channelId, (tx, access) => setChannelMemberRole(tx, access, memberId, role), {
+      minRole: 'owner',
     });
 
   /**

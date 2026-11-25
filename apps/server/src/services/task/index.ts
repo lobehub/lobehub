@@ -794,7 +794,10 @@ export class TaskService {
     return findTaskOrThrow(this.taskModel, taskId);
   }
 
-  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
-    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(taskId);
+  async getTaskDetail(taskId: string, preloaded?: TaskItem): Promise<TaskDetailData | null> {
+    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(
+      taskId,
+      preloaded,
+    );
   }
 }
