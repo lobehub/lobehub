@@ -222,6 +222,7 @@ export class MessagePageQueries extends MessageScope {
       result,
       timing,
       topicId,
+      viewModelPluginState: selectViewModelPluginState,
       window: groupNodeWindow,
     });
 
@@ -397,6 +398,7 @@ export class MessagePageQueries extends MessageScope {
     timing,
     topicId,
     skipCompressedMembers,
+    viewModelPluginState: selectViewModelPluginState,
     window,
   }: {
     /**
@@ -427,6 +429,8 @@ export class MessagePageQueries extends MessageScope {
     /** Explicit group window (cursor pagination); overrides the row-derived one. */
     /** See `QueryMessageParams.skipCompressedMembers`. */
     skipCompressedMembers?: boolean;
+    /** See `QueryMessageParams.viewModelPluginState`. */
+    viewModelPluginState?: boolean;
     window?: MessageGroupNodeWindow;
   }): Promise<UIChatMessage[]> => {
     if (!topicId) return [];
@@ -439,6 +443,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
             window,
           }),
         { current, hasMessages: result.length > 0, topicId },
@@ -455,6 +460,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
           }),
         { current, hasMessages: false, topicId },
       );
@@ -468,6 +474,7 @@ export class MessagePageQueries extends MessageScope {
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
             skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
           }),
         { current, hasMessages: true, topicId },
       );
@@ -488,7 +495,11 @@ export class MessagePageQueries extends MessageScope {
           },
           postProcessUrl,
           timing,
-          { allowShareVisitor, skipCompressedMembers },
+          {
+            allowShareVisitor,
+            skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
+          },
         ),
       { current, hasMessages: true, topicId },
     );

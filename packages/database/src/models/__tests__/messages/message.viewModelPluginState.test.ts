@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { LOADING_FLAT } from '@lobechat/const';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
+import { MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { messagePlugins, messages, topics, users } from '../../../schemas';
+import { messageGroups, messagePlugins, messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 import { VIEW_MODEL_REDUCED_TOOLS } from '../../message/viewModelPluginState';
@@ -176,6 +177,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(messageGroups).where(eq(messageGroups.userId, userId));
   await serverDB.delete(users).where(eq(users.id, userId));
 });
 
@@ -256,5 +258,29 @@ describe('MessageModel.query viewModelPluginState', () => {
         projectToolViewModels(full.filter((message) => message.id === id)),
       );
     }
+  });
+
+  it('reduces the members a message group hydrates as well', async () => {
+    await serverDB.insert(messageGroups).values({
+      content: 'Summary',
+      createdAt: new Date(2024, 0, 2),
+      id: 'vmps-group',
+      topicId,
+      type: MessageGroupType.Compression,
+      userId,
+    });
+    await serverDB
+      .update(messages)
+      .set({ messageGroupId: 'vmps-group' })
+      .where(eq(messages.topicId, topicId));
+
+    const full = await messageModel.query({ topicId });
+    const reduced = await messageModel.query({ topicId, viewModelPluginState: true });
+
+    const membersOf = (list: typeof full) =>
+      (list.find((message) => message.role === 'compressedGroup') as any).compressedMessages;
+    expect(stateOf(membersOf(full), 'run')).toHaveProperty('stdout');
+    expect(stateOf(membersOf(reduced), 'run')).toEqual({ exitCode: 0, success: true });
+    expect(projectToolViewModels(reduced)).toEqual(projectToolViewModels(full));
   });
 });

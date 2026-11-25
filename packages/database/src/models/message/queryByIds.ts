@@ -48,6 +48,7 @@ import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
 import type { MessageGroupNodeWindow, ModelTimingContext } from './types';
+import { viewModelPluginState } from './viewModelPluginState';
 
 export class MessageByIdsQueries extends MessageScope {
   private readonly relations: MessageRelationQueries;
@@ -83,6 +84,8 @@ export class MessageByIdsQueries extends MessageScope {
         path: string | null,
         file: { fileType: string; id?: string | null },
       ) => Promise<string>;
+      /** See `QueryMessageParams.viewModelPluginState`. */
+      viewModelPluginState?: boolean;
     } = {},
   ): Promise<UIChatMessage[]> => {
     if (messageIds.length === 0) return [];
@@ -142,7 +145,7 @@ export class MessageByIdsQueries extends MessageScope {
         },
         pluginError: messagePlugins.error,
         pluginIntervention: messagePlugins.intervention,
-        pluginState: messagePlugins.state,
+        pluginState: options.viewModelPluginState ? viewModelPluginState : messagePlugins.state,
 
         translate: {
           content: messageTranslates.content,
@@ -394,6 +397,11 @@ export class MessageByIdsQueries extends MessageScope {
       allowShareVisitor?: boolean;
       /** See `QueryMessageParams.skipCompressedMembers`. */
       skipCompressedMembers?: boolean;
+      /**
+       * See `QueryMessageParams.viewModelPluginState`. Applies to the hydrated
+       * members only: the runtime state of omitted members is read whole.
+       */
+      viewModelPluginState?: boolean;
       window?: MessageGroupNodeWindow;
     } = {},
   ): Promise<UIChatMessage[]> => {
@@ -495,7 +503,11 @@ export class MessageByIdsQueries extends MessageScope {
         timing,
         'db.message.messageGroups.queryByIds',
         () =>
-          this.queryByIds(plan.idsToHydrate, { allowShareVisitor: includeVisitor, postProcessUrl }),
+          this.queryByIds(plan.idsToHydrate, {
+            allowShareVisitor: includeVisitor,
+            postProcessUrl,
+            viewModelPluginState: options.viewModelPluginState,
+          }),
         { messageCount: plan.idsToHydrate.length, totalMemberCount: groupMessageRecords.length },
       ),
       loadCompressedStateRows(this.db, plan.stateIds),
