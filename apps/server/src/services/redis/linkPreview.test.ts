@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LinkPreviewUnavailableError } from '@/server/services/linkPreview/errors';
+
 import { linkPreview } from './linkPreview';
 
 const { get, set } = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
@@ -45,13 +47,20 @@ describe('redisService.linkPreview', () => {
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a failed fetch after five minutes instead of an hour', async () => {
+  it('remembers a failed fetch for five minutes as a failure, never as "no card"', async () => {
     const resolve = vi.fn().mockRejectedValue(new Error('timeout'));
 
-    await expect(linkPreview.remember(URL, resolve)).resolves.toBe(null);
-    expect(set).toHaveBeenCalledWith(KEY, JSON.stringify({ preview: null }), {
-      px: 5 * 60 * 1000,
-    });
+    await expect(linkPreview.remember(URL, resolve)).rejects.toBeInstanceOf(
+      LinkPreviewUnavailableError,
+    );
+    expect(set).toHaveBeenCalledWith(KEY, JSON.stringify({ failed: true }), { px: 5 * 60 * 1000 });
+
+    // The next viewer within five minutes gets the same failure without a fetch.
+    get.mockResolvedValue(JSON.stringify({ failed: true }));
+    await expect(linkPreview.remember(URL, resolve)).rejects.toBeInstanceOf(
+      LinkPreviewUnavailableError,
+    );
+    expect(resolve).toHaveBeenCalledTimes(1);
   });
 
   it('reads live without Redis or when Redis fails', async () => {
@@ -59,6 +68,9 @@ describe('redisService.linkPreview', () => {
     const resolve = vi.fn().mockResolvedValue(null);
     await linkPreview.remember(URL, resolve);
     expect(resolve).toHaveBeenCalledTimes(1);
+    await expect(
+      linkPreview.remember(URL, () => Promise.reject(new Error('timeout'))),
+    ).rejects.toBeInstanceOf(LinkPreviewUnavailableError);
 
     redisAvailable = true;
     get.mockRejectedValue(new Error('down'));

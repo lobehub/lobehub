@@ -29,6 +29,16 @@ describe('extractLinkPreviewUrls', () => {
     ]);
   });
 
+  it('follows reference-style links to their definitions', () => {
+    const content = [
+      'See [the docs][site] and [again][SITE].',
+      '',
+      '[site]: https://example.com/docs',
+    ].join('\n');
+
+    expect(extractLinkPreviewUrls(content)).toEqual(['https://example.com/docs']);
+  });
+
   it('ignores links quoted in code', () => {
     const content = [
       'run `curl https://inline.example.com/a`',

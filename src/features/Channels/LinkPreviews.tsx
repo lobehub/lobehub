@@ -7,7 +7,7 @@ import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { parseInternalLink } from '@/features/EntityLink/internalLink';
 import { linkPreviewActions, linkPreviewSelectors, useLinkPreviewStore } from '@/store/linkPreview';
 
-import { extractLinkPreviewUrls } from './linkPreviewUrls';
+import { extractLinkPreviewUrls, mayLinkWebPage } from './linkPreviewUrls';
 
 const styles = stylex.create({
   // Out of flow, so it adds no gap to the message body while it waits to be seen.
@@ -172,16 +172,11 @@ const LinkPreviewCard = ({ url }: { url: string }) => {
 export const LinkPreviews = ({ content }: { content: string }) => {
   const workspaces = useWorkspaces();
   const slugKey = workspaces.map((workspace) => workspace.slug).join('\n');
-  // Polling re-renders every message while replies run; scan the text only when it changes.
-  const urls = useMemo(() => {
-    const origin = typeof window === 'undefined' ? undefined : window.location.origin;
-    const slugs = slugKey ? slugKey.split('\n') : [];
-    return extractLinkPreviewUrls(content, (url) => !!parseInternalLink(url, origin, slugs));
-  }, [content, slugKey]);
 
-  // A Channel opens on up to 100 messages; reading the cards of history far
-  // off screen would fan out hundreds of page fetches. Ask for a message's
-  // cards once it comes near the viewport, and keep them from then on.
+  // A Channel opens on up to 100 messages. Reading the links (a Markdown
+  // parse) and the cards of history far off screen would cost a parse per
+  // message and fan out hundreds of page fetches, so both wait until the
+  // message comes near the viewport, and stay on from then.
   const sentinelRef = useRef<HTMLSpanElement>(null);
   const [seen, setSeen] = useState(false);
   useInViewport(sentinelRef, {
@@ -190,15 +185,25 @@ export const LinkPreviews = ({ content }: { content: string }) => {
     },
     rootMargin: '400px 0px',
   });
-  // Cards already known (this session, or restored from the last one) paint at once.
+
+  // Polling re-renders every message while replies run; scan the text only when it changes.
+  const urls = useMemo(() => {
+    if (!seen) return [];
+    const origin = typeof window === 'undefined' ? undefined : window.location.origin;
+    const slugs = slugKey ? slugKey.split('\n') : [];
+    return extractLinkPreviewUrls(content, (url) => !!parseInternalLink(url, origin, slugs));
+  }, [seen, content, slugKey]);
+  // Cards already known (this session, or restored from the last one) paint without a request.
   const ready = useLinkPreviewStore(linkPreviewSelectors.readyUrls(urls));
 
-  if (urls.length === 0) return null;
+  if (!mayLinkWebPage(content)) return null;
 
   return (
     <>
       <span aria-hidden ref={sentinelRef} {...stylex.props(styles.sentinel)} />
-      {seen && urls.map((url) => <LinkPreviewSync key={url} url={url} />)}
+      {urls.map((url) => (
+        <LinkPreviewSync key={url} url={url} />
+      ))}
       {ready.length > 0 && (
         <div {...stylex.props(styles.list)}>
           {ready.map((url) => (

@@ -1,4 +1,4 @@
-import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
+import { isSSRFBlockedError, type SSRFOptions, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type { LinkPreview } from '@lobechat/types';
 import debug from 'debug';
 
@@ -42,6 +42,18 @@ const charsetOf = (contentType: string) => {
   }
 };
 
+/**
+ * Public addresses only, on every hop. A deployment may let other fetches
+ * reach private hosts (`SSRF_ALLOW_PRIVATE_IP_ADDRESS`, `SSRF_ALLOW_IP_ADDRESS_LIST`
+ * for an internal MCP or model endpoint); any signed-in user can ask for a
+ * preview, so those exceptions must not apply here.
+ */
+const PUBLIC_ONLY: SSRFOptions = {
+  allowIPAddressList: [],
+  allowPrivateIPAddress: false,
+  maxContentLength: MAX_HTML_BYTES,
+};
+
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 5;
 
@@ -64,7 +76,7 @@ const fetchPage = async (url: string, signal: AbortSignal) => {
         redirect: 'manual',
         signal,
       },
-      { maxContentLength: MAX_HTML_BYTES },
+      PUBLIC_ONLY,
     );
 
     const location = response.headers.get('location');
@@ -97,8 +109,9 @@ const readPreview = async (url: string): Promise<LinkPreview | null> => {
 
 /**
  * The Open Graph summary of a public web page, or `null` when the address is
- * not a public `http(s)` page, does not answer in time, or names neither a
- * title nor a description. Fetched through the SSRF guard (every redirect hop
+ * not a public `http(s)` page (private and reserved hosts included) or the page
+ * names neither a title nor a description. Rejects with `LinkPreviewUnavailableError` when the page could
+ * not be read (timeout, refused, blocked), so a viewer keeps the card it has. Fetched through the SSRF guard (every redirect hop
  * included), and shared by every viewer through the cache: one page is read
  * once a day however many messages link it.
  */
@@ -106,17 +119,14 @@ export const getLinkPreview = async (input: string): Promise<LinkPreview | null>
   const url = normalizeLinkPreviewUrl(input);
   if (!url) return null;
 
-  try {
-    return await redisService.linkPreview.remember(url, async () => {
-      try {
-        return await readPreview(url);
-      } catch (error) {
-        log('preview of %s failed: %O', new URL(url).origin, error);
-        throw error;
-      }
-    });
-  } catch {
-    // Without Redis the failure reaches here; either way the message shows no card.
-    return null;
-  }
+  return redisService.linkPreview.remember(url, async () => {
+    try {
+      return await readPreview(url);
+    } catch (error) {
+      // A private or reserved address will never have a public card.
+      if (isSSRFBlockedError(error)) return null;
+      log('preview of %s failed: %O', new URL(url).origin, error);
+      throw error;
+    }
+  });
 };

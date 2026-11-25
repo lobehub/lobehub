@@ -1,11 +1,26 @@
+import { SSRFBlockedError } from '@lobechat/ssrf-safe-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LinkPreviewUnavailableError } from './errors';
 import { getLinkPreview, normalizeLinkPreviewUrl } from './index';
 
 const { ssrfSafeFetch } = vi.hoisted(() => ({ ssrfSafeFetch: vi.fn() }));
-vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch }));
+vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ssrfSafeFetch,
+}));
 vi.mock('@/server/services/redis', () => ({
-  redisService: { linkPreview: { remember: (_url: string, resolve: () => unknown) => resolve() } },
+  redisService: {
+    linkPreview: {
+      remember: async (_url: string, resolve: () => Promise<unknown>) => {
+        try {
+          return await resolve();
+        } catch (error) {
+          throw new LinkPreviewUnavailableError({ cause: error });
+        }
+      },
+    },
+  },
 }));
 
 const htmlResponse = (body: string | Uint8Array, contentType = 'text/html; charset=utf-8') =>
@@ -43,7 +58,8 @@ describe('getLinkPreview', () => {
     expect(ssrfSafeFetch).toHaveBeenCalledWith(
       'https://example.com/post',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      { maxContentLength: 512 * 1024 },
+      // Public hosts only, whatever exceptions the deployment grants other fetches.
+      { allowIPAddressList: [], allowPrivateIPAddress: false, maxContentLength: 512 * 1024 },
     );
   });
 
@@ -103,15 +119,23 @@ describe('getLinkPreview', () => {
     await expect(getLinkPreview('https://example.cn/')).resolves.toMatchObject({ title: '标题' });
   });
 
-  it('answers no card for non-HTML pages, failed responses, blocked or slow fetches', async () => {
+  it('answers no card for non-HTML pages, missing pages and private hosts', async () => {
     ssrfSafeFetch.mockResolvedValueOnce(htmlResponse('%PDF', 'application/pdf'));
     await expect(getLinkPreview('https://example.com/a.pdf')).resolves.toBe(null);
 
     ssrfSafeFetch.mockResolvedValueOnce(new Response('gone', { status: 404 }));
     await expect(getLinkPreview('https://example.com/gone')).resolves.toBe(null);
 
-    ssrfSafeFetch.mockRejectedValueOnce(new Error('SSRF blocked: 10.0.0.1 is not allowed'));
+    ssrfSafeFetch.mockRejectedValueOnce(new SSRFBlockedError('SSRF blocked: 10.0.0.1'));
     await expect(getLinkPreview('http://internal.example.com/')).resolves.toBe(null);
+  });
+
+  it('reports a page it could not read as unavailable, not as having no card', async () => {
+    ssrfSafeFetch.mockRejectedValueOnce(new Error('The operation was aborted due to timeout'));
+
+    await expect(getLinkPreview('https://slow.example.com/')).rejects.toBeInstanceOf(
+      LinkPreviewUnavailableError,
+    );
   });
 
   it('never fetches an address that cannot have a card', async () => {
