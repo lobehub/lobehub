@@ -2,9 +2,22 @@ import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
 
 const isCompressedGroup = (message: UIChatMessage) => message.role === 'compressedGroup';
 
-const findLastUserIndex = (messages: UIChatMessage[]) => {
+/**
+ * A thread page also lists the main-conversation rows it branched from. A
+ * thread's group must not be hoisted above one of those: it would land above
+ * the inherited context and the branch divider. So the search stops at a user
+ * message from another conversation. A group whose `threadId` is unknown
+ * (legacy groups mixing both) keeps the plain last-user anchor.
+ */
+const findAnchorIndex = (messages: UIChatMessage[], group: UIChatMessage) => {
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user') return i;
+    const message = messages[i];
+    if (message.role !== 'user') continue;
+
+    const crossesConversation =
+      group.threadId !== undefined && (message.threadId ?? null) !== (group.threadId ?? null);
+
+    return crossesConversation ? -1 : i;
   }
 
   return -1;
@@ -34,7 +47,7 @@ export const hoistCompressedGroups = (messages: UIChatMessage[]): UIChatMessage[
     }
 
     const keepPosition = (message.metadata as CompressionGroupMetadata | undefined)?.keepPosition;
-    const anchor = keepPosition ? -1 : findLastUserIndex(result);
+    const anchor = keepPosition ? -1 : findAnchorIndex(result, message);
 
     if (anchor === -1) {
       result.push(message);
