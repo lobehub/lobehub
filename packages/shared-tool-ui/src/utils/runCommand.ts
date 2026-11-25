@@ -27,3 +27,34 @@ export const getRunCommandDisplayCommand = (command?: string) => {
 
   return stripOuterShellQuotes(match[1]) || trimmed;
 };
+
+interface RunCommandOutputState {
+  output?: string;
+  stderr?: string;
+  stdout?: string;
+}
+
+/**
+ * The text a command card shows as the command's own output, next to a
+ * separately rendered `stderr`.
+ *
+ * `stdout` is the canonical field. Writers stopped persisting `output` when it
+ * only repeats `stdout` (Codex) or `stdout + stderr` (local shell), so newer
+ * rows carry `stdout` alone while older rows carry both; legacy rows and
+ * backends that never report `stdout` still fall back to `output`, then to the
+ * tool message body.
+ *
+ * An empty `stdout` next to a non-empty `stderr` yields no text: the legacy
+ * `output` would only repeat the stderr block the card already renders.
+ */
+export const getRunCommandStdout = (
+  state: RunCommandOutputState | null | undefined,
+  content?: string | null,
+): string => {
+  if (typeof state?.stdout === 'string') {
+    if (state.stdout) return state.stdout;
+    if (state.stderr?.trim()) return '';
+  }
+
+  return state?.output || content || '';
+};

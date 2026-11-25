@@ -435,7 +435,8 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
               outputTruncated: true,
             }
           : {}),
-        output: truncatedOutput.output,
+        // `stdout` is the canonical field (see `getRunCommandStdout`);
+        // also writing `output` stored the same text twice.
         stdout: truncatedOutput.output,
         success: isSuccess,
       },
@@ -1008,7 +1009,6 @@ export class CodexAdapter implements AgentEventAdapter {
     return [
       this.createToolStateEvent(itemId, {
         isBackground: false,
-        output: snapshot,
         stdout: snapshot,
       }),
     ];
