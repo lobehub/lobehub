@@ -1,9 +1,10 @@
 import { type SkillItem, type SkillSource, skillsPrompts } from '@lobechat/prompts';
-import { isPlainRecord, pickTrimmedString } from '@lobechat/utils/object';
+import { isPlainRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
 import type { Message, PipelineContext, ProcessorOptions } from '../types';
+import { SKILL_STORE_TOOL_ID } from './SkillImportRouteInjector';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -16,31 +17,34 @@ declare module '../types' {
 
 const log = debug('context-engine:provider:SkillContextProvider');
 
-/**
- * Wire-format identifier and import APIs of `lobe-skill-store`. Literal copies —
- * frozen, persisted in message rows, and not importable here without adding a
- * tool-package dependency to `context-engine`.
- */
-const SKILL_STORE_IDENTIFIER = 'lobe-skill-store';
+/** Skill Store APIs whose result reports the import `status` in its state. */
 const SKILL_STORE_IMPORT_APIS = new Set(['importFromMarket', 'importSkill']);
+
+/**
+ * Filesystem skills outrank a user-library skill of the same name in the skill
+ * pool, so a listed entry with one of these sources is never the library skill
+ * an import just created.
+ */
+const FILESYSTEM_SKILL_SOURCES = new Set<SkillSource | undefined>(['device', 'project']);
 
 const extractCreatedSkillName = (state: unknown): string | undefined => {
   if (!isPlainRecord(state)) return undefined;
   if (state.success !== true || state.status !== 'created') return undefined;
 
-  return pickTrimmedString(state.name)?.toLowerCase();
+  return typeof state.name === 'string' && state.name ? state.name : undefined;
 };
 
 /**
- * Collect lower-cased names of skills created by `lobe-skill-store` in the
- * visible (non-truncated, non-compressed) conversation history.
+ * Collect the names of skills created by `lobe-skill-store` in the visible
+ * (non-truncated, non-compressed) conversation history.
  *
- * When the model installs a new skill mid-conversation, the import confirmation
- * (and usually an `activateSkill` result right after) is already in visible
- * history. Injecting that newly created skill into `<available_skills>` inside
- * the leading system message on the next turn mutates message `[0]` and
- * invalidates 100% of the provider prompt cache without adding information the
- * model does not already have.
+ * When the model installs a new skill mid-conversation, listing it in
+ * `<available_skills>` on the next turn mutates message `[0]` and invalidates
+ * the provider prompt cache for the whole conversation prefix. Until the import
+ * turn leaves visible history, the model knows the skill only from the import
+ * confirmation, which carries its name and not its description.
+ *
+ * Names are compared exactly, the way the skill pool dedupes them.
  *
  * Deliberately skips `compressedGroup.compressedMessages`: once the import turn
  * is compressed into a summary or truncated out of history, the skill returns
@@ -48,15 +52,20 @@ const extractCreatedSkillName = (state: unknown): string | undefined => {
  * ignores `status: 'updated' | 'unchanged'` because those skills were already
  * in the initial `<available_skills>` block and removing them would itself
  * break the cached prefix.
+ *
+ * Covers model-driven Skill Store installs only, because they are the only
+ * list change the history records. A re-import that reorders the list, a skill
+ * created by `lobe-skill-maintainer`, and an install made outside the
+ * conversation still change message `[0]` on the next turn.
  */
-export const collectSessionCreatedSkillNames = (messages: readonly Message[]): Set<string> => {
+const collectSessionCreatedSkillNames = (messages: readonly Message[]): Set<string> => {
   const names = new Set<string>();
 
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
       isPlainRecord(msg.plugin) &&
-      msg.plugin.identifier === SKILL_STORE_IDENTIFIER &&
+      msg.plugin.identifier === SKILL_STORE_TOOL_ID &&
       typeof msg.plugin.apiName === 'string' &&
       SKILL_STORE_IMPORT_APIS.has(msg.plugin.apiName)
     ) {
@@ -73,7 +82,7 @@ export const collectSessionCreatedSkillNames = (messages: readonly Message[]): S
       for (const tool of child.tools) {
         if (
           !isPlainRecord(tool) ||
-          tool.identifier !== SKILL_STORE_IDENTIFIER ||
+          tool.identifier !== SKILL_STORE_TOOL_ID ||
           typeof tool.apiName !== 'string' ||
           !SKILL_STORE_IMPORT_APIS.has(tool.apiName)
         ) {
@@ -149,6 +158,9 @@ export const selectActivatedSkills = (enabledSkills?: SkillMeta[]): SkillMeta[] 
 export class SkillContextProvider extends BaseSystemRoleProvider {
   readonly name = 'SkillContextProvider';
 
+  /** Skills the last `buildSystemRoleContent` call put into the prompt. */
+  private injectedSkillsCount = 0;
+
   constructor(
     private config: SkillContextProviderConfig,
     options: ProcessorOptions = {},
@@ -161,7 +173,9 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     const activatedSkills = selectActivatedSkills(enabledSkills);
     const sessionCreatedSkillNames = collectSessionCreatedSkillNames(context.messages);
     const availableSkills = enabledSkills.filter(
-      (s) => !s.activated && !sessionCreatedSkillNames.has(s.name.trim().toLowerCase()),
+      (s) =>
+        !s.activated &&
+        (FILESYSTEM_SKILL_SOURCES.has(s.source) || !sessionCreatedSkillNames.has(s.name)),
     );
 
     return { activatedSkills, availableSkills };
@@ -218,14 +232,14 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
       activatedSkills.length,
       availableSkills.length,
     );
+    this.injectedSkillsCount = activatedSkills.length + availableSkills.length;
     return contentParts.join('\n\n');
   }
 
   protected onInjected(context: PipelineContext): void {
-    const { activatedSkills, availableSkills } = this.resolvePromptSkills(context);
     context.metadata.skillContext = {
       injected: true,
-      skillsCount: activatedSkills.length + availableSkills.length,
+      skillsCount: this.injectedSkillsCount,
     };
   }
 }

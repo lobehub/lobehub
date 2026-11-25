@@ -271,7 +271,7 @@ describe('SkillContextProvider', () => {
                   result: {
                     content: 'Skill "find-skills" created successfully.',
                     state: {
-                      name: 'Find-Skills',
+                      name: 'find-skills',
                       skillId: 'skl_2',
                       status: 'created',
                       success: true,
@@ -356,6 +356,76 @@ describe('SkillContextProvider', () => {
       expect(systemMessage!.content).toContain('<skill name="updated-skill">');
       expect(systemMessage!.content).toContain('<skill name="unchanged-skill">');
       expect(systemMessage!.content).toContain('<skill name="failed-skill">');
+    });
+
+    it('keeps a filesystem skill listed when a same-named skill is created in this session', async () => {
+      // The pool keeps the project skill over the new library skill of the same name,
+      // so the listed entry is the one that was already there on the previous turn.
+      const skills: SkillMeta[] = [
+        {
+          description: 'Project PPT skill',
+          identifier: 'project:pptx',
+          location: '/repo/.agents/skills/pptx/SKILL.md',
+          name: 'pptx',
+          source: 'project',
+        },
+        {
+          description: 'Device chart skill',
+          identifier: 'device:chart',
+          location: '/home/me/.agents/skills/chart/SKILL.md',
+          name: 'chart',
+          source: 'device',
+        },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        {
+          content: 'Skill "pptx" created successfully from market.',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+          role: 'tool',
+        },
+        {
+          content: 'Skill "chart" created successfully.',
+          id: 't2',
+          plugin: { apiName: 'importSkill', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'chart', skillId: 'skl_2', status: 'created', success: true },
+          role: 'tool',
+        },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).toContain('<skill name="pptx"');
+      expect(systemMessage!.content).toContain('<skill name="chart"');
+      expect(result.metadata.skillContext).toEqual({ injected: true, skillsCount: 2 });
+    });
+
+    it('keeps a listed skill whose name differs from the created one only by case', async () => {
+      const skills: SkillMeta[] = [
+        { description: 'Existing skill', identifier: 'pptx-upper', name: 'PPTX' },
+        { description: 'Newly installed', identifier: 'market-pptx', name: 'pptx' },
+      ];
+      const provider = new SkillContextProvider({ enabledSkills: skills });
+
+      const messages = [
+        {
+          content: 'Skill "pptx" created successfully from market.',
+          id: 't1',
+          plugin: { apiName: 'importFromMarket', identifier: 'lobe-skill-store' },
+          pluginState: { name: 'pptx', skillId: 'skl_1', status: 'created', success: true },
+          role: 'tool',
+        },
+      ];
+
+      const result = await provider.process(createContext(messages));
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+
+      expect(systemMessage!.content).toContain('<skill name="PPTX">');
+      expect(systemMessage!.content).not.toContain('<skill name="pptx">');
     });
 
     it('keeps a session-created skill listed once its import turn is compressed into compressedGroup', async () => {
