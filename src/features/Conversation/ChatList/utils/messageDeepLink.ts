@@ -5,7 +5,8 @@ import { collectSteerChains } from '../../store/slices/data/steerChains';
 export interface MessageDeepLink {
   id: string;
   navigationKey: string;
-  onHandled?: () => void;
+  /** Called once the list has centered the target, with the row that renders it. */
+  onHandled?: (target: { displayMessageId: string; id: string }) => void;
 }
 
 export interface ResolvedMessageDeepLink extends MessageDeepLink {

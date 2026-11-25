@@ -296,7 +296,7 @@ export const useTopicScrollPersist = ({
 
       const container = containerRef?.current;
       if (!container) {
-        targetDeepLink.onHandled?.();
+        targetDeepLink.onHandled?.(targetDeepLink);
         finalize(false);
         return;
       }
@@ -323,7 +323,7 @@ export const useTopicScrollPersist = ({
         );
         if (targetMatch?.exact) {
           targetMatch.element.scrollIntoView({ block: 'center' });
-          targetDeepLink.onHandled?.();
+          targetDeepLink.onHandled?.(targetDeepLink);
           finalize(false);
           return;
         }

@@ -143,6 +143,38 @@ describe('useTopicScrollPersist', () => {
       expect(onHandled).toHaveBeenCalledTimes(1);
     });
 
+    it('opens on a deep link without jumping to the bottom while rows keep resizing', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const onHandled = vi.fn();
+
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          headerOffset: 1,
+          messageDeepLink: {
+            displayMessageId: 'm20',
+            id: 'm20',
+            index: 20,
+            navigationKey: 'navigation-1',
+            onHandled,
+          },
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      // A revalidation re-measures rows for a while after the list opens.
+      for (let frame = 0; frame < 40; frame += 1) {
+        handle.scrollSize += 100;
+        await advanceFrames(1);
+      }
+
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(21, { align: 'center' });
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
+      expect(onHandled).toHaveBeenCalledWith(expect.objectContaining({ displayMessageId: 'm20' }));
+    });
+
     it('centers the exact nested message after its virtual row mounts', async () => {
       const handle = createFakeVList({ scrollSize: 6000 });
       const container = document.createElement('div');
