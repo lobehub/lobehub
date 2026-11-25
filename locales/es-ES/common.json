@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Tarjeta",
   "agentViewAll.view.list": "Lista",
   "alert.cloud.action": "Probar ahora",
-  "alert.cloud.desc": "Todos los usuarios registrados obtienen ${{credit}} de uso gratuito al mes, sin necesidad de configuración. Incluye sincronización global en la nube y búsqueda web avanzada.",
-  "alert.cloud.descOnMobile": "Todos los usuarios registrados obtienen ${{credit}} de uso gratuito al mes, sin necesidad de configuración.",
   "alert.cloud.title": "La beta de {{name}} está activa",
   "alreadyUpToDate": "Ya está actualizado",
   "appLoading.appIdle": "Listo para comenzar",

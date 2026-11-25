@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Kart",
   "agentViewAll.view.list": "Liste",
   "alert.cloud.action": "Şimdi dene",
-  "alert.cloud.desc": "Tüm kayıtlı kullanıcılar ayda ${{credit}} ücretsiz kullanım hakkı elde eder—kurulum gerekmez. Küresel bulut senkronizasyonu ve gelişmiş web aramasını içerir.",
-  "alert.cloud.descOnMobile": "Tüm kayıtlı kullanıcılar ayda ${{credit}} ücretsiz kullanım hakkı elde eder—kurulum gerekmez.",
   "alert.cloud.title": "{{name}} beta yayında",
   "alreadyUpToDate": "Zaten Güncel",
   "appLoading.appIdle": "Başlamaya hazır",

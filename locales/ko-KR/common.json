@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "카드",
   "agentViewAll.view.list": "목록",
   "alert.cloud.action": "지금 체험하기",
-  "alert.cloud.desc": "모든 등록 사용자는 매월 ${{credit}}의 무료 사용량을 받습니다—설정이 필요하지 않습니다. 글로벌 클라우드 동기화와 고급 웹 검색이 포함됩니다.",
-  "alert.cloud.descOnMobile": "모든 등록 사용자는 매월 ${{credit}}의 무료 사용량을 받습니다—설정이 필요하지 않습니다.",
   "alert.cloud.title": "{{name}} 베타 테스트 시작",
   "alreadyUpToDate": "이미 최신 상태입니다",
   "appLoading.appIdle": "시작 준비 중",

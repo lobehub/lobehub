@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "カード",
   "agentViewAll.view.list": "リスト",
   "alert.cloud.action": "今すぐ試す",
-  "alert.cloud.desc": "登録ユーザーは全員、毎月 ${{credit}} 分の無料利用ができます — 設定は不要です。グローバルクラウド同期と高度なウェブ検索が含まれます。",
-  "alert.cloud.descOnMobile": "登録ユーザーは全員、毎月 ${{credit}} 分の無料利用ができます — 設定は不要です。",
   "alert.cloud.title": "{{name}} ベータテスト開始",
   "alreadyUpToDate": "すでに最新の状態です",
   "appLoading.appIdle": "起動準備中",

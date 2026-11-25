@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Karta",
   "agentViewAll.view.list": "Lista",
   "alert.cloud.action": "Wypróbuj teraz",
-  "alert.cloud.desc": "Wszyscy zarejestrowani użytkownicy otrzymują ${{credit}} darmowego wykorzystania miesięcznie — bez konieczności konfiguracji. Obejmuje globalną synchronizację w chmurze i zaawansowane wyszukiwanie w sieci.",
-  "alert.cloud.descOnMobile": "Wszyscy zarejestrowani użytkownicy otrzymują ${{credit}} darmowego wykorzystania miesięcznie — bez konieczności konfiguracji.",
   "alert.cloud.title": "Beta {{name}} jest dostępna",
   "alreadyUpToDate": "Już aktualne",
   "appLoading.appIdle": "Gotowy do rozpoczęcia",

@@ -1062,13 +1062,12 @@ export default {
   'input.agentRunFeeUnfunded.descTopUp': 'Top up, then send again.',
   'input.agentRunFeeUnfunded.free.desc':
     'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs.',
-  'input.agentRunFeeUnfunded.free.descNoReset':
-    'Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descNoReset': 'Upgrade to {{plan}} for more usage.',
   'input.agentRunFeeUnfunded.free.descOwnKey':
     'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
   'input.agentRunFeeUnfunded.free.descOwnKeyNoReset':
-    'Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
-  'input.agentRunFeeUnfunded.free.title': 'You’ve used this month’s free credits',
+    'Upgrade to {{plan}} for more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.title': 'You’ve used your free credits',
   'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
