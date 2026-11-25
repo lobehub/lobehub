@@ -105,8 +105,9 @@ export const buildAgentProfileTabOptions = ({
   const showEngine = canConfigure || active === 'engine';
   const showKnowledge = (canConfigure && !heterogeneous) || active === 'knowledge';
   const showInstruction = (canConfigure && !heterogeneous) || active === 'instruction';
-  // Where a heterogeneous agent runs and what it needs there; a harness agent has no such page.
-  const showEnvironment = (canConfigure && heterogeneous) || active === 'environment';
+  // Where the agent runs and what it needs there. Every agent runs somewhere — a LobeHub agent's
+  // tools reach a device just as a heterogeneous agent's CLI does — so every agent has the page.
+  const showEnvironment = canConfigure || active === 'environment';
   const showTools = (canConfigure && !heterogeneous) || active === 'tools';
   const showSkills = (canConfigure && !heterogeneous) || active === 'skills';
   const showOpening = (canConfigure && openingSupported) || active === 'opening';
