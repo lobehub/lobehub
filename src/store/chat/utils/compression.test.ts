@@ -37,12 +37,7 @@ describe('compression utils', () => {
       'user-1',
       'assistant-1',
     ]);
-    expect(getCompressionCandidateMessageIds(messages, { beforeMessageId: 'missing' })).toEqual([
-      'user-1',
-      'assistant-1',
-      'user-2',
-      'assistant-2',
-    ]);
+    expect(getCompressionCandidateMessageIds(messages, { beforeMessageId: 'missing' })).toEqual([]);
   });
 
   it('should detect running compression operations in the same conversation context', () => {

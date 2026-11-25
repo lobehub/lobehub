@@ -14,6 +14,7 @@ import { chainCompressContext } from '@lobechat/prompts';
 
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
+import { withPendingCompressedGroup } from '@/store/chat/utils/compression';
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
@@ -82,12 +83,19 @@ export class ClientCompressionTransport implements CompressionTransport {
         agentId,
         groupId: operationContext.groupId,
         messageIds: input.messageIds,
+        sourceGroupIds: input.sourceGroupIds,
         threadId: operationContext.threadId,
         topicId: input.topicId,
       });
 
       this.activeCompression.messageGroupId = result.messageGroupId;
-      store.replaceMessages(result.messages, { context: operationContext });
+      store.replaceMessages(
+        withPendingCompressedGroup(result.messages, {
+          ...operationContext,
+          id: result.messageGroupId,
+        }),
+        { context: operationContext },
+      );
 
       const summaryOperation = store.startOperation({
         context: { ...operationContext, messageId: result.messageGroupId },
@@ -101,6 +109,7 @@ export class ClientCompressionTransport implements CompressionTransport {
       }
 
       return {
+        existingSummary: result.existingSummary,
         messageGroupId: result.messageGroupId,
         messages: result.messages,
         messagesToSummarize: result.messagesToSummarize,

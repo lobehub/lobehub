@@ -1,3 +1,4 @@
+import { collectDocumentReads, contextReplayFileIds } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
@@ -16,6 +17,7 @@ import { MessageModel } from '@/database/models/message';
 import type { WorkTypeOptIn } from '@/database/models/work/registry';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 
+import { loadContextReplays, revokedContextSources } from '../contextReplay';
 import { FileService } from '../file';
 import { TrashService } from '../trash';
 import { resolveMessageFileUrls } from './resolveMessageFileUrls';
@@ -112,6 +114,7 @@ export class MessageService {
   private compressionRepository: CompressionRepository;
   private trashService: TrashService;
   private workTypeOptIn: WorkTypeOptIn;
+  private compressionAccess: Parameters<typeof loadContextReplays>[0];
 
   constructor(
     db: LobeChatDatabase,
@@ -119,6 +122,7 @@ export class MessageService {
     workspaceId?: string,
     options: { workTypeOptIn?: WorkTypeOptIn } = {},
   ) {
+    this.compressionAccess = { db, userId, workspaceId };
     this.workTypeOptIn = options.workTypeOptIn ?? {};
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
@@ -560,6 +564,48 @@ export class MessageService {
 
   // =============== Compression Methods ===============
 
+  private async assertCompressionSources(
+    selected: UIChatMessage[],
+    sourceGroupIds: string[],
+    options: QueryOptions,
+  ) {
+    const sourceMembers = (
+      await Promise.all(
+        sourceGroupIds.map((id) => this.compressionRepository.getCompressedMessages(id)),
+      )
+    ).flat();
+    const sourceMessages = await this.messageModel.queryByIds(
+      sourceMembers.map((message) => message.id),
+    );
+    const history = [...selected, ...sourceMessages];
+    const access = {
+      ...this.compressionAccess,
+      agentId: options.agentId ?? undefined,
+      topicId: options.topicId ?? undefined,
+    };
+    const snapshots = await loadContextReplays(access, this.messageModel, [
+      ...history.map((message) => message.id),
+      ...sourceGroupIds,
+    ]);
+    const revokedFiles = await revokedContextSources(
+      access,
+      contextReplayFileIds(history).map((id) => `file:${id}`),
+    );
+    const revokedReads = await Promise.all(
+      collectDocumentReads(history).map((read) =>
+        revokedContextSources({ ...access, agentId: read.agentId ?? access.agentId }, [
+          `document-read:${read.documentId}`,
+        ]),
+      ),
+    );
+    if (
+      Object.values(snapshots).some((snapshot) => snapshot.invalidated) ||
+      revokedFiles.length ||
+      revokedReads.some((ids) => ids.length)
+    )
+      throw new Error('Compression source access has been revoked');
+  }
+
   /**
    * Create a compression group for messages
    * Creates a placeholder group, marks messages as compressed, and returns updated messages
@@ -571,38 +617,70 @@ export class MessageService {
   async createCompressionGroup(
     topicId: string,
     messageIds: string[],
-    options?: QueryOptions,
+    options?: QueryOptions & { sourceGroupIds?: string[] },
   ): Promise<{
+    existingSummary?: string;
     messageGroupId: string;
     messages?: UIChatMessage[];
     messagesToSummarize: UIChatMessage[];
     success: boolean;
   }> {
-    // 1. Get messages that need to be summarized (before marking them as compressed)
-    const allMessages = await this.messageModel.query(
-      this.withWorkTypes({ topicId, ...options }),
-      this.getQueryOptions(),
+    const selectedIds = [...new Set(messageIds)];
+    const sourceGroupIds = [...new Set(options?.sourceGroupIds ?? [])];
+    const selected = await this.messageModel.queryByIds(selectedIds, this.getQueryOptions());
+    if (
+      selected.length !== selectedIds.length ||
+      selected.some(
+        (message) =>
+          message.topicId !== topicId || (message.threadId ?? null) !== (options?.threadId ?? null),
+      )
+    )
+      throw new Error('Compression selection belongs to another conversation or is unavailable');
+    const selectedById = new Map(selected.map((message) => [message.id, message]));
+    const messagesToSummarize = selectedIds.map((id) => selectedById.get(id)!);
+    const sourceGroups = (await this.compressionRepository.getCompressionGroups(topicId)).filter(
+      (group) => sourceGroupIds.includes(group.id),
     );
-
-    const messagesToSummarize = allMessages.filter((msg) => messageIds.includes(msg.id));
+    if (sourceGroups.length !== sourceGroupIds.length)
+      throw new Error('Compression source group is unavailable');
+    await this.assertCompressionSources(messagesToSummarize, sourceGroupIds, {
+      ...options,
+      topicId,
+    });
 
     // 2. Create compression group with placeholder content
     const messageGroupId = await this.compressionRepository.createCompressionGroup({
       content: '...', // Placeholder content
-      messageIds,
+      messageIds: selectedIds,
       metadata: {
-        originalMessageCount: messageIds.length,
+        originalMessageCount: selectedIds.length,
       },
+      sourceGroupIds,
+      threadId: options?.threadId,
       topicId,
     });
 
     // 3. Query updated messages (compressed messages will be grouped)
-    const messages = await this.messageModel.query(
-      this.withWorkTypes({ topicId, ...options }),
-      this.getQueryOptions(),
-    );
+    let messages: UIChatMessage[];
+    try {
+      messages = await this.messageModel.query(
+        this.withWorkTypes({ topicId, ...options }),
+        this.getQueryOptions(),
+      );
+    } catch (error) {
+      await this.compressionRepository.deleteCompressionGroup(messageGroupId, {
+        topicId,
+        threadId: options?.threadId,
+      });
+      throw error;
+    }
 
     return {
+      existingSummary:
+        sourceGroups
+          .map((group) => group.content)
+          .filter(Boolean)
+          .join('\n\n') || undefined,
       messageGroupId,
       messages,
       messagesToSummarize,
@@ -630,11 +708,19 @@ export class MessageService {
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
     const { agentId, groupId, sourceGroupIds, threadId, topicId } = params;
 
+    const members = await this.compressionRepository.getCompressedMessages(messageGroupId);
+    await this.assertCompressionSources(
+      await this.messageModel.queryByIds(members.map((message) => message.id)),
+      sourceGroupIds ?? [],
+      params,
+    );
+
     // 1. Update the new group and atomically replace prior compression groups.
     await this.compressionRepository.finalizeCompressionGroup({
       content,
       groupId: messageGroupId,
       sourceGroupIds,
+      threadId,
       topicId,
     });
 
@@ -680,7 +766,10 @@ export class MessageService {
     context: QueryOptions,
   ): Promise<{ messages: UIChatMessage[]; success: boolean }> {
     // Delete compression group (this also unmarks messages)
-    await this.compressionRepository.deleteCompressionGroup(messageGroupId);
+    await this.compressionRepository.deleteCompressionGroup(messageGroupId, {
+      threadId: context.threadId,
+      topicId: context.topicId ?? undefined,
+    });
 
     // Query updated messages
     const messages = await this.messageModel.query(

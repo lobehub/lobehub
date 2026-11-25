@@ -110,9 +110,20 @@ export class ContextReplayCoordinator {
       name: processor.name,
       process: async (context) => {
         if (this.input.committedSnapshot) return context;
-        const result = await processor.process(context);
+        // Wire-only histories may omit IDs. Give the provider temporary identities so
+        // cloned anonymous messages cannot all match the last undefined map key.
+        // They stay local to capture; the original history is returned unchanged.
+        const existingIds = new Set(context.messages.map((message) => message.id));
+        const captureMessages = context.messages.map((message, index) => {
+          if (message.id) return message;
+          let id = `replay-input:${this.input.invocationId}:${index}`;
+          while (existingIds.has(id)) id += ':';
+          existingIds.add(id);
+          return { ...message, id };
+        });
+        const result = await processor.process({ ...context, messages: captureMessages });
         if (result.isAborted) return result;
-        const before = new Map(context.messages.map((message) => [message.id, message]));
+        const before = new Map(captureMessages.map((message) => [message.id, message]));
         const parts: Message[] = [];
         for (const message of result.messages) {
           const original = before.get(message.id);

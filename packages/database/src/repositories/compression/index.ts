@@ -2,9 +2,9 @@ import type { CompressionGroupMetadata } from '@lobechat/types';
 import { MessageGroupType } from '@lobechat/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import type { MessageGroupItem } from '../../schemas';
 import { messageGroups, messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface CreateCompressionGroupParams {
@@ -12,6 +12,8 @@ export interface CreateCompressionGroupParams {
   editorData?: any;
   messageIds: string[];
   metadata: CompressionGroupMetadata;
+  sourceGroupIds?: string[];
+  threadId?: string | null;
   topicId: string;
 }
 
@@ -19,6 +21,7 @@ export interface FinalizeCompressionGroupParams {
   content: string;
   groupId: string;
   sourceGroupIds?: string[];
+  threadId?: string | null;
   topicId: string;
 }
 
@@ -53,37 +56,107 @@ export class CompressionRepository {
   private messagesOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
+  private threadScope = (threadId?: string | null) =>
+    threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId);
+
+  /** Lock and validate every dependency before changing any history. */
+  private async assertGroupScope(
+    tx: Pick<LobeChatDatabase, 'select'>,
+    ids: string[],
+    scope: { threadId?: string | null; topicId?: string },
+    requireMembers = false,
+  ) {
+    if (!ids.length) return;
+    const groups = await tx
+      .select({ id: messageGroups.id })
+      .from(messageGroups)
+      .where(
+        and(
+          this.groupsOwnership(),
+          inArray(messageGroups.id, ids),
+          scope.topicId ? eq(messageGroups.topicId, scope.topicId) : undefined,
+          eq(messageGroups.type, MessageGroupType.Compression),
+        ),
+      )
+      .orderBy(messageGroups.id)
+      .for('update');
+    if (groups.length !== ids.length) throw new Error('Compression source group is unavailable');
+    const members = await tx
+      .select({
+        id: messages.id,
+        threadId: messages.threadId,
+        topicId: messages.topicId,
+        messageGroupId: messages.messageGroupId,
+      })
+      .from(messages)
+      .where(and(this.messagesOwnership(), inArray(messages.messageGroupId, ids)))
+      .for('update');
+    if (
+      members.some(
+        (message) =>
+          (scope.topicId && message.topicId !== scope.topicId) ||
+          (message.threadId ?? null) !== (scope.threadId ?? null),
+      ) ||
+      (requireMembers &&
+        ids.some((id) => !members.some((message) => message.messageGroupId === id)))
+    )
+      throw new Error('Compression source group belongs to another conversation');
+  }
+
   /**
    * Create a compression group and mark messages as compressed
    */
   async createCompressionGroup(params: CreateCompressionGroupParams): Promise<string> {
     const { topicId, content, editorData, messageIds, metadata } = params;
 
-    // Store metadata in the description field as JSON string
-    const description = JSON.stringify(metadata);
-
-    // 1. Create compression group
-    const result = (await this.db
-      .insert(messageGroups)
-      .values({
-        content,
-        description,
-        editorData,
-        topicId,
-        type: MessageGroupType.Compression,
-        userId: this.userId,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .returning()) as MessageGroupItem[];
-
-    const group = result[0];
-
-    // 2. Mark messages as compressed
-    if (messageIds.length > 0) {
-      await this.markMessagesAsCompressed(messageIds, group.id);
-    }
-
-    return group.id;
+    const selectedIds = [...new Set(messageIds)];
+    return this.db.transaction(async (tx) => {
+      await this.assertGroupScope(tx, [...new Set(params.sourceGroupIds ?? [])], params, true);
+      if (selectedIds.length) {
+        const selected = await tx
+          .select({ id: messages.id, messageGroupId: messages.messageGroupId })
+          .from(messages)
+          .where(
+            and(
+              this.messagesOwnership(),
+              eq(messages.topicId, topicId),
+              this.threadScope(params.threadId),
+              inArray(messages.id, selectedIds),
+              notTrashed(messages.isDeleted),
+            ),
+          )
+          .for('update');
+        if (
+          selected.length !== selectedIds.length ||
+          selected.some((message) => message.messageGroupId)
+        )
+          throw new Error('Compression selection is unavailable or already grouped');
+      }
+      const [group] = await tx
+        .insert(messageGroups)
+        .values({
+          content,
+          description: JSON.stringify(metadata),
+          editorData,
+          topicId,
+          type: MessageGroupType.Compression,
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning({ id: messageGroups.id });
+      if (selectedIds.length)
+        await tx
+          .update(messages)
+          .set({ messageGroupId: group.id })
+          .where(
+            and(
+              this.messagesOwnership(),
+              eq(messages.topicId, topicId),
+              inArray(messages.id, selectedIds),
+            ),
+          );
+      return group.id;
+    });
   }
 
   /**
@@ -154,11 +227,13 @@ export class CompressionRepository {
    */
   async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
     const { content, groupId, topicId } = params;
+    if (!content.trim()) throw new Error('Compression summary is empty');
     const requestedSourceGroupIds = [
       ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
     ];
 
     await this.db.transaction(async (trx) => {
+      await this.assertGroupScope(trx, [groupId, ...requestedSourceGroupIds].sort(), params);
       const finalizedGroups = await trx
         .update(messageGroups)
         .set({ content, updatedAt: new Date() })
@@ -191,7 +266,8 @@ export class CompressionRepository {
         );
       const sourceGroupIds = sourceGroups.map((group) => group.id);
 
-      if (sourceGroupIds.length === 0) return;
+      if (sourceGroupIds.length !== requestedSourceGroupIds.length)
+        throw new Error('Compression source group is unavailable');
 
       await trx
         .update(messages)
@@ -308,16 +384,21 @@ export class CompressionRepository {
   /**
    * Delete a compression group and unmark all associated messages
    */
-  async deleteCompressionGroup(groupId: string): Promise<void> {
-    // 1. Unmark all messages
-    await this.db
-      .update(messages)
-      .set({ messageGroupId: null })
-      .where(and(this.messagesOwnership(), eq(messages.messageGroupId, groupId)));
+  async deleteCompressionGroup(
+    groupId: string,
+    scope: { threadId?: string | null; topicId?: string } = {},
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await this.assertGroupScope(tx, [groupId], scope);
+      await tx
+        .update(messages)
+        .set({ messageGroupId: null })
+        .where(and(this.messagesOwnership(), eq(messages.messageGroupId, groupId)));
 
-    // 2. Delete the group
-    await this.db
-      .delete(messageGroups)
-      .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
+      // 2. Delete the group
+      await tx
+        .delete(messageGroups)
+        .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
+    });
   }
 }

@@ -48,7 +48,6 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   messages: [],
   origin: {
     agentId: 'agent-123',
-    threadId: 'thread-123',
     topicId: 'topic-123',
   },
   modelRuntimeConfig: {
@@ -131,6 +130,86 @@ describe('compressContext executor', () => {
     };
   });
 
+  it('does not compress hidden siblings or reuse summaries outside the active input', async () => {
+    const visible = [
+      { id: 'visible-user', role: 'user', content: 'visible' },
+      { id: 'visible-answer', role: 'assistant', content: 'answer' },
+      { id: 'active-user', role: 'user', content: 'continue' },
+    ];
+    messagesQuery.mockResolvedValue([
+      { id: 'other-summary', role: 'compressedGroup', content: 'HIDDEN SUMMARY' },
+      ...visible,
+      { id: 'hidden-sibling', role: 'assistant', content: 'HIDDEN SIBLING' },
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: visible.slice(0, 2),
+    });
+    const state = createState({ messages: visible });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+    expect(compressionCreateGroup.mock.calls[0][0].messageIds).toEqual([
+      'visible-user',
+      'visible-answer',
+    ]);
+    expect(compressionBuildPrompt.mock.calls[0][0].existingSummary).toBeUndefined();
+    expect(compressionFinalizeGroup.mock.calls[0][0].sourceGroupIds).toEqual([]);
+    expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'visible-answer' });
+  });
+
+  it('leaves inherited parent-thread history intact while compacting a child thread', async () => {
+    const history = [
+      { id: 'ancestor', role: 'user', content: 'main conversation', threadId: null },
+      { id: 'child-answer', role: 'assistant', content: 'thread reply', threadId: 'child' },
+      { id: 'active-user', role: 'user', content: 'continue', threadId: 'child' },
+    ];
+    messagesQuery.mockResolvedValue(history);
+    const state = createState({
+      origin: { agentId: 'agent-123', topicId: 'topic-123', threadId: 'child' },
+      messages: history,
+    });
+    await compressContext(host)(createInstruction(state.messages), state);
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['child-answer'], threadId: 'child' }),
+    );
+  });
+
+  it('does not dispatch a summary request after cancellation during prompt preparation', async () => {
+    const controller = new AbortController();
+    const history = [{ id: 'history', role: 'user', content: 'keep me' }];
+    messagesQuery.mockResolvedValue(history);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+      signal: controller.signal,
+    });
+    compressionBuildPrompt.mockImplementation(async () => {
+      controller.abort();
+      return { messages: [] };
+    });
+    const state = createState({ messages: history });
+    await compressContext(host)(createInstruction(state.messages), state);
+    expect(llmStream).not.toHaveBeenCalled();
+    expect(compressionRollbackGroup).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back whitespace-only summaries without replacing the live history', async () => {
+    const history = [{ id: 'history', role: 'user', content: 'keep me' }];
+    messagesQuery.mockResolvedValue(history);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+    });
+    llmStream.mockResolvedValue({ content: '  \n ' });
+    const state = createState({ messages: history });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+    expect(result.newState.messages).toEqual(history);
+    expect(result.events).toEqual([expect.objectContaining({ type: 'compression_error' })]);
+    expect(compressionFinalizeGroup).not.toHaveBeenCalled();
+    expect(compressionRollbackGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageGroupId: 'group-123' }),
+    );
+  });
+
   it('compresses db messages and preserves a trailing user follow-up outside the group', async () => {
     const preservedMessage = {
       content: 'continue with this exact instruction',
@@ -172,14 +251,13 @@ describe('compressContext executor', () => {
       {
         agentId: 'agent-123',
         groupId: undefined,
-        threadId: 'thread-123',
         topicId: 'topic-123',
       },
       { resolveAssetUrls: true },
     );
     expect(compressionCreateGroup).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageIds: ['msg-history', 'assistant-existing'],
+        messageIds: ['msg-history'],
         topicId: 'topic-123',
         workspaceId: 'workspace-123',
       }),
@@ -218,10 +296,10 @@ describe('compressContext executor', () => {
       preservedMessage,
     ]);
     expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
-    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
+    expect((result.nextContext?.payload as any).parentMessageId).toBeUndefined();
     expect(result.events).toContainEqual({
       groupId: 'group-123',
-      parentMessageId: 'assistant-existing',
+      parentMessageId: undefined,
       type: 'compression_complete',
     });
     expect(result.newState.usage.llm.tokens).toEqual({ input: 10, output: 5, total: 15 });
@@ -342,6 +420,7 @@ describe('compressContext executor', () => {
       { content: 'recent answer', id: 'assistant-recent', role: 'assistant' },
     ]);
     compressionCreateGroup.mockResolvedValue({
+      existingSummary: 'First prior summary\n\nSecond prior summary',
       messageGroupId: 'group-123',
       messages: [
         sourceGroup1,
@@ -391,6 +470,7 @@ describe('compressContext executor', () => {
     };
     messagesQuery.mockResolvedValue([sourceGroup]);
     compressionCreateGroup.mockResolvedValue({
+      existingSummary: 'Prior summary',
       messageGroupId: 'group-123',
       messages: [sourceGroup, { content: '...', id: 'group-123', role: 'compressedGroup' }],
       messagesToSummarize: [],
@@ -426,7 +506,7 @@ describe('compressContext executor', () => {
 
     expect(compressionCreateGroup).not.toHaveBeenCalled();
     expect(result.nextContext?.payload as any).toMatchObject({
-      parentMessageId: 'assistant-existing',
+      parentMessageId: undefined,
       skipped: true,
     });
   });

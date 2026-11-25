@@ -1,3 +1,5 @@
+import { contextReplayMessageIds } from '@lobechat/context-engine';
+
 import { UsageCounter } from '../core';
 import type { AgentRuntimeHost } from '../transport';
 import type {
@@ -42,7 +44,7 @@ export const compressContext =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'compress_context' }>;
-    const { messages, currentTokenCount, existingSummary } = payload;
+    const { messages, currentTokenCount } = payload;
     const { operation, transports } = host;
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
@@ -115,14 +117,23 @@ export const compressContext =
     let createdGroupId: string | undefined;
 
     try {
-      const dbMessages = await transports.messages.query(
-        {
-          agentId,
-          groupId,
-          threadId,
-          topicId,
-        },
-        { resolveAssetUrls: true },
+      const visibleIds = new Set(contextReplayMessageIds(messages));
+      const dbMessages = (
+        await transports.messages.query(
+          {
+            agentId,
+            groupId,
+            threadId,
+            topicId,
+          },
+          { resolveAssetUrls: true },
+        )
+      ).filter(
+        (message) =>
+          (message.role === 'compressedGroup' ||
+            (message.threadId ?? null) === (threadId ?? null)) &&
+          (visibleIds.has(message.id) ||
+            (message.role === 'tool' && !!message.parentId && visibleIds.has(message.parentId))),
       );
 
       const sourceCompressionGroups = dbMessages.filter(
@@ -131,10 +142,6 @@ export const compressContext =
       const sourceGroupIds = sourceCompressionGroups
         .map((message) => message.id)
         .filter((id): id is string => Boolean(id));
-      const persistedExistingSummary = sourceCompressionGroups
-        .map((message) => (typeof message.content === 'string' ? message.content.trim() : ''))
-        .filter(Boolean)
-        .join('\n\n');
 
       const messageIds = dbMessages
         .filter(
@@ -167,6 +174,7 @@ export const compressContext =
         agentId,
         groupId,
         messageIds,
+        sourceGroupIds,
         threadId,
         topicId,
         workspaceId,
@@ -174,11 +182,13 @@ export const compressContext =
       createdGroupId = compressionResult.messageGroupId;
 
       const compressionPayload = await compression.buildPrompt({
-        existingSummary: persistedExistingSummary || existingSummary,
+        existingSummary: compressionResult.existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
       let streamedSummary = '';
+      if (compressionResult.signal?.aborted)
+        throw Object.assign(new Error('Context compression cancelled'), { name: 'AbortError' });
       const summaryResult = await llm.stream(
         {
           messages: compressionPayload.messages,
@@ -203,6 +213,8 @@ export const compressContext =
         abortError.name = 'AbortError';
         throw abortError;
       }
+      if (!summaryResult.content.trim())
+        throw new Error('Context compression returned an empty summary');
 
       const finalCompression = await compression.finalizeGroup({
         agentId,

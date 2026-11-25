@@ -298,7 +298,6 @@ export const messageRouter = router({
         agentId: z.string(),
         groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),
@@ -378,12 +377,13 @@ export const messageRouter = router({
         agentId: z.string(),
         groupId: z.string().nullish(),
         messageIds: z.array(z.string()),
+        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { topicId, messageIds, agentId, groupId, threadId } = input;
+      const { topicId, messageIds, agentId, groupId, sourceGroupIds, threadId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
       // Same visitor guard as `addFilesToMessage` above, plus the message ids
       // themselves — compression reads and rewrites their content.
@@ -393,6 +393,7 @@ export const messageRouter = router({
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
         groupId,
+        sourceGroupIds,
         threadId,
         topicId,
       });
@@ -440,6 +441,7 @@ export const messageRouter = router({
         content: z.string(),
         groupId: z.string().nullish(),
         messageGroupId: z.string(),
+        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),

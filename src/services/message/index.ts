@@ -522,15 +522,18 @@ export class MessageService {
     agentId: string;
     groupId?: string | null;
     messageIds: string[];
+    sourceGroupIds?: string[];
     threadId?: string | null;
     topicId: string;
   }): Promise<{
+    existingSummary?: string;
     messageGroupId: string;
     messages: UIChatMessage[];
     messagesToSummarize: UIChatMessage[];
   }> => {
     const result = await lambdaClient.message.createCompressionGroup.mutate(params);
     return {
+      existingSummary: result.existingSummary,
       messageGroupId: result.messageGroupId,
       messages: (result.messages || []) as unknown as UIChatMessage[],
       messagesToSummarize: (result.messagesToSummarize || []) as unknown as UIChatMessage[],

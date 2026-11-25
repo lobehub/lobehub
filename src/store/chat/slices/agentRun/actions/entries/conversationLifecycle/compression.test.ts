@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import {
+  INPUT_LOADING_OPERATION_TYPES,
+  isQueueBlockingOperation,
+} from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -34,6 +39,7 @@ const closeToast = vi.fn();
 const getMessageIds = () => (useChatStore.getState().dbMessagesMap[key] ?? []).map((m) => m.id);
 
 beforeEach(() => {
+  useChatStore.setState(useChatStore.getInitialState());
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(
     () => () => ({ model: 'gpt-4o-mini', provider: 'openai' }) as any,
   );
@@ -65,6 +71,132 @@ afterEach(() => {
 });
 
 describe('executeCompression', () => {
+  it('keeps a source-only compaction visible and allows the composer Stop action to cancel it', async () => {
+    const prior = { id: 'prior-summary', role: 'compressedGroup', content: 'prior', topicId };
+    useChatStore.setState({
+      dbMessagesMap: { [key]: [prior] as any },
+      messagesMap: { [key]: [prior] as any },
+    });
+    vi.mocked(messageService.createCompressionGroup).mockResolvedValue({
+      messageGroupId: 'group-1',
+      messages: [prior] as any,
+      messagesToSummarize: [],
+      existingSummary: 'prior',
+    });
+    vi.mocked(messageService.cancelCompression).mockResolvedValue({ messages: [prior] as any });
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(
+      async ({ abortController }) => {
+        expect(getMessageIds()).toContain('group-1');
+        expect(
+          operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState()),
+        ).toBe(true);
+        const operation = Object.values(useChatStore.getState().operations).find(
+          (op) => op.type === 'contextCompression' && op.status === 'running',
+        )!;
+        expect(isQueueBlockingOperation(operation)).toBe(true);
+        await useChatStore
+          .getState()
+          .cancelOperations({ ...context, status: 'running', type: INPUT_LOADING_OPERATION_TYPES });
+        expect(abortController?.signal.aborted).toBe(true);
+      },
+    );
+    expect(await useChatStore.getState().executeCompression(context, '')).toBe(false);
+    expect(getMessageIds()).toEqual(['prior-summary']);
+    expect(messageService.cancelCompression).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('sends the queued follow-up after manual compression succeeds', async () => {
+    const originalSend = useChatStore.getState().sendMessage;
+    const send = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ sendMessage: send });
+    vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(
+      async ({ onMessageHandle }) => {
+        useChatStore.getState().enqueueMessage(key, {
+          id: 'queued',
+          content: 'next question',
+          createdAt: Date.now(),
+          interruptMode: 'soft',
+        });
+        onMessageHandle?.({ type: 'text', text: 'summary' });
+      },
+    );
+    try {
+      expect(await useChatStore.getState().executeCompression(context, '')).toBe(true);
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith(expect.objectContaining({ message: 'next question' })),
+      );
+    } finally {
+      useChatStore.setState({ sendMessage: originalSend, queuedMessages: {} });
+    }
+  });
+
+  it('keeps a hidden regenerated sibling out of manual compression', async () => {
+    const hidden = { id: 'hidden-sibling', role: 'assistant', content: 'HIDDEN', topicId };
+    useChatStore.setState({
+      dbMessagesMap: { [key]: [...originalMessages, hidden] as any },
+      messagesMap: { [key]: originalMessages },
+    });
+    vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(
+      async ({ onMessageHandle }) => {
+        onMessageHandle?.({ type: 'text', text: 'summary' });
+      },
+    );
+    expect(await useChatStore.getState().executeCompression(context, '')).toBe(true);
+    expect(messageService.createCompressionGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['user-1', 'assistant-1'] }),
+    );
+  });
+  it('restores the server group and original history when the summary is cancelled', async () => {
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockRejectedValue(
+      Object.assign(new Error('cancelled'), { name: 'AbortError' }),
+    );
+    const succeeded = await useChatStore.getState().executeCompression(context, '');
+    expect(succeeded).toBe(false);
+    expect(messageService.cancelCompression).toHaveBeenCalledTimes(1);
+    expect(getMessageIds()).toEqual(['user-1', 'assistant-1']);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(
+      Object.values(useChatStore.getState().operations)
+        .filter((op) => op.type === 'contextCompression')
+        .every((op) => op.status !== 'running'),
+    ).toBe(true);
+  });
+
+  it('includes the previous summary and supersedes it when compacting again', async () => {
+    const prior = {
+      id: 'prior-summary',
+      role: 'compressedGroup',
+      content: 'stale local draft',
+      topicId,
+    };
+    vi.mocked(messageService.createCompressionGroup).mockResolvedValue({
+      messageGroupId: 'group-1',
+      messages: [],
+      messagesToSummarize: originalMessages,
+      existingSummary: 'EARLIER DECISION',
+    });
+    useChatStore.setState({
+      dbMessagesMap: { [key]: [prior, ...originalMessages] as any },
+      messagesMap: { [key]: [prior, ...originalMessages] as any },
+    });
+    vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({
+      messages: [{ id: 'group-1', role: 'compressedGroup', content: 'combined' } as any],
+    });
+    const fetch = vi
+      .spyOn(chatService, 'fetchPresetTaskResult')
+      .mockImplementation(async ({ onMessageHandle }) => {
+        onMessageHandle?.({ type: 'text', text: 'combined' });
+      });
+    expect(await useChatStore.getState().executeCompression(context, '')).toBe(true);
+    expect(JSON.stringify(fetch.mock.calls[0][0].params?.messages)).toContain('EARLIER DECISION');
+    expect(messageService.finalizeCompression).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceGroupIds: ['prior-summary'] }),
+    );
+    expect(getMessageIds()).toEqual(['group-1']);
+  });
   it('keeps the original messages when the summary request fails', async () => {
     const finalizeSpy = vi.spyOn(messageService, 'finalizeCompression');
     vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(async ({ onError }) => {
@@ -172,7 +304,10 @@ describe('executeCompression', () => {
     expect(finalizeSpy).toHaveBeenCalledWith({
       agentId,
       content: 'summary',
+      groupId: undefined,
       messageGroupId: 'group-1',
+      sourceGroupIds: [],
+      threadId: null,
       topicId,
     });
     expect(messageService.cancelCompression).not.toHaveBeenCalled();
