@@ -5,9 +5,8 @@ export default {
   'agentViewAll.groupBy.noFolder': 'No category',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
-    'All registered users get ${{credit}} of free usage per month—no setup needed. Includes global cloud sync and advanced web search.',
-  'alert.cloud.descOnMobile':
-    'All registered users get ${{credit}} of free usage per month—no setup needed.',
+    'All registered users get ${{credit}} of free usage—no setup needed. Includes global cloud sync and advanced web search.',
+  'alert.cloud.descOnMobile': 'All registered users get ${{credit}} of free usage—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
   'agentViewAll.addToSidebar': 'Show in my sidebar',
   'agentViewAll.empty': 'No agents yet',

@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Thẻ",
   "agentViewAll.view.list": "Danh sách",
   "alert.cloud.action": "Dùng thử ngay",
-  "alert.cloud.desc": "Tất cả người dùng đã đăng ký nhận ${{credit}} sử dụng miễn phí mỗi tháng—không cần thiết lập. Bao gồm đồng bộ đám mây toàn cầu và tìm kiếm web nâng cao.",
-  "alert.cloud.descOnMobile": "Tất cả người dùng đã đăng ký nhận ${{credit}} sử dụng miễn phí mỗi tháng—không cần thiết lập.",
   "alert.cloud.title": "{{name}} beta đã hoạt động",
   "alreadyUpToDate": "Đã cập nhật đầy đủ",
   "appLoading.appIdle": "Sẵn sàng bắt đầu",

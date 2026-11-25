@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "卡片",
   "agentViewAll.view.list": "列表",
   "alert.cloud.action": "免費體驗",
-  "alert.cloud.desc": "所有註冊用戶每月可獲得 ${{credit}} 的免費使用額度，無需設定。包含全球雲端同步與進階網路搜尋。",
-  "alert.cloud.descOnMobile": "所有註冊用戶每月可獲得 ${{credit}} 的免費使用額度，無需設定。",
   "alert.cloud.title": "歡迎體驗 {{name}}",
   "alreadyUpToDate": "已是最新版本",
   "appLoading.appIdle": "準備啟動",

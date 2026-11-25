@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "کارت",
   "agentViewAll.view.list": "لیست",
   "alert.cloud.action": "هم‌اکنون امتحان کنید",
-  "alert.cloud.desc": "همه کاربران ثبت‌نام‌شده ماهانه ${{credit}} استفاده رایگان دریافت می‌کنند—بدون نیاز به تنظیمات. شامل همگام‌سازی ابری جهانی و جستجوی وب پیشرفته.",
-  "alert.cloud.descOnMobile": "همه کاربران ثبت‌نام‌شده ماهانه ${{credit}} استفاده رایگان دریافت می‌کنند—بدون نیاز به تنظیمات.",
   "alert.cloud.title": "نسخه آزمایشی {{name}} فعال شد",
   "alreadyUpToDate": "قبلاً به‌روز شده است",
   "appLoading.appIdle": "آماده برای شروع",
