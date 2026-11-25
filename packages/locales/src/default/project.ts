@@ -86,6 +86,8 @@ export default {
   'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
   'settings.logoUploadFailed': 'Could not upload the logo',
   'settings.advanced': 'Advanced',
+  'settings.management': 'Project management',
+  'settings.managementDescription': 'Connected services and actions that affect the whole project.',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
     'No device folders yet. Add a folder on a connected device to run this project there.',

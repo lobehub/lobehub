@@ -33,7 +33,7 @@ export const useOnboardingActions = (detail: ProjectDetail, refreshSites: () => 
       }
       case 'site': {
         if (item.site === 'none') openSiteModal({ onSaved: refreshSites, projectId: project.id });
-        else navigate(getProjectSettingsPath(routeId, 'sites'));
+        else navigate(getProjectSettingsPath(routeId, 'advanced'));
         return;
       }
       case 'knowledge': {
