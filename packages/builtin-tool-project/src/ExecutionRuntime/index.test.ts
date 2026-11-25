@@ -9,6 +9,7 @@ const service = (overrides: Partial<ProjectToolService> = {}): ProjectToolServic
   listRunners: vi.fn(),
   removeRunner: vi.fn(),
   reorderRunners: vi.fn(),
+  switchRunner: vi.fn(),
   updateEnvironment: vi.fn(),
   ...overrides,
 });
@@ -82,6 +83,42 @@ describe('ProjectExecutionRuntime.addRunner', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('at position 2 of 3 in priority');
+  });
+});
+
+describe('ProjectExecutionRuntime.switchRunner', () => {
+  it('says the move takes effect from the next turn and marks the target', async () => {
+    const result = await new ProjectExecutionRuntime(
+      service({
+        switchRunner: vi.fn().mockResolvedValue([
+          { current: true, deviceId: 'dev-1', id: 'dir-1', kind: 'device', path: '/work/a' },
+          {
+            deviceId: 'dev-2',
+            deviceName: 'Studio',
+            id: 'dir-2',
+            kind: 'device',
+            path: '/work/b',
+            pending: true,
+          },
+        ]),
+      }),
+    ).switchRunner({ runnerId: 'dir-2' });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('moves to Studio (/work/b) when its next turn starts');
+    expect(result.content).toContain(
+      'dir-2 · Studio · presence unknown · /work/b ← this conversation from its next turn',
+    );
+  });
+
+  it('refuses the cloud sandbox without calling the service', async () => {
+    const switchRunner = vi.fn();
+    const result = await new ProjectExecutionRuntime(service({ switchRunner })).switchRunner({
+      runnerId: 'sandbox',
+    });
+
+    expect(result.success).toBe(false);
+    expect(switchRunner).not.toHaveBeenCalled();
   });
 });
 

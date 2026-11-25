@@ -9,11 +9,16 @@ import {
   type RemoveRunnerParams,
   type ReorderRunnersParams,
   SANDBOX_RUNNER_ID,
+  type SwitchRunnerParams,
   type UpdateEnvironmentParams,
 } from '../types';
 
 const formatRunner = (runner: ProjectToolRunner, index: number) => {
-  const mark = runner.current ? ' ← this conversation' : '';
+  const mark = runner.current
+    ? ' ← this conversation'
+    : runner.pending
+      ? ' ← this conversation from its next turn'
+      : '';
   if (runner.kind === 'sandbox') return `${index + 1}. ${SANDBOX_RUNNER_ID} · cloud sandbox${mark}`;
   const presence =
     runner.online === undefined ? 'presence unknown' : runner.online ? 'online' : 'offline';
@@ -129,6 +134,29 @@ export class ProjectExecutionRuntime {
     try {
       const runners = await this.service.reorderRunners(params);
       return { content: formatRunners(runners), state: { runners }, success: true };
+    } catch (error) {
+      return failure(error);
+    }
+  }
+
+  async switchRunner(params: SwitchRunnerParams): Promise<BuiltinServerRuntimeOutput> {
+    if (params.runnerId === SANDBOX_RUNNER_ID)
+      return failure(
+        new Error(
+          'A conversation cannot move to the cloud sandbox; start a new conversation for it.',
+        ),
+      );
+    try {
+      const runners = await this.service.switchRunner(params);
+      const target = runners.find((runner) => runner.id === params.runnerId);
+      const where = target
+        ? `${target.deviceName || target.deviceId || 'device'} (${target.path})`
+        : params.runnerId;
+      return {
+        content: `This conversation moves to ${where} when its next turn starts; this turn finishes where it is. Files and the CLI session on the current device do not follow.\n${formatRunners(runners)}`,
+        state: { runners },
+        success: true,
+      };
     } catch (error) {
       return failure(error);
     }

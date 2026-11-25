@@ -95,6 +95,20 @@ export const ProjectManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+    {
+      description:
+        'Move this conversation to another device runner. The current turn finishes where it is; the move takes effect when the next turn starts, and the conversation continues there in a fresh session. Use it when a runner is offline or failing. The cloud sandbox is not a target: start a new conversation for it.',
+      humanIntervention: 'required',
+      name: ProjectApiName.switchRunner,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          runnerId: { description: 'A device runner id from listRunners.', type: 'string' },
+        },
+        required: ['runnerId'],
+        type: 'object',
+      },
+    },
   ],
   identifier: ProjectIdentifier,
   meta: {

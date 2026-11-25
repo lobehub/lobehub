@@ -6,6 +6,7 @@ import { createProjectToolService } from '../toolService';
 const state = vi.hoisted(() => ({
   allowed: true,
   bind: vi.fn(),
+  requestTopicMove: vi.fn(),
   configuration: {} as Record<string, unknown>,
   directories: [] as Record<string, unknown>[],
   online: [] as { deviceId: string; online: boolean }[],
@@ -18,6 +19,11 @@ const state = vi.hoisted(() => ({
 vi.mock('@/database/models/projectWorkingDirectory', () => ({
   ProjectWorkingDirectoryModel: class {
     list = async () => state.directories;
+    resolve = async (id: string) => {
+      const found = state.directories.find((item) => item.id === id);
+      if (!found) throw new Error('Project directory not found or access denied');
+      return found;
+    };
   },
 }));
 vi.mock('@/database/models/rbac', () => ({
@@ -33,6 +39,7 @@ vi.mock('@/database/models/topic', () => ({
 vi.mock('@/database/repositories/projectDirectory', () => ({
   ProjectDirectoryRepository: class {
     bind = state.bind;
+    requestTopicMove = state.requestTopicMove;
     executionOrder = async () => ({ sandbox: state.sandboxOrder });
   },
 }));
@@ -72,6 +79,7 @@ const create = (topicId?: string) =>
 beforeEach(() => {
   state.allowed = true;
   state.bind.mockReset();
+  state.requestTopicMove.mockReset();
   state.update.mockReset();
   state.configuration = {};
   state.directories = [];
@@ -164,5 +172,49 @@ describe('write permission', () => {
     await inWorkspace().updateEnvironment({ notes: 'x' });
 
     expect(state.update).toHaveBeenCalled();
+  });
+});
+
+describe('switchRunner', () => {
+  it('records the move for the next turn and marks the target pending', async () => {
+    state.directories = [directory('dir-1', 0), directory('dir-2', 1, 'dev-2')];
+    state.stat = { exists: true, isDirectory: true };
+    state.topic = {
+      metadata: { pendingProjectWorkingDirectoryId: 'dir-2' },
+      projectId: 'project-1',
+      projectWorkingDirectoryId: 'dir-1',
+    };
+
+    const runners = await create('topic-1').switchRunner({ runnerId: 'dir-2' });
+
+    expect(state.requestTopicMove).toHaveBeenCalledWith('topic-1', 'dir-2');
+    expect(runners.find((runner) => runner.id === 'dir-1')?.current).toBe(true);
+    expect(runners.find((runner) => runner.id === 'dir-2')?.pending).toBe(true);
+  });
+
+  it('refuses a folder its device cannot see', async () => {
+    state.directories = [directory('dir-2', 1, 'dev-2')];
+    state.stat = { exists: false, isDirectory: false };
+
+    await expect(create('topic-1').switchRunner({ runnerId: 'dir-2' })).rejects.toThrow(
+      'not available',
+    );
+    expect(state.requestTopicMove).not.toHaveBeenCalled();
+  });
+
+  it('refuses a workspace member who may not update conversations', async () => {
+    state.allowed = false;
+    state.directories = [directory('dir-2', 1, 'dev-2')];
+    state.stat = { exists: true, isDirectory: true };
+
+    await expect(
+      createProjectToolService({} as LobeChatDatabase, {
+        projectId: 'project-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      }).switchRunner({ runnerId: 'dir-2' }),
+    ).rejects.toThrow('permission');
+    expect(state.requestTopicMove).not.toHaveBeenCalled();
   });
 });

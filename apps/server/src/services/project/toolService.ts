@@ -78,8 +78,11 @@ export const createProjectToolService = (
       topic?.projectId === projectId
         ? (topic.projectWorkingDirectoryId ?? SANDBOX_RUNNER_ID)
         : undefined;
+    const pendingId =
+      topic?.projectId === projectId ? topic.metadata?.pendingProjectWorkingDirectoryId : undefined;
     const toRunner = (directory: DirectoryRow): ProjectToolRunner => ({
       current: currentId === directory.id || undefined,
+      pending: pendingId === directory.id || undefined,
       deviceId: directory.deviceId,
       deviceName: directory.deviceName,
       id: directory.id,
@@ -162,6 +165,32 @@ export const createProjectToolService = (
     reorderRunners: async ({ runnerIds }) => {
       await assertCanChange();
       await directoryRepo.reorderExecutionEnvironments(projectId, runnerIds);
+      return readRunners();
+    },
+
+    switchRunner: async ({ runnerId }) => {
+      if (!topicId) throw new Error('switchRunner works only inside a conversation');
+      // Same permission as moving a conversation from its header.
+      if (workspaceId) {
+        const allowed = await new RbacModel(db, userId).hasAnyPermission(
+          [RBAC_PERMISSIONS.TOPIC_UPDATE_ALL, RBAC_PERMISSIONS.TOPIC_UPDATE_OWNER],
+          { workspaceId },
+        );
+        if (!allowed) throw new Error('You do not have permission to move this conversation');
+      }
+      const directory = await directoryModel.resolve(runnerId, projectId);
+      // Same reachability gate as moving from the header: the next turn drops
+      // the session on the current device, so a folder the target device
+      // cannot see is refused now, while the current binding still holds.
+      const stat = await deviceGateway.statPath({
+        deviceId: directory.deviceId,
+        path: directory.path,
+        userId,
+        workspaceId,
+      });
+      if (!stat?.exists || !stat.isDirectory)
+        throw new Error('That device is offline or the folder is not available on it');
+      await directoryRepo.requestTopicMove(topicId, directory.id);
       return readRunners();
     },
 

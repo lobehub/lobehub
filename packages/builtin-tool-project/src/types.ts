@@ -6,6 +6,7 @@ export const ProjectApiName = {
   listRunners: 'listRunners',
   removeRunner: 'removeRunner',
   reorderRunners: 'reorderRunners',
+  switchRunner: 'switchRunner',
   updateEnvironment: 'updateEnvironment',
 } as const;
 
@@ -25,6 +26,8 @@ export interface ProjectToolRunner {
   /** Absent when presence could not be read. */
   online?: boolean;
   path?: string;
+  /** This conversation moves here when its next turn starts. */
+  pending?: boolean;
   platform?: string | null;
   /** False for a folder a run cannot start in yet (its device never confirmed it). */
   runnable?: boolean;
@@ -65,6 +68,10 @@ export interface ReorderRunnersParams {
   runnerIds: string[];
 }
 
+export interface SwitchRunnerParams {
+  runnerId: string;
+}
+
 export interface UpdateEnvironmentParams {
   addRepositories?: { ref?: string; url: string }[];
   notes?: string;
@@ -79,6 +86,8 @@ export interface ProjectToolService {
   listRunners: () => Promise<{ devices: ProjectToolDevice[]; runners: ProjectToolRunner[] }>;
   removeRunner: (params: RemoveRunnerParams) => Promise<void>;
   reorderRunners: (params: ReorderRunnersParams) => Promise<ProjectToolRunner[]>;
+  /** Moves this conversation from its next turn; returns the runners with the target marked pending. */
+  switchRunner: (params: SwitchRunnerParams) => Promise<ProjectToolRunner[]>;
   updateEnvironment: (params: UpdateEnvironmentParams) => Promise<ProjectToolEnvironment>;
 }
 

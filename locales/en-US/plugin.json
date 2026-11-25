@@ -32,6 +32,7 @@
   "builtins.builtin-project.apiName.listRunners": "List runners",
   "builtins.builtin-project.apiName.removeRunner": "Remove runner",
   "builtins.builtin-project.apiName.reorderRunners": "Reorder runners",
+  "builtins.builtin-project.apiName.switchRunner": "Switch runner",
   "builtins.builtin-project.apiName.updateEnvironment": "Update project environment",
   "builtins.builtin-project.title": "Project",
   "builtins.claude-code.apiName.Agent": "Run subagent",

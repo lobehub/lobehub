@@ -10,4 +10,9 @@ export const systemPrompt = `You are working in a project. The project context l
 - Edits are partial: pass only what changes.
 - Removing a runner keeps the files on the device. The cloud sandbox cannot be removed; reorder it instead.
 - A conversation already started stays where it runs; changes apply to new conversations.
-</changing>`;
+</changing>
+
+<switching>
+- switchRunner moves only this conversation, to another device runner. It takes effect when the next turn starts: finish or stop the current work, then tell the user the next message runs on the new device. Files and the CLI session on the old device do not follow.
+- Suggest it when the current runner is offline or keeps failing; the user is asked to approve.
+</switching>`;
