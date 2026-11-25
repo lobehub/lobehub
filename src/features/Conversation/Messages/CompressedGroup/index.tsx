@@ -15,7 +15,7 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, ChevronUp, FoldVertical, History, Sparkles, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, Sparkles, Undo2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,16 +26,17 @@ import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
 import { useCompressedHistoryInline } from '../Contexts/CompressedHistoryInlineContext';
+import { CompactIcon } from './CompactIcon';
 import CompressedMessageItem from './CompressedMessageItem';
 import {
   getCompressedTurnCount,
   isCompressionSummaryGenerating,
   shouldShowCompressedGroupPanel,
 } from './logic';
+import { openCompressionSummary } from './SummaryModal';
 import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
 import { useIsSlow } from './useIsSlow';
-import { useRevealOnExpand } from './useRevealOnExpand';
 
 const styles = stylex.create({
   collapsedButton: {
@@ -71,18 +72,15 @@ const styles = stylex.create({
   statusRowButton: { cursor: 'pointer' },
   container: { marginBlockEnd: '8px' },
   divider: { margin: '0' },
-  summaryTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
   messagesContainer: { paddingBlock: '8px' },
 });
 
 export interface CompressedGroupMessageProps {
   id: string;
   index: number;
-  /** The group is the last row, so an opened summary grows under the chat input. */
-  isLatestItem?: boolean;
 }
 
-const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatestItem }) => {
+const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
   // The chat list renders the original conversation as rows above this group,
@@ -92,13 +90,19 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatest
   const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
 
-  const handleCancelCompression = useCallback(() => {
-    confirmModal({
-      content: t('compression.cancelConfirm'),
-      onOk: () => cancelCompression(id),
-      title: t('compression.cancel'),
-    });
-  }, [id, cancelCompression, t]);
+  const handleCancelCompression = useCallback(
+    (onDone?: () => void) => {
+      confirmModal({
+        content: t('compression.cancelConfirm'),
+        onOk: async () => {
+          await cancelCompression(id);
+          onDone?.();
+        },
+        title: t('compression.cancel'),
+      });
+    },
+    [id, cancelCompression, t],
+  );
 
   const content = message?.content;
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;
@@ -125,12 +129,6 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatest
   const storeApi = useConversationStoreApi();
   useFollowCompressingRow(isGeneratingSummary && historyInline, storeApi.getState);
   const isSlow = useIsSlow(isGeneratingSummary);
-  const toggleSummary = useRevealOnExpand({
-    expanded,
-    getScrollState: storeApi.getState,
-    isLastRow: !!isLatestItem,
-    toggleExpanded,
-  });
 
   const showPanelContent = shouldShowCompressedGroupPanel({
     expanded,
@@ -173,7 +171,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatest
     return (
       <Flexbox className={stylex.props(styles.container).className}>
         <div {...stylex.props(styles.statusRow)}>
-          <Icon icon={FoldVertical} size={16} />
+          <Icon icon={CompactIcon} size={16} />
           <span className={cx(shinyTextStyles.shinyText)}>
             {t('compression.compacting')}
             {isSlow && ` · ${t('compression.compactingSlow')}`}
@@ -204,38 +202,27 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatest
       icon={Undo2}
       size={'small'}
       title={t('compression.cancel')}
-      onClick={handleCancelCompression}
+      onClick={() => handleCancelCompression()}
     />
   );
 
   // The original conversation sits right above as ordinary rows, so the
-  // divider stays put as the compression marker and only toggles the summary.
+  // compression point is just a status line; its summary opens in a modal.
   if (historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className}>
         {/* The reader scrolls through the history right above; a turn count adds nothing. */}
         <button
           {...stylex.props(styles.statusRow, styles.statusRowButton)}
-          aria-expanded={expanded}
+          aria-haspopup={'dialog'}
           type={'button'}
-          onClick={toggleSummary}
+          onClick={() =>
+            openCompressionSummary({ content, onCancelCompression: handleCancelCompression })
+          }
         >
-          <Icon icon={FoldVertical} size={16} />
+          <Icon icon={CompactIcon} size={16} />
           <span>{t('compression.compacted')}</span>
-          <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
         </button>
-        {showPanelContent && (
-          <Flexbox gap={8}>
-            <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
-              <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.summaryTitle)}>
-                <Icon icon={Sparkles} size={14} />
-                <span>{t('compression.summary')}</span>
-              </Flexbox>
-              {cancelAction}
-            </Flexbox>
-            <Markdown variant={'chat'}>{content}</Markdown>
-          </Flexbox>
-        )}
       </Flexbox>
     );
   }
@@ -273,7 +260,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatest
             type={'button'}
             onClick={toggleExpanded}
           >
-            <Icon icon={FoldVertical} size={14} />
+            <Icon icon={CompactIcon} size={14} />
             <span>{collapsedLabel}</span>
             <Icon icon={ChevronDown} size={14} />
           </button>
