@@ -5286,15 +5286,52 @@ When I am ___, I need ___
   'subscriptionAccounts.filterEmpty': 'No account matches the filter.',
   'subscriptionAccounts.purchase.adminOnly': 'Only workspace admins can buy this bundle.',
   'subscriptionAccounts.purchase.agree': 'I understand the notes above',
-  'subscriptionAccounts.purchase.buy': 'Buy',
+  'subscriptionAccounts.purchase.buy': 'Submit request and pay',
+  'subscriptionAccounts.purchase.deliveryNote':
+    'After you pay, we procure the account and deliver it to your device within {{days}} working days. If we cannot, you get a full refund.',
+  'subscriptionAccounts.purchase.desc':
+    'A cloud device with an official Claude Code or Codex account. Submit your request and pay: we prepare the device right away and deliver the account to it.',
+  'subscriptionAccounts.purchase.pay': 'Submit and pay {{amount}}',
+  'subscriptionAccounts.purchase.purchases.activeUntil': 'In use until {{date}}',
+  'subscriptionAccounts.purchase.purchases.destroyIn_one':
+    'Deleted in {{count}} day unless renewed',
+  'subscriptionAccounts.purchase.purchases.destroyIn_other':
+    'Deleted in {{count}} days unless renewed',
+  'subscriptionAccounts.purchase.purchases.endingSoon_one': 'Ends in {{count}} day',
+  'subscriptionAccounts.purchase.purchases.endingSoon_other': 'Ends in {{count}} days',
+  'subscriptionAccounts.purchase.purchases.preparing':
+    'Delivered within {{days}} working days after payment',
+  'subscriptionAccounts.purchase.purchases.renew': 'Renew',
+  'subscriptionAccounts.purchase.renew.desc':
+    'Renews the same device and account. While in use, the end date moves out; a frozen bundle is delivered again after you pay.',
+  'subscriptionAccounts.purchase.renew.pay': 'Pay {{amount}}',
+  'subscriptionAccounts.purchase.renew.title': 'Renew your bundle',
+  'subscriptionAccounts.purchase.renew.unavailable':
+    'This bundle cannot be renewed right now. Please contact us.',
+  'subscriptionAccounts.purchase.status.active': 'Delivered. The device and agent are ready.',
+  'subscriptionAccounts.purchase.status.awaiting_fulfillment':
+    'Payment received. We are preparing your account and will deliver it within {{days}} working days.',
+  'subscriptionAccounts.purchase.status.checkout_expired':
+    'The payment page expired before payment.',
+  'subscriptionAccounts.purchase.status.checkout_pending': 'Confirming your payment…',
+  'subscriptionAccounts.purchase.status.destroyed': 'This bundle has ended.',
+  'subscriptionAccounts.purchase.status.frozen':
+    'This bundle has ended and is frozen. Renew it to continue.',
+  'subscriptionAccounts.purchase.status.refunded': 'This bundle was refunded.',
+  'subscriptionAccounts.purchase.statusTag.active': 'In use',
+  'subscriptionAccounts.purchase.statusTag.awaiting_fulfillment': 'Preparing',
+  'subscriptionAccounts.purchase.statusTag.checkout_expired': 'Expired',
+  'subscriptionAccounts.purchase.statusTag.checkout_pending': 'Awaiting payment',
+  'subscriptionAccounts.purchase.statusTag.destroyed': 'Ended',
+  'subscriptionAccounts.purchase.statusTag.frozen': 'Frozen',
+  'subscriptionAccounts.purchase.statusTag.refunded': 'Refunded',
+  'subscriptionAccounts.purchase.statusTag.rejected': 'Needs attention',
   'subscriptionAccounts.purchase.canceled': 'Payment canceled. You were not charged.',
   'subscriptionAccounts.purchase.community.discord': 'Join Discord',
   'subscriptionAccounts.purchase.community.wechat': 'Official WeChat group',
   'subscriptionAccounts.purchase.community.wechatRequest': 'Request the WeChat group QR code',
   'subscriptionAccounts.purchase.community.wechatScan': 'Scan with WeChat to join.',
   'subscriptionAccounts.purchase.account.title': 'Choose a coding account',
-  'subscriptionAccounts.purchase.desc':
-    'A cloud device with an official Claude Code or Codex account. After payment, we create the device and the matching agent bound to it.',
   'subscriptionAccounts.purchase.device.title': 'Choose a device',
   'subscriptionAccounts.purchase.empty':
     'No bundles are on sale right now. New stock appears here once it is listed.',
@@ -5313,17 +5350,12 @@ When I am ___, I need ___
     'This account and device can only be used on LobeHub.',
   'subscriptionAccounts.purchase.notice.title': 'Before you buy',
   'subscriptionAccounts.purchase.openAgent': 'Open agent',
-  'subscriptionAccounts.purchase.pay': 'Pay {{amount}}',
   'subscriptionAccounts.purchase.period.everyMonth': 'Billed every month',
   'subscriptionAccounts.purchase.period.everyMonths': 'Billed every {{count}} months',
   'subscriptionAccounts.purchase.period.monthly': 'Monthly',
   'subscriptionAccounts.purchase.period.quarterly': 'Quarterly',
   'subscriptionAccounts.purchase.period.title': 'Choose a billing period',
   'subscriptionAccounts.purchase.period.yearly': 'Yearly',
-  'subscriptionAccounts.purchase.purchases.endingSoon_one':
-    'Ends in {{count}} day. Contact us to renew.',
-  'subscriptionAccounts.purchase.purchases.endingSoon_other':
-    'Ends in {{count}} days. Contact us to renew.',
   'subscriptionAccounts.purchase.purchases.endsAt': 'Ends {{date}}',
   'subscriptionAccounts.purchase.purchases.title': 'Your bundles',
   'subscriptionAccounts.purchase.scope.personal': 'You',
@@ -5338,26 +5370,10 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.sku.perQuarter': '/ quarter',
   'subscriptionAccounts.purchase.sku.perYear': '/ year',
   'subscriptionAccounts.purchase.sku.remaining': '{{count}} left',
-  'subscriptionAccounts.purchase.status.active': 'Ready. The device and agent are set up.',
-  'subscriptionAccounts.purchase.status.awaiting_account':
-    'Device and agent created. We are signing the account in on the device.',
-  'subscriptionAccounts.purchase.status.checkout_pending': 'Confirming your payment…',
-  'subscriptionAccounts.purchase.status.ended': 'This bundle has ended.',
-  'subscriptionAccounts.purchase.status.expired': 'The payment page expired before payment.',
-  'subscriptionAccounts.purchase.status.failed': 'Setup ran into a problem. We will contact you.',
   'subscriptionAccounts.purchase.status.loadFailed':
     "Couldn't load this purchase. Refresh the page or contact us.",
-  'subscriptionAccounts.purchase.status.provisioning': 'Payment received. Setting up the device…',
   'subscriptionAccounts.purchase.status.rejected':
     "There's a problem with this payment. We will contact you.",
-  'subscriptionAccounts.purchase.statusTag.active': 'Active',
-  'subscriptionAccounts.purchase.statusTag.awaiting_account': 'Signing in account',
-  'subscriptionAccounts.purchase.statusTag.checkout_pending': 'Awaiting payment',
-  'subscriptionAccounts.purchase.statusTag.ended': 'Ended',
-  'subscriptionAccounts.purchase.statusTag.expired': 'Expired',
-  'subscriptionAccounts.purchase.statusTag.failed': 'Needs attention',
-  'subscriptionAccounts.purchase.statusTag.provisioning': 'Setting up',
-  'subscriptionAccounts.purchase.statusTag.rejected': 'Needs attention',
   'subscriptionAccounts.purchase.summary.account': 'Account',
   'subscriptionAccounts.purchase.summary.discount': '{{badge}} applied.',
   'subscriptionAccounts.purchase.summary.included': 'Included',
