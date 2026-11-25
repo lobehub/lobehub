@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceSelectOptions } from '@/features/DeviceManager/useDeviceSelectOptions';
+import { RemoteDirectoryBrowser } from '@/features/WorkingDirectory/RemoteDirectoryBrowser';
 import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
@@ -52,12 +53,17 @@ function AddDirectoryContent({
     ? fixedDevice?.friendlyName || fixedDevice?.hostname || initialDeviceId
     : undefined;
   const [path, setPath] = useState('');
+  // An online machine is browsed for the folder; typing the path is the fallback.
+  const [manual, setManual] = useState(false);
+  const device = devices.find((item) => item.deviceId === deviceId);
+  const browsable = !!device?.online && !manual;
   const deviceOptions = useDeviceSelectOptions(devices, deviceId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const bind = useProjectDirectoryStore((s) => s.bind);
   const { close } = useModalContext();
-  const save = async () => {
+  const save = async (path: string) => {
+    if (!environmentId || !deviceId || !path.trim()) return;
     setPending(true);
     setError(undefined);
     try {
@@ -80,13 +86,16 @@ function AddDirectoryContent({
       setPending(false);
     }
   };
+  const errorMessage = error instanceof Error ? error.message : undefined;
   return (
     <Flexbox gap={16}>
-      <Text type="secondary">
-        {fixedDeviceName
-          ? t('settings.setDirectoryDescription', { device: fixedDeviceName })
-          : t('settings.addDirectoryDescription')}
-      </Text>
+      {!browsable && (
+        <Text type="secondary">
+          {fixedDeviceName
+            ? t('settings.setDirectoryDescription', { device: fixedDeviceName })
+            : t('settings.addDirectoryDescription')}
+        </Text>
+      )}
       {fixedDeviceName ? (
         <Flexbox horizontal align="center" gap={8}>
           {getDeviceIcon(fixedDevice?.platform, 16)}
@@ -103,30 +112,47 @@ function AddDirectoryContent({
             value={deviceId}
             onChange={(id) => {
               setDevice(id ?? '');
+              setManual(false);
               setError(undefined);
             }}
           />
         </>
       )}
-      <Text>{t('directories.path')}</Text>
-      <Input
-        aria-label={t('directories.path')}
-        disabled={pending}
-        placeholder={t('directories.path')}
-        value={path}
-        onChange={(e) => {
-          setPath(e.target.value);
-          setError(undefined);
-        }}
-      />
-      {error ? (
-        <Alert
-          showIcon
-          description={error instanceof Error ? error.message : undefined}
-          title={t('settings.addDirectoryFailed')}
-          type="error"
+      {browsable ? (
+        // The device's own folders, as when adding a working directory to an agent.
+        <RemoteDirectoryBrowser
+          deviceId={deviceId}
+          error={error ? errorMessage || t('settings.addDirectoryFailed') : undefined}
+          loading={pending}
+          onCancel={close}
+          onSelect={(picked) => void save(picked)}
+          onManual={(typed) => {
+            setPath(typed);
+            setError(undefined);
+            setManual(true);
+          }}
         />
-      ) : null}
+      ) : (
+        <ManualPath
+          canBrowse={!!device?.online}
+          deviceId={deviceId}
+          environmentId={environmentId}
+          error={error}
+          errorMessage={errorMessage}
+          path={path}
+          pending={pending}
+          submitLabel={t(
+            initialDeviceId ? 'settings.setDeviceDirectory' : 'settings.addExecutionEnvironment',
+          )}
+          onBrowse={() => setManual(false)}
+          onCancel={close}
+          onSave={() => void save(path)}
+          onChange={(next) => {
+            setPath(next);
+            setError(undefined);
+          }}
+        />
+      )}
       {deviceRequest.error || environmentsRequest.error ? (
         <AsyncError
           error={deviceRequest.error || environmentsRequest.error}
@@ -135,31 +161,94 @@ function AddDirectoryContent({
           }
         />
       ) : null}
-      <Flexbox horizontal gap={8} justify="flex-end">
-        <Button disabled={pending} onClick={close}>
-          {t('cancel', { ns: 'common' })}
-        </Button>
-        <Button
-          disabled={!environmentId || !deviceId || !path.trim()}
-          loading={pending}
-          type="primary"
-          onClick={save}
-        >
-          {t(initialDeviceId ? 'settings.setDeviceDirectory' : 'settings.addDirectory')}
-        </Button>
-      </Flexbox>
     </Flexbox>
   );
 }
+
+/** The typed-path form: for an offline machine, or when the person chose to type it. */
+const ManualPath = ({
+  canBrowse,
+  deviceId,
+  environmentId,
+  error,
+  errorMessage,
+  onBrowse,
+  onCancel,
+  onChange,
+  onSave,
+  path,
+  pending,
+  submitLabel,
+}: {
+  canBrowse: boolean;
+  deviceId: string;
+  environmentId: string;
+  error: unknown;
+  errorMessage?: string;
+  onBrowse: () => void;
+  onCancel: () => void;
+  onChange: (path: string) => void;
+  onSave: () => void;
+  path: string;
+  pending: boolean;
+  submitLabel: string;
+}) => {
+  const { t } = useTranslation('project');
+  const { t: tDevice } = useTranslation('device');
+  return (
+    <>
+      <Text>{t('directories.path')}</Text>
+      <Input
+        aria-label={t('directories.path')}
+        disabled={pending}
+        placeholder={t('directories.path')}
+        value={path}
+        onChange={(e) => onChange(e.target.value)}
+        onPressEnter={() => environmentId && deviceId && path.trim() && onSave()}
+      />
+      {error ? (
+        <Alert
+          showIcon
+          description={errorMessage}
+          title={t('settings.addDirectoryFailed')}
+          type="error"
+        />
+      ) : null}
+      <Flexbox horizontal align="center" gap={8} justify="space-between">
+        <div>
+          {canBrowse && (
+            <Button disabled={pending} onClick={onBrowse}>
+              {tDevice('workingDirectory.browseFolders')}
+            </Button>
+          )}
+        </div>
+        <Flexbox horizontal gap={8}>
+          <Button disabled={pending} onClick={onCancel}>
+            {t('cancel', { ns: 'common' })}
+          </Button>
+          <Button
+            disabled={!environmentId || !deviceId || !path.trim()}
+            loading={pending}
+            type="primary"
+            onClick={onSave}
+          >
+            {submitLabel}
+          </Button>
+        </Flexbox>
+      </Flexbox>
+    </>
+  );
+};
 export const openAddDirectoryModal = (
   projectId: string,
   environmentId?: string,
   options: AddDirectoryOptions = {},
 ) =>
   createModal({
-    title: t(options.deviceId ? 'settings.setDeviceDirectory' : 'settings.addDirectory', {
-      ns: 'project',
-    }),
+    title: t(
+      options.deviceId ? 'settings.setDeviceDirectory' : 'settings.addExecutionEnvironment',
+      { ns: 'project' },
+    ),
     content: (
       <AddDirectoryContent {...options} environmentId={environmentId} projectId={projectId} />
     ),
