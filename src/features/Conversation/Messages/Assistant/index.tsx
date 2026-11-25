@@ -21,6 +21,7 @@ import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import ActionRowSpacer from '../components/ActionRowSpacer';
 import MessageBranch from '../components/MessageBranch';
 import RefreshingIndicator from '../components/RefreshingIndicator';
 import {
@@ -183,7 +184,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
                 messageId={id}
               />
             )}
-            {!disableEditing && actionBarHolder}
+            {disableEditing ? <ActionRowSpacer /> : actionBarHolder}
           </>
         }
         afterActions={
