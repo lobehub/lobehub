@@ -593,37 +593,41 @@ export class VerifyRunModel {
    * stamp per-run knobs like the task's `maxRepairRounds` override, and to carry
    * them onto a repair round's run so it derives the same cap.
    */
-  /**
-   * Claim the right to drive the task from this run, exactly once.
-   *
-   * The settle path reads `taskDrivenAt`, decides, and only then writes it —
-   * so two verifier callbacks landing together can both pass the read and both
-   * act (spawning two rounds, or one spawning while the other pauses the task
-   * it just started). The claim moves that decision into a single conditional
-   * UPDATE: the row is only stamped if nobody stamped it, and the loser learns
-   * it lost from the empty result.
-   *
-   * @returns true when this caller owns the drive, false when it was taken.
-   */
-  claimTaskDrive = async (runId: string): Promise<boolean> => {
+  /** Acquire an owner-scoped drive lease; release on failure, commit only after core effects. */
+  claimTaskDrive = async (runId: string, claimId: string): Promise<boolean> => {
     const claimed = await this.db
       .update(verifyRuns)
       .set({
-        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('taskDrivenAt', ${new Date().toISOString()}::text)`,
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('taskDriveClaimedAt', ${new Date().toISOString()}::text, 'taskDriveClaimId', ${claimId}::text)`,
       })
       .where(
         and(
           eq(verifyRuns.id, runId),
-          // Null-testing a jsonb arrow expression in a WHERE clause takes the
-          // production engine down (XX000), so compare an extracted value
-          // against a sentinel instead — see the jsonbNullTest guard.
+          sql`${verifyRuns.status} in ('passed', 'failed', 'errored')`,
+          // Compare extracted values: jsonb null tests can fail on the production engine.
           sql`coalesce(${verifyRuns.metadata} ->> 'taskDrivenAt', '') = ''`,
+          sql`coalesce(${verifyRuns.metadata} ->> 'taskDriveClaimId', '') = ''`,
           this.ownership(),
         ),
       )
       .returning({ id: verifyRuns.id });
-
     return claimed.length > 0;
+  };
+
+  /** Only the lease owner may release or commit; merge without losing review/policy metadata. */
+  finishTaskDrive = async (runId: string, claimId: string, completed = false): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`(coalesce(${verifyRuns.metadata}, '{}'::jsonb) - 'taskDriveClaimedAt' - 'taskDriveClaimId') || ${completed ? JSON.stringify({ taskDrivenAt: new Date().toISOString() }) : '{}'}::jsonb`,
+      })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          sql`${verifyRuns.metadata} ->> 'taskDriveClaimId' = ${claimId}`,
+          this.ownership(),
+        ),
+      );
   };
 
   /** Record the auto-repair decision without clobbering the rest of `metadata`. */
