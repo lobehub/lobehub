@@ -88,4 +88,28 @@ describe('file proxy route', () => {
     );
     expect(fileServiceMocks.instance.createCachedPreSignedUrlForPreview).not.toHaveBeenCalled();
   });
+
+  it('should render a branded 404 page for browsers when the file does not exist', async () => {
+    vi.mocked(FileModel.getFileById).mockResolvedValue(undefined);
+
+    const response = await GET(
+      new NextRequest('https://lobehub.com/f/missing', { headers: { accept: 'text/html' } }),
+      { params: Promise.resolve({ id: 'missing' }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await response.text()).toContain('<h1 id="title">文件不存在</h1>');
+  });
+
+  it('should keep the plain-text 404 for non-browser callers', async () => {
+    vi.mocked(FileModel.getFileById).mockResolvedValue(undefined);
+
+    const response = await GET(new NextRequest('https://lobehub.com/f/missing'), {
+      params: Promise.resolve({ id: 'missing' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('File not found');
+  });
 });

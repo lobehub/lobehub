@@ -11,6 +11,7 @@ import {
 } from '@/server/services/enterpriseKnowledge/contentAccess';
 import { FileService } from '@/server/services/file';
 import { createEnterpriseFileResponse } from '@/server/services/file/enterpriseProxy';
+import { createFileNotFoundResponse } from '@/server/services/file/notFoundResponse';
 
 const log = debug('lobe-file:proxy');
 
@@ -46,9 +47,7 @@ const handleGet = async (req: NextRequest, segmentData: { params: Params }) => {
 
     if (!file) {
       log('File not found: %s', id);
-      return new Response('File not found', {
-        status: 404,
-      });
+      return createFileNotFoundResponse(req);
     }
 
     // Classify with the owner's scope, then authorize the actual request. No
@@ -62,16 +61,14 @@ const handleGet = async (req: NextRequest, segmentData: { params: Params }) => {
       if (enterprise) {
         const reader = resolveManagedContentReader(await createLambdaContext(req));
         if (!reader)
-          return new Response('File not found', {
+          return createFileNotFoundResponse(req, {
             headers: { 'Cache-Control': 'private, no-store' },
-            status: 404,
           });
         await resolveEnterpriseContentScopes({ serverDB: db, userId: reader }, [id]);
       }
     } catch {
-      return new Response('File not found', {
+      return createFileNotFoundResponse(req, {
         headers: { 'Cache-Control': 'private, no-store' },
-        status: 404,
       });
     }
 
