@@ -7,7 +7,7 @@ export const A2uiManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Draw a card in the conversation from A2UI 1.0 messages for one surface: createSurface, updateComponents (flat components with ids, root is a Card) and optionally updateDataModel. Mostly for showing information visually (reports, digests, metrics, charts, status lists); also for multi-field input. Not for prose. Invalid cards come back with errors to fix.',
+        'Draw a card in the conversation from A2UI 1.0 messages for one surface: createSurface, updateComponents (flat components with ids, one with id "root") and optionally updateDataModel. Mostly for showing information visually (reports, comparisons, schedules, profiles, metrics, charts, tables); also for multi-field input. Design the layout for the content. Not for prose. Invalid cards come back with errors to fix.',
       name: A2uiApiName.renderUI,
       parameters: {
         properties: {
@@ -26,7 +26,7 @@ export const A2uiManifest: BuiltinToolManifest = {
   identifier: A2uiIdentifier,
   meta: {
     avatar: '🧩',
-    description: 'Answer with visual cards: reports, metrics, charts, status lists and forms',
+    description: 'Answer with visual cards: reports, comparisons, schedules, charts, tables and forms',
     title: 'Cards',
   },
   systemRole: systemPrompt,
