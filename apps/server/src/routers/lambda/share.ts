@@ -26,6 +26,7 @@ import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { resolveServerProviderModelList } from '@/server/globalConfig/providerModelList';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
 import { listShareActivatableExtensionIds } from '@/server/services/agentShare/activatableExtensions';
@@ -74,15 +75,18 @@ const resolveVisitorUploadAbility = async (
         provider: share.agentProvider,
       }),
     ]);
-    const ownerModel = await new AiModelModel(
-      db,
-      share.ownerId,
-      share.workspaceId ?? undefined,
-    ).findByIdAndProvider(model, provider);
+    const [ownerModel, serverModels] = await Promise.all([
+      new AiModelModel(db, share.ownerId, share.workspaceId ?? undefined).findByIdAndProvider(
+        model,
+        provider,
+      ),
+      resolveServerProviderModelList(provider, builtinModels),
+    ]);
     const abilities = resolveModelMediaCapabilities({
       builtinModels,
       model,
       provider,
+      serverModels,
       userAbilities: ownerModel?.abilities as ModelAbilities | undefined,
     });
 
