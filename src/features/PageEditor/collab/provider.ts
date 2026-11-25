@@ -68,6 +68,7 @@ export interface PageCollabProviderEvents {
   /** This member changed the page, as opposed to the editor syncing or bootstrapping it. */
   onLocalEdit?: () => void;
   onPendingChange?: (pending: number) => void;
+  onRefused?: () => void;
   onReset?: (reason: PageCollabResetReason) => void;
   onStatus?: (status: PageCollabStatus) => void;
 }
@@ -423,8 +424,15 @@ export class PageCollabProvider extends Emitter {
           this.events.onBlocked?.(blocked);
           return;
         }
+        // The room turns this member away (no access, or the `page_collab` flag is off for them
+        // while this client still holds an older snapshot): the page edits over HTTP instead.
+        if (message.code === 'forbidden') {
+          clearTimeout(this.syncTimer);
+          this.events.onRefused?.();
+          return;
+        }
         // A view-only member is still in the room; only their writes are refused.
-        if (message.code === 'read_only' || message.code === 'forbidden') {
+        if (message.code === 'read_only') {
           this.events.onAccess?.('view');
           return;
         }

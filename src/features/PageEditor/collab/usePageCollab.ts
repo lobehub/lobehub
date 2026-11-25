@@ -66,7 +66,10 @@ export const usePageCollabEligible = (documentId: string | undefined) => {
     const document = documentId ? s.documentDetailMap[documentId]?.document : undefined;
     return !!document && !document.workspaceId;
   });
-  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown && !isPersonalPage;
+  const refused = useDocumentStore((s) =>
+    documentId ? !!s.documents[documentId]?.collabRefused : false,
+  );
+  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown && !isPersonalPage && !refused;
 };
 
 export const usePageCollab = (documentId: string | undefined, onReset?: () => void) => {
@@ -113,6 +116,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         if (!storeApi.getState().collab?.edited) setCollab({ edited: true });
       },
       onPendingChange: (pending) => setCollab({ pending }),
+      onRefused: () => useDocumentStore.getState().refuseDocumentCollab(documentId!),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;
         // After a lost bootstrap race the pending edits are the duplicate copy itself.

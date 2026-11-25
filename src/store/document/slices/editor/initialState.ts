@@ -44,6 +44,8 @@ export interface EditorContentState {
    * saves only carry metadata.
    */
   collab?: boolean;
+  // Sticky until reload: rejoining would only be turned away again.
+  collabRefused?: boolean;
   /**
    * Document content (markdown)
    */

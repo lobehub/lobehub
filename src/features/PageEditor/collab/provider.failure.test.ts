@@ -40,6 +40,7 @@ const setup = () => {
     onCharLimitCleared: vi.fn(),
     onCharLimitExceeded: vi.fn(),
     onFailure: vi.fn(),
+    onRefused: vi.fn(),
     onStatus: vi.fn(),
   };
   const provider = new PageCollabProvider('doc_1', new Y.Doc(), room.mux as any, events);
@@ -133,6 +134,17 @@ describe('PageCollabProvider failures', () => {
     vi.advanceTimersByTime(PAGE_ROOM_SYNC_TIMEOUT_MS);
 
     expect(events.onAccess).toHaveBeenCalledWith('view');
+    expect(events.onFailure).not.toHaveBeenCalled();
+  });
+
+  it('hands a member the room turns away back to stored editing', () => {
+    const { events, room } = setup();
+
+    room.deliver({ code: 'forbidden', documentId: 'doc_1', message: '', type: 'doc_error' });
+    vi.advanceTimersByTime(PAGE_ROOM_SYNC_TIMEOUT_MS);
+
+    expect(events.onRefused).toHaveBeenCalledTimes(1);
+    expect(events.onAccess).not.toHaveBeenCalled();
     expect(events.onFailure).not.toHaveBeenCalled();
   });
 

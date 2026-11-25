@@ -80,6 +80,19 @@ describe('usePageCollabEligible', () => {
     expect(result.current).toBe(true);
   });
 
+  it('keeps a page the room turned away on stored editing', () => {
+    loadDocument('ws_1');
+    const { result, rerender } = renderEligible();
+    expect(result.current).toBe(true);
+
+    act(() => {
+      useDocumentStore.getState().refuseDocumentCollab('doc_1');
+    });
+    rerender();
+
+    expect(result.current).toBe(false);
+  });
+
   it('keeps a personal page out of rooms', () => {
     loadDocument(null);
 

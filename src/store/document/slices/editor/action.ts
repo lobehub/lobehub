@@ -260,6 +260,15 @@ export class EditorActionImpl {
     );
   };
 
+  refuseDocumentCollab = (documentId: string): void => {
+    if (!this.#get().documents[documentId]) return;
+
+    this.#get().internal_dispatchDocument(
+      { id: documentId, type: 'updateDocument', value: { collabRefused: true } },
+      n('refuseDocumentCollab'),
+    );
+  };
+
   /**
    * An agent command starts editing the stored page: save what the user typed
    * so the agent reads it, and hold the page read-only until the command ends.
