@@ -9,7 +9,7 @@ import type {
 } from '@lobechat/types';
 import { MessageGroupType } from '@lobechat/types';
 import { logTimingSink as logTiming, runTimedSinkStage as runTimedStage } from '@lobechat/utils';
-import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import {
@@ -39,11 +39,13 @@ import {
   materializeChatAudioItem,
   toFileDocumentsMap,
 } from './attachments';
+import { createdAtIso, messageStrictlyBefore } from './cursorWindow';
 import {
   buildMessageGroupNode,
   compressedBranchMarkerColumns,
   compressedStateMarkerColumns,
   loadCompressedStateRows,
+  MAX_COMPRESSED_GROUP_MEMBERS,
   planMessageGroupHydration,
   selectCompressedGroupMembers,
 } from './groupNodes';
@@ -487,7 +489,9 @@ export class MessageByIdsQueries extends MessageScope {
               inArray(messages.messageGroupId, groupIds),
             ),
           )
-          .orderBy(asc(messages.createdAt)),
+          // `id` breaks `createdAt` ties so `compressedOmittedIds` and
+          // `queryCompressedGroupMembers` page through the same order.
+          .orderBy(asc(messages.createdAt), asc(messages.id)),
       { groupCount: groupIds.length },
     );
     logTiming(timing, 'db.message.messageGroups.messages.select:rows', {
@@ -535,6 +539,7 @@ export class MessageByIdsQueries extends MessageScope {
    * itself, so consecutive pages parse as whole turns. A group outside the
    * caller's scope or topic, or an `untilId` that is not one of its members,
    * yields an empty page rather than an error: the client simply stops paging.
+   * Pass the returned `nextUntilId` to read the page before this one.
    */
   queryCompressedGroupMembers = async (
     params: { groupId: string; topicId: string; untilId: string },
@@ -545,7 +550,7 @@ export class MessageByIdsQueries extends MessageScope {
       ) => Promise<string>;
     } = {},
   ): Promise<CompressedGroupMembersPage> => {
-    const empty: CompressedGroupMembersPage = { messages: [], omittedIds: [] };
+    const empty: CompressedGroupMembersPage = { messages: [] };
     const [group] = await this.db
       .select({ id: messageGroups.id })
       .from(messageGroups)
@@ -564,16 +569,39 @@ export class MessageByIdsQueries extends MessageScope {
       .limit(1);
     if (!group) return empty;
 
-    const records = await this.db
+    const [until] = await this.db
+      .select({ createdAt: createdAtIso })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          eq(messages.messageGroupId, group.id),
+          eq(messages.id, params.untilId),
+        ),
+      )
+      .limit(1);
+    if (!until) return empty;
+
+    // Read only the newest members up to `untilId` (keyset on `(createdAt, id)`,
+    // the same order the node uses), one more than a page so the next
+    // `untilId` is known, instead of every member of a large group per page.
+    const newestFirst = await this.db
       .select({ id: messages.id, role: messages.role })
       .from(messages)
-      .where(and(this.ownership(), eq(messages.messageGroupId, group.id)))
-      .orderBy(asc(messages.createdAt));
+      .where(
+        and(
+          this.ownership(),
+          eq(messages.messageGroupId, group.id),
+          or(
+            eq(messages.id, params.untilId),
+            messageStrictlyBefore({ createdAt: until.createdAt, id: params.untilId }),
+          ),
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(MAX_COMPRESSED_GROUP_MEMBERS + 1);
 
-    const until = records.findIndex((record) => record.id === params.untilId);
-    if (until < 0) return empty;
-
-    const candidates = records.slice(0, until + 1);
+    const candidates = newestFirst.reverse();
     const page = selectCompressedGroupMembers(candidates);
     const fullMessages = await this.queryByIds(
       page.map((record) => record.id),
@@ -586,7 +614,7 @@ export class MessageByIdsQueries extends MessageScope {
 
     return {
       messages: parse(ordered).flatList,
-      omittedIds: candidates.slice(0, candidates.length - page.length).map((record) => record.id),
+      nextUntilId: candidates.at(-page.length - 1)?.id,
     };
   };
 }

@@ -7,8 +7,8 @@ import type { ChatRow } from './chatRows';
 export interface CompressedHistoryPage {
   /** Loaded older members, oldest first, parsed into display nodes. */
   messages: UIChatMessage[];
-  /** Members still older than `messages`, ascending. */
-  omittedIds: string[];
+  /** Newest member still older than `messages`, the next page's `untilId`; absent at the group start. */
+  nextUntilId?: string;
 }
 
 const isCompressedGroup = (message: UIChatMessage) => message.role === 'compressedGroup';
@@ -53,11 +53,11 @@ export const getCompressedHistoryMembers = (
   return members;
 };
 
-/** Ids of a group's members not loaded yet, ascending. */
-export const getCompressedHistoryOmittedIds = (
+/** The newest of a group's members not loaded yet, or `undefined` once all are. */
+export const getCompressedHistoryNextUntilId = (
   group: UIChatMessage,
   page?: CompressedHistoryPage,
-): string[] => page?.omittedIds ?? group.compressedOmittedIds ?? [];
+): string | undefined => (page ? page.nextUntilId : group.compressedOmittedIds?.at(-1));
 
 /**
  * The group whose older members load next when the reader reaches the top:
@@ -71,14 +71,22 @@ export const findCompressedGroupToPage = (
   const group = messages[0];
   if (!group || !isCompressedGroup(group)) return;
 
-  const untilId = getCompressedHistoryOmittedIds(group, pages[group.id]).at(-1);
+  const untilId = getCompressedHistoryNextUntilId(group, pages[group.id]);
   return untilId ? { group, untilId } : undefined;
 };
 
 export interface CompressedRow extends ChatRow {
+  /**
+   * Set on the row marking a later group's unloaded members, between the
+   * group above and this group's loaded ones: the id of the group to page.
+   */
+  compressedGap?: string;
   /** Set on a compression member's row: the member, rendered read-only. */
   compressedMember?: UIChatMessage;
 }
+
+/** Row id of a group's unloaded-members gap, see `CompressedRow.compressedGap`. */
+export const compressedGapRowId = (groupId: string) => `${groupId}:earlier`;
 
 /**
  * Lay a compression group's original conversation out as ordinary rows right
@@ -100,8 +108,15 @@ export const expandCompressedRows = (
       .filter(isCompressedGroup)
       .map((group) => [group.id, getCompressedHistoryMembers(group, pages[group.id])]),
   );
+  // Only the oldest row pages on reaching the top (`findCompressedGroupToPage`);
+  // any later capped group has its gap in the middle of the transcript.
+  const firstId = messages[0]?.id;
+  const groupById = new Map(messages.filter(isCompressedGroup).map((group) => [group.id, group]));
   const expandedRows: CompressedRow[] = [];
   for (const row of rows) {
+    const group = groupById.get(row.id);
+    if (group && group.id !== firstId && getCompressedHistoryNextUntilId(group, pages[group.id]))
+      expandedRows.push({ compressedGap: group.id, id: compressedGapRowId(group.id) });
     for (const member of membersByGroup.get(row.id) ?? []) {
       expandedRows.push({ compressedMember: member, id: member.id });
     }

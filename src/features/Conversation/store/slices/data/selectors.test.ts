@@ -5,7 +5,7 @@ import { dataSelectors } from './selectors';
 
 const stateWith = (
   displayMessages: unknown[],
-  compressedHistoryPages: Record<string, { messages: unknown[]; omittedIds: string[] }> = {},
+  compressedHistoryPages: Record<string, { messages: unknown[]; nextUntilId?: string }> = {},
 ): State => ({ compressedHistoryPages, displayMessages }) as unknown as State;
 
 describe('taskCallbackTaskIds', () => {
@@ -144,7 +144,6 @@ describe('getBlockContent', () => {
             role: 'assistantGroup',
           },
         ],
-        omittedIds: [],
       },
     });
 

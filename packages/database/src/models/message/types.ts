@@ -270,6 +270,6 @@ export interface SoftDeletedMessage {
 export interface CompressedGroupMembersPage {
   /** The page's members, parsed into display nodes (oldest first). */
   messages: UIChatMessage[];
-  /** Ids of the group's members still older than this page, ascending. */
-  omittedIds: string[];
+  /** Newest member older than this page, the next page's `untilId`; absent at the group start. */
+  nextUntilId?: string;
 }

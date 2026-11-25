@@ -10,7 +10,10 @@ import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { hoistCompressedGroups } from '../../../ChatList/utils/compressedGroupOrder';
-import { findCompressedGroupToPage } from '../../../ChatList/utils/compressedHistory';
+import {
+  findCompressedGroupToPage,
+  getCompressedHistoryNextUntilId,
+} from '../../../ChatList/utils/compressedHistory';
 import { type Store as ConversationStore } from '../../action';
 import { type State } from '../../initialState';
 import { isSameConversationContext } from '../../utils/contextGuard';
@@ -91,6 +94,13 @@ export interface DataAction {
 
   /** Mirror the chat store bucket of the current context into this store. */
   internal_syncChatTranscript: () => void;
+
+  /**
+   * Page one compression group's older members on request: a later group's
+   * unloaded members sit mid-transcript, where reaching the top never pages
+   * them. Same loading and error state as `loadEarlierMessages`.
+   */
+  loadCompressedGroupHistory: (groupId: string, options?: { retry?: boolean }) => Promise<void>;
 
   /**
    * Load one round-aligned page of history older than the server's
@@ -182,8 +192,18 @@ export const dataSlice: StateCreator<
     return true;
   };
 
-  /** Page one compression group's older members; see `loadEarlierMessages`. */
-  const loadCompressedHistory = async (options?: { retry?: boolean }) => {
+  /**
+   * Bumped per member-page request: a response that is no longer the latest
+   * (the reader left the topic and came back, and paged again) is dropped,
+   * since the context check alone cannot tell the two visits apart.
+   */
+  let compressedHistoryRequest = 0;
+
+  /**
+   * Page one compression group's older members: `groupId`, or the oldest row
+   * when it is a group (see `loadEarlierMessages`).
+   */
+  const loadCompressedHistory = async (options?: { retry?: boolean }, groupId?: string) => {
     const { compressedHistoryPages, context, displayMessages, transcriptSource } = get();
     // Share views read through share-authorized endpoints; the member page is owner-only.
     if (transcriptSource !== 'chat' || !context.topicId) return;
@@ -191,13 +211,17 @@ export const dataSlice: StateCreator<
     if (get().isLoadingEarlierMessages) return;
     if (get().earlierMessagesError !== undefined && !options?.retry) return;
 
-    const target = findCompressedGroupToPage(
-      hoistCompressedGroups(displayMessages),
-      compressedHistoryPages,
-    );
-    if (!target) return;
+    const group = groupId ? displayMessages.find((message) => message.id === groupId) : undefined;
+    const target = groupId
+      ? group && {
+          group,
+          untilId: getCompressedHistoryNextUntilId(group, compressedHistoryPages[groupId]),
+        }
+      : findCompressedGroupToPage(hoistCompressedGroups(displayMessages), compressedHistoryPages);
+    if (!target?.untilId) return;
 
-    const groupId = target.group.id;
+    const targetId = target.group.id;
+    const request = ++compressedHistoryRequest;
     set(
       { earlierMessagesError: undefined, isLoadingEarlierMessages: true },
       false,
@@ -205,20 +229,21 @@ export const dataSlice: StateCreator<
     );
     try {
       const page = await messageService.getCompressedGroupMembers({
-        groupId,
+        groupId: targetId,
         topicId: context.topicId,
         untilId: target.untilId,
       });
+      if (request !== compressedHistoryRequest) return;
       if (!isSameConversationContext(context, get().context)) return;
 
-      const previous = get().compressedHistoryPages[groupId];
+      const previous = get().compressedHistoryPages[targetId];
       set(
         {
           compressedHistoryPages: {
             ...get().compressedHistoryPages,
-            [groupId]: {
+            [targetId]: {
               messages: [...page.messages, ...(previous?.messages ?? [])],
-              omittedIds: page.omittedIds,
+              nextUntilId: page.nextUntilId,
             },
           },
           isLoadingEarlierMessages: false,
@@ -227,8 +252,9 @@ export const dataSlice: StateCreator<
         'compressedHistory/end',
       );
     } catch (error) {
+      if (request !== compressedHistoryRequest) return;
       if (!isSameConversationContext(context, get().context)) return;
-      log('[loadCompressedHistory] failed | group=%s | %O', groupId, error);
+      log('[loadCompressedHistory] failed | group=%s | %O', targetId, error);
       set(
         { earlierMessagesError: error, isLoadingEarlierMessages: false },
         false,
@@ -296,6 +322,10 @@ export const dataSlice: StateCreator<
       )
         return;
       set(next, false, 'syncChatTranscript');
+    },
+
+    loadCompressedGroupHistory: async (groupId, options) => {
+      await loadCompressedHistory(options, groupId);
     },
 
     loadEarlierMessages: async (options) => {

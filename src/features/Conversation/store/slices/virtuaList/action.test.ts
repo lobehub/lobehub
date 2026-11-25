@@ -28,6 +28,7 @@ const createScrollMethods = (): VirtuaScrollMethods => ({
   scrollTo: vi.fn(),
   scrollToEnd: vi.fn(),
   scrollToIndex: vi.fn(),
+  scrollToMessage: vi.fn(),
 });
 
 const createStoreWithMethods = () => {

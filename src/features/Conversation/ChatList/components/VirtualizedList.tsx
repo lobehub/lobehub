@@ -75,6 +75,8 @@ interface VirtualizedListProps {
   printable?: boolean;
   /** Reopen at the message the reader last had at the top of the viewport. */
   rememberReadingPosition?: boolean;
+  /** Row index of the row rendering a display message, or -1 when none does. */
+  resolveMessageRow?: (messageId: string) => number;
 }
 
 /**
@@ -93,6 +95,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     paging,
     printable,
     rememberReadingPosition,
+    resolveMessageRow,
   }) => {
     const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
@@ -353,6 +356,14 @@ const VirtualizedList = memo<VirtualizedListProps>(
       setScrollState({ isScrolling: false });
     }, [setScrollState]);
 
+    // Read by the scroll methods registered once on mount.
+    const resolveMessageRowRef = useRef(resolveMessageRow);
+    const dataSourceRef = useRef(dataSource);
+    useEffect(() => {
+      resolveMessageRowRef.current = resolveMessageRow;
+      dataSourceRef.current = dataSource;
+    });
+
     // Register scroll methods to store on mount
     useEffect(() => {
       const ref = virtuaRef.current;
@@ -373,6 +384,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
             if (scroller) scroller.scrollTop = scroller.scrollHeight;
           },
           scrollToIndex: (index, options) => ref.scrollToIndex(index + LEADING_ROWS, options),
+          scrollToMessage: (messageId, options) => {
+            const index =
+              resolveMessageRowRef.current?.(messageId) ?? dataSourceRef.current.indexOf(messageId);
+            if (index >= 0) ref.scrollToIndex(index + LEADING_ROWS, options);
+          },
         });
 
         // Seed active index once on mount (avoid requiring user scroll)

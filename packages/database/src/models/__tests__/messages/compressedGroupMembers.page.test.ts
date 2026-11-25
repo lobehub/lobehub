@@ -18,13 +18,16 @@ const idOf = (i: number) => `pg-${String(i).padStart(4, '0')}`;
 let messageModel: MessageModel;
 let serverDB: LobeChatDatabase;
 
-/** A group of `total` alternating user/assistant members, one second apart. */
-const seedGroup = async (total: number) => {
+/**
+ * A group of `total` alternating user/assistant members, `stepMs` apart (0
+ * gives every member the same `createdAt`, as a bulk insert can).
+ */
+const seedGroup = async (total: number, stepMs = 1000) => {
   const base = Date.parse('2024-01-01T00:00:00Z');
   await serverDB.insert(messages).values(
     Array.from({ length: total }, (_, i) => ({
       content: `member ${i}`,
-      createdAt: new Date(base + i * 1000),
+      createdAt: new Date(base + i * stepMs),
       id: idOf(i),
       // Chain the members so `parse()` sees one conversation.
       parentId: i === 0 ? null : idOf(i - 1),
@@ -84,24 +87,44 @@ describe('MessageModel.queryCompressedGroupMembers', () => {
     expect(first.messages.at(-1)!.id).toBe(nodeOmitted.at(-1));
     expect(first.messages[0].role).toBe('user');
     expect(first.messages).toHaveLength(MAX_COMPRESSED_GROUP_MEMBERS);
-    expect(first.omittedIds).toEqual(nodeOmitted.slice(0, -MAX_COMPRESSED_GROUP_MEMBERS));
+    expect(first.nextUntilId).toBe(nodeOmitted.at(-MAX_COMPRESSED_GROUP_MEMBERS - 1));
 
     const second = await messageModel.queryCompressedGroupMembers({
       groupId,
       topicId,
-      untilId: first.omittedIds.at(-1)!,
+      untilId: first.nextUntilId!,
     });
-    expect(second.messages.at(-1)!.id).toBe(first.omittedIds.at(-1));
+    expect(second.messages.at(-1)!.id).toBe(first.nextUntilId);
 
     const last = await messageModel.queryCompressedGroupMembers({
       groupId,
       topicId,
-      untilId: second.omittedIds.at(-1)!,
+      untilId: second.nextUntilId!,
     });
     // Every member is now loaded exactly once, oldest first.
-    expect(last.omittedIds).toEqual([]);
+    expect(last.nextUntilId).toBeUndefined();
     expect(last.messages[0].id).toBe(idOf(0));
     const pagedIds = [...last.messages, ...second.messages, ...first.messages].map((m) => m.id);
+    expect(pagedIds).toEqual(nodeOmitted);
+  });
+
+  it('pages members sharing one createdAt without skipping or repeating any', async () => {
+    const total = MAX_COMPRESSED_GROUP_MEMBERS * 2 + 10;
+    await seedGroup(total, 0);
+
+    const [node] = (await messageModel.query({ topicId })).filter(
+      (m) => m.role === 'compressedGroup',
+    ) as any[];
+    const nodeOmitted: string[] = node.compressedOmittedIds;
+
+    const pagedIds: string[] = [];
+    let untilId: string | undefined = nodeOmitted.at(-1);
+    while (untilId) {
+      const page = await messageModel.queryCompressedGroupMembers({ groupId, topicId, untilId });
+      pagedIds.unshift(...page.messages.map((m) => m.id));
+      untilId = page.nextUntilId;
+    }
+
     expect(pagedIds).toEqual(nodeOmitted);
   });
 
@@ -114,7 +137,7 @@ describe('MessageModel.queryCompressedGroupMembers', () => {
       untilId: 'not-a-member',
     });
 
-    expect(page).toEqual({ messages: [], omittedIds: [] });
+    expect(page).toEqual({ messages: [] });
   });
 
   it("does not read another user's compression group", async () => {
@@ -127,7 +150,7 @@ describe('MessageModel.queryCompressedGroupMembers', () => {
       untilId: idOf(3),
     });
 
-    expect(page).toEqual({ messages: [], omittedIds: [] });
+    expect(page).toEqual({ messages: [] });
   });
 
   it('returns an empty page when the group belongs to another topic', async () => {
@@ -139,6 +162,6 @@ describe('MessageModel.queryCompressedGroupMembers', () => {
       untilId: idOf(3),
     });
 
-    expect(page).toEqual({ messages: [], omittedIds: [] });
+    expect(page).toEqual({ messages: [] });
   });
 });

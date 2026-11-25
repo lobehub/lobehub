@@ -279,17 +279,17 @@ export class MessageService {
 
   /**
    * One older page of a compression group's members (see the
-   * `getCompressedGroupMembers` procedure), oldest first, plus the ids still
-   * older than it.
+   * `getCompressedGroupMembers` procedure), oldest first, plus the `untilId`
+   * of the page before it.
    */
   getCompressedGroupMembers = async (params: {
     groupId: string;
     topicId: string;
     untilId: string;
-  }): Promise<{ messages: UIChatMessage[]; omittedIds: string[] }> => {
+  }): Promise<{ messages: UIChatMessage[]; nextUntilId?: string }> => {
     const page = await lambdaClient.message.getCompressedGroupMembers.query(params);
 
-    return page as unknown as { messages: UIChatMessage[]; omittedIds: string[] };
+    return page as unknown as { messages: UIChatMessage[]; nextUntilId?: string };
   };
 
   searchInTopic = async (params: {

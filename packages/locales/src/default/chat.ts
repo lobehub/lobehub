@@ -401,6 +401,7 @@ export default {
   'compression.failed': 'Context compression failed, original messages kept',
   'compression.failedReason': 'Summary generation failed: {{reason}}',
   'compression.history': 'Original conversation',
+  'compression.loadEarlier': 'Show earlier messages',
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',

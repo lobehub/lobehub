@@ -35,6 +35,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import CompressedHistoryGap from './components/CompressedHistoryGap';
 import PreviewTail from './components/PreviewTail';
 import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
 import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
@@ -249,6 +250,14 @@ const ChatList = memo<ChatListProps>(
         resolveMessageDeepLink(expandedRows?.messages ?? displayMessages, rowIds, messageDeepLink),
       [displayMessages, expandedRows, messageDeepLink, rowIds],
     );
+    const resolveMessageRow = useCallback(
+      (messageId: string) =>
+        resolveMessageDeepLink(expandedRows?.messages ?? displayMessages, rowIds, {
+          id: messageId,
+          navigationKey: messageId,
+        })?.index ?? -1,
+      [displayMessages, expandedRows, rowIds],
+    );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
@@ -306,6 +315,7 @@ const ChatList = memo<ChatListProps>(
         // A compressed member is history the model no longer sees in full:
         // read-only, without the live row's actions.
         if (row?.compressedMember) return <CompressedMessageItem message={row.compressedMember} />;
+        if (row?.compressedGap) return <CompressedHistoryGap groupId={row.compressedGap} />;
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -454,6 +464,7 @@ const ChatList = memo<ChatListProps>(
                 paging={paging}
                 printable={printable}
                 rememberReadingPosition={rememberReadingPosition}
+                resolveMessageRow={resolveMessageRow}
               />
             </CompressedHistoryInlineContext>
           </BackgroundRunHintContext>
