@@ -551,6 +551,119 @@ describe('CreateVideoAction', () => {
       expect(useVideoStore.getState().parameters.prompt).toBe('An unrelated draft');
     });
 
+    it('keeps a reference selected while the edit submission is pending', async () => {
+      const { complete, submitting } = submitEdit();
+      const { result } = renderHook(useVideoReferenceUpload);
+      const preview = vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:later-reference');
+      let uploaded!: (value: { url: string }) => void;
+      uploadWithProgressMock.mockReturnValueOnce(
+        new Promise<{ url: string }>((resolve) => {
+          uploaded = resolve;
+        }),
+      );
+      const image = new File(['fixture'], 'reference.png', { type: 'image/png' });
+      let upload!: Promise<void>;
+
+      try {
+        act(() => {
+          upload = result.current.handleUploadFiles([image]);
+        });
+        expect(useVideoStore.getState().uploadingImagePreviews).toContain('blob:later-reference');
+
+        await act(async () => {
+          complete();
+          await submitting;
+        });
+        await act(async () => {
+          uploaded({ url: 'https://storage.example/later-reference.png' });
+          await upload;
+        });
+
+        expect(useVideoStore.getState().editingGenerationId).toBe(source.generationId);
+        expect(useVideoStore.getState().parameters.imageUrls).toEqual([
+          'https://storage.example/later-reference.png',
+        ]);
+      } finally {
+        preview.mockRestore();
+      }
+    });
+
+    it('shows the moderation notice after changing only the aspect ratio', async () => {
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+      const { reject, submitting } = submitEdit();
+      useVideoStore.getState().setParamOnInput('aspectRatio', '9:16');
+      expect(useVideoStore.getState().parameters.aspectRatio).toBe('9:16');
+
+      reject(new Error('blocked'));
+      await expect(submitting).rejects.toThrow('blocked');
+
+      expect(useVideoStore.getState().blockedPrompt).toBe('The submitted edit');
+    });
+
+    it('does not show a stale moderation notice when switching back to the same source', async () => {
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+      const { reject, submitting } = submitEdit();
+      const store = useVideoStore.getState();
+      store.startEditingVideo({ ...source, generationId: 'another-source' });
+      store.startEditingVideo(source);
+      expect(useVideoStore.getState().parameters.prompt).toBe('The submitted edit');
+
+      reject(new Error('blocked'));
+      await expect(submitting).rejects.toThrow('blocked');
+
+      expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
+    });
+
+    it('does not show a stale moderation notice after changing the instruction', async () => {
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+      const { reject, submitting } = submitEdit();
+      useVideoStore.getState().setParamOnInput('prompt', 'A different instruction');
+
+      reject(new Error('blocked'));
+      await expect(submitting).rejects.toThrow('blocked');
+
+      expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
+    });
+
+    it.each([
+      [
+        'switching the edit source',
+        () =>
+          useVideoStore.getState().startEditingVideo({
+            ...source,
+            generationId: 'another-source',
+          }),
+      ],
+      ['cancelling the edit', () => useVideoStore.getState().cancelEditingVideo()],
+      [
+        'leaving the edit through the model picker',
+        () => useVideoStore.getState().setModelAndProviderOnSelect(omni12Model.id, 'google'),
+      ],
+      [
+        'reusing settings',
+        () =>
+          useVideoStore.getState().reuseVideoSettings(omni12Model.id, 'google', {
+            prompt: 'The submitted edit',
+          }),
+      ],
+    ] as const)(
+      'clears an existing moderation notice after %s with the same instruction',
+      async (_, changeDraft) => {
+        useVideoStore.getState().setParamOnInput('prompt', 'The submitted edit');
+        isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+        const { reject, submitting } = submitEdit();
+
+        reject(new Error('blocked'));
+        await expect(submitting).rejects.toThrow('blocked');
+        expect(useVideoStore.getState().blockedPrompt).toBe('The submitted edit');
+
+        changeDraft();
+
+        expect(useVideoStore.getState().parameters.prompt).toBe('The submitted edit');
+        expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
+      },
+    );
+
     it('clears the prompt after submitting the current creation draft', async () => {
       await useVideoStore.getState().createVideo();
       expect(useVideoStore.getState().parameters.prompt).toBe('');

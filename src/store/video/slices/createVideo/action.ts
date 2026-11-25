@@ -106,6 +106,13 @@ export class CreateVideoActionImpl {
     const isSubmittedDraftCurrent = (state: VideoStore) =>
       state.editingGenerationId === store.editingGenerationId && state.parameters === parameters;
 
+    const submittedEdit = store.editingDraftSnapshot;
+    const isSubmittedPromptCurrent = (state: VideoStore) =>
+      submittedEdit
+        ? state.editingDraftSnapshot === submittedEdit &&
+          state.parameters.prompt === parameters.prompt
+        : isSubmittedDraftCurrent(state);
+
     let finalTopicId = activeGenerationTopicId;
 
     // 1. Create generation topic if not exists
@@ -154,9 +161,11 @@ export class CreateVideoActionImpl {
         (state) => {
           if (!isSubmittedDraftCurrent(state)) return state;
 
-          return state.editingGenerationId
-            ? restoreEditingDraft(state)
-            : { parameters: { ...state.parameters, prompt: '' } };
+          if (state.editingGenerationId) {
+            return state.uploadingImagePreviews.length === 0 ? restoreEditingDraft(state) : state;
+          }
+
+          return { parameters: { ...state.parameters, prompt: '' } };
         },
         false,
         'createVideo/clearPrompt',
@@ -166,7 +175,7 @@ export class CreateVideoActionImpl {
       if (isGenerationPromptModerationError(error)) {
         this.#set(
           (state) =>
-            isSubmittedDraftCurrent(state) ? { blockedPrompt: parameters.prompt } : state,
+            isSubmittedPromptCurrent(state) ? { blockedPrompt: parameters.prompt } : state,
           false,
           'createVideo/promptBlocked',
         );
@@ -252,7 +261,9 @@ export class CreateVideoActionImpl {
 
     this.#set(
       {
-        editingDraftSnapshot: store.editingDraftSnapshot ?? cloneEditingDraft(store),
+        blockedPrompt: undefined,
+        // A fresh snapshot identity keeps a pending result tied to this edit.
+        editingDraftSnapshot: { ...(store.editingDraftSnapshot ?? cloneEditingDraft(store)) },
         editingGenerationId: generationId,
         imageInputMode: supportsConversationalVideoEditReferences(model)
           ? 'reference'

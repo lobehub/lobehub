@@ -143,6 +143,7 @@ export class GenerationConfigActionImpl {
 
     this.#set(
       {
+        blockedPrompt: state.editingGenerationId ? undefined : state.blockedPrompt,
         editingDraftSnapshot: undefined,
         editingGenerationId: undefined,
         imageInputMode,
@@ -193,6 +194,7 @@ export class GenerationConfigActionImpl {
     this.#set(
       {
         ...normalized,
+        blockedPrompt: undefined,
         parameters: clampEndFrameDuration(normalized.parameters, parametersSchema),
         uploadingImagePreviews: [],
       },
