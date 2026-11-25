@@ -2,7 +2,7 @@ import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildManagedCodexConfig, seedClaudeProfile, seedCodexProfile } from './profile';
 
@@ -114,6 +114,23 @@ describe('Codex profile', () => {
   it('writes the pinned config even when the user has none', async () => {
     await seedCodexProfile(managed, { env: {}, homeDir: home });
 
+    expect(await readFile(path.join(managed, 'config.toml'), 'utf8')).toBe(
+      'cli_auth_credentials_store = "file"\n',
+    );
+  });
+
+  it('seeds concurrent runs started in the same millisecond', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-06-01T00:00:00.000Z'));
+    try {
+      await expect(
+        Promise.all([
+          seedCodexProfile(managed, { env: {}, homeDir: home }),
+          seedCodexProfile(managed, { env: {}, homeDir: home }),
+        ]),
+      ).resolves.toBeDefined();
+    } finally {
+      vi.restoreAllMocks();
+    }
     expect(await readFile(path.join(managed, 'config.toml'), 'utf8')).toBe(
       'cli_auth_credentials_store = "file"\n',
     );

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -139,7 +140,7 @@ const ensurePrivateDir = async (dir: string) => {
 
 /** Write through a private temp file and rename, so a reader never sees half a secret. */
 const writePrivateFile = async (file: string, content: string) => {
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const temp = `${file}.${randomUUID()}.tmp`;
   try {
     await writeFile(temp, content, { encoding: 'utf8', flag: 'wx', mode: FILE_MODE });
     await chmod(temp, FILE_MODE);

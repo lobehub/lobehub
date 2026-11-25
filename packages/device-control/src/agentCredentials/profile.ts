@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { chmod, copyFile, lstat, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -57,7 +58,7 @@ const CODEX_CREDENTIAL_STORE_PIN = 'cli_auth_credentials_store = "file"';
 const lstatOrUndefined = (target: string) => lstat(target).catch(() => undefined);
 
 const writePrivate = async (file: string, content: string) => {
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const temp = `${file}.${randomUUID()}.tmp`;
   try {
     await writeFile(temp, content, { encoding: 'utf8', mode: FILE_MODE });
     await chmod(temp, FILE_MODE);
