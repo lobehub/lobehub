@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   channelAskAnswerText,
   channelAskFallbackText,
+  channelAskInterventionResult,
   channelMessageAsk,
   normalizeChannelAskInput,
   validateChannelAskAnswers,
@@ -70,5 +71,29 @@ describe('channel ask', () => {
     expect(
       channelMessageAsk({ ask: { ...ask, bodyLength: 3, requesterMemberId: 'm', status: 'x' } }),
     ).toMatchObject({ bodyLength: 3, status: 'pending' });
+  });
+
+  it('reads closed cards and the run a card belongs to', () => {
+    const intervention = { operationId: 'op-1', toolCallId: 'toolu_1' };
+    expect(
+      channelMessageAsk({
+        ask: { ...ask, intervention, requesterMemberId: 'm1', status: 'closed' },
+      }),
+    ).toMatchObject({ intervention, status: 'closed' });
+    expect(
+      channelMessageAsk({ ask: { ...ask, requesterMemberId: 'm1', status: 'nope' } })?.status,
+    ).toBe('pending');
+  });
+
+  it('shapes an answer the way a blocked run reads its question card', () => {
+    expect(
+      channelAskInterventionResult(ask, [
+        { selected: ['Exercise'] },
+        { other: ' Weekends ', selected: ['Mornings'] },
+      ]),
+    ).toEqual({ 'Start with?': 'Exercise', 'When?': ['Mornings', 'Weekends'] });
+    expect(
+      channelAskInterventionResult(ask, [{ other: 'Sleep', selected: [] }, { selected: [] }]),
+    ).toEqual({ 'Start with?': 'Sleep', 'When?': [] });
   });
 });

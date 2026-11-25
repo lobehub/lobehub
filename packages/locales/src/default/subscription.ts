@@ -627,9 +627,10 @@ export default {
   'plans.legacy.banner.canceledDesc':
     'Your subscription is canceled and ends with this billing period. You can upgrade to a current plan anytime to keep going.',
   'plans.legacy.banner.desc':
-    'It keeps its current price. You can upgrade to a higher-tier plan anytime, and what you have used this billing period is on us.',
+    'It keeps its current price. You can upgrade to a higher-tier plan anytime: the confirmation compares your current and new quotas side by side, and what you have used this billing period is on us.',
   'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
   'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.banner.viewBenefits': 'View current benefits',
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
@@ -804,7 +805,7 @@ export default {
   'plansModal.default.desc': 'Unlock more capacity and advanced features.',
   'plansModal.default.title': 'Upgrade your plan',
   'plansModal.fileStorageLimit.desc':
-    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Resources page</1> to free up space.',
+    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Library page</1> to free up space.',
   'plansModal.fileStorageLimit.title': 'Storage limit reached',
   'plansModal.messengerWechat.desc':
     'The WeChat System Bot is available on paid personal plans. Upgrade to connect and use it.',

@@ -8,6 +8,8 @@ import type {
   ChannelHistoryPage,
   ChannelMessagePersonParams,
   ChannelPeoplePage,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelSendMessageParams,
   ChannelSentMessage,
   ChannelSentPersonMessage,
@@ -161,7 +163,29 @@ const ThreadInspector = memo<BuiltinInspectorProps<unknown, unknown>>(
 );
 ThreadInspector.displayName = 'ChannelThreadInspector';
 
+const ReactionInspector = memo<BuiltinInspectorProps<ChannelReactParams, ChannelReacted>>(
+  ({ apiName, args, isArgumentsStreaming, isLoading }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>
+          {t(
+            apiName === ChannelApiName.removeReaction
+              ? 'builtins.lobe-channel.apiName.removeReaction'
+              : 'builtins.lobe-channel.apiName.addReaction',
+          )}
+        </span>
+        {args?.emoji && <span>{args.emoji}</span>}
+      </div>
+    );
+  },
+);
+ReactionInspector.displayName = 'ChannelReactionInspector';
+
 export const ChannelInspectors = {
+  [ChannelApiName.addReaction]: ReactionInspector,
+  [ChannelApiName.removeReaction]: ReactionInspector,
   ...Object.fromEntries(THREAD_API_NAMES.map((name) => [name, ThreadInspector])),
   [ChannelApiName.askUser]: AskUserInspector,
   [ChannelApiName.listChannels]: ListChannelsInspector,

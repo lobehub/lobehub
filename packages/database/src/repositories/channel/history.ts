@@ -11,6 +11,8 @@ import type {
   ChannelJobStatus,
   ChannelListThreadsParams,
   ChannelMessageVia,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelThreadPage,
@@ -48,6 +50,7 @@ import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
 import { channelUserNameSql } from './nickname';
+import { normalizeReactionEmoji, setReaction } from './reactions';
 import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
@@ -736,6 +739,40 @@ export class ChannelHistoryRepository {
       },
       { allowShared: true },
     );
+  };
+
+  /**
+   * The run's Agent adds (`add`) or removes its own reaction on a message it can read: in its own
+   * conversation up to the request cutoff, or in another Thread it read. Like a person's, the
+   * reaction posts nothing, wakes nobody and leaves read state alone.
+   */
+  react = async (
+    operationId: string,
+    params: ChannelReactParams,
+    add: boolean,
+  ): Promise<ChannelReacted & { channelId: string }> => {
+    if (!params.messageId?.trim()) throw new ChannelError('BAD_REQUEST', 'messageId is required');
+    const emoji = normalizeReactionEmoji(params.emoji ?? '');
+    return this.read(operationId, async (tx, channelId, runManifest) => {
+      const other =
+        params.threadId && params.threadId !== runManifest.threadId
+          ? await findThread(tx, channelId, params.threadId)
+          : null;
+      const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
+      const [message] = isUuid(params.messageId)
+        ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+        : [];
+      if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
+      const { added } = await setReaction(
+        tx,
+        channelId,
+        manifest.self.memberId,
+        message.id,
+        emoji,
+        add,
+      );
+      return { added, channelId, emoji, messageId: message.id };
+    });
   };
 }
 

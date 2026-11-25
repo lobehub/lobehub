@@ -35,15 +35,19 @@ describe('composeShareCopy', () => {
 });
 
 describe('platform share URLs', () => {
-  it('builds an X intent with the encoded link and copy', () => {
+  it('builds an x.com post intent whose text carries the copy and the link', () => {
     const href = buildTwitterShareUrl(input);
     const parsed = new URL(href);
 
-    expect(parsed.origin + parsed.pathname).toBe('https://twitter.com/intent/tweet');
-    expect(parsed.searchParams.get('url')).toBe(url);
-    expect(parsed.searchParams.get('text')).toBe(composeShareCopy(input).text);
+    // twitter.com/intent/tweet only redirects here, and its universal link can
+    // open the X app without the draft.
+    expect(parsed.origin + parsed.pathname).toBe('https://x.com/intent/post');
+    // The whole post, link included, is the prefill; nothing rides on `url`.
+    expect([...parsed.searchParams.keys()]).toEqual(['text']);
+    expect(parsed.searchParams.get('text')).toBe(composeShareCopy(input).textWithUrl);
     // Reserved characters in the link and the copy are percent-encoded.
-    expect(href).toContain(`url=${encodeURIComponent(url)}`);
+    expect(href).toContain(encodeURIComponent(url));
+    expect(href).toContain('%0A');
     expect(href).toContain('%26');
     expect(href).toContain('%3F');
     expect(href).not.toContain(' ');
@@ -71,9 +75,8 @@ describe('platform share URLs', () => {
     const x = new URL(actions.x.href);
     const weibo = new URL(actions.weibo.href);
 
-    expect(x.searchParams.get('url')).toBe(url);
+    expect(x.searchParams.get('text')).toBe(copy.textWithUrl);
     expect(weibo.searchParams.get('url')).toBe(url);
-    expect(x.searchParams.get('text')).toBe(copy.text);
     expect(weibo.searchParams.get('title')).toBe(copy.text);
 
     expect(actions.instagram).toEqual({
@@ -119,13 +122,13 @@ describe('buildTwitterText', () => {
 
     expect(text).toContain('…');
     expect(text.endsWith(SHARE_SIGNATURE)).toBe(true);
-    // X joins text and link with a space and weighs any link at 23.
+    // The link follows a line break and X weighs any link at 23.
     expect(twitterTextWeight(text) + 1 + TWITTER_URL_WEIGHT).toBeLessThanOrEqual(
       TWITTER_MAX_WEIGHT,
     );
-    expect(params.get('text')).toBe(text);
-    expect(params.get('url')).toBe(url);
-    expect(params.get('url')).toMatch(/\/share\/t\/abc123$/);
+    // Truncation only touches the copy: the full link survives at the end.
+    expect(params.get('text')).toBe(`${text}\n${url}`);
+    expect(params.get('text')).toMatch(/\/share\/t\/abc123$/);
   });
 
   it('counts the ellipsis as two', () => {
@@ -139,14 +142,15 @@ describe('buildTwitterText', () => {
 });
 
 describe('openShareWindow', () => {
-  it('opens a new window without an opener', () => {
+  it('opens a plain new tab without an opener', () => {
     const open = vi.fn();
-    openShareWindow('https://twitter.com/intent/tweet?url=x', { open });
+    openShareWindow('https://x.com/intent/post?text=x', { open });
 
+    // A sized popup would squeeze the intent page into its narrow layout.
     expect(open).toHaveBeenCalledWith(
-      'https://twitter.com/intent/tweet?url=x',
+      'https://x.com/intent/post?text=x',
       '_blank',
-      expect.stringContaining('noopener'),
+      'noopener,noreferrer',
     );
   });
 });

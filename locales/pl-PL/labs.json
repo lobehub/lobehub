@@ -32,7 +32,6 @@
   "features.messageTextSelectionActions.title": "Akcje zaznaczania tekstu wiadomości",
   "features.oauthApps.desc": "Pokaż zarządzanie aplikacjami OAuth w ustawieniach osobistych i przestrzeni roboczej. Ta funkcja jest domyślnie ukryta.",
   "features.oauthApps.title": "Aplikacje OAuth",
-  "features.projects.desc": "Organizuj długoterminowe cele w dedykowanych przestrzeniach roboczych z własnymi agentami, bazami wiedzy i zadaniami.",
   "features.projects.title": "Przestrzenie Robocze Projektów",
   "features.selfLearning.desc": "Pokaż, czego każdy agent nauczył się z rzeczywistej praktyki — jego bazę reguł, które reguły są faktycznie używane, oraz które warstwy są nadal puste.",
   "features.selfLearning.note": "To uruchamia wywołania modelu w tle i zużywa dodatkowy limit. Każdy nocny przegląd obejmuje do 50 rozmów.",

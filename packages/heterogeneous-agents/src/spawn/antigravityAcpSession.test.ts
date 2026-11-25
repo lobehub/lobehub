@@ -672,6 +672,67 @@ describe('AntigravityAcpSession', () => {
     expect(events[answer].stepIndex).toBeGreaterThan(events[confirmed].stepIndex);
   });
 
+  it('leaves a follow-up for the next turn while the old answer is streaming', async () => {
+    let finishFirst!: () => void;
+    const agy = createAgy({
+      onPrompt: (prompt, { finish, update }) => {
+        update(textChunk('Old answer begins.'));
+        finishFirst = () => {
+          update(textChunk(' Old answer ends.'));
+          finish(prompt.id, { stopReason: 'end_turn' });
+        };
+      },
+    });
+    const { events, session } = createSession(agy);
+    const run = session.run();
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'stream_chunk')).toBe(true),
+    );
+
+    const accepted = session.steer([{ text: 'Next task', type: 'text' }], 'msg-next');
+    finishFirst();
+    if (accepted) session.close();
+    await run;
+
+    expect(accepted).toBe(false);
+    expect(methods(agy.requests).filter((method) => method === 'session/prompt')).toHaveLength(1);
+    expect(
+      events
+        .filter((event) => event.type === 'stream_chunk' && event.data.chunkType === 'text')
+        .map((event) => [event.stepIndex, event.data.content]),
+    ).toEqual([
+      [0, 'Old answer begins.'],
+      [0, ' Old answer ends.'],
+    ]);
+  });
+
+  it('refuses a steer after the active prompt returned while its output is still draining', async () => {
+    const agy = createAgy({
+      onPrompt: (prompt, { finish, update }) => {
+        finish(prompt.id, { stopReason: 'end_turn' });
+        update({
+          content: { text: 'Trailing thought', type: 'text' },
+          sessionUpdate: 'agent_thought_chunk',
+        });
+      },
+    });
+    let accepted: boolean | undefined;
+    const { session } = createSession(agy, {
+      onEvents: (events) => {
+        if (
+          accepted === undefined &&
+          events.some((event) => event.data?.chunkType === 'reasoning')
+        ) {
+          accepted = session.steer([{ text: 'Next task', type: 'text' }], 'msg-next');
+        }
+      },
+    });
+    await session.run();
+
+    expect(accepted).toBe(false);
+    expect(methods(agy.requests).filter((method) => method === 'session/prompt')).toHaveLength(1);
+  });
+
   it('ends as interrupted when stopped after a steer, and refuses further steers', async () => {
     const agy = createAgy({ onPrompt: () => {} });
     const { events, session } = createSession(agy);
@@ -759,6 +820,84 @@ describe('AntigravityAcpSession', () => {
       agentType: 'antigravity',
       message: 'Antigravity could not authenticate. Run `agy` and sign in, then retry.',
     });
+  });
+
+  it('treats agy’s quota notice in a text update as a terminal, resettable usage limit', async () => {
+    const now = Date.now();
+    const quotaNotice =
+      '⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 28m39s.';
+    const agy = createAgy({
+      onPrompt: (prompt, { finish, update }) => {
+        update(textChunk(quotaNotice));
+        finish(prompt.id, { stopReason: 'end_turn' });
+      },
+    });
+    const { events, session } = createSession(agy);
+
+    await expect(session.run()).rejects.toThrow('Individual quota reached');
+    expect(events.find((event) => event.type === 'error')?.data).toMatchObject({
+      agentType: 'antigravity',
+      code: 'rate_limit',
+      details: { kind: 'usage_limit' },
+      rateLimitInfo: { status: 'rejected' },
+    });
+    const reset = events.find((event) => event.type === 'error')?.data.rateLimitInfo.resetsAt;
+    expect(reset).toBeGreaterThanOrEqual(Math.floor(now / 1000) + 28 * 60 + 39);
+    expect(reset).toBeLessThanOrEqual(Math.ceil(Date.now() / 1000) + 28 * 60 + 39);
+    expect(events.some((event) => event.type === 'stream_chunk')).toBe(false);
+  });
+
+  it('does not turn an answer discussing the quota notice into a failure', async () => {
+    const answer =
+      'The CLI says “Individual quota reached. Please upgrade your subscription to increase your limits.” when its allowance runs out.';
+    const agy = createAgy({
+      onPrompt: (prompt, { finish, update }) => {
+        update(textChunk(answer));
+        finish(prompt.id, { stopReason: 'end_turn' });
+      },
+    });
+    const { events, session } = createSession(agy);
+    await session.run();
+
+    expect(events.find((event) => event.type === 'stream_chunk')?.data.content).toBe(answer);
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+  });
+
+  it('opens a step for the quota card when the steer fails before producing output', async () => {
+    const agy = createAgy({
+      onPrompt: (prompt, { finish, update }) => {
+        if (prompt.params?.prompt?.[0]?.text === 'next') {
+          update(
+            textChunk(
+              'Individual quota reached. Please upgrade your subscription to increase your limits.',
+            ),
+          );
+          finish(prompt.id, { stopReason: 'end_turn' });
+        } else {
+          update({
+            content: { text: 'Thinking', type: 'text' },
+            sessionUpdate: 'agent_thought_chunk',
+          });
+        }
+      },
+    });
+    const { events, session } = createSession(agy);
+    const run = session.run();
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'stream_chunk')).toBe(true),
+    );
+    expect(session.steer([{ text: 'next', type: 'text' }], 'msg-next')).toBe(true);
+    await expect(run).rejects.toThrow('Individual quota reached');
+
+    const steerIndex = events.findIndex((event) => event.data?.phase === 'user_message');
+    const nextIndex = events.findIndex(
+      (event) => event.type === 'stream_start' && event.data?.newStep,
+    );
+    const errorIndex = events.findIndex((event) => event.type === 'error');
+    expect(steerIndex).toBeGreaterThanOrEqual(0);
+    expect(nextIndex).toBeGreaterThan(steerIndex);
+    expect(errorIndex).toBeGreaterThan(nextIndex);
+    expect(events[errorIndex].stepIndex).toBe(events[nextIndex].stepIndex);
   });
 
   it('keeps subagent conversations out of the parent stream', async () => {

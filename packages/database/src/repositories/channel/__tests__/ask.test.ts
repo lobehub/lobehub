@@ -6,6 +6,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { agentOperations, channelJobs, workspaceMembers } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository } from '..';
 import { answerAsk } from '../ask';
+import { closeInterventionAsk, postInterventionAsk } from '../interventionAsk';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -58,12 +59,16 @@ const askedReply = async (draft = 'Hi, I am your health helper.') => {
 };
 
 const answer = (state: Awaited<ReturnType<typeof askedReply>>, selected: string[], as = 'member') =>
-  (as === 'member' ? state.asMember : state.asOwner).write(state.channel.id, (tx, access) =>
-    answerAsk(tx, access, {
-      answers: [{ selected }],
-      messageId: state.replyId,
-      requestKey: `answer:${state.replyId}`,
-    }),
+  (as === 'member' ? state.asMember : state.asOwner).write(
+    state.channel.id,
+    async (tx, access) =>
+      (
+        await answerAsk(tx, access, {
+          answers: [{ selected }],
+          messageId: state.replyId,
+          requestKey: `answer:${state.replyId}`,
+        })
+      ).reply,
   );
 
 describe('Channel ask messages', () => {
@@ -150,5 +155,76 @@ describe('Channel ask messages', () => {
     await expect(answer(state, ['Diet', 'Exercise'])).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
+  });
+});
+
+describe('Channel ask cards of a blocked run', () => {
+  const asked = async () => {
+    const state = await running();
+    const intervention = { operationId: state.operationId, toolCallId: 'toolu_1' };
+    const posted = (await postInterventionAsk(db, intervention, { questions }))!;
+    return { ...state, intervention, posted };
+  };
+
+  it('posts the question under the request while the run waits, once', async () => {
+    const state = await asked();
+    expect(state.posted.channelId).toBe(state.channel.id);
+    const card = (await state.asMember.detail(state.channel.id)).messages.find(
+      (message) => message.id === state.posted.messageId,
+    )!;
+    expect(card).toMatchObject({ kind: 'ask', replyToId: state.job.messageId });
+    expect(card.ask).toMatchObject({
+      intervention: state.intervention,
+      requesterMemberId: state.member.id,
+      status: 'pending',
+    });
+
+    // The run's retried batch finds the card it already posted.
+    expect(await postInterventionAsk(db, state.intervention, { questions })).toEqual(state.posted);
+  });
+
+  it('records the answer without waking the Agent, which is still on the request', async () => {
+    const state = await asked();
+    const { ask, reply } = await state.asMember.write(state.channel.id, (tx, access) =>
+      answerAsk(tx, access, {
+        answers: [{ selected: ['Exercise'] }],
+        messageId: state.posted.messageId,
+        requestKey: 'answer',
+      }),
+    );
+
+    expect(reply).toMatchObject({ replyToId: state.posted.messageId, routingStatus: 'skipped' });
+    expect(await jobsOf(db, reply.id)).toHaveLength(0);
+    expect(ask).toMatchObject({ intervention: state.intervention, status: 'answered' });
+    // The run's echo of the answer leaves an answered card alone.
+    expect(await closeInterventionAsk(db, state.intervention)).toBeUndefined();
+  });
+
+  it('closes the card when the run settles the question elsewhere', async () => {
+    const state = await asked();
+    expect(await closeInterventionAsk(db, state.intervention)).toBe(state.channel.id);
+    const card = (await state.asMember.detail(state.channel.id)).messages.find(
+      (message) => message.id === state.posted.messageId,
+    )!;
+    expect(card.ask?.status).toBe('closed');
+    await expect(
+      state.asMember.write(state.channel.id, (tx, access) =>
+        answerAsk(tx, access, {
+          answers: [{ selected: ['Diet'] }],
+          messageId: state.posted.messageId,
+          requestKey: 'late',
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('asks nothing for a run that serves no Channel request', async () => {
+    expect(
+      await postInterventionAsk(
+        db,
+        { operationId: 'op-elsewhere', toolCallId: 't' },
+        { questions },
+      ),
+    ).toBeUndefined();
   });
 });

@@ -5,10 +5,12 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { resolveShareVisitorDeviceAccess, type ShareDeviceAccessSubject } from './deviceAccess';
 
-const { filterAddressBookPeople, isChannelEnabled } = vi.hoisted(() => ({
+const { filterAddressBookPeople, isChannelEnabled, requestGrantedUserIds } = vi.hoisted(() => ({
   filterAddressBookPeople: vi.fn(),
   isChannelEnabled: vi.fn(),
+  requestGrantedUserIds: vi.fn(),
 }));
+vi.mock('@/database/models/agentShare', () => ({ AgentShareModel: { requestGrantedUserIds } }));
 vi.mock('@/server/services/channel/featureGate', () => ({ isChannelEnabled }));
 vi.mock('@/business/server/contact/addressBook', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -26,6 +28,7 @@ describe('resolveShareVisitorDeviceAccess', () => {
   beforeEach(() => {
     filterAddressBookPeople.mockReset();
     isChannelEnabled.mockReset().mockResolvedValue(true);
+    requestGrantedUserIds.mockReset().mockResolvedValue([]);
     vi.mocked(getAddressBook).mockClear();
   });
 
@@ -105,4 +108,32 @@ describe('resolveShareVisitorDeviceAccess', () => {
     );
     expect(isChannelEnabled).toHaveBeenCalledWith('owner');
   });
+
+  // The owner approved the visitor's request to use the Agent (a group mention, or a DM card):
+  // that names them as explicitly as a contact, so the address book is not asked of them.
+  it.each(['allowlist', 'contacts'] as const)(
+    'grants a listed visitor the owner approved by request under `%s`, outside the book',
+    async (deviceAccess) => {
+      const subject = {
+        ...share({ deviceAccess, deviceAllowUserIds: ['visitor-1'] }),
+        shareId: 'share-1',
+      };
+      filterAddressBookPeople.mockResolvedValue([]);
+      requestGrantedUserIds.mockResolvedValue(['visitor-1']);
+
+      expect(await resolveShareVisitorDeviceAccess(db, subject, 'visitor-1')).toBe(true);
+      expect(requestGrantedUserIds).toHaveBeenCalledWith(db, 'share-1', ['visitor-1']);
+
+      // Revoking their grant (or unlisting them) withdraws it.
+      requestGrantedUserIds.mockResolvedValue([]);
+      expect(await resolveShareVisitorDeviceAccess(db, subject, 'visitor-1')).toBe(false);
+      expect(
+        await resolveShareVisitorDeviceAccess(
+          db,
+          { ...subject, shareConfig: { deviceAccess, deviceAllowUserIds: [] } },
+          'visitor-1',
+        ),
+      ).toBe(false);
+    },
+  );
 });

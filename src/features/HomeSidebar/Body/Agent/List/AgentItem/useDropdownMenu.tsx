@@ -27,7 +27,6 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -45,8 +44,6 @@ import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
 import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 
 interface UseAgentDropdownMenuParams {
-  avatar?: string;
-  backgroundColor?: string;
   group: string | undefined;
   id: string;
   /** Labels currently applied to the agent (from the sidebar list payload). */
@@ -68,8 +65,6 @@ interface UseAgentDropdownMenuParams {
 }
 
 export const useAgentDropdownMenu = ({
-  avatar,
-  backgroundColor,
   group,
   id,
   labels,
@@ -151,18 +146,6 @@ export const useAgentDropdownMenu = ({
   const isInbox = slug === INBOX_SESSION_ID;
   const canDelete = !isInbox && (canManage || canManageResource);
 
-  // Cross-workspace Transfer to… / Copy to… items (null when workspace
-  // feature is off or the viewer lacks permission for this agent)
-  const agentTransferMenuItems = useAgentTransferMenuItem(
-    id,
-    {
-      avatar,
-      backgroundColor,
-      title,
-    },
-    { userId, visibility },
-  );
-  const transferMenuItems = isInbox ? null : agentTransferMenuItems;
   const canManagePermission = !isInbox && canManageResource;
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(id);
@@ -435,13 +418,13 @@ export const useAgentDropdownMenu = ({
               },
             ]
           : []),
-        ...(canConfigure && transferMenuItems?.length ? transferMenuItems : []),
         ...(canConfigure
           ? [
-              // Member permissions, visibility and the handover to a member
-              // are low-frequency management: they live in the Agent's
-              // settings, and the row keeps one shortcut into that section
-              // for creators and workspace owners.
+              // Member permissions, visibility, the handover to a member and
+              // the cross-scope Transfer to… / Copy to… are low-frequency
+              // management: they live in the Agent's settings, and the row
+              // keeps one shortcut into the permission section for creators
+              // and workspace owners.
               ...(activeWorkspaceId && canManagePermission
                 ? [
                     { type: 'divider' as const },
@@ -517,7 +500,6 @@ export const useAgentDropdownMenu = ({
       group,
       isDefault,
       openCreateGroupModal,
-      transferMenuItems,
       isShownInSidebar,
       setSidebarItemVisible,
       t,

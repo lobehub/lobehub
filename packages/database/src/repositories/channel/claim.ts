@@ -3,7 +3,14 @@ import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
-import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
+import type {
+  ChannelItem,
+  ChannelJobItem,
+  ChannelMemberItem,
+  ChannelMessageItem,
+  ChannelThreadItem,
+  TopicItem,
+} from '../../schemas';
 import {
   agentOperations,
   channelJobs,
@@ -15,6 +22,7 @@ import {
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
+import { fileAgentAccessRequest, resolveChannelAgentAccess } from './agentAccess';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { requestMissingGrant } from './grants';
 import { buildManifest } from './manifest';
@@ -29,6 +37,11 @@ export interface ChannelClaimOptions {
   leaseMs: number;
   /** Process or queue worker that will drive the run. */
   leaseOwner: string;
+  /**
+   * Called when the claim settled the job as failed because the Agent's owner declined its
+   * requester, so the caller posts its card once the claim commits.
+   */
+  onAccessDenied?: (jobId: string) => void;
   /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
   onlineDeviceIds?: string[];
   /**
@@ -97,6 +110,41 @@ const block = async (
     .set({ blockedCode: code, blockedReason: reason, deviceId })
     .where(eq(channelJobs.id, job.id));
   await audit(tx, job.channelId, 'job_blocked', job.id, { code, deviceId, reason });
+};
+
+const ACCESS_PENDING_REASON = 'Waiting for the Agent owner to allow access';
+
+/**
+ * Whether a queued job is not waiting for an Agent owner's answer to its requester. Such a job
+ * waits on one person's permission, not on the member's queue, so it never holds the replies of
+ * the people who may use the Agent; it is claimed again on its own (see `candidates`).
+ */
+export const notAwaitingAccess = () =>
+  sql`${channelJobs.blockedCode} IS DISTINCT FROM 'access_request_pending'`;
+
+/**
+ * Settles a job whose requester the Agent's owner declined: failed, with the declined access as
+ * its code, and the manifest its card in the reply slot is written from. It never ran, so it has
+ * no operation; asking again (`requestAgentAccess`) queues it once more.
+ */
+const settleAccessDenied = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  member: ChannelMemberItem,
+  request: ChannelMessageItem,
+  thread: ChannelThreadItem | null,
+) => {
+  await tx
+    .update(channelJobs)
+    .set({
+      blockedCode: 'access_denied',
+      blockedReason: 'The Agent owner declined access',
+      deviceId: null,
+      manifest: buildManifest({ job, member, request, thread }),
+      status: 'failed',
+    })
+    .where(eq(channelJobs.id, job.id));
+  await audit(tx, job.channelId, 'job_access_denied', job.id);
 };
 
 /** Settles a job that must never run, e.g. its requester left or its branch was archived. */
@@ -338,6 +386,54 @@ export const claimJob = async (
     await cancel(tx, job, 'request_deleted');
     return null;
   }
+
+  // The requester is the execution identity; without them there is nobody to run as.
+  const [requester] = await tx
+    .select({ id: channelMembers.id, userId: channelMembers.userId })
+    .from(channelMembers)
+    .where(
+      and(
+        eq(channelMembers.id, job.requesterMemberId),
+        eq(channelMembers.actorType, 'user'),
+        eq(channelMembers.status, 'active'),
+        isNotNull(channelMembers.userId),
+      ),
+    );
+  if (!requester?.userId) {
+    await cancel(tx, job, 'requester_unavailable');
+    return null;
+  }
+  // Whether the requester may use the Agent at all comes before any ordering: a request waiting
+  // for its owner's answer holds back no one else's reply (see `awaitingAccess`).
+  const [agentMember] = await tx
+    .select()
+    .from(channelMembers)
+    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
+  if (!agentMember) return null;
+  const access = await resolveChannelAgentAccess(
+    tx,
+    channel,
+    agentMember,
+    { memberId: requester.id, userId: requester.userId },
+    job.threadId,
+  );
+  if (access.kind === 'request') {
+    if (access.grant?.status === 'rejected') {
+      await settleAccessDenied(tx, job, agentMember, request, thread ?? null);
+      options.onAccessDenied?.(job.id);
+      return null;
+    }
+    // Asked once: a request already waiting keeps its card; the owner's answer wakes the Channel.
+    if (access.grant?.status !== 'pending')
+      await fileAgentAccessRequest(tx, channel.id, {
+        memberId: agentMember.id,
+        missing: access.missing,
+        ownerId: access.ownerId,
+        requesterMemberId: requester.id,
+      });
+    await block(tx, job, 'access_request_pending', ACCESS_PENDING_REASON);
+    return null;
+  }
   // An earlier undecided message in this branch may still enqueue this member ahead of it, and
   // so may the Thread's root while it is undecided. Checking only jobs would let a later
   // request overtake it while another worker routes it. Other branches never hold this one.
@@ -373,6 +469,7 @@ export const claimJob = async (
         eq(channelJobs.memberId, job.memberId),
         eq(channelJobs.status, 'queued'),
         sameBranch(job.threadId),
+        or(notAwaitingAccess(), eq(channelJobs.id, job.id)),
       ),
     )
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
@@ -438,29 +535,13 @@ export const claimJob = async (
     return null;
   }
 
-  // The requester is the execution identity; without them there is nobody to run as.
-  const [requester] = await tx
-    .select({ id: channelMembers.id, userId: channelMembers.userId })
-    .from(channelMembers)
-    .where(
-      and(
-        eq(channelMembers.id, job.requesterMemberId),
-        eq(channelMembers.actorType, 'user'),
-        eq(channelMembers.status, 'active'),
-        isNotNull(channelMembers.userId),
-      ),
-    );
-  if (!requester?.userId) {
-    await cancel(tx, job, 'requester_unavailable');
-    return null;
-  }
-
   const resolved = await resolveExecutionConfig(
     tx,
     channel,
     member,
     requester.userId,
     options.serverDefaultAgentConfig,
+    access,
   );
   // A branch that moved into its own worktree runs there; the grant still covers the
   // configured directory it was cut from.

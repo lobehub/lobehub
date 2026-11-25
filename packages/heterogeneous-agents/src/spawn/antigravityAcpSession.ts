@@ -129,6 +129,11 @@ const isPromptResponse = (message: AcpRpcMessage): boolean => {
   return isRecord(message.result) && 'stopReason' in message.result;
 };
 
+// agy can send its quota rejection as a complete ACP text chunk and return
+// end_turn. Match the standalone notice so ordinary prose stays in the chat.
+const QUOTA_NOTICE =
+  /^(?:⚠️?\s*)?Individual quota reached\.\s+Please upgrade your subscription to increase your limits\.(?:\s+Resets in (?:\d+[dhms]\s*)+\.?)?$/i;
+
 /** `session/resume` and `session/load` both failed to find the saved conversation. */
 export const isAntigravityAcpSessionNotFoundError = (
   error: unknown,
@@ -149,9 +154,8 @@ export class AntigravityAcpSession extends AcpAgentSession<
 > {
   /** Session updates before the prompt (a `session/load` replay) are history, not output. */
   private acceptUpdates = false;
-  /** Read confirmations, chained so each lands before any update that follows it. */
-  private confirmations: Promise<void> = Promise.resolve();
   private readonly launch: ReturnType<typeof buildAntigravityAcpLaunch>;
+  private writingAnswer = false;
   /** Prompt responses handled so far, in stdout order. */
   private promptResponses = 0;
   /** Steered prompts written to agy, in order, that the run has not settled yet. */
@@ -183,14 +187,21 @@ export class AntigravityAcpSession extends AcpAgentSession<
 
   /**
    * Write a user message into the running turn. `false` when the run takes no
-   * input now (not prompting yet, interrupted, or settling): nothing was
-   * written, so the message can wait for the next run. agy confirms it read
+   * input now (not prompting yet, writing an answer, interrupted, or settling):
+   * nothing was written, so the message can wait for the next run. agy confirms it read
    * the message when the prompt it interrupts returns, reported as
    * `step_complete { phase: 'user_message', uuid }`.
    */
   steer(prompt: AntigravityAcpPromptBlock[], uuid: string): boolean {
     const sessionId = this.acpSessionId;
-    if (!this.steerable || !sessionId || this.closedByHost) return false;
+    if (
+      !this.steerable ||
+      !sessionId ||
+      this.closedByHost ||
+      this.writingAnswer ||
+      this.promptResponses > this.steerCount
+    )
+      return false;
 
     const result = this.client.request<AntigravityAcpPromptResult>(
       'session/prompt',
@@ -202,10 +213,7 @@ export class AntigravityAcpSession extends AcpAgentSession<
     result.catch(() => {});
     this.steers.push(result);
 
-    const index = ++this.steerCount;
-    // The prompt before it already returned: agy starts on this one now.
-    if (this.promptResponses >= index) this.confirmSteer(uuid);
-    else this.unconfirmedSteers.push({ index, uuid });
+    this.unconfirmedSteers.push({ index: ++this.steerCount, uuid });
     return true;
   }
 
@@ -284,7 +292,6 @@ export class AntigravityAcpSession extends AcpAgentSession<
       this.addUsage(last.usage);
     }
     this.steerable = false;
-    await this.confirmations;
 
     const used = Object.values(this.usage).some((value) => value > 0);
     await this.pushToPipeline({
@@ -310,16 +317,16 @@ export class AntigravityAcpSession extends AcpAgentSession<
   }
 
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
-    await this.confirmations;
     if (isPromptResponse(message)) {
       // Each steer ends the prompt before it, so this is when agy read the
       // next one. Confirm it here, in stdout order, so the answer to it that
       // follows in the same output opens a step of its own.
       this.promptResponses += 1;
+      this.writingAnswer = false;
       const next = this.unconfirmedSteers[0];
-      if (next && next.index <= this.promptResponses) {
+      if (!message.error && next && next.index <= this.promptResponses) {
         this.unconfirmedSteers.shift();
-        await this.confirmSteer(next.uuid);
+        await this.pushToPipeline({ type: 'antigravity_user_message', uuid: next.uuid });
       }
       return;
     }
@@ -331,7 +338,16 @@ export class AntigravityAcpSession extends AcpAgentSession<
     // agy starts the raw tool before the form request, whose schema supplies
     // the arguments for the same card. A terminal update still closes it or
     // shows the original tool when agy fell back to asking in chat.
-    const { name, sessionUpdate, status } = params.update;
+    const { content, name, sessionUpdate, status } = params.update;
+    if (sessionUpdate === 'agent_message_chunk' && isRecord(content) && content.type === 'text') {
+      const text = typeof content.text === 'string' ? content.text.trim() : '';
+      if (QUOTA_NOTICE.test(text)) throw new Error(text);
+      // The updates only identify the session. Leave the next prompt queued
+      // while agy is writing an answer so its remaining text stays on this turn.
+      if (text) this.writingAnswer = true;
+    } else if (sessionUpdate === 'tool_call') {
+      this.writingAnswer = false;
+    }
     if (
       this.options.askUserBridge &&
       name === 'ask_question' &&
@@ -458,16 +474,6 @@ export class AntigravityAcpSession extends AcpAgentSession<
     const level = configValue(configOptions, 'thought_level');
     const variant = level ? `${family}-${level}` : undefined;
     return variant && availableModelIds(sessionResult).has(variant) ? variant : family;
-  }
-
-  private confirmSteer(uuid: string): Promise<void> {
-    const confirmed = this.confirmations.then(() =>
-      this.pushToPipeline({ type: 'antigravity_user_message', uuid }),
-    );
-    // Awaited by the next message and by `settlePrompt`.
-    confirmed.catch(() => {});
-    this.confirmations = confirmed;
-    return confirmed;
   }
 
   private addUsage(usage: unknown): void {

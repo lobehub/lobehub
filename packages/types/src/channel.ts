@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAgentAccessCard } from './agentAccess';
 import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
 import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
@@ -187,8 +188,9 @@ export type ChannelMessageMetadata = Record<string, unknown> & {
  *   Agent's session where it stopped.
  * - `retry`: run it again from the start (`channel.retryJob`).
  * - `switch_device`: the device was the cause; pick another one for the Agent, then retry.
+ * - `request_access`: the requester may not use the Agent; ask its owner (`channel.requestAgentAccess`).
  */
-export type ChannelReplyErrorAction = 'resume' | 'retry' | 'switch_device';
+export type ChannelReplyErrorAction = 'request_access' | 'resume' | 'retry' | 'switch_device';
 
 /**
  * `metadata.replyError` of an Agent's message that stands in its reply slot (the request and the
@@ -435,6 +437,9 @@ export interface ChannelJobWake {
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** The requester may not use the Agent: its owner was asked, or declined (a failed job). */
+  | 'access_denied'
+  | 'access_request_pending'
   /** A deferred `followup` waiting for the message's primary responder to settle. */
   | 'awaiting_primary'
   | 'device_approval_pending'
@@ -487,6 +492,29 @@ export interface ChannelReadMessagesParams {
    * message instead of the run's request cutoff. Omit for the run's own conversation.
    */
   threadId?: string;
+}
+
+/** One emoji on a message: who left it, by member, in the order they did. */
+export interface ChannelMessageReaction {
+  count: number;
+  /** A Unicode emoji. */
+  emoji: string;
+  /** People and Agents alike, by their member in the Channel. */
+  memberIds: string[];
+}
+
+/** An Agent adding or removing its own reaction on a message of its current conversation. */
+export interface ChannelReactParams {
+  emoji: string;
+  messageId: string;
+  /** The Thread `readMessages({ threadId })` returned the message from. */
+  threadId?: string;
+}
+
+export interface ChannelReacted {
+  added: boolean;
+  emoji: string;
+  messageId: string;
 }
 
 export interface ChannelReadMessageParams {
@@ -974,6 +1002,8 @@ export interface ChannelPublicMember {
 }
 
 export interface ChannelPublicMessage {
+  /** An Agent's card asking its owner (the reader) to let someone use it, with its status. */
+  agentAccess?: ChannelAgentAccessCard | null;
   agentId: string | null;
   /** An Agent's question with options, on an `ask` message; null otherwise. */
   ask?: ChannelAsk | null;

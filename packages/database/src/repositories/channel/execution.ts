@@ -21,7 +21,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
-import { claimJob } from './claim';
+import { claimJob, notAwaitingAccess } from './claim';
 import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
@@ -34,6 +34,7 @@ import {
   findOpeningCandidate,
   findOpeningReply,
 } from './opening';
+import { markJobRequest } from './reactions';
 import type { ChannelReplyErrorDraft } from './replyError';
 import {
   findReplyError,
@@ -228,7 +229,7 @@ export class ChannelExecutionRepository {
    * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
-    const [inFlight, heads] = await Promise.all([
+    const [inFlight, heads, awaitingAccess] = await Promise.all([
       this.db
         .select()
         .from(channelJobs)
@@ -247,7 +248,13 @@ export class ChannelExecutionRepository {
         .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-        .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            notAwaitingAccess(),
+          ),
+        )
         // Same order as the head check in claimJob.
         .orderBy(
           channelJobs.memberId,
@@ -255,11 +262,25 @@ export class ChannelExecutionRepository {
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
+      // Out of the queue order while their requester waits for the Agent owner's answer, so each
+      // is tried on its own: the answer moves it on.
+      this.db
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            eq(channelJobs.blockedCode, 'access_request_pending'),
+          ),
+        )
+        .orderBy(asc(channelJobs.createdAt))
+        .limit(limit),
     ]);
     return {
-      heads: heads
-        .map(({ job }) => job)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      heads: [...heads.map(({ job }) => job), ...awaitingAccess].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
       inFlight,
     };
   };
@@ -503,6 +524,8 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'input_accepted', job.id, {
         cutoff: job.manifest?.cutoffSequence ?? null,
       });
+      // The Agent took the request on, and shows so on it.
+      await markJobRequest(tx, job, 'working');
     });
 
   /** Stores the final answer. Immutable once saved, so a retry cannot change it. */
@@ -573,6 +596,7 @@ export class ChannelExecutionRepository {
         .set({ publishedMessageId: reply.id, status: 'completed' })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
+      await markJobRequest(tx, job, 'answered');
 
       return reply.id;
     });
@@ -807,6 +831,9 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await advanceOperation(tx, job, outcome.operation, outcome.error);
+      // Every run ends here. One that ended without a reply takes back the 👀 it showed; one
+      // still finishing an accepted draft keeps it until it publishes.
+      if (!job.publishedMessageId && status !== 'running') await markJobRequest(tx, job, 'cleared');
       await audit(tx, channelId, 'writer_released', job.id, { status });
     });
 

@@ -49,6 +49,7 @@ const ClientLlmWaitingCard = memo<ClientLlmWaitingCardProps>(({ expiresAt, id, p
           provider,
           threadId: context.threadId,
           topicId: context.topicId ?? undefined,
+          workspaceSlug: context.workspaceSlug,
         });
         if (resumed) {
           await updateMessageError(id, null);
@@ -66,6 +67,7 @@ const ClientLlmWaitingCard = memo<ClientLlmWaitingCardProps>(({ expiresAt, id, p
       context.agentId,
       context.threadId,
       context.topicId,
+      context.workspaceSlug,
       id,
       operationId,
       provider,

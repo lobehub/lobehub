@@ -62,13 +62,13 @@ describe('useOnboardingActions', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/settings/members');
   });
 
-  it('opens the add-site dialog when there is no site, and the Sites tab once there is one', () => {
+  it('opens the add-site dialog when there is no site, and Advanced settings, where Sites live, once there is one', () => {
     const { result } = renderHook(() => useOnboardingActions(detail, vi.fn()));
     result.current.openConnection({ count: 0, done: false, key: 'site', site: 'none' });
     expect(mocks.openSiteModal).toHaveBeenCalledTimes(1);
 
     result.current.openConnection({ count: 1, done: false, key: 'site', site: 'waiting' });
-    expect(mocks.navigate).toHaveBeenCalledWith('/project/launch/settings/sites');
+    expect(mocks.navigate).toHaveBeenCalledWith('/project/launch/settings/advanced');
   });
 
   it('opens the add-folder dialog until a folder is connected', () => {

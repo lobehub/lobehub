@@ -9,8 +9,10 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SCOPE_READ_MAX_LIMIT, SignalDecisionModel } from '@/database/models/signalDecision';
 import { ChannelError } from '@/database/repositories/channel';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentAccessService } from '@/server/services/channel/agentAccess';
 import { ChannelService } from '@/server/services/channel/ChannelService';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import {
@@ -67,6 +69,12 @@ const externalChannelProcedure = channelBaseProcedure;
 /** Everything else is for members (and the personal space) only. */
 const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
+const agentAccessService = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => new AgentAccessService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+
 export const channelRouter = router({
   ...channelHistoryProcedures,
   /** Without a Channel, the people a new Channel in this scope can start with. */
@@ -88,6 +96,19 @@ export const channelRouter = router({
       await ctx.channelService.archiveThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  /** Opens an empty Thread under a name the person typed. */
+  createThread: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        requestKey: z.string().min(1).max(200),
+        title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.createThread(input.channelId, input),
+      success: true,
+    })),
   /** In a project Channel, `joinProject` seats an Agent from outside in the project first. */
   addAgent: channelProcedure
     .input(z.object({ channelId, agent: agentSelection, joinProject: z.boolean().optional() }))
@@ -117,6 +138,30 @@ export const channelRouter = router({
         input.memberId,
         input.environment,
       ),
+      success: true,
+    })),
+  /**
+   * Whether the caller may use an Agent: in a Channel (a group, or their conversation with it),
+   * or without one before they open a conversation. See `resolveAgentAccess`.
+   */
+  agentAccess: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), channelId: channelId.optional() }))
+    .query(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).check(input),
+      success: true,
+    })),
+  /** Ask the Agent's owner to let the caller use it; `jobId` is a failed reply to run again. */
+  requestAgentAccess: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), channelId, jobId: z.uuid().optional() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).request(input),
+      success: true,
+    })),
+  /** Only the Agent's owner named on the request decides it; both decisions are idempotent. */
+  decideAgentAccess: channelProcedure
+    .input(z.object({ decision: z.enum(['approve', 'deny']), grantId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await agentAccessService(ctx).decide(input.grantId, input.decision),
       success: true,
     })),
   /** Requests to run Channel Agents on the caller's private devices, for them to decide. */
@@ -446,6 +491,18 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  /** Adds the caller's reaction, or removes it when they already left that emoji. */
+  toggleReaction: externalChannelProcedure
+    .input(z.object({ channelId, emoji: z.string().min(1).max(32), messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.toggleReaction(input.channelId, input.messageId, input.emoji),
+      success: true,
+    })),
+  /** The caller's most used reactions lately, most used first; the client pads its defaults. */
+  frequentReactions: externalChannelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.frequentReactions(),
+    success: true,
+  })),
   deleteMessage: channelProcedure
     .input(z.object({ channelId, messageId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -457,6 +514,13 @@ export const channelRouter = router({
     .input(z.object({ channelId, memberId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.channelService.removeMember(input.channelId, input.memberId);
+      return { success: true };
+    }),
+  /** The owner makes a person of a group Channel an admin, or returns them to a plain member. */
+  setMemberRole: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid(), role: z.enum(['admin', 'member']) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.setMemberRole(input.channelId, input.memberId, input.role);
       return { success: true };
     }),
   rename: channelProcedure

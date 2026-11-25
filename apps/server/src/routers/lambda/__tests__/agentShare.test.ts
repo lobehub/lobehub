@@ -7,10 +7,16 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 
 /** Rows the router's Agent-owner lookup (`select … from agents`) returns. */
 const mockAgentOwnerRows = vi.fn(async () => [{ userId: 'user-1' }]);
+/** Rows an unlimited `select … where` returns: the profiles of people approved by request. */
+const mockUserRows = vi.fn(async () => [] as unknown[]);
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
     return {
-      select: () => ({ from: () => ({ where: () => ({ limit: () => mockAgentOwnerRows() }) }) }),
+      select: () => ({
+        from: () => ({
+          where: () => Object.assign(mockUserRows(), { limit: () => mockAgentOwnerRows() }),
+        }),
+      }),
     };
   }),
 }));
@@ -60,6 +66,7 @@ const mockCreate = vi.fn();
 const mockFindByShareId = vi.fn();
 const mockForceDisableWorkspaceShare = vi.fn();
 const mockGetByAgentId = vi.fn();
+const mockRequestGrantedUserIds = vi.fn(async (..._args: unknown[]) => [] as string[]);
 const mockListWorkspaceSharesForAudit = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockUpdateSlug = vi.fn();
@@ -81,6 +88,7 @@ vi.mock('@/database/models/agentShare', () => ({
       findByShareId: mockFindByShareId,
       forceDisableWorkspaceShare: mockForceDisableWorkspaceShare,
       listWorkspaceSharesForAudit: mockListWorkspaceSharesForAudit,
+      requestGrantedUserIds: mockRequestGrantedUserIds,
     },
   ),
 }));
@@ -516,6 +524,38 @@ describe('agentShareRouter', () => {
         unlisted: [carol],
       });
       expect(mockFindUser).toHaveBeenCalledWith('user-carol');
+    });
+
+    // Approving someone's request to use the Agent lists them for the device without making them
+    // a contact; saving the share settings again must not refuse them, nor show them as gone.
+    it('keeps a person the owner approved by request, outside the address book', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      const dave = { avatar: null, fullName: 'Dave', id: 'user-dave', username: 'dave' };
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, deviceAllowUserIds: ['user-bob', 'user-dave'] },
+      });
+      mockFilterAddressBookPeople.mockResolvedValue(['user-bob']);
+      mockListAddressBookPeople.mockResolvedValue([bob]);
+      mockRequestGrantedUserIds.mockResolvedValue(['user-dave']);
+      mockUserRows.mockResolvedValue([dave]);
+
+      const config = {
+        deviceAccess: 'allowlist' as const,
+        deviceAllowUserIds: ['user-bob', 'user-dave'],
+      };
+      await caller.updateShareConfig({ agentId: 'agent-1', config });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+      expect(mockRequestGrantedUserIds).toHaveBeenCalledWith(expect.anything(), share.id, [
+        'user-dave',
+      ]);
+
+      await expect(caller.listDeviceGrantablePeople({ agentId: 'agent-1' })).resolves.toEqual({
+        enabled: true,
+        people: [bob, dave],
+        unlisted: [],
+      });
+      mockRequestGrantedUserIds.mockResolvedValue([]);
     });
   });
 

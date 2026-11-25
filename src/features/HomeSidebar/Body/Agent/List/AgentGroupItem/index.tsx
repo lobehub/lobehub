@@ -25,7 +25,7 @@ interface GroupItemProps {
 }
 
 const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, description, title, pinned, userId, visibility } = item;
+  const { id, avatar, backgroundColor, title, pinned, userId, visibility } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const { isMyPinned, isPrivate } = useSidebarPinState({ id, pinned, visibility });
@@ -116,7 +116,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
-    description,
     id,
     memberAvatars,
     pinned: pinned ?? false,

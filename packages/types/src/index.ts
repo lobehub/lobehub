@@ -1,4 +1,5 @@
 export * from './agent';
+export * from './agentAccess';
 export * from './agentAccount';
 export * from './agentAvailability';
 export * from './agentDelivery';
@@ -36,6 +37,7 @@ export * from './discover';
 export * from './document';
 export * from './documentComment';
 export * from './documentLike';
+export * from './emoji';
 export * from './entityId';
 export * from './environment';
 export * from './eval';

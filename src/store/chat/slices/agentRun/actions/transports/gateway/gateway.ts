@@ -227,7 +227,7 @@ const isSuccessfulGatewayCompletion = (params: {
 
 // ─── Action Implementation ───
 
-interface ReconnectToGatewayOperationParams {
+interface ReconnectToGatewayOperationParams extends Pick<ConversationContext, 'workspaceSlug'> {
   /**
    * Agent that owns the rendered conversation. Callers outside the agent route
    * (task detail / home run drawer) MUST pass it: `activeAgentId` is whatever
@@ -249,11 +249,7 @@ interface ReconnectToGatewayOperationParams {
   heteroType?: string | null;
   operationId: string;
   scope?: string;
-  /**
-   * Server-written ISO timestamp of when the run claimed the topic — carried
-   * on the topic's `runningOperation` marker so elapsed-time anchors survive
-   * a page refresh even when the messages list hasn't loaded yet.
-   */
+  /** Server start time, retained on reconnect before the messages load. */
   startedAt?: string;
   threadId?: string | null;
   topicId: string;
@@ -1663,6 +1659,7 @@ export class GatewayActionImpl {
     provider: string;
     threadId?: string | null;
     topicId?: string;
+    workspaceSlug?: string;
   }): Promise<boolean> => {
     const { agentId, assistantMessageId, operationId, provider, threadId, topicId } = params;
     const llmExecutor = getLlmExecutorDeclarationFor(provider);
@@ -1679,6 +1676,7 @@ export class GatewayActionImpl {
         operationId,
         threadId,
         topicId,
+        workspaceSlug: params.workspaceSlug,
       });
     }
     // A socket still handshaking when the call goes out is not counted as a
@@ -1763,11 +1761,11 @@ export class GatewayActionImpl {
     // does — `createGatewayEventHandler` branches on `context.agentShareId` to
     // skip owner-only side effects (agent-signal emission, message.update on
     // error), and this context otherwise matches the one
-    // ReadOnlyConversationArea.tsx builds ({ agentId, agentShareId, scope:
-    // 'main', topicId }) for the visitor-rendered bucket.
+    // ReadOnlyConversationArea.tsx builds for the visitor-rendered bucket.
     const context = {
       agentId,
       ...(agentShareId && { agentShareId }),
+      workspaceSlug: params.workspaceSlug,
       scope: (scope ?? 'main') as ConversationContext['scope'],
       threadId: threadId ?? null,
       topicId,

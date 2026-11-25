@@ -30,6 +30,7 @@ import {
   asyncTasks,
   channelMessageFiles,
   chunks,
+  customEmojis,
   documentChunks,
   documents,
   embeddings,
@@ -251,7 +252,7 @@ export class FileModel {
 
     // delete the file from global file if it is not used by other files
     // if `DISABLE_REMOVE_GLOBAL_FILE` is true, we will not remove the global file
-    if (fileCount === 0 && removeGlobalFile) {
+    if (fileCount === 0 && removeGlobalFile && !(await this.hasEmojiReference(tx, [fileHash]))) {
       await tx.delete(globalFiles).where(eq(globalFiles.hashId, fileHash));
 
       return file;
@@ -381,6 +382,22 @@ export class FileModel {
     });
   };
 
+  /**
+   * Hashes a custom emoji still draws its image from. Emojis reference the blob directly, so it
+   * must outlive every `files` row, including the uploader's.
+   */
+  private findEmojiReferences = async (db: Transaction, hashList: string[]) => {
+    if (hashList.length === 0) return [];
+    const rows = await db
+      .selectDistinct({ fileHash: customEmojis.fileHash })
+      .from(customEmojis)
+      .where(inArray(customEmojis.fileHash, hashList));
+    return rows.map((row) => row.fileHash);
+  };
+
+  private hasEmojiReference = async (db: Transaction, hashList: string[]) =>
+    (await this.findEmojiReferences(db, hashList)).length > 0;
+
   deleteGlobalFile = async (hashId: string) => {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
@@ -480,6 +497,7 @@ export class FileModel {
 
       // Put still-in-use hashes into a Set for quick lookup
       const usedHashes = new Set(remainingFiles.map((file) => file.fileHash));
+      for (const hash of await this.findEmojiReferences(trx, hashList)) usedHashes.add(hash);
 
       // Find hashes to delete (those no longer used by any file)
       const hashesToDelete = hashList.filter((hash) => !usedHashes.has(hash));
