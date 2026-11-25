@@ -608,6 +608,7 @@ export default {
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
   'plans.compare.auto': 'Auto Model',
+  'plans.compare.autoAvailable': 'Available',
   'plans.compare.auto.tooltip':
     "Auto Model picks a suitable model for each conversation. It has a limit of its own and doesn't use your plan limits. Agent run fees come from your plan limits first, then from Auto Model's.",
   'plans.compare.autoSeparate': 'Extra {{multiple}}× plan limits',
@@ -620,7 +621,6 @@ export default {
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
-  'plans.compare.autoFromBalance': 'Paid from balance',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',

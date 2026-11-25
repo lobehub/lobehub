@@ -639,7 +639,7 @@
   "plans.compare.artifactSites": "在线 Artifact 站点数",
   "plans.compare.auto": "Auto Model",
   "plans.compare.auto.tooltip": "Auto Model 会为每个对话自动选择合适的模型。它有单独的额度，不占用套餐额度；助理运行费先从套餐额度扣除，用完再从 Auto Model 额度扣除。",
-  "plans.compare.autoFromBalance": "从余额扣除",
+  "plans.compare.autoAvailable": "支持",
   "plans.compare.autoSeparate": "另享 {{multiple}} 倍套餐额度",
   "plans.compare.baselineNote": "每行以标有「标准」的套餐为基准，按倍数对比。",
   "plans.compare.concurrentAgentRuns": "并发智能体任务数",

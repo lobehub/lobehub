@@ -639,7 +639,7 @@
   "plans.compare.artifactSites": "Active Artifact sites",
   "plans.compare.auto": "Auto Model",
   "plans.compare.auto.tooltip": "Auto Model picks a suitable model for each conversation. It has a limit of its own and doesn't use your plan limits. Agent run fees come from your plan limits first, then from Auto Model's.",
-  "plans.compare.autoFromBalance": "Paid from balance",
+  "plans.compare.autoAvailable": "Available",
   "plans.compare.autoSeparate": "Extra {{multiple}}× plan limits",
   "plans.compare.baselineNote": "Each limit is shown as a multiple of the plan marked Standard in its row.",
   "plans.compare.concurrentAgentRuns": "Concurrent agent tasks",
