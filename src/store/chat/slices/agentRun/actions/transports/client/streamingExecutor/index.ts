@@ -71,14 +71,14 @@ import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
-import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
-import { getFollowUpMode } from '../../lifecycle/followUpMode';
-import type { RunParkedReason, RunScope } from '../../lifecycle/types';
-import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
-import { steerQueuedFollowUps } from './clientSteer';
-import { deferClientSkillsTool } from './deferSkillsTool';
-import { buildRunManifestMap } from './discoverableManifests';
-import { clientInterventionAudits } from './interventionAudits';
+import { buildRunLifecycle } from '../../../lifecycle/buildRunLifecycle';
+import { getFollowUpMode } from '../../../lifecycle/followUpMode';
+import type { RunParkedReason, RunScope } from '../../../lifecycle/types';
+import { buildViewedTaskPrompt } from '../../viewedTaskPrompt';
+import { steerQueuedFollowUps } from '.././clientSteer';
+import { deferClientSkillsTool } from '.././deferSkillsTool';
+import { buildRunManifestMap } from '.././discoverableManifests';
+import { clientInterventionAudits } from '.././interventionAudits';
 
 const log = debug('lobe-store:streaming-executor');
 
