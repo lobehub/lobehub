@@ -35,6 +35,8 @@ vi.mock('../featureGate', () => ({
   assertChannelEnabled: vi.fn(),
   isChannelEnabled: vi.fn(async () => true),
 }));
+// A deployment that limits shared Agents to some providers: a Channel approval must not need it.
+vi.mock('@/business/agent-share', () => ({ AGENT_SHARE_ALLOWED_PROVIDERS: ['lobehub'] }));
 // The owner has no Agent Share feature: approving in a Channel must not need it.
 vi.mock('@/server/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -245,6 +247,49 @@ describe('a friend mentions the owner’s personal Agent in a group', () => {
     expect(claim?.job.executionConfig).toMatchObject({ share: { ownerId } });
     expect(
       await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
+    ).toMatchObject({ state: 'ok', via: 'share' });
+  });
+
+  // Approving resolved the Agent's model against the share provider allowlist and refused a native
+  // Agent on any other provider ("Shared agents only support models from: …").
+  it('runs a native Agent on a provider shares do not allow, once approved', async () => {
+    const asOwner = new ChannelRepository(db, ownerId, undefined);
+    const { channel } = await asOwner.create({ title: 'Friends' });
+    await fixture.addPerson(channel.id, visitorId, 'member');
+    const agent = await fixture.addAgent(channel.id, 'Writer', {
+      model: 'gpt-5',
+      provider: 'openai',
+      runtime: 'native',
+    });
+    const message = await new ChannelRepository(db, visitorId, undefined).send(channel.id, {
+      content: '@Writer draft it',
+      mentions: [agent.id],
+      requestKey: 'native',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    await execution.claim(channel.id, job.id, lease);
+    const [request] = await grantsOf(agent.id);
+
+    await expect(
+      new AgentAccessService(db, ownerId).decide(request.id, 'approve'),
+    ).resolves.toMatchObject({ grant: { status: 'approved' } });
+    const [stored] = await db.select().from(agents).where(eq(agents.id, agent.agentId!));
+    // The owner's model is left as it is, not swapped for an allowed one.
+    expect(stored).toMatchObject({ model: 'gpt-5', provider: 'openai' });
+    const claim = await execution.claim(channel.id, job.id, lease);
+    expect(claim?.job.executionConfig).toMatchObject({
+      model: 'gpt-5',
+      provider: 'openai',
+      runtime: 'native',
+      share: { ownerId },
+    });
+    expect(
+      await resolveAgentAccess(db, {
+        agentId: agent.agentId!,
+        channelId: channel.id,
+        requesterUserId: visitorId,
+      }),
     ).toMatchObject({ state: 'ok', via: 'share' });
   });
 

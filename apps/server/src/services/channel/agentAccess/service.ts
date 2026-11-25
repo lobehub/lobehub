@@ -161,10 +161,12 @@ export class AgentAccessService {
  * admits without being in the owner's address book (`resolveShareVisitorDeviceAccess`).
  * Idempotent.
  *
- * Not behind the share-creation feature gate (`assertAgentShareCreationEnabled`), which guards a
- * person publishing a share from share settings: here the owner already pulled the Agent into the
- * Channel and approves one person there, and the share row is only how that grant is recorded.
- * Only called for an Agent that is an active member of the request's Channel (`decide`).
+ * Neither the share-creation feature gate (`assertAgentShareCreationEnabled`) nor the share
+ * model restriction (`AgentService.prepareShareModel`, `AGENT_SHARE_ALLOWED_PROVIDERS`) applies:
+ * both guard a person publishing a share from share settings. Here the owner already pulled the
+ * Agent into the Channel and approves one person there, and the share row is only how that grant
+ * is recorded; the run path checks neither. Only called for an Agent that is an active member of
+ * the request's Channel (`decide`).
  */
 export const grantAgentAccess = async (
   db: LobeChatDatabase,
@@ -179,10 +181,9 @@ export const grantAgentAccess = async (
 ) => {
   const { agentId, ownerId, requesterUserId } = params;
   const agentService = new AgentService(db, ownerId, params.workspaceId ?? undefined);
-  const shareId = await agentService.withShareModelLock(agentId, async (service, shares) => {
+  const shareId = await agentService.withShareModelLock(agentId, async (_service, shares) => {
     let share = await shares.getByAgentId(agentId);
     if (!share || !isLiveAgentShareVisibility(share.visibility)) {
-      await service.prepareShareModel(agentId);
       const created = await shares.create(agentId, 'card');
       share =
         created.visibility === 'private'
