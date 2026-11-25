@@ -94,7 +94,7 @@ export class FavoriteModel {
   };
 
   /**
-   * Favorite a target, appending it to the end of the section. Favoriting a
+   * Favorite a target, putting it at the top of the section. Favoriting a
    * target that is already there refreshes its link and snapshot in place and
    * keeps its position.
    */
@@ -116,8 +116,10 @@ export class FavoriteModel {
       // Refreshing an existing favorite never grows the list.
       if (existing === 0 && count >= FAVORITE_LIMIT) throw new FavoriteLimitError();
 
+      // One below the current top. The value may go negative; the next
+      // reorder rewrites the whole sidebar to 0..n-1.
       const nextSortOrder = sql<number>`(
-        SELECT COALESCE(MAX(${userFavorites.sortOrder}) + 1, 0)
+        SELECT COALESCE(MIN(${userFavorites.sortOrder}) - 1, 0)
         FROM ${userFavorites}
         WHERE ${this.scope()}
       )`;
@@ -179,7 +181,9 @@ export class FavoriteModel {
 
   /**
    * Store the order the member arranged. Ids outside this sidebar are ignored;
-   * favorites missing from `ids` keep their position after the listed ones.
+   * favorites missing from `ids` were added after the caller read the list
+   * (on another device, or while this reorder waited its turn), so they stay
+   * on top, ahead of the listed ones, as {@link add} placed them.
    */
   reorder = async (ids: string[]): Promise<void> => {
     await this.db.transaction(async (tx) => {
@@ -192,8 +196,8 @@ export class FavoriteModel {
       const existing = rows.map((row) => row.id);
       const listed = new Set(ids);
       const order = [
-        ...ids.filter((id) => existing.includes(id)),
         ...existing.filter((id) => !listed.has(id)),
+        ...ids.filter((id) => existing.includes(id)),
       ];
       if (order.length === 0) return;
 
