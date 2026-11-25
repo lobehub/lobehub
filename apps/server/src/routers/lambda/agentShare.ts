@@ -23,6 +23,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
+import { buildSharedAgentData } from '@/server/services/agentShare/sharedAgentData';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
@@ -358,6 +359,24 @@ export const agentShareRouter = router({
   getShareStatus: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
     await assertCanManageAgentShare(ctx, input.agentId);
     return ctx.agentShareModel.getByAgentId(input.agentId);
+  }),
+
+  /**
+   * The visitor landing page as its settings preview shows it. Authorized as a
+   * share manager rather than through `share.getSharedAgent`: that visitor read
+   * treats only the Agent's creator as the owner, so a Workspace manager
+   * previewing a colleague's Agent would count a page view on a link share and
+   * be refused on a paused one. A preview never counts a view.
+   */
+  getProfilePreview: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    const status = await ctx.agentShareModel.getByAgentId(input.agentId);
+    const share = status && (await AgentShareModel.findByShareId(ctx.serverDB, status.id));
+    if (!share) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent share not found' });
+    }
+
+    return buildSharedAgentData(ctx.serverDB, share, { isOwner: share.ownerId === ctx.userId });
   }),
 
   /**
