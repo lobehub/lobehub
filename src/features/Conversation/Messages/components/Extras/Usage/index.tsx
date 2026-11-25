@@ -10,6 +10,7 @@ import { BadgeCent, CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { brandIcon } from '@/components/BrandIcon';
 import { ModelIcon } from '@/components/LobeIcons';
 import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useAgentStore } from '@/store/agent';
@@ -173,7 +174,13 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
               gap={2}
               title={showMemberTokenUsage ? undefined : t('messages.creditUsageHint')}
             >
-              <Icon icon={isUsageCreditsEnabled() ? BadgeCent : CircleDollarSignIcon} />
+              <Icon
+                icon={
+                  isUsageCreditsEnabled()
+                    ? brandIcon('usage.credits', BadgeCent)
+                    : CircleDollarSignIcon
+                }
+              />
               {formatUsageCost(usage.cost, formatCost)}
             </Center>
           )}

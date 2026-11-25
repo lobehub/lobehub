@@ -10,6 +10,7 @@ import { BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { brandIcon } from '@/components/BrandIcon';
 import InfoTooltip from '@/components/InfoTooltip';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
@@ -254,7 +255,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
           updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
         }}
       >
-        <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />
+        <Icon icon={isShowCredit ? brandIcon('usage.credits', BadgeCent) : CoinsIcon} />
         <AnimatedNumber
           duration={1500}
           // Force remount when switching between token/credit to prevent unwanted animation

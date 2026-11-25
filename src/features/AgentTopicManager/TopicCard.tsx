@@ -8,6 +8,7 @@ import { BadgeCent, CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } fro
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { brandIcon } from '@/components/BrandIcon';
 import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
@@ -204,7 +205,12 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
               gap={3}
               title={formatUsageCostLabel(cost, (usd) => `$${usd.toFixed(4)}`)}
             >
-              <Icon icon={isUsageCreditsEnabled() ? BadgeCent : CircleDollarSign} size={11} />
+              <Icon
+                size={11}
+                icon={
+                  isUsageCreditsEnabled() ? brandIcon('usage.credits', BadgeCent) : CircleDollarSign
+                }
+              />
               {formatUsageCost(cost, (usd) => formatPrice(usd, 2))}
             </Flexbox>
           )}

@@ -69,6 +69,7 @@ export type BrandIconKey =
   | 'topic.overview'
   | 'topic.share'
   | 'topic.terminal'
+  | 'usage.credits'
   | 'workspace.document'
   | 'workspace.skill'
   /** A market category's icon, by kind and category key, e.g. `category.agent.office`. */

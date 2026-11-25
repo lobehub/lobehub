@@ -7,6 +7,7 @@ import { BadgeCentIcon, CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from '
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { brandIcon } from '@/components/BrandIcon';
 import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -363,7 +364,9 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
       : undefined,
     totalCost > 0
       ? {
-          icon: isUsageCreditsEnabled() ? BadgeCentIcon : CircleDollarSignIcon,
+          icon: isUsageCreditsEnabled()
+            ? brandIcon('usage.credits', BadgeCentIcon)
+            : CircleDollarSignIcon,
           key: 'cost',
           label: costLabel,
           title: `${costLabel}: ${formatCost(totalCost)}`,

@@ -7,6 +7,7 @@ import { BadgeCentIcon, CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { brandIcon } from '@/components/BrandIcon';
 import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { formatUsageCost, isUsageCreditsEnabled } from '@/utils/usageCredits';
@@ -148,7 +149,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     // Beside an icon the amount drops its unit: the `$`, or the credit label.
     const usage = cost
       ? isUsageCreditsEnabled()
-        ? { icon: BadgeCentIcon, value: formatUsageCost(item.totalCost ?? 0, String) }
+        ? {
+            icon: brandIcon('usage.credits', BadgeCentIcon),
+            value: formatUsageCost(item.totalCost ?? 0, String),
+          }
         : { icon: CircleDollarSignIcon, value: cost.slice(1) }
       : totalTokens
         ? { icon: CoinsIcon, value: formatUsageValue(totalTokens) }
