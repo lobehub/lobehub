@@ -283,6 +283,8 @@
   "credits.modelPolicy.tiers.desc": "高档位包含低档位的全部模型。",
   "credits.modelPolicy.tiers.empty": "这一档暂时没有模型",
   "credits.modelPolicy.tiers.included": "包含的模型",
+  "credits.modelPolicy.tiers.showAll": "展开全部 · 还有 {{count}} 个",
+  "credits.modelPolicy.tiers.showLess": "收起",
   "credits.modelPolicy.tiers.title": "各档位包含的模型",
   "credits.modelPolicy.tiers.unavailable": "不可用",
   "credits.modelPolicy.title": "可用档位",

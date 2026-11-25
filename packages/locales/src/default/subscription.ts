@@ -1181,6 +1181,8 @@ export default {
   'credits.modelPolicy.tiers.desc': 'Each tier includes every model of the tiers below it.',
   'credits.modelPolicy.tiers.empty': 'No models in this tier yet',
   'credits.modelPolicy.tiers.included': 'Included models',
+  'credits.modelPolicy.tiers.showAll': 'Show all · {{count}} more',
+  'credits.modelPolicy.tiers.showLess': 'Show less',
   'credits.modelPolicy.tiers.title': 'Models by tier',
   'credits.modelPolicy.tiers.unavailable': 'Not available',
 };
