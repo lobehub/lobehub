@@ -15,7 +15,7 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, ChevronUp, History, Sparkles, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FoldVertical, History, Sparkles, Undo2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -149,7 +149,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
       <Flexbox className={stylex.props(styles.container).className}>
         <Divider className={stylex.props(styles.divider).className}>
           <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.compressingLabel)}>
-            <Icon icon={History} size={14} />
+            <Icon icon={FoldVertical} size={14} />
             <span className={cx(shinyTextStyles.shinyText)}>
               {t('compression.dividerCompressing')}
             </span>
@@ -198,7 +198,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             type={'button'}
             onClick={toggleExpanded}
           >
-            <Icon icon={History} size={14} />
+            <Icon icon={FoldVertical} size={14} />
             <span>{turnsLabel(true)}</span>
             <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
           </button>
@@ -252,7 +252,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             type={'button'}
             onClick={toggleExpanded}
           >
-            <Icon icon={History} size={14} />
+            <Icon icon={FoldVertical} size={14} />
             <span>{turnsLabel(false)}</span>
             <Icon icon={ChevronDown} size={14} />
           </button>
