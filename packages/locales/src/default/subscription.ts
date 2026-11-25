@@ -1049,6 +1049,11 @@ export default {
   'credits.topUp.success.balance': '+{{amount}} balance',
   'credits.autoTopUp.descUsd': 'Make sure your balance never runs out',
   'credits.packages.titleUsd': 'My top-ups',
+  'credits.budgetPage.allocate.desc':
+    'Set aside allowances for groups or teams. Members use them before their personal allowance.',
+  'credits.budgetPage.allocate.title': 'Shared allowances',
+  'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
+  'credits.budgetPage.limit.title': 'Spending limits',
   'credits.budgetPage.tabs.agentShare': 'Shared agents',
   'credits.budgetPage.tabs.dedicated': 'Dedicated budgets',
   'credits.budgetPage.tabs.member': 'Member limits',
