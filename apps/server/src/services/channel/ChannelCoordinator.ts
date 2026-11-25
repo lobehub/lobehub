@@ -7,11 +7,7 @@ import {
 } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
-import type {
-  ChannelContextMessage,
-  ChannelExecutionConfig,
-  ChannelSharedAgentAccess,
-} from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
 import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -166,11 +162,12 @@ export class ChannelCoordinator {
     access: ChannelSharedAgentAccess,
     agentId: string,
     requesterId: string,
-    /**
-     * The visitor's own message and the files it attaches; a message it quotes is not part of
-     * its prompt.
-     */
-    request: Pick<ChannelContextMessage, 'content' | 'fileIds'>,
+    request: {
+      /** The files of each of the visitor's messages the run reads, a quoted one included. */
+      attachments: string[][];
+      /** The visitor's own message; a message it quotes is not part of its prompt. */
+      content: string;
+    },
   ): Promise<AgentShareGate> {
     const share = await AgentShareModel.findByShareId(this.db, access.shareId);
     if (!share || share.agentId !== agentId || share.ownerId !== access.ownerId)
@@ -183,12 +180,18 @@ export class ChannelCoordinator {
       throw shareRefusal(ChatErrorType.ShareHeterogeneousAgentUnsupported);
     if (request.content.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
       throw shareRefusal(ChatErrorType.SharePromptTooLong);
-    const attachmentLimit = request.fileIds?.length
-      ? shareAttachmentLimitType(
-          await readVisitorFiles(this.db, requesterId, request.fileIds),
-          share.shareConfig.maxFileStorage,
-        )
-      : undefined;
+    const fileIds = request.attachments.flat();
+    let attachmentLimit: string | undefined;
+    if (fileIds.length) {
+      // The share page's per-message file count holds for each message, not the turn's total.
+      const byId = new Map(
+        (await readVisitorFiles(this.db, requesterId, fileIds)).map((file) => [file.id, file]),
+      );
+      attachmentLimit = shareAttachmentLimitType(
+        request.attachments.map((ids) => [...new Set(ids)].flatMap((id) => byId.get(id) ?? [])),
+        share.shareConfig.maxFileStorage,
+      );
+    }
     if (attachmentLimit) throw shareRefusal(attachmentLimit);
     const sent = await new TopicModel(
       this.db,
@@ -325,7 +328,10 @@ export class ChannelCoordinator {
             await openChannelReply(this.db, channelId, job.id, {
               admitShare: ({ agent, request, requesterUserId, share }) =>
                 // Only a refusal skips the opening; a failed check leaves it to dispatch.
-                this.shareGate(share, agent.id, requesterUserId, request).then(
+                this.shareGate(share, agent.id, requesterUserId, {
+                  attachments: [request.fileIds ?? []],
+                  content: request.content,
+                }).then(
                   () => true,
                   (error) => !dispatchFailure(error),
                 ),
@@ -495,19 +501,20 @@ export class ChannelCoordinator {
         resumed ? this.executions.replyError(job.channelId, job.id) : undefined,
       ]);
       // A shared Agent reads only what its visitor attached, from their own messages.
-      const visitorFileIds =
+      const visitorAttachments =
         share && topic.senderId
           ? input
               .filter(({ author }) => author.type === 'user' && author.id === topic.senderId)
-              .flatMap((message) => message.fileIds ?? [])
+              .map((message) => message.fileIds ?? [])
           : [];
+      const visitorFileIds = visitorAttachments.flat();
       const shareGate =
         share && topic.senderId
           ? await this.shareGate(share, member.agentId, topic.senderId, {
               content:
                 input.find((message) => message.id === job.manifest!.requestMessageId)?.content ??
                 '',
-              fileIds: visitorFileIds,
+              attachments: visitorAttachments,
             })
           : undefined;
       if (share && !shareGate) throw new Error('A shared Agent run needs its requester');

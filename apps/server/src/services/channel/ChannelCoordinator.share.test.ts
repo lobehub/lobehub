@@ -1,5 +1,9 @@
 // @vitest-environment node
-import { SHARE_VISITOR_MAX_FILE_SIZE, SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import {
+  SHARE_VISITOR_MAX_FILE_SIZE,
+  SHARE_VISITOR_MAX_FILES_PER_TURN,
+  SHARE_VISITOR_PROMPT_MAX_LENGTH,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -429,6 +433,23 @@ describe('dispatching a contact’s shared Agent', () => {
       );
       expect(resolveChannelAttachments).not.toHaveBeenCalled();
       expect(execAgent.mock.calls[0][0].fileIds).toEqual(['file_copy']);
+    });
+
+    it('counts files per message, so a quoted message’s files do not refuse the reply', async () => {
+      const files = Array.from({ length: SHARE_VISITOR_MAX_FILES_PER_TURN }, (_, index) => ({
+        ...pptx,
+        id: `file_quoted_${index}`,
+      }));
+      executions.input.mockResolvedValue([
+        { author: visitor, content: 'Earlier', fileIds: files.map(({ id }) => id), id: 'quoted' },
+        { author: visitor, content: 'And this one?', fileIds: [pptx.id], id: 'message' },
+      ]);
+      readVisitorFiles.mockResolvedValue([...files, pptx]);
+      importShareAttachments.mockResolvedValue(['file_copy']);
+      await coordinator().advance('channel');
+
+      expect(executions.retireReservation).not.toHaveBeenCalled();
+      expect(execAgent).toHaveBeenCalledOnce();
     });
 
     it('refuses a file beyond the share page’s size cap before copying anything', async () => {

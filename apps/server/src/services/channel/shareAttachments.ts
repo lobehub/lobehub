@@ -83,16 +83,18 @@ export const readVisitorFiles = async (
 };
 
 /**
- * The per-turn bounds the share page applies to a visitor's upload. Checked before the reply
- * opens, so an oversized turn is refused before anything is copied or acknowledged.
+ * The bounds the share page applies to a visitor's upload, given each of the visitor's messages'
+ * files: the file count per message, and each file's size. Checked before the reply opens, so an
+ * oversized turn is refused before anything is copied or acknowledged.
  */
 export const shareAttachmentLimitType = (
-  sources: Pick<SourceFile, 'size'>[],
+  messages: Pick<SourceFile, 'size'>[][],
   maxFileStorage = AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
 ) => {
+  const sources = messages.flat();
   if (!sources.length) return;
   if (
-    sources.length > SHARE_VISITOR_MAX_FILES_PER_TURN ||
+    messages.some((files) => files.length > SHARE_VISITOR_MAX_FILES_PER_TURN) ||
     sources.some((file) => file.size > SHARE_VISITOR_MAX_FILE_SIZE)
   )
     return ChatErrorType.ShareAttachmentTooLarge;

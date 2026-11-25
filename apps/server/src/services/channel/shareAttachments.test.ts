@@ -101,23 +101,31 @@ describe('readVisitorFiles', () => {
 
 describe('shareAttachmentLimitType', () => {
   it('admits a turn within the share page’s bounds', () => {
-    expect(shareAttachmentLimitType([{ size: 1 }])).toBeUndefined();
-    expect(shareAttachmentLimitType([], 0)).toBeUndefined();
+    expect(shareAttachmentLimitType([[{ size: 1 }]])).toBeUndefined();
+    expect(shareAttachmentLimitType([[], []], 0)).toBeUndefined();
   });
 
-  it('refuses too many files or a file too large', () => {
-    expect(
-      shareAttachmentLimitType(
-        Array.from({ length: SHARE_VISITOR_MAX_FILES_PER_TURN + 1 }, () => ({ size: 1 })),
-      ),
-    ).toBe(ChatErrorType.ShareAttachmentTooLarge);
-    expect(shareAttachmentLimitType([{ size: SHARE_VISITOR_MAX_FILE_SIZE + 1 }])).toBe(
+  it('refuses a message with too many files or a file too large', () => {
+    const files = (length: number) => Array.from({ length }, () => ({ size: 1 }));
+    expect(shareAttachmentLimitType([files(SHARE_VISITOR_MAX_FILES_PER_TURN + 1)])).toBe(
+      ChatErrorType.ShareAttachmentTooLarge,
+    );
+    expect(shareAttachmentLimitType([[{ size: SHARE_VISITOR_MAX_FILE_SIZE + 1 }]])).toBe(
       ChatErrorType.ShareAttachmentTooLarge,
     );
   });
 
+  it('counts files per message, so a quoted message’s files do not push the reply over', () => {
+    const files = (length: number) => Array.from({ length }, () => ({ size: 1 }));
+    expect(
+      shareAttachmentLimitType([files(SHARE_VISITOR_MAX_FILES_PER_TURN), files(1)]),
+    ).toBeUndefined();
+  });
+
   it('refuses any file once the creator turned visitor attachments off', () => {
-    expect(shareAttachmentLimitType([{ size: 1 }], 0)).toBe(ChatErrorType.ShareFileStorageExceeded);
+    expect(shareAttachmentLimitType([[{ size: 1 }]], 0)).toBe(
+      ChatErrorType.ShareFileStorageExceeded,
+    );
   });
 });
 
