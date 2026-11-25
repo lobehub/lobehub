@@ -12,6 +12,7 @@ export interface ImportSkillParams {
 }
 
 export interface ImportSkillState {
+  description?: string;
   name?: string;
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';
@@ -87,6 +88,7 @@ export interface ImportFromMarketParams {
 }
 
 export interface ImportFromMarketState {
+  description?: string;
   name?: string;
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';

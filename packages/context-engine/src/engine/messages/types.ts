@@ -30,6 +30,7 @@ import type { OnboardingContext } from '../../providers/OnboardingContextInjecto
 import type { Plan } from '../../providers/PlanInjector';
 import type { ProjectInstructionFile } from '../../providers/ProjectInstructionsInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { SkillChangesByMessage } from '../../providers/SkillIndexSnapshot';
 import type { TodoList } from '../../providers/TodoInjector';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
@@ -321,6 +322,12 @@ export interface MessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
+  /**
+   * Skill-index change notes keyed by the user message each belongs to.
+   * The host passes them when `skillsConfig.enabledSkills` renders
+   * `<available_skills>` from a snapshot (see `resolveSkillIndex`).
+   */
+  skillChanges?: SkillChangesByMessage;
   /** Skills explicitly selected by the user for the current request */
   selectedSkills?: RuntimeSelectedSkill[];
   /** Tools explicitly selected by the user for the current request */

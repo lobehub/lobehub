@@ -30,7 +30,7 @@ const formatSkillOverview = (skill: MarketSkillItem): string | undefined => {
 export type SkillStoreSearchServiceParams = Omit<SearchSkillParams, 'query'>;
 
 export interface SkillImportServiceResult {
-  skill: { id: string; name: string };
+  skill: { description?: string | null; id: string; name: string };
   status: 'created' | 'updated' | 'unchanged';
 }
 
@@ -96,9 +96,13 @@ export class SkillStoreExecutionRuntime {
       // routes import through the server runtime, so this never double-fires.
       await this.service.onSkillImported?.();
 
+      const description = result.skill.description?.trim() || undefined;
       return {
-        content: `Skill "${result.skill.name}" ${result.status} successfully.`,
+        content: description
+          ? `Skill "${result.skill.name}" ${result.status} successfully.\nDescription: ${description}`
+          : `Skill "${result.skill.name}" ${result.status} successfully.`,
         state: {
+          ...(description && { description }),
           name: result.skill.name,
           skillId: result.skill.id,
           status: result.status,
@@ -196,9 +200,13 @@ export class SkillStoreExecutionRuntime {
       // See importSkill: refresh for the direct/local client invoke path.
       await this.service.onSkillImported?.();
 
+      const description = result.skill.description?.trim() || undefined;
       return {
-        content: `Skill "${result.skill.name}" ${result.status} successfully from market.`,
+        content: description
+          ? `Skill "${result.skill.name}" ${result.status} successfully from market.\nDescription: ${description}`
+          : `Skill "${result.skill.name}" ${result.status} successfully from market.`,
         state: {
+          ...(description && { description }),
           name: result.skill.name,
           skillId: result.skill.id,
           status: result.status,

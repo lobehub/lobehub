@@ -9,6 +9,7 @@ import type {
   OperationSkillSet,
   OperationToolSet,
   ProjectInstructionFile,
+  SkillIndexSnapshot,
   ToolExecutor,
   ToolSource,
   UserMemoryConfig,
@@ -374,6 +375,13 @@ export interface AgentRunBinding {
     platform?: string;
     systemInfo?: Record<string, string>;
   };
+  /**
+   * The skill-index snapshot (rows + change notes) this run renders from,
+   * pinned on its first step so later steps send the same `<available_skills>`
+   * block and `<skills_changes>` notes (see `resolveSkillIndex`). Replaced only
+   * when the history is compressed mid-run.
+   */
+  skillIndex?: SkillIndexSnapshot;
 }
 
 /**

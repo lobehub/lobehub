@@ -157,7 +157,7 @@ describe('skillStoreRuntime', () => {
       'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
     mocks.getSkillDownloadUrl.mockReturnValue(downloadUrl);
     mocks.importFromUrl.mockResolvedValue({
-      skill: { id: 'skl_memory', name: 'memory-setup' },
+      skill: { description: 'Configure memory storage', id: 'skl_memory', name: 'memory-setup' },
       status: 'unchanged',
     });
     const { skillStoreRuntime } = await import('../skillStore');
@@ -174,7 +174,7 @@ describe('skillStoreRuntime', () => {
       { identifier: 'openclaw-skills-memory-setup', source: 'market' },
     );
     expect(result).toEqual({
-      skill: { id: 'skl_memory', name: 'memory-setup' },
+      skill: { description: 'Configure memory storage', id: 'skl_memory', name: 'memory-setup' },
       status: 'unchanged',
     });
   });
