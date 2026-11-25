@@ -20,6 +20,7 @@ export * from './auth';
 export * from './brief';
 export * from './channel';
 export * from './channelAsk';
+export * from './channelMember';
 export * from './channelMessage';
 export * from './channelMessageCard';
 export * from './chunk';
