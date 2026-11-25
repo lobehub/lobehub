@@ -12,6 +12,7 @@ const {
   openChannelReply,
   resolveChannelRoutedDevice,
   routedPresence,
+  wakePickedDevices,
 } = vi.hoisted(() => ({
   createChannelWorktree: vi.fn(),
   executions: {
@@ -35,6 +36,7 @@ const {
   openChannelReply: vi.fn(),
   resolveChannelRoutedDevice: vi.fn(),
   routedPresence: { isOnline: vi.fn(), prefetch: vi.fn() },
+  wakePickedDevices: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -60,6 +62,7 @@ vi.mock('./ChannelRoutingService', () => ({
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+vi.mock('./pickedDeviceWake', () => ({ wakePickedDevices }));
 vi.mock('./replyOpening', () => ({ openChannelReply }));
 vi.mock('./routedDevice', () => ({
   createRoutedDevicePresence: () => routedPresence,
@@ -170,6 +173,37 @@ describe('Channel concurrent startup', () => {
         executionTarget: 'device',
       });
     }
+  });
+
+  // A reply waiting for a sleeping cloud device picked in the Channel would wait forever.
+  it('wakes the offline devices picked in the Channel that claims wait for', async () => {
+    getScopedOnlineDevices.mockResolvedValue([{ deviceId: 'mac', online: true }]);
+    executions.claim.mockImplementation(async (_channelId, id: string, options) => {
+      options.onPickedDeviceOffline?.({ deviceId: 'cloud-1', ownerId: 'owner' });
+      return null;
+    });
+
+    await coordinator(2, false, [
+      { config: { deviceId: 'cloud-1', deviceOwnerId: 'owner' }, id: 'job-0' },
+    ]).advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(wakePickedDevices).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      channelId: 'channel',
+      devices: [
+        { deviceId: 'cloud-1', ownerId: 'owner' },
+        { deviceId: 'cloud-1', ownerId: 'owner' },
+      ],
+      onlineDeviceIds: ['mac'],
+      workspaceId: null,
+    });
+  });
+
+  it('wakes nothing when no claim waits for a picked device', async () => {
+    await coordinator(1).advance('channel');
+
+    expect(execAgent).toHaveBeenCalled();
+    expect(wakePickedDevices).not.toHaveBeenCalled();
   });
 
   it('notifies the claimed reply state before runtime startup resolves', async () => {
