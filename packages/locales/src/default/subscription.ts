@@ -594,7 +594,8 @@ export default {
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
   'plans.compare.monthlySpend': 'Monthly limit',
-  'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
+  'plans.compare.monthlySpend.desc':
+    'Paid plans reset at the start of each billing month; Free credits are granted once',
   'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
   'plans.compare.monthlySpend.runsOnce': 'About {{runs}} agent tasks in total (one-time)',
   'plans.compare.rolling5hSpend': '5-hour limit',

@@ -611,7 +611,7 @@
   "plans.compare.earlyAccess": "新功能抢先体验",
   "plans.compare.included": "包含",
   "plans.compare.monthlySpend": "每月额度",
-  "plans.compare.monthlySpend.desc": "每个计费月开始时重置",
+  "plans.compare.monthlySpend.desc": "付费套餐每个计费月开始时重置；免费额度为一次性发放",
   "plans.compare.monthlySpend.runs": "约 {{runs}} 次智能体任务",
   "plans.compare.monthlySpend.runsOnce": "共约 {{runs}} 次智能体任务（一次性）",
   "plans.compare.noLimit": "无限制",
