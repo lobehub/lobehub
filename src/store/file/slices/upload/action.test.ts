@@ -67,6 +67,16 @@ beforeAll(() => {
   });
 });
 
+const mockSigned = {
+  metadata: {
+    date: '1',
+    dirname: 'files/1',
+    filename: 'signed.png',
+    pathname: 'files/1/signed.png',
+  },
+  url: Promise.resolve('https://example.com/signed'),
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(handleFileUploadError).mockReturnValue(false);
@@ -74,6 +84,8 @@ beforeEach(() => {
   vi.mocked(getAudioDuration).mockResolvedValue(undefined);
   vi.mocked(getImageThumbhash).mockResolvedValue(undefined);
   vi.spyOn(uploadService, 'releaseUpload').mockResolvedValue();
+  vi.spyOn(uploadService, 'signUpload').mockReturnValue(mockSigned);
+  vi.spyOn(uploadService, 'releaseSignedUpload').mockResolvedValue();
 });
 
 afterEach(() => {
@@ -257,6 +269,8 @@ describe('FileUploadAction', () => {
 
         expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value', undefined);
         expect(uploadToS3Spy).not.toHaveBeenCalled();
+        // Signed while the hash was checked; the duplicate gives the reservation back.
+        expect(uploadService.releaseSignedUpload).toHaveBeenCalledWith(mockSigned);
         expect(onStatusUpdate).toHaveBeenCalledWith({
           id: mockFile.name,
           type: 'updateFile',
@@ -375,8 +389,11 @@ describe('FileUploadAction', () => {
         expect(uploadService.uploadFileToS3).toHaveBeenCalledWith(mockFile, {
           onNotSupported: expect.any(Function),
           onProgress: expect.any(Function),
+          signed: mockSigned,
           skipCheckFileType: undefined,
         });
+        // The upload owns the signed key now, so it is not released.
+        expect(uploadService.releaseSignedUpload).not.toHaveBeenCalled();
         expect(fileService.createFile).toHaveBeenCalledWith(
           {
             fileType: mockFile.type,

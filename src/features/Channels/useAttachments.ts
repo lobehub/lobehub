@@ -85,7 +85,7 @@ export function useAttachments(draftKey: string, workspaceId?: string | null) {
     patch(item.id, { abortController, error: undefined, errorCode: undefined, status: 'pending' });
     try {
       const file = COMPRESSIBLE_IMAGE_TYPES.has(item.file.type)
-        ? await compressImageFile(item.file)
+        ? await compressImageFile(item.file, { webp: true })
         : item.file;
       if (abortController.signal.aborted) return;
       const result = await upload({

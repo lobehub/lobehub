@@ -5,7 +5,13 @@ import { fileEnv } from '@/envs/file';
 import { lambdaClient, scopedLambdaClient } from '@/libs/trpc/client';
 
 import { hashFile } from '../hashFile';
-import { UPLOAD_NETWORK_ERROR, UploadRequestError, uploadService } from '../upload';
+import {
+  UPLOAD_NETWORK_ERROR,
+  UPLOAD_STALL_TIMEOUT,
+  UPLOAD_STALLED_ERROR,
+  UploadRequestError,
+  uploadService,
+} from '../upload';
 
 const { mockHashHex, mockHashUpdate } = vi.hoisted(() => ({
   mockHashHex: vi.fn(() => 'streamed-hash'),
@@ -377,6 +383,34 @@ describe('UploadService', () => {
       });
     });
 
+    it('should fail a PUT that stops sending bytes, but not one that keeps moving', async () => {
+      vi.useFakeTimers();
+      const xhr = new XMLHttpRequest();
+      Object.assign(xhr, { abort: vi.fn() });
+      let progress: ((event: Partial<ProgressEvent>) => void) | undefined;
+      vi.spyOn(xhr.upload, 'addEventListener').mockImplementation((event, handler) => {
+        // @ts-expect-error - mock implementation
+        if (event === 'progress') progress = handler;
+      });
+      vi.spyOn(xhr, 'addEventListener').mockImplementation(() => {});
+
+      try {
+        const result = uploadService.uploadToServerS3(mockFile, {});
+        const settled = expect(result).rejects.toThrow(UPLOAD_STALLED_ERROR);
+        await vi.advanceTimersByTimeAsync(UPLOAD_STALL_TIMEOUT - 1000);
+        progress?.({ lengthComputable: true, loaded: 2, total: 4 });
+        await vi.advanceTimersByTimeAsync(UPLOAD_STALL_TIMEOUT - 1000);
+        expect(xhr.abort).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1000);
+        await settled;
+        expect(xhr.abort).toHaveBeenCalled();
+        expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should handle upload error', async () => {
       const xhr = new XMLHttpRequest();
 
@@ -625,6 +659,55 @@ describe('UploadService', () => {
         uploadId: 'upload-1',
       });
       expect(lambdaClient.upload.completeS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signUpload', () => {
+    it('should PUT to the URL signed ahead, under the signed key, without signing again', async () => {
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
+      const xhrMock = {
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'load') handler();
+        }),
+        getResponseHeader: vi.fn(),
+        open: vi.fn(),
+        send: vi.fn(),
+        setRequestHeader: vi.fn(),
+        status: 200,
+        upload: { addEventListener: vi.fn() },
+      };
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as unknown as typeof XMLHttpRequest;
+
+      const signed = uploadService.signUpload(mockFile)!;
+      const result = await uploadService.uploadToServerS3(mockFile, { signed });
+
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).toHaveBeenCalledOnce();
+      expect(xhrMock.open).toHaveBeenCalledWith('PUT', mockPreSignUrl);
+      expect(result.path).toBe(signed.metadata.pathname);
+    });
+
+    it('should leave multipart-sized files unsigned', () => {
+      const largeFile = new File(['x'], 'large.bin');
+      Object.defineProperty(largeFile, 'size', { value: 65 * 1024 * 1024 });
+
+      expect(uploadService.signUpload(largeFile)).toBeUndefined();
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should release a skipped signed upload, but not one that never signed', async () => {
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValueOnce(
+        mockPreSignUrl,
+      );
+      await uploadService.releaseSignedUpload(uploadService.signUpload(mockFile)!);
+      expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalledOnce();
+
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockRejectedValueOnce(
+        new Error('quota exceeded'),
+      );
+      await uploadService.releaseSignedUpload(uploadService.signUpload(mockFile)!);
+      expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalledOnce();
     });
   });
 

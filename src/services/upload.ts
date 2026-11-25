@@ -11,6 +11,13 @@ import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 import { hashFile } from './hashFile';
 
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
+export const UPLOAD_STALLED_ERROR = 'UploadStalled';
+
+/**
+ * A PUT that sends no bytes for this long is dropped. A stalled connection fires neither `error`
+ * nor `load`, so without this the file spins forever instead of offering a retry.
+ */
+export const UPLOAD_STALL_TIMEOUT = 30_000;
 
 const MAX_MULTIPART_PARTS = 10_000;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
@@ -71,7 +78,9 @@ const readStorageError = (xhr: XMLHttpRequest): UploadRequestError => {
 };
 
 const isRetryableUploadError = (error: unknown) =>
-  error === UPLOAD_NETWORK_ERROR || (error instanceof UploadRequestError && error.retryable);
+  error === UPLOAD_NETWORK_ERROR ||
+  (error instanceof Error && error.message === UPLOAD_STALLED_ERROR) ||
+  (error instanceof UploadRequestError && error.retryable);
 
 const waitBeforeRetry = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -122,6 +131,13 @@ const generateFilePathMetadata = (
   };
 };
 
+/** A single-PUT upload signed ahead of time; see {@link UploadService.signUpload}. */
+export interface SignedUpload {
+  metadata: ReturnType<typeof generateFilePathMetadata>;
+  url: Promise<string>;
+  workspaceId?: string | null;
+}
+
 interface UploadFileToS3Options {
   abortController?: AbortController;
   directory?: string;
@@ -129,6 +145,8 @@ interface UploadFileToS3Options {
   onNotSupported?: () => void;
   onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
   pathname?: string;
+  /** Signed by {@link UploadService.signUpload}; replaces `directory` and `pathname`. */
+  signed?: SignedUpload;
   skipCheckFileType?: boolean;
   /** Pins the scope the upload is reserved in; `undefined` follows the active workspace. */
   workspaceId?: string | null;
@@ -146,11 +164,46 @@ class UploadService {
   };
 
   /**
+   * Signs a single-PUT upload ahead of time, so the signing round trip overlaps whatever the
+   * caller awaits meanwhile (hashing, the duplicate check). Signing reserves the key against the
+   * user's quota: pass it to {@link uploadFileToS3}, or {@link releaseSignedUpload} it when the
+   * upload is skipped. Files too large for a single PUT get nothing.
+   */
+  signUpload = (file: File, workspaceId?: string | null): SignedUpload | undefined => {
+    if (file.size > MAX_UPLOAD_FILE_SIZE || file.size >= MULTIPART_UPLOAD_THRESHOLD) return;
+    const metadata = generateFilePathMetadata(file.name);
+    const url = scopedLambdaClient(workspaceId).upload.createS3PreSignedUrl.mutate({
+      pathname: metadata.pathname,
+      size: file.size,
+    });
+    // Surfaced where the upload awaits it; a skipped upload must not report it as unhandled.
+    url.catch(() => {});
+    return { metadata, url, workspaceId };
+  };
+
+  releaseSignedUpload = async ({ metadata, url, workspaceId }: SignedUpload) => {
+    try {
+      await url;
+    } catch {
+      // Never signed, so nothing was reserved.
+      return;
+    }
+    await this.releaseUpload(metadata.pathname, workspaceId);
+  };
+
+  /**
    * uniform upload method for both server and client
    */
   uploadFileToS3 = async (
     file: File,
-    { onProgress, directory, pathname, abortController, workspaceId }: UploadFileToS3Options,
+    {
+      onProgress,
+      directory,
+      pathname,
+      abortController,
+      signed,
+      workspaceId,
+    }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
     if (file.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
 
@@ -163,6 +216,7 @@ class UploadService {
       directory,
       onProgress,
       pathname,
+      signed,
       workspaceId,
     });
     return { data, success: true };
@@ -231,12 +285,14 @@ class UploadService {
       directory,
       pathname,
       abortController,
+      signed,
       workspaceId,
     }: {
       abortController?: AbortController;
       directory?: string;
       onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
       pathname?: string;
+      signed?: SignedUpload;
       workspaceId?: string | null;
     },
   ): Promise<FileMetadata> => {
@@ -246,7 +302,7 @@ class UploadService {
       dirname,
       filename,
       pathname: uploadPathname,
-    } = generateFilePathMetadata(file.name, { directory, pathname });
+    } = signed?.metadata ?? generateFilePathMetadata(file.name, { directory, pathname });
     const result = { date, dirname, filename, path: uploadPathname };
     const startTime = Date.now();
 
@@ -262,10 +318,11 @@ class UploadService {
           },
         );
       } else {
-        const preSignUrl = await client.upload.createS3PreSignedUrl.mutate({
-          pathname: uploadPathname,
-          size: file.size,
-        });
+        const preSignUrl = await (signed?.url ??
+          client.upload.createS3PreSignedUrl.mutate({
+            pathname: uploadPathname,
+            size: file.size,
+          }));
 
         await this.putBlob(
           preSignUrl,
@@ -363,10 +420,21 @@ class UploadService {
     const xhr = new XMLHttpRequest();
     const abort = () => xhr.abort();
     signal?.addEventListener('abort', abort, { once: true });
+    let stall: ReturnType<typeof setTimeout> | undefined;
 
     try {
       return await new Promise<string | undefined>((resolve, reject) => {
+        // Restarted on every progress tick: a slow upload that keeps moving is never cut off.
+        const watch = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => {
+            // Rejected first: aborting fires the `abort` listener, which would report a cancel.
+            reject(new Error(UPLOAD_STALLED_ERROR));
+            xhr.abort();
+          }, UPLOAD_STALL_TIMEOUT);
+        };
         xhr.upload.addEventListener('progress', (event) => {
+          watch();
           if (event.lengthComputable) onProgress(event.loaded);
         });
         xhr.addEventListener('load', () => {
@@ -382,8 +450,10 @@ class UploadService {
         xhr.open('PUT', url);
         if (contentType) xhr.setRequestHeader('Content-Type', contentType);
         xhr.send(blob);
+        watch();
       });
     } finally {
+      clearTimeout(stall);
       signal?.removeEventListener('abort', abort);
     }
   };
