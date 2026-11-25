@@ -90,54 +90,6 @@ export const pickDirectoryForPath = <T extends BoundDirectoryLike>(
   return best ? { directory: best.directory, matchedParent: true } : undefined;
 };
 
-export type DirectoryResolution<T extends BoundDirectoryLike> =
-  | { directory: T; matchedParent: boolean; status: 'matched' }
-  | { deviceId: string; status: 'unbound' }
-  | { status: 'unavailable' };
-
-/**
- * Resolve a launch to a bound directory, tolerating a cold start.
- *
- * A launch replays as soon as the navigation bridge mounts, which can beat the
- * local device identity and the first authenticated request. Only those are
- * waited for: once the device is known and the list has answered, that answer
- * decides, so an unbound directory is reported at once instead of after the
- * deadline. The deadline only bounds a device or server that never answers.
- */
-export const resolveDirectoryMatch = async <T extends BoundDirectoryLike>({
-  getDeviceId,
-  list,
-  pollMs = 500,
-  targetPath,
-  timeoutMs = 10_000,
-}: {
-  /** Polled until it answers: device identity arrives after the renderer boots. */
-  getDeviceId: () => string | undefined;
-  list: () => Promise<T[] | null | undefined>;
-  pollMs?: number;
-  targetPath: string;
-  timeoutMs?: number;
-}): Promise<DirectoryResolution<T>> => {
-  const deadline = Date.now() + timeoutMs;
-
-  for (;;) {
-    const deviceId = getDeviceId();
-
-    if (deviceId) {
-      try {
-        const directories = await list();
-        const match = pickDirectoryForPath(directories ?? [], targetPath, { deviceId });
-        return match ? { ...match, status: 'matched' } : { deviceId, status: 'unbound' };
-      } catch (error) {
-        console.warn('[openDirectory] Failed to list project directories', error);
-      }
-    }
-
-    if (Date.now() >= deadline) return { status: 'unavailable' };
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
-  }
-};
-
 /**
  * The conversation to reveal for a directory: the most recently updated one.
  * `listTopics` returns ascending `updatedAt`, but sorting here keeps the rule

@@ -5,6 +5,7 @@ import { openDirectoryInApp } from './openDirectory';
 const mocks = vi.hoisted(() => ({
   bind: vi.fn(),
   createProject: vi.fn(),
+  deviceId: 'device-local' as string | undefined,
   find: vi.fn(),
   inboxAgentId: 'agt_inbox' as string | undefined,
   list: vi.fn(),
@@ -15,6 +16,10 @@ vi.mock('@/services/project', () => ({ projectService: { find: mocks.find } }));
 
 vi.mock('@/services/projectWorkingDirectory', () => ({
   projectWorkingDirectoryService: { list: mocks.list, listTopics: mocks.listTopics },
+}));
+
+vi.mock('@/store/electron', () => ({
+  useElectronStore: { getState: () => ({ resolveGatewayDeviceId: async () => mocks.deviceId }) },
 }));
 
 vi.mock('@/store/project', () => ({
@@ -34,28 +39,22 @@ vi.mock('@/store/agent/selectors', () => ({
 const LOCAL = 'device-local';
 const TARGET = '/Users/me/code/ryugi-cloud';
 
-const launch = (overrides: Partial<Parameters<typeof openDirectoryInApp>[0]> = {}) => {
+const launch = (reuseExisting = true) => {
   const navigate = vi.fn();
-  const result = openDirectoryInApp({
-    getDeviceId: () => LOCAL,
+  return {
     navigate,
-    targetPath: TARGET,
-    ...overrides,
-  });
-  return { navigate, result };
+    result: openDirectoryInApp({ navigate, reuseExisting, targetPath: TARGET }),
+  };
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.deviceId = LOCAL;
   mocks.inboxAgentId = 'agt_inbox';
   mocks.list.mockResolvedValue({ data: [] });
   mocks.listTopics.mockResolvedValue({ data: [] });
-  mocks.createProject.mockResolvedValue({
-    coordinatorAgentId: 'agt_inbox',
-    id: 'prj_new',
-    name: 'ryugi-cloud',
-  });
-  mocks.bind.mockResolvedValue({ id: 'dir_new', skippedTopics: [] });
+  mocks.createProject.mockResolvedValue({ coordinatorAgentId: 'agt_inbox', id: 'prj_new' });
+  mocks.bind.mockResolvedValue({ id: 'dir_new' });
 });
 
 describe('openDirectoryInApp', () => {
@@ -80,41 +79,26 @@ describe('openDirectoryInApp', () => {
       });
     });
 
-    it('should open a draft in the new directory', async () => {
+    it('should open a draft in the new directory after one list call', async () => {
       const { navigate, result } = launch();
+      await result;
 
-      await expect(result).resolves.toMatchObject({ status: 'created-project' });
+      expect(mocks.list).toHaveBeenCalledTimes(1);
       expect(navigate).toHaveBeenCalledWith('/project/prj_new/topic?agent=agt_inbox&dir=dir_new');
     });
 
-    it('should not wait for a deadline once the list has answered', async () => {
-      vi.useFakeTimers();
-      try {
-        const { navigate, result } = launch();
-        await vi.advanceTimersByTimeAsync(0);
-        await result;
-        expect(navigate).toHaveBeenCalledTimes(1);
-        expect(mocks.list).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('should let the server create a main agent when LobeAI is not known yet', async () => {
+    it('should let the server pick the main agent when LobeAI is not loaded yet', async () => {
       mocks.inboxAgentId = undefined;
-
-      await launch().result;
-
-      expect(mocks.createProject).toHaveBeenCalledWith({ name: 'ryugi-cloud' });
-    });
-
-    it('should open the new project when binding the folder fails', async () => {
-      mocks.bind.mockRejectedValue(new Error('PRECONDITION_FAILED'));
+      mocks.createProject.mockResolvedValue({ coordinatorAgentId: 'agt_server', id: 'prj_new' });
 
       const { navigate, result } = launch();
+      await result;
 
-      await expect(result).resolves.toMatchObject({ status: 'created-project-unbound' });
-      expect(navigate).toHaveBeenCalledWith('/project/prj_new');
+      expect(mocks.createProject).toHaveBeenCalledWith({
+        coordinatorAgentId: undefined,
+        name: 'ryugi-cloud',
+      });
+      expect(navigate).toHaveBeenCalledWith('/project/prj_new/topic?agent=agt_server&dir=dir_new');
     });
   });
 
@@ -127,17 +111,20 @@ describe('openDirectoryInApp', () => {
     });
 
     const { navigate, result } = launch();
+    await result;
 
-    await expect(result).resolves.toMatchObject({ status: 'opened-topic' });
     expect(navigate).toHaveBeenCalledWith('/project/prj_a/topic/tpc_1');
     expect(mocks.createProject).not.toHaveBeenCalled();
   });
 
-  it('should fall back to the project list without a device identity', async () => {
-    const { navigate, result } = launch({ getDeviceId: () => undefined, timeoutMs: 5 });
+  it('should go to the project list without a device identity', async () => {
+    mocks.deviceId = undefined;
 
-    await expect(result).resolves.toMatchObject({ status: 'directory-unavailable' });
+    const { navigate, result } = launch();
+    await result;
+
     expect(navigate).toHaveBeenCalledWith('/projects');
+    expect(mocks.list).not.toHaveBeenCalled();
     expect(mocks.createProject).not.toHaveBeenCalled();
   });
 });
