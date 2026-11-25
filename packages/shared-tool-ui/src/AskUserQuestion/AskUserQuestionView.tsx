@@ -15,6 +15,7 @@ import type { AskUserFormApi } from './useAskUserForm';
 import { useAskUserHotkeys } from './useAskUserHotkeys';
 
 const styles = stylex.create({
+  dimmed: { opacity: 0.55, transition: 'opacity 0.12s ease' },
   note: {
     gap: '6px',
     paddingBlockStart: '12px',
@@ -178,19 +179,21 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       )}
 
       {activeQuestion && (
-        <QuestionPanel
-          answer={picks[activeQuestion.question]}
-          customPlaceholder={labels.customPlaceholder}
-          customValue={custom[activeQuestion.question] ?? ''}
-          disabled={expired || submitting}
-          highlightedIndex={highlightedIndex}
-          question={activeQuestion}
-          recommendedTag={labels.recommendedTag}
-          onCustomChange={handleCustomChange}
-          onCustomNavigate={handleCustomNavigate}
-          onPressEnter={isSubmitDisabled ? undefined : handlePrimary}
-          onToggle={handleToggle}
-        />
+        <div {...stylex.props(primary.action.kind === 'sendNote' && styles.dimmed)}>
+          <QuestionPanel
+            answer={picks[activeQuestion.question]}
+            customPlaceholder={labels.customPlaceholder}
+            customValue={custom[activeQuestion.question] ?? ''}
+            disabled={expired || submitting}
+            highlightedIndex={highlightedIndex}
+            question={activeQuestion}
+            recommendedTag={labels.recommendedTag}
+            onCustomChange={handleCustomChange}
+            onCustomNavigate={handleCustomNavigate}
+            onPressEnter={isSubmitDisabled ? undefined : handlePrimary}
+            onToggle={handleToggle}
+          />
+        </div>
       )}
 
       {supplementActive && (
