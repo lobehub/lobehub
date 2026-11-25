@@ -375,6 +375,8 @@
   "pageEditor.editMode.lockedBySelfDescription": "Saves will resume after the other session closes or its lock expires (~30s).",
   "pageEditor.editMode.lockedBySomeone": "Someone else is editing this document",
   "pageEditor.editMode.lockedDescription": "The page is read-only while they edit. Your changes won’t be saved until they’re done.",
+  "pageEditor.editMode.lockedInRoomDescription": "They’re editing with Live Page Collaboration, a Labs feature. Turn it on to edit together in real time.",
+  "pageEditor.editMode.turnOnPageCollab": "Turn on",
   "pageEditor.editedAt": "Last edited on {{time}}",
   "pageEditor.editedAtBy": "Last edited on {{time}} by {{name}}",
   "pageEditor.editedBy": "Last edited by {{name}}",

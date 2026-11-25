@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +8,7 @@ import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
+import { useJoinRoomOffer } from './collab/useJoinRoomOffer';
 import { usePageEditorStore } from './store';
 import { usePageLockedByOther } from './usePageLockedByOther';
 import { usePageLockedBySelf } from './usePageLockedBySelf';
@@ -23,6 +24,7 @@ const LockedAlert = memo(() => {
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
+  const joinRoom = useJoinRoomOffer();
   const inCollab = usePageEditorStore((s) => !!s.collab);
   const isLockedByOther = usePageLockedByOther();
   const isLockedBySelf = usePageLockedBySelf();
@@ -54,6 +56,23 @@ const LockedAlert = memo(() => {
   const title = holder?.fullName
     ? t('pageEditor.editMode.lockedByOther', { name: holder.fullName })
     : t('pageEditor.editMode.lockedBySomeone');
+
+  if (joinRoom) {
+    return (
+      <Alert
+        showIcon
+        description={t('pageEditor.editMode.lockedInRoomDescription')}
+        style={{ marginBlock: 8 }}
+        title={title}
+        type="info"
+        action={
+          <Button size={'small'} onClick={joinRoom}>
+            {t('pageEditor.editMode.turnOnPageCollab')}
+          </Button>
+        }
+      />
+    );
+  }
 
   return (
     <Alert

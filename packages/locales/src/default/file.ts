@@ -433,10 +433,13 @@ export default {
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.lockedInRoomDescription':
+    'They’re editing with Live Page Collaboration, a Labs feature. Turn it on to edit together in real time.',
   'pageEditor.editMode.lockLostDescription':
     'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
   'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',
   'pageEditor.editMode.lockUnstable': 'Reconnecting edit lock…',
+  'pageEditor.editMode.turnOnPageCollab': 'Turn on',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',
