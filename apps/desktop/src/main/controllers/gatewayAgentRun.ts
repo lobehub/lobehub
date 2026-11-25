@@ -8,6 +8,7 @@ import {
 import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
 import { buildClaudeCodeEntrypointEnv } from '@lobechat/heterogeneous-agents/protocol';
+import { app as electronApp } from 'electron';
 
 import type HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 
@@ -44,7 +45,11 @@ export interface GatewayAgentRunDeps {
 }
 
 const resolveInstalledCredential = (agentType: string) =>
-  resolveAgentCredentialSpawnEnv(agentType, { rootDir: defaultAgentCredentialRootDir() });
+  resolveAgentCredentialSpawnEnv(agentType, {
+    rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
+  });
+
+const NO_CREDENTIAL: AgentCredentialSpawnEnv = { kind: 'none' };
 
 export interface GatewayAgentRunAck {
   reason?: string;
@@ -93,9 +98,11 @@ export const executeGatewayAgentRun = async (
     // Same precedence as `lh connect`: an installed credential wins over the
     // desktop's own logins and account routing; an expired or unreadable one
     // rejects the run instead of falling back to another login.
-    const credential = await (deps.resolveAgentCredential ?? resolveInstalledCredential)(
-      request.agentType,
-    );
+    // Only agents that accept an installed credential look one up.
+    const credential =
+      request.agentType === 'claude-code' || request.agentType === 'codex'
+        ? await (deps.resolveAgentCredential ?? resolveInstalledCredential)(request.agentType)
+        : NO_CREDENTIAL;
     if (credential.kind === 'reject') return { reason: credential.reason, status: 'rejected' };
 
     const account =

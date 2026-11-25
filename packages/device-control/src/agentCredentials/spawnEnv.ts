@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import { seedClaudeProfile, seedCodexProfile } from './profile';
 import {
   type AgentCredentialStoreOptions,
@@ -54,6 +57,9 @@ export const resolveAgentCredentialSpawnEnv = async (
   options: ResolveAgentCredentialSpawnEnvOptions,
 ): Promise<AgentCredentialSpawnEnv> => {
   if (agentType !== 'claude-code' && agentType !== 'codex') return NONE;
+  // The common case is no credential at all: answer it without async I/O, so
+  // a spawn on a device that never had one is not delayed by a file read.
+  if (!existsSync(path.join(options.rootDir, agentType))) return NONE;
 
   const credential = await readInstalledAgentCredential(agentType, options).catch(
     () => ({ status: 'invalid' }) as const,

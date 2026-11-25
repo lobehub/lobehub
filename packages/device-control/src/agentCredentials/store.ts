@@ -29,9 +29,12 @@ export interface AgentCredentialStoreOptions {
   rootDir: string;
 }
 
-/** `~/.lobehub/agent-credentials`, shared by the desktop app and `lh connect`. */
-export const defaultAgentCredentialRootDir = () =>
-  path.join(os.homedir(), '.lobehub', 'agent-credentials');
+/**
+ * `~/.lobehub/agent-credentials`, shared by the desktop app and `lh connect`.
+ * The desktop passes Electron's home path; the CLI uses the OS one.
+ */
+export const defaultAgentCredentialRootDir = (homeDir: string = os.homedir()) =>
+  path.join(homeDir, '.lobehub', 'agent-credentials');
 
 /**
  * Where one provider's credential and managed profile live. Only

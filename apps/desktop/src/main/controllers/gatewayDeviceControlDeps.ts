@@ -31,7 +31,9 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
 
   // Provider credentials for heterogeneous agent runs. The store is shared with
   // `lh connect` on this machine, and `executeGatewayAgentRun` applies it.
-  const credentialStore = { rootDir: defaultAgentCredentialRootDir() };
+  const credentialStore = () => ({
+    rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
+  });
 
   return {
     approveProjectRoot: async (root) => {
@@ -44,9 +46,9 @@ export const createDesktopDeviceControlDeps = (app: App): DeviceControlDeps => {
     // Workspace share (server-driven enroll/unenroll RPCs): the service owns
     // the gateway connections, so both handlers route straight to it.
     enrollWorkspace: (params) => service().enrollWorkspace(params),
-    checkAgentCredential: (params) => checkAgentCredential(params, credentialStore),
-    installAgentCredential: (params) => installAgentCredential(params, credentialStore),
-    removeAgentCredential: (params) => removeAgentCredential(params, credentialStore),
+    checkAgentCredential: (params) => checkAgentCredential(params, credentialStore()),
+    installAgentCredential: (params) => installAgentCredential(params, credentialStore()),
+    removeAgentCredential: (params) => removeAgentCredential(params, credentialStore()),
     getLocalFilePreview: (params) => localFileCtr().getLocalFilePreview(params),
     readExternalAssetForPublish: (params) => localFileCtr().readExternalAssetForPublish(params),
     copyAssetForPublish: (params) => localFileCtr().copyAssetForPublish(params),
