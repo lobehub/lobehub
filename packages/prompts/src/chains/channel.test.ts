@@ -59,10 +59,10 @@ describe('Channel request prompt', () => {
       '<channel_quote from="Coder" type="agent" boundary="b0">',
       'The plan',
       '</channel_quote boundary="b0">',
-      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      '<channel_request from="Mia" type="user" id="first" to="Codex" boundary="b0">',
       'Fix the list',
       '</channel_request boundary="b0">',
-      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      '<channel_request from="Mia" type="user" id="current" to="Codex" boundary="b0">',
       'Only the queued items',
       '</channel_request boundary="b0">',
       '<channel_merged boundary="b0">',
@@ -105,6 +105,8 @@ describe('Channel request prompt', () => {
       /<\/channel_request boundary="b0">\n<channel_wake boundary="b0">\n[\S\s]+\n<\/channel_wake boundary="b0">$/,
     );
     expect(prompt).toContain('`NO_REPLY`');
+    // Silence can still acknowledge: thanks or agreement get a reaction instead of nothing.
+    expect(prompt).toContain('react to it with one fitting emoji');
     expect(prompt).toContain('80% sure the message is meant for you');
     // Channel prompts have no self-improvement section to point at.
     expect(prompt).not.toContain('<self_improvement>');
@@ -166,7 +168,7 @@ describe('Channel request prompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      '<channel_request from="Mia" type="user" id="current" to="Codex" boundary="b0">',
     );
     expect(prompt).toContain('<channel_resume boundary="b0">');
     expect(prompt).toContain('(Coder stopped making progress)');
@@ -193,7 +195,7 @@ describe('Channel request prompt', () => {
     );
   });
 
-  it('renders the unseen context and the request as attributed blocks without ids', () => {
+  it('renders the unseen context without ids and the request with the id to react to', () => {
     const prompt = buildChannelPrompt(
       manifest,
       [message('other', 'NOT_THE_REQUEST', caller), message('current', 'Make it three?', caller)],
@@ -204,7 +206,7 @@ describe('Channel request prompt', () => {
         '<channel_message from="Coder" type="agent" boundary="b0">',
         'Two o’clock?',
         '</channel_message boundary="b0">',
-        '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+        '<channel_request from="Mia" type="user" id="current" to="Codex" boundary="b0">',
         'Make it three?',
         '</channel_request boundary="b0">',
       ].join('\n'),
@@ -216,7 +218,7 @@ describe('Channel request prompt', () => {
       via: { agentId: 'agent-relayer', name: 'Project Agent' },
     });
     expect(buildChannelPrompt(manifest, [relayed], { boundary: 'b0' })).toContain(
-      '<channel_request from="Mia" type="user" via="Project Agent" to="Codex" boundary="b0">',
+      '<channel_request from="Mia" type="user" via="Project Agent" id="current" to="Codex" boundary="b0">',
     );
     expect(
       projectChannelHistory({
@@ -233,7 +235,7 @@ describe('Channel request prompt', () => {
       via: { agentId: 'agent-answerer', name: 'Answerer' },
     });
     expect(buildChannelPrompt(manifest, [receipt], { boundary: 'b0' })).toContain(
-      '<channel_request from="Mia" type="user" via="Answerer" reply_from="#Platform" to="Codex" boundary="b0">',
+      '<channel_request from="Mia" type="user" via="Answerer" reply_from="#Platform" id="current" to="Codex" boundary="b0">',
     );
     expect(CHANNEL_INSTRUCTIONS).toContain('do not relay it again');
   });
