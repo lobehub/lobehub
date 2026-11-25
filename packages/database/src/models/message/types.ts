@@ -84,6 +84,8 @@ export interface QueryMessagesOptions {
    * Topic ID for MessageGroup aggregation queries
    */
   topicId?: string;
+  /** See `QueryMessageParams.viewModelPluginState`. */
+  viewModelPluginState?: boolean;
   /**
    * Custom where condition for message filtering
    */

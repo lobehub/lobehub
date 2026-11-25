@@ -110,6 +110,7 @@ export class MessageConversationQueries extends MessageScope {
       topicId,
       groupId,
       threadId,
+      viewModelPluginState,
     }: QueryMessageParams = {},
     options: {
       /**
@@ -212,6 +213,7 @@ export class MessageConversationQueries extends MessageScope {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: and(threadScopeCondition, threadCondition),
       });
@@ -244,6 +246,7 @@ export class MessageConversationQueries extends MessageScope {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: whereCondition,
       });
@@ -280,6 +283,7 @@ export class MessageConversationQueries extends MessageScope {
       skipWorks,
       timing,
       topicId: topicId ?? undefined,
+      viewModelPluginState,
       where: whereCondition,
       workAccessScope: options.workAccessScope,
     });

@@ -62,6 +62,16 @@ export interface QueryMessageParams {
   skipWorks?: boolean;
   threadId?: string | null;
   topicId?: string | null;
+  /**
+   * Select each tool row's `pluginState` already reduced, in SQL, by the keys
+   * the UI view-model projection (`@lobechat/tool-view-model`) drops: command
+   * output, document text, file bodies, grep matches, crawled page bodies.
+   * Projecting the result gives exactly what projecting a full read gives, and
+   * the model context never reads those keys. Only for readers whose UI
+   * consumers all project, such as the agent runtime's protocol-2 step reads;
+   * a client that renders unprojected rows would lose them.
+   */
+  viewModelPluginState?: boolean;
 }
 
 /**

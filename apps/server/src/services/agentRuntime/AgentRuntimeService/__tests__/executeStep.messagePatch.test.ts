@@ -261,6 +261,7 @@ describe('AgentRuntimeService.executeStep - message patches across inline steps'
     expect(queryUiMessages).toHaveBeenCalledWith(patch.state, {
       skipCompressedMembers: true,
       skipWorks: true,
+      viewModelPluginState: true,
     });
     const patchAt = indexOf('message_patch', 1);
     expect(patchAt).toBeLessThan(indexOf('step_start', 2));
@@ -296,6 +297,7 @@ describe('AgentRuntimeService.executeStep - message patches across inline steps'
     expect(queryUiMessages).toHaveBeenCalledWith(expect.objectContaining({ stepCount: 2 }), {
       skipCompressedMembers: true,
       skipWorks: true,
+      viewModelPluginState: true,
     });
     const patchAt = indexOf('message_patch', 1);
     expect(events()[patchAt].data).toMatchObject({
@@ -494,6 +496,21 @@ describe('AgentRuntimeService.executeStep - compression groups in step reads', (
 
     expect(query.mock.calls[0][0]).toMatchObject({ skipCompressedMembers: true });
     expect(query.mock.calls[1][0]).toMatchObject({ skipCompressedMembers: false });
+  });
+
+  // The patch is diffed after projection, so a projected-away payload never
+  // has to leave the database; a protocol-1 snapshot is rendered unprojected.
+  it('reads projected-away tool payloads only for a run that receives message patches', async () => {
+    const { coordinator, query, service } = buildService();
+    coordinator.loadAgentState
+      .mockResolvedValueOnce(runState())
+      .mockResolvedValueOnce(runState({ host: {} }));
+
+    await service.executeStep(inlineStep(1));
+    await service.executeStep(inlineStep(1));
+
+    expect(query.mock.calls[0][0]).toMatchObject({ viewModelPluginState: true });
+    expect(query.mock.calls[1][0]).toMatchObject({ viewModelPluginState: false });
   });
 
   it('ships a group the step changed with its members', async () => {
