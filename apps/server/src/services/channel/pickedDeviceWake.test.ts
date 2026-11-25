@@ -107,17 +107,24 @@ describe('wakePickedDevices', () => {
     expect(afterUnscoped).toHaveBeenCalledTimes(2);
   });
 
-  it('never fails the Channel advance when a lookup throws', async () => {
-    findWakeableManagedDevices.mockRejectedValue(new Error('db down'));
+  it('never fails the Channel advance, nor the other wakes, when a lookup throws', async () => {
+    const other = { deviceId: 'cloud-2', scope: 'workspace', workspaceId: 'ws' } as const;
+    findWakeableManagedDevices
+      .mockRejectedValueOnce(new Error('db down'))
+      .mockResolvedValueOnce([other]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
       wakePickedDevices(db, {
         channelId: 'channel-4',
-        devices: [{ deviceId: 'cloud-1', ownerId: 'owner' }],
+        devices: [
+          { deviceId: 'cloud-1', ownerId: 'owner' },
+          { deviceId: 'cloud-2', ownerId: 'owner' },
+        ],
         onlineDeviceIds: [],
         workspaceId: 'ws',
       }),
     ).resolves.toBeUndefined();
+    expect(wakeManagedDevice).toHaveBeenCalledExactlyOnceWith('owner', other);
   });
 });

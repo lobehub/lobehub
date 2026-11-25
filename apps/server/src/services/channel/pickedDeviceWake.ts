@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import pMap from 'p-map';
 
 import {
   findWakeableManagedDevices,
@@ -46,29 +47,33 @@ export const wakePickedDevices = async (
   for (const { deviceId, ownerId } of devices)
     if (ownerId) unique.set(`${ownerId}\0${deviceId}`, { deviceId, ownerId });
 
-  const results = await Promise.allSettled(
-    [...unique.values()].map(async ({ deviceId, ownerId }) => {
-      const [target] = await findWakeableManagedDevices(
-        { db, userId: ownerId, workspaceId: workspaceId ?? undefined },
-        [deviceId],
-        onlineDeviceIds,
-      );
-      if (!target) return;
-      if (!(await wakeManagedDevice(ownerId, target))) return;
+  await pMap(
+    unique.values(),
+    async ({ deviceId, ownerId }) => {
+      try {
+        const [target] = await findWakeableManagedDevices(
+          { db, userId: ownerId, workspaceId: workspaceId ?? undefined },
+          [deviceId],
+          onlineDeviceIds,
+        );
+        if (!target) return;
+        if (!(await wakeManagedDevice(ownerId, target))) return;
 
-      const key = `${channelId}\0${ownerId}\0${deviceId}`;
-      if (waiting.has(key)) return;
-      waiting.add(key);
-      afterUnscoped(async () => {
-        try {
-          if (await waitForManagedDeviceOnline(ownerId, target)) await wakeChannel(channelId);
-        } finally {
-          waiting.delete(key);
-        }
-      });
-    }),
+        const key = `${channelId}\0${ownerId}\0${deviceId}`;
+        if (waiting.has(key)) return;
+        waiting.add(key);
+        afterUnscoped(async () => {
+          try {
+            if (await waitForManagedDeviceOnline(ownerId, target)) await wakeChannel(channelId);
+          } finally {
+            waiting.delete(key);
+          }
+        });
+      } catch (error) {
+        // One device failing to wake must not fail the Channel advance or the other wakes.
+        console.error('[channel:wakePickedDevices]', channelId, deviceId, error);
+      }
+    },
+    { concurrency: 3 },
   );
-  for (const result of results)
-    if (result.status === 'rejected')
-      console.error('[channel:wakePickedDevices]', channelId, result.reason);
 };
