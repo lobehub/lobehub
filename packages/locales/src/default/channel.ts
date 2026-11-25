@@ -158,6 +158,8 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  'collapseThreads': 'Collapse threads',
+  'expandThreads': 'Expand threads',
   /** Heads the Channel's own actions in a menu that also holds a thread's. */
   'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
