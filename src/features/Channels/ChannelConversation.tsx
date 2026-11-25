@@ -20,9 +20,11 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
+import { requireJoin } from './confirmJoin';
 import { hasReplyActivity, replyFailurePlacement } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { JoinNotice } from './JoinNotice';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
@@ -137,10 +139,13 @@ const Timeline = ({
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
-  const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
   // A shared Agent's owner reading a visitor's conversation: nothing to send, reply to or branch.
   const readOnly = !!detail?.readOnly;
+  // Reading a Channel without joining it: writing asks to join first, then carries on.
+  const joinFirst = requireJoin(detail, threadId);
+  const selectReply = joinFirst((message: ChannelPublicMessage) => reply.select(message));
+  const startThread = joinFirst(onStartThread);
   const direct = !!detail?.channel.agentId;
   // Join lines belong to the main conversation; a thread starts from its root message. A direct
   // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
@@ -295,7 +300,7 @@ const Timeline = ({
                           onJumpToMessage={jumpToMessage}
                           onOpenThread={onOpenThread}
                           onOpenTopic={onOpenTopic}
-                          onStartThread={channelArchived || readOnly ? undefined : onStartThread}
+                          onStartThread={channelArchived || readOnly ? undefined : startThread}
                           onReply={
                             channelArchived || readOnly || thread?.status === 'archived'
                               ? undefined
@@ -313,6 +318,8 @@ const Timeline = ({
               <ReadOnlyNotice />
             ) : channelArchived || thread?.status === 'archived' ? (
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
+            ) : !joined ? (
+              <JoinNotice channelId={channelId} maxWidth={maxWidth} threadId={threadId} />
             ) : (
               <Composer
                 channel={detail.channel}
@@ -330,9 +337,7 @@ const Timeline = ({
                 placeholder={
                   threadId
                     ? t('threadComposer')
-                    : t(direct ? 'directComposer' : joined ? 'composer' : 'composerToJoin', {
-                        name: detail.channel.title,
-                      })
+                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
                 }
                 onCancelReply={() => reply.clear()}
                 onQueue={(message) => {

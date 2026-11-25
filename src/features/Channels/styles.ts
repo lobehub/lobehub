@@ -284,6 +284,46 @@ export const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     backgroundColor: cssVar.colorFillQuaternary,
   },
+  /** Covers the composer, at its height, while the reader has not joined the Channel. */
+  joinNotice: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: densityTokens['--lobe-density-content-gap'],
+    minHeight: 50,
+    marginBlockEnd: 12,
+    paddingBlock: 8,
+    paddingInlineStart: 16,
+    paddingInlineEnd: 9,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    fontSize: 14,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  /** Overlapping member avatars; the one leaving is popped out of the row as it fades. */
+  avatarStack: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  avatarStackItem: {
+    position: 'relative',
+    display: 'flex',
+    flexShrink: 0,
+    borderRadius: '50%',
+    // Masks the avatar underneath, so transparent (emoji) avatars do not show through each other.
+    backgroundColor: cssVar.colorBgElevated,
+    boxShadow: `0 0 0 2px ${cssVar.colorBgElevated}`,
+  },
+  avatarStackSize: (width: number, height: number) => ({ width, height }),
+  avatarStackSlot: (offset: number, layer: number) => ({
+    marginInlineStart: offset,
+    zIndex: layer,
+  }),
   muted: {
     fontSize: 12,
     color: cssVar.colorTextSecondary,
