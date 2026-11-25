@@ -516,6 +516,13 @@ export const channelRouter = router({
       await ctx.channelService.removeMember(input.channelId, input.memberId);
       return { success: true };
     }),
+  /** The owner makes a person of a group Channel an admin, or returns them to a plain member. */
+  setMemberRole: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid(), role: z.enum(['admin', 'member']) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.setMemberRole(input.channelId, input.memberId, input.role);
+      return { success: true };
+    }),
   rename: channelProcedure
     .input(z.object({ channelId, title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength) }))
     .mutation(async ({ ctx, input }) => ({

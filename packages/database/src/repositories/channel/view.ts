@@ -555,6 +555,26 @@ const memberEnvironmentSource = <
   };
 };
 
+/**
+ * Whether the viewer may open an Agent member's own page: the agent ownership predicate
+ * (`buildWorkspaceWhere`) read off the joined row. In a workspace Channel that is a live Agent of
+ * the same workspace, public or created by the viewer; in a personal one, the viewer's own.
+ */
+export const canViewerOpenAgent = (
+  row: {
+    agentDeleted: boolean | null;
+    agentUserId: string | null;
+    agentVisibility: 'private' | 'public' | null;
+    agentWorkspaceId: string | null;
+  },
+  viewer: Pick<EnvironmentViewer, 'userId' | 'workspaceId'>,
+): boolean => {
+  if (!viewer.userId || !row.agentUserId || row.agentDeleted === true) return false;
+  const own = row.agentUserId === viewer.userId;
+  if (!viewer.workspaceId) return !row.agentWorkspaceId && own;
+  return row.agentWorkspaceId === viewer.workspaceId && (row.agentVisibility !== 'private' || own);
+};
+
 const environmentViewer = async (
   tx: Transaction,
   channelId: string,
@@ -645,6 +665,7 @@ export const readChannelView = async (
         grantStatus: channelMemberGrants.status,
         grantWorkingDirectory: channelMemberGrants.workingDirectory,
         agencyConfig: agents.agencyConfig,
+        agentDeleted: agents.isDeleted,
         agentUserId: agents.userId,
         agentVisibility: agents.visibility,
         agentWorkspaceId: agents.workspaceId,
@@ -807,9 +828,10 @@ export const readChannelView = async (
     members: environments.map((row) => {
       const {
         agencyConfig: _agencyConfig,
-        agentUserId: _agentUserId,
-        agentVisibility: _agentVisibility,
-        agentWorkspaceId: _agentWorkspaceId,
+        agentDeleted,
+        agentUserId,
+        agentVisibility,
+        agentWorkspaceId,
         deviceId,
         deviceOwnerId,
         grantDeviceId,
@@ -840,6 +862,14 @@ export const readChannelView = async (
           : channelDirectory;
       return {
         ...member,
+        ...(member.agentId
+          ? {
+              canOpenAgent: canViewerOpenAgent(
+                { agentDeleted, agentUserId, agentVisibility, agentWorkspaceId },
+                viewer,
+              ),
+            }
+          : {}),
         environment:
           member.agentId && (deviceId || workingDirectory)
             ? {

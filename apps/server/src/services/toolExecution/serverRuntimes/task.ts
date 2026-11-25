@@ -1071,7 +1071,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       const task = await resolveTaskOrThrow(taskModel(), id);
-      const detail = await taskService().getTaskDetail(task.id);
+      const detail = await taskService().getTaskDetail(task.id, task);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
 
       return {

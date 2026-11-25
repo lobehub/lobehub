@@ -312,7 +312,10 @@ describe('AiAgentService.execAgent - hetero runs see the task viewed in Tasks', 
       prompt: 'Which issue are we working on?',
     });
 
-    expect(TaskDetailService.prototype.getTaskDetail).toHaveBeenCalledWith('task-row-858');
+    expect(TaskDetailService.prototype.getTaskDetail).toHaveBeenCalledWith(
+      'task-row-858',
+      expect.objectContaining({ id: 'task-row-858' }),
+    );
     const { agentSystemContext } = mockBuildRemoteDeviceHeteroContext.mock.calls[0][0];
     expect(agentSystemContext).toMatch(/^Agent rules\n\n<page_context>/);
     expect(agentSystemContext).toContain('viewing the detail page of task T-858');

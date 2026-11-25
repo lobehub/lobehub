@@ -74,6 +74,42 @@ export const removeChannelMember = async (
 };
 
 /**
+ * The owner makes a person of a group Channel an admin, or returns an admin to a plain member.
+ * An admin invites people and edits the Channel like the owner, short of removing other admins.
+ * The owner's own seat and Agents carry no role to change.
+ */
+export const setChannelMemberRole = async (
+  tx: Transaction,
+  access: ChannelAccess,
+  memberId: string,
+  role: 'admin' | 'member',
+): Promise<void> => {
+  requireGroup(access);
+  if (access.member.role !== 'owner')
+    throw new ChannelError('FORBIDDEN', 'Only the owner can change who is an admin');
+  const [target] = await tx
+    .select()
+    .from(channelMembers)
+    .where(
+      and(
+        eq(channelMembers.channelId, access.channel.id),
+        eq(channelMembers.id, memberId),
+        eq(channelMembers.status, 'active'),
+      ),
+    );
+  if (!target) throw new ChannelError('NOT_FOUND', 'Member not found');
+  if (target.actorType !== 'user' || target.role === 'owner')
+    throw new ChannelError('BAD_REQUEST', 'Only a person other than the owner can change role');
+  if (target.role === role) return;
+
+  await tx.update(channelMembers).set({ role }).where(eq(channelMembers.id, target.id));
+  await audit(tx, access.channel.id, 'member_role_changed', target.id, {
+    role,
+    userId: target.userId,
+  });
+};
+
+/**
  * The caller leaves a group Channel. The owner hands the Channel on by deleting it, so they stay.
  * Someone who left an open project Channel can join it again.
  */
