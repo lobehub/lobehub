@@ -20,6 +20,7 @@ export class ServerContextBuilder implements ContextBuilder {
     );
     const result = await buildServerCallLlmContext({
       ctx: this.ctx,
+      contextReplay: input.contextReplay,
       llmPayload: input.payload,
       model: input.model,
       provider: input.provider,
@@ -34,6 +35,7 @@ export class ServerContextBuilder implements ContextBuilder {
         tools: tooling.resolved.tools,
       }),
       messages: result.processedMessages,
+      contextReplaySnapshot: result.contextReplaySnapshot,
       getToolActivationContext: result.getToolActivationContext,
       modelParameters: {
         ...result.resolvedExtendParams,

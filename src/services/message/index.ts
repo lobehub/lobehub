@@ -4,6 +4,7 @@ import {
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatTranslate,
+  type ContextReplaySnapshot,
   type CreateMessageParams,
   type CreateMessageResult,
   type HeterogeneousToolStateSnapshot,
@@ -116,6 +117,19 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
 const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
+  getContextReplays = async (ids: string[]): Promise<Record<string, ContextReplaySnapshot>> => {
+    const result: Record<string, ContextReplaySnapshot> = {};
+    for (let start = 0; start < ids.length; start += 1000) {
+      Object.assign(
+        result,
+        await lambdaClient.message.getContextReplays.query({ ids: ids.slice(start, start + 1000) }),
+      );
+    }
+    return result;
+  };
+
+  commitContextReplay = (id: string, snapshot: ContextReplaySnapshot) =>
+    lambdaClient.message.commitContextReplay.mutate({ id, snapshot });
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
     const input = {
       operations: operations.map((operation) => {

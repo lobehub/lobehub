@@ -87,6 +87,7 @@ import {
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
 import { ToolNameResolver } from '../tools';
+import { ContextReplayCoordinator } from './contextReplay';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
 const log = debug('context-engine:MessagesEngine');
@@ -156,7 +157,19 @@ export class MessagesEngine {
    * Build the processing pipeline based on configuration
    */
   private buildPipeline(): ContextEngine {
-    const processors = this.buildProcessors();
+    let processors = this.buildProcessors();
+    if (this.params.contextReplay) {
+      const replay = new ContextReplayCoordinator(
+        this.params.contextReplay,
+        this.params.contextReplay.sessionKey ?? `${this.params.provider}:${this.params.model}`,
+      );
+      processors = processors.map((processor) => replay.wrap(processor));
+      processors.splice(
+        processors.findIndex((processor) => processor.name === 'MessageContentProcessor'),
+        0,
+        replay.materialize,
+      );
+    }
     log(`Built pipeline with ${processors.length} processors`);
     return new ContextEngine({ pipeline: processors });
   }

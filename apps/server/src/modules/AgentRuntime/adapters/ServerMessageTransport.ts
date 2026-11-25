@@ -9,7 +9,12 @@ import type {
 } from '@lobechat/agent-runtime';
 import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
-import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
+import type {
+  ContextReplaySnapshot,
+  CreateMessageParams,
+  UIChatMessage,
+  UpdateMessageParams,
+} from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
 
@@ -23,6 +28,8 @@ import { unwrapPgError } from '../pgError';
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
  */
 export class ServerMessageTransport implements MessageTransport {
+  commitContextReplay = (id: string, snapshot: ContextReplaySnapshot) =>
+    this.messageModel.commitContextReplay(id, snapshot);
   constructor(
     private readonly messageModel: MessageModel,
     private readonly options: {

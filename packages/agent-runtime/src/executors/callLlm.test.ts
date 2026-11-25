@@ -170,6 +170,67 @@ const createHost = (
 });
 
 describe('callLlm executor', () => {
+  it('does not dispatch when the immutable context snapshot cannot be committed', async () => {
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    messages.commitContextReplay = vi
+      .fn()
+      .mockRejectedValue(new Error('snapshot persistence failed'));
+    const context = createContextBuilder();
+    vi.mocked(context.build).mockResolvedValue({
+      ...contextOutput,
+      contextReplaySnapshot: {
+        changes: [],
+        invocationId: 'assistant-1',
+        sessionKey: 'openai:gpt-4',
+        sourceIds: [],
+        version: 1,
+      },
+    });
+    await expect(
+      callLlm(createHost(transport.llm, messages, createStreamSink(), context))(
+        instruction,
+        createState(),
+      ),
+    ).rejects.toThrow('snapshot persistence failed');
+    expect(transport.runAttempt).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds from the committed winner before dispatching a concurrent retry', async () => {
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    const candidate = {
+      changes: [],
+      invocationId: 'assistant-1',
+      sessionKey: 'openai:gpt-4',
+      sourceIds: [],
+      system: [{ role: 'system' as const, content: 'loser' }],
+      version: 1 as const,
+    };
+    const winner = { ...candidate, system: [{ role: 'system' as const, content: 'winner' }] };
+    messages.commitContextReplay = vi.fn().mockResolvedValue(winner);
+    const context = createContextBuilder();
+    vi.mocked(context.build).mockImplementation(async (input) => ({
+      ...contextOutput,
+      messages: [
+        ...(input.contextReplay?.committedSnapshot ?? candidate).system!,
+        { role: 'user', content: 'question' },
+      ],
+      contextReplaySnapshot: input.contextReplay?.committedSnapshot ?? candidate,
+    }));
+    await callLlm(createHost(transport.llm, messages, createStreamSink(), context))(
+      instruction,
+      createState(),
+    );
+    expect(vi.mocked(context.build).mock.calls[1][0].contextReplay?.committedSnapshot).toEqual(
+      winner,
+    );
+    expect(transport.runAttempt).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(transport.runAttempt!).mock.calls[0][0].context.messages).toEqual([
+      { content: 'winner', role: 'system' },
+      { content: 'question', role: 'user' },
+    ]);
+  });
   it('ships a joined steer parent on stream_start so the client can show it before the step ends', async () => {
     const transport = createCallTransport();
     const messages = createMessageTransport();
@@ -316,6 +377,7 @@ describe('callLlm executor', () => {
       type: 'stream_start',
     });
     expect(context.build).toHaveBeenCalledWith({
+      contextReplay: { invocationId: 'assistant-1', committedSnapshot: undefined },
       model: 'gpt-4',
       payload: instructionWithParent.payload,
       provider: 'openai',

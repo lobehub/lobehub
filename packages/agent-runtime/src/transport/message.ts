@@ -1,4 +1,9 @@
-import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
+import type {
+  ContextReplaySnapshot,
+  CreateMessageParams,
+  UIChatMessage,
+  UpdateMessageParams,
+} from '@lobechat/types';
 
 /** Minimal reference an executor needs back after creating a message. */
 export interface RuntimeMessageRef {
@@ -84,6 +89,11 @@ export interface UpdateToolMessageInput {
  * id the caller needs to anchor follow-up writes.
  */
 export interface MessageTransport {
+  /** Atomic first-writer commit; return the immutable winner, never a local optimistic copy. */
+  commitContextReplay?: (
+    id: string,
+    snapshot: ContextReplaySnapshot,
+  ) => Promise<ContextReplaySnapshot>;
   createAssistantMessage: (
     params: CreateMessageParams,
     options?: CreateAssistantMessageOptions,

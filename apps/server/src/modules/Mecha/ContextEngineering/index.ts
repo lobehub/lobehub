@@ -13,6 +13,7 @@ import { type ServerMessagesEngineParams } from './types';
  */
 export const toContextSnapshot = ({
   additionalContexts,
+  contextReplay,
   additionalVariables,
   agentAccountContext,
   agentBuilderContext,
@@ -88,6 +89,7 @@ export const toContextSnapshot = ({
     provider,
   },
   run: {
+    contextReplay,
     additionalContexts,
     enableAgentMode,
     enableExpertise,

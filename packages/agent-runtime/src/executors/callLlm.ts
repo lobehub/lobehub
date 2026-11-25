@@ -1,3 +1,6 @@
+import type { ContextReplaySnapshot } from '@lobechat/types';
+import { isEqual } from 'es-toolkit';
+
 import type {
   AgentRuntimeHost,
   ContextBuildOutput,
@@ -410,8 +413,15 @@ export const callLlm =
       type: 'stream_start',
     });
 
-    const context = await contextBuilder
+    const persistedSnapshot = assistantMessageSeed.metadata?.contextReplay as
+      ContextReplaySnapshot | undefined;
+    const contextReplay = {
+      invocationId: assistantMessage.id,
+      committedSnapshot: persistedSnapshot,
+    };
+    let context = await contextBuilder
       .build({
+        contextReplay,
         model,
         payload: llmPayload,
         provider,
@@ -427,6 +437,23 @@ export const callLlm =
       });
 
     try {
+      if (context.contextReplaySnapshot) {
+        if (!transports.messages.commitContextReplay)
+          throw new Error('Context snapshots require durable message persistence');
+        const winner = await transports.messages.commitContextReplay(
+          assistantMessage.id,
+          context.contextReplaySnapshot,
+        );
+        if (!isEqual(winner, { ...context.contextReplaySnapshot, createdBy: winner.createdBy })) {
+          context = await contextBuilder.build({
+            model,
+            payload: llmPayload,
+            provider,
+            state,
+            contextReplay: { invocationId: assistantMessage.id, committedSnapshot: winner },
+          });
+        }
+      }
       const prepared: PreparedCallLlmInput = {
         assistantMessageId: assistantMessage.id,
         context,

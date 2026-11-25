@@ -7,6 +7,7 @@ import type {
   LobeToolManifest,
   MemoryContext,
   OperationSkillSet,
+  PipelineContextMetadata,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -15,6 +16,7 @@ import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from 
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   agentIdentityLabel,
+  type ContextReplayInput,
   manifestBaseIdentifier,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
@@ -78,6 +80,7 @@ interface ContextEngineeringContext {
    * `plugins` (pinned) is left out of the client skill pool.
    */
   autoSkillIds?: string[];
+  contextReplay?: ContextReplayInput;
   /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
@@ -138,7 +141,8 @@ interface ContextEngineeringContext {
 }
 
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
-export const contextEngineering = async ({
+export const contextEngineeringDetailed = async ({
+  contextReplay,
   additionalContexts,
   attachmentPreviewFileIds,
   messages = [],
@@ -165,7 +169,10 @@ export const contextEngineering = async ({
   stepContext,
   topicId,
   memoryContext,
-}: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
+}: ContextEngineeringContext): Promise<{
+  messages: OpenAIChatMessage[];
+  metadata: PipelineContextMetadata;
+}> => {
   log('tools: %o', tools);
 
   // Build agent group configuration if groupId is provided
@@ -397,6 +404,7 @@ export const contextEngineering = async ({
       provider,
     },
     run: {
+      contextReplay,
       enableMcpAppContext:
         !!getServerConfigStoreState() &&
         serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),
@@ -442,7 +450,8 @@ export const contextEngineering = async ({
 
   log('Input messages count: %d', messages.length);
 
-  const { messages: processed } = await runContextEngineering(snapshot);
+  const result = await runContextEngineering(snapshot);
+  const processed = result.messages;
 
   log('Output messages count: %d', processed.length);
 
@@ -453,5 +462,9 @@ export const contextEngineering = async ({
     );
   }
 
-  return processed;
+  return result;
 };
+
+export const contextEngineering = async (
+  input: ContextEngineeringContext,
+): Promise<OpenAIChatMessage[]> => (await contextEngineeringDetailed(input)).messages;

@@ -1,5 +1,10 @@
 import type { ResolvedToolSet } from '@lobechat/context-engine';
-import type { MessageContextAccounting, ResolveToolActivationContext } from '@lobechat/types';
+import type {
+  ContextReplayInput,
+  ContextReplaySnapshot,
+  MessageContextAccounting,
+  ResolveToolActivationContext,
+} from '@lobechat/types';
 
 import type { AgentState, CallLLMPayload } from '../types';
 
@@ -11,6 +16,7 @@ import type { AgentState, CallLLMPayload } from '../types';
  */
 export interface ContextBuildInput {
   [key: string]: unknown;
+  contextReplay?: ContextReplayInput;
   model: string;
   payload: CallLLMPayload;
   provider: string;
@@ -24,6 +30,7 @@ export interface ContextBuildOutput {
    * `metadata.contextAccounting` for the chat input's context breakdown.
    */
   contextAccounting?: MessageContextAccounting;
+  contextReplaySnapshot?: ContextReplaySnapshot;
   getToolActivationContext?: ResolveToolActivationContext;
   /** Adapter-native prepared messages; kept in-memory and out of serialized state. */
   messages: unknown[];

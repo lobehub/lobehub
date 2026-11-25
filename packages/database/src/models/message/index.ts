@@ -9,6 +9,7 @@ import { MessageAnalyticsQueries } from './analytics';
 import { MessageAnnotationMutations } from './annotation';
 import { MessageBackgroundSubAgentQueries } from './backgroundSubAgent';
 import { MessageBranchSnapshots } from './branchSnapshots';
+import { MessageContextReplays } from './contextReplay';
 import { MessageDeleteMutations } from './delete';
 import { MessageLookupQueries } from './lookup';
 import { MessagePluginStore } from './plugin';
@@ -78,6 +79,8 @@ export class MessageModel {
   createMessageQuery: MessageWriteMutations['createMessageQuery'];
   update: MessageWriteMutations['update'];
   updateMetadata: MessageWriteMutations['updateMetadata'];
+  commitContextReplay: MessageContextReplays['commitContextReplay'];
+  getContextReplays: MessageContextReplays['getContextReplays'];
 
   updatePluginState: MessagePluginStore['updatePluginState'];
   updateMessagePlugin: MessagePluginStore['updateMessagePlugin'];
@@ -197,6 +200,9 @@ export class MessageModel {
     this.createMessageQuery = writes.createMessageQuery;
     this.update = writes.update;
     this.updateMetadata = writes.updateMetadata;
+    const contextReplays = new MessageContextReplays(...args);
+    this.commitContextReplay = contextReplays.commitContextReplay;
+    this.getContextReplays = contextReplays.getContextReplays;
     this.updatePluginState = plugins.updatePluginState;
     this.updateMessagePlugin = plugins.updateMessagePlugin;
     // The approval claim locks and writes message roots and plugin rows in one

@@ -2,6 +2,7 @@ import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   AgentSenderMetadataSchema,
+  ContextReplaySnapshotSchema,
   CreateNewMessageParamsSchema,
   omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
@@ -132,6 +133,22 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
 ]);
 
 export const messageRouter = router({
+  getContextReplays: messageProcedure
+    .use(withScopedPermission('message:read'))
+    .input(z.object({ ids: z.array(z.string()).max(1000) }))
+    .query(async ({ ctx, input }) => {
+      await assertCreatorMessageTargets(guardCtx(ctx), input.ids);
+      await assertCanViewMessageTargets(guardCtx(ctx), input.ids);
+      return ctx.messageModel.getContextReplays(input.ids);
+    }),
+  commitContextReplay: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(z.object({ id: z.string(), snapshot: ContextReplaySnapshotSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      return ctx.messageModel.commitContextReplay(input.id, input.snapshot);
+    }),
   addFilesToMessage: messageProcedure
     .use(withScopedPermission('message:update'))
     .input(

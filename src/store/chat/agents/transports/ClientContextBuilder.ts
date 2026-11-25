@@ -5,9 +5,11 @@ import type {
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
 import {
+  contextReplayMessageIds,
   ToolResolver,
   type ToolsEngine,
   tryCountRequestPayloadTokens,
+  withContextReplays,
 } from '@lobechat/context-engine';
 import type { MessageMetadata } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
@@ -16,6 +18,7 @@ import { dedupeBy } from '@lobechat/utils';
 import { chatService } from '@/services/chat';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { FetchOptions } from '@/services/chat/types';
+import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
 import type { ChatStreamPayload } from '@/types/openai/chat';
 
@@ -76,6 +79,12 @@ export class ClientContextBuilder implements ContextBuilder {
     const messages = input.payload.messages.filter(
       (message) => !assistantMessageId || message.id !== assistantMessageId,
     );
+    const snapshots = input.contextReplay
+      ? await messageService.getContextReplays([
+          ...contextReplayMessageIds(messages),
+          input.contextReplay.invocationId,
+        ])
+      : {};
     const prepared = await chatService.buildAssistantMessageContext(
       {
         agentId: effectiveAgentId || undefined,
@@ -85,7 +94,13 @@ export class ClientContextBuilder implements ContextBuilder {
         discoveryManifests:
           input.state.operationToolSet?.manifestMap ?? input.state.toolManifestMap,
         groupId,
-        messages,
+        messages: input.contextReplay ? withContextReplays(messages, snapshots) : messages,
+        ...(input.contextReplay && {
+          contextReplay: {
+            ...input.contextReplay,
+            committedSnapshot: snapshots[input.contextReplay.invocationId],
+          },
+        }),
         model: input.model,
         provider: input.provider,
         resolvedAgentConfig: promptAgentConfig,
@@ -111,6 +126,7 @@ export class ClientContextBuilder implements ContextBuilder {
         tools: params.tools,
       }),
       messages: preparedMessages,
+      contextReplaySnapshot: prepared.contextReplaySnapshot,
       modelParameters: {
         options: prepared.options,
         params: {

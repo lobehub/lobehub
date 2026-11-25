@@ -72,6 +72,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
   return {
     // --- conversation + runtime flags ---
     additionalContexts: run.additionalContexts,
+    contextReplay: run.contextReplay,
     enableAgentMode: run.enableAgentMode,
     enableExpertise: run.enableExpertise,
     enableMcpAppContext: run.enableMcpAppContext,

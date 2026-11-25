@@ -72,3 +72,4 @@ export {
   ToolCallProcessor,
   ToolMessageReorder,
 } from './processors';
+export { contextReplayMessageIds, withContextReplays } from './utils/contextReplayMessages';

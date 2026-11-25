@@ -1,15 +1,18 @@
 import {
   type AgentState,
   type CallLLMPayload,
+  type ContextBuildInput,
   selectEnableExpertise,
   selectExpertise,
 } from '@lobechat/agent-runtime';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import {
   cacheEconomicsForProvider,
+  contextReplayMessageIds,
   getSlicedMessages,
   skillChangesByMessage,
   skillsFromSnapshot,
+  withContextReplays,
 } from '@lobechat/context-engine';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
@@ -19,7 +22,11 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ResolveToolActivationContext, type UIChatMessage } from '@lobechat/types';
+import {
+  type ContextReplaySnapshot,
+  type ResolveToolActivationContext,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -39,6 +46,7 @@ import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 import { createToolActivationResolver } from './serverToolActivationContext';
 
 interface BuildServerCallLlmContextInput {
+  contextReplay?: ContextBuildInput['contextReplay'];
   ctx: RuntimeExecutorContext;
   llmPayload: CallLLMPayload;
   model: string;
@@ -67,6 +75,7 @@ const hasTrailingTodoMutation = (messages: UIChatMessage[]) => {
 };
 
 export interface ServerCallLlmContextBuildResult {
+  contextReplaySnapshot?: ContextReplaySnapshot;
   getToolActivationContext?: ResolveToolActivationContext;
   preserveThinkingForPayload?: boolean;
   processedMessages: ChatStreamPayload['messages'];
@@ -77,6 +86,7 @@ export interface ServerCallLlmContextBuildResult {
 }
 
 export const buildServerCallLlmContext = async ({
+  contextReplay,
   ctx,
   llmPayload,
   model,
@@ -192,7 +202,16 @@ export const buildServerCallLlmContext = async ({
     : liveSkills;
   const skillChanges = skillIndexSnapshot ? skillChangesByMessage(skillIndexSnapshot) : undefined;
 
+  const snapshots = contextReplay
+    ? await ctx.messageModel.getContextReplays([
+        ...contextReplayMessageIds(messagesForContext),
+        contextReplay.invocationId,
+      ])
+    : {};
   const contextEngineInput = {
+    ...(contextReplay && {
+      contextReplay: { ...contextReplay, committedSnapshot: snapshots[contextReplay.invocationId] },
+    }),
     enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
     additionalContexts: llmPayload.additionalContexts,
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
@@ -255,7 +274,9 @@ export const buildServerCallLlmContext = async ({
           name: knowledgeBase.name ?? '',
         })),
     },
-    messages: messagesForContext,
+    messages: contextReplay
+      ? withContextReplays(messagesForContext, snapshots)
+      : messagesForContext,
     model,
     modelDisplayName,
     modelKnowledgeCutoff,
@@ -349,6 +370,7 @@ export const buildServerCallLlmContext = async ({
   );
 
   return {
+    contextReplaySnapshot: ceMetadata.contextReplaySnapshot,
     getToolActivationContext: createToolActivationResolver(
       state,
       resolved,

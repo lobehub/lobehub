@@ -5,6 +5,8 @@ import type { ConversationMode } from '../../topic';
 import type { WorkRegistrationIntent } from '../../work';
 import type { MessageContextAccounting } from './contextAccounting';
 import { MessageContextAccountingSchema } from './contextAccounting';
+import type { ContextReplaySnapshot } from './contextReplay';
+import { ContextReplaySnapshotSchema } from './contextReplay';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
@@ -450,6 +452,7 @@ export interface BotSenderMetadata {
 }
 
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
+  contextReplay: ContextReplaySnapshotSchema.optional(),
   conversationMode: z.enum(['agent', 'chat']).optional(),
   botSender: BotSenderMetadataSchema.optional(),
   externalOrigin: ExternalOriginMetadataSchema.optional(),
@@ -523,6 +526,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
 export const ClientMessageMetadataSchema = MessageMetadataSchema.omit({
   agentSender: true,
   conversationMode: true,
+  contextReplay: true,
 });
 
 /** Drops server-owned blocks from metadata a client sent untyped (passthrough / record inputs). */
@@ -530,12 +534,13 @@ export const omitServerOwnedMessageMetadata = <T>(metadata: T): T => {
   if (
     !metadata ||
     typeof metadata !== 'object' ||
-    !('agentSender' in metadata || 'conversationMode' in metadata)
+    !('agentSender' in metadata || 'conversationMode' in metadata || 'contextReplay' in metadata)
   )
     return metadata;
   const {
     agentSender: _agentSender,
     conversationMode: _conversationMode,
+    contextReplay: _contextReplay,
     ...rest
   } = metadata as Record<string, unknown>;
   return rest as T;
@@ -618,6 +623,8 @@ export interface MessageMetadata {
    * one; see {@link MessageContextAccounting}.
    */
   contextAccounting?: MessageContextAccounting;
+  /** Private runtime input delta committed before this assistant generation. */
+  contextReplay?: ContextReplaySnapshot;
   /**
    * Generic context selections attached to user messages.
    * Page selections remain mirrored in `pageSelections` for compatibility.
