@@ -396,7 +396,9 @@ export class TaskLifecycleService {
 
       // 8. A task with a Channel delivery posts the run's answer (text and cards) there as its
       //    Agent's message, once per run. A Channel that refuses the post skips only this run.
-      if (currentTask)
+      //    A verify-bound run posts only once Verify accepts it (driveTaskFromVerify), so the
+      //    Channel never reads an output a later verdict rejects.
+      if (currentTask && !verifyBound)
         await postTaskRunToChannel(this.db, {
           operationId: params.operationId,
           scope: { userId: this.userId, workspaceId: this.workspaceId },

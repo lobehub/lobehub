@@ -854,6 +854,17 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
     });
 
+    it('defers a verify-bound run to the verify settle path', async () => {
+      findById.mockResolvedValue(
+        baseTask({ config: { delivery: { channelId: 'chn_1' } } } as Partial<TaskItem>),
+      );
+      verifyFindByOperation.mockResolvedValueOnce({ planConfirmedAt: new Date() });
+
+      await service.onTopicComplete(createDoneParams());
+
+      expect(postToChannel).not.toHaveBeenCalled();
+    });
+
     it('posts nothing for a failed run', async () => {
       findById.mockResolvedValue(baseTask());
       await service.onTopicComplete(createErrorParams('schedule'));
