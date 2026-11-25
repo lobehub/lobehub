@@ -17,16 +17,7 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import {
-  Archive,
-  ArrowDownUp,
-  ChevronDown,
-  ChevronRight,
-  Compass,
-  Hash,
-  MoreHorizontal,
-  Plus,
-} from 'lucide-react';
+import { Archive, ArrowDownUp, Compass, Hash, MoreHorizontal, Play, Plus } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -68,6 +59,18 @@ const SORT_BYS: ChannelListSort['by'][] = ['createdAt', 'updatedAt', 'title'];
 const SORT_ORDERS: ChannelListSort['order'][] = ['desc', 'asc'];
 
 const styles = stylex.create({
+  // Mirrors the `inline` indicator of `@lobehub/ui` Accordion (the sidebar group headers): a solid
+  // 7px triangle that turns down when the group is open.
+  caret: {
+    transition: `transform 200ms ${cssVar.motionEaseOut}`,
+    alignItems: 'center',
+    color: cssVar.colorTextDescription,
+    display: 'flex',
+    transitionDuration: { 'default': null, '@media (prefers-reduced-motion: reduce)': '0s' },
+  },
+  caretOpen: {
+    transform: 'rotate(90deg)',
+  },
   thread: {
     position: 'relative',
     paddingInlineStart: `calc(${sidebarRow.paddingInline} + ${sidebarRow.iconBox})`,
@@ -205,7 +208,7 @@ interface ChannelRowProps {
 
 /**
  * A Channel row and, while it is open, its threads. Pointing at or focusing a row whose
- * threads are listed swaps its `#` for a chevron that folds them away; the fold is kept per
+ * threads are listed swaps its `#` for a caret that folds them away; the fold is kept per
  * Channel on this device.
  */
 const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: ChannelRowProps) => {
@@ -232,7 +235,7 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
   // A project Channel the caller can read but has not joined: dimmed, with no member actions.
   const joined = channel.joined !== false;
 
-  // The chevron takes the `#`'s slot, so the title never shifts. The `#` is drawn at 14px: the
+  // The caret takes the `#`'s slot, so the title never shifts. The `#` is drawn at 14px: the
   // glyph fills its whole box, so it reads larger than other nav icons at 18px.
   let toggle: ReactNode;
   if (foldable && (pointed || focused)) {
@@ -242,11 +245,15 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
         <ActionIcon
           aria-expanded={expanded}
           aria-label={label}
-          icon={expanded ? ChevronDown : ChevronRight}
           size="small"
           title={label}
+          icon={
+            <span {...stylex.props(styles.caret, expanded && styles.caretOpen)}>
+              <Play fill="currentColor" size={7} strokeWidth={1} />
+            </span>
+          }
           onClick={(event) => {
-            // The chevron sits inside the row's link; folding must not open the Channel.
+            // The caret sits inside the row's link; folding must not open the Channel.
             event.preventDefault();
             event.stopPropagation();
             toggleFold();
@@ -262,7 +269,7 @@ const ChannelRow = ({ activeChannelId, activeThreadId, channel, menuItems }: Cha
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
       }}
-      // Keyboard focus only: a click also focuses the row's link, which would pin the chevron.
+      // Keyboard focus only: a click also focuses the row's link, which would pin the caret.
       onFocus={(event) => setFocused(event.target.matches(':focus-visible'))}
     >
       {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
