@@ -5,6 +5,7 @@ import {
 } from './agent/heterogeneousAgent';
 import type { ChannelAgentAccessCard } from './agentAccess';
 import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
+import type { ChannelPublicMember } from './channelMember';
 import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
@@ -940,27 +941,6 @@ export interface ChannelListItem {
   workspaceId: string | null;
 }
 
-/** Where an Agent member runs in this Channel, readable by every member. */
-export interface ChannelMemberEnvironmentPreview {
-  deviceId: string | null;
-  /** The device's friendly name, else its hostname; null when the device row is gone. */
-  deviceName: string | null;
-  /**
-   * The device owner's approval for a private workspace device picked in this Channel;
-   * absent when the device needs none (public, personal, or the Agent's own setting).
-   */
-  grant?: ChannelMemberDeviceGrant;
-  workingDirectory: string | null;
-}
-
-/** One Agent member's grant on someone's private device, as members of the Channel see it. */
-export interface ChannelMemberDeviceGrant {
-  /** Who decides it; the client offers approve / reject / revoke to this person only. */
-  deviceOwnerId: string;
-  id: string;
-  status: ChannelMemberGrantStatus;
-}
-
 /** A request on one of the caller's private devices, as the device owner reviews it. */
 export interface ChannelDeviceGrantItem {
   agentId: string | null;
@@ -977,28 +957,6 @@ export interface ChannelDeviceGrantItem {
   requesterUserId: string | null;
   status: ChannelMemberGrantStatus;
   workingDirectory: string;
-}
-
-export interface ChannelPublicMember {
-  actorType: ChannelMemberActorType;
-  agentId: string | null;
-  avatar: string | null;
-  description: string | null;
-  /** Agent members only; null when the Channel sets no device or directory for it. */
-  environment?: ChannelMemberEnvironmentPreview | null;
-  id: string;
-  /** The member who added this one; null when they joined on their own or the adder is unknown. */
-  invitedBy: string | null;
-  joinedAt: Date;
-  /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
-  muted?: boolean;
-  name: string | null;
-  role: ChannelMemberRole | null;
-  status: ChannelMemberStatus;
-  userAvatar: string | null;
-  userId: string | null;
-  userName: string | null;
-  username: string | null;
 }
 
 export interface ChannelPublicMessage {
