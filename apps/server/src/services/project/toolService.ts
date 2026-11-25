@@ -5,9 +5,11 @@ import {
   SANDBOX_RUNNER_ID,
 } from '@lobechat/builtin-tool-project';
 import { applyEnvironmentEdit } from '@lobechat/builtin-tool-project/executionRuntime';
+import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
 import type { LobeChatDatabase } from '@lobechat/database';
 
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
+import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import { ProjectDirectoryRepository } from '@/database/repositories/projectDirectory';
 import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
@@ -44,6 +46,22 @@ export const createProjectToolService = (
   const directoryModel = new ProjectWorkingDirectoryModel(db, userId, workspaceId);
   const directoryRepo = new ProjectDirectoryRepository(db, userId, workspaceId);
   const environmentRepo = new ProjectEnvironmentRepository(db, userId, workspaceId);
+
+  /**
+   * The settings mutations sit behind `withScopedPermission('agent:update')`,
+   * and the repositories' manage check relies on that gate (a readable public
+   * project counts as manageable). A tool call reaches the repositories
+   * without the router, so it checks the same permission itself: a workspace
+   * viewer who may chat and approve a call still cannot change the project.
+   */
+  const assertCanChange = async () => {
+    if (!workspaceId) return;
+    const allowed = await new RbacModel(db, userId).hasAnyPermission(
+      [RBAC_PERMISSIONS.AGENT_UPDATE_ALL, RBAC_PERMISSIONS.AGENT_UPDATE_OWNER],
+      { workspaceId },
+    );
+    if (!allowed) throw new Error('You do not have permission to change this project');
+  };
 
   const readRunners = async (): Promise<ProjectToolRunner[]> => {
     const [directories, order, presence, topic] = await Promise.all([
@@ -95,6 +113,7 @@ export const createProjectToolService = (
 
   return {
     addRunner: async ({ deviceId, path }) => {
+      await assertCanChange();
       // Same gate as the settings dialog: a definite "not there" is refused;
       // an unreachable device cannot be checked and stays addable.
       const stat = await deviceGateway.statPath({ deviceId, path, userId, workspaceId });
@@ -136,15 +155,18 @@ export const createProjectToolService = (
     },
 
     removeRunner: async ({ runnerId }) => {
+      await assertCanChange();
       await directoryRepo.remove(projectId, runnerId);
     },
 
     reorderRunners: async ({ runnerIds }) => {
+      await assertCanChange();
       await directoryRepo.reorderExecutionEnvironments(projectId, runnerIds);
       return readRunners();
     },
 
     updateEnvironment: async (edit) => {
+      await assertCanChange();
       const { configuration } = await environmentRepo.get(projectId);
       // Validated as the settings form's edit is: only https github.com repositories.
       const parsed = configurationSchema.safeParse(applyEnvironmentEdit(configuration ?? {}, edit));

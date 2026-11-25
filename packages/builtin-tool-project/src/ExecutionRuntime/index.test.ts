@@ -63,6 +63,28 @@ describe('ProjectExecutionRuntime', () => {
   });
 });
 
+describe('ProjectExecutionRuntime.addRunner', () => {
+  it('reports the place the new runner actually takes', async () => {
+    const added = { deviceId: 'dev-1', id: 'dir-2', kind: 'device' as const, path: '/work/b' };
+    const result = await new ProjectExecutionRuntime(
+      service({
+        addRunner: vi.fn().mockResolvedValue(added),
+        listRunners: vi.fn().mockResolvedValue({
+          devices: [],
+          runners: [
+            { deviceId: 'dev-1', id: 'dir-1', kind: 'device', path: '/work/a' },
+            added,
+            { id: 'sandbox', kind: 'sandbox' },
+          ],
+        }),
+      }),
+    ).addRunner({ deviceId: 'dev-1', path: '/work/b' });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('at position 2 of 3 in priority');
+  });
+});
+
 describe('applyEnvironmentEdit', () => {
   const stored = {
     bootstrapCommand: 'pnpm i',

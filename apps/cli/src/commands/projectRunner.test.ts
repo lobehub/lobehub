@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { orderRunners, parseRepositoryArg, SANDBOX_RUNNER_ID } from './projectRunner';
+import {
+  orderRunners,
+  parseRepositoryArg,
+  sameRepository,
+  SANDBOX_RUNNER_ID,
+} from './projectRunner';
 
 const folder = (id: string, sortOrder = 0) => ({ id, path: `/work/${id}`, sortOrder });
 
@@ -49,5 +54,13 @@ describe('parseRepositoryArg', () => {
     expect(parseRepositoryArg('https://github.com/lobehub/lobe-pet')).toEqual({
       url: 'https://github.com/lobehub/lobe-pet',
     });
+  });
+});
+
+describe('sameRepository', () => {
+  it('matches a .git url with a trailing slash to the bare one', () => {
+    expect(sameRepository('https://github.com/acme/app.git/', 'https://github.com/acme/app')).toBe(
+      true,
+    );
   });
 });

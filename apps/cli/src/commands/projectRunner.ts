@@ -58,15 +58,19 @@ export const parseRepositoryArg = (value: string): { ref?: string; url: string }
 
 type GitSource = { kind: 'git'; path?: string; ref?: string; setupCommand?: string; url: string };
 
-const sameRepository = (a: string, b: string) =>
-  a
-    .replace(/\.git$/, '')
+/** Trailing slashes before `.git`, so `repo.git/` matches `repo`. */
+const canonicalRepository = (url: string) =>
+  url
     .replace(/\/+$/, '')
-    .toLowerCase() ===
-  b
     .replace(/\.git$/, '')
-    .replace(/\/+$/, '')
     .toLowerCase();
+
+export const sameRepository = (a: string, b: string) =>
+  canonicalRepository(a) === canonicalRepository(b);
+
+/** Only git sources carry a URL; a legacy `files` source is kept as is. */
+const isRepository = (source: { kind: string; url?: string }, url: string) =>
+  source.kind === 'git' && !!source.url && sameRepository(source.url, url);
 
 export function registerProjectRunnerCommands(project: Command) {
   const runner = project
@@ -230,10 +234,10 @@ export function registerProjectRunnerCommands(project: Command) {
         const configuration = { ...data.configuration };
         let sources = [...(configuration.sources ?? [])] as GitSource[];
         for (const url of options.removeRepo ?? [])
-          sources = sources.filter((source) => !sameRepository(source.url, url));
+          sources = sources.filter((source) => !isRepository(source, url));
         for (const value of options.addRepo ?? []) {
           const { ref, url } = parseRepositoryArg(value);
-          if (!sources.some((source) => sameRepository(source.url, url)))
+          if (!sources.some((source) => isRepository(source, url)))
             sources.push({ kind: 'git', url, ...(ref && { ref }) });
         }
         const next = {

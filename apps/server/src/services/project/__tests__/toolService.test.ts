@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProjectToolService } from '../toolService';
 
 const state = vi.hoisted(() => ({
+  allowed: true,
   bind: vi.fn(),
   configuration: {} as Record<string, unknown>,
   directories: [] as Record<string, unknown>[],
@@ -17,6 +18,11 @@ const state = vi.hoisted(() => ({
 vi.mock('@/database/models/projectWorkingDirectory', () => ({
   ProjectWorkingDirectoryModel: class {
     list = async () => state.directories;
+  },
+}));
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: class {
+    hasAnyPermission = async () => state.allowed;
   },
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -64,6 +70,7 @@ const create = (topicId?: string) =>
   });
 
 beforeEach(() => {
+  state.allowed = true;
   state.bind.mockReset();
   state.update.mockReset();
   state.configuration = {};
@@ -126,5 +133,36 @@ describe('createProjectToolService', () => {
     await expect(
       create().updateEnvironment({ addRepositories: [{ url: 'https://evil.test/x' }] }),
     ).rejects.toThrow(/Invalid environment/);
+  });
+});
+
+describe('write permission', () => {
+  const inWorkspace = () =>
+    createProjectToolService({} as LobeChatDatabase, {
+      projectId: 'project-1',
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
+
+  it('refuses every change from a workspace member without agent:update', async () => {
+    state.allowed = false;
+    const tool = inWorkspace();
+
+    await expect(tool.updateEnvironment({ notes: 'x' })).rejects.toThrow('permission');
+    await expect(tool.addRunner({ deviceId: 'dev-1', path: '/work/a' })).rejects.toThrow(
+      'permission',
+    );
+    await expect(tool.removeRunner({ runnerId: 'dir-1' })).rejects.toThrow('permission');
+    await expect(tool.reorderRunners({ runnerIds: ['sandbox'] })).rejects.toThrow('permission');
+    expect(state.update).not.toHaveBeenCalled();
+    expect(state.bind).not.toHaveBeenCalled();
+  });
+
+  it('lets a member with agent:update change the environment', async () => {
+    state.update.mockResolvedValue({ configuration: { notes: 'x' } });
+
+    await inWorkspace().updateEnvironment({ notes: 'x' });
+
+    expect(state.update).toHaveBeenCalled();
   });
 });

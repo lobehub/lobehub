@@ -510,8 +510,10 @@ export class ProjectDirectoryRepository {
   /**
    * Reorder the project's execution environments — its device folders and the
    * cloud sandbox (`'sandbox'`) — into the given order, which is the priority
-   * a new conversation follows. Ids that are not this project's folders are
-   * refused rather than ignored, so a stale list cannot silently half-apply.
+   * a new conversation follows. The order must name every folder and the
+   * sandbox exactly once: an unknown id, a duplicate or an omission is refused
+   * rather than half-applied, since an omitted runner would keep its old place
+   * and tie with the ones that moved.
    */
   async reorderExecutionEnvironments(projectId: string, order: string[]) {
     const project = await this.assertManageableProject(projectId);
@@ -532,6 +534,15 @@ export class ProjectDirectoryRepository {
         if (owned.length !== new Set(directoryIds).size)
           throw new ProjectDirectoryError('BAD_REQUEST', 'Unknown project directory in order');
       }
+      const all = await db
+        .select({ id: projectWorkingDirectories.id })
+        .from(projectWorkingDirectories)
+        .where(eq(projectWorkingDirectories.projectId, projectId));
+      if (new Set(order).size !== order.length || order.length !== all.length + 1)
+        throw new ProjectDirectoryError(
+          'BAD_REQUEST',
+          'The order must list every runner, including the sandbox, exactly once',
+        );
       for (const [index, id] of order.entries()) {
         if (id === 'sandbox')
           await db

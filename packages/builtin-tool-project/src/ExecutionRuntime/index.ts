@@ -96,9 +96,14 @@ export class ProjectExecutionRuntime {
   async addRunner(params: AddRunnerParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const runner = await this.service.addRunner(params);
+      // A new folder goes in before a sandbox that is last, so read its real place.
+      const { runners } = await this.service.listRunners();
+      const position = runners.findIndex((item) => item.id === runner.id);
+      const place =
+        position === -1 ? '' : ` at position ${position + 1} of ${runners.length} in priority`;
       return {
-        content: `Added runner ${runner.id} (${runner.path}), last in priority. Use reorderRunners to move it up.`,
-        state: { runners: [runner] },
+        content: `Added runner ${runner.id} (${runner.path})${place}. Use reorderRunners to change the order.\n${formatRunners(runners)}`,
+        state: { runners },
         success: true,
       };
     } catch (error) {

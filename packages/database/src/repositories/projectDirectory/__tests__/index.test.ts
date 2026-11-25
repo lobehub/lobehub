@@ -892,6 +892,22 @@ describe('ProjectDirectoryRepository execution order', () => {
     ).rejects.toThrow('Unknown project directory');
   });
 
+  it('refuses an order that leaves a runner out or names one twice', async () => {
+    const first = await repo.bind(base);
+    const second = await repo.bind({ ...base, path: '/work/second' });
+
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, ['sandbox', second.id]),
+    ).rejects.toThrow('exactly once');
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, [second.id, first.id]),
+    ).rejects.toThrow('exactly once');
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id, first.id, second.id]),
+    ).rejects.toThrow('exactly once');
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
   it('lets only someone who may change the project reorder it', async () => {
     const first = await repo.bind(base);
 
