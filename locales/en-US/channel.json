@@ -1,4 +1,9 @@
 {
+  "a2uiAction.empty": "—",
+  "a2uiAction.no": "No",
+  "a2uiAction.submitted": "Submitted",
+  "a2uiAction.submittedTitle": "Submitted “{{title}}”",
+  "a2uiAction.yes": "Yes",
   "actionFailed": "Something went wrong. Try again.",
   "activity.many": "{{count}} members are replying…",
   "activity.one": "{{name}} · {{status}}",
