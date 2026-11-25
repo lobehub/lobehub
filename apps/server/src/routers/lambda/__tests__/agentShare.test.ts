@@ -72,6 +72,12 @@ const mockUpdateConfig = vi.fn();
 const mockUpdateSlug = vi.fn();
 const mockUpdateVisibility = vi.fn();
 const mockListEligibleWorks = vi.fn();
+const mockIncrementUserViewCount = vi.fn();
+
+const mockBuildSharedAgentData = vi.fn();
+vi.mock('@/server/services/agentShare/sharedAgentData', () => ({
+  buildSharedAgentData: (...args: unknown[]) => mockBuildSharedAgentData(...args),
+}));
 
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: Object.assign(
@@ -86,6 +92,7 @@ vi.mock('@/database/models/agentShare', () => ({
     }),
     {
       findByShareId: mockFindByShareId,
+      incrementUserViewCount: mockIncrementUserViewCount,
       forceDisableWorkspaceShare: mockForceDisableWorkspaceShare,
       listWorkspaceSharesForAudit: mockListWorkspaceSharesForAudit,
       requestGrantedUserIds: mockRequestGrantedUserIds,
@@ -767,6 +774,37 @@ describe('agentShareRouter', () => {
         code: 'FORBIDDEN',
       });
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getProfilePreview', () => {
+    it("shows a manager the paused landing page of a colleague's Agent without counting a view", async () => {
+      // A Workspace manager resolves the share through the manage-scoped
+      // lookup; the Agent's creator is someone else.
+      const row = { ...share, ownerId: 'user-1', shareId: 'share-1', workspaceId: 'ws-1' };
+      mockFindByShareId.mockResolvedValue(row);
+      mockBuildSharedAgentData.mockResolvedValue({ shareId: 'share-1' });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-2' }));
+
+      await expect(caller.getProfilePreview({ agentId: 'agent-1' })).resolves.toEqual({
+        shareId: 'share-1',
+      });
+      expect(mockGetByAgentId).toHaveBeenCalledWith('agent-1');
+      expect(mockFindByShareId).toHaveBeenCalledWith(expect.anything(), 'share-1');
+      expect(mockBuildSharedAgentData).toHaveBeenCalledWith(expect.anything(), row, {
+        isOwner: false,
+      });
+      expect(mockIncrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    it('refuses an Agent the caller cannot manage', async () => {
+      mockGetByAgentId.mockResolvedValue(null);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-2' }));
+
+      await expect(caller.getProfilePreview({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockBuildSharedAgentData).not.toHaveBeenCalled();
     });
   });
 
