@@ -93,7 +93,9 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const handleCancelCompression = useCallback(
     (onDone?: () => void) => {
       confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
         content: t('compression.cancelConfirm'),
+        okText: t('compression.cancel'),
         onOk: async () => {
           await cancelCompression(id);
           onDone?.();
