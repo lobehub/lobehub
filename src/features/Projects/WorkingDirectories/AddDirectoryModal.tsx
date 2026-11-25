@@ -1,29 +1,23 @@
-import {
-  Alert,
-  Button,
-  createModal,
-  Flexbox,
-  Input,
-  Select,
-  Text,
-  useModalContext,
-} from '@lobehub/ui';
+import { Alert, Button, createModal, Flexbox, Input, Text, useModalContext } from '@lobehub/ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
-import { useDeviceSelectOptions } from '@/features/DeviceManager/useDeviceSelectOptions';
 import { RemoteDirectoryBrowser } from '@/features/WorkingDirectory/RemoteDirectoryBrowser';
 import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
+import AddDirectoryDeviceStep, {
+  addDirectoryDeviceName,
+  AddDirectoryDeviceStatus,
+} from './AddDirectoryDeviceStep';
+
 interface AddDirectoryOptions {
   /** The machine to add it on, when the caller already knows it. */
   deviceId?: string;
-  /** Called with the folder once it is part of the project. */
   /** Called with the folder once it is part of the project, and the device it was saved on. */
   onAdded?: (directory: { deviceId: string; id: string }) => void;
 }
@@ -57,7 +51,6 @@ function AddDirectoryContent({
   const [manual, setManual] = useState(false);
   const device = devices.find((item) => item.deviceId === deviceId);
   const browsable = !!device?.online && !manual;
-  const deviceOptions = useDeviceSelectOptions(devices, deviceId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const bind = useProjectDirectoryStore((s) => s.bind);
@@ -87,37 +80,64 @@ function AddDirectoryContent({
     }
   };
   const errorMessage = error instanceof Error ? error.message : undefined;
+  const loadError =
+    deviceRequest.error || environmentsRequest.error ? (
+      <AsyncError
+        error={deviceRequest.error || environmentsRequest.error}
+        onRetry={() => Promise.all([deviceRequest.revalidate(), environmentsRequest.revalidate()])}
+      />
+    ) : null;
+
+  // Step one: which machine. Opened from a device's own row, it is already decided.
+  if (!deviceId)
+    return (
+      <Flexbox gap={16}>
+        <Text type="secondary">{t('settings.pickDeviceDescription')}</Text>
+        <AddDirectoryDeviceStep
+          devices={devices}
+          onPick={(id) => {
+            setDevice(id);
+            setManual(false);
+            setError(undefined);
+          }}
+        />
+        {loadError}
+        <Flexbox horizontal justify="flex-end">
+          <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
+        </Flexbox>
+      </Flexbox>
+    );
+
+  // Step two: the folder on that machine, browsed from its home folder.
   return (
     <Flexbox gap={16}>
-      {!browsable && (
+      {!browsable && fixedDeviceName && (
         <Text type="secondary">
-          {fixedDeviceName
-            ? t('settings.setDirectoryDescription', { device: fixedDeviceName })
-            : t('settings.addDirectoryDescription')}
+          {t('settings.setDirectoryDescription', { device: fixedDeviceName })}
         </Text>
       )}
-      {fixedDeviceName ? (
-        <Flexbox horizontal align="center" gap={8}>
-          {getDeviceIcon(fixedDevice?.platform, 16)}
-          <Text weight={500}>{fixedDeviceName}</Text>
+      <Flexbox horizontal align="center" gap={8} justify="space-between">
+        <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
+          {getDeviceIcon(device?.platform ?? fixedDevice?.platform, 16)}
+          <Text ellipsis weight={500}>
+            {addDirectoryDeviceName(device, fixedDeviceName ?? deviceId)}
+          </Text>
+          {device && <AddDirectoryDeviceStatus device={device} />}
         </Flexbox>
-      ) : (
-        <>
-          <Text>{t('directories.device')}</Text>
-          <Select
-            aria-label={t('directories.device')}
+        {!initialDeviceId && (
+          <Button
             disabled={pending}
-            options={deviceOptions}
-            placeholder={t('directories.device')}
-            value={deviceId}
-            onChange={(id) => {
-              setDevice(id ?? '');
-              setManual(false);
+            size="small"
+            type="text"
+            onClick={() => {
+              setDevice('');
               setError(undefined);
             }}
-          />
-        </>
-      )}
+          >
+            {t('settings.changeDevice')}
+          </Button>
+        )}
+      </Flexbox>
       {browsable ? (
         // The device's own folders, as when adding a working directory to an agent.
         <RemoteDirectoryBrowser
@@ -153,14 +173,7 @@ function AddDirectoryContent({
           }}
         />
       )}
-      {deviceRequest.error || environmentsRequest.error ? (
-        <AsyncError
-          error={deviceRequest.error || environmentsRequest.error}
-          onRetry={() =>
-            Promise.all([deviceRequest.revalidate(), environmentsRequest.revalidate()])
-          }
-        />
-      ) : null}
+      {loadError}
     </Flexbox>
   );
 }

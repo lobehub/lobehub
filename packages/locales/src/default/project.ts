@@ -708,4 +708,9 @@ export default {
     "This folder couldn't be set up. Check its path, or try again later.",
   'settings.directoryUnavailable_needsManager':
     'A project manager needs to open this page while the device is online.',
+  'settings.changeDevice': 'Change device',
+  'settings.noDevices':
+    'No devices yet. Connect one with the LobeHub desktop app or the `lh connect` CLI.',
+  'settings.pickDeviceDescription':
+    'Choose the device this execution environment works on. Next, pick a folder on it.',
 };
