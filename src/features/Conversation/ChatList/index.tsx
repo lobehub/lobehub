@@ -24,7 +24,6 @@ import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
-import CompressedMessageItem from '../Messages/CompressedGroup/CompressedMessageItem';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
 import { CompressedHistoryInlineContext } from '../Messages/Contexts/CompressedHistoryInlineContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
@@ -36,6 +35,7 @@ import {
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import CompressedHistoryGap from './components/CompressedHistoryGap';
+import CompressedMemberRow from './components/CompressedMemberRow';
 import PreviewTail from './components/PreviewTail';
 import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
 import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
@@ -337,9 +337,7 @@ const ChatList = memo<ChatListProps>(
       (index: number, id: string) => {
         const isLatestItem = rowIds.length === index + 1;
         const row = rowById.get(id);
-        // A compressed member is history the model no longer sees in full:
-        // read-only, without the live row's actions.
-        if (row?.compressedMember) return <CompressedMessageItem message={row.compressedMember} />;
+        if (row?.compressedMember) return <CompressedMemberRow id={id} index={index} />;
         if (row?.compressedGap)
           return (
             <CompressedHistoryGap

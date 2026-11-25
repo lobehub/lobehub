@@ -26,6 +26,32 @@ const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
 const hasLaterMessages = (s: State) => s.hasLaterMessages;
 
+const compressedMemberIndexes = new WeakMap<
+  UIChatMessage[],
+  { byId: Map<string, UIChatMessage>; pages: State['compressedHistoryPages'] }
+>();
+
+/** Every compression group's members, node slice and paged-in ones, by id; built once per snapshot. */
+const indexCompressedMembers = (
+  messages: UIChatMessage[],
+  pages: State['compressedHistoryPages'],
+): Map<string, UIChatMessage> => {
+  const cached = compressedMemberIndexes.get(messages);
+  if (cached && cached.pages === pages) return cached.byId;
+
+  const byId = new Map<string, UIChatMessage>();
+  for (const group of messages) {
+    if (group.role !== 'compressedGroup') continue;
+    for (const member of [
+      ...(pages[group.id]?.messages ?? []),
+      ...(group.compressedMessages ?? []),
+    ])
+      byId.set(member.id, member);
+  }
+  compressedMemberIndexes.set(messages, { byId, pages });
+  return byId;
+};
+
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
   const topLevelMessage = indexDisplayMessages(s.displayMessages).byId.get(id);
@@ -39,7 +65,8 @@ const getDisplayMessageById = (id: string) => (s: State) => {
     }
   }
 
-  return undefined;
+  // Compression members render as ordinary message rows above their group.
+  return indexCompressedMembers(s.displayMessages, s.compressedHistoryPages).get(id);
 };
 const getDbMessageById = (id: string) => (s: State) => indexDbMessages(s.dbMessages).byId.get(id);
 const getDbMessageByToolCallId = (id: string) => (s: State) =>

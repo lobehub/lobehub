@@ -176,3 +176,24 @@ describe('rowTailId', () => {
     expect(dataSelectors.rowTailId('g3')(steeredRow)).toBe('g3');
   });
 });
+
+describe('getDisplayMessageById', () => {
+  it('finds compression members, both the node slice and paged-in ones', () => {
+    const state = stateWith(
+      [
+        {
+          compressedMessages: [{ content: 'newest', id: 'u2', role: 'user' }],
+          id: 'group',
+          role: 'compressedGroup',
+        },
+        { id: 'u3', role: 'user' },
+      ],
+      { group: { messages: [{ content: 'paged', id: 'u1', role: 'user' }] } },
+    );
+
+    expect(dataSelectors.getDisplayMessageById('u3')(state)?.id).toBe('u3');
+    expect(dataSelectors.getDisplayMessageById('u2')(state)?.content).toBe('newest');
+    expect(dataSelectors.getDisplayMessageById('u1')(state)?.content).toBe('paged');
+    expect(dataSelectors.getDisplayMessageById('missing')(state)).toBeUndefined();
+  });
+});
