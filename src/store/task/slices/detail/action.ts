@@ -95,7 +95,6 @@ const hasInstructionSnapshotChanged = (
 };
 
 type Setter = StoreSetter<TaskStore>;
-type TaskDetailResponse = Awaited<ReturnType<typeof taskService.getDetail>>;
 
 /**
  * How long a detail read made while resolving a reference stays usable for the
@@ -129,7 +128,7 @@ export class TaskDetailSliceActionImpl {
    * Detail reads made while resolving a reference (`T-12`) to its id, keyed by
    * id and taken by the first replica fetch for it — see `#resolveViaDetail`.
    */
-  readonly #resolvedDetails = new Map<string, { at: number; response: TaskDetailResponse }>();
+  readonly #resolvedDetails = new Map<string, { at: number; data: TaskDetailData }>();
   /** Mounted task-detail surfaces, oldest first — see `claimActiveTask`. */
   readonly #activeTaskClaims: { ref: string }[] = [];
 
@@ -277,11 +276,20 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
-  #takeResolvedDetail = (taskId: string): TaskDetailResponse | undefined => {
+  #takeResolvedDetail = (taskId: string): { data: TaskDetailData } | undefined => {
     const entry = this.#resolvedDetails.get(taskId);
     if (!entry) return;
     this.#resolvedDetails.delete(taskId);
-    return Date.now() - entry.at <= RESOLVED_DETAIL_TTL ? entry.response : undefined;
+    return Date.now() - entry.at <= RESOLVED_DETAIL_TTL ? { data: entry.data } : undefined;
+  };
+
+  /** Park a read for the next replica fetch; one nobody claims is dropped at the TTL. */
+  #parkResolvedDetail = (id: string, data: TaskDetailData) => {
+    const entry = { at: Date.now(), data };
+    this.#resolvedDetails.set(id, entry);
+    setTimeout(() => {
+      if (this.#resolvedDetails.get(id) === entry) this.#resolvedDetails.delete(id);
+    }, RESOLVED_DETAIL_TTL);
   };
 
   #loadTaskDetail = async (taskId: string): Promise<TaskDetailData> => {
@@ -354,7 +362,7 @@ export class TaskDetailSliceActionImpl {
       error.code = 'TASK_NOT_FOUND';
       throw error;
     }
-    this.#resolvedDetails.set(data.id, { at: Date.now(), response });
+    this.#parkResolvedDetail(data.id, data);
     this.#rememberTask({ id: data.id, identifier: data.identifier }, ref);
     return data.id;
   };
