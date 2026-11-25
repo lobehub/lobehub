@@ -218,3 +218,17 @@ describe('switchRunner', () => {
     expect(state.requestTopicMove).not.toHaveBeenCalled();
   });
 });
+
+describe('updateEnvironment keeps what it does not edit', () => {
+  it('preserves stored requirements on a notes-only edit', async () => {
+    state.configuration = { notes: 'old', requirements: { memoryGb: 8 } };
+    state.update.mockImplementation(async (_id, { configuration }) => ({ configuration }));
+
+    await create().updateEnvironment({ notes: 'new' });
+
+    expect(state.update.mock.calls[0][1].configuration).toMatchObject({
+      notes: 'new',
+      requirements: { memoryGb: 8 },
+    });
+  });
+});

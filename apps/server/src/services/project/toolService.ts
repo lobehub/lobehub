@@ -197,13 +197,18 @@ export const createProjectToolService = (
     updateEnvironment: async (edit) => {
       await assertCanChange();
       const { configuration } = await environmentRepo.get(projectId);
+      const edited = applyEnvironmentEdit(configuration ?? {}, edit);
       // Validated as the settings form's edit is: only https github.com repositories.
-      const parsed = configurationSchema.safeParse(applyEnvironmentEdit(configuration ?? {}, edit));
+      const parsed = configurationSchema.safeParse(edited);
       if (!parsed.success)
         throw new Error(
           `Invalid environment: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`,
         );
-      const updated = await environmentRepo.update(projectId, { configuration: parsed.data });
+      // The schema only knows the fields this API edits and strips the rest
+      // (`requirements`), so a partial edit keeps whatever it did not touch.
+      const updated = await environmentRepo.update(projectId, {
+        configuration: { ...edited, ...parsed.data },
+      });
       return describeEnvironment(updated.configuration);
     },
   };

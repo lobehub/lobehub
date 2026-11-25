@@ -130,6 +130,7 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { settleExistingTopicAfterSend } from './existingTopicAfterSend';
 import { getOptimisticMessageMedia } from './optimisticMessageMedia';
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
@@ -1883,15 +1884,7 @@ export class ConversationLifecycleActionImpl {
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
-        // Optimistically bump the sort key (`sortUpdatedAt`, the sidebar's activity-time
-        // sort/group key) so the topic jumps to the top immediately, before the SWR
-        // refetch returns the server's fresh `topicActivityAt`. Bumping `updatedAt` here
-        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`.
-        this.#get().internal_dispatchTopic({
-          type: 'updateTopic',
-          id: operationContext.topicId,
-          value: { sortUpdatedAt: Date.now() },
-        });
+        settleExistingTopicAfterSend(this.#get, operationContext.topicId);
       }
 
       // Record created threadId in operation metadata
