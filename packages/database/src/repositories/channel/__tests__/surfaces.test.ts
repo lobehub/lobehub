@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, workspaceMembers } from '../../../schemas';
+import { agentOperations, channelMessages, workspaceMembers } from '../../../schemas';
 import { ChannelExecutionRepository } from '..';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
@@ -89,5 +89,20 @@ describe('Channel replies with cards', () => {
     expect(reply.content).toBe('Quiet night.');
     expect(reply.surfaces).toEqual([]);
     expect(reply.surfacesBodyLength).toBeUndefined();
+  });
+
+  it('drops the cards when the reply is deleted, so no button stays live on a tombstone', async () => {
+    const state = await cardReply('Here is the plan.', [surface]);
+    await state.asOwner.deleteMessage(state.channel.id, state.replyId);
+    const [row] = await db
+      .select({ metadata: channelMessages.metadata })
+      .from(channelMessages)
+      .where(eq(channelMessages.id, state.replyId));
+    expect(row.metadata).not.toHaveProperty('surfaces');
+    const reply = (await state.asMember.detail(state.channel.id)).messages.find(
+      (message) => message.id === state.replyId,
+    )!;
+    expect(reply.deletedAt).toBeTruthy();
+    expect(reply.surfaces).toEqual([]);
   });
 });

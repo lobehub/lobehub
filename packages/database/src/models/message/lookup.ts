@@ -3,6 +3,7 @@ import type { DBMessageItem, IThreadType, TopicMessageSearchMatch } from '@lobec
 import { ThreadType } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import {
   agentsToSessions,
@@ -253,10 +254,14 @@ export class MessageLookupQueries extends MessageScope {
     operationId: string;
     topicId: string;
   }): Promise<unknown[]> => {
+    // The runtime stamps the operation on the assistant step, not on the tool result under it,
+    // so the run is resolved through the step that called the tool.
+    const step = alias(messages, 'tool_step');
     const rows = await this.db
       .select({ state: messagePlugins.state })
       .from(messages)
       .innerJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+      .innerJoin(step, eq(step.id, messages.parentId))
       .where(
         and(
           this.ownership(),
@@ -276,7 +281,7 @@ export class MessageLookupQueries extends MessageScope {
               ),
           ),
           eq(messages.role, 'tool'),
-          sql`${messages.metadata}->>'operationId' = ${operationId}`,
+          sql`${step.metadata}->>'operationId' = ${operationId}`,
           eq(messagePlugins.identifier, identifier),
           eq(messagePlugins.apiName, apiName),
         ),
