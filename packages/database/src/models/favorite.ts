@@ -94,7 +94,7 @@ export class FavoriteModel {
   };
 
   /**
-   * Favorite a target, appending it to the end of the section. Favoriting a
+   * Favorite a target, putting it at the top of the section. Favoriting a
    * target that is already there refreshes its link and snapshot in place and
    * keeps its position.
    */
@@ -116,8 +116,10 @@ export class FavoriteModel {
       // Refreshing an existing favorite never grows the list.
       if (existing === 0 && count >= FAVORITE_LIMIT) throw new FavoriteLimitError();
 
+      // One below the current top. The value may go negative; the next
+      // reorder rewrites the whole sidebar to 0..n-1.
       const nextSortOrder = sql<number>`(
-        SELECT COALESCE(MAX(${userFavorites.sortOrder}) + 1, 0)
+        SELECT COALESCE(MIN(${userFavorites.sortOrder}) - 1, 0)
         FROM ${userFavorites}
         WHERE ${this.scope()}
       )`;
