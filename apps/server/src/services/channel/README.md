@@ -164,8 +164,9 @@ Each member answers a branch in message order, but not one run per message: when
 claimed, the same person's owed answers queued right behind it from that member in that branch
 are merged into the run (`claim.ts`, `merge.ts`). The manifest's cutoff and `requestMessageId`
 move to the newest of them and `requestMessageIds` lists them all; their jobs settle as `merged`,
-and only the first opens a reply. Merging stops at someone else's request, a `followup` wake, a
-relay or brought-back answer, or a message whose routing is still undecided, and never applies
+and only the first opens a reply. A message woken as a `mention` (a follow-up window, its name in
+the text) is owed an answer and merges like an addressed one. Merging stops at someone else's
+request, a `followup` wake or one deferred behind another member, a relay or brought-back answer, or a message whose routing is still undecided, and never applies
 to a shared Agent, whose visitors are metered per request. Retrying the run re-queues them.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
