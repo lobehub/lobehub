@@ -5403,7 +5403,6 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.status.rejected':
     "There's a problem with this payment. We will contact you.",
   'subscriptionAccounts.purchase.summary.account': 'Account',
-  'subscriptionAccounts.purchase.summary.discount': '{{badge}} applied.',
   'subscriptionAccounts.purchase.summary.included': 'Included',
   'subscriptionAccounts.purchase.summary.listPrice': 'Monthly list price.',
   'subscriptionAccounts.purchase.summary.period': 'Billing period',

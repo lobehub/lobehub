@@ -2550,7 +2550,6 @@
   "subscriptionAccounts.purchase.statusTag.rejected": "Needs attention",
   "subscriptionAccounts.purchase.summary.account": "Account",
   "subscriptionAccounts.purchase.summary.device": "Device",
-  "subscriptionAccounts.purchase.summary.discount": "{{badge}} applied.",
   "subscriptionAccounts.purchase.summary.included": "Included",
   "subscriptionAccounts.purchase.summary.listPrice": "Monthly list price.",
   "subscriptionAccounts.purchase.summary.period": "Billing period",

@@ -2550,7 +2550,6 @@
   "subscriptionAccounts.purchase.statusTag.rejected": "待处理",
   "subscriptionAccounts.purchase.summary.account": "编程账号",
   "subscriptionAccounts.purchase.summary.device": "设备",
-  "subscriptionAccounts.purchase.summary.discount": "已享 {{badge}}。",
   "subscriptionAccounts.purchase.summary.included": "已包含",
   "subscriptionAccounts.purchase.summary.listPrice": "月付原价。",
   "subscriptionAccounts.purchase.summary.period": "支付周期",
