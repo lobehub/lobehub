@@ -29,6 +29,42 @@ describe('SkillStoreExecutionRuntime — direct/local invoke refresh', () => {
     expect(service.onSkillImported).toHaveBeenCalledTimes(1);
   });
 
+  it('includes skill description in importSkill and importFromMarket results when provided', async () => {
+    const withDesc = {
+      skill: { description: 'Formats executive decision memos.', id: 's2', name: 'q4-helper' },
+      status: 'created' as const,
+    };
+    (service.importFromUrl as ReturnType<typeof vi.fn>).mockResolvedValueOnce(withDesc);
+    (service.importFromMarket as ReturnType<typeof vi.fn>).mockResolvedValueOnce(withDesc);
+
+    const urlResult = await runtime.importSkill({
+      type: 'url',
+      url: 'https://example.com/SKILL.md',
+    });
+    expect(urlResult.content).toBe(
+      'Skill "q4-helper" created successfully.\nDescription: Formats executive decision memos.',
+    );
+    expect(urlResult.state).toEqual({
+      description: 'Formats executive decision memos.',
+      name: 'q4-helper',
+      skillId: 's2',
+      status: 'created',
+      success: true,
+    });
+
+    const marketResult = await runtime.importFromMarket({ identifier: 'market-q4-helper' });
+    expect(marketResult.content).toBe(
+      'Skill "q4-helper" created successfully from market.\nDescription: Formats executive decision memos.',
+    );
+    expect(marketResult.state).toEqual({
+      description: 'Formats executive decision memos.',
+      name: 'q4-helper',
+      skillId: 's2',
+      status: 'created',
+      success: true,
+    });
+  });
+
   it('refreshes the skills list inline after a successful importFromMarket', async () => {
     const result = await runtime.importFromMarket({ identifier: 'cool-skill' });
 

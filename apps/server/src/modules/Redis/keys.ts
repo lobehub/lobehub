@@ -358,6 +358,12 @@ export const RedisKeys = {
     agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
       `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
+     * The skill-index snapshot one conversation renders `<available_skills>` from, and its change notes.
+     * Full key: lobechat:skill_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    skillIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `skill_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
+    /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
      */

@@ -1,4 +1,5 @@
 import { type AgentRuntimeContext, getLlmCallCount } from '@lobechat/agent-runtime';
+import type { SkillIndexSnapshot } from '@lobechat/context-engine';
 import type { AgentDocumentIndexSnapshot } from '@lobechat/context-engine/agent-document';
 import { context as otelContext, trace as otelTrace } from '@lobechat/observability-otel/api';
 import {
@@ -339,9 +340,10 @@ export async function executeStep(
       // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
       // payload in trace only, reducing per-step Redis state by ~500x.
       let contextEnginePayload: { input: unknown; metadata?: unknown; output: unknown } | undefined;
-      // Agent-document index snapshot the step pinned, written into the state
-      // it saves so the next step renders the same index and change notes.
+      // Agent-document and skill index snapshots the step pinned, written into
+      // the state it saves so the next step renders the same index and change notes.
       let agentDocumentIndex: AgentDocumentIndexSnapshot | undefined;
+      let skillIndex: SkillIndexSnapshot | undefined;
 
       // Create Agent and Runtime instances
       // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
@@ -353,6 +355,9 @@ export async function executeStep(
         agentState,
         bindAgentDocumentIndex: (snapshot) => {
           agentDocumentIndex = snapshot;
+        },
+        bindSkillIndex: (snapshot) => {
+          skillIndex = snapshot;
         },
         operationId,
         stepIndex,
@@ -376,10 +381,11 @@ export async function executeStep(
         runtime,
         stepIndex,
       });
-      if (agentDocumentIndex) {
+      if (agentDocumentIndex || skillIndex) {
         stepResult.newState.binding = {
           ...stepResult.newState.binding,
-          agentDocumentIndex,
+          ...(agentDocumentIndex && { agentDocumentIndex }),
+          ...(skillIndex && { skillIndex }),
         };
       }
 

@@ -1,10 +1,8 @@
 import { type SkillItem, type SkillSource, skillsPrompts } from '@lobechat/prompts';
-import { isPlainRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
-import type { Message, PipelineContext, ProcessorOptions } from '../types';
-import { SKILL_STORE_TOOL_ID } from './SkillImportRouteInjector';
+import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -16,88 +14,6 @@ declare module '../types' {
 }
 
 const log = debug('context-engine:provider:SkillContextProvider');
-
-/** Skill Store APIs whose result reports the import `status` in its state. */
-const SKILL_STORE_IMPORT_APIS = new Set(['importFromMarket', 'importSkill']);
-
-/**
- * Filesystem skills outrank a user-library skill of the same name in the skill
- * pool, so a listed entry with one of these sources is never the library skill
- * an import just created.
- */
-const FILESYSTEM_SKILL_SOURCES = new Set<SkillSource | undefined>(['device', 'project']);
-
-const extractCreatedSkillName = (state: unknown): string | undefined => {
-  if (!isPlainRecord(state)) return undefined;
-  if (state.success !== true || state.status !== 'created') return undefined;
-
-  return typeof state.name === 'string' && state.name ? state.name : undefined;
-};
-
-/**
- * Collect the names of skills created by `lobe-skill-store` in the visible
- * (non-truncated, non-compressed) conversation history.
- *
- * When the model installs a new skill mid-conversation, listing it in
- * `<available_skills>` on the next turn mutates message `[0]` and invalidates
- * the provider prompt cache for the whole conversation prefix. Until the import
- * turn leaves visible history, the model knows the skill only from the import
- * confirmation, which carries its name and not its description.
- *
- * Names are compared exactly, the way the skill pool dedupes them.
- *
- * Deliberately skips `compressedGroup.compressedMessages`: once the import turn
- * is compressed into a summary or truncated out of history, the skill returns
- * to `<available_skills>` so the model never loses visibility of it. Also
- * ignores `status: 'updated' | 'unchanged'` because those skills were already
- * in the initial `<available_skills>` block and removing them would itself
- * break the cached prefix.
- *
- * Covers model-driven Skill Store installs only, because they are the only
- * list change the history records. A re-import that reorders the list, a skill
- * created by `lobe-skill-maintainer`, and an install made outside the
- * conversation still change message `[0]` on the next turn.
- */
-const collectSessionCreatedSkillNames = (messages: readonly Message[]): Set<string> => {
-  const names = new Set<string>();
-
-  for (const msg of messages) {
-    if (
-      msg.role === 'tool' &&
-      isPlainRecord(msg.plugin) &&
-      msg.plugin.identifier === SKILL_STORE_TOOL_ID &&
-      typeof msg.plugin.apiName === 'string' &&
-      SKILL_STORE_IMPORT_APIS.has(msg.plugin.apiName)
-    ) {
-      const name = extractCreatedSkillName(msg.pluginState);
-      if (name) names.add(name);
-      continue;
-    }
-
-    if (!Array.isArray(msg.children)) continue;
-
-    for (const child of msg.children) {
-      if (!isPlainRecord(child) || !Array.isArray(child.tools)) continue;
-
-      for (const tool of child.tools) {
-        if (
-          !isPlainRecord(tool) ||
-          tool.identifier !== SKILL_STORE_TOOL_ID ||
-          typeof tool.apiName !== 'string' ||
-          !SKILL_STORE_IMPORT_APIS.has(tool.apiName)
-        ) {
-          continue;
-        }
-
-        const result = isPlainRecord(tool.result) ? tool.result : undefined;
-        const name = extractCreatedSkillName(result?.state);
-        if (name) names.add(name);
-      }
-    }
-  }
-
-  return names;
-};
 
 /**
  * Lightweight skill metadata for context injection
@@ -158,9 +74,6 @@ export const selectActivatedSkills = (enabledSkills?: SkillMeta[]): SkillMeta[] 
 export class SkillContextProvider extends BaseSystemRoleProvider {
   readonly name = 'SkillContextProvider';
 
-  /** Skills the last `buildSystemRoleContent` call put into the prompt. */
-  private injectedSkillsCount = 0;
-
   constructor(
     private config: SkillContextProviderConfig,
     options: ProcessorOptions = {},
@@ -168,20 +81,7 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     super(options);
   }
 
-  private resolvePromptSkills(context: PipelineContext) {
-    const enabledSkills = this.config.enabledSkills ?? [];
-    const activatedSkills = selectActivatedSkills(enabledSkills);
-    const sessionCreatedSkillNames = collectSessionCreatedSkillNames(context.messages);
-    const availableSkills = enabledSkills.filter(
-      (s) =>
-        !s.activated &&
-        (FILESYSTEM_SKILL_SOURCES.has(s.source) || !sessionCreatedSkillNames.has(s.name)),
-    );
-
-    return { activatedSkills, availableSkills };
-  }
-
-  protected buildSystemRoleContent(context: PipelineContext): string | null {
+  protected buildSystemRoleContent(_context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
     const { enabledSkills } = this.config;
@@ -191,10 +91,9 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
       return null;
     }
 
-    // Separate activated skills (inject content directly) from available skills (list only),
-    // keeping skills created inside this conversation out of <available_skills> so the
-    // leading system message stays byte-stable for prompt caching.
-    const { activatedSkills, availableSkills } = this.resolvePromptSkills(context);
+    // Separate activated skills (inject content directly) from available skills (list only)
+    const activatedSkills = selectActivatedSkills(enabledSkills);
+    const availableSkills = enabledSkills.filter((s) => !s.activated);
 
     const contentParts: string[] = [];
 
@@ -232,14 +131,13 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
       activatedSkills.length,
       availableSkills.length,
     );
-    this.injectedSkillsCount = activatedSkills.length + availableSkills.length;
     return contentParts.join('\n\n');
   }
 
   protected onInjected(context: PipelineContext): void {
     context.metadata.skillContext = {
       injected: true,
-      skillsCount: this.injectedSkillsCount,
+      skillsCount: this.config.enabledSkills?.length ?? 0,
     };
   }
 }
