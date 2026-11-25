@@ -23,6 +23,7 @@ import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { probeAgentRunRuntimes } from '@/server/services/aiAgent/pipeline/codexDeviceRuntime';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
+import { recordDevicesSeen } from '@/server/services/deviceGateway/lastSeen';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
@@ -308,6 +309,10 @@ export const registryRouter = router({
             },
           ];
 
+    // Each pool's registry rows with the devices its gateway reports online,
+    // recorded below so an offline row's `lastSeen` is when it was last alive.
+    const observed: { online: Set<string>; rows: typeof personalRows }[] = [];
+
     // Merge a DB-registered set with its live gateway pool into the UI shape.
     // `scope` tags the group; deviceIds never collide across pools (a personal id
     // is derived from userId, a workspace id from workspaceId).
@@ -322,6 +327,7 @@ export const registryRouter = router({
       for (const conn of filterAuthorizedDevicePresence(registeredDeviceIds, onlineList, scope)) {
         channelsByDevice.set(conn.deviceId, toChannels(conn));
       }
+      observed.push({ online: new Set(channelsByDevice.keys()), rows });
 
       const seen = new Set<string>();
       const fromDb = rows.map((d): DeviceListItem => {
@@ -409,10 +415,14 @@ export const registryRouter = router({
     // and their ghosts have to be merged first, then ordered as one list.
     // Consumers (settings list, picker) filter this down to a single scope, and
     // filtering preserves order, so one pass serves every surface.
-    return sortDevicesByActivity([
+    const items = sortDevicesByActivity([
       ...buildItems(personalRows, personalOnline, 'personal', personalPhases),
       ...buildItems(workspaceRows, workspaceOnline, 'workspace', workspacePhases),
     ]);
+    await Promise.all(
+      observed.map(({ online, rows }) => recordDevicesSeen(ctx.deviceModel, rows, online)),
+    );
+    return items;
   }),
 
   // ─── Tunnel links ───

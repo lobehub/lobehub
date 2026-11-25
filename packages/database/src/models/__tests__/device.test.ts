@@ -626,6 +626,60 @@ describe('DeviceModel', () => {
     });
   });
 
+  describe('markSeen', () => {
+    const registeredAt = new Date('2026-01-01T00:00:00.000Z');
+    const seenAt = new Date('2026-03-01T00:00:00.000Z');
+
+    const insertRows = async (rows: (typeof devices.$inferInsert)[]) =>
+      serverDB
+        .insert(devices)
+        .values(rows.map((row) => ({ ...row, lastSeenAt: registeredAt, updatedAt: registeredAt })))
+        .returning();
+
+    const lastSeenOf = async (id: string) =>
+      (await serverDB.query.devices.findFirst({ where: eq(devices.id, id) }))?.lastSeenAt;
+
+    it('stamps the given rows without touching updatedAt', async () => {
+      const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
+
+      await deviceModel.markSeen([row.id], seenAt);
+
+      const stored = await serverDB.query.devices.findFirst({ where: eq(devices.id, row.id) });
+      expect(stored?.lastSeenAt).toEqual(seenAt);
+      expect(stored?.updatedAt).toEqual(registeredAt);
+    });
+
+    it('never moves lastSeenAt backwards', async () => {
+      const [row] = await insertRows([{ deviceId: 'p1', identitySource: 'machine-id', userId }]);
+      await deviceModel.markSeen([row.id], seenAt);
+
+      await deviceModel.markSeen([row.id], registeredAt);
+
+      expect(await lastSeenOf(row.id)).toEqual(seenAt);
+    });
+
+    it('leaves rows the caller cannot read untouched', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: wsId, name: 'WS 1', primaryOwnerId: userId, slug: 'device-model-ws-1-slug' });
+      const rows = await insertRows([
+        { deviceId: 'theirs', identitySource: 'machine-id', userId: otherUserId },
+        ...workspaceVisibilityRows(),
+      ]);
+      const idOf = (deviceId: string) => rows.find((row) => row.deviceId === deviceId)!.id;
+
+      await new DeviceModel(serverDB, userId, wsId).markSeen(
+        rows.map((row) => row.id),
+        seenAt,
+      );
+
+      expect(await lastSeenOf(idOf('pub'))).toEqual(seenAt);
+      expect(await lastSeenOf(idOf('mine-private'))).toEqual(seenAt);
+      expect(await lastSeenOf(idOf('theirs-private'))).toEqual(registeredAt);
+      expect(await lastSeenOf(idOf('theirs'))).toEqual(registeredAt);
+    });
+  });
+
   describe('update', () => {
     it('should update user-editable fields', async () => {
       await deviceModel.register({ deviceId: 'dev-1', identitySource: 'machine-id' });
