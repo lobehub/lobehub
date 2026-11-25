@@ -50,6 +50,12 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.2s ease',
   },
+  compressingLabel: {
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+  },
   container: { marginBlockEnd: '8px' },
   divider: { margin: '0' },
   summaryTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
@@ -134,6 +140,24 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     ],
     [t],
   );
+
+  // While the summary streams, the divider already marks the compression point
+  // so the transcript does not swap layouts when generation finishes.
+  if (isGeneratingSummary && historyInline) {
+    return (
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
+        <Divider className={stylex.props(styles.divider).className}>
+          <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.compressingLabel)}>
+            <Icon icon={History} size={14} />
+            <span className={cx(shinyTextStyles.shinyText)}>
+              {t('compression.dividerCompressing')}
+            </span>
+          </Flexbox>
+        </Divider>
+        <StreamingMarkdown>{content}</StreamingMarkdown>
+      </Flexbox>
+    );
+  }
 
   if (isGeneratingSummary) {
     return (

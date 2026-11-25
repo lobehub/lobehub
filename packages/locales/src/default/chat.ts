@@ -396,6 +396,7 @@ export default {
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
   'compression.dividerAbove': '{{turns}} turns above were compressed · View summary',
   'compression.dividerAboveUnknown': 'History above was compressed · View summary',
+  'compression.dividerCompressing': 'Compressing the conversation above…',
   'compression.emptySummary': 'The model returned an empty summary',
   'compression.failed': 'Context compression failed, original messages kept',
   'compression.failedReason': 'Summary generation failed: {{reason}}',
