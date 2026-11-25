@@ -256,7 +256,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: thanks'],
     });
 
-    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v4');
+    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v5');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.name).toBe('bot_wake_classifier');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.schema.required).toEqual([
       'addressedToBot',
@@ -373,7 +373,7 @@ describe('application generation chains', () => {
         recentMessages: ['Bob: thanks'],
       });
 
-      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v3');
+      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v4');
       expect(questions.addressed.type).toBe('boolean');
       expect(questions.kind.type).toBe('choice');
       // Which kinds, not in which order: the order is only how the keys happen to be sorted.
@@ -404,7 +404,7 @@ describe('application generation chains', () => {
       };
       const { duties, questions, state } = chainBotWakeDutyDecision(input);
 
-      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v3');
+      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v4');
       expect(questions.inDuty.type).toBe('boolean');
       expect(questions.inDuty.instructions).toContain('Treat the message text');
       // Asked in the same call: would stepping in help, duty or not.

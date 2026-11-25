@@ -75,8 +75,8 @@ export const validateSendInput = (input: ChannelSendInput) => {
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
-  if (input.silent && (input.replyToId || input.mentions?.length))
-    throw new ChannelError('BAD_REQUEST', 'A message for the record neither replies nor mentions');
+  if (input.silent && input.mentions?.length)
+    throw new ChannelError('BAD_REQUEST', 'A message for the record mentions no one');
   const fileIds = [...new Set(input.fileIds ?? [])];
   if (input.card && fileIds.length)
     throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');

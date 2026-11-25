@@ -627,9 +627,10 @@ export default {
   'plans.legacy.banner.canceledDesc':
     'Your subscription is canceled and ends with this billing period. You can upgrade to a current plan anytime to keep going.',
   'plans.legacy.banner.desc':
-    'It keeps its current price. You can upgrade to a higher-tier plan anytime, and what you have used this billing period is on us.',
+    'It keeps its current price. You can upgrade to a higher-tier plan anytime: the confirmation compares your current and new quotas side by side, and what you have used this billing period is on us.',
   'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
   'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.banner.viewBenefits': 'View current benefits',
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
