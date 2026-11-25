@@ -358,6 +358,11 @@ export const RedisKeys = {
     agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
       `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
+     * The Open Graph preview of one public page, by the SHA-256 of its address.
+     * Full key: lobechat:link_preview:v1:{urlHash}
+     */
+    linkPreview: (urlHash: string): string => `link_preview:v1:${urlHash}`,
+    /**
      * The skill-index snapshot one conversation renders `<available_skills>` from, and its change notes.
      * Full key: lobechat:skill_index:v1:{topicId}:{threadId|main}:{agentId}
      */

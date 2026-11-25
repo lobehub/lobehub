@@ -349,6 +349,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),
   // Linear OAuth connections hold workspace tokens and are managed from Settings
   linear: 'blocked',
+  // fetches arbitrary public pages for message link cards; no key-based client renders them
+  linkPreview: 'blocked',
   llmGenerationTracing: 'blocked',
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run

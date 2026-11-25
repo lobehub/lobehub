@@ -99,6 +99,10 @@ vi.mock('@/store/user/selectors', () => ({
   userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-self' },
 }));
+vi.mock('./LinkPreviews', () => ({
+  LinkPreviews: ({ content }: { content: string }) =>
+    createElement('div', { 'data-content': content, 'data-testid': 'link-previews' }),
+}));
 vi.mock('./MessageAttachments', () => ({ MessageAttachments: () => null }));
 vi.mock('./MessageReceipts', () => ({
   MessageRoutingStatus: () => null,
@@ -175,6 +179,33 @@ describe('ChannelMessage links', () => {
     );
     expect(markdownProps.current.components[CHANNEL_MENTION_TAG]).toBeDefined();
     expect(markdownProps.current.rehypePlugins).toContain(EntityLinkElement.rehypePlugin);
+  });
+
+  it('mounts link cards under the message text, outside the collapsible body', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'usr_1', name: '寻千', type: 'user' }),
+          content: 'https://ryugi.innei.dev/a/2CWv3qrwa7PuQOrqnLJ9Q',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('link-previews').dataset.content).toBe(
+      'https://ryugi.innei.dev/a/2CWv3qrwa7PuQOrqnLJ9Q',
+    );
+  });
+
+  it('mounts no link cards for a message without text', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={message({ avatar: null, id: 'usr_1', name: '寻千', type: 'user' })}
+      />,
+    );
+
+    expect(screen.queryByTestId('link-previews')).toBeNull();
   });
 });
 

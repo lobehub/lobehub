@@ -13,6 +13,7 @@ import { gitHubRefs } from './gitHubRefs';
 import { heteroControl } from './heteroControl';
 import { inboundWebhook } from './inboundWebhook';
 import { linear } from './linear';
+import { linkPreview } from './linkPreview';
 import { openapi } from './openapi';
 import { pageCollab } from './pageCollab';
 import { qqPassive } from './qqPassive';
@@ -40,6 +41,7 @@ export const redisService = {
   heteroControl,
   inboundWebhook,
   linear,
+  linkPreview,
   openapi,
   pageCollab,
   qqPassive,

@@ -65,6 +65,7 @@ export * from './hotkey';
 export * from './importer';
 export * from './knowledgeBase';
 export * from './linear';
+export * from './linkPreview';
 export * from './llm';
 export * from './managedDevice';
 export * from './meeting';
