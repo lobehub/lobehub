@@ -45,13 +45,36 @@ const CLAUDE_SETTINGS_AUTH_KEYS = ['apiKeyHelper', 'awsAuthRefresh', 'awsCredent
 const CLAUDE_LINKED_ENTRIES = ['CLAUDE.md', 'agents', 'commands', 'plugins', 'skills'];
 const CODEX_LINKED_ENTRIES = ['AGENTS.md', 'prompts', 'skills'];
 
-/** Top-level Codex config keys that pick a login method or credential store. */
+/**
+ * Top-level Codex config keys that pick a login method, a credential store,
+ * or a provider (directly, or through a profile) that could authenticate and
+ * bill somewhere other than the installed `auth.json`.
+ */
 const CODEX_AUTH_CONFIG_KEYS = [
   'cli_auth_credentials_store',
   'forced_chatgpt_workspace_id',
   'forced_login_method',
+  'model_provider',
   'preferred_auth_method',
+  'profile',
 ];
+
+/** A TOML table header: `[a.b]` or `[[a.b]]`. */
+const TOML_TABLE_HEADER = /^\s*\[\[?\s*([^[\]]+?)\s*\]\]?\s*(?:#.*)?$/;
+
+/** Custom provider definitions; the managed run only uses the built-in one. */
+const isCodexProviderPath = (dottedPath: string) =>
+  /^["']?model_providers["']?(?:\s*\.|$)/.test(dottedPath);
+
+/** Profiles stay, minus the provider they would switch to. */
+const isCodexProfileTable = (dottedPath: string) => /^["']?profiles["']?\s*\./.test(dottedPath);
+
+/**
+ * Names of the instruction files copied (not linked) on Windows, with the
+ * copy's mtime, so a later seed refreshes an untouched copy but never one the
+ * agent edited.
+ */
+const COPIED_ENTRIES_FILE = '.lobehub-copied-entries.json';
 
 const CODEX_CREDENTIAL_STORE_PIN = 'cli_auth_credentials_store = "file"';
 
@@ -78,37 +101,75 @@ const readJsonObject = async (file: string): Promise<Record<string, unknown> | u
   }
 };
 
-/**
- * Point `managedDir/name` at `sourceDir/name`. A link this module made is
- * refreshed; a real file or directory the agent created in the profile is
- * left alone; a link whose source disappeared is removed.
- */
-const linkEntry = async (sourceDir: string, managedDir: string, name: string) => {
-  const source = path.join(sourceDir, name);
-  const target = path.join(managedDir, name);
-  const [sourceStat, targetStat] = await Promise.all([
-    lstatOrUndefined(source),
-    lstatOrUndefined(target),
-  ]);
-  if (targetStat && !targetStat.isSymbolicLink()) return;
-  if (targetStat) await rm(target, { force: true });
-  if (!sourceStat) return;
-
-  if (process.platform === 'win32') {
-    // File symlinks need a privilege on Windows: junction dirs, copy files.
-    if (sourceStat.isDirectory()) await symlink(source, target, 'junction');
-    else await copyFile(source, target);
-    return;
-  }
-  await symlink(source, target);
-};
-
 const bestEffort = async (work: () => Promise<unknown>) => {
   try {
     await work();
   } catch {
     // A missing or unreadable piece of user config must not block the run.
   }
+};
+
+type CopiedEntries = Record<string, number>;
+
+const readCopiedEntries = async (managedDir: string): Promise<CopiedEntries> => {
+  const stored = await readJsonObject(path.join(managedDir, COPIED_ENTRIES_FILE));
+  const entries: CopiedEntries = {};
+  for (const [name, mtime] of Object.entries(stored ?? {})) {
+    if (typeof mtime === 'number') entries[name] = mtime;
+  }
+  return entries;
+};
+
+/**
+ * Point `managedDir/name` at `sourceDir/name`. A link (or Windows copy) this
+ * module made is refreshed; a real file or directory the agent created or
+ * edited in the profile is left alone; an entry whose source disappeared is
+ * removed. `copied` tracks the Windows copies and is updated in place.
+ */
+const linkEntry = async (
+  sourceDir: string,
+  managedDir: string,
+  name: string,
+  copied: CopiedEntries,
+) => {
+  const source = path.join(sourceDir, name);
+  const target = path.join(managedDir, name);
+  const [sourceStat, targetStat] = await Promise.all([
+    lstatOrUndefined(source),
+    lstatOrUndefined(target),
+  ]);
+  const ownCopy = !!targetStat?.isFile() && copied[name] === targetStat.mtimeMs;
+  if (targetStat && !targetStat.isSymbolicLink() && !ownCopy) {
+    delete copied[name];
+    return;
+  }
+  if (targetStat) await rm(target, { force: true });
+  delete copied[name];
+  if (!sourceStat) return;
+
+  if (process.platform === 'win32') {
+    // File symlinks need a privilege on Windows: junction dirs, copy files.
+    if (sourceStat.isDirectory()) {
+      await symlink(source, target, 'junction');
+    } else {
+      await copyFile(source, target);
+      copied[name] = (await lstat(target)).mtimeMs;
+    }
+    return;
+  }
+  await symlink(source, target);
+};
+
+const linkEntries = async (sourceDir: string, managedDir: string, names: string[]) => {
+  const copied = await readCopiedEntries(managedDir);
+  const before = JSON.stringify(copied);
+  for (const name of names) {
+    await bestEffort(() => linkEntry(sourceDir, managedDir, name, copied));
+  }
+  if (JSON.stringify(copied) === before) return;
+  await bestEffort(() =>
+    writePrivate(path.join(managedDir, COPIED_ENTRIES_FILE), JSON.stringify(copied)),
+  );
 };
 
 const isSameDir = (a: string, b: string) => path.resolve(a) === path.resolve(b);
@@ -147,9 +208,7 @@ export const seedClaudeProfile = async (managedDir: string, options: SeedProfile
     await writePrivate(target, JSON.stringify(settings, null, 2));
   });
 
-  for (const name of CLAUDE_LINKED_ENTRIES) {
-    await bestEffort(() => linkEntry(user.configDir, managedDir, name));
-  }
+  await linkEntries(user.configDir, managedDir, CLAUDE_LINKED_ENTRIES);
 
   // User-scope MCP servers live in `.claude.json` beside session state and
   // the account record; copy only `mcpServers` into the profile's own file.
@@ -166,14 +225,24 @@ export const seedClaudeProfile = async (managedDir: string, options: SeedProfile
   });
 };
 
-/** Drop top-level auth / credential-store keys, then pin the file store. */
+/**
+ * Drop top-level auth / credential-store / provider keys, custom provider
+ * tables and profile provider overrides, then pin the file store.
+ */
 export const buildManagedCodexConfig = (userConfig: string | undefined) => {
   const kept: string[] = [];
-  let topLevel = true;
+  let table: string | undefined;
   for (const line of (userConfig ?? '').split(/\r?\n/)) {
-    if (/^\s*\[/.test(line)) topLevel = false;
-    const key = /^\s*([\w-]+)\s*=/.exec(line)?.[1];
-    if (topLevel && key && CODEX_AUTH_CONFIG_KEYS.includes(key)) continue;
+    const header = TOML_TABLE_HEADER.exec(line)?.[1];
+    if (header !== undefined) table = header;
+    const inProviderTable = table !== undefined && isCodexProviderPath(table);
+    if (inProviderTable) continue;
+    const key = /^\s*([\w"'.-]+?)\s*=/.exec(line)?.[1];
+    if (key !== undefined && header === undefined) {
+      if (table === undefined && (CODEX_AUTH_CONFIG_KEYS.includes(key) || isCodexProviderPath(key)))
+        continue;
+      if (table !== undefined && isCodexProfileTable(table) && key === 'model_provider') continue;
+    }
     kept.push(line);
   }
   // Top-level keys must precede the first table, so the pin goes first.
@@ -194,7 +263,5 @@ export const seedCodexProfile = async (
   // Not best-effort: without the pin a keyring default could hide auth.json.
   await writePrivate(path.join(managedHome, 'config.toml'), buildManagedCodexConfig(userConfig));
 
-  for (const name of CODEX_LINKED_ENTRIES) {
-    await bestEffort(() => linkEntry(userHome, managedHome, name));
-  }
+  await linkEntries(userHome, managedHome, CODEX_LINKED_ENTRIES);
 };

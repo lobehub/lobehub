@@ -111,6 +111,34 @@ describe('Codex profile', () => {
     );
   });
 
+  it('drops custom provider routing so the run bills the installed login', () => {
+    const config = buildManagedCodexConfig(
+      [
+        'model = "gpt-5"',
+        'model_provider = "proxy"',
+        'profile = "work"',
+        'model_providers.inline.base_url = "https://inline"',
+        '',
+        '[model_providers.proxy]',
+        'base_url = "https://proxy.example"',
+        'env_key = "PROXY_KEY"',
+        'requires_openai_auth = false',
+        '',
+        '[profiles.work]',
+        'model = "o3"',
+        'model_provider = "proxy"',
+        '',
+        '[mcp_servers.docs]',
+        'command = "docs-mcp"',
+      ].join('\n'),
+    );
+
+    expect(config).not.toMatch(/proxy|inline|env_key|requires_openai_auth|profile =/);
+    expect(config).toContain('model = "gpt-5"');
+    expect(config).toContain('[profiles.work]\nmodel = "o3"');
+    expect(config).toContain('[mcp_servers.docs]\ncommand = "docs-mcp"');
+  });
+
   it('writes the pinned config even when the user has none', async () => {
     await seedCodexProfile(managed, { env: {}, homeDir: home });
 
@@ -146,5 +174,47 @@ describe('Codex profile', () => {
 
     expect(await readFile(path.join(managed, 'config.toml'), 'utf8')).toContain('model = "o3"');
     expect(await readFile(path.join(managed, 'AGENTS.md'), 'utf8')).toBe('# codex');
+  });
+});
+
+describe('instruction copies on Windows', () => {
+  const platform = process.platform;
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: platform });
+  });
+
+  const userAgents = () => path.join(home, '.codex', 'AGENTS.md');
+  const managedAgents = () => path.join(managed, 'AGENTS.md');
+  const seed = () => seedCodexProfile(managed, { env: {}, homeDir: home });
+
+  beforeEach(async () => {
+    await mkdir(path.join(home, '.codex'), { recursive: true });
+    await writeFile(userAgents(), '# v1');
+  });
+
+  it('refreshes an untouched copy and drops it when the source goes away', async () => {
+    await seed();
+    expect(await readFile(managedAgents(), 'utf8')).toBe('# v1');
+
+    await writeFile(userAgents(), '# v2');
+    await seed();
+    expect(await readFile(managedAgents(), 'utf8')).toBe('# v2');
+
+    await rm(userAgents());
+    await seed();
+    await expect(lstat(managedAgents())).rejects.toThrow();
+  });
+
+  it('keeps a copy the agent edited', async () => {
+    await seed();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeFile(managedAgents(), '# edited by the agent');
+
+    await writeFile(userAgents(), '# v2');
+    await seed();
+    expect(await readFile(managedAgents(), 'utf8')).toBe('# edited by the agent');
   });
 });
