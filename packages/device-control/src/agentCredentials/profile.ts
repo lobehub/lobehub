@@ -59,15 +59,43 @@ const CODEX_AUTH_CONFIG_KEYS = [
   'profile',
 ];
 
+/** One TOML key segment: bare, "basic" or 'literal'. */
+const TOML_KEY_SEGMENT = String.raw`(?:[\w-]+|"(?:[^"\\]|\\.)*"|'[^']*')`;
+const TOML_DOTTED_KEY = String.raw`${TOML_KEY_SEGMENT}(?:\s*\.\s*${TOML_KEY_SEGMENT})*`;
 /** A TOML table header: `[a.b]` or `[[a.b]]`. */
-const TOML_TABLE_HEADER = /^\s*\[\[?\s*([^[\]]+?)\s*\]\]?\s*(?:#.*)?$/;
+const TOML_TABLE_HEADER = new RegExp(
+  String.raw`^\s*\[\[?\s*(${TOML_DOTTED_KEY})\s*\]\]?\s*(?:#.*)?$`,
+);
+/** A key/value line: `a.b = ...`. */
+const TOML_KEY_VALUE = new RegExp(String.raw`^\s*(${TOML_DOTTED_KEY})\s*=`);
+
+/**
+ * `"model_provider"`, `'profiles'.work` and `model_provider` are the same
+ * TOML keys: drop the quotes so the filters compare bare dotted paths.
+ */
+const normalizeTomlKey = (dottedKey: string) =>
+  (dottedKey.match(new RegExp(TOML_KEY_SEGMENT, 'g')) ?? [])
+    .map((segment) => {
+      if (segment.startsWith('"')) {
+        // TOML escapes are JSON's plus `\U`; an exotic one just keeps its raw text.
+        try {
+          return JSON.parse(segment) as string;
+        } catch {
+          return segment.slice(1, -1);
+        }
+      }
+      if (segment.startsWith("'")) return segment.slice(1, -1);
+      return segment;
+    })
+    .join('.');
 
 /** Custom provider definitions; the managed run only uses the built-in one. */
 const isCodexProviderPath = (dottedPath: string) =>
-  /^["']?model_providers["']?(?:\s*\.|$)/.test(dottedPath);
+  dottedPath === 'model_providers' || dottedPath.startsWith('model_providers.');
 
 /** Profiles stay, minus the provider they would switch to. */
-const isCodexProfileTable = (dottedPath: string) => /^["']?profiles["']?\s*\./.test(dottedPath);
+const isCodexProfileProviderKey = (dottedPath: string) =>
+  /^profiles\.[^.]+\.model_provider$/.test(dottedPath);
 
 /**
  * Names of the instruction files copied (not linked) on Windows, with the
@@ -233,15 +261,21 @@ export const buildManagedCodexConfig = (userConfig: string | undefined) => {
   const kept: string[] = [];
   let table: string | undefined;
   for (const line of (userConfig ?? '').split(/\r?\n/)) {
-    const header = TOML_TABLE_HEADER.exec(line)?.[1];
-    if (header !== undefined) table = header;
-    const inProviderTable = table !== undefined && isCodexProviderPath(table);
-    if (inProviderTable) continue;
-    const key = /^\s*([\w"'.-]+?)\s*=/.exec(line)?.[1];
-    if (key !== undefined && header === undefined) {
-      if (table === undefined && (CODEX_AUTH_CONFIG_KEYS.includes(key) || isCodexProviderPath(key)))
+    const rawHeader = TOML_TABLE_HEADER.exec(line)?.[1];
+    if (rawHeader !== undefined) table = normalizeTomlKey(rawHeader);
+    if (table !== undefined && isCodexProviderPath(table)) continue;
+    const rawKey = rawHeader === undefined ? TOML_KEY_VALUE.exec(line)?.[1] : undefined;
+    if (rawKey !== undefined) {
+      const key = normalizeTomlKey(rawKey);
+      // Resolve against the table, so `[profiles]` + `work.model_provider` matches too.
+      const fullKey = table === undefined ? key : `${table}.${key}`;
+      if (
+        (table === undefined && CODEX_AUTH_CONFIG_KEYS.includes(key)) ||
+        isCodexProviderPath(fullKey) ||
+        isCodexProfileProviderKey(fullKey)
+      ) {
         continue;
-      if (table !== undefined && isCodexProfileTable(table) && key === 'model_provider') continue;
+      }
     }
     kept.push(line);
   }

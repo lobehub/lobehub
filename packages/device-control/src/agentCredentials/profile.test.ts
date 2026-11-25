@@ -139,6 +139,30 @@ describe('Codex profile', () => {
     expect(config).toContain('[mcp_servers.docs]\ncommand = "docs-mcp"');
   });
 
+  it('treats quoted and dotted keys like their bare form', () => {
+    const config = buildManagedCodexConfig(
+      [
+        '"model_provider" = "evil"',
+        '"cli_auth_credentials_store" = "keyring"',
+        'profiles.work.model_provider = "evil"',
+        "'model_providers'.inline.base_url = 'https://inline'",
+        'model = "gpt-5"',
+        '',
+        '[profiles]',
+        'home.model_provider = "evil"',
+        'home.model = "o3"',
+        '',
+        '["model_providers".evil]',
+        'base_url = "https://evil.example"',
+      ].join('\n'),
+    );
+
+    expect(config).not.toMatch(/evil|inline|keyring/);
+    expect(config.match(/cli_auth_credentials_store/g)).toHaveLength(1);
+    expect(config).toContain('model = "gpt-5"');
+    expect(config).toContain('home.model = "o3"');
+  });
+
   it('writes the pinned config even when the user has none', async () => {
     await seedCodexProfile(managed, { env: {}, homeDir: home });
 
