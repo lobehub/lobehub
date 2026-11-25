@@ -134,4 +134,21 @@ describe('normalizeChannelReplyOpening', () => {
       ),
     ).toEqual({ placement: 'channel' });
   });
+
+  it('drops an acknowledgement that is only punctuation', () => {
+    for (const ack of [':', '：', '…', ' - ', '。']) {
+      expect(
+        normalizeChannelReplyOpening(
+          { ...answer, ack, acknowledge: true },
+          { canOpenThread: true },
+        ),
+      ).toEqual({ placement: 'channel' });
+    }
+    expect(
+      normalizeChannelReplyOpening(
+        { ...answer, ack: '好', acknowledge: true },
+        { canOpenThread: false },
+      ),
+    ).toEqual({ ack: '好', placement: 'channel' });
+  });
 });
