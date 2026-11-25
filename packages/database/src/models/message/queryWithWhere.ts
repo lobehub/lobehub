@@ -24,6 +24,7 @@ import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
 import type { MessageGroupNodeWindow, ModelTimingContext, QueryMessagesOptions } from './types';
+import { viewModelPluginState } from './viewModelPluginState';
 
 export class MessagePageQueries extends MessageScope {
   private readonly relations: MessageRelationQueries;
@@ -69,6 +70,7 @@ export class MessagePageQueries extends MessageScope {
       allowShareVisitor,
       workAccessScope,
       groupNodeWindow,
+      viewModelPluginState: selectViewModelPluginState,
     } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
@@ -142,7 +144,7 @@ export class MessagePageQueries extends MessageScope {
             },
             pluginError: messagePlugins.error,
             pluginIntervention: messagePlugins.intervention,
-            pluginState: messagePlugins.state,
+            pluginState: selectViewModelPluginState ? viewModelPluginState : messagePlugins.state,
 
             translate: {
               content: messageTranslates.content,
