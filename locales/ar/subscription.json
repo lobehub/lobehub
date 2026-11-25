@@ -488,6 +488,7 @@
   "plans.compare.earlyAccess": "وصول مبكر إلى الميزات الجديدة",
   "plans.compare.included": "مضمّن",
   "plans.compare.monthlySpend": "الحد الشهري",
+  "plans.compare.monthlySpend.desc": "يُعاد ضبطه في بداية كل شهر فوترة",
   "plans.compare.noLimit": "بلا حد",
   "plans.compare.none": "لا شيء",
   "plans.compare.notIncluded": "غير مضمّن",

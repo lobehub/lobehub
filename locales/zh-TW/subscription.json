@@ -488,6 +488,7 @@
   "plans.compare.earlyAccess": "新功能搶先體驗",
   "plans.compare.included": "包含",
   "plans.compare.monthlySpend": "每月上限",
+  "plans.compare.monthlySpend.desc": "每個計費月份開始時重置",
   "plans.compare.noLimit": "無上限",
   "plans.compare.none": "無",
   "plans.compare.notIncluded": "不包含",

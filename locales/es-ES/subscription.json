@@ -488,6 +488,7 @@
   "plans.compare.earlyAccess": "Acceso anticipado a nuevas funciones",
   "plans.compare.included": "Incluido",
   "plans.compare.monthlySpend": "Límite mensual",
+  "plans.compare.monthlySpend.desc": "Se restablece al inicio de cada mes de facturación",
   "plans.compare.noLimit": "Sin límite",
   "plans.compare.none": "Ninguno",
   "plans.compare.notIncluded": "No incluido",
