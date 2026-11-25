@@ -46,9 +46,15 @@ interface RunCommandOutputState {
  *
  * An empty `stdout` keeps falling back even when `stderr` is set: the body
  * carries the exit code and failure header (e.g. a stderr-only non-zero exit),
- * which the card would otherwise not show anywhere.
+ * which the card would otherwise not show anywhere. A legacy `output` that is
+ * exactly `stderr` is skipped for the same reason: it only repeats the stderr
+ * block and would hide that header.
  */
 export const getRunCommandStdout = (
   state: RunCommandOutputState | null | undefined,
   content?: string | null,
-): string => state?.stdout || state?.output || content || '';
+): string => {
+  const output = state?.output === state?.stderr ? undefined : state?.output;
+
+  return state?.stdout || output || content || '';
+};

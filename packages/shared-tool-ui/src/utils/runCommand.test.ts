@@ -51,6 +51,10 @@ describe('getRunCommandStdout', () => {
     expect(getRunCommandStdout({ output: '', stderr: 'boom\n', stdout: '' }, body)).toBe(body);
     // New local rows drop the derived `output`, so the body is the fallback.
     expect(getRunCommandStdout({ stderr: 'boom\n', stdout: '' }, body)).toBe(body);
+    // Legacy local rows stored `output = stdout + stderr`, i.e. just the stderr.
+    expect(getRunCommandStdout({ output: 'boom\n', stderr: 'boom\n', stdout: '' }, body)).toBe(
+      body,
+    );
   });
 
   it('keeps a legacy output that differs from the empty stdout', () => {
