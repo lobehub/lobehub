@@ -107,6 +107,54 @@ describe('removing Channel members', () => {
   });
 });
 
+const roleOf = async (memberId: string) => {
+  const [row] = await db
+    .select({ role: channelMembers.role })
+    .from(channelMembers)
+    .where(eq(channelMembers.id, memberId));
+  return row?.role;
+};
+
+describe('setting Channel admins', () => {
+  it('lets the owner make a person an admin, who can then invite and rename', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    await expect(asMember.rename(channel.id, 'Renamed')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+
+    await asOwner.setMemberRole(channel.id, member.id, 'admin');
+
+    expect(await roleOf(member.id)).toBe('admin');
+    expect((await asMember.rename(channel.id, 'Renamed')).title).toBe('Renamed');
+    const [entry] = await db
+      .select()
+      .from(channelAudit)
+      .where(
+        and(eq(channelAudit.channelId, channel.id), eq(channelAudit.event, 'member_role_changed')),
+      );
+    expect(entry).toMatchObject({ targetId: member.id, details: { role: 'admin' } });
+
+    await asOwner.setMemberRole(channel.id, member.id, 'member');
+    expect(await roleOf(member.id)).toBe('member');
+  });
+
+  it('leaves the choice to the owner and keeps the owner and Agents as they are', async () => {
+    const { asMember, asOwner, channel, member, owner } = await fixture.createTeamChannel();
+    await db.update(channelMembers).set({ role: 'admin' }).where(eq(channelMembers.id, member.id));
+
+    await expect(asMember.setMemberRole(channel.id, member.id, 'member')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(asOwner.setMemberRole(channel.id, owner.id, 'member')).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    const agent = await fixture.addAgent(channel.id, 'Helper');
+    await expect(asOwner.setMemberRole(channel.id, agent.id, 'admin')).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+});
+
 describe('leaving a Channel', () => {
   it('lets a member leave and keeps the owner', async () => {
     const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
