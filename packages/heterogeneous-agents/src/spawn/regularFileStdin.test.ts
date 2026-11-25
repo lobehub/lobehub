@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readSync, statSync } from 'node:fs';
 import * as fsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
@@ -45,17 +45,27 @@ describe('createRegularFileStdin', () => {
   it('hands over a 0600 prompt file under the temp dir and removes it on cleanup', async () => {
     const stdin = await createRegularFileStdin('hello doubao');
 
-    const filePath = promptFilePath();
-    expect(filePath.startsWith(tmpdir())).toBe(true);
-    expect(statSync(filePath).mode & 0o777).toBe(0o600);
-    await expect(fsPromises.readFile(stdin.fd)).resolves.toEqual(
-      Buffer.from('hello doubao', 'utf8'),
-    );
+    try {
+      const filePath = promptFilePath();
+      expect(filePath.startsWith(tmpdir())).toBe(true);
+      expect(statSync(filePath).mode & 0o777).toBe(0o600);
 
-    await stdin.cleanup();
-    expect(existsSync(filePath)).toBe(false);
-    // Cleanup is idempotent: a second call must not touch the closed fd.
-    await expect(stdin.cleanup()).resolves.toBeUndefined();
+      // The handle exposes a raw fd, so read it through `readSync` with an
+      // explicit position: `fsPromises.readFile` accepts a path, Buffer or URL
+      // but not a file descriptor.
+      const buffer = Buffer.alloc(64);
+      const bytesRead = readSync(stdin.fd, buffer, 0, buffer.length, 0);
+      expect(buffer.subarray(0, bytesRead).toString('utf8')).toBe('hello doubao');
+
+      await stdin.cleanup();
+      expect(existsSync(filePath)).toBe(false);
+      // Cleanup is idempotent: a second call must not touch the closed fd.
+      await expect(stdin.cleanup()).resolves.toBeUndefined();
+    } finally {
+      // Never leave the fd open if an assertion above fails: an unclosed
+      // FileHandle is only reclaimed at GC time and emits a DEP0137 warning.
+      await stdin.cleanup();
+    }
   });
 
   it('removes the partially written file when the write rejects', async () => {
