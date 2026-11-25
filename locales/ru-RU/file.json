@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Понравилось",
   "pageEditor.likes.more": "+{{count}} ещё",
   "pageEditor.linkCopied": "Ссылка скопирована",
-  "pageEditor.lock.editingByOther": "{{name}} редактирует эту страницу. Ваши изменения не могут быть сохранены прямо сейчас.",
-  "pageEditor.lock.editingBySomeone": "Кто-то другой редактирует эту страницу. Ваши изменения не могут быть сохранены прямо сейчас.",
   "pageEditor.menu.copyLink": "Скопировать ссылку",
   "pageEditor.menu.export": "Экспорт",
   "pageEditor.menu.export.html": "HTML",

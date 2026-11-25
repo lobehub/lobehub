@@ -24,10 +24,10 @@ const LockedAlert = memo(() => {
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
-  const joinRoom = useJoinRoomOffer();
   const inCollab = usePageEditorStore((s) => !!s.collab);
   const isLockedByOther = usePageLockedByOther();
   const isLockedBySelf = usePageLockedBySelf();
+  const joinRoom = useJoinRoomOffer(isLockedBySelf);
   // Our own save was just rejected by the lock — treat as locked even if the
   // lock-service state hasn't caught up yet.
   const saveBlockedByLock = useDocumentStore((s) =>
@@ -38,14 +38,28 @@ const LockedAlert = memo(() => {
   if (!isWorkspacePage || (inCollab && !isLockedByOther)) return null;
   if (!isLockedByOther && !isLockedBySelf && !saveBlockedByLock) return null;
 
+  const turnOnButton = joinRoom && (
+    <Button size={'small'} onClick={joinRoom.turnOn}>
+      {t('pageEditor.editMode.turnOnPageCollab')}
+    </Button>
+  );
+
   // Same user, different session (other tab / unreleased prior mount): show a
   // self-aware message and a neutral info tone — it isn't a collaborator
   // conflict, just the user's own stale lease lingering until expiry.
   if (isLockedBySelf) {
+    let description = t('pageEditor.editMode.lockedBySelfDescription');
+    if (joinRoom?.reloadOtherTab) {
+      description = t('pageEditor.editMode.lockedBySelfReloadDescription');
+    } else if (joinRoom) {
+      description = t('pageEditor.editMode.lockedBySelfInRoomDescription');
+    }
+
     return (
       <Alert
         showIcon
-        description={t('pageEditor.editMode.lockedBySelfDescription')}
+        action={turnOnButton}
+        description={description}
         style={{ marginBlock: 8 }}
         title={t('pageEditor.editMode.lockedBySelf')}
         type="info"
@@ -61,15 +75,11 @@ const LockedAlert = memo(() => {
     return (
       <Alert
         showIcon
+        action={turnOnButton}
         description={t('pageEditor.editMode.lockedInRoomDescription')}
         style={{ marginBlock: 8 }}
         title={title}
         type="info"
-        action={
-          <Button size={'small'} onClick={joinRoom}>
-            {t('pageEditor.editMode.turnOnPageCollab')}
-          </Button>
-        }
       />
     );
   }

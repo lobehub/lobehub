@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "已讚",
   "pageEditor.likes.more": "+{{count}} 更多",
   "pageEditor.linkCopied": "連結已複製",
-  "pageEditor.lock.editingByOther": "{{name}} 正在編輯此頁面。您的更改目前無法保存。",
-  "pageEditor.lock.editingBySomeone": "其他人正在編輯此頁面。您的更改目前無法保存。",
   "pageEditor.menu.copyLink": "複製連結",
   "pageEditor.menu.export": "匯出",
   "pageEditor.menu.export.html": "HTML",

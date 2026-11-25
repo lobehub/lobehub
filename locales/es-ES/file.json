@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Me gusta",
   "pageEditor.likes.more": "+{{count}} más",
   "pageEditor.linkCopied": "Enlace copiado",
-  "pageEditor.lock.editingByOther": "{{name}} está editando esta página. Tus cambios no se pueden guardar en este momento.",
-  "pageEditor.lock.editingBySomeone": "Alguien más está editando esta página. Tus cambios no se pueden guardar en este momento.",
   "pageEditor.menu.copyLink": "Copiar enlace",
   "pageEditor.menu.export": "Exportar",
   "pageEditor.menu.export.html": "HTML",

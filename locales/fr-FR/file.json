@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Mention J’aime",
   "pageEditor.likes.more": "+{{count}} de plus",
   "pageEditor.linkCopied": "Lien copié",
-  "pageEditor.lock.editingByOther": "{{name}} est en train de modifier cette page. Vos modifications ne peuvent pas être enregistrées pour le moment.",
-  "pageEditor.lock.editingBySomeone": "Quelqu'un d'autre est en train de modifier cette page. Vos modifications ne peuvent pas être enregistrées pour le moment.",
   "pageEditor.menu.copyLink": "Copier le lien",
   "pageEditor.menu.export": "Exporter",
   "pageEditor.menu.export.html": "HTML",

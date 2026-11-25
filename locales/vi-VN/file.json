@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Đã thích",
   "pageEditor.likes.more": "+{{count}} thêm",
   "pageEditor.linkCopied": "Đã sao chép liên kết",
-  "pageEditor.lock.editingByOther": "{{name}} đang chỉnh sửa trang này. Thay đổi của bạn hiện không thể lưu được.",
-  "pageEditor.lock.editingBySomeone": "Người khác đang chỉnh sửa trang này. Thay đổi của bạn hiện không thể lưu được.",
   "pageEditor.menu.copyLink": "Sao Chép Liên Kết",
   "pageEditor.menu.export": "Xuất",
   "pageEditor.menu.export.html": "HTML",
