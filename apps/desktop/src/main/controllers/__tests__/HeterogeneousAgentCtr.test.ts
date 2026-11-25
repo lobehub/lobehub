@@ -294,6 +294,14 @@ const { ensureResumeTranscriptMock, readClaudeCodeSessionCostMock } = vi.hoisted
   readClaudeCodeSessionCostMock: vi.fn(async (): Promise<number | undefined> => undefined),
 }));
 
+/**
+ * `createRegularFileStdin` writes the Doubao prompt to a temp file. Tests park it
+ * on a promise to simulate a Stop landing while that write is still pending.
+ */
+const { regularFileStdinImpl } = vi.hoisted(() => ({
+  regularFileStdinImpl: { value: null as null | ((payload: string) => Promise<any>) },
+}));
+
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   const { createCodexAppServerMocks } = await import('./testUtils');
   const actual = await importOriginal<typeof spawnModule>();
@@ -553,6 +561,12 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     ...actual,
     ensureClaudeCodeResumeTranscript: ensureResumeTranscriptMock,
     readClaudeCodeSessionCost: readClaudeCodeSessionCostMock,
+    // Only Doubao hands its prompt over as a file, so the override stays inert
+    // for every other agent type.
+    createRegularFileStdin: (payload: string) =>
+      regularFileStdinImpl.value
+        ? regularFileStdinImpl.value(payload)
+        : actual.createRegularFileStdin(payload),
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     ...createCodexAppServerMocks(actual, {
       codexAppServerCanReuse,
@@ -4481,6 +4495,7 @@ describe('HeterogeneousAgentCtr', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
       execFileMock.mockReset();
+      regularFileStdinImpl.value = null;
     });
 
     it.each([
@@ -4570,6 +4585,40 @@ describe('HeterogeneousAgentCtr', () => {
         expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
       },
     );
+
+    it('does not spawn Doubao when cancelled while its prompt file is written', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      vi.spyOn(ctr as any, 'createCliTraceSession').mockResolvedValue(undefined);
+      const { sessionId } = await ctr.startSession({ agentType: 'doubao', command: 'doubao' });
+
+      const cleanupMock = vi.fn(async () => {});
+      const fileStarted = vi.fn();
+      let completeFile!: () => void;
+      regularFileStdinImpl.value = () =>
+        new Promise((resolve) => {
+          fileStarted();
+          completeFile = () => resolve({ cleanup: cleanupMock, fd: 4242 });
+        });
+
+      const sendPrompt = ctr.sendPrompt({
+        operationId: 'op-cancel-doubao',
+        prompt: 'work',
+        sessionId,
+      });
+      await vi.waitFor(() => expect(fileStarted).toHaveBeenCalledOnce());
+
+      // The Stop lands while the prompt file is still being written: no process
+      // exists yet, so `cancelSession` only sets the flag and returns.
+      await ctr.cancelSession({ sessionId });
+      completeFile();
+      await sendPrompt;
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(cleanupMock).toHaveBeenCalledOnce();
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
   });
 
   describe('spawnLhHeteroExec', () => {

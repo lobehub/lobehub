@@ -1692,6 +1692,20 @@ export default class HeterogeneousAgentCtr {
         ? await createRegularFileStdin(spawnPlan.stdinPayload)
         : undefined;
 
+    // Writing the stdin file is a second pre-launch hop, and a Stop that lands
+    // while it runs cannot interrupt anything: `cancelSession` finds no
+    // `session.process`, sets the flag and returns. The guard above has already
+    // run, so without this second check the turn would still spawn Doubao —
+    // with `always_allow` — and let it run tools after the user cancelled.
+    if (session.cancelledByUs) {
+      await regularFileStdin?.cleanup().catch(() => {});
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after pre-launch cancellation:', cleanupError);
+      });
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     logger.info(
       'Spawning agent:',
       resolvedCliSpawnPlan.command,

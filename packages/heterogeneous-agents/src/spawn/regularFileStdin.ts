@@ -1,4 +1,4 @@
-import { open, rm, writeFile } from 'node:fs/promises';
+import { type FileHandle, open, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,6 +8,25 @@ export interface RegularFileStdin {
   /** Read-only fd to hand a child as its stdio[0]. */
   fd: number;
 }
+
+/**
+ * Create the prompt file and open it for the child.
+ *
+ * The caller only ever learns the pathname through the returned handle, so a
+ * `writeFile` that rejects halfway (e.g. `ENOSPC`) or an `open` that fails
+ * would strand the prompt — content that can be sensitive — in the OS temp
+ * directory with nobody left to delete it. Unlink at every failure point and
+ * rethrow the original error.
+ */
+const writePromptFile = async (filePath: string, payload: string): Promise<FileHandle> => {
+  try {
+    await writeFile(filePath, payload, { encoding: 'utf8', mode: 0o600 });
+    return await open(filePath, 'r');
+  } catch (error) {
+    await rm(filePath, { force: true }).catch(() => {});
+    throw error;
+  }
+};
 
 /**
  * Hand a child process its prompt through a regular file instead of the
@@ -24,8 +43,7 @@ export const createRegularFileStdin = async (payload: string): Promise<RegularFi
     tmpdir(),
     `lh-agent-stdin-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   );
-  await writeFile(filePath, payload, { encoding: 'utf8', mode: 0o600 });
-  const handle = await open(filePath, 'r');
+  const handle = await writePromptFile(filePath, payload);
 
   let closed = false;
 

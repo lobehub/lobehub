@@ -1740,6 +1740,7 @@ export default {
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
   'connectAgent.providerDesc.devin': 'Cognition coding agent CLI',
+  'connectAgent.providerDesc.doubao': 'ByteDance coding agent CLI',
   'connectAgent.providerDesc.grok-build': 'xAI coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.kimi-code': 'Moonshot AI coding agent CLI',
