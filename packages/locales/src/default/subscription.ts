@@ -819,6 +819,17 @@ export default {
   'plansModal.ultraModelAccess.desc':
     'Ultra models are the most capable and most expensive ones, available on Pro and above. Upgrade to use them.',
   'plansModal.ultraModelAccess.title': 'Ultra models need Pro or above',
+  'promotionCode.applied': 'Code applied:',
+  'promotionCode.apply': 'Apply',
+  'promotionCode.copy': 'Copy code',
+  'promotionCode.discountLine': 'Code {{code}}',
+  'promotionCode.error.invalid': 'This code is invalid or has expired',
+  'promotionCode.error.notApplicable': 'This code can’t be used for this purchase',
+  'promotionCode.error.notStackable':
+    'Your subscription already has a discount, so another code can’t be added',
+  'promotionCode.label': 'Promotion code',
+  'promotionCode.placeholder': 'Enter a promotion code',
+  'promotionCode.remove': 'Remove',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View details',
