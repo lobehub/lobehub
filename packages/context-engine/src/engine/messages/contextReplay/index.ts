@@ -188,6 +188,7 @@ export class ContextReplayCoordinator {
         ...new Set([
           ...history.flatMap((entry) => entry.snapshot.sourceIds),
           ...canonicalChanges.flatMap((change) => change.sourceIds),
+          ...Object.values(this.input.sourceIdsByProvider ?? {}).flat(),
         ]),
       ];
       const snapshot: ContextReplaySnapshot = own ?? {

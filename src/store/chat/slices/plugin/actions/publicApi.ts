@@ -1,6 +1,8 @@
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 
+import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 
 /**
@@ -25,7 +27,21 @@ export class PluginPublicApiActionImpl {
     id: string,
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
+    authorization?: { expectedDeviceId?: string },
   ): Promise<any> => {
+    const store = this.#get();
+    const message = Object.values(store.dbMessagesMap)
+      .flat()
+      .find((item) => item.id === id);
+    if (message?.agentId)
+      await messageService.assertToolDispatch({
+        agentId: message.agentId,
+        topicId: message.topicId ?? undefined,
+        identifier: payload.identifier,
+        apiName: payload.apiName,
+        expectedDeviceId:
+          authorization?.expectedDeviceId ?? getElectronStoreState().gatewayDeviceInfo?.deviceId,
+      });
     switch (payload.type) {
       // @ts-ignore
       case 'mcp': {

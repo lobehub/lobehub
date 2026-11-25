@@ -85,6 +85,7 @@ const executePreparedCall = async (
 
   try {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await prepared.context.beforeDispatch?.();
       const execution = await runWithTrace(trace, () =>
         llm.runAttempt({
           assistantMessageId: prepared.assistantMessageId,

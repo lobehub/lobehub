@@ -79,11 +79,17 @@ export class ClientContextBuilder implements ContextBuilder {
     const messages = input.payload.messages.filter(
       (message) => !assistantMessageId || message.id !== assistantMessageId,
     );
+    const documentAgentId =
+      input.state.origin?.editingAgentId ??
+      (resolvedAgentConfig.enabledToolIds?.includes('lobe-agent-builder')
+        ? this.context.get().activeAgentId
+        : effectiveAgentId) ??
+      undefined;
     const snapshots = input.contextReplay
-      ? await messageService.getContextReplays([
-          ...contextReplayMessageIds(messages),
-          input.contextReplay.invocationId,
-        ])
+      ? await messageService.getContextReplays(
+          [...contextReplayMessageIds(messages), input.contextReplay.invocationId],
+          documentAgentId,
+        )
       : {};
     const prepared = await chatService.buildAssistantMessageContext(
       {
@@ -98,6 +104,17 @@ export class ClientContextBuilder implements ContextBuilder {
         ...(input.contextReplay && {
           contextReplay: {
             ...input.contextReplay,
+            resetHistory: Object.values(snapshots).some((snapshot) => snapshot.invalidated),
+            sourceIdsByProvider: {
+              ProjectContextInjector: input.state.origin?.projectId
+                ? [`project:${input.state.origin.projectId}`]
+                : [],
+              TaskManagerContextInjector:
+                operation.context.viewedTask?.type === 'detail'
+                  ? [`task:${operation.context.viewedTask.taskId}`]
+                  : [],
+            },
+            validateSources: (ids) => messageService.revokedContextSources(ids, documentAgentId),
             runtimeContext: {
               environment: input.state.plan?.execution?.kind,
               deviceId: input.state.binding?.device?.id,
@@ -124,6 +141,15 @@ export class ClientContextBuilder implements ContextBuilder {
     const { messages: preparedMessages = [], ...params } = prepared.params;
 
     return {
+      ...(prepared.contextReplaySnapshot && {
+        beforeDispatch: async () => {
+          const revoked = await messageService.revokedContextSources(
+            prepared.contextReplaySnapshot!.sourceIds,
+            documentAgentId,
+          );
+          if (revoked.length) throw new Error('Context source access revoked before dispatch');
+        },
+      }),
       // The client transport sends these messages and `params.tools` as-is.
       contextAccounting: tryCountRequestPayloadTokens({
         messages: preparedMessages,

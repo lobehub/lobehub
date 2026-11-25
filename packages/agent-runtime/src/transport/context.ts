@@ -24,6 +24,8 @@ export interface ContextBuildInput {
 }
 
 export interface ContextBuildOutput {
+  /** Revalidate access on every network attempt, including automatic retries. */
+  beforeDispatch?: () => Promise<void>;
   /**
    * Estimated token accounting of the final request (processed messages plus
    * the resolved `tools` array). Persisted on the assistant message as

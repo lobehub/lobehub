@@ -20,7 +20,7 @@ const visit = (
 export const contextReplayMessageIds = (messages: UIChatMessage[]): string[] => {
   const ids = new Set<string>();
   visit(messages, (node) => {
-    if (typeof node.id === 'string' && typeof node.role === 'string') ids.add(node.id);
+    if (typeof node.id === 'string') ids.add(node.id);
     return node;
   });
   return [...ids];
@@ -32,7 +32,7 @@ export const withContextReplays = (
   snapshots: Record<string, ContextReplaySnapshot>,
 ): UIChatMessage[] =>
   visit(messages, (node) => {
-    if (typeof node.id !== 'string' || typeof node.role !== 'string') return node;
+    if (typeof node.id !== 'string') return node;
     const { contextReplay: _untrusted, ...metadata } = (node.metadata ?? {}) as Record<
       string,
       unknown
@@ -42,3 +42,28 @@ export const withContextReplays = (
       metadata: { ...metadata, ...(snapshots[node.id] && { contextReplay: snapshots[node.id] }) },
     };
   }) as UIChatMessage[];
+
+export const contextReplaySnapshots = (messages: UIChatMessage[]): ContextReplaySnapshot[] => {
+  const snapshots: ContextReplaySnapshot[] = [];
+  visit(messages, (node) => {
+    const snapshot = (node.metadata as { contextReplay?: ContextReplaySnapshot } | undefined)
+      ?.contextReplay;
+    if (snapshot && snapshot.invocationId === node.id) snapshots.push(snapshot);
+    return node;
+  });
+  return snapshots;
+};
+
+export const contextReplayFileIds = (messages: UIChatMessage[]): string[] => {
+  const ids = new Set<string>();
+  visit(messages, (node) => {
+    for (const key of ['fileList', 'imageList', 'audioList', 'videoList']) {
+      if (Array.isArray(node[key]))
+        for (const item of node[key]) {
+          if (item && typeof item === 'object' && typeof item.id === 'string') ids.add(item.id);
+        }
+    }
+    return node;
+  });
+  return [...ids];
+};

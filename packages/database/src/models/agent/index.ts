@@ -64,6 +64,7 @@ export class AgentModel {
 
   // **************** Read *************** //
 
+  getAgentToolPolicy = this.withContext(find.getAgentToolPolicy);
   getAgentDisplayFields = this.withContext(find.getAgentDisplayFields);
   getAgentVisibility = this.withContext(find.getAgentVisibility);
   existsById = this.withContext(find.existsById);

@@ -81,6 +81,7 @@ export class MessageModel {
   updateMetadata: MessageWriteMutations['updateMetadata'];
   commitContextReplay: MessageContextReplays['commitContextReplay'];
   getContextReplays: MessageContextReplays['getContextReplays'];
+  getContextReplayDependencies: MessageContextReplays['getContextReplayDependencies'];
 
   updatePluginState: MessagePluginStore['updatePluginState'];
   updateMessagePlugin: MessagePluginStore['updateMessagePlugin'];
@@ -203,6 +204,7 @@ export class MessageModel {
     const contextReplays = new MessageContextReplays(...args);
     this.commitContextReplay = contextReplays.commitContextReplay;
     this.getContextReplays = contextReplays.getContextReplays;
+    this.getContextReplayDependencies = contextReplays.getContextReplayDependencies;
     this.updatePluginState = plugins.updatePluginState;
     this.updateMessagePlugin = plugins.updateMessagePlugin;
     // The approval claim locks and writes message roots and plugin rows in one

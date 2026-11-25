@@ -90,6 +90,7 @@ import { parseReferDocumentTags } from '../documentReference';
 import { ToolNameResolver } from '../tools';
 import { parseReferTopicTags } from '../topicReference';
 import { ContextReplayCoordinator } from './contextReplay';
+import { prepareContextReplay } from './contextReplay/access';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
 
 const log = debug('context-engine:MessagesEngine');
@@ -136,6 +137,7 @@ export class MessagesEngine {
    * Process messages and return OpenAI-compatible format
    */
   async process(): Promise<MessagesEngineResult> {
+    this.params = await prepareContextReplay(this.params);
     const pipeline = this.buildPipeline();
     const result = await pipeline.process({ messages: this.params.messages });
 

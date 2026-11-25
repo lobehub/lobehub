@@ -13,6 +13,7 @@ export interface ContextReplaySegment {
 export interface ContextReplaySnapshot {
   changes: ContextReplaySegment[];
   createdBy?: string;
+  invalidated?: boolean;
   invocationId: string;
   parentSnapshotId?: string;
   sessionKey: string;
@@ -25,11 +26,14 @@ export interface ContextReplaySnapshot {
 export interface ContextReplayInput {
   committedSnapshot?: ContextReplaySnapshot;
   invocationId: string;
+  resetHistory?: boolean;
   /** Current access decisions, checked again even when retrying a committed snapshot. */
   revokedSourceIds?: string[];
   runtimeContext?: Record<string, string | number | boolean | string[] | undefined>;
   sessionKey?: string;
   sourceIdsByProvider?: Record<string, string[]>;
+  /** Host authorization; a failed lookup is treated as revoked, never as allowed. */
+  validateSources?: (sourceIds: string[]) => Promise<string[]>;
 }
 
 const ReplayMessageSchema = z.object({
@@ -50,6 +54,7 @@ const ReplayMessageSchema = z.object({
 });
 
 export const ContextReplaySnapshotSchema: z.ZodType<ContextReplaySnapshot> = z.object({
+  invalidated: z.boolean().optional(),
   changes: z.array(
     z.object({
       key: z.string(),

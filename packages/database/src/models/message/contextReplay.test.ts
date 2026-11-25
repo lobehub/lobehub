@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { messages, users } from '../../schemas';
+import { messageGroups, messages, users } from '../../schemas';
 import { MessageModel } from './index';
 
 const db = await getTestDB();
@@ -56,4 +56,22 @@ it('does not disclose or replace another author snapshot', async () => {
   await expect(
     new MessageModel(db, other).commitContextReplay('context-assistant', snapshot('forged')),
   ).rejects.toThrow();
+});
+
+it('checks dependencies behind nested compression groups without exposing them through messages', async () => {
+  await model.commitContextReplay('context-assistant', snapshot('private prompt'));
+  await db.insert(messageGroups).values({ id: 'outer-group', userId: owner, type: 'compression' });
+  await db.insert(messageGroups).values({
+    id: 'inner-group',
+    userId: owner,
+    parentGroupId: 'outer-group',
+    type: 'compression',
+  });
+  await db
+    .update(messages)
+    .set({ messageGroupId: 'inner-group' })
+    .where(eq(messages.id, 'context-assistant'));
+  expect(
+    (await model.getContextReplays(['outer-group']))['context-assistant'].system?.[0].content,
+  ).toBe('private prompt');
 });

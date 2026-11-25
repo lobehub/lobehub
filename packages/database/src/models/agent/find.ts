@@ -313,3 +313,16 @@ export const resolveIdBySlug = async (
 
   return rows[0]?.id ?? null;
 };
+
+export const getAgentToolPolicy = async (ctx: AgentModelContext, id: string) => {
+  const [row] = await ctx.db
+    .select({
+      plugins: agents.plugins,
+      chatConfig: agents.chatConfig,
+      agencyConfig: agents.agencyConfig,
+    })
+    .from(agents)
+    .where(and(eq(agents.id, id), ctx.ownership()))
+    .limit(1);
+  return row;
+};

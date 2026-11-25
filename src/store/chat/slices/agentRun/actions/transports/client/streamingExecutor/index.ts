@@ -363,6 +363,13 @@ export class StreamingExecutorActionImpl {
       });
     const state: AgentState = {
       ...baseState,
+      binding: {
+        ...baseState.binding,
+        device: {
+          ...baseState.binding?.device,
+          id: baseState.binding?.device?.id ?? currentDeviceId,
+        },
+      },
       metadata: {
         ...baseState.metadata,
         agentId,

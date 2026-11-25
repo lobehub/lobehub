@@ -21,6 +21,7 @@ import { createMCPError } from '@/libs/mcp/types';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveLinkedCall } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
+import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveMcpClientKinds } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
@@ -180,6 +181,18 @@ export class ToolExecutionService {
 
     log('Executing tool: %s:%s (type: %s)', identifier, apiName, type);
 
+    if (context.serverDB && context.userId && context.agentId)
+      await assertCurrentToolDispatch({
+        db: context.serverDB,
+        userId: context.userId,
+        workspaceId: context.workspaceId,
+        agentId: context.agentId,
+        topicId: context.topicId,
+        identifier,
+        apiName,
+        expectedDeviceId: context.activeDeviceId,
+        includeShareVisitor: !!context.agentShareVisitor,
+      });
     // ── Connector tool permission gate (covers ALL paths + qstash) ────────
     // Check before any execution so that disabled tools are blocked universally:
     // Lobehub market skills, Composio, MCP connectors, and execAgent/qstash alike.

@@ -34,6 +34,7 @@ import {
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 import { resolveServerSkillIndex } from '@/server/modules/Mecha/ContextEngineering/providers/skillIndex';
+import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
@@ -135,7 +136,7 @@ export const buildServerCallLlmContext = async ({
           editingGroupId: state.origin?.editingGroupId,
           threadId: state.origin?.threadId,
           topicId,
-          userId: ctx.userId,
+          userId: ctx.userId!,
           workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
         })
       : state.origin?.editingGroupId;
@@ -202,16 +203,40 @@ export const buildServerCallLlmContext = async ({
     : liveSkills;
   const skillChanges = skillIndexSnapshot ? skillChangesByMessage(skillIndexSnapshot) : undefined;
 
+  const documentAgentId = state.origin?.editingAgentId ?? agentId;
   const snapshots = contextReplay
-    ? await ctx.messageModel.getContextReplays([
-        ...contextReplayMessageIds(messagesForContext),
-        contextReplay.invocationId,
-      ])
+    ? await loadContextReplays(
+        {
+          db: ctx.serverDB,
+          userId: ctx.userId!,
+          workspaceId: ctx.workspaceId,
+          agentId: documentAgentId,
+        },
+        ctx.messageModel,
+        [...contextReplayMessageIds(messagesForContext), contextReplay.invocationId],
+      )
     : {};
   const contextEngineInput = {
     ...(contextReplay && {
       contextReplay: {
         ...contextReplay,
+        resetHistory: Object.values(snapshots).some((snapshot) => snapshot.invalidated),
+        sourceIdsByProvider: {
+          ProjectContextInjector: state.origin?.projectId
+            ? [`project:${state.origin.projectId}`]
+            : [],
+          TaskManagerContextInjector: state.origin?.taskId ? [`task:${state.origin.taskId}`] : [],
+        },
+        validateSources: (ids: string[]) =>
+          revokedContextSources(
+            {
+              db: ctx.serverDB,
+              userId: ctx.userId!,
+              workspaceId: ctx.workspaceId,
+              agentId: documentAgentId,
+            },
+            ids,
+          ),
         committedSnapshot: snapshots[contextReplay.invocationId],
         runtimeContext: {
           environment: executionTarget,
@@ -380,12 +405,9 @@ export const buildServerCallLlmContext = async ({
 
   return {
     contextReplaySnapshot: ceMetadata.contextReplaySnapshot,
-    getToolActivationContext: createToolActivationResolver(
-      state,
-      resolved,
-      contextEngineInput,
-      processedMessages,
-    ),
+    getToolActivationContext: contextReplay
+      ? undefined
+      : createToolActivationResolver(state, resolved, contextEngineInput, processedMessages),
     preserveThinkingForPayload,
     processedMessages,
     resolvedExtendParams,

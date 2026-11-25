@@ -5,6 +5,8 @@ import type {
 } from '@lobechat/agent-runtime';
 import { tryCountRequestPayloadTokens } from '@lobechat/context-engine';
 
+import { revokedContextSources } from '@/server/services/contextReplay';
+
 import type { RuntimeExecutorContext } from '../context';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import { resolveServerCallLlmTooling } from './serverCallLlmTooling';
@@ -29,6 +31,20 @@ export class ServerContextBuilder implements ContextBuilder {
     });
 
     return {
+      ...(result.contextReplaySnapshot && {
+        beforeDispatch: async () => {
+          const revoked = await revokedContextSources(
+            {
+              db: this.ctx.serverDB,
+              userId: this.ctx.userId!,
+              workspaceId: this.ctx.workspaceId,
+              agentId: input.state.origin?.editingAgentId ?? input.state.origin?.agentId,
+            },
+            result.contextReplaySnapshot!.sourceIds,
+          );
+          if (revoked.length) throw new Error('Context source access revoked before dispatch');
+        },
+      }),
       // The attempt ships these messages and `resolved.tools` as-is.
       contextAccounting: tryCountRequestPayloadTokens({
         messages: result.processedMessages,

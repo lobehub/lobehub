@@ -231,6 +231,21 @@ describe('callLlm executor', () => {
       { content: 'question', role: 'user' },
     ]);
   });
+  it('checks source access immediately before dispatch and never sends a revoked input', async () => {
+    const transport = createCallTransport();
+    const context = createContextBuilder();
+    const beforeDispatch = vi.fn().mockRejectedValue(new Error('source access revoked'));
+    vi.mocked(context.build).mockResolvedValue({ ...contextOutput, beforeDispatch });
+    await expect(
+      callLlm(createHost(transport.llm, createMessageTransport(), createStreamSink(), context))(
+        instruction,
+        createState(),
+      ),
+    ).rejects.toThrow('source access revoked');
+    expect(beforeDispatch).toHaveBeenCalledTimes(1);
+    expect(transport.runAttempt).not.toHaveBeenCalled();
+  });
+
   it('ships a joined steer parent on stream_start so the client can show it before the step ends', async () => {
     const transport = createCallTransport();
     const messages = createMessageTransport();

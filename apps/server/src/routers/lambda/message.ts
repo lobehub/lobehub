@@ -24,6 +24,8 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
+import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
@@ -133,13 +135,45 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
 ]);
 
 export const messageRouter = router({
+  assertToolDispatch: messageProcedure
+    .use(withScopedPermission('message:read'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        topicId: z.string().optional(),
+        identifier: z.string(),
+        apiName: z.string(),
+        expectedDeviceId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertCurrentToolDispatch({
+        ...input,
+        ...guardCtx(ctx),
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return true;
+    }),
+  revokedContextSources: messageProcedure
+    .use(withScopedPermission('message:read'))
+    .input(z.object({ sourceIds: z.array(z.string()).max(1000), agentId: z.string().optional() }))
+    .query(({ ctx, input }) =>
+      revokedContextSources(
+        { ...guardCtx(ctx), workspaceId: ctx.workspaceId ?? undefined, agentId: input.agentId },
+        input.sourceIds,
+      ),
+    ),
   getContextReplays: messageProcedure
     .use(withScopedPermission('message:read'))
-    .input(z.object({ ids: z.array(z.string()).max(1000) }))
+    .input(z.object({ ids: z.array(z.string()).max(1000), agentId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       await assertCreatorMessageTargets(guardCtx(ctx), input.ids);
       await assertCanViewMessageTargets(guardCtx(ctx), input.ids);
-      return ctx.messageModel.getContextReplays(input.ids);
+      return loadContextReplays(
+        { ...guardCtx(ctx), workspaceId: ctx.workspaceId ?? undefined, agentId: input.agentId },
+        ctx.messageModel,
+        input.ids,
+      );
     }),
   commitContextReplay: messageProcedure
     .use(withScopedPermission('message:update'))

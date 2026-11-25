@@ -119,7 +119,8 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
       // Custom provider IDs use the OpenAI-compatible runtime. Defer the final
       // decision until aliases, relays and the effective protocol are resolved.
       anchorActivatedTools:
-        responsesProviders.has(model.provider) || !builtInProviders.has(model.provider),
+        !run.contextReplay &&
+        (responsesProviders.has(model.provider) || !builtInProviders.has(model.provider)),
       disabledToolIdentifiers,
       manifests,
       tools: enabledToolIds,
