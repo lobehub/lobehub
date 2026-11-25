@@ -134,20 +134,17 @@ const Header = ({ narrow, onClose, onExitFullscreen }: HeaderProps) => {
 
   const identity = (
     <Flexbox horizontal align={'center'} gap={2} style={{ minWidth: 0 }}>
-      {!narrow && (
-        <>
-          <ActionIcon
-            active={outlineOpen}
-            className={nodrag}
-            disabled={mode === 'verify'}
-            icon={ListTreeIcon}
-            size={toolSize}
-            title={t('artboard.header.outline')}
-            onClick={() => artboardActions.setOutlineOpen(!outlineOpen)}
-          />
-          {divider}
-        </>
-      )}
+      <ActionIcon
+        active={outlineOpen}
+        aria-expanded={outlineOpen}
+        className={nodrag}
+        disabled={mode === 'verify'}
+        icon={ListTreeIcon}
+        size={toolSize}
+        title={t('artboard.header.outline')}
+        onClick={() => artboardActions.setOutlineOpen(!outlineOpen)}
+      />
+      {!narrow && divider}
       <PageMenu className={nodrag} />
     </Flexbox>
   );
