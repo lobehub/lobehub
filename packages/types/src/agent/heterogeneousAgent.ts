@@ -297,6 +297,37 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://www.npmjs.com/package/@bytedance/doubao-cli',
+      // Doubao reports every unusable device-identity state as one opaque
+      // `auth_unavailable`, so the message has to name the local fixes the
+      // user can actually check: a symlinked or half-installed `app/`, a state
+      // directory the CLI cannot lock down, and a stale login left from before
+      // the reinstall.
+      errorMessage:
+        'Doubao could not authenticate. Check that `~/.local/share/doubao_cli` is a real directory (not a symlink) with mode 700 and a complete install, then run `doubao login` and retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'auth_unavailable',
+        '无法访问用于保存设备身份的安全存储',
+      ],
+      signInCommand: 'doubao login',
+    },
+    defaultCommand: 'doubao',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Doubao',
+    install: {
+      commands: ['npm install -g @bytedance/doubao-cli'],
+      docsUrl: 'https://www.npmjs.com/package/@bytedance/doubao-cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDoubaoAgent',
+    menuLabelKey: 'newDoubaoAgent',
+    resume: { supported: true },
+    title: 'Doubao',
+    type: 'doubao',
+  },
+  {
+    auth: {
       docsUrl: 'https://docs.x.ai/build/overview',
       errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
       patterns: [

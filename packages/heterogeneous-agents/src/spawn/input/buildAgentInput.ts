@@ -177,6 +177,15 @@ const buildQoderInput = async (
   };
 };
 
+const buildDoubaoInput = (blocks: AgentContentBlock[]): AgentInputPlan => ({
+  args: [],
+  // Doubao reads the whole prompt from stdin (`-p -`) as plain text; it does
+  // not accept the Claude `{type: 'user', message: {…}}` input envelope. The
+  // CLI has no attachment flag, so image blocks are not forwarded — see
+  // `imageInput.ts`, which deliberately leaves Doubao out.
+  stdin: collectText(blocks),
+});
+
 /**
  * Convert a unified `AgentPromptInput` into the per-agent stdin payload + any
  * extra CLI args required to attach images. The single source of truth for
@@ -207,6 +216,9 @@ export const buildAgentInput = async (
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
+    }
+    case 'doubao': {
+      return buildDoubaoInput(blocks);
     }
     case 'kimi-code': {
       return buildKimiCodeInput(blocks, options);

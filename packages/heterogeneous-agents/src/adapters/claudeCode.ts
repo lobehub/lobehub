@@ -244,13 +244,15 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
 ] as const;
 
 export interface ClaudeCompatibleAdapterProfile {
-  agentType: 'claude-code' | 'codebuddy';
+  agentType: 'claude-code' | 'codebuddy' | 'doubao';
   /**
    * Claude reuses one message.id across every content block in an LLM turn, so
    * an id change is a turn boundary. CodeBuddy instead assigns independent
    * ids to its reasoning item and assistant text item; those ids must stay in
    * the model-response turn opened by stream_event:message_start (or, in batch
-   * mode, until a tool_result asks the model to continue).
+   * mode, until a tool_result asks the model to continue). Doubao does the
+   * same, and additionally namespaces its tool item ids
+   * (`<response>:tool_use:<uuid>`), so only the bare response id is a turn.
    */
   assistantMessageIdsDefineTurns: boolean;
   authMessage: string;
@@ -1239,6 +1241,36 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     return toUsageData(raw?.usage);
   }
 
+  /**
+   * Where the id lives for a provider that streams `content_block_delta` frames
+   * without a preceding `message_start`. Claude and CodeBuddy always send
+   * `message_start`, so the default (`undefined`) keeps their behaviour
+   * exactly as it was. Doubao puts the id on the `stream_event` wrapper
+   * instead; subclasses override this to surface it.
+   *
+   * Returning an id here is not cosmetic: `streamedTextByMessageId` is what
+   * lets the trailing full-text `assistant` echo be reduced to its unseen
+   * suffix, so without it the whole reply is emitted twice — once per delta,
+   * once from the echo.
+   */
+  protected resolveStreamEventMessageId(_raw: any): string | undefined {
+    return undefined;
+  }
+
+  /**
+   * Bind the delta flow to its message id, opening the turn when the provider
+   * gave us no `message_start` to do it. Both halves matter: the buffer keeps
+   * the echo from duplicating the text, and the step boundary keeps a
+   * post-tool answer from coalescing onto the tool-issuing assistant.
+   */
+  private beginDeltaFlow(raw: any): HeterogeneousAgentEvent[] {
+    if (this.currentStreamEventMessageId) return [];
+    const msgId = this.resolveStreamEventMessageId(raw);
+    if (!msgId) return [];
+    this.currentStreamEventMessageId = msgId;
+    return this.openMainMessage(msgId, this.currentStreamEventModel);
+  }
+
   constructor(
     options: ClaudeCodeAdapterOptions = {},
     profile: ClaudeCompatibleAdapterProfile = CLAUDE_CODE_ADAPTER_PROFILE,
@@ -2181,6 +2213,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       case 'content_block_delta': {
         const delta = event.delta;
         if (!delta) return [];
+        const flowEvents = this.beginDeltaFlow(raw);
         const msgId = this.currentStreamEventMessageId;
         if (delta.type === 'text_delta' && delta.text) {
           if (msgId) {
@@ -2189,7 +2222,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
               `${this.streamedTextByMessageId.get(msgId) ?? ''}${delta.text}`,
             );
           }
-          return [this.makeChunkEvent({ chunkType: 'text', content: delta.text })];
+          return [...flowEvents, this.makeChunkEvent({ chunkType: 'text', content: delta.text })];
         }
         if (delta.type === 'thinking_delta' && delta.thinking) {
           if (msgId) {
@@ -2198,9 +2231,12 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
               `${this.streamedThinkingByMessageId.get(msgId) ?? ''}${delta.thinking}`,
             );
           }
-          return [this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking })];
+          return [
+            ...flowEvents,
+            this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking }),
+          ];
         }
-        return [];
+        return flowEvents;
       }
       case 'message_delta': {
         // Authoritative per-turn usage. CC echoes stale message_start usage on

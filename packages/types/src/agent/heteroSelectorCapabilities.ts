@@ -499,6 +499,12 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
+  // Doubao exposes native `--model` / `--effort` flags and a `model list`
+  // command, but wiring them needs a catalog probe the CLI side does not
+  // implement yet (see `models/listHeterogeneousAgentModels.ts`). Until that
+  // lands the selector stays empty for this provider — the spawn still honours
+  // a model passed through `--agent-arg`, it just is not offered in the UI.
+  'doubao': {},
   'grok-build': {
     effort: {
       encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
