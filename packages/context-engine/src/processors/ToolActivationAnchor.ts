@@ -13,6 +13,7 @@ import {
 } from '../utils/activatedTools';
 import { ACTIVATION_DOCS_IN_SYSTEM_PROMPT_NOTE } from './ActivationResultTrim';
 import { parsePlaceholderVariables } from './PlaceholderVariables';
+import { replayToolActivationPlan } from './replayToolActivationPlan';
 
 export interface ToolActivationAnchorConfig {
   manifests?: LobeToolManifest[];
@@ -36,6 +37,16 @@ export class ToolActivationAnchorProcessor extends BaseProcessor {
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const { manifests = [], variableGenerators = {} } = this.config;
+    if (context.metadata.contextReplaySnapshot) {
+      const plan = replayToolActivationPlan(context, manifests);
+      if (!plan) return this.markAsExecuted(context);
+      const processed = this.cloneContext(context);
+      const index = processed.messages.findIndex(
+        (message) => message.role === 'tool' && message.tool_call_id === plan.results[0].callId,
+      );
+      processed.messages[index] = { ...processed.messages[index], toolActivationPlan: plan };
+      return this.markAsExecuted(processed);
+    }
     const system = context.messages.find((message) => message.role === 'system');
     if (!manifests.length || typeof system?.content !== 'string')
       return this.markAsExecuted(context);

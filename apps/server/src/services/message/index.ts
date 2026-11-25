@@ -14,6 +14,7 @@ import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
 import type { WorkTypeOptIn } from '@/database/models/work/registry';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 
 import { FileService } from '../file';
 import { TrashService } from '../trash';
@@ -341,7 +342,30 @@ export class MessageService {
     //    when present (passing `undefined` falls back to the model's genId
     //    default), so flows that chain parentId across not-yet-created messages
     //    (e.g. the subagent run coordinator) can assign ids up front.
-    const item = await this.messageModel.create(normalizeMessageError(params), params.id);
+    const item = await this.messageModel
+      .create(normalizeMessageError(params), params.id)
+      .catch(async (error: unknown) => {
+        const pg = unwrapPgError(error);
+        if (
+          params.role !== 'assistant' ||
+          !params.clientId ||
+          pg?.code !== '23505' ||
+          pg.constraint !== 'message_client_id_user_unique'
+        )
+          throw error;
+        const saved = await this.messageModel.findByClientId(params.clientId);
+        if (
+          !saved ||
+          saved.role !== 'assistant' ||
+          ['agentId', 'topicId', 'threadId', 'groupId', 'parentId'].some(
+            (key) =>
+              (saved[key as keyof typeof saved] ?? null) !==
+              (params[key as keyof typeof params] ?? null),
+          )
+        )
+          throw error;
+        return saved;
+      });
 
     // 2. Query all messages for this agent/topic
     // Use agentId field for query

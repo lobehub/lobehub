@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/agent-runtime';
 import {
   contextReplayMessageIds,
+  replayToolActivationContext,
   ToolResolver,
   type ToolsEngine,
   tryCountRequestPayloadTokens,
@@ -91,6 +92,16 @@ export class ClientContextBuilder implements ContextBuilder {
           documentAgentId,
         )
       : {};
+    const executionBinding =
+      input.contextReplay &&
+      (snapshots[input.contextReplay.invocationId]?.executionBinding ??
+        input.contextReplay.committedSnapshot?.executionBinding ??
+        input.state.binding?.executionBinding ??
+        (await messageService.getExecutionBinding({
+          agentId: effectiveAgentId!,
+          topicId: topicId ?? undefined,
+        })));
+    if (executionBinding) input.state.binding = { ...input.state.binding, executionBinding };
     const prepared = await chatService.buildAssistantMessageContext(
       {
         agentId: effectiveAgentId || undefined,
@@ -104,7 +115,9 @@ export class ClientContextBuilder implements ContextBuilder {
         ...(input.contextReplay && {
           contextReplay: {
             ...input.contextReplay,
-            resetHistory: Object.values(snapshots).some((snapshot) => snapshot.invalidated),
+            actorId: effectiveAgentId ?? undefined,
+            executionBinding: executionBinding || undefined,
+
             sourceIdsByProvider: {
               ProjectContextInjector: input.state.origin?.projectId
                 ? [`project:${input.state.origin.projectId}`]
@@ -157,6 +170,9 @@ export class ClientContextBuilder implements ContextBuilder {
       }),
       messages: preparedMessages,
       contextReplaySnapshot: prepared.contextReplaySnapshot,
+      getToolActivationContext: input.contextReplay
+        ? async () => replayToolActivationContext(preparedMessages)
+        : undefined,
       modelParameters: {
         options: prepared.options,
         params: {

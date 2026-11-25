@@ -4,7 +4,12 @@ import type { OpenAIFunctionCall } from './functionCall';
 
 /** A request-local projection of tool discoveries onto their original conversation positions. */
 export interface ToolActivationContext {
-  additions: { afterToolCallId: string; instructions: string; names: string[] }[];
+  additions: {
+    afterToolCallId: string;
+    instructions: string;
+    names: string[];
+    definitionRevisions?: Record<string, string>;
+  }[];
   /** Leading system prompt before mid-operation tool instructions were added. */
   system?: { current: string; initial: string };
 }
@@ -65,7 +70,12 @@ export type UserMessageContentPart =
 /** Optional prompt edits prepared from the final, paired conversation. The Responses
  * runtime applies them only when the same request can declare all their tools inline. */
 export interface ToolActivationPlan {
-  results: { callId: string; content: string; toolNames: string[] }[];
+  results: {
+    callId: string;
+    content: string;
+    toolNames: string[];
+    definitionRevisions?: Record<string, string>;
+  }[];
   system?: { original: string; replacement: string; start: number };
 }
 

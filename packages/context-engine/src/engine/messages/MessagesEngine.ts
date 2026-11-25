@@ -88,6 +88,7 @@ import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
 import { parseReferDocumentTags } from '../documentReference';
 import { ToolNameResolver } from '../tools';
+import { generateToolsFromManifest } from '../tools/utils';
 import { parseReferTopicTags } from '../topicReference';
 import { ContextReplayCoordinator } from './contextReplay';
 import { prepareContextReplay } from './contextReplay/access';
@@ -165,8 +166,10 @@ export class MessagesEngine {
     if (this.params.contextReplay) {
       const replay = new ContextReplayCoordinator(
         this.params.contextReplay,
-        this.params.contextReplay.sessionKey ?? `${this.params.provider}:${this.params.model}`,
+        this.params.contextReplay.sessionKey ??
+          `${this.params.provider}:${this.params.model}:${this.params.contextReplay.actorId ?? this.params.agentGroup?.currentAgentId ?? 'default'}:${this.params.agentGroup?.currentAgentRole ?? 'agent'}`,
         this.params.variableGenerators,
+        (this.params.toolsConfig?.manifests ?? []).flatMap(generateToolsFromManifest),
       );
       processors = processors.map((processor) => replay.wrap(processor));
       processors.splice(

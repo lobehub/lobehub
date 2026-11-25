@@ -73,3 +73,5 @@ export {
   ToolMessageReorder,
 } from './processors';
 export { contextReplayMessageIds, withContextReplays } from './utils/contextReplayMessages';
+export { memoryPersonaRevision } from './utils/memorySources';
+export { replayToolActivationContext } from './utils/replayToolActivationContext';

@@ -66,6 +66,27 @@ describe('MessageService', () => {
     messageService = new MessageService(mockDB, userId);
   });
 
+  it('returns the original assistant when a logical client step is delivered twice', async () => {
+    vi.mocked(mockMessageModel.create).mockRejectedValue({
+      cause: {
+        code: '23505',
+        constraint: 'message_client_id_user_unique',
+        severity: 'ERROR',
+      },
+    });
+    mockMessageModel.findByClientId = vi
+      .fn()
+      .mockResolvedValue({ id: 'saved-assistant', role: 'assistant', topicId: 'topic' });
+    vi.mocked(mockMessageModel.query).mockResolvedValue([]);
+    const result = await messageService.createMessage({
+      role: 'assistant',
+      content: '',
+      clientId: 'operation:step',
+      topicId: 'topic',
+    });
+    expect(result.id).toBe('saved-assistant');
+  });
+
   describe('prepareUiMessages', () => {
     it('derives nested UI views without changing raw model data', async () => {
       mockFileService.getFileAccessUrl = vi.fn(async (file) => `/proxy/${file.id}`);

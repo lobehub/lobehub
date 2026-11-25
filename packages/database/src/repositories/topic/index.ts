@@ -18,6 +18,7 @@ import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './s
  * operation, summaries) and must not leak into the branch.
  */
 const BRANCH_TOPIC_METADATA_KEYS = [
+  'conversationMode',
   'boundDeviceId',
   'heteroEffort',
   'reasoningConfig',

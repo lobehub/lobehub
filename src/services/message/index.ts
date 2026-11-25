@@ -117,12 +117,15 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
 const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
+  getExecutionBinding = (input: { agentId: string; topicId?: string }) =>
+    lambdaClient.message.getExecutionBinding.query(input);
   assertToolDispatch = (input: {
     agentId: string;
     topicId?: string;
     identifier: string;
     apiName: string;
     expectedDeviceId?: string;
+    assistantMessageId?: string;
   }) => lambdaClient.message.assertToolDispatch.query(input);
   revokedContextSources = async (sourceIds: string[], agentId?: string): Promise<string[]> => {
     const denied: string[] = [];

@@ -45,16 +45,19 @@ describe('resolveExistingTopicForRun', () => {
     expect(out?.metadata?.workingDirectory).toBe('/repo/bound-dir');
   });
 
-  it('skips the round-trip for non-hetero runs', async () => {
-    const fetchTopicDetail = vi.fn();
+  it('loads the committed mode for a paginated native topic without restoring a worktree', async () => {
+    const serverTopic = topic({ metadata: { conversationMode: 'chat' } });
+    const fetchTopicDetail = vi.fn().mockResolvedValue(serverTopic);
+    const ensureWorktree = vi.fn();
     const out = await resolveExistingTopicForRun({
       fetchTopicDetail,
+      ensureWorktree,
       isHetero: false,
       storeTopic: undefined,
       topicId: 'tpc_x',
     });
-    expect(out).toBeUndefined();
-    expect(fetchTopicDetail).not.toHaveBeenCalled();
+    expect(out?.metadata?.conversationMode).toBe('chat');
+    expect(ensureWorktree).not.toHaveBeenCalled();
   });
 
   it('skips when there is no topicId (new-topic send)', async () => {

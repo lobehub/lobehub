@@ -10,9 +10,16 @@ export interface ContextReplaySegment {
 }
 
 /** One logical LLM invocation's immutable delta; stored before dispatch, never in Redis state. */
+export interface ContextReplayExecutionBinding {
+  agentDeviceId: string | null;
+  topicDeviceId: string | null;
+}
+
 export interface ContextReplaySnapshot {
   changes: ContextReplaySegment[];
   createdBy?: string;
+  executionBinding?: ContextReplayExecutionBinding;
+  historyStartId?: string;
   invalidated?: boolean;
   invocationId: string;
   parentSnapshotId?: string;
@@ -20,11 +27,15 @@ export interface ContextReplaySnapshot {
   sourceIds: string[];
   /** Present at the start of a baseline, not copied into every subsequent delta. */
   system?: OpenAIChatMessage[];
+  toolDefinitions?: Record<string, string>;
   version: 1;
 }
 
 export interface ContextReplayInput {
+  actorId?: string;
   committedSnapshot?: ContextReplaySnapshot;
+  executionBinding?: ContextReplayExecutionBinding;
+  historyStartId?: string;
   invocationId: string;
   resetHistory?: boolean;
   /** Current access decisions, checked again even when retrying a committed snapshot. */
@@ -54,6 +65,10 @@ const ReplayMessageSchema = z.object({
 });
 
 export const ContextReplaySnapshotSchema: z.ZodType<ContextReplaySnapshot> = z.object({
+  executionBinding: z
+    .object({ agentDeviceId: z.string().nullable(), topicDeviceId: z.string().nullable() })
+    .optional(),
+  historyStartId: z.string().optional(),
   invalidated: z.boolean().optional(),
   changes: z.array(
     z.object({
@@ -68,5 +83,6 @@ export const ContextReplaySnapshotSchema: z.ZodType<ContextReplaySnapshot> = z.o
   sessionKey: z.string(),
   sourceIds: z.array(z.string()),
   system: z.array(ReplayMessageSchema).optional(),
+  toolDefinitions: z.record(z.string(), z.string()).optional(),
   version: z.literal(1),
 });

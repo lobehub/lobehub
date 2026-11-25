@@ -1,8 +1,13 @@
 import { chatModeAllowedToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
 import type { LobeToolManifest } from '@lobechat/context-engine';
-import type { AgentPluginEntry, ConversationMode, LobeAgentChatConfig } from '@lobechat/types';
+import type {
+  AgentPluginEntry,
+  ContextReplayExecutionBinding,
+  ConversationMode,
+  LobeAgentChatConfig,
+} from '@lobechat/types';
 import {
-  getActivePluginIds,
+  getOptedInPluginIds,
   manifestBaseIdentifier,
   resolveToolMode,
   withConversationMode,
@@ -15,6 +20,8 @@ export const assertToolDispatchPolicy = (input: {
   chatConfig?: LobeAgentChatConfig | null;
   conversationMode?: ConversationMode;
   currentDeviceId?: string;
+  currentBinding?: ContextReplayExecutionBinding;
+  expectedBinding?: ContextReplayExecutionBinding;
   expectedDeviceId?: string;
   executionTarget?: 'auto' | 'local' | 'device' | 'sandbox' | 'none';
   identifier: string;
@@ -38,17 +45,24 @@ export const assertToolDispatchPolicy = (input: {
     throw new Error('Tool is unavailable in this conversation mode');
   if (
     mode === 'custom' &&
-    !getActivePluginIds(input.plugins).some((id) => id === baseId || id === input.identifier)
+    !getOptedInPluginIds(input.plugins).some((id) => id === baseId || id === input.identifier)
   )
     throw new Error('Tool is outside the custom tool set');
   if (input.manifest && !input.manifest.api.some((api) => api.name === input.apiName))
     throw new Error('Tool API is no longer available');
+  const deviceDependent =
+    isDeviceToolIdentifier(input.identifier) ||
+    (input.identifier === 'lobe-skills' &&
+      ['execScript', 'runCommand', 'exportFile'].includes(input.apiName) &&
+      !!input.expectedDeviceId);
   if (
-    (isDeviceToolIdentifier(input.identifier) ||
-      input.identifier === 'lobe-skills' ||
-      !!input.expectedDeviceId) &&
-    input.currentDeviceId &&
-    input.currentDeviceId !== input.expectedDeviceId
+    deviceDependent &&
+    input.expectedBinding &&
+    input.currentBinding &&
+    (input.expectedBinding.topicDeviceId !== input.currentBinding.topicDeviceId ||
+      input.expectedBinding.agentDeviceId !== input.currentBinding.agentDeviceId)
   )
+    throw new Error('Execution device binding changed; start a new call');
+  if (deviceDependent && input.currentDeviceId && input.currentDeviceId !== input.expectedDeviceId)
     throw new Error('Execution device changed; start a new call for the selected device');
 };

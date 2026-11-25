@@ -25,6 +25,7 @@ export * from './pricing';
 export * from './safeParseJSON';
 export * from './sanitizeToolCallArguments';
 export * from './sleep';
+export * from './stableJsonDigest';
 export * from './timing';
 export * from './truncateSurrogateSafe';
 export * from './uriParser';

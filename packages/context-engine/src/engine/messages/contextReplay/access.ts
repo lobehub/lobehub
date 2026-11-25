@@ -1,5 +1,10 @@
 import { collectDocumentReads } from '../../../processors/RevokedDocumentResultFilter';
-import { contextReplayFileIds, contextReplaySnapshots } from '../../../utils/contextReplayMessages';
+import {
+  contextReplayFileIds,
+  contextReplayMessageIds,
+  contextReplaySnapshots,
+} from '../../../utils/contextReplayMessages';
+import { filterMemorySources, memorySourceIds } from '../../../utils/memorySources';
 import type { MessagesEngineParams } from '../types';
 
 /** Coarse dependencies deliberately include the entire visible input ancestry. */
@@ -8,6 +13,14 @@ export const prepareContextReplay = async (
 ): Promise<MessagesEngineParams> => {
   const replay = params.contextReplay;
   if (!replay) return params;
+  const prior = contextReplaySnapshots(params.messages);
+  const boundary =
+    replay.committedSnapshot?.historyStartId ??
+    prior.findLast((snapshot) => snapshot.historyStartId)?.historyStartId;
+  const start = boundary
+    ? params.messages.findIndex((message) => contextReplayMessageIds([message]).includes(boundary))
+    : -1;
+  const visibleMessages = start >= 0 ? params.messages.slice(start) : params.messages;
   const documents = (params.agentDocuments ?? []).flatMap((doc) =>
     doc.id ? [`document:${doc.id}`] : [],
   );
@@ -17,8 +30,8 @@ export const prepareContextReplay = async (
   ];
   const initial = params.initialContext;
   const sources: Record<string, string[]> = {
-    Attachments: contextReplayFileIds(params.messages).map((id) => `file:${id}`),
-    HistoricalDocumentReads: collectDocumentReads(params.messages).map(
+    Attachments: contextReplayFileIds(visibleMessages).map((id) => `file:${id}`),
+    HistoricalDocumentReads: collectDocumentReads(visibleMessages).map(
       (read) => `document-read:${read.documentId}`,
     ),
     SystemDocumentSources: documents,
@@ -39,7 +52,7 @@ export const prepareContextReplay = async (
       ? [`goal:${initial.goalOverview.goalId}`]
       : [],
     KnowledgeInjector: knowledge,
-    UserMemoryInjector: params.userMemory?.enabled ? ['memory:current'] : [],
+    UserMemoryInjector: await memorySourceIds(params.userMemory),
     SkillContextProvider: (params.skillsConfig?.enabledSkills ?? []).map(
       (skill) => `skill:${skill.identifier}`,
     ),
@@ -48,21 +61,26 @@ export const prepareContextReplay = async (
     ),
     ...replay.sourceIdsByProvider,
   };
-  const historical = contextReplaySnapshots(params.messages);
+  const historical = contextReplaySnapshots(visibleMessages);
   const sourceIds = [
     ...new Set([
       ...Object.values(sources).flat(),
       ...documents,
-      ...collectDocumentReads(params.messages).map((read) => `document-read:${read.documentId}`),
+      ...collectDocumentReads(visibleMessages).map((read) => `document-read:${read.documentId}`),
       ...historical.flatMap((snapshot) => snapshot.sourceIds),
       ...(replay.committedSnapshot?.sourceIds ?? []),
     ]),
   ];
   const localSources = new Set(Object.values(sources).flat());
-  const localTypes = new Set(['memory', 'skill', 'tool']);
+  const localTypes = new Set(['unverified-memory', 'skill', 'tool']);
   const remoteSources = sourceIds.filter((source) => !localTypes.has(source.split(':')[0]));
   const revoked = new Set([
     ...(replay.revokedSourceIds ?? []),
+    ...sourceIds.filter(
+      (source) =>
+        !params.userMemory?.enabled &&
+        (source.startsWith('memory:') || source.startsWith('memory-persona:')),
+    ),
     ...sourceIds.filter(
       (source) => localTypes.has(source.split(':')[0]) && !localSources.has(source),
     ),
@@ -85,7 +103,7 @@ export const prepareContextReplay = async (
       'Context source access changed; start a new invocation instead of retrying revoked input',
     );
   }
-  const unknownSummary = params.messages.some(
+  const unknownSummary = visibleMessages.some(
     (message) => message.role === 'compressedGroup' && !message.metadata?.contextReplay,
   );
   const reset =
@@ -93,7 +111,7 @@ export const prepareContextReplay = async (
     replay.resetHistory ||
     revoked.size > 0 ||
     historical.some((snapshot) => snapshot.invalidated);
-  const latestUser = params.messages.findLast((message) => message.role === 'user');
+  const latestUser = visibleMessages.findLast((message) => message.role === 'user');
   const messages = reset
     ? latestUser
       ? [
@@ -111,7 +129,7 @@ export const prepareContextReplay = async (
           },
         ]
       : []
-    : params.messages;
+    : visibleMessages;
   if (reset)
     for (const message of messages) {
       for (const key of ['fileList', 'imageList', 'audioList', 'videoList'] as const) {
@@ -122,8 +140,13 @@ export const prepareContextReplay = async (
       }
     }
   const allowed = (source: string) => !revoked.has(source);
+  // Shared answers retain their provenance even when the next actor has its own private baseline.
+  sources.InheritedInputSources = reset
+    ? []
+    : historical.flatMap((snapshot) => snapshot.sourceIds).filter(allowed);
   const updated: MessagesEngineParams = {
     ...params,
+    userMemory: await filterMemorySources(params.userMemory, revoked),
     historySummary: undefined,
     messages,
     ...(reset && {
@@ -166,6 +189,7 @@ export const prepareContextReplay = async (
     },
     contextReplay: {
       ...replay,
+      historyStartId: reset ? latestUser?.id : boundary,
       sourceIdsByProvider: Object.fromEntries(
         Object.entries(sources).map(([key, ids]) => [key, ids.filter(allowed)]),
       ),

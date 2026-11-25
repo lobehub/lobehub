@@ -39,6 +39,9 @@ export class ServerContextBuilder implements ContextBuilder {
               userId: this.ctx.userId!,
               workspaceId: this.ctx.workspaceId,
               agentId: input.state.origin?.editingAgentId ?? input.state.origin?.agentId,
+              shareVisitor:
+                input.state.principal?.actor?.shareVisitor ?? this.ctx.agentShareVisitor,
+              topicId: this.ctx.topicId ?? input.state.origin?.topicId,
             },
             result.contextReplaySnapshot!.sourceIds,
           );

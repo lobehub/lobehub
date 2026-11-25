@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ToolActivationContext } from '@lobechat/types';
+import { stableJsonDigest } from '@lobechat/utils';
 import debug from 'debug';
 
 import { supportsClaudeInlineToolChanges } from '../../../providers/anthropic/modelId';
@@ -27,6 +28,23 @@ type WireUpdate = {
   role: 'system';
 };
 
+const isReplayUpdate = (message: Anthropic.MessageParam | undefined) => {
+  if (message?.role !== 'user') return false;
+  const blocks =
+    typeof message.content === 'string'
+      ? [{ type: 'text', text: message.content }]
+      : message.content;
+  return (
+    blocks.length > 0 &&
+    blocks.every(
+      (block) =>
+        block.type === 'text' &&
+        'text' in block &&
+        /^<(runtime_context|context_update)\b/.test(block.text.trim()),
+    )
+  );
+};
+
 function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActivationContext) {
   const tools = body.tools ?? [];
   if (!tools.length || tools.some((tool) => tool.type)) return;
@@ -46,7 +64,10 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
         : [],
     );
     if (matches.length !== 1) return;
-    const index = matches[0];
+    let index = matches[0];
+    // Immutable replay updates follow the complete result batch. Keep that boundary
+    // before the next assistant; arbitrary user input still forces the ordinary path.
+    if (addition.definitionRevisions) while (isReplayUpdate(body.messages[index + 1])) index++;
     // Anthropic permits a content-bearing system message only at the tail or before an assistant.
     const next = body.messages[index + 1];
     if (next && next.role !== 'assistant') return;
@@ -150,6 +171,15 @@ export async function prepareAnthropicToolChanges(
       options.metadata?.operationId,
     );
     return ordinary;
+  }
+  for (const addition of context.additions) {
+    if (!addition.definitionRevisions) continue;
+    for (const name of addition.names) {
+      const tool = payload.tools.find(
+        (candidate) => candidate.type === 'function' && candidate.function.name === name,
+      );
+      if (addition.definitionRevisions[name] !== (await stableJsonDigest(tool))) return ordinary;
+    }
   }
   const projected = anchorAdditions(body, context);
   if (!projected) {

@@ -191,6 +191,7 @@ export class ToolExecutionService {
         identifier,
         apiName,
         expectedDeviceId: context.activeDeviceId,
+        assistantMessageId: context.assistantMessageId,
         includeShareVisitor: !!context.agentShareVisitor,
       });
     // ── Connector tool permission gate (covers ALL paths + qstash) ────────

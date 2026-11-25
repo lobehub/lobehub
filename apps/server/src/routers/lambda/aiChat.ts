@@ -30,7 +30,10 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
-import { assertCanUseConversationTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import {
+  assertCanUseConversationTargets,
+  assertCanUseTopicTargets,
+} from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { toRuntimeErrorCause } from '@/server/routers/lambda/_helpers/runtimeErrorCause';
 import { resolveAgentReference } from '@/server/services/agent/resolveReference';
@@ -162,13 +165,17 @@ const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:c
 export const aiChatRouter = router({
   resolveConversationMode: aiChatWriteProcedure
     .input(z.object({ topicId: z.string(), fallback: z.enum(['agent', 'chat']) }))
-    .mutation(({ ctx, input }) =>
-      new TopicModel(
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      return new TopicModel(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
-      ).resolveConversationMode(input.topicId, input.fallback),
-    ),
+      ).resolveConversationMode(input.topicId, input.fallback);
+    }),
   /**
    * Asks a decision model (e.g. `lobehub/jev-1.14.0`) typed questions about one state and returns
    * its answers with probabilities: `lh generate decide`. The same `runtime.decide` call bot wake

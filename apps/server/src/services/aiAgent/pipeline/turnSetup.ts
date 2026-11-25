@@ -18,7 +18,6 @@ import {
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
   resolveHeterogeneousTopicRuntimeSnapshot,
-  resolveToolMode,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -49,6 +48,7 @@ import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
+import { userTurnConversationMode } from './userTurnConversationMode';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -997,10 +997,12 @@ export const setupTurn = async (
         groupId: appContext?.groupId ?? undefined,
         metadata: {
           ...requestTriggerMetadata,
-          conversationMode:
-            resolveToolMode(agentConfig.chatConfig) === 'chat'
-              ? ('chat' as const)
-              : ('agent' as const),
+          conversationMode: await userTurnConversationMode({
+            ...deps,
+            topicId,
+            threadId: appContext?.threadId,
+            chatConfig: agentConfig.chatConfig,
+          }),
         },
         parentId: userMessageParentId,
         role: 'user' as const,

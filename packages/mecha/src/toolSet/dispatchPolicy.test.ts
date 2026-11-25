@@ -2,6 +2,17 @@ import { expect, it } from 'vitest';
 
 import { assertToolDispatchPolicy } from './dispatchPolicy';
 
+it('dispatches an opted-in auto tool in a custom tool set', () => {
+  expect(() =>
+    assertToolDispatchPolicy({
+      identifier: 'custom',
+      apiName: 'run',
+      chatConfig: { toolMode: 'custom' },
+      plugins: [{ identifier: 'custom', mode: 'auto' }],
+    }),
+  ).not.toThrow();
+});
+
 it('rejects a disabled tool after an earlier declaration and keeps chat mode authoritative', () => {
   expect(() =>
     assertToolDispatchPolicy({

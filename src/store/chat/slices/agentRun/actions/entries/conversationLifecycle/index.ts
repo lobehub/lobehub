@@ -1045,12 +1045,7 @@ export class ConversationLifecycleActionImpl {
       });
     }
 
-    // The topic list store is paginated — a deep-linked older topic can be the
-    // ACTIVE topic yet miss `getTopicById`. For hetero runs that miss used to
-    // silently resolve the agent/device default cwd instead of the topic's
-    // bound workingDirectory and drop `--resume` (fresh CLI session, context
-    // lost, no error) — fall back to the server row. A topic this send is
-    // about to create has no server row, so the lookup is skipped entirely.
+    // Paginated topics need authoritative mode and cwd/resume metadata; new topics skip the lookup.
     const existingTopic = await resolveExistingTopicForRun({
       fetchTopicDetail: (id) => topicService.getTopicDetail(id),
       isHetero: !!heterogeneousProvider,
@@ -1265,10 +1260,7 @@ export class ConversationLifecycleActionImpl {
       // metadata write — which never lands on cancel/error and meanwhile
       // makes By-Project grouping miss the topic and `--resume` unsafe.
       //
-      // Priority: topic-level cwd (once a topic is bound to a project) wins
-      // over the agent-level default. Without this, a topic pinned to dir A
-      // would silently execute under the agent's current default dir B and
-      // lose resume.
+      // Topic-level cwd wins over the agent default so the CLI can resume its session.
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
@@ -1276,7 +1268,11 @@ export class ConversationLifecycleActionImpl {
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
-            conversationMode: getSendConversationMode(operationContext.agentId!, boundTopic),
+            conversationMode: getSendConversationMode(
+              operationContext.agentId!,
+              existingTopic ?? boundTopic,
+              this.#get().dbMessagesMap[operationMessageKey],
+            ),
             groupId: operationContext.groupId ?? undefined,
             // External CLIs report their selected model after execution.
             newAssistantMessage: {
@@ -1789,7 +1785,11 @@ export class ConversationLifecycleActionImpl {
       const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
       data = await aiChatService.sendMessageInServer(
         {
-          conversationMode: getSendConversationMode(operationContext.agentId!, boundTopic),
+          conversationMode: getSendConversationMode(
+            operationContext.agentId!,
+            existingTopic ?? boundTopic,
+            this.#get().dbMessagesMap[operationMessageKey],
+          ),
           newUserMessage: {
             content: persistedContent,
             editorData,

@@ -27,7 +27,7 @@ export class PluginPublicApiActionImpl {
     id: string,
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
-    authorization?: { expectedDeviceId?: string },
+    authorization?: { expectedDeviceId?: string; assistantMessageId?: string },
   ): Promise<any> => {
     const store = this.#get();
     const message = Object.values(store.dbMessagesMap)
@@ -39,6 +39,7 @@ export class PluginPublicApiActionImpl {
         topicId: message.topicId ?? undefined,
         identifier: payload.identifier,
         apiName: payload.apiName,
+        assistantMessageId: authorization?.assistantMessageId ?? message.parentId ?? undefined,
         expectedDeviceId:
           authorization?.expectedDeviceId ?? getElectronStoreState().gatewayDeviceInfo?.deviceId,
       });

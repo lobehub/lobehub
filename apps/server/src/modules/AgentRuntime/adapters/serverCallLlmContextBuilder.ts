@@ -35,6 +35,7 @@ import {
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 import { resolveServerSkillIndex } from '@/server/modules/Mecha/ContextEngineering/providers/skillIndex';
 import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
+import { getCurrentExecutionBinding } from '@/server/services/contextReplay/toolDispatch';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
@@ -211,16 +212,34 @@ export const buildServerCallLlmContext = async ({
           userId: ctx.userId!,
           workspaceId: ctx.workspaceId,
           agentId: documentAgentId,
+          shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
+          topicId,
         },
         ctx.messageModel,
         [...contextReplayMessageIds(messagesForContext), contextReplay.invocationId],
       )
     : {};
+  const executionBinding =
+    contextReplay &&
+    (snapshots[contextReplay.invocationId]?.executionBinding ??
+      contextReplay.committedSnapshot?.executionBinding ??
+      state.binding?.executionBinding ??
+      (await getCurrentExecutionBinding({
+        db: ctx.serverDB,
+        userId: ctx.userId!,
+        workspaceId: ctx.workspaceId,
+        agentId: agentId!,
+        topicId,
+        includeShareVisitor: !!ctx.agentShareVisitor,
+      })));
+  if (executionBinding) state.binding = { ...state.binding, executionBinding };
   const contextEngineInput = {
     ...(contextReplay && {
       contextReplay: {
         ...contextReplay,
-        resetHistory: Object.values(snapshots).some((snapshot) => snapshot.invalidated),
+        actorId: agentId,
+        executionBinding: executionBinding || undefined,
+
         sourceIdsByProvider: {
           ProjectContextInjector: state.origin?.projectId
             ? [`project:${state.origin.projectId}`]
@@ -234,6 +253,8 @@ export const buildServerCallLlmContext = async ({
               userId: ctx.userId!,
               workspaceId: ctx.workspaceId,
               agentId: documentAgentId,
+              shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
+              topicId,
             },
             ids,
           ),
@@ -405,9 +426,12 @@ export const buildServerCallLlmContext = async ({
 
   return {
     contextReplaySnapshot: ceMetadata.contextReplaySnapshot,
-    getToolActivationContext: contextReplay
-      ? undefined
-      : createToolActivationResolver(state, resolved, contextEngineInput, processedMessages),
+    getToolActivationContext: createToolActivationResolver(
+      state,
+      resolved,
+      contextEngineInput,
+      processedMessages,
+    ),
     preserveThinkingForPayload,
     processedMessages,
     resolvedExtendParams,

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatRouter } from './aiChat';
 
-const { resolveMode, savePair, getMessages, createTopic } = vi.hoisted(() => ({
+const { resolveMode, savePair, getMessages, createTopic, useTopic } = vi.hoisted(() => ({
+  useTopic: vi.fn(),
   createTopic: vi.fn(),
   getMessages: vi.fn(),
   resolveMode: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock('@/database/models/topic', () => ({
   },
 }));
 vi.mock('@/database/models/thread');
+vi.mock('@/server/routers/lambda/_helpers/conversationResourceGuard', () => ({
+  assertCanUseConversationTargets: vi.fn(),
+  assertCanUseTopicTargets: useTopic,
+}));
 vi.mock('@/database/repositories/topic', () => ({
   TopicRepository: class {
     create = createTopic;
@@ -58,6 +63,13 @@ beforeEach(() => {
 });
 
 describe('local execution conversation mode contract', () => {
+  it('checks topic USE permission before committing a legacy mode', async () => {
+    useTopic.mockRejectedValueOnce(new Error('USE denied'));
+    await expect(
+      caller().resolveConversationMode({ topicId: 'mode-topic', fallback: 'chat' }),
+    ).rejects.toThrow('USE denied');
+    expect(resolveMode).not.toHaveBeenCalled();
+  });
   it('returns a conflict when another first send wins the database transaction', async () => {
     savePair.mockRejectedValue(
       Object.assign(new Error('Conversation mode is locked'), { status: 409 }),

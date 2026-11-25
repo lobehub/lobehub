@@ -5,9 +5,11 @@ import type {
   ContextReplaySnapshot,
   OpenAIChatMessage,
 } from '@lobechat/types';
+import { stableJsonDigest } from '@lobechat/utils';
 
 import { PlaceholderVariablesProcessor } from '../../../processors/PlaceholderVariables';
 import type { ContextProcessor, Message } from '../../../types';
+import type { UniformTool } from '../../tools/types';
 
 declare module '../../../types' {
   interface PipelineContextMetadataOverrides {
@@ -79,6 +81,7 @@ export class ContextReplayCoordinator {
     private input: ContextReplayInput,
     private sessionKey: string,
     private variables: Record<string, () => string> = {},
+    private tools: UniformTool[] = [],
   ) {
     if (input.runtimeContext)
       this.candidates.set('runtime_configuration', {
@@ -149,7 +152,9 @@ export class ContextReplayCoordinator {
     process: async (context) => {
       const history = context.messages.flatMap((message) => {
         const snapshot = message.metadata?.contextReplay as ContextReplaySnapshot | undefined;
-        return snapshot?.version === 1 && snapshot.invocationId === message.id
+        return snapshot?.version === 1 &&
+          snapshot.invocationId === message.id &&
+          snapshot.sessionKey === this.sessionKey
           ? [{ messageId: message.id as string, snapshot }]
           : [];
       });
@@ -192,6 +197,13 @@ export class ContextReplayCoordinator {
         ]),
       ];
       const snapshot: ContextReplaySnapshot = own ?? {
+        executionBinding: this.input.executionBinding,
+        toolDefinitions: Object.fromEntries(
+          await Promise.all(
+            this.tools.map(async (tool) => [tool.function.name, await stableJsonDigest(tool)]),
+          ),
+        ),
+        historyStartId: this.input.historyStartId,
         changes: canonicalChanges,
         invocationId: this.input.invocationId,
         parentSnapshotId: previous?.invocationId,

@@ -16,6 +16,7 @@ import {
   messageTTS,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { copyContextReplaySnapshots } from './copyContextReplaySnapshots';
 
 export type IdPair = [sourceId: string, newId: string];
 
@@ -336,4 +337,5 @@ export const copyMessagesInDatabase = async ({
     end`,
   });
   await copyChildRows(messageChunks, messageChunks.messageId, { messageId: newMessageId });
+  await copyContextReplaySnapshots({ executor, messageIdPairs, targetUserId, targetWorkspaceId });
 };

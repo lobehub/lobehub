@@ -1,6 +1,15 @@
 import type { ContextReplaySnapshot, UIChatMessage } from '@lobechat/types';
 
-const childKeys = ['children', 'pinnedMessages', 'messages', 'tools', 'result'];
+const childKeys = [
+  'children',
+  'members',
+  'tasks',
+  'compressedMessages',
+  'pinnedMessages',
+  'messages',
+  'tools',
+  'result',
+];
 
 const visit = (
   value: unknown,
@@ -43,7 +52,7 @@ export const withContextReplays = (
     };
   }) as UIChatMessage[];
 
-export const contextReplaySnapshots = (messages: UIChatMessage[]): ContextReplaySnapshot[] => {
+export const contextReplaySnapshots = (messages: unknown): ContextReplaySnapshot[] => {
   const snapshots: ContextReplaySnapshot[] = [];
   visit(messages, (node) => {
     const snapshot = (node.metadata as { contextReplay?: ContextReplaySnapshot } | undefined)

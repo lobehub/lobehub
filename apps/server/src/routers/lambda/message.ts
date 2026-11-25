@@ -25,7 +25,10 @@ import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
-import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
+import {
+  assertCurrentToolDispatch,
+  getCurrentExecutionBinding,
+} from '@/server/services/contextReplay/toolDispatch';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
@@ -135,6 +138,16 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
 ]);
 
 export const messageRouter = router({
+  getExecutionBinding: messageProcedure
+    .use(withScopedPermission('message:read'))
+    .input(z.object({ agentId: z.string(), topicId: z.string().optional() }))
+    .query(({ ctx, input }) =>
+      getCurrentExecutionBinding({
+        ...input,
+        ...guardCtx(ctx),
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
+    ),
   assertToolDispatch: messageProcedure
     .use(withScopedPermission('message:read'))
     .input(
@@ -144,6 +157,7 @@ export const messageRouter = router({
         identifier: z.string(),
         apiName: z.string(),
         expectedDeviceId: z.string().optional(),
+        assistantMessageId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {

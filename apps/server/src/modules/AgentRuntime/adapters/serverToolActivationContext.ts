@@ -5,6 +5,7 @@ import {
   generateToolsFromManifest,
   renderPlaceholderTemplate,
   renderToolInstructions,
+  replayToolActivationContext,
   type ResolvedToolSet,
 } from '@lobechat/context-engine';
 import { createVariableGenerators } from '@lobechat/mecha';
@@ -27,6 +28,7 @@ export function createToolActivationResolver(
   input: ServerMessagesEngineParams,
   canonicalMessages: ChatStreamPayload['messages'],
 ): ResolveToolActivationContext | undefined {
+  if (input.contextReplay) return async () => replayToolActivationContext(canonicalMessages);
   const initial = state.operationToolSet;
   if (!initial || !resolved.enabledToolIds.includes(LobeActivatorIdentifier)) return;
   // Keep evaluation runs using their session clock on the canonical, hydrated prompt.
