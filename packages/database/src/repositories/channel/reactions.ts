@@ -2,7 +2,6 @@ import type { ChannelMessageReaction } from '@lobechat/types';
 import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 
-import type { ChannelJobItem } from '../../schemas';
 import { channelMembers, channelMessageReactions, channelMessages } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { ChannelError } from './error';
@@ -158,39 +157,6 @@ export const setReaction = async (
 
   const reactions = await reactionsByMessage(tx, channelId, [messageId], memberId);
   return { added: add, reactions: reactions.get(messageId) ?? [] };
-};
-
-/** What an Agent shows on a request while it works on it. */
-export const CHANNEL_JOB_WORKING_REACTION = '👀';
-/** What replaces it once the Agent's reply is out. */
-export const CHANNEL_JOB_ANSWERED_REACTION = '✅';
-
-/**
- * The mark an Agent leaves on the request it was asked to answer, the way a teammate would:
- * 👀 while it works (`working`), ✅ once its reply is out (`answered`), and nothing when the job
- * ended without one (`cleared`). Only a job that owes an answer marks its request: a `followup`
- * wake may stay silent, and a 👀 that comes and goes would only say it looked.
- *
- * Best effort, in a savepoint: a reaction the message refuses (deleted, too many) never undoes
- * the job's own write. Returns whether the reactions changed as asked.
- */
-export const markJobRequest = async (
-  tx: Transaction,
-  job: Pick<ChannelJobItem, 'channelId' | 'memberId' | 'messageId' | 'wake'>,
-  state: 'answered' | 'cleared' | 'working',
-): Promise<boolean> => {
-  if (job.wake?.kind === 'followup') return false;
-  try {
-    await tx.transaction(async (savepoint) => {
-      const mark = (emoji: string, add: boolean) =>
-        setReaction(savepoint, job.channelId, job.memberId, job.messageId, emoji, add);
-      await mark(CHANNEL_JOB_WORKING_REACTION, state === 'working');
-      if (state === 'answered') await mark(CHANNEL_JOB_ANSWERED_REACTION, true);
-    });
-    return true;
-  } catch {
-    return false;
-  }
 };
 
 /**

@@ -39,7 +39,6 @@ import {
   findOpeningCandidate,
   findOpeningReply,
 } from './opening';
-import { markJobRequest } from './reactions';
 import type { ChannelReplyErrorDraft } from './replyError';
 import {
   findReplyError,
@@ -529,8 +528,6 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'input_accepted', job.id, {
         cutoff: job.manifest?.cutoffSequence ?? null,
       });
-      // The Agent took the request on, and shows so on it.
-      await markJobRequest(tx, job, 'working');
     });
 
   /** Stores the final answer. Immutable once saved, so a retry cannot change it. */
@@ -623,7 +620,6 @@ export class ChannelExecutionRepository {
         .set({ publishedMessageId: reply.id, status: 'completed' })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
-      await markJobRequest(tx, job, 'answered');
 
       return reply.id;
     });
@@ -858,9 +854,6 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await advanceOperation(tx, job, outcome.operation, outcome.error);
-      // Every run ends here. One that ended without a reply takes back the 👀 it showed; one
-      // still finishing an accepted draft keeps it until it publishes.
-      if (!job.publishedMessageId && status !== 'running') await markJobRequest(tx, job, 'cleared');
       await audit(tx, channelId, 'writer_released', job.id, { status });
     });
 
