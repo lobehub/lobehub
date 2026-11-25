@@ -97,6 +97,25 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('should instruct scheduled tasks to execute one occurrence now instead of confirming setup', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          identifier: 'TASK-1',
+          instruction: '每天早上 7:30 推送英语语言早报，包含 3 分钟阅读材料和 5 个生词卡',
+          name: '语言早报',
+          status: 'scheduled',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('execute one occurrence immediately');
+    expect(result).toContain('Do not reply with task setup, scheduling confirmation');
+    expect(result).toMatchSnapshot();
+  });
+
   it('should build prompt with task description + instruction', () => {
     const result = buildTaskRunPrompt(
       {
