@@ -238,30 +238,78 @@ describe('useAskUserForm additional notes', () => {
     });
   });
 
-  it('requires both complete answers and non-empty notes in additional-notes mode', () => {
+  it('lets an open note send on its own but never blocks complete answers', () => {
     const { hook } = setup(twoQuestionArgs);
 
     act(() => hook.result.current.setSupplementMode(true));
     expect(hook.result.current.isSubmitDisabled).toBe(true);
 
     act(() => hook.result.current.handleSupplementTextChange('More context'));
-    expect(hook.result.current.isSubmitDisabled).toBe(true);
+    expect(hook.result.current.isSubmitDisabled).toBe(false);
+    expect(hook.result.current.primary.action).toEqual({ kind: 'sendNote' });
 
+    act(() => hook.result.current.handleSupplementTextChange(''));
     act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
     act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto'));
     expect(hook.result.current.isSubmitDisabled).toBe(false);
+    expect(hook.result.current.primary.action).toEqual({ kind: 'submit' });
   });
 
-  it('keeps replace-all and additional-notes modes mutually exclusive', () => {
+  it('sends the note alone as the whole answer when nothing is picked', () => {
+    const { hook, onInteractionAction } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('  Hold off for now.  '));
+    act(() => hook.result.current.handlePrimary());
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: { __freeform__: 'Hold off for now.' },
+      type: 'submit',
+    });
+  });
+
+  it('moves to the next unanswered question instead of submitting a partial form', () => {
+    const { hook, onInteractionAction } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setQuestionMode('0'));
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    act(() => hook.result.current.setQuestionMode('0'));
+    act(() => hook.result.current.handlePrimary());
+
+    expect(hook.result.current.activeTab).toBe('1');
+    expect(onInteractionAction).not.toHaveBeenCalled();
+  });
+
+  it('counts answered questions and reports when there is a draft to lose', () => {
+    const { hook } = setup(twoQuestionArgs);
+    expect(hook.result.current.answeredCount).toBe(0);
+    expect(hook.result.current.hasDraft).toBe(false);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    expect(hook.result.current.answeredCount).toBe(1);
+    expect(hook.result.current.hasDraft).toBe(true);
+  });
+
+  it('treats a typed note as a draft even with nothing picked', () => {
     const { hook } = setup(twoQuestionArgs);
 
     act(() => hook.result.current.setSupplementMode(true));
-    expect(hook.result.current.supplementActive).toBe(true);
-    expect(hook.result.current.escapeActive).toBe(false);
+    act(() => hook.result.current.handleSupplementTextChange('Draft'));
+    expect(hook.result.current.hasDraft).toBe(true);
+  });
 
-    act(() => hook.result.current.setEscapeMode(true));
+  it('removing the note empties and closes it', () => {
+    const { hook, writeDraft } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Draft'));
+    act(() => hook.result.current.handleRemoveNote());
+
     expect(hook.result.current.supplementActive).toBe(false);
-    expect(hook.result.current.escapeActive).toBe(true);
+    expect(hook.result.current.supplementText).toBe('');
+    expect(writeDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ supplementActive: false, supplementText: '' }),
+    );
   });
 
   it('restores additional-notes drafts without losing selected answers', () => {
@@ -280,16 +328,16 @@ describe('useAskUserForm additional notes', () => {
     expect(hook.result.current.isSubmitDisabled).toBe(false);
   });
 
-  it('persists one atomic snapshot when returning from replace-all to a question', () => {
+  it('keeps the note open while moving between questions', () => {
     const { hook, writeDraft } = setup(twoQuestionArgs);
 
-    act(() => hook.result.current.setEscapeMode(true));
-    act(() => hook.result.current.setQuestionMode('0'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.setQuestionMode('1'));
 
-    expect(hook.result.current.escapeActive).toBe(false);
-    expect(hook.result.current.supplementActive).toBe(false);
+    expect(hook.result.current.activeTab).toBe('1');
+    expect(hook.result.current.supplementActive).toBe(true);
     expect(writeDraft).toHaveBeenLastCalledWith(
-      expect.objectContaining({ escapeActive: false, supplementActive: false }),
+      expect.objectContaining({ supplementActive: true }),
     );
   });
 
@@ -326,7 +374,7 @@ describe('useAskUserForm additional notes', () => {
     act(() => hook.result.current.setQuestionMode('0'));
     act(() => hook.result.current.handleSubmit());
 
-    expect(hook.result.current.supplementActive).toBe(false);
+    expect(hook.result.current.supplementActive).toBe(true);
     expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
       payload: {
         'How broad?': 'Narrow',
@@ -335,6 +383,33 @@ describe('useAskUserForm additional notes', () => {
       },
       type: 'submit',
     });
+  });
+
+  it('sends a note-only draft as the answer when the countdown runs out', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'));
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: twoQuestionArgs,
+        countdownMs: 1000,
+        onInteractionAction,
+        persistedDraft: undefined,
+        writeDraft: vi.fn(),
+      }),
+    );
+
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Use my own plan.'));
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: { __freeform__: 'Use my own plan.' },
+      type: 'submit',
+    });
+
+    hook.unmount();
+    vi.useRealTimers();
   });
 
   it('includes saved notes in the timeout fallback after returning to a question', () => {
