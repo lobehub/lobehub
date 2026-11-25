@@ -1,4 +1,9 @@
 {
+  "a2uiAction.empty": "—",
+  "a2uiAction.no": "否",
+  "a2uiAction.submitted": "已提交",
+  "a2uiAction.submittedTitle": "已提交「{{title}}」",
+  "a2uiAction.yes": "是",
   "actionFailed": "操作失败，请重试。",
   "activity.many": "{{count}} 位成员正在回复…",
   "activity.one": "{{name}} · {{status}}",
