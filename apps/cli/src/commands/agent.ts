@@ -9,6 +9,7 @@ import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
+import { registerAgentConnectCommand } from './agent/connect';
 import { registerAgentMoveCommands } from './agent/move';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
@@ -480,6 +481,10 @@ export function registerAgentCommand(program: Command) {
   // ── transfer / move-group ───────────────────────────
 
   registerAgentMoveCommands(agent);
+
+  // ── connect ─────────────────────────────────────────
+
+  registerAgentConnectCommand(agent);
 
   // ── kb-files ───────────────────────────────────────
 

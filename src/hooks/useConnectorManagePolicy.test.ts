@@ -22,8 +22,11 @@ vi.mock('@/hooks/useResourceManageable', () => {
   };
 });
 
-const manageable = (connector?: { agentId?: string | null; userId?: string | null }) =>
-  renderHook(() => useConnectorManageable(connector)).result.current;
+const manageable = (connector?: {
+  agentId?: string | null;
+  userId?: string | null;
+  visibility?: string;
+}) => renderHook(() => useConnectorManageable(connector)).result.current;
 
 describe('useConnectorManageable', () => {
   beforeEach(() => {
@@ -80,6 +83,22 @@ describe('useConnectorManageable', () => {
 
     expect(manageable({ agentId: 'a1', userId: 'me' })).toMatchObject({ canManage: true });
     expect(manageable({ agentId: 'a1', userId: 'arvin' })).toMatchObject({ canManage: false });
+  });
+
+  it('lets the creator maintain their private connector when the policy restricts members', () => {
+    // Regression: under admins_only a member could add a private connector but
+    // then neither edit nor remove it, though the server lets its creator.
+    mocks.policy = { canEditPolicy: false, canManage: false, memberManage: 'admins_only' };
+
+    expect(manageable({ userId: 'me', visibility: 'private' })).toEqual({
+      canManage: true,
+      canManageCredentials: true,
+      isPending: false,
+      restrictedByPolicy: false,
+    });
+    expect(manageable({ userId: 'arvin', visibility: 'private' })).toMatchObject({
+      canManage: false,
+    });
   });
 });
 

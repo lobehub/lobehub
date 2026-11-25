@@ -120,6 +120,7 @@ TaskRoutes.patch(
 TaskRoutes.post(
   '/:id/runs',
   routeDoc({
+    operationId: 'tasks.run',
     data: TaskRunStartedSchema,
     description:
       'Starts the run and answers once the agent operation is accepted; follow it with `operationId`.',

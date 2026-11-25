@@ -13,9 +13,12 @@ const labels = {
   'channel': 'tab.integration',
   'engine': 'tab.engine',
   'environment': 'tab.environment',
+  'graph': 'agentTab.graph',
   'instruction': 'tab.instruction',
   'knowledge': 'tab.knowledge',
   'mail': 'tab.mail',
+  'opening': 'agentTab.opening',
+  'permission': 'permission.page.entry',
   'profile': 'tab.profile',
   'self-evolving': 'title',
   'share': 'share',
@@ -44,6 +47,9 @@ describe('getAgentProfileTab', () => {
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
     ['/agent/agt_1/webhook', 'webhook'],
+    ['/acme/agent/agt_1/opening', 'opening'],
+    ['/agent/agt_1/graph', 'graph'],
+    ['/acme/agent/agt_1/permission', 'permission'],
     ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
     ['/acme/agent/agt_1/self-evolving/dom_1/experience/les_1', 'self-evolving'],
@@ -280,7 +286,7 @@ describe('groupAgentProfileTabOptions', () => {
     value,
   });
 
-  it('keeps who-it-is on top, then the setup pages, then mail and IM bots under identity', () => {
+  it('keeps who-it-is on top, then capabilities, mail and IM bots under identity, then growth', () => {
     const groups = groupAgentProfileTabOptions(
       (
         [
@@ -305,14 +311,15 @@ describe('groupAgentProfileTabOptions', () => {
       ['shape', ['instruction', 'knowledge']],
       ['setup', ['engine', 'environment', 'tools', 'skills']],
       ['identity', ['mail', 'channel']],
-      ['general', ['self-evolving', 'statistics', 'share']],
+      ['growth', ['self-evolving', 'statistics']],
+      ['general', ['share']],
     ]);
   });
 
   it('leaves out a group with nothing to open', () => {
     const groups = groupAgentProfileTabOptions([option('statistics')]);
 
-    expect(groups.map((group) => group.key)).toEqual(['general']);
+    expect(groups.map((group) => group.key)).toEqual(['growth']);
   });
 });
 
@@ -325,7 +332,7 @@ describe('webhook tab', () => {
     heterogeneous: false,
   };
 
-  it('lists webhooks after channels for an editor where the feature is on', () => {
+  it('lists webhooks after channels, under Advanced, for an editor where the feature is on', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
       active: 'profile',
@@ -336,9 +343,9 @@ describe('webhook tab', () => {
     expect(values.indexOf('webhook')).toBe(values.indexOf('channel') + 1);
     expect(
       groupAgentProfileTabOptions(options)
-        .find((group) => group.key === 'identity')
+        .find((group) => group.key === 'advanced')
         ?.options.map((option) => option.value),
-    ).toEqual(['channel', 'webhook']);
+    ).toEqual(['webhook']);
   });
 
   it('leaves webhooks out while the feature is off or the member cannot edit', () => {
@@ -370,18 +377,19 @@ describe('automations tab', () => {
     heterogeneous: false,
   };
 
-  it('lists the automations after channels under identity while webhooks are on', () => {
+  it('lists the automations under Advanced, leaving identity to mail and IM bots', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
       active: 'profile',
       automationsSupported: true,
       canConfigure: true,
     });
-    expect(
-      groupAgentProfileTabOptions(options)
-        .find((group) => group.key === 'identity')
-        ?.options.map((option) => option.value),
-    ).toEqual(['channel', 'automations']);
+    const groups = groupAgentProfileTabOptions(options);
+    const tabsOf = (key: string) =>
+      groups.find((group) => group.key === key)?.options.map((option) => option.value);
+
+    expect(tabsOf('identity')).toEqual(['channel']);
+    expect(tabsOf('advanced')).toEqual(['automations']);
   });
 
   it('shows the list to a member who cannot edit the agent too', () => {
@@ -402,5 +410,128 @@ describe('automations tab', () => {
     expect(
       buildAgentProfileTabOptions({ ...off, active: 'automations' }).map((option) => option.value),
     ).toContain('automations');
+  });
+});
+
+describe('permission tab', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: true,
+    heterogeneous: false,
+  };
+
+  it('sits with the general entries, before share, for a workspace agent', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      canConfigure: true,
+      permissionSupported: true,
+    });
+
+    expect(
+      groupAgentProfileTabOptions(options)
+        .find((group) => group.key === 'general')
+        ?.options.map((option) => option.value),
+    ).toEqual(['permission', 'share']);
+  });
+
+  it('leaves the tab out without a workspace or edit access', () => {
+    for (const gate of [
+      { canConfigure: true, permissionSupported: false },
+      { canConfigure: false, permissionSupported: true },
+    ])
+      expect(
+        buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate }).map((o) => o.value),
+      ).not.toContain('permission');
+  });
+
+  it('keeps the tab of the current page even when gated off', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'permission',
+      canConfigure: false,
+    });
+
+    expect(options.map((option) => option.value)).toContain('permission');
+  });
+});
+
+describe('opening and graph tabs', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: false,
+    heterogeneous: false,
+  };
+
+  it('lists opening under Shape and graph under its own Advanced section', () => {
+    const groups = groupAgentProfileTabOptions(
+      buildAgentProfileTabOptions({
+        ...base,
+        active: 'profile',
+        canConfigure: true,
+        graphSupported: true,
+        openingSupported: true,
+      }),
+    );
+    const tabsOf = (key: string) =>
+      groups.find((group) => group.key === key)?.options.map((option) => option.value);
+
+    expect(tabsOf('shape')).toEqual(['instruction', 'knowledge', 'opening']);
+    expect(tabsOf('setup')).toEqual(['engine', 'tools', 'skills']);
+    expect(tabsOf('advanced')).toEqual(['graph']);
+    expect(groups.map((group) => group.key)).toEqual([
+      'profile',
+      'shape',
+      'setup',
+      'identity',
+      'advanced',
+      'growth',
+    ]);
+  });
+
+  it('drops the Advanced section when the graph option does not apply', () => {
+    const groups = groupAgentProfileTabOptions(
+      buildAgentProfileTabOptions({
+        ...base,
+        active: 'profile',
+        canConfigure: true,
+        openingSupported: true,
+      }),
+    );
+
+    expect(groups.map((group) => group.key)).not.toContain('advanced');
+  });
+
+  it('keeps opening for a heterogeneous agent', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      canConfigure: true,
+      heterogeneous: true,
+      openingSupported: true,
+    });
+
+    expect(options.map((option) => option.value)).toContain('opening');
+  });
+
+  it.each([
+    ['opening', { canConfigure: false, openingSupported: true }],
+    ['opening', { canConfigure: true, openingSupported: false }],
+    ['graph', { canConfigure: false, graphSupported: true }],
+    ['graph', { canConfigure: true, graphSupported: false }],
+  ] as const)('leaves %s out when its gate is closed', (tab, gate) => {
+    const options = buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate });
+
+    expect(options.map((option) => option.value)).not.toContain(tab);
+  });
+
+  it.each(['opening', 'graph'] as const)('keeps %s on its own page when gated off', (active) => {
+    const options = buildAgentProfileTabOptions({ ...base, active, canConfigure: false });
+
+    expect(options.map((option) => option.value)).toContain(active);
   });
 });

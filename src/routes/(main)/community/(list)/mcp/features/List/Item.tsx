@@ -27,6 +27,7 @@ import Scores from '@/features/MCP/Scores';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverMcpItem } from '@/types/discover';
 
 import ConnectionTypeTag from './ConnectionTypeTag';
@@ -46,7 +47,7 @@ const styles = stylex.create({
   secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
@@ -75,7 +76,7 @@ const McpItem = memo<DiscoverMcpItem>(
   }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/mcp', identifier);
+    const link = urlJoin('/marketplace/mcp', identifier);
 
     const handleClick = useCallback(() => {
       discoverService

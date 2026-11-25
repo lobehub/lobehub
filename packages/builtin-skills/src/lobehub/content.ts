@@ -55,10 +55,12 @@ run commands.
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
 | \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
+| \`lh work\` | Show files and links you produced as Work cards under your reply (create, update) | \`references/work\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
 | \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
-| \`lh project\` / \`lh task\` | Projects and agent tasks | \`references/project\` |
+| \`lh project\` | Projects | \`references/project\` |
+| \`lh task\` | Tasks, dependencies and task documents | \`references/task\` |
 | \`lh goal\` | Long-running goal graphs | \`references/goal\` |
 | \`lh trace\` | Inspect and replay recorded agent runs | \`references/trace\` |
 | \`lh skill\` | Skill management (install, create, manage) | \`references/skill\` |
@@ -74,9 +76,7 @@ run commands.
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
 | \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh notification\` / \`lh migrate\` | Account, usage, settings, notification settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
 
-Covered by their own skills, so activate the skill instead of reading a reference here:
-\`lh task\` inside a task run (\`task\` skill) and
-\`lh acceptance\` (\`acceptance\` skill).
+For \`lh acceptance\`, activate the \`acceptance\` skill instead of reading a reference here.
 
 # Workspace scope
 

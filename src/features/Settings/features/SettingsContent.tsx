@@ -10,7 +10,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { SettingsTabs } from '@/store/global/initialState';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import { ManageMemoryButton } from '../memory/features/ManageMemoryButton';
 import { componentMap } from './componentMap';
 import { getSettingsContainerMaxWidth, OWN_FRAME_TABS } from './ownFrameTabs';
 import { SettingsPageActionsContext, SettingsPageActionsRow } from './SettingsPageActions';
@@ -18,7 +17,7 @@ import { useSettingsTabTitle } from './tabTitles';
 
 const REDIRECT_MAP: Record<string, string> = {
   [SettingsTabs.Common]: SettingsTabs.Appearance,
-  [SettingsTabs.ChatAppearance]: SettingsTabs.Appearance,
+  [SettingsTabs.ChatAppearance]: SettingsTabs.Conversation,
   [SettingsTabs.Agent]: SettingsTabs.ServiceModel,
   [SettingsTabs.TTS]: SettingsTabs.ServiceModel,
   [SettingsTabs.Image]: SettingsTabs.ServiceModel,
@@ -89,7 +88,6 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);
         if (OWN_FRAME_TABS.has(tabKey)) return <Fragment key={tabKey}>{content}</Fragment>;
-        const headerExtra = tabKey === SettingsTabs.Memory ? <ManageMemoryButton /> : undefined;
         return (
           <Fragment key={tabKey}>
             <NavHeader styles={{ center: { alignItems: 'center' } }}>
@@ -102,7 +100,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
                 paddingInline={24}
               >
                 {/* Page actions sit in the content column so they align with the body. */}
-                <SettingsPageActionsRow ref={setPageActions}>{headerExtra}</SettingsPageActionsRow>
+                <SettingsPageActionsRow ref={setPageActions} />
                 {content}
               </SettingContainer>
             </SettingsPageActionsContext>

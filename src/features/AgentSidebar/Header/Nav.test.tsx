@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as LobeUI from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Nav from './index';
 
 vi.mock('./Agent', () => ({ default: () => null }));
+const platformMock = vi.hoisted(() => ({ isMacDesktop: true }));
+vi.mock('@/features/NavPanel/ToggleLeftPanelButton', () => ({
+  default: () => null,
+  get isMacDesktop() {
+    return platformMock.isMacDesktop;
+  },
+}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeUI>();
+  return {
+    ...actual,
+    // Real ActionIcon only surfaces `title` through a hover Tooltip, which
+    // happy-dom cannot open; a plain button keeps the hover label assertable.
+    ActionIcon: ({
+      'aria-label': ariaLabel,
+      onClick,
+      title,
+    }: {
+      'aria-label'?: string;
+      'onClick'?: () => void;
+      'title'?: ReactNode;
+    }) => (
+      <button
+        aria-label={ariaLabel}
+        data-hover-title={typeof title === 'string' ? title : undefined}
+        type="button"
+        onClick={onClick}
+      />
+    ),
+  };
+});
 vi.mock('@/features/NavPanel/backOrigin', () => ({ useBackButtonProps: () => ({}) }));
 vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
   default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
@@ -136,11 +168,10 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
-    enableGoals: (state: { preference: { lab?: { enableGoals?: boolean } } }) =>
-      state.preference.lab?.enableGoals ?? false,
   },
 }));
 
@@ -164,6 +195,7 @@ describe('Agent sidebar header nav', () => {
     labMock.enableGoals = true;
     resourceAccessMock.canEditResource = true;
     resourceAccessMock.isAccessResolved = true;
+    platformMock.isMacDesktop = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -244,6 +276,54 @@ describe('Agent sidebar header nav', () => {
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
   });
 
+  it('opens search from the header, not from the nav list, in the macOS app', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  // Web, mobile and the Windows app show the panel toggle in the header, which
+  // leaves no room for search there.
+  it('keeps search as a nav row outside the macOS app', () => {
+    platformMock.isMacDesktop = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).not.toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    expect(searchButton).toHaveTextContent('tab.search');
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps header search for members who cannot open the profile', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.search' }),
+    );
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
+  });
+
+  it.each(['tab.search', 'tab.profile'])('shows the %s label on hover', (label) => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: label })).toHaveAttribute('data-hover-title', label);
+  });
+
   it.each([
     [false, false],
     [false, undefined],
@@ -260,39 +340,32 @@ describe('Agent sidebar header nav', () => {
     expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
   });
 
-  it('navigates to the agent goals page', () => {
+  it('opens the combined entry even when a previous Goals preference is false', () => {
+    labMock.enableGoals = false;
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'goalList.title' }));
-
-    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
-    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
-  });
-
-  it('navigates to the agent tasks page', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
-
-    render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'tab.tasks' }));
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
   });
 
-  it.each(['/agent/agt_eH4zL98zBx5u/tasks', '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA'])(
-    'keeps the tasks entry active on %s',
-    (pathname) => {
-      usePathnameMock.mockReturnValue(pathname);
+  it.each([
+    '/agent/agt_eH4zL98zBx5u/goals',
+    '/agent/agt_eH4zL98zBx5u/goal/example',
+    '/agent/agt_eH4zL98zBx5u/tasks',
+    '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA',
+  ])('keeps the tasks entry active on %s', (pathname) => {
+    usePathnameMock.mockReturnValue(pathname);
 
-      render(<Nav />);
+    render(<Nav />);
 
-      expect(screen.getByRole('button', { name: 'tab.tasks' })).toHaveAttribute(
-        'data-active',
-        'true',
-      );
-    },
-  );
+    expect(screen.getByRole('button', { name: 'tab.goalsAndTasks' })).toHaveAttribute(
+      'data-active',
+      'true',
+    );
+  });
 
   it('moves self-evolving into the profile group for members who can open it', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
@@ -347,7 +420,7 @@ describe('Agent sidebar header nav', () => {
     });
   });
 
-  it('places topics above goals and tasks, with profile settings in the header', () => {
+  it('opens tasks from the combined entry, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -357,10 +430,20 @@ describe('Agent sidebar header nav', () => {
     expect(screen.getByRole('banner')).toContainElement(
       screen.getByRole('button', { name: 'tab.profile' }),
     );
-    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(
-      labels.indexOf('goalList.title'),
-    );
-    expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+    expect(labels).not.toContain('goalList.title');
+    expect(labels).not.toContain('tab.tasks');
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
+  });
+
+  // The full topic page is reached from the Topics section header arrow, not a
+  // nav entry that duplicated the section right below it.
+  it('has no Topics nav entry', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/topics');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'management.sidebarEntry' })).toBeNull();
   });
 
   // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as

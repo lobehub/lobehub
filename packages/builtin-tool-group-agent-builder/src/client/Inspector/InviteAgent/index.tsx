@@ -1,13 +1,12 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { shinyTextStyles } from '@/styles';
 
 import type { InviteAgentParams, InviteAgentState } from '../../../types';

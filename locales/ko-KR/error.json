@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "이 에이전트에 대한 실행 장치에 연결할 수 없습니다. 장치를 연결하거나 서버에서 장치 게이트웨이를 구성한 후 다시 시도하세요.",
   "response.DeviceResponseTimeout": "기기가 제시간에 응답하지 않았습니다. 기기가 오프라인 상태이거나 절전 모드일 수 있으며, 실행이 아직 시작 중일 수 있습니다. 기기가 연결되어 있는지와 실행이 이미 진행 중인지 확인한 후 다시 시도하세요.",
   "response.ExceededContextWindowCloud": "대화가 너무 길어 처리할 수 없습니다. 마지막 메시지를 편집하여 입력을 줄이거나 일부 메시지를 삭제한 후 다시 시도하세요.",
-  "response.FreePlanLimit": "현재 요금제에서는 이 기능이 지원되지 않습니다. 유료 요금제로 업그레이드한 후 계속하세요",
   "response.GoogleAIBlockReason.BLOCKLIST": "내용에 차단된 용어가 포함되어 있습니다. 다시 표현하여 시도해 주세요.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "생성된 이미지가 안전상의 이유로 차단되었습니다. 요청을 수정하여 다시 시도해 주세요.",
   "response.GoogleAIBlockReason.LANGUAGE": "요청한 언어는 지원되지 않습니다. 지원되는 언어로 다시 시도해 주세요.",

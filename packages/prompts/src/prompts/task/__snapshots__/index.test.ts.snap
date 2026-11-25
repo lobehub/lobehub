@@ -3,8 +3,10 @@
 exports[`buildTaskRunPrompt > should build prompt with only task instruction 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 帮我写一本 AI Agent 技术书籍
 
 Review: (not configured)
@@ -14,8 +16,10 @@ Review: (not configured)
 exports[`buildTaskRunPrompt > should build prompt with task description + instruction 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 帮我写一本 AI Agent 技术书籍，目标 8 章
 Description: 面向开发者的技术书籍
 
@@ -26,8 +30,10 @@ Review: (not configured)
 exports[`buildTaskRunPrompt > should handle empty activities gracefully 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)
@@ -45,8 +51,10 @@ exports[`buildTaskRunPrompt > should handle full scenario with all sections 1`] 
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写一本 AI Agent 书，目标 8 章
 Description: 面向开发者的 AI Agent 技术书籍
 Topics: 1
@@ -65,8 +73,10 @@ Activities:
 exports[`buildTaskRunPrompt > should include activity history with topics and briefs in CLI style 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 Topics: 2
 
@@ -89,8 +99,10 @@ exports[`buildTaskRunPrompt > should include agent comments with author label an
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)
@@ -104,8 +116,10 @@ Activities:
 exports[`buildTaskRunPrompt > should include parentTask context for subtasks 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-4 (id: task_004) 第2章 核心架构
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 撰写第2章
 Parent: TASK-1
 
@@ -124,8 +138,10 @@ Review: (not configured)
 exports[`buildTaskRunPrompt > should include subtasks in task section 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_root) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Subtasks:
@@ -139,8 +155,10 @@ Review: (not configured)
 exports[`buildTaskRunPrompt > should include subtasks in task tag when provided 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_001) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写一本 AI Agent 书，目标 8 章
 
 Subtasks:
@@ -159,8 +177,10 @@ exports[`buildTaskRunPrompt > should only include user comments in user_feedback
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)
@@ -182,8 +202,10 @@ exports[`buildTaskRunPrompt > should place high_priority_instruction first, then
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)
@@ -201,8 +223,10 @@ exports[`buildTaskRunPrompt > should prioritize user feedback at the top 1`] = `
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)
@@ -216,8 +240,10 @@ Activities:
 exports[`buildTaskRunPrompt > should show resolved action and comment on briefs 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-2 (id: task_test) 第2章
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写第2章
 
 Review: (not configured)
@@ -234,8 +260,10 @@ exports[`buildTaskRunPrompt > should truncate comments to 80 chars in activities
 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.
 TASK-1 (id: task_test) 写一本书
 Status: ● running     Priority: -
+When all deliverables are ready, request completion of this task (\`lh task complete <id>\` with a shell).
 Instruction: 写书
 
 Review: (not configured)

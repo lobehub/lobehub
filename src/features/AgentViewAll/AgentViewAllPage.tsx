@@ -47,6 +47,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -54,6 +57,7 @@ import { flattenAgentBuckets } from './flattenBuckets';
 import { groupItemsByFolder } from './groupByFolder';
 import ListConfig from './ListConfig';
 import { type AgentListViewOptions, normalizeAgentListViewOptions } from './listViewOptions';
+import RecommendedAgentsSection from './RecommendedAgentsSection';
 import SidebarAgentsSection from './SidebarAgentsSection';
 
 type SegmentValue = 'private' | 'workspace';
@@ -80,7 +84,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 100%;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     transition: background 0.15s;
@@ -103,43 +107,48 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const GroupHeader = memo<GroupHeaderProps>(
-  ({ avatar, collapsed, color, count, index, label, onToggle }) => (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      className={cx(
-        groupHeaderStyles.bar,
-        index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
-      )}
-      onClick={onToggle}
-    >
-      <Icon
-        color={cssVar.colorTextSecondary}
-        icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
-        size={14}
-      />
-      {avatar ? (
-        <Avatar avatar={avatar} size={20} />
-      ) : color ? (
-        <span
-          style={{
-            background: color,
-            borderRadius: '50%',
-            display: 'inline-block',
-            height: 9,
-            width: 9,
-          }}
+  ({ avatar, collapsed, color, count, index, label, onToggle }) => {
+    const compact = useInterfaceDensity() === 'compact';
+
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        paddingBlock={compact ? 6 : undefined}
+        className={cx(
+          groupHeaderStyles.bar,
+          index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
+        )}
+        onClick={onToggle}
+      >
+        <Icon
+          color={cssVar.colorTextSecondary}
+          icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
+          size={14}
         />
-      ) : null}
-      <Text fontSize={13} weight={500}>
-        {label}
-      </Text>
-      <Text fontSize={12} type={'secondary'}>
-        {count}
-      </Text>
-    </Flexbox>
-  ),
+        {avatar ? (
+          <Avatar avatar={avatar} size={20} />
+        ) : color ? (
+          <span
+            style={{
+              background: color,
+              borderRadius: '50%',
+              display: 'inline-block',
+              height: 9,
+              width: 9,
+            }}
+          />
+        ) : null}
+        <Text fontSize={13} weight={500}>
+          {label}
+        </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {count}
+        </Text>
+      </Flexbox>
+    );
+  },
 );
 
 GroupHeader.displayName = 'AgentViewAllGroupHeader';
@@ -219,6 +228,7 @@ const AgentViewAllPage = memo(() => {
 
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
+  const recommendedIds = useHomeStore(homeAgentListSelectors.recommendedAgentIds, isEqual);
   const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
   const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
@@ -250,6 +260,15 @@ const AgentViewAllPage = memo(() => {
   );
 
   const items = activeWorkspaceId && segment === 'private' ? privateItems : workspaceItems;
+
+  // The workspace's recommended Agents, in the owners'/admins' order; ids of
+  // rows that no longer exist (or turned private) are skipped.
+  const recommendedItems = useMemo(() => {
+    if (!activeWorkspaceId) return [];
+    const byId = new Map(workspaceItems.map((item) => [item.id, item]));
+    return recommendedIds.flatMap((id) => byId.get(id) ?? []);
+  }, [activeWorkspaceId, recommendedIds, workspaceItems]);
+  const { allowed: canEditRecommended } = usePermission('manage_settings');
 
   // "In sidebar" overview data: everything visible in the sidebar across BOTH
   // the workspace and private buckets — the block answers "what's in my
@@ -303,7 +322,12 @@ const AgentViewAllPage = memo(() => {
       if (!profile) continue;
       map.set(member.userId, {
         avatar: profile.avatar,
-        name: profile.fullName || profile.username || profile.email || undefined,
+        name:
+          getWorkspaceMemberNickname(member) ||
+          profile.fullName ||
+          profile.username ||
+          profile.email ||
+          undefined,
       });
     }
     return map;
@@ -340,13 +364,15 @@ const AgentViewAllPage = memo(() => {
   );
 
   const filteredItems = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
+    // Case and spacing are ignored, so "lobeai" still finds "Lobe AI".
+    const fold = (value?: string | null) => value?.toLowerCase().replaceAll(/\s+/g, '') ?? '';
+    const query = fold(keyword);
     let matched = query
       ? items.filter(
           (item) =>
-            item.name?.toLowerCase().includes(query) ||
-            item.title?.toLowerCase().includes(query) ||
-            item.description?.toLowerCase().includes(query),
+            fold(item.name).includes(query) ||
+            fold(item.title).includes(query) ||
+            fold(item.description).includes(query),
         )
       : items;
 
@@ -507,10 +533,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
+        onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed],
   );
 
   const renderRow = useCallback(
@@ -521,10 +547,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         showAuthor={showAuthor}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
+        onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -535,11 +561,14 @@ const AgentViewAllPage = memo(() => {
     createMarketAgentMenuItem,
   } = useCreateMenuItems();
 
-  // Creating from the Private tab lands the item in the private bucket, so
-  // the new row appears in the list the user is currently looking at.
+  // Each tab starts creation in its own bucket, so the new row appears in the
+  // list the user is currently looking at. The create dialogs still show the
+  // choice and let the user change it.
   const createOptions = useMemo(
     () =>
-      activeWorkspaceId && segment === 'private' ? { visibility: 'private' as const } : undefined,
+      activeWorkspaceId
+        ? { visibility: segment === 'private' ? ('private' as const) : ('public' as const) }
+        : undefined,
     [activeWorkspaceId, segment],
   );
 
@@ -589,13 +618,19 @@ const AgentViewAllPage = memo(() => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
+        {isInit &&
+          !keyword.trim() &&
+          (recommendedItems.length > 0 || (!!activeWorkspaceId && canEditRecommended)) && (
+            <RecommendedAgentsSection
+              canEdit={canEditRecommended}
+              isListed={isListed}
+              items={recommendedItems}
+              onToggleSidebar={handleToggleSidebar}
+            />
+          )}
         {!isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
         {isInit && !keyword.trim() && sidebarItems.length > 0 && (
-          <SidebarAgentsSection
-            fixedIds={workspaceSidebarIds?.fixed}
-            items={sidebarItems}
-            onToggleSidebar={handleToggleSidebar}
-          />
+          <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
         )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           {/* The workspace/private split only exists inside a workspace;

@@ -4,6 +4,8 @@ import {
   type ModifyOperation,
 } from '@lobechat/editor-runtime';
 import type { HeadlessEditor, HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
+import { TRPCError } from '@trpc/server';
+import * as Y from 'yjs';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
@@ -13,12 +15,13 @@ import {
 } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
+import { redisService } from '@/server/services/redis';
 
 import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
 import { runPageExclusive } from './queue';
 import { PageRoomStaleBaseError } from './roomClient';
-import { RoomPageSessions } from './roomSession';
+import { type RoomPageSession, RoomPageSessions } from './roomSession';
 import type { PageWriter } from './session';
 
 export interface PageBody {
@@ -26,6 +29,15 @@ export interface PageBody {
   markdown?: string;
   /** The room carries the title too; one written only to the row would be projected over. */
   title?: string;
+}
+
+export interface PageBodyWriteOptions {
+  /**
+   * Write only while the page is still at this stored version (`updatedAt`). It
+   * is checked against the room the body lands in, on every attempt; otherwise
+   * the write rejects with `DocumentVersionMismatch`, as a row write would.
+   */
+  expectedUpdatedAt?: Date;
 }
 
 // A stale base means another server instance wrote the room after this one
@@ -80,6 +92,57 @@ const applyBody = async (editor: HeadlessEditor, body: PageBody) => {
   }
 };
 
+const versionMismatch = () =>
+  new TRPCError({
+    cause: { data: { code: 'DocumentVersionMismatch' } },
+    code: 'CONFLICT',
+    message: 'Document has been updated by another session',
+  });
+
+/**
+ * The room is at the stored version when the stored page still is and the room
+ * holds nothing the page does not show: it is still at the state the page was
+ * last written from. Runs where the body is about to enter the room, so a write
+ * queued behind another, or retried, sees what came before it.
+ */
+const assertRoomAtVersion = async (
+  db: LobeChatDatabase,
+  documentId: string,
+  session: RoomPageSession,
+  expectedUpdatedAt: Date,
+  writer: PageWriter,
+) => {
+  // The push is what makes the check hold against another server instance.
+  if (session.serverWriteSeq === undefined) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'This page is open in a room that cannot take conditional writes; send no version',
+    });
+  }
+
+  // Without Redis nobody can tell what the room holds beyond the stored page.
+  const written = await redisService.pageCollab.lastPersistedRoomState(documentId);
+  if (written !== undefined) {
+    const read = Y.decodeStateVector(session.stateVector);
+    const recorded = written && Y.decodeStateVector(written);
+    const roomIsStored =
+      !!recorded &&
+      recorded.size === read.size &&
+      [...read].every(([client, clock]) => recorded.get(client) === clock);
+    if (!roomIsStored) {
+      // Edits typed in the room that the stored page does not show yet (or a room
+      // nobody recorded). Storing them gives the caller a version to read them at.
+      await session.projectAsRead();
+      throw versionMismatch();
+    }
+  }
+
+  const row = await new DocumentService(db, writer.userId, writer.workspaceId).getDocumentById(
+    documentId,
+  );
+  if (row?.updatedAt?.getTime() !== expectedUpdatedAt.getTime()) throw versionMismatch();
+};
+
 /**
  * Writes a page body that a server-side writer (the CLI, an agent tool, a
  * rollback, a client that predates rooms) would otherwise put straight into the
@@ -95,6 +158,7 @@ export const writePageBodyThroughRoom = async (
   documentId: string,
   body: PageBody,
   writer: PageWriter,
+  { expectedUpdatedAt }: PageBodyWriteOptions = {},
 ): Promise<boolean> => {
   if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
@@ -104,6 +168,9 @@ export const writePageBodyThroughRoom = async (
       if (!session) return false;
 
       try {
+        if (expectedUpdatedAt) {
+          await assertRoomAtVersion(db, documentId, session, expectedUpdatedAt, writer);
+        }
         if (body.editorData !== undefined || body.markdown !== undefined) {
           await applyBody(session.draft.editor, body);
         }
@@ -124,6 +191,9 @@ export const writePageBodyThroughRoom = async (
         if (!(error instanceof PageRoomStaleBaseError) || retry >= MAX_STALE_BASE_RETRIES) {
           throw error;
         }
+        // Another server wrote the room after this one read it: the page is past
+        // the version the caller named, whatever the stored page says yet.
+        if (expectedUpdatedAt) throw versionMismatch();
         await sleep(STALE_BASE_BACKOFF_MS * (retry + 1) * (0.5 + Math.random()));
       }
     }
@@ -161,11 +231,12 @@ export const updateDocumentThroughRoom = async (
       saveSource: params.saveSource ?? 'system',
       writeSource: params.writeSource ?? 'user',
     },
+    { expectedUpdatedAt: params.expectedUpdatedAt },
   );
   if (!routed) return service.updateDocument(documentId, params);
 
-  // The room merged and persisted the body (and title); the version predicate
-  // guarded a row write that no longer happens.
+  // The room took the body (and title) under the version predicate, and its write
+  // moved the stored version on: the rest of the update lands on the new one.
   const {
     content: _content,
     editorData: _editorData,

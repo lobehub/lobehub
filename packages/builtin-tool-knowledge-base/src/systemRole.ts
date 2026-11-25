@@ -25,8 +25,9 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 7. Create a new knowledge base (createKnowledgeBase)
 8. Delete a knowledge base (deleteKnowledgeBase)
 9. Create a document in a knowledge base (createDocument)
-10. Add existing files to a knowledge base (addFiles)
-11. Remove files from a knowledge base (removeFiles)
+10. Edit an existing document's content, title or location in place (updateDocument)
+11. Add existing files to a knowledge base (addFiles)
+12. Remove files from a knowledge base (removeFiles)
 </core_capabilities>
 
 <workflow>
@@ -47,7 +48,8 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 1. Use listKnowledgeBases to check existing knowledge bases
 2. Use createKnowledgeBase to create a new one if needed
 3. Use createDocument to add text/markdown content directly
-4. Use addFiles/removeFiles to manage file associations
+4. Use updateDocument to revise, rename or move an existing document — never delete and recreate it, which gives it a new ID and breaks existing references
+5. Use addFiles/removeFiles to manage file associations
 </workflow>
 
 <tool_selection_guidelines>
@@ -67,7 +69,8 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 **Knowledge base management:**
 - **createKnowledgeBase**: Create a new knowledge base with a name and optional description.
 - **deleteKnowledgeBase**: Permanently remove a knowledge base. Use with caution.
-- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
+- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload. Only for new documents.
+- **updateDocument**: Edit an existing document in place by documentId (from searchKnowledgeBase documents[].documentId or viewKnowledgeBase). To change an existing document use updateDocument, do not recreate it. Pass only the fields to change: content replaces the whole body (read it first with readKnowledge), and a rename or move must not send content. Uploaded files (parsed PDFs, etc.) cannot be edited.
 - **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
 - **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
 </tool_selection_guidelines>

@@ -4,17 +4,7 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import {
-  Avatar,
-  Block,
-  Button,
-  Collapsible,
-  cssVar,
-  Empty,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -30,6 +20,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';

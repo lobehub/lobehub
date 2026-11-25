@@ -17,3 +17,9 @@ export const BUILTIN_BETTER_AUTH_PROVIDERS = [
 export const PROVIDER_ALIAS_MAP: Record<string, string> = {
   'microsoft-entra-id': 'microsoft',
 };
+
+/**
+ * Error code returned by `/change-email` when the new address already belongs to another
+ * account. Shared by the server plugin and the profile settings row that localizes it.
+ */
+export const CHANGE_EMAIL_IN_USE_CODE = 'EMAIL_ALREADY_IN_USE';

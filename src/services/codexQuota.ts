@@ -55,7 +55,14 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
     const persisted =
       account && readings.length ? buildCodexPanelSnapshot(account, readings, lastLive) : null;
     const receivedAt = account?.updatedAt ? new Date(account.updatedAt).getTime() : 0;
-    if (persisted && !options.force && !options.revalidate && Date.now() - receivedAt < REFRESH_MS)
+    // Persisted limit readings omit the live account's credit balance.
+    if (
+      lastLive &&
+      persisted &&
+      !options.force &&
+      !options.revalidate &&
+      Date.now() - receivedAt < REFRESH_MS
+    )
       return persisted;
     if (persisted) options.onInterim?.(persisted);
 
@@ -78,9 +85,22 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       if (persisted) return persisted;
       throw error;
     }
+    const externalAccountId = live?.identity?.externalAccountId;
+    if (live?.status === 'error') {
+      const fallback = externalAccountId
+        ? [persisted, lastLive].find(
+            (snapshot) => snapshot?.identity?.externalAccountId === externalAccountId,
+          )
+        : null;
+      if (!externalAccountId || externalAccountId !== trustedAccountId) {
+        trustedAccountId = undefined;
+        lastLive = null;
+      }
+      return fallback ? { ...fallback, error: live.error, status: 'error' } : live;
+    }
+
     if (live?.status === 'ok') lastLive = live;
     let ingested = false;
-    const externalAccountId = live?.identity?.externalAccountId;
     if (live?.status === 'ok' && externalAccountId) {
       trustedAccountId = externalAccountId;
       account = accounts.find((item) => item.externalAccountId === externalAccountId);
@@ -125,7 +145,8 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       account = undefined;
       readings = [];
     }
-    if (account && readings.length) return buildCodexPanelSnapshot(account, readings, live);
+    if (account && readings.length)
+      return buildCodexPanelSnapshot(account, readings, live ?? lastLive);
     return (
       live ??
       persisted ?? {

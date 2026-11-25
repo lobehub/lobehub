@@ -6,10 +6,11 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sx } from '@/styles/sx';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { rowStyles } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
+import { statusTint } from '../Overview/statusTint';
 import { getDetailVisual } from './prVisual';
 
 export const headStyles = stylex.create({
@@ -46,14 +47,14 @@ export const headStyles = stylex.create({
     backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
-  root: { paddingBlockStart: '10px', paddingBlockEnd: '8px', paddingInline: '8px' },
+  root: { paddingBlockStart: 0, paddingBlockEnd: '8px', paddingInline: '6px' },
   stats: { fontVariantNumeric: 'tabular-nums' },
   title: {
     flex: '1',
     minWidth: '0',
-    fontSize: '15px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
-    lineHeight: '22px',
+    lineHeight: '20px',
     color: cssVar.colorText,
     overflowWrap: 'anywhere',
   },
@@ -75,10 +76,10 @@ export const PrStatePill = memo<{
   const visual = getDetailVisual(pr);
   return (
     <span
-      {...sx(sectionStyles.pill, {
-        background: `color-mix(in srgb, ${visual.color} 12%, transparent)`,
-        color: visual.color,
-      })}
+      {...stylex.props(
+        sectionStyles.pill,
+        sectionStyles.pillTone(visual.color, statusTint(visual.color)),
+      )}
     >
       <Icon icon={visual.icon} size={12} />
       {t(`workingPanel.pr.state.${visual.state}`)}

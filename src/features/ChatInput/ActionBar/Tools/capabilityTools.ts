@@ -30,17 +30,6 @@ const CAPABILITY_CONFIG_PATCHES: Record<
   },
 };
 
-/**
- * Activation label a capability row shows. On/off comes from chatConfig rather than
- * from the plugin list, while `pinned` additionally records the explicit pin in
- * `agents.plugins` — that is what moves the row into the Pinned group.
- */
-export const resolveCapabilityMode = (enabled: boolean, pinned = false): AgentPluginMode => {
-  if (pinned) return 'pinned';
-
-  return enabled ? 'auto' : 'disabled';
-};
-
 /** Whether `identifier`'s activation is backed by chatConfig rather than only `agents.plugins`. */
 export const isCapabilityTool = (identifier: string): boolean =>
   identifier in CAPABILITY_CONFIG_PATCHES;

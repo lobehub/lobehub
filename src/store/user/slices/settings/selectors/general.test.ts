@@ -21,7 +21,7 @@ describe('settingsSelectors', () => {
         costEstimateWarningThreshold: 0.5,
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
-        isDevMode: false,
+        interfaceDensity: 'loose',
         isLiteMode: false,
         mermaidTheme: 'lobe-theme',
         telemetry: true,
@@ -44,6 +44,44 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('showMessageUsage', () => {
+    it('is off when nothing was chosen', () => {
+      expect(userGeneralSettingsSelectors.showMessageUsage(initialState as UserStore)).toBe(false);
+    });
+
+    it('keeps it on for people who had the retired Advanced Tools switch on', () => {
+      const s = merge(initialState, {
+        settings: { general: { isDevMode: true } },
+      }) as unknown as UserStore;
+
+      expect(userGeneralSettingsSelectors.showMessageUsage(s)).toBe(true);
+    });
+
+    it('lets the explicit choice win over the retired switch', () => {
+      const s = merge(initialState, {
+        settings: { general: { isDevMode: true, showMessageUsage: false } },
+      }) as unknown as UserStore;
+
+      expect(userGeneralSettingsSelectors.showMessageUsage(s)).toBe(false);
+    });
+  });
+
+  describe('interfaceDensity', () => {
+    it('defaults to loose when unset', () => {
+      expect(userGeneralSettingsSelectors.interfaceDensity(initialState as UserStore)).toBe(
+        'loose',
+      );
+    });
+
+    it('returns compact when chosen', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { interfaceDensity: 'compact' } },
+      });
+
+      expect(userGeneralSettingsSelectors.interfaceDensity(s as UserStore)).toBe('compact');
+    });
+  });
+
   describe('fontAntialiasing', () => {
     it('should default to true when unset', () => {
       expect(userGeneralSettingsSelectors.fontAntialiasing(initialState as UserStore)).toBe(true);
@@ -59,25 +97,14 @@ describe('settingsSelectors', () => {
   });
 
   describe('followUpBehavior', () => {
-    it('should stay on the legacy behavior while the lab is off, whatever is stored', () => {
-      const s: UserState = merge(initialState, {
-        settings: { general: { followUpBehavior: 'queue' } },
-      });
-
-      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('legacy');
+    it('should default to steer', () => {
+      expect(userGeneralSettingsSelectors.followUpBehavior(initialState as UserStore)).toBe(
+        'steer',
+      );
     });
 
-    it('should default to steer with the lab on', () => {
+    it('should read the stored setting', () => {
       const s: UserState = merge(initialState, {
-        preference: { lab: { enableBetterCodingExperience: true } },
-      });
-
-      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('steer');
-    });
-
-    it('should read the stored setting with the lab on', () => {
-      const s: UserState = merge(initialState, {
-        preference: { lab: { enableBetterCodingExperience: true } },
         settings: { general: { followUpBehavior: 'queue' } },
       });
 
@@ -115,6 +142,30 @@ describe('settingsSelectors', () => {
       });
 
       expect(userGeneralSettingsSelectors.enablePasteAutoConvert(s as UserStore)).toBe(true);
+    });
+  });
+
+  describe('enableVoiceMessage', () => {
+    it('should default to false when unset', () => {
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(initialState as UserStore)).toBe(
+        false,
+      );
+    });
+
+    it('should return true when turned on', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { enableVoiceMessage: true } },
+      });
+
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(s as UserStore)).toBe(true);
+    });
+
+    it('should return false when explicitly turned off', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { enableVoiceMessage: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(s as UserStore)).toBe(false);
     });
   });
 

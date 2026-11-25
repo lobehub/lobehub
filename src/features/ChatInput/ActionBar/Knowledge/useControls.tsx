@@ -11,6 +11,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
@@ -24,21 +25,21 @@ const styles = stylex.create({
   viewMore: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     // width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
     // submenu) and lets the row span full width; padding-inline 12 lines its icon/text
     // up with the menu items above.
     width: '320px',
-    minHeight: '32px',
+    minHeight: sidebarRow.controlHeight,
     // The footer wrapper adds padding-block: 8px top & bottom; the top keeps it separated
     // from the list, but the bottom leaves a dead gap against the popup edge — cancel it.
     marginBlockEnd: '-8px',
     marginInline: '-12px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },

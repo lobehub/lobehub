@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { EnvironmentModel } from '../../../models/environment';
-import { ProjectModel } from '../../../models/project';
 import { ProjectWorkingDirectoryModel } from '../../../models/projectWorkingDirectory';
 import { TopicModel } from '../../../models/topic';
 import {
@@ -18,6 +17,7 @@ import {
   users,
   workspaces,
 } from '../../../schemas';
+import { ProjectEnvironmentRepository } from '../../projectEnvironment';
 import { ProjectDirectoryRepository } from '../index';
 
 const db = await getTestDB();
@@ -96,18 +96,29 @@ describe('ProjectDirectoryRepository.bind', () => {
       repositoryUrl: 'git@github.com:lobehub/lobehub.git',
     });
     const row = await directoryModel.resolve(directory.id);
-    expect(row.configuration).toEqual({
-      sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
-    });
+    expect(row.configuration).toEqual(
+      expect.objectContaining({
+        sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
+      }),
+    );
     await db
       .update(environments)
       .set({ configuration: {} })
       .where(eq(environments.id, row.environmentId));
     const [instance] = await db.select().from(environmentInstances);
     expect(instance.configurationSnapshot).toEqual(row.configuration);
-    await expect(
-      repo.bind({ ...base, repositoryUrl: 'https://github.com/other/repo' }),
-    ).rejects.toThrow('Repository differs');
+    // Another checkout bound to the project adds its repository to the
+    // project's one environment; the folder already built keeps its snapshot.
+    await repo.bind({ ...base, repositoryUrl: 'https://github.com/other/repo' });
+    const [environment] = await db
+      .select()
+      .from(environments)
+      .where(eq(environments.id, row.environmentId));
+    expect(environment.configuration.sources).toEqual([
+      { kind: 'git', url: 'https://github.com/other/repo' },
+    ]);
+    const [unchanged] = await db.select().from(environmentInstances);
+    expect(unchanged.configurationSnapshot).toEqual(row.configuration);
   });
 
   it('isolates devices even when their path matches', async () => {
@@ -129,9 +140,11 @@ describe('ProjectDirectoryRepository.bind', () => {
       .update(environments)
       .set({ configuration: { sources: [{ kind: 'git', url: 'https://github.com/other/repo' }] } })
       .where(eq(environments.id, row.environmentId));
-    expect((await directoryModel.resolve(directory.id)).configuration).toEqual({
-      sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
-    });
+    expect((await directoryModel.resolve(directory.id)).configuration).toEqual(
+      expect.objectContaining({
+        sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
+      }),
+    );
   });
 
   it('does not expose or change another user’s project or device', async () => {
@@ -145,36 +158,44 @@ describe('ProjectDirectoryRepository.bind', () => {
     await expect(repo.bind({ ...base, deviceId: 'private-device' })).rejects.toThrow();
   });
 
-  it('reuses an attached environment and keeps its instance snapshot across updates', async () => {
-    const projectModel = new ProjectModel(db, userId);
-    const env = await new EnvironmentModel(db, userId).save({
-      name: 'Shared GitHub',
-      repositoryUrl: 'git@github.com:lobehub/lobehub.git',
+  it("binds every folder to the project's own environment", async () => {
+    const own = await new ProjectEnvironmentRepository(db, userId).get(base.projectId);
+    const first = await directoryModel.resolve((await repo.bind(base)).id);
+    const second = await directoryModel.resolve(
+      (await repo.bind({ ...base, name: 'Other', path: '/work/other' })).id,
+    );
+    expect(first.environmentId).toBe(own.id);
+    expect(second.environmentId).toBe(own.id);
+    // A standalone environment the client names is not linked in its place.
+    const standalone = await new EnvironmentModel(db, userId).save({ name: 'Standalone' });
+    const third = await repo.bind({
+      ...base,
+      environmentId: standalone.id,
+      name: 'Third',
+      path: '/work/third',
     });
-    await projectModel.attachEnvironment(base.projectId, env.id);
-    const binding = await repo.bind({ ...base, environmentId: env.id });
-    const bound = await directoryModel.resolve(binding.id);
-    const [before] = await db
-      .select()
-      .from(environmentInstances)
-      .where(eq(environmentInstances.id, bound.instanceId!));
-    await new EnvironmentModel(db, userId).save({
-      id: env.id,
-      name: 'Updated resource',
-      repositoryUrl: 'https://github.com/lobehub/new-repo',
-    });
-    const [after] = await db
-      .select()
-      .from(environmentInstances)
-      .where(eq(environmentInstances.id, bound.instanceId!));
-    expect(after.configurationSnapshot).toEqual(before.configurationSnapshot);
+    expect((await directoryModel.resolve(third.id)).environmentId).toBe(own.id);
+    expect(
+      await db
+        .select()
+        .from(projectEnvironments)
+        .where(eq(projectEnvironments.projectId, base.projectId)),
+    ).toEqual([expect.objectContaining({ environmentId: own.id })]);
   });
 
-  it('reports a disabled environment of the same name instead of hitting its unique index', async () => {
-    const env = await new EnvironmentModel(db, userId).save({ name: base.name });
-    await db.update(environments).set({ enabled: false }).where(eq(environments.id, env.id));
-    await expect(repo.bind(base)).rejects.toThrow('Environment is disabled');
-    expect(await db.select().from(environments)).toHaveLength(1);
+  it("refuses a folder another project's environment already built", async () => {
+    await repo.bind(base);
+    await db.insert(agents).values({ id: 'second-coordinator', userId });
+    await db.insert(projects).values({
+      coordinatorAgentId: 'second-coordinator',
+      id: 'second-project',
+      identifier: 'SEC',
+      name: 'Second project',
+      userId,
+    });
+    await expect(repo.bind({ ...base, projectId: 'second-project' })).rejects.toThrow(
+      'belongs to another environment',
+    );
   });
 
   it('rejects filing conversations for an agent fixed to another execution target', async () => {
@@ -501,7 +522,11 @@ describe('ProjectDirectoryRepository.moveTopic', () => {
       name: 'Other project',
       userId,
     });
-    const foreign = await repo.bind({ ...second, projectId: 'other-project' });
+    const foreign = await repo.bind({
+      ...second,
+      path: '/work/foreign',
+      projectId: 'other-project',
+    });
     await pinnedTopic(first.id);
     await expect(repo.moveTopic('to-move', foreign.id)).rejects.toThrow();
     await db.update(topics).set({ status: 'running' }).where(eq(topics.id, 'to-move'));
@@ -798,6 +823,80 @@ describe('ProjectDirectoryRepository.relocate', () => {
         path: '/work/fixed',
         projectId: base.projectId,
       }),
+    ).rejects.toThrow('Project not found or access denied');
+  });
+});
+
+// The project's execution environments — its device folders and the cloud
+// sandbox — in the order a new conversation tries them.
+describe('ProjectDirectoryRepository execution order', () => {
+  const order = async () => {
+    const { sandbox } = await repo.executionOrder(base.projectId);
+    const folders = await directoryModel.list(base.projectId);
+    return [
+      ...folders.map((folder) => ({ id: folder.path, sortOrder: folder.sortOrder })),
+      {
+        id: 'sandbox',
+        sortOrder: sandbox,
+      },
+    ]
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder || Number(a.id === 'sandbox') - Number(b.id === 'sandbox'),
+      )
+      .map((item) => item.id);
+  };
+
+  it('tries folders before the sandbox until anything is reordered', async () => {
+    await repo.bind(base);
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('stores a reordered priority for folders and the sandbox', async () => {
+    const first = await repo.bind(base);
+    const second = await repo.bind({ ...base, path: '/work/second' });
+
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', second.id, first.id]);
+
+    expect(await order()).toEqual(['sandbox', '/work/second', '/work/repo']);
+  });
+
+  it('places a new folder before the sandbox when the sandbox is last', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, [first.id, 'sandbox']);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('places a new folder last when the sandbox was moved ahead of folders', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['sandbox', '/work/repo', '/work/second']);
+  });
+
+  it("refuses an order naming a folder that is not this project's", async () => {
+    await repo.bind(base);
+
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, [
+        'sandbox',
+        '00000000-0000-0000-0000-000000000000',
+      ]),
+    ).rejects.toThrow('Unknown project directory');
+  });
+
+  it('lets only someone who may change the project reorder it', async () => {
+    const first = await repo.bind(base);
+
+    await expect(
+      otherRepo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]),
     ).rejects.toThrow('Project not found or access denied');
   });
 });

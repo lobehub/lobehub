@@ -31,7 +31,10 @@ describe('buildRunProjectContextPrompt', () => {
     });
     mocks.listAgents.mockResolvedValue([
       { agent: { id: 'agt-coord', title: 'Coordinator' }, binding: { enabled: true } },
-      { agent: { id: 'agt-writer', title: 'Writer' }, binding: { enabled: true, role: 'copy' } },
+      {
+        agent: { id: 'agt-writer', name: 'Justin', title: 'Writer' },
+        binding: { enabled: true, role: 'copy' },
+      },
       { agent: { id: 'agt-off', title: 'Paused' }, binding: { enabled: false, role: 'qa' } },
     ]);
     mocks.listKnowledgeBases.mockResolvedValue([
@@ -49,7 +52,7 @@ describe('buildRunProjectContextPrompt', () => {
     const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord');
 
     expect(prompt).toContain('Apollo Renamed');
-    expect(prompt).toContain('Writer (agt-writer): copy');
+    expect(prompt).toContain('Justin (Writer) (agt-writer): copy');
     expect(prompt).not.toContain('agt-off');
     expect(prompt).toContain('Style guide (kb-1)');
     expect(prompt).not.toContain('Old notes');
@@ -98,7 +101,7 @@ describe('buildRunProjectContextPrompt', () => {
 
     expect(context?.startsWith('<project_context>\n')).toBe(true);
     expect(context?.endsWith('\n</project_context>')).toBe(true);
-    expect(context).toContain('Writer (agt-writer): copy');
+    expect(context).toContain('Justin (Writer) (agt-writer): copy');
     expect(context).not.toContain('<coordination_rules>');
     await expect(buildHeteroProjectContext(deps, undefined, 'agt-coord')).resolves.toBe(undefined);
   });

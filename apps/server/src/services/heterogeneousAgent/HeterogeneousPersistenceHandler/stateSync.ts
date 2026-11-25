@@ -185,7 +185,10 @@ export async function loadOrCreateState(
     streamStartAssistantIds: new Map(),
     streamStartParentMessages: new Map(),
     toolMsgIdByCallId: new Map(),
-    threadId: running?.threadId ?? undefined,
+    // A sub-agent run in an isolation thread is only in the topic marker while
+    // its parent's turn runs (never once a background child outlives it); its
+    // seeded assistant message always sits in that thread.
+    threadId: running?.threadId ?? baseAssistantMessage?.threadId ?? undefined,
     topicId,
   };
   await refreshToolMessageIndex(deps, state);

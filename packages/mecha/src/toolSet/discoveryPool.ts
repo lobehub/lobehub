@@ -2,12 +2,17 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import type { GenerateToolsParams, LobeToolManifest } from '@lobechat/context-engine';
 import {
   type BuiltinToolResolveContext,
   type DeviceExecutionTarget,
   executionTargetToRuntimeMode,
+  type LobeAgentChatConfig,
   type LobeBuiltinTool,
+  manifestBaseIdentifier,
+  resolveToolMode,
   type ToolExecutor,
   type ToolSource,
 } from '@lobechat/types';
@@ -46,6 +51,38 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
       ...(request.connectorIds ?? []),
     ]),
   ];
+};
+
+/**
+ * Build the initial invocation set. Subsequent explicit activations use the full eligible pool.
+ *
+ * `lobe-web-browsing` stays preloaded whenever search is enabled: it is the
+ * highest-frequency tool in general conversations, its slimmed footprint is small,
+ * and deferring it forces an extra activation round-trip plus a prompt-cache wipe
+ * on providers that lack mid-conversation tool additions. Turning search off still
+ * removes it completely via `resolveToolRules` (`runtimeManagedToolIds`).
+ */
+export const initialToolSelection = (
+  toolIds: string[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'> | null,
+  skipDefaultTools?: boolean,
+): Pick<GenerateToolsParams, 'toolIds' | 'excludeDefaultToolIds' | 'skipDefaultTools'> => {
+  const deferCapabilities = !skipDefaultTools && resolveToolMode(chatConfig) === 'agent';
+  if (!deferCapabilities) {
+    return {
+      excludeDefaultToolIds: undefined,
+      skipDefaultTools: skipDefaultTools || undefined,
+      toolIds,
+    };
+  }
+  const deferredRuntimeToolIds = runtimeManagedToolIds.filter(
+    (id) => id !== WebBrowsingManifest.identifier,
+  );
+  return {
+    excludeDefaultToolIds: deferredRuntimeToolIds,
+    skipDefaultTools: undefined,
+    toolIds: toolIds?.filter((id) => !deferredRuntimeToolIds.includes(id)),
+  };
 };
 
 export interface DiscoveryPoolRequest {
@@ -97,7 +134,11 @@ export interface DiscoveryPoolRequest {
 
 export interface DiscoveryPool {
   /** The single guard every ingest into the pool goes through. */
-  isManifestIngestAllowed: (identifier: string) => boolean;
+  /**
+   * `baseIdentifier` is a connector row's connector (`manifest.connector`): its
+   * tool set follows the connector's exclusive and disabled entries.
+   */
+  isManifestIngestAllowed: (identifier: string, baseIdentifier?: string) => boolean;
   /** What the activator may discover and enable mid-run. */
   manifestMap: Record<string, LobeToolManifest>;
   /** Which family a discovered tool executes through. */
@@ -124,9 +165,9 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   // leaving it discoverable would let explicit activation re-surface the
   // device list mid-run. Enforced at the ingest layer so no later source
   // can re-add an identifier the walls removed.
-  const isManifestIngestAllowed = (identifier: string): boolean => {
-    if (exclusive && !exclusive.has(identifier)) return false;
-    if (disabled.has(identifier)) return false;
+  const isManifestIngestAllowed = (identifier: string, baseIdentifier = identifier): boolean => {
+    if (exclusive && !exclusive.has(identifier) && !exclusive.has(baseIdentifier)) return false;
+    if (disabled.has(identifier) || disabled.has(baseIdentifier)) return false;
     if (
       hasDeviceProxy &&
       identifier === AuvManifest.identifier &&
@@ -143,7 +184,7 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
 
   // Seed with the invocation set (candidates ∪ defaults the engine enabled).
   request.enabledManifests.forEach((manifest, id) => {
-    if (isManifestIngestAllowed(id)) manifestMap[id] = manifest;
+    if (isManifestIngestAllowed(id, manifestBaseIdentifier(manifest))) manifestMap[id] = manifest;
   });
 
   const runtimeMode = executionTargetToRuntimeMode(executionTarget);
@@ -195,7 +236,7 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   // Connector families, with the source the runtime executes them through.
   const ingestFamily = (manifests: readonly LobeToolManifest[], source: ToolSource) => {
     for (const manifest of manifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
+      if (!isManifestIngestAllowed(manifest.identifier, manifestBaseIdentifier(manifest))) continue;
       if (!manifestMap[manifest.identifier]) manifestMap[manifest.identifier] = manifest;
       sourceMap[manifest.identifier] = source;
     }

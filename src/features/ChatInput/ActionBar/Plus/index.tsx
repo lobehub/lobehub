@@ -1,8 +1,7 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, Popover, toast, Upload } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
+import { Icon, toast, Upload } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -14,20 +13,20 @@ import {
   TargetIcon,
   TypeIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useInRouterContext, useLocation } from 'react-router';
 
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -39,15 +38,15 @@ import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import SubmenuChevron from '../components/SubmenuChevron';
-import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
-import { useControls as useToolsControls } from '../Tools/useControls';
+import { usePopupToolsMenuItem } from './usePopupToolsMenuItem';
 import { useSkillsMenuItem } from './useSkillsMenuItem';
+import { useToolsMenuItem } from './useToolsMenuItem';
 
 const styles = stylex.create({
   activeLabel: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
@@ -85,108 +84,18 @@ const styles = stylex.create({
   labelWithChip: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
 });
 
-type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
-  label?: ReactNode;
-  popoverContent?: unknown;
-};
-
-interface PopoverLabelProps {
-  disabled?: boolean;
-  label: ReactNode;
-  popoverContent: ReactNode;
-}
-
-/**
- * The detail card must anchor past the whole menu row, not the label cell:
- * anchored to the label, it opens exactly over the item's trailing `extra`
- * slot ("..." menu, re-authorize link, switches), and a press landing on the
- * portal'd card is read by base-ui as an outside press that dismisses the
- * whole submenu. The card is also rendered inert (pointer-events: none) — it
- * is a hover information surface, so it must never swallow a press meant for
- * the controls beneath it.
- */
-const PopoverLabel = memo<PopoverLabelProps>(({ disabled, label, popoverContent }) => {
-  const { close, onOpenChange, open } = useDetailPopoverState(disabled);
-  const wrapperRef = useRef<HTMLSpanElement>(null);
-  const rowAnchorRef = useMemo(
-    () => ({
-      get current() {
-        const wrapper = wrapperRef.current;
-        return (wrapper?.closest('[role="menuitem"]') as HTMLElement | null) ?? wrapper;
-      },
-    }),
-    [],
-  );
-
-  return (
-    <Popover
-      arrow={false}
-      content={popoverContent}
-      disabled={disabled}
-      mouseEnterDelay={0.25}
-      open={open}
-      placement={'rightTop'}
-      positionerProps={{ anchor: rowAnchorRef, sideOffset: 8 }}
-      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
-      onOpenChange={onOpenChange}
-    >
-      <span
-        ref={wrapperRef}
-        style={{ display: 'block', width: '100%' }}
-        onClickCapture={close}
-        onContextMenuCapture={close}
-      >
-        {label}
-      </span>
-    </Popover>
-  );
-});
-
-PopoverLabel.displayName = 'PopoverLabel';
-
-const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown, disabled?: boolean) => {
-  if (!popoverContent) return label;
-
-  return (
-    <PopoverLabel disabled={disabled} label={label} popoverContent={popoverContent as ReactNode} />
-  );
-};
-
-const stripPopoverContent = (
-  items?: ActionDropdownMenuItems,
-  detailPopoverDisabled?: boolean,
-): ActionDropdownMenuItems =>
-  items?.map((item) => {
-    if (!item) return item;
-    if ('type' in item && item.type === 'divider') return item;
-
-    const nextItem = { ...(item as DropdownItemWithPopover) };
-    const popoverContent = nextItem.popoverContent;
-    delete nextItem.popoverContent;
-
-    if ('children' in nextItem && nextItem.children) {
-      return {
-        ...nextItem,
-        children: stripPopoverContent(nextItem.children, detailPopoverDisabled),
-      } as ActionDropdownMenuItems[number];
-    }
-
-    if ('label' in nextItem) {
-      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent, detailPopoverDisabled);
-    }
-
-    return nextItem;
-  }) ?? [];
-
-const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+const usePlusMenuItemsBase = ({
+  close,
+  toolsMenuItem,
+}: {
+  close: () => void;
+  toolsMenuItem: ActionDropdownMenuItems[number];
+}): ActionDropdownMenuItems => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
-
-  // Goal creation is lab-gated while the product surface is being rolled out.
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const upload = useChatInputUpload();
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -202,9 +111,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     ],
   );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
-  const skillActivateMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-  );
 
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
@@ -226,14 +132,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
   const closeDropdown = useCallback(() => close(), [close]);
   const skillsMenuItem = useSkillsMenuItem(closeDropdown);
-  const {
-    autoCount: skillAutoCount,
-    isPolicyMenuOpen: isSkillPolicyMenuOpen,
-    marketFooter: skillMarketFooter,
-    marketHeader: skillMarketHeader,
-    marketItems: skillItems,
-    pinnedCount: skillPinnedCount,
-  } = useToolsControls({ closeDropdown });
 
   const handleToggleParams = useCallback(() => {
     close();
@@ -264,14 +162,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       ) : (
         label
       );
-
-    // The row detail card and the "..." policy menu anchor to the same right edge,
-    // so leaving hover live lets a neighbouring row's card open on top of the menu
-    // and swallow the click meant for it.
-    const skillMenuItems = stripPopoverContent(
-      skillItems as ActionDropdownMenuItems,
-      isSkillPolicyMenuOpen,
-    );
 
     const uploadItems: ActionDropdownMenuItems = [
       {
@@ -311,27 +201,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
     ];
 
-    // In auto mode every installed skill is callable, so show pinned + auto.
-    // In manual mode only the pinned ones are active, so show pinned only.
-    const activeSkillCount =
-      skillActivateMode === 'auto' ? skillPinnedCount + skillAutoCount : skillPinnedCount;
-
     const toolsItems: ActionDropdownMenuItems =
-      isAgentModeEnabled && enableFC
-        ? [
-            {
-              children: skillMenuItems,
-              // Trailing chevron (replaces base-ui's default triangle submenu arrow,
-              // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-              extra: <SubmenuChevron />,
-              footer: skillMarketFooter,
-              header: skillMarketHeader,
-              icon: SkillsIcon,
-              key: 'tools',
-              label: renderLabelWithCount(tSetting('tools.picker.title'), activeSkillCount),
-            } as ActionDropdownMenuItems[number],
-          ]
-        : [];
+      isAgentModeEnabled && enableFC ? [toolsMenuItem] : [];
 
     // Memory and web search are activation entries of the Tools popover now: they
     // live in its "Auto" group, can be disabled there, and carry their own settings,
@@ -404,27 +275,25 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     // Goal creation has one canonical entry: drop the goal chip at the head of
     // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
-    const acceptanceItems: ActionDropdownMenuItems = enableGoals
-      ? [
-          {
-            icon: TargetIcon,
-            key: 'set-topic-goal',
-            // Same string as the chip it inserts: one label for the affordance,
-            // so the menu row and the chip can never drift apart.
-            label: tEditor('slash.goal'),
-            onClick: () => {
-              insertGoalTag(editor, tEditor('slash.goal'));
-            },
-          },
-        ]
-      : [];
+    const goalItems: ActionDropdownMenuItems = [
+      {
+        icon: TargetIcon,
+        key: 'set-topic-goal',
+        // Same string as the chip it inserts: one label for the affordance,
+        // so the menu row and the chip can never drift apart.
+        label: tEditor('slash.goal'),
+        onClick: () => {
+          insertGoalTag(editor, tEditor('slash.goal'));
+        },
+      },
+    ];
 
     // Grouped with a single divider only between non-empty groups:
     // [attachments] | [tools · skills] | [set goal] | [formatting · params]
     const menuGroups: ActionDropdownMenuItems[] = [
       attachmentsItems,
       coreItems,
-      acceptanceItems,
+      goalItems,
       formatItems,
     ];
     return menuGroups
@@ -433,7 +302,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   }, [
     agentId,
     canConfigureResource,
-    enableGoals,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -443,22 +311,16 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     handleToggleParams,
     isAgentModeEnabled,
     isParamsPanelActive,
-    isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
     showTypoBar,
-    skillActivateMode,
-    skillAutoCount,
-    skillPinnedCount,
     knowledgeItems,
     knowledgeFooter,
     t,
     tEditor,
     tSetting,
-    skillItems,
-    skillMarketFooter,
-    skillMarketHeader,
     skillsMenuItem,
+    toolsMenuItem,
     upload,
     routeLargeFilesToLocalPaths,
     close,
@@ -467,22 +329,38 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   return items;
 };
 
+const useMainPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = useToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
+const usePopupPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = usePopupToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
 /**
  * The trigger stays hook-free: every store subscription and the whole item tree
- * live in `usePlusMenuItems`, which ActionDropdown only invokes from inside the
- * popup — so opening a conversation no longer pays for a menu nobody opened.
+ * live in `useMainPlusMenuItems` / `usePopupPlusMenuItems`, which ActionDropdown
+ * only invokes from inside the popup — so opening a conversation no longer pays
+ * for a menu nobody opened.
  */
-const PlusAction = memo(() => {
+const PlusActionBase = memo<{ isPopup: boolean }>(({ isPopup }) => {
   const { t } = useTranslation('chat');
+  const { controlHeight, iconSize } = useDensityTokens();
 
   return (
     <ChatInputAction
       icon={PlusIcon}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
       title={t('plus.contextTooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
-        menu: { useItems: usePlusMenuItems },
+        menu: { useItems: isPopup ? usePopupPlusMenuItems : useMainPlusMenuItems },
         minWidth: 196,
         placement: 'topLeft',
       }}
@@ -490,21 +368,41 @@ const PlusAction = memo(() => {
   );
 });
 
+PlusActionBase.displayName = 'PlusActionBase';
+
+const PlusActionInRouter = memo(() => {
+  const { pathname } = useLocation();
+
+  return <PlusActionBase isPopup={pathname.startsWith('/popup')} />;
+});
+
+PlusActionInRouter.displayName = 'PlusActionInRouter';
+
+const PlusAction = memo(() => {
+  const inRouter = useInRouterContext();
+
+  return inRouter ? <PlusActionInRouter /> : <PlusActionBase isPopup={false} />;
+});
+
 PlusAction.displayName = 'PlusAction';
 
-const Plus = () => (
-  <Suspense
-    fallback={
-      <ChatInputAction
-        disabled
-        icon={PlusIcon}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title=""
-      />
-    }
-  >
-    <PlusAction />
-  </Suspense>
-);
+const Plus = () => {
+  const { controlHeight, iconSize } = useDensityTokens();
+
+  return (
+    <Suspense
+      fallback={
+        <ChatInputAction
+          disabled
+          icon={PlusIcon}
+          size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
+          title=""
+        />
+      }
+    >
+      <PlusAction />
+    </Suspense>
+  );
+};
 
 export default Plus;

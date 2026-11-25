@@ -50,6 +50,7 @@ interface RpcRateWindow {
 }
 
 interface RpcRateLimitSnapshot {
+  credits?: { balance?: string | null; unlimited?: boolean } | null;
   limitId?: string | null;
   limitName?: string | null;
   primary?: RpcRateWindow;
@@ -149,6 +150,12 @@ const normalizeCreditText = (value: string | null | undefined) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed || null;
+};
+
+const mapRpcCredits = (raw: RpcRateLimitSnapshot['credits']): CodexQuotaSnapshot['credits'] => {
+  const balance = normalizeCreditText(raw?.balance);
+  const unlimited = raw?.unlimited === true;
+  return balance === null && !unlimited ? undefined : { balance, unlimited };
 };
 
 const mapRpcResetCredit = (credit: RpcRateLimitResetCredit): CodexRateLimitResetCredit => ({
@@ -533,16 +540,17 @@ const requestViaRpc = async <T>(
       settleError(new Error(`${failureMessage}: RPC timed out`), true);
     }, timeoutMs);
 
-    void resolveCliSpawnPlan(options.command ?? 'codex', rpcArgs)
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...options.env,
+      ...(options.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {}),
+    };
+    void resolveCliSpawnPlan(options.command ?? 'codex', rpcArgs, childEnv)
       .then((spawnPlan) => {
         if (finished) return;
 
         child = spawn(spawnPlan.command, spawnPlan.args, {
-          env: {
-            ...process.env,
-            ...options.env,
-            ...(options.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {}),
-          },
+          env: spawnPlan.env ?? childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
         });
@@ -572,6 +580,9 @@ const fetchViaRpc = async (
     const rateLimits = mapRpcRateLimits(wrapper);
     const defaultRateLimit =
       rateLimits.find(({ limitId }) => limitId.toLowerCase() === 'codex') ?? rateLimits[0];
+    const credits =
+      mapRpcCredits(wrapper.rateLimitsByLimitId?.codex?.credits) ??
+      mapRpcCredits(wrapper.rateLimits?.credits);
     const rateLimitResetCredits = mapRpcResetCredits(wrapper?.rateLimitResetCredits);
     let backendCredits: CodexRateLimitResetCredits | null = null;
 
@@ -591,6 +602,7 @@ const fetchViaRpc = async (
 
     const updatedAt = Date.now();
     return {
+      credits,
       error: null,
       readings: codexQuotaReadings(rateLimits, updatedAt),
       provider: 'codex',

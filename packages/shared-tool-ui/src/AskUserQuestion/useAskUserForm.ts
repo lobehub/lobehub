@@ -33,6 +33,11 @@ export interface UseAskUserFormParams {
   deadlineAt?: number;
   /** Preserve the form but disable every action while a remote submit awaits producer ACK. */
   disabled?: boolean;
+  /**
+   * Never answer with option 1 when the countdown ends: the clock only closes the question.
+   * For a question the person may answer elsewhere (a Channel), where a default is not theirs.
+   */
+  noAnswerOnTimeout?: boolean;
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
@@ -106,6 +111,7 @@ export const useAskUserForm = ({
   countdownMs,
   deadlineAt,
   disabled = false,
+  noAnswerOnTimeout = false,
   onInteractionAction,
   persistedDraft,
   requireAllAnswered = true,
@@ -168,7 +174,7 @@ export const useAskUserForm = ({
   const hasProviderOwnedOptionIds = questions.some((question) =>
     question.options.some((option) => !!option.id),
   );
-  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds;
+  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds && !noAnswerOnTimeout;
 
   // A resolved `onInteractionAction` means the answer was published, not that
   // the producer consumed it — the card stays disabled until the host settles

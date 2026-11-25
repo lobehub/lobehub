@@ -7,6 +7,8 @@ import { CircleDollarSign, Clock, Layers, type LucideIcon, Trophy } from 'lucide
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import Sparkline from '../../../../features/Sparkline';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
 import BenchmarkTitleBar from './TitleBar';
@@ -31,7 +33,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
 
     min-width: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
   `,

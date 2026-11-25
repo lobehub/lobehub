@@ -181,6 +181,22 @@ describe('Channel on-demand history', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('rejects an unknown Thread and a malformed message id as NOT_FOUND', async () => {
+    const state = await setup();
+    await state.say('Own conversation');
+    const { operationId, request } = await state.run();
+    await expect(
+      state.history.readMessages(operationId, { threadId: 'cht_missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      state.history.readMessage(operationId, { messageId: request.id, threadId: 'cht_missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // A Thread id passed as a message id is not a uuid; it must not reach Postgres as one.
+    await expect(
+      state.history.readMessage(operationId, { messageId: 'cht_uvOObyIW8CII' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it.each([
     'requester',
     'agent',
@@ -257,7 +273,7 @@ describe('Channel relay source', () => {
   it('relays a Channel run from its own Channel and request', async () => {
     const state = await setup();
     const { operationId } = await state.run();
-    expect(await state.history.relaySource(operationId, { allowBotRun: true })).toEqual({
+    expect(await state.history.relaySource(operationId, { allowDirectRun: true })).toEqual({
       channelRun: expect.objectContaining({ channelId: state.channel.id }),
       origin: { channelId: state.channel.id, threadId: null },
       requestVia: undefined,
@@ -265,7 +281,7 @@ describe('Channel relay source', () => {
     });
   });
 
-  it("relays an owner's live bot run only when the caller opts in", async () => {
+  it("relays the requester's live direct run only when the caller opts in", async () => {
     const history = new ChannelHistoryRepository(db, fixture.memberId, fixture.workspaceId);
     const [agent] = await db
       .insert(agents)
@@ -291,20 +307,29 @@ describe('Channel relay source', () => {
       const bot = await operation('op-relay-bot', {});
       // The native tool path never opts in, so a bot run without a Channel stays refused there.
       await expect(history.relaySource(bot)).rejects.toThrow('Channel operation not found');
-      expect(await history.relaySource(bot, { allowBotRun: true })).toEqual({
+      expect(await history.relaySource(bot, { allowDirectRun: true })).toEqual({
         self: { agentId: agent.id, name: 'Telegram Agent' },
       });
 
-      const chat = await operation('op-relay-chat', { trigger: 'chat' });
-      await expect(history.relaySource(chat, { allowBotRun: true })).rejects.toThrow(
+      // The user's own chat turn (sent or scheduled) may message for them too.
+      for (const trigger of ['chat', 'scheduled']) {
+        const direct = await operation(`op-relay-${trigger}`, { trigger });
+        await expect(history.relaySource(direct)).rejects.toThrow('Channel operation not found');
+        expect(await history.relaySource(direct, { allowDirectRun: true })).toEqual({
+          self: { agentId: agent.id, name: 'Telegram Agent' },
+        });
+      }
+      // A server-started run without a Channel never does, whatever its token says.
+      const cron = await operation('op-relay-cron', { trigger: 'cron' });
+      await expect(history.relaySource(cron, { allowDirectRun: true })).rejects.toThrow(
         'Channel operation not found',
       );
       const other = await operation('op-relay-other', { userId: fixture.ownerId });
-      await expect(history.relaySource(other, { allowBotRun: true })).rejects.toThrow(
+      await expect(history.relaySource(other, { allowDirectRun: true })).rejects.toThrow(
         'Channel operation not found',
       );
       const ended = await operation('op-relay-ended', { status: 'completed' });
-      await expect(history.relaySource(ended, { allowBotRun: true })).rejects.toThrow(
+      await expect(history.relaySource(ended, { allowDirectRun: true })).rejects.toThrow(
         'no longer active',
       );
     } finally {

@@ -2,17 +2,24 @@
 import { MarketAPIError } from '@lobehub/market-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as MarketServiceModule from '@/server/services/market';
+
 import { marketRouter } from './market';
 
 const mockPreprocessLhCommand = vi.hoisted(() => vi.fn());
 const mockSandboxCallTool = vi.hoisted(() => vi.fn());
+const mockSandboxExportAndUploadFile = vi.hoisted(() => vi.fn());
 const mockCreateSandboxService = vi.hoisted(() =>
   vi.fn(function () {
     return {
       callTool: mockSandboxCallTool,
+      exportAndUploadFile: mockSandboxExportAndUploadFile,
     };
   }),
 );
+// Records what each MarketService was built with, so a test can see whether
+// the storage claim rode on the token a sandbox call is signed with.
+const mockMarketServiceOptions = vi.hoisted(() => [] as unknown[]);
 const mockResolveSandboxSessionConfig = vi.hoisted(() =>
   vi.fn(async () => ({ claim: null, mode: 'ephemeral' as const })),
 );
@@ -56,6 +63,17 @@ vi.mock('@/server/services/file', () => ({
   }),
 }));
 
+vi.mock('@/server/services/market', async (importOriginal) => {
+  const actual = await importOriginal<typeof MarketServiceModule>();
+  return {
+    ...actual,
+    MarketService: vi.fn(function (options: unknown) {
+      mockMarketServiceOptions.push(options);
+      return new actual.MarketService(options as never);
+    }),
+  };
+});
+
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
   resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
@@ -74,6 +92,7 @@ vi.mock('debug', () => ({
 describe('tools marketRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMarketServiceOptions.length = 0;
   });
 
   it('should pass workspace scope when preprocessing sandbox lh commands', async () => {
@@ -177,6 +196,132 @@ describe('tools marketRouter', () => {
 
     expect(mockCreateSandboxService).toHaveBeenCalledWith(
       expect.objectContaining({ sandboxSpecification: specification }),
+    );
+  });
+
+  // Regression (T-14039): the export route opened its session with only
+  // `topicId` and `userId` — no mode, no directory, no claim — while
+  // `execInSandbox` opened the topic's persistent one. The execution plane
+  // routed the export to the ephemeral runtime, so a file a command wrote under
+  // `/mnt/workspace/ws-user_*` was "not found" in `/workspace`, `/root` and
+  // `/tmp`, whatever path the model passed, and copies made there did not help.
+  it('exports from the session the conversation commands run in', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    const claim = { drive: 'personal', key: 'ws-user_caller-user', quotaBytes: 1024 };
+    const specification = { env: { NODE_ENV: 'production' } };
+    mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+      claim,
+      cwd: 'reports',
+      environment: 'env-1',
+      mode: 'drive',
+      specification,
+      workingDir: '/home/user/reports',
+    } as never);
+    mockSandboxExportAndUploadFile.mockResolvedValue({
+      fileId: 'file-1',
+      filename: 'report.pdf',
+      success: true,
+      url: '/f/file-1',
+    });
+
+    const result = await caller.exportAndUploadFile({
+      filename: 'report.pdf',
+      path: '/mnt/workspace/ws-user_caller-user/reports/report.pdf',
+      topicId: 'topic-1',
+    });
+
+    expect(result).toMatchObject({ fileId: 'file-1', success: true });
+    expect(mockResolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isShareVisitorRun: false,
+        topicId: 'topic-1',
+        userId: 'caller-user',
+        workspaceId: 'ws-1',
+      }),
+    );
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sandboxCwd: 'reports',
+        sandboxInstanceId: 'env-1',
+        sandboxMode: 'drive',
+        sandboxSpecification: specification,
+        sandboxWorkingDir: '/home/user/reports',
+        topicId: 'topic-1',
+        userId: 'caller-user',
+      }),
+    );
+    // The entitlement is read off the token, so it has to be on the one the
+    // export is signed with, not only on the request.
+    expect(mockMarketServiceOptions).toContainEqual(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ sandboxStorage: claim, userId: 'caller-user' }),
+      }),
+    );
+    expect(mockSandboxExportAndUploadFile).toHaveBeenCalledWith(
+      '/mnt/workspace/ws-user_caller-user/reports/report.pdf',
+      'report.pdf',
+    );
+  });
+
+  // The two routes the client-side executor uses must agree on the session:
+  // a call that names another placement for the same topic runs elsewhere, and
+  // can tear down the live session on the way.
+  it('opens the same session for an export as for a command', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    const sessionConfig = {
+      claim: { key: 'ws-org-ws-1', quotaBytes: 1024 },
+      cwd: 'lobehub-dev',
+      environment: 'env-1',
+      mode: 'persistent',
+      workingDir: '/home/user/lobehub-dev',
+    };
+    mockResolveSandboxSessionConfig
+      .mockResolvedValueOnce(sessionConfig as never)
+      .mockResolvedValueOnce(sessionConfig as never);
+    mockSandboxCallTool.mockResolvedValue({ result: { ok: true }, success: true });
+    mockSandboxExportAndUploadFile.mockResolvedValue({ filename: 'out.csv', success: true });
+
+    await caller.execInSandbox({
+      params: { command: 'python make_csv.py' },
+      toolName: 'runCommand',
+      topicId: 'topic-1',
+    });
+    await caller.exportAndUploadFile({ filename: 'out.csv', path: 'out.csv', topicId: 'topic-1' });
+
+    const [commandSession, exportSession] = mockCreateSandboxService.mock.calls.map(
+      ([options]: any[]) => {
+        const { marketService: _marketService, ...rest } = options;
+        return rest;
+      },
+    );
+    expect(exportSession).toEqual(commandSession);
+  });
+
+  it('keeps an ephemeral topic on the caller market service when no claim resolves', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: null,
+    } as any);
+    mockSandboxExportAndUploadFile.mockResolvedValue({ filename: 'a.txt', success: true });
+
+    await caller.exportAndUploadFile({ filename: 'a.txt', path: 'a.txt', topicId: 'topic-1' });
+
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxMode: 'ephemeral', topicId: 'topic-1' }),
+    );
+    expect(mockMarketServiceOptions).not.toContainEqual(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ sandboxStorage: expect.anything() }),
+      }),
     );
   });
 

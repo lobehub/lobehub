@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 
 import { SETTINGS_ANCHOR_ROW_ATTR, SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { densityTokens } from '@/styles/density.stylex';
 
 interface ProfileRowProps {
   action?: ReactNode;
@@ -25,7 +26,7 @@ const styles = stylex.create({
   body: {
     display: 'flex',
     flex: '1',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     minWidth: '0',
@@ -36,7 +37,7 @@ const styles = stylex.create({
     gap: { default: '24px', [media.md]: '12px' },
     alignItems: { default: 'center', [media.md]: 'stretch' },
     minHeight: '48px',
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     flexDirection: { default: null, [media.md]: 'column' },
   },
 });

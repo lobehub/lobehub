@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import {
+  clearSentAttachments,
   createQueueSendNowGate,
   getContextWindow,
   getConversationChatInputUiState,
@@ -85,35 +88,6 @@ describe('getQueuedHintKey by Follow-up behavior', () => {
     );
     expect(getQueuedHintKey({ count: 2, mode: 'steer', waitsForRunEnd: true })).toBe(
       'inputQueue.steerUnsupportedMergeHint',
-    );
-  });
-});
-
-describe('getQueuedHintKey', () => {
-  it('promises the next step boundary for the built-in runtime', () => {
-    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: false })).toBe('inputQueue.queuedHint');
-    expect(getQueuedHintKey({ count: 2, waitsForRunEnd: false })).toBe(
-      'inputQueue.queuedMergeHint',
-    );
-  });
-
-  /**
-   * @example A follow-up is queued while a Claude Code run is still calling tools.
-   */
-  it('promises the end of the whole run for heterogeneous agents', () => {
-    // ROOT CAUSE:
-    //
-    // A Claude Code / Codex CLI turn cannot be handed back at a step boundary:
-    // the queue drains only once the CLI run ends. QueueTray still captioned
-    // the row "Sends when the current step finishes".
-    //
-    // Before: one caption for every runtime.
-    // After: heterogeneous agents say the follow-up waits for the current run.
-    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: true })).toBe(
-      'inputQueue.queuedRunEndHint',
-    );
-    expect(getQueuedHintKey({ count: 3, waitsForRunEnd: true })).toBe(
-      'inputQueue.queuedRunEndMergeHint',
     );
   });
 });
@@ -287,6 +261,30 @@ describe('partitionSendableUploads', () => {
       failed: [files[1], files[3]],
       sendable: [files[0], files[2]],
     });
+  });
+});
+
+describe('clearSentAttachments', () => {
+  it('keeps a failed upload in the composer and clears only what was sent', () => {
+    const contextKey = 'main_agent-1';
+    const chip = (id: string, status: UploadFileItem['status']) =>
+      ({ file: new File([], `${id}.zip`), id, status }) as UploadFileItem;
+    const uploads = [chip('sent', 'success'), chip('failed', 'error')];
+    useFileStore.setState({
+      chatContextSelectionsByContext: { [contextKey]: [{ id: 'sel' } as any] },
+      chatUploadFileListByContext: { [contextKey]: uploads },
+    });
+
+    const { sendable } = partitionSendableUploads(uploads);
+    clearSentAttachments(useFileStore.getState(), contextKey, sendable);
+
+    const state = useFileStore.getState();
+    expect(
+      fileChatSelectors
+        .chatUploadFileList(contextKey)(state)
+        .map((f) => f.id),
+    ).toEqual(['failed']);
+    expect(fileChatSelectors.chatContextSelections(contextKey)(state)).toEqual([]);
   });
 });
 

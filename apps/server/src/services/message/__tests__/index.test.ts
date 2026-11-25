@@ -309,6 +309,36 @@ describe('MessageService', () => {
     });
   });
 
+  describe('returned message list', () => {
+    it('includes the Work types the client opted into', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([]);
+      const service = new MessageService(mockDB, userId, undefined, {
+        workTypeOptIn: { includeArtboardWorks: true, includeFileWorks: true },
+      });
+
+      await service.updateMessage('msg-1', { content: 'x' } as any, { topicId: 'topic-1' });
+
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          includeArtboardWorks: true,
+          includeFileWorks: true,
+          topicId: 'topic-1',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('keeps the legacy Work set for a client that sent no opt-in', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([]);
+
+      await messageService.updateMessage('msg-1', { content: 'x' } as any, { topicId: 'topic-1' });
+
+      const [params] = vi.mocked(mockMessageModel.query).mock.calls[0];
+      expect(params).not.toHaveProperty('includeArtboardWorks');
+      expect(params).not.toHaveProperty('includeFileWorks');
+    });
+  });
+
   describe('updateMessage', () => {
     it('normalizes a known error from a legacy client before persistence', async () => {
       await messageService.updateMessage(

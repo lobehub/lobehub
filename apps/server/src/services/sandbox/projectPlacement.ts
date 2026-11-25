@@ -3,8 +3,7 @@ import type { ChatTopicMetadata } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
-import { EnvironmentModel } from '@/database/models/environment';
-import { ProjectModel } from '@/database/models/project';
+import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
 
 const log = debug('lobe-server:sandbox:project-placement');
 
@@ -14,7 +13,7 @@ export interface ProjectTopicSandboxInput {
   /** The agent the conversation runs; a workspace-public one applies published environments only. */
   agentId?: string;
   db: LobeChatDatabase;
-  /** A repository the composer picked; must be one linked to the project. */
+  /** Ignored: a project has one environment. Kept for older clients. */
   environmentId?: string;
   projectId: string;
   userId: string;
@@ -25,8 +24,8 @@ const hasGitSource = (configuration: { sources?: { kind?: string }[] } | null | 
   (configuration?.sources ?? []).some((source) => source.kind === 'git');
 
 /**
- * The sandbox a new project conversation starts in: the project's repository,
- * cloned into a temporary Cloud Sandbox.
+ * The sandbox a new project conversation starts in: the project's environment —
+ * its repositories, setup and variables — applied to a temporary Cloud Sandbox.
  *
  * Coding belongs in the temporary sandbox, which is discarded after use: a
  * repository's dependencies and build output would only fill the drive, and
@@ -45,25 +44,21 @@ const hasGitSource = (configuration: { sources?: { kind?: string }[] } | null | 
 export const resolveProjectTopicSandbox = async ({
   agentId,
   db,
-  environmentId,
   projectId,
   userId,
   workspaceId,
 }: ProjectTopicSandboxInput): Promise<ProjectTopicSandbox> => {
   try {
-    const linked = await new ProjectModel(db, userId, workspaceId).listEnvironments(projectId);
+    const environment = await new ProjectEnvironmentRepository(db, userId, workspaceId).get(
+      projectId,
+    );
+    if (!hasGitSource(environment.configuration)) return {};
+
     const sharedAgent =
       !!workspaceId &&
       !!agentId &&
       (await new AgentModel(db, userId, workspaceId).getAgentVisibility(agentId)) === 'public';
-    const usable = linked.filter(
-      (item) => hasGitSource(item.configuration) && (!sharedAgent || item.visibility === 'public'),
-    );
-    const picked = environmentId ? usable.find((item) => item.id === environmentId) : usable[0];
-    if (!picked) return {};
-
-    const environment = await new EnvironmentModel(db, userId, workspaceId).findById(picked.id);
-    if (!environment) return {};
+    if (sharedAgent && environment.visibility !== 'public') return {};
 
     return { sandboxEnvironmentId: environment.id };
   } catch (error) {

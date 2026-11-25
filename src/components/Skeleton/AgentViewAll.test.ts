@@ -9,7 +9,7 @@ import AgentViewAllSkeleton from './AgentViewAll';
 
 const setCollapsed = (collapsed: boolean) =>
   useGlobalStore.setState((s) => ({
-    status: { ...s.status, agentListSidebarSectionCollapsed: collapsed },
+    status: { ...s.status, agentListSidebarSectionExpanded: !collapsed },
   }));
 
 const render = () => {
@@ -21,11 +21,12 @@ const render = () => {
 };
 
 describe('AgentViewAllSkeleton', () => {
-  afterEach(() => setCollapsed(false));
+  afterEach(() => setCollapsed(true));
 
   // The loaded page puts the "In sidebar" block above the toolbar; a skeleton
   // without it dropped the toolbar and rows by the block's height on load.
   it('reserves the expanded "In sidebar" block above the toolbar', () => {
+    setCollapsed(false);
     const { count, unmount } = render();
 
     expect(count('agent-view-all-sidebar-skeleton')).toBe(1);
@@ -38,6 +39,22 @@ describe('AgentViewAllSkeleton', () => {
     const { count, unmount } = render();
 
     expect(count('agent-view-all-sidebar-skeleton')).toBe(1);
+    expect(count('agent-view-all-sidebar-card-skeleton')).toBe(0);
+    unmount();
+  });
+
+  it('starts collapsed for everyone, whatever earlier builds persisted', () => {
+    // Earlier builds persisted `agentListSidebarSectionCollapsed: false` as
+    // the default for every account; it must not keep the block open.
+    useGlobalStore.setState((s) => ({
+      status: {
+        ...s.status,
+        agentListSidebarSectionCollapsed: false,
+        agentListSidebarSectionExpanded: undefined,
+      },
+    }));
+    const { count, unmount } = render();
+
     expect(count('agent-view-all-sidebar-card-skeleton')).toBe(0);
     unmount();
   });

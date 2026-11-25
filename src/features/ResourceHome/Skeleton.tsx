@@ -13,6 +13,7 @@ import MasonryViewSkeleton from '@/features/ResourceManager/components/Explorer/
 import { useMasonryColumnCount } from '@/features/ResourceManager/components/Explorer/useMasonryColumnCount';
 import WorkGallerySkeleton from '@/features/WorkGallery/Skeleton';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensityTokens } from '@/styles/density';
 
 import { resolveResourceSkeletonView } from './skeletonView';
 
@@ -20,6 +21,7 @@ const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const columnCount = useMasonryColumnCount();
+  const { headerHeight } = useDensityTokens();
   const view = resolveResourceSkeletonView(pathname, searchParams.get('view'));
 
   if (view === 'works') return <WorkGallerySkeleton />;
@@ -37,7 +39,7 @@ const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
           horizontal
           align={'center'}
           flex={'none'}
-          height={44}
+          height={headerHeight}
           justify={'space-between'}
           paddingInline={16}
         >

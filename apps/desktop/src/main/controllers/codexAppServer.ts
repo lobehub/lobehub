@@ -9,6 +9,7 @@ import {
   buildCodexAppServerThreadParams,
   CodexAppServerClient,
   CodexThreadSession,
+  getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
   pickCodexRunProvenance,
   readCodexSessionModel,
@@ -25,7 +26,7 @@ import type { AgentSession, CliTraceSession, SendPromptParams } from './heteroge
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
 
 /** Controller-owned services used by the Codex transport without owning other transports. */
-interface CodexAppServerHost {
+export interface CodexAppServerHost {
   appendCliTraceFile: (
     trace: CliTraceSession | undefined,
     name: string,
@@ -75,6 +76,44 @@ interface CodexAppServerHost {
     name: string,
     payload: unknown,
   ) => Promise<void> | undefined;
+}
+
+/**
+ * Routes one desktop Codex turn: the native app-server when the lab is on and
+ * it can honor the session's arguments, else `codex exec`.
+ *
+ * Returns:
+ * - True after the app-server handled the turn; false for the generic exec spawn.
+ *
+ * Call stack:
+ *
+ * HeterogeneousAgentCtr.sendPrompt -> runtimeDispatchers.codex
+ *   -> {@link dispatchCodexPrompt} -> {@link sendPromptWithCodexAppServer}
+ */
+export async function dispatchCodexPrompt(
+  host: CodexAppServerHost,
+  params: SendPromptParams,
+  session: AgentSession,
+  { appServerEnabled }: { appServerEnabled: boolean },
+): Promise<boolean> {
+  if (session.hostedProviderBinding || session.codexAppServerFallback || !appServerEnabled) {
+    return false;
+  }
+  const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+    resume: !!session.agentSessionId,
+  });
+  if (unsupportedArgs.length === 0) return sendPromptWithCodexAppServer(host, params, session);
+  if (session.agentSessionId) {
+    const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+    host.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+    throw new Error(message);
+  }
+  session.codexAppServerFallback = true;
+  logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+    sessionId: session.sessionId,
+    unsupportedArgs,
+  });
+  return false;
 }
 
 /**
@@ -230,6 +269,7 @@ export async function sendPromptWithCodexAppServer(
   try {
     await appServerSession.run({
       askUserBridge: intervention.bridge,
+      collaborationMode: params.collaborationMode,
       input,
       onRawMessage: (line) => host.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
       operationId: params.operationId,

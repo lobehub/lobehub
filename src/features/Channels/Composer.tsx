@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -89,11 +90,13 @@ export function Composer({
   activity,
   channel,
   draftKey,
+  maxWidth,
   members,
   onQueue,
   onSend,
   placeholder,
   replyTarget,
+  starter,
   onCancelReply,
 }: {
   /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
@@ -102,15 +105,19 @@ export function Composer({
   channel?: ChannelListItem;
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
+  /** Caps the composer column width, centered; spans the full width when omitted. */
+  maxWidth?: number;
   members: ChannelPublicMember[];
   placeholder: string;
   replyTarget?: ChannelReplyTarget | null;
+  /** Markdown filling an empty composer when no draft is saved; see {@link useComposerDraft}. */
+  starter?: string;
   onCancelReply?: () => void;
 } & ComposerDelivery) {
   const { t } = useTranslation('channel');
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
-  const draft = useComposerDraft(editor, draftKey);
+  const draft = useComposerDraft(editor, draftKey, starter);
   useEffect(() => {
     if (replyTarget) editor.focus();
   }, [editor, replyTarget]);
@@ -124,9 +131,25 @@ export function Composer({
   /** The card the mention picker docks to, full width above the input like an IM. */
   const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments(draftKey);
+  const workspaces = useWorkspaces();
+  /**
+   * Files upload into the Channel's own scope, not whichever one the app has active: the send
+   * accepts a member's files only from the Channel's workspace. An external contact, not a member
+   * there, attaches files from their personal space.
+   */
+  const channelWorkspaceId = channel?.workspaceId;
+  const uploadWorkspaceId = !channel
+    ? undefined
+    : channelWorkspaceId &&
+        (channelWorkspaceId === workspaceId ||
+          workspaces.some((workspace) => workspace.id === channelWorkspaceId))
+      ? channelWorkspaceId
+      : null;
+  const attachments = useAttachments(draftKey, uploadWorkspaceId);
   const { allowed } = usePermission('create_content');
-  const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  /** Files sent to another person's shared Agent are refused server-side, so offer no upload. */
+  const enableUpload = knowledgeBase && !channel?.sharedAgent;
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
     if (!sending.current && canUpload) return attachments.upload(files);
@@ -232,7 +255,7 @@ export function Composer({
     />
   );
   return (
-    <WideScreenContainer fullWidth paddingInline={8}>
+    <WideScreenContainer fullWidth paddingInline={8} style={{ maxWidth }}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
         {/* Without an activity line the input meets the feed directly, with no empty strip. */}
         {activity != null && (

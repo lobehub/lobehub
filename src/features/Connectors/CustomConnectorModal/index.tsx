@@ -1,4 +1,8 @@
-import { type LobeToolCustomPlugin, type McpConnectVia } from '@lobechat/types';
+import {
+  type ConnectorVisibility,
+  type LobeToolCustomPlugin,
+  type McpConnectVia,
+} from '@lobechat/types';
 import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +19,6 @@ import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { saveConnectorEdit } from './connectorEdit';
-import { executeLegacyMigrationSave } from './legacyPluginMigration';
 import { saveOAuthConnectorEdit } from './oauthEdit';
 import {
   countDroppedAccounts,
@@ -41,6 +44,11 @@ interface CustomConnectorModalProps {
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
+  /**
+   * Create mode in a workspace: `private` adds the connector as the caller's
+   * own, which only their private agents load (the Private tab's add).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 /** Drop empty key/value pairs a user may have left behind in an editor. */
@@ -81,9 +89,10 @@ interface StdioConfig {
  *   connected yet (see `requiresOAuth`); other edits keep the accounts
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
-  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
+  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess, visibility }) => {
     const { t } = useTranslation('tool');
     const createConnector = useToolStore((s) => s.createConnector);
+    const migrateLegacyPlugin = useToolStore((s) => s.migrateLegacyPlugin);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -280,18 +289,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `value` is the full form state — DevModal seeded itself from
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
-        const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          // The migration orchestrator predates the server-reported `isNew`
-          // and still keys its rollback on `hasExistingConnector` below.
-          createConnector: async (payload) => (await createConnector(payload)).id,
-          deleteConnector,
-          // Read fresh so the rollback only deletes a connector this migration
-          // created, never one the idempotent upsert merely updated.
-          hasExistingConnector: (id) =>
-            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
-          syncConnectorTools,
-          uninstallCustomPlugin,
-        });
+        const result = await migrateLegacyPlugin(legacyPlugin, value);
         if (!result.ok) {
           throw new Error(
             result.reason === 'no-mcp'
@@ -439,6 +437,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         }),
         name: identifier,
         sourceType: ConnectorSourceType.custom,
+        ...(visibility === 'private' && { visibility }),
       };
 
       // OAuth: create with the OIDC config, then drive the authorize popup that
@@ -538,6 +537,9 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
+        privateConnector={
+          isEditMode ? connector?.visibility === 'private' : visibility === 'private'
+        }
         onDelete={handleDelete}
         onSave={handleSave}
         onOpenChange={(next) => {

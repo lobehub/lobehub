@@ -1,6 +1,8 @@
 import { createStaticStyles, cx } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   // Cards carry their own frame, so the grid sits bare in its host. Columns
   // step by the host's own width — one on a phone, then two, three and four —
@@ -9,7 +11,7 @@ const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     min-width: 0;
 
     @container device-grid (min-width: 560px) {

@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import TailMarquee from '@/components/TailMarquee';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { startProjectTopicDraft } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -47,6 +48,7 @@ import {
 const DEVICE_GROUP_PREFIX = 'device:';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('topic');
   const { t: tProject } = useTranslation('project');
   const { t: tChat } = useTranslation('chat');
@@ -109,7 +111,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center color={cssVar.colorTextTertiary} flex={'none'} height={18} width={18}>
               {device ? (

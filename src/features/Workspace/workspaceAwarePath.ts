@@ -37,7 +37,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'about',
   'advanced',
   'apikey',
-  // Account-level tabs (profile / appearance / hotkey / messenger) are
+  // Account-level tabs (profile / appearance / hotkey) are
   // mirrored under the workspace so members can reach them without leaving
   // the workspace.
   'appearance',
@@ -46,9 +46,14 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'automations',
   'billing',
   'budget',
-  // Personal chat-assist preferences, reachable by every member.
+  // Legacy alias: chat preferences became `conversation`; the routers keep a
+  // redirect, so prefixed deep-links still land on `/:slug/settings/conversation`.
   'chat-preference',
+  // Legacy alias: connectors moved to `/marketplace/connector`; the routers keep
+  // a redirect, so prefixed deep-links land on `/:slug/marketplace/connector`.
   'connector',
+  // Personal conversation preferences, reachable by every member.
+  'conversation',
   'credential',
   // Legacy alias for `credential` — the routers keep a redirect, so prefixed
   // deep-links still land on `/:slug/settings/credential`.
@@ -59,11 +64,13 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'environments',
   'general',
   'hotkey',
-  // Third-party integrations bind to the workspace that connected them.
+  // Legacy alias: integrations moved to `/marketplace/connector`; the routers
+  // keep a redirect, and the install callbacks still return here.
   'integrations',
   'labels',
   'labs',
   'members',
+  // Legacy settings bookmarks redirect to the app within the same workspace.
   'messenger',
   'notification',
   'oauth-apps',
@@ -71,6 +78,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'profile',
   'provider',
   'service-model',
+  // Legacy alias: installed skills moved to `/marketplace/skill/installed`; the
+  // routers keep a redirect from `/:slug/settings/skill`.
   'skill',
   'statistics',
   // Legacy alias for `statistics` — the routers keep a redirect, so prefixed

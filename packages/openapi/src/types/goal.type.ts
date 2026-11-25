@@ -39,6 +39,12 @@ import { goalStatuses, goalSubjectTypes } from '@/const/goal';
 import type { GoalListItem } from '@/database/models/goal';
 import type { GoalItem as GoalRow } from '@/database/schemas';
 
+import {
+  CursorPaginationQuerySchema,
+  legacyOffsetQueryShape,
+  pageInfoShape,
+  totalShape,
+} from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
 // ==================== Path / Query Schemas ====================
@@ -55,8 +61,8 @@ export type GoalIdParam = z.infer<typeof GoalIdParamSchema>;
  */
 export const GoalListQuerySchema = z.object({
   agentId: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  ...CursorPaginationQuerySchema.shape,
+  ...legacyOffsetQueryShape,
   projectId: z.string().optional(),
   statuses: z
     .string()
@@ -227,21 +233,26 @@ const GoalNodeWorkVersionRelationSchema = unionEnum<GoalNodeWorkVersionRelation>
   'contradicts',
 ]);
 const WorkTypeSchema = unionEnum<WorkType>()([
+  'artboard',
   'canvas',
   'document',
   'external',
   'file',
+  'collection',
   'goal_report',
   'task',
 ]);
 const WorkResourceTypeSchema = unionEnum<WorkResourceType>()([
+  'artboard',
   'canvas',
   'document',
   'github_issue',
   'github_pull_request',
   'linear_document',
   'linear_issue',
+  'link',
   'file',
+  'collection',
   'goal_report',
   'task',
 ]);
@@ -310,7 +321,7 @@ export const GoalListItemSchema = z
   .meta({ id: 'GoalListItem' });
 
 export const GoalListResponseSchema = z
-  .object({ goals: z.array(GoalListItemSchema), total: z.number().int() })
+  .object({ ...pageInfoShape, goals: z.array(GoalListItemSchema), ...totalShape })
   .strict()
   .meta({ id: 'GoalList' });
 

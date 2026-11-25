@@ -85,13 +85,6 @@ export const usePullRequestActions = ({
           mutate(
             (key: unknown) =>
               Array.isArray(key) &&
-              key[0] === deviceKeys.gitLinkedPR.root &&
-              key[1] === cacheDeviceId &&
-              key[2] === workingDirectory,
-          ),
-          mutate(
-            (key: unknown) =>
-              Array.isArray(key) &&
               key[0] === deviceKeys.gitPullRequestMergeContext.root &&
               key[1] === cacheDeviceId &&
               key[2] === readPath &&

@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { densityTokens } from '@/styles/density.stylex';
 import { formatShortenNumber } from '@/utils/format';
 
 import { useWakeSummary } from './useWakeRecords';
@@ -17,7 +18,7 @@ const styles = stylex.create({
     flex: '1',
     minWidth: 104,
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

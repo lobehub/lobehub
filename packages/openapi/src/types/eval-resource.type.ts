@@ -1,18 +1,23 @@
 import { z } from 'zod';
 
+import {
+  CursorPaginationQuerySchema,
+  legacyOffsetQueryShape,
+  legacyPageQueryShape,
+  resolvePagination,
+} from '../helpers/pagination';
+
 export const EvalIdSchema = z.string().min(1).max(128);
 export const EvalResourceIdSchema = z.object({ id: EvalIdSchema });
 export const EvalDatasetPathSchema = z.object({ datasetId: EvalIdSchema });
+/** `cursor` + `limit`, plus the deprecated `offset` and `page`/`pageSize`. */
 export const EvalPaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).max(1000000).optional(),
-  page: z.coerce.number().int().min(1).max(1000000).optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  ...CursorPaginationQuerySchema.shape,
+  ...legacyOffsetQueryShape,
+  ...legacyPageQueryShape,
 });
-export const evalPagination = (query: z.infer<typeof EvalPaginationSchema>) => ({
-  limit: query.limit ?? query.pageSize ?? 20,
-  offset: query.offset ?? ((query.page ?? 1) - 1) * (query.limit ?? query.pageSize ?? 20),
-});
+export const evalPagination = (query: z.infer<typeof EvalPaginationSchema>) =>
+  resolvePagination(query);
 export const EvalModeSchema = z.enum([
   'equals',
   'contains',

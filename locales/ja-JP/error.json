@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "このエージェントの実行デバイスに接続できませんでした。デバイスを接続するか、サーバー上でデバイスゲートウェイを設定してから、再度お試しください。",
   "response.DeviceResponseTimeout": "デバイスが時間内に応答しませんでした。オフラインになっているか、スリープ状態である可能性があります。または、この実行をまだ開始している途中かもしれません。デバイスが接続されていること、この実行がすでに進行中でないことを確認してから、再試行してください。",
   "response.ExceededContextWindowCloud": "会話が長すぎて処理できません。最後のメッセージを編集して入力を減らすか、いくつかのメッセージを削除して再試行してください。",
-  "response.FreePlanLimit": "現在のプランではこの機能はサポートされていません。有料プランにアップグレードしてから続けてください",
   "response.GoogleAIBlockReason.BLOCKLIST": "コンテンツにブロックされた用語が含まれています。言い換えて再試行してください。",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "生成された画像は安全上の理由でブロックされました。リクエストを変更して再試行してください。",
   "response.GoogleAIBlockReason.LANGUAGE": "要求された言語はサポートされていません。サポートされている言語で再試行してください。",

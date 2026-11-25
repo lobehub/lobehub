@@ -18,6 +18,7 @@ import { memo } from 'react';
 
 import { isModifierClick } from '@/utils/navigation';
 
+import { useNavItemMetrics } from '../density';
 import { type LazyActions, useLazyActions } from './useLazyActions';
 import {
   NAV_ITEM_ACTIONS_INSET_VAR,
@@ -112,6 +113,8 @@ export interface NavItemSlots {
   iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
+  /** Passive status after the title. Clicking it still selects the row. */
+  titleSuffix?: ReactNode;
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
@@ -168,7 +171,7 @@ const NavItem = memo<NavItemProps>(
     active,
     href,
     icon,
-    iconSize = 18,
+    iconSize: iconSizeProp,
     title,
     titleColor,
     titleMarquee,
@@ -184,6 +187,8 @@ const NavItem = memo<NavItemProps>(
     onPointerLeave,
     ...rest
   }) => {
+    const metrics = useNavItemMetrics();
+    const iconSize = iconSizeProp ?? metrics.iconSize;
     const { mount: mountLazyActions, node: renderedActions } = useLazyActions(actions);
     const marqueeAvailable = useTitleMarqueeAvailable();
     const marquee = !!titleMarquee && marqueeAvailable;
@@ -217,7 +222,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
+    const { titlePrefix, titleSuffix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -227,8 +232,9 @@ const NavItem = memo<NavItemProps>(
       : {};
 
     const mergedStyle =
-      href || disabled || style
+      href || disabled || style || metrics.radius !== undefined
         ? {
+            ...(metrics.radius === undefined ? undefined : { borderRadius: metrics.radius }),
             ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
             // `disabled` only blocks the click by itself — dim the row so the
             // blocked state is visible instead of a silently dead button.
@@ -240,7 +246,7 @@ const NavItem = memo<NavItemProps>(
     // A description stacks the title in a column, where `flex: 1` would grow it vertically.
     const titleStyle = description ? undefined : { flex: 1 };
     const titleNode = marquee ? (
-      <Text color={textColor} style={{ ...titleStyle, minWidth: 0 }}>
+      <Text color={textColor} fontSize={metrics.fontSize} style={{ ...titleStyle, minWidth: 0 }}>
         <span className={styles.marqueeViewport} ref={titleViewportRef}>
           <span className={styles.marqueeText} ref={titleTextRef}>
             {title}
@@ -248,7 +254,12 @@ const NavItem = memo<NavItemProps>(
         </span>
       </Text>
     ) : (
-      <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }} style={titleStyle}>
+      <Text
+        color={textColor}
+        ellipsis={{ tooltipWhenOverflow: true }}
+        fontSize={metrics.fontSize}
+        style={titleStyle}
+      >
         {title}
       </Text>
     );
@@ -259,9 +270,9 @@ const NavItem = memo<NavItemProps>(
         // With a description the row is two lines tall; align the leading icon
         // to the title's first line (match its line-height) instead of letting
         // it center across both lines, which drops it into the gap.
-        height={description ? 22 : 28}
+        height={description ? metrics.lineHeight : metrics.iconBox}
         style={description ? { alignSelf: 'flex-start' } : undefined}
-        width={28}
+        width={metrics.iconBox}
       >
         {loading ? (
           <Spin size={iconSize} variant="network" />
@@ -278,10 +289,10 @@ const NavItem = memo<NavItemProps>(
         className={cx(styles.container, className)}
         clickable={!disabled}
         data-nav-item=""
-        gap={8}
-        height={description ? undefined : 36}
-        paddingBlock={description ? 8 : undefined}
-        paddingInline={4}
+        gap={metrics.gap}
+        height={description ? undefined : metrics.rowHeight}
+        paddingBlock={description ? metrics.twoLinePaddingBlock : undefined}
+        paddingInline={metrics.paddingInline}
         style={mergedStyle}
         variant={variant}
         onClick={(e) => {
@@ -307,7 +318,7 @@ const NavItem = memo<NavItemProps>(
             style={description ? { alignSelf: 'flex-start' } : undefined}
             // Keep the icon column width so the title does not shift; a wider
             // label overflows evenly into the gaps around it.
-            width={28}
+            width={metrics.iconBox}
           >
             {iconNode}
             {iconBelow}
@@ -328,13 +339,14 @@ const NavItem = memo<NavItemProps>(
         >
           {titlePrefix}
           {description ? (
-            <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} gap={metrics.twoLineGap} style={{ overflow: 'hidden' }}>
               {titleNode}
               {description}
             </Flexbox>
           ) : (
             titleNode
           )}
+          {titleSuffix}
           {extra && (
             <Flexbox
               horizontal

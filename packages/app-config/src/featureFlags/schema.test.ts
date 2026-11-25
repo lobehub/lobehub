@@ -361,6 +361,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
+  it('should keep the artboard off outside development and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.artboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableArtboard).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ artboard: true }).enableArtboard).toBe(true);
+
+    const config = { artboard: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableArtboard).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableArtboard).toBe(false);
+  });
+
   it('should keep agent knowledge spaces off by default and enable them per user', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
     expect(
@@ -549,32 +560,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       const config = FeatureFlagsSchema.parse({ agent_runtime_slim_state: ['user-1'] });
       expect(mapFeatureFlagsEnvToState(config, 'user-1').enableSlimAgentState).toBe(true);
       expect(mapFeatureFlagsEnvToState(config, 'user-2').enableSlimAgentState).toBe(false);
-    });
-  });
-
-  describe('agent_runtime_strip_operation_toolset', () => {
-    it('is off by default', () => {
-      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
-      expect(
-        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
-      ).toBe(false);
-    });
-
-    it('maps true to enabled for every user', () => {
-      const config = { agent_runtime_strip_operation_toolset: true };
-
-      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
-      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
-    });
-
-    it('maps a user allowlist to the listed users only', () => {
-      const config = FeatureFlagsSchema.parse({
-        agent_runtime_strip_operation_toolset: ['user-1'],
-      });
-
-      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
-      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
-      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
     });
   });
 });

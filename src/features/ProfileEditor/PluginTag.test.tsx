@@ -311,6 +311,48 @@ describe('PluginTag row variant', () => {
     expect(screen.getByText('Community')).toBeTruthy();
   });
 
+  it('says when the agent runs an item on its own connection, in the row and its details', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: null, identifier: 'gmail', name: 'Gmail' },
+    ];
+    const connection = { desc: 'Signs in separately', label: 'Own connection', title: 'Own' };
+    const onOpen = vi.fn();
+    render(
+      <PluginTag
+        agentId="agt-1"
+        connection={connection}
+        pluginId="gmail"
+        variant="row"
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.getByText('Own connection')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ connection }));
+  });
+
+  it('keeps the usual connection out of the row and says it in the details only', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: null, identifier: 'gmail', name: 'Gmail' },
+    ];
+    const connection = { desc: 'Shared by your agents', title: 'Library connection' };
+    const onOpen = vi.fn();
+    render(
+      <PluginTag
+        agentId="agt-1"
+        connection={connection}
+        pluginId="gmail"
+        variant="row"
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.queryByText('Library connection')).toBeNull();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ connection }));
+  });
+
   it('offers removal only when the row is removable and editable', () => {
     const { rerender } = render(<PluginTag pluginId="gmail" variant="row" />);
     expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeTruthy();

@@ -64,6 +64,10 @@ describe('canJoinRunningTurn', () => {
     expect(canJoinRunningTurn(followUp('a', 1), state)).toBe(true);
   });
 
+  it('does not join a turn that has a different artboard stream capability', () => {
+    expect(canJoinRunningTurn(followUp('a', 1, { acceptsArtboardWorks: true }), state)).toBe(false);
+  });
+
   it('takes a parent’s steer instruction whatever the sub-agent run’s settings', () => {
     const subAgentRun = {
       ...state,

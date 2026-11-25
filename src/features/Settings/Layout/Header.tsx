@@ -1,20 +1,25 @@
 'use client';
 
-import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { useSettingsScopeTitle } from '@/features/SettingsSwitch/useSettingsScopeTitle';
 
-const Header = memo<PropsWithChildren>(() => {
-  const { t } = useTranslation('common');
+import { usePersonalSettingsScope } from '../hooks/usePersonalSettingsScope';
+
+const PERSONAL_SPACE = { kind: 'personal' } as const;
+
+const Header = memo(() => {
+  const { categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
+  const title = useSettingsScopeTitle(scope, PERSONAL_SPACE);
+  const firstTab = categoryGroups.find((group) => group.scope === scope)?.items[0]?.key;
 
   return (
     <SideBarHeaderLayout
       breadcrumb={[
         {
-          href: '/settings',
-          title: t('tab.setting'),
+          href: firstTab ? tabUrl(firstTab) : '/settings',
+          title,
         },
       ]}
     />

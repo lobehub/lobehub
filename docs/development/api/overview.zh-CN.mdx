@@ -1,0 +1,118 @@
+---
+title: LobeHub 公开 API 概览与快速开始
+description: >-
+  调用 LobeHub 公开 REST API 与 SDK：当前已可用和即将推出的能力，以及如何用 API Key
+  发出第一个请求。
+tags:
+  - LobeHub
+  - REST API
+  - SDK
+  - OpenAPI
+  - 开发者指南
+---
+
+# LobeHub 公开 API 概览与快速开始
+
+公开 API 让你自己的应用、脚本或 Agent 读取并操作 LobeHub 账户或工作区（Workspace）中的数据：Agent、话题、消息、文件、资源库、任务、目标和模型调用。它是位于 `/api/v1` 下的 REST API，由 OpenAPI 3.1 规范描述，并提供基于该规范生成的官方 TypeScript SDK。
+
+本指南只描述 LobeHub 源码中已存在的行为。每项能力带有以下两种标签之一：
+
+- **已可用**：已合并到 `canary` 分支，即 LobeHub Cloud 运行的分支。
+- **即将推出**：已在尚未合并的 Pull Request 中实现。发布前名称、字段和限制仍可能变化，暂不要基于它们构建生产集成。
+
+## 指南目录
+
+| 页面                                                   | 内容                                                       |
+| ---------------------------------------------------- | -------------------------------------------------------- |
+| [鉴权与 scope](/zh/docs/development/api/authentication) | API Key、OIDC 与 PKCE、OAuth 应用、`X-Workspace-Id` 以及 scope 表 |
+| [错误、分页、限流与重试](/zh/docs/development/api/conventions)  | 错误格式与错误码目录、分页、限流、`Idempotency-Key` 和重试建议                 |
+| [流式、运行与人工审批](/zh/docs/development/api/streaming)     | `POST /responses` 流式事件、Agent 运行事件、审批和客户端工具结果             |
+| [Webhook](/zh/docs/development/api/webhooks)         | 事件目录、投递格式和签名校验                                           |
+| [MCP 服务器](/zh/docs/development/api/mcp-server)       | 通过 MCP 将 Claude Code、Cursor 或 Codex 连接到 LobeHub          |
+| [SDK 与文件上传](/zh/docs/development/api/sdks)           | TypeScript 和 Python SDK 示例，以及文件上传                        |
+| [版本、弃用与变更日志](/zh/docs/development/api/versioning)    | 兼容性规则和 API 变更日志                                          |
+
+## 可用性一览
+
+| 能力                                                             | 状态   | 来源                                                      |
+| -------------------------------------------------------------- | ---- | ------------------------------------------------------- |
+| `/api/v1` 下的 REST API，成功响应带类型                                  | 已可用  | [#23217](https://github.com/lobehub/lobehub/pull/23217) |
+| API Key 与 OIDC Bearer 鉴权、`X-Workspace-Id`                      | 已可用  | `packages/openapi/src/middleware`                       |
+| TypeScript SDK `@lobehub/sdk`（`createLobeHub`、OAuth PKCE 辅助函数） | 已可用  | `packages/sdk`                                          |
+| `POST /responses` 流式、任务运行、multipart 文件上传                       | 已可用  | `packages/openapi/src/routes`                           |
+| 统一错误码、游标分页、限流、幂等                                               | 即将推出 | [#23231](https://github.com/lobehub/lobehub/pull/23231) |
+| SDK 重试、类型化错误、`paginate`、`responses.stream`、`workspaceId`       | 即将推出 | [#23246](https://github.com/lobehub/lobehub/pull/23246) |
+| 带事件流和人工审批的 Agent 运行 API                                        | 即将推出 | [#23253](https://github.com/lobehub/lobehub/pull/23253) |
+| 带 HMAC 签名的开发者 Webhook                                          | 即将推出 | [#23272](https://github.com/lobehub/lobehub/pull/23272) |
+| 位于 `/api/v1/mcp` 的 MCP 服务器                                     | 即将推出 | [#23318](https://github.com/lobehub/lobehub/pull/23318) |
+| OAuth 开放平台（动态注册、`client_credentials`、API scope）                | 即将推出 | [#23322](https://github.com/lobehub/lobehub/pull/23322) |
+| Python SDK `lobehub`                                           | 即将推出 | [#23337](https://github.com/lobehub/lobehub/pull/23337) |
+
+已合并和待合并变更的完整列表见 [API 变更日志](/zh/docs/development/api/versioning#api-changelog)。
+
+## 快速开始
+
+### 1. 创建 API Key
+
+1. 打开数据所在的工作区，进入 **设置 → API Keys**（`/<workspace>/settings/apikey`）。
+2. 创建一个 Key。选择 **完全访问**，或只勾选集成所需的 [scope](/zh/docs/development/api/authentication#scopes)。
+3. 复制 Key。它以 `sk-lh-` 开头，后跟 58 位小写字母和数字。较早创建的 Key 为 16 位，仍可继续使用。
+
+之后可以在 Key 的详情页修改 scope，只有 Key 的创建者可以修改。
+
+### 2. 发送第一个请求
+
+```bash
+curl https://app.lobehub.com/api/v1/users/me \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY"
+```
+
+成功响应包裹在信封结构中：
+
+```json
+{
+  "success": true,
+  "data": { "id": "user_…", "email": "…" },
+  "timestamp": "2026-11-18T08:00:00.000Z"
+}
+```
+
+自托管实例请将 `https://app.lobehub.com` 替换为你部署的源地址。基础路径始终是 `/api/v1`。
+
+### 3. 选择工作区
+
+在工作区内创建的 Key 绑定该工作区：请求无需额外请求头即在该工作区中执行。OIDC 访问令牌可通过发送工作区 id 指定工作区：
+
+```bash
+curl https://app.lobehub.com/api/v1/agents \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "X-Workspace-Id: $WORKSPACE_ID"
+```
+
+完整规则见[工作区选择](/zh/docs/development/api/authentication#workspace-selection)。
+
+### 4. 查阅规范
+
+- 交互式参考：`https://app.lobehub.com/api/v1/docs`
+- 机器可读规范：`https://app.lobehub.com/api/v1/openapi.json`
+- 仓库中的源规范：[`packages/openapi/openapi.yml`](https://github.com/lobehub/lobehub/blob/canary/packages/openapi/openapi.yml)
+
+应用内部路由（`/trpc/*`、`/webapi/*`）不属于公开 API，可能随时变更且不另行通知。
+
+### 5. 使用 TypeScript SDK
+
+```bash
+npm install @lobehub/sdk
+```
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({ apiKey: process.env.LOBEHUB_API_KEY! });
+
+const { data, error } = await lobehub.agents.list();
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.data.agents.map((agent) => agent.id));
+```
+
+更多示例见 [SDK 与文件上传](/zh/docs/development/api/sdks)。

@@ -2,28 +2,9 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { describe, expect, it } from 'vitest';
 
-import {
-  isCapabilityTool,
-  resolveCapabilityConfigPatch,
-  resolveCapabilityMode,
-} from './capabilityTools';
+import { isCapabilityTool, resolveCapabilityConfigPatch } from './capabilityTools';
 
 describe('capabilityTools', () => {
-  describe('resolveCapabilityMode', () => {
-    it('reports an enabled capability as Auto', () => {
-      expect(resolveCapabilityMode(true)).toBe('auto');
-    });
-
-    it('reports a disabled capability as Disabled', () => {
-      expect(resolveCapabilityMode(false)).toBe('disabled');
-    });
-
-    it('reports a pinned capability as Pinned, whether or not it is enabled', () => {
-      expect(resolveCapabilityMode(true, true)).toBe('pinned');
-      expect(resolveCapabilityMode(false, true)).toBe('pinned');
-    });
-  });
-
   describe('isCapabilityTool', () => {
     it('recognises memory and web browsing', () => {
       expect(isCapabilityTool(MemoryManifest.identifier)).toBe(true);

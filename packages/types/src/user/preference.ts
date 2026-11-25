@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
 import type { AgentModelOverride } from '../agent/modelSelection';
+import type { HeteroPermissionModeDir } from '../heteroPermissionMode';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -69,6 +70,18 @@ export interface WorkspaceUserPreference {
   /** Per-member Agent/Chat runtime mode for shared workspace agents. */
   agentModeOverrides?: Record<string /* agentId */, boolean>;
   /**
+   * The Claude Code permission mode this member last picked per directory (see
+   * `HeteroPermissionModeDir`), which a new topic there starts in. Written only
+   * through `workspaceUserSettings.setHeteroPermissionModeDir`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
+  /**
+   * Directories (`getWorktreeModeKey`) where this member last left the Codex
+   * Plan switch on, which a new Codex topic there starts with. Most recent
+   * first and capped; written only through `workspaceUserSettings.setHeteroPlanModeDir`.
+   */
+  heteroPlanModeDirs?: string[];
+  /**
    * This member's notification preferences for workspace-scoped scenarios
    * (the `workspace` category of the scenario registry). Same shape as the
    * personal `user_settings.notification` bag; missing = every workspace
@@ -113,13 +126,24 @@ export interface WorkspaceUserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
-   * Agents / chat groups this member pinned for themselves in the merged
-   * workspace "Agents" section (newest first). Personal: it never changes
-   * another member's sidebar. Team pins — the ones every member sees — stay on
-   * the shared `agents.pinned` / `chat_groups.pinned` columns, which only
-   * workspace owners and admins may write for public rows. A private row's
-   * own `pinned` column is read as this member's pin too, since only its
-   * creator can see it.
+   * Whether this member's sidebar was set up from the workspace once. The
+   * server does it the first time the member's preference is read:
+   * - a member who joined before team pins were retired keeps the team pins
+   *   (public rows with the shared `pinned` column) as their own pins;
+   * - anyone else gets the workspace's recommended Agents
+   *   (`settings.sidebar.recommendedAgentIds`) added to their sidebar,
+   *   unpinned, through `sidebarAgentVisibilityOverrides`.
+   * Nothing is written while there is nothing to add, so a later list still
+   * reaches the member. Changes to the list never reach a member set up before.
+   */
+  sidebarInitialized?: boolean;
+  /**
+   * Agents / chat groups pinned in this member's merged workspace "Agents"
+   * section, in the member's own order. Personal: it never changes another
+   * member's sidebar. A member who joined before team pins were retired has
+   * them copied in once (see `sidebarInitialized`); after that the member
+   * alone decides what it holds. A private row's own `pinned` column is read
+   * as this member's pin too, since only its creator can see it.
    */
   sidebarPinnedItemIds?: string[];
   /**
@@ -183,11 +207,6 @@ export const UserGuideSchema = z.object({
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
-  /**
-   * one switch for the experiments that improve how agents write and work with
-   * code; every coding-experience improvement reads this flag
-   */
-  enableBetterCodingExperience: z.boolean().optional(),
   /**
    * enable agent identity: give an agent its own mail address
    */
@@ -268,15 +287,9 @@ export const UserLabSchema = z.object({
    * (its ids and the client environment) to the support team
    */
   enableTopicBugReport: z.boolean().optional(),
-  /**
-   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
-   */
+  /** @deprecated Legacy client preference. Goals are available to everyone. */
   enableGoals: z.boolean().optional(),
-  /**
-   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
-   * while older clients that only know this key are still around: their writes
-   * touch only this key, so it carries the latest choice.
-   */
+  /** @deprecated Legacy alias for the Goals lab preference. */
   enableTopicAcceptance: z.boolean().optional(),
   /**
    * expose a port on the working device through a tunnel link, so a dev server
@@ -346,6 +359,18 @@ export interface UserPreference {
    */
   fontFamily?: string;
   guide?: UserGuide;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.heteroPermissionModeDirs};
+   * written only through `user.setHeteroPermissionModeDir`, absent from the
+   * schema for the same reason as `worktreeModeDirs`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.heteroPlanModeDirs};
+   * written only through `user.setHeteroPlanModeDir`, absent from the schema
+   * for the same reason as `worktreeModeDirs`.
+   */
+  heteroPlanModeDirs?: string[];
   hideSyncAlert?: boolean;
   /**
    * lab experimental features
@@ -465,6 +490,8 @@ export const OAuthAccountSchema = z.object({
  * SSO Provider info displayed in profile page
  */
 export interface SSOProvider {
+  /** Local Better Auth account row ID, used for account operations (not the provider subject). */
+  accountId?: string;
   email?: string;
   /** Expiration time - Date for better-auth */
   expiresAt?: Date | number | null;

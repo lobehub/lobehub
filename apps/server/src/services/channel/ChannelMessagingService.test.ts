@@ -24,11 +24,9 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     openAgentPair = openAgentPair;
   },
 }));
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: class {
-    findUser = findUser;
-    listPeople = listPeople;
-  },
+vi.mock('@/business/server/contact/addressBook', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAddressBook: () => ({ findUser, listPeople }),
 }));
 vi.mock('@/database/models/workspace', () => ({
   WorkspaceModel: class {
@@ -238,10 +236,10 @@ describe('ChannelMessagingService', () => {
     await service().listChannels();
     expect(relaySource).toHaveBeenLastCalledWith('op-current', {});
     const fromBot = new ChannelMessagingService({} as never, 'user-1', 'op-current', undefined, {
-      allowBotRun: true,
+      allowDirectRun: true,
     });
     await fromBot.listChannels();
-    expect(relaySource).toHaveBeenLastCalledWith('op-current', { allowBotRun: true });
+    expect(relaySource).toHaveBeenLastCalledWith('op-current', { allowDirectRun: true });
   });
 
   it("relays an owner's bot request with no current Channel and no receipt origin", async () => {

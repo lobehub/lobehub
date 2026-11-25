@@ -220,7 +220,6 @@
   "verify.error.generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
   "verify.error.missingToken": "رابط غير صالح. افتح هذه الصفحة من البوت.",
   "verify.error.title": "تعذر تأكيد الرابط",
-  "verify.error.unlinkBeforeRelink": "تم ربط حساب LobeHub هذا بالفعل بحساب Telegram آخر. قم بفصله في الإعدادات → المراسلة قبل ربط حساب جديد.",
   "verify.signInCta": "تسجيل الدخول للمتابعة",
   "verify.signInRequired": "يرجى تسجيل الدخول إلى LobeHub لتأكيد الرابط.",
   "verify.success.backToLobeHub": "العودة إلى LobeHub",

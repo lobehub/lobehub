@@ -1,4 +1,7 @@
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { onTopicComplete } from './onTopicComplete';
 
@@ -44,13 +47,19 @@ const failedRunPayload = {
 };
 
 describe('onTopicComplete webhook', () => {
+  let taskRows: { identifier?: string; workspaceId: string | null }[];
+  let where: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
-    const chain = {
+    taskRows = [{ workspaceId: 'ws-1' }];
+    const chain: Record<string, unknown> = {
       from: () => chain,
-      limit: async () => [{ workspaceId: 'ws-1' }],
-      where: () => chain,
+      limit: async () => taskRows,
     };
+    where = vi.fn(() => chain);
+    chain.where = where;
     getServerDB.mockReset().mockResolvedValue({ select: () => chain });
+    vi.mocked(TaskLifecycleService).mockClear();
     isRunAlreadySettled.mockReset().mockResolvedValue(false);
     lifecycleOnTopicComplete.mockReset().mockResolvedValue(undefined);
     claim.mockReset().mockResolvedValue('claimed');
@@ -80,6 +89,64 @@ describe('onTopicComplete webhook', () => {
     await onTopicComplete(context);
     expect(json).toHaveBeenCalledWith({ success: true });
     expect(lifecycleOnTopicComplete).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a run started by someone other than the Task creator', () => {
+    // A teammate, or a bot driving someone else's Task, runs it under their own
+    // user id; the hook body carries that runner, not the creator.
+    const runnerPayload = { ...failedRunPayload, reason: 'done', userId: 'user-runner' };
+
+    it('looks the Task up by id alone, not by the runner as its creator', async () => {
+      const { context } = makeContext(runnerPayload);
+
+      await onTopicComplete(context);
+
+      const { sql } = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
+      expect(sql).toContain('"id"');
+      expect(sql).not.toContain('created_by_user_id');
+    });
+
+    it("settles the run in the Task's workspace", async () => {
+      const { context, json } = makeContext(runnerPayload);
+
+      await onTopicComplete(context);
+
+      expect(TaskLifecycleService).toHaveBeenCalledWith(expect.anything(), 'user-runner', 'ws-1');
+      expect(lifecycleOnTopicComplete).toHaveBeenCalledTimes(1);
+      expect(json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it("falls back to the runner's workspace when the Task row is gone", async () => {
+      taskRows = [];
+      const { context } = makeContext({ ...runnerPayload, workspaceId: 'ws-runner' });
+
+      await onTopicComplete(context);
+
+      expect(isRunAlreadySettled).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-runner',
+        'ws-runner',
+        expect.objectContaining({ operationId: 'op-1' }),
+      );
+      expect(TaskLifecycleService).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-runner',
+        'ws-runner',
+      );
+    });
+
+    it('keeps a personal Task personal even when the body names a workspace', async () => {
+      taskRows = [{ workspaceId: null }];
+      const { context } = makeContext({ ...runnerPayload, workspaceId: 'ws-runner' });
+
+      await onTopicComplete(context);
+
+      expect(TaskLifecycleService).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-runner',
+        undefined,
+      );
+    });
   });
 
   it('acks a delayed delivery for a run the sweep already settled without re-applying it', async () => {

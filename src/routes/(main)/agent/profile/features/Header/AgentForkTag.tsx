@@ -22,7 +22,7 @@ const AgentForkTag = memo(() => {
 
   const handleClick = () => {
     if (forkSource?.identifier) {
-      navigate(`/community/agent/${forkSource.identifier}`);
+      navigate(`/marketplace/agent/${forkSource.identifier}`);
     }
   };
 

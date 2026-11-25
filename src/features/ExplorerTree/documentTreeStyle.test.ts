@@ -3,6 +3,9 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { sidebarRow } from '@/styles/density.stylex';
+
+import { COMPACT_FOLDER_ICON_CSS } from '../Conversation/WorkingSidebar/Files/fileTreeStyle';
 import {
   DOCUMENT_TREE_ICON_CSS,
   DOCUMENT_TREE_LAYOUT,
@@ -71,8 +74,16 @@ describe('code tree call sites', () => {
     'features/Conversation/WorkingSidebar/Files/index.tsx': [
       'features/Conversation/WorkingSidebar/Files/fileTreeStyle.ts',
     ],
-    'features/Conversation/WorkingSidebar/Review/FileTreeNav.tsx': [],
+    'features/Conversation/WorkingSidebar/Review/FileTreeNav.tsx': [
+      'features/Conversation/WorkingSidebar/Files/fileTreeStyle.ts',
+    ],
   };
+
+  it('sizes the code tree folders to the file glyph and spaces them by the row gap', () => {
+    expect(COMPACT_FOLDER_ICON_CSS).toContain('width: 16px');
+    expect(COMPACT_FOLDER_ICON_CSS).toContain('background-size: 16px 16px');
+    expect(COMPACT_FOLDER_ICON_CSS).toContain(`margin-inline-end: ${sidebarRow.gap}`);
+  });
 
   it.each(Object.keys(CODE_TREE_FILES))(
     '%s renders with FOLDER_ICON_CSS and no document tokens',
@@ -82,12 +93,11 @@ describe('code tree call sites', () => {
       expect(source).not.toContain('DOCUMENT_TREE_ICON_CSS');
       expect(source).not.toContain('DOCUMENT_TREE_ROW_CSS');
       expect(source).not.toContain('DOCUMENT_TREE_LAYOUT');
-      // They keep their own pre-existing 12px label and pierre's default 30px row
-      // (no `itemHeight` prop) — that is what "文件的那个 tree 渲染保留原样" means.
-      // The document tree's 14px / 36px must never reach them.
-      // Written as a `stylex.create` custom property key since the StyleX migration.
-      expect(source).toMatch(/['"]?--trees-font-size-override['"]?:\s*['"]?12px/);
-      expect(source).not.toContain('itemHeight');
+      // They follow the switchable WorkingSidebar row system, never the
+      // document tree's fixed 14px / 36px.
+      expect(source).toContain('COMPACT_FOLDER_ICON_CSS');
+      expect(source).toContain('itemHeight={density.treeItemHeight}');
+      expect(source).toMatch(/['"]--trees-font-size-override['"]:\s*sidebarRow\.textFontSize/);
     },
   );
 });

@@ -5,11 +5,12 @@ import ToolListGroup, { TOOL_ROWS_VISIBLE } from './ToolListGroup';
 
 const rows = (n: number) => Array.from({ length: n }, (_, i) => <div key={i}>row-{i}</div>);
 
-const renderGroup = (count: number) =>
+const renderGroup = (count: number, fold?: boolean) =>
   render(
     <ToolListGroup
       addControl={<button type="button">add</button>}
       emptyText="nothing yet"
+      fold={fold}
       rows={rows(count)}
       title="Group"
     />,
@@ -42,5 +43,13 @@ describe('ToolListGroup', () => {
 
     fireEvent.click(screen.getByText('settingAgent.tools.showLess'));
     expect(screen.getAllByText(/^row-/)).toHaveLength(TOOL_ROWS_VISIBLE);
+  });
+
+  it('shows every row of a long list when the list is the page itself', () => {
+    const total = TOOL_ROWS_VISIBLE + 5;
+    renderGroup(total, false);
+
+    expect(screen.getAllByText(/^row-/)).toHaveLength(total);
+    expect(screen.queryByText('settingAgent.tools.showAll')).toBeNull();
   });
 });

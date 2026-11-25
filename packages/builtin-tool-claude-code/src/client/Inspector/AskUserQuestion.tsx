@@ -1,5 +1,6 @@
 'use client';
 
+import type { ClaudeCodePermissionInterventionArgs } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
@@ -56,16 +57,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuestionArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
-    const { t } = useTranslation('plugin');
-    const label = t(ClaudeCodeApiName.AskUserQuestion as any);
+    const { t } = useTranslation(['plugin', 'tool']);
+    // A Claude Code permission request rides the same card: say what it asks.
+    const permission = (args as Partial<ClaudeCodePermissionInterventionArgs> | undefined)
+      ?.claudeCodePermission;
+    const label = permission
+      ? t(
+          permission.kind === 'exitPlan'
+            ? 'tool:claudeCode.permission.inspector.plan'
+            : 'tool:claudeCode.permission.inspector.permission',
+        )
+      : t(ClaudeCodeApiName.AskUserQuestion as any);
     const argsQuestions = normalizeAskUserQuestions(args);
     const questions = argsQuestions.length ? argsQuestions : normalizeAskUserQuestions(partialArgs);
 
     // One chip per question, so a collapsed card still says *what* was asked. The
     // old `header +N` named only the first and turned the rest into a count.
-    const headers = questions
-      .map((q) => q.header || q.question)
-      .filter((header): header is string => !!header);
+    const headers = permission
+      ? permission.kind === 'tool'
+        ? [permission.displayName ?? permission.toolName]
+        : []
+      : questions.map((q) => q.header || q.question).filter((header): header is string => !!header);
     const shown = headers.slice(0, MAX_CHIPS);
     const rest = headers.length - shown.length;
 

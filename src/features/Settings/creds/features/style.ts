@@ -1,10 +1,26 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const styles = stylex.create({
+  // The row opens the item: a hover wash that reaches 8px past the content,
+  // inside the list card's own padding.
+  clickable: {
+    cursor: 'pointer',
+    marginInline: '-8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
   container: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
+  },
+  // Compact density: 6px block padding, 36px tile, 14px title → ~55px two-line rows.
+  containerCompact: {
+    paddingBlock: '6px',
   },
   description: {
     overflow: 'hidden',
@@ -13,6 +29,7 @@ export const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  descriptionCompact: { lineHeight: '18px' },
   icon: {
     display: 'flex',
     flexShrink: 0,
@@ -24,14 +41,20 @@ export const styles = stylex.create({
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
-  key: {
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
+  iconCompact: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
   },
   title: {
+    overflow: 'hidden',
     fontSize: '15px',
     fontWeight: 500,
     color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  titleCompact: {
+    fontSize: '14px',
   },
 });

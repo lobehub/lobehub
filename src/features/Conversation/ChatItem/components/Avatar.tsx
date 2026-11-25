@@ -1,6 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
 import { type CSSProperties, type MouseEventHandler } from 'react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import A from '@/components/Avatar';
@@ -25,6 +25,8 @@ const Avatar = memo<AvatarProps>(
   ({ agentId, loading, avatar, unoptimized, onClick, shape = 'square', size = 28, style, alt }) => {
     const displayName = agentDisplayName(avatar);
     const contextAgentId = useConversationStore(contextSelectors.agentId);
+    // A feed holds many of these, so only a generating or hovered character animates.
+    const [hovered, setHovered] = useState(false);
 
     // A custom node (rather than an emoji or image URL) is rendered as given.
     const agentAvatar =
@@ -37,16 +39,21 @@ const Avatar = memo<AvatarProps>(
         <AgentAvatar
           agentId={agentId || contextAgentId}
           alt={alt || displayName}
+          animated={!!loading || hovered}
           animation={loading}
           avatar={agentAvatar}
           background={avatar.backgroundColor}
+          followPointer={hovered}
           name={displayName}
           shape={shape}
           size={size}
+          state={loading ? 'working' : undefined}
           style={style}
           title={displayName}
           unoptimized={unoptimized}
           onClick={onClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
         />
       );
 

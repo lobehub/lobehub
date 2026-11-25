@@ -8,6 +8,10 @@ const { executions, executeToolCall, interruptTask } = vi.hoisted(() => ({
   executions: {
     input: vi.fn(),
     deliverAnswerToAsker: vi.fn(),
+    fail: vi.fn(),
+    deliverReplyMentions: vi
+      .fn()
+      .mockResolvedValue({ mentions: [], woke: false, workspaceId: null }),
     publish: vi.fn(),
     releaseWriter: vi.fn(),
     retireReservation: vi.fn().mockResolvedValue(false),
@@ -53,6 +57,10 @@ vi.mock('./ChannelRoutingService', () => ({ ChannelRoutingService: vi.fn() }));
 vi.mock('./attachments', () => ({ resolveChannelAttachments: vi.fn() }));
 vi.mock('./notify', () => ({ notifyChannel: vi.fn() }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+const { reportChannelReplyFailure } = vi.hoisted(() => ({
+  reportChannelReplyFailure: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('./replyError', () => ({ reportChannelReplyFailure }));
 
 describe('Channel completion physical writer confirmation', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -105,6 +113,18 @@ describe('Channel completion physical writer confirmation', () => {
       expect(executions.releaseWriter).not.toHaveBeenCalled();
       expect(executeToolCall).toHaveBeenCalled();
       expect(executions.publish).toHaveBeenCalledTimes(revoked ? 0 : 1);
+    },
+  );
+
+  it.each(['abandoned', 'error', 'interrupted'])(
+    'fails a run that ended %s and explains it in the reply slot',
+    async (status) => {
+      executeToolCall.mockResolvedValue({ success: true, state: { exited: false } });
+      await coordinator(false, 'codex', null, status).complete('channel', 'job', 'op');
+
+      expect(executions.fail).toHaveBeenCalledWith('channel', 'job', expect.any(Object));
+      expect(reportChannelReplyFailure).toHaveBeenCalledWith(expect.anything(), 'channel', 'job');
+      expect(executions.publish).not.toHaveBeenCalled();
     },
   );
 

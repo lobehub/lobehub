@@ -22,7 +22,7 @@ const GroupForkTag = memo(() => {
 
   const handleClick = () => {
     if (forkSource?.identifier) {
-      navigate(`/community/group_agent/${forkSource.identifier}`);
+      navigate(`/marketplace/group_agent/${forkSource.identifier}`);
     }
   };
 

@@ -74,6 +74,7 @@ export default {
   'apikey.scopes.groups.agent': 'Agents',
   'apikey.scopes.groups.chat': 'Chat',
   'apikey.scopes.groups.file': 'Files',
+  'apikey.scopes.groups.generation': 'Generation',
   'apikey.scopes.groups.knowledge': 'Knowledge',
   'apikey.scopes.groups.mcp': 'MCP servers',
   'apikey.scopes.groups.model': 'Models',
@@ -96,7 +97,6 @@ export default {
   'authModal.signingIn': 'Signing in...',
   'authModal.title': 'Session Expired',
   'betterAuth.errors.confirmPasswordRequired': 'Please confirm your password',
-  'betterAuth.errors.emailExists': 'This email is already registered. Please sign in instead',
   'betterAuth.errors.emailInvalid': 'Please enter a valid email address or username',
   'betterAuth.errors.emailNotRegistered': 'This email or username is not registered',
   'betterAuth.errors.emailNotVerified': 'Email not verified, please verify your email first',
@@ -109,14 +109,11 @@ export default {
   'betterAuth.errors.passwordMinLength': 'Password must be at least 8 characters',
   'betterAuth.errors.passwordMismatch': 'The passwords do not match',
   'betterAuth.errors.passwordRequired': 'Please enter your password',
-  'betterAuth.errors.usernameNotRegistered': 'This username is not registered',
   'betterAuth.errors.usernameRequired': 'Please enter your username',
   'betterAuth.resetPassword.backToSignIn': 'Back to Sign In',
   'betterAuth.resetPassword.confirmPasswordPlaceholder': 'Confirm new password',
   'betterAuth.resetPassword.confirmPasswordRequired': 'Please confirm your new password',
   'betterAuth.resetPassword.description': 'Please enter your new password',
-  'betterAuth.resetPassword.error': 'Failed to reset password, please try again',
-  'betterAuth.resetPassword.invalidToken': 'Invalid or expired reset link',
   'betterAuth.resetPassword.newPasswordPlaceholder': 'Enter new password',
   'betterAuth.resetPassword.passwordMismatch': 'Passwords do not match',
   'betterAuth.resetPassword.submit': 'Reset Password',
@@ -129,6 +126,18 @@ export default {
   'betterAuth.captcha.pendingDescription':
     'Verification did not complete. Please try the challenge again.',
   'betterAuth.captcha.title': 'Security verification required',
+  'betterAuth.errors.emailRegistered':
+    'This email is already registered. Sign in with it instead; if you forgot the password, choose "Forgot password?" after entering your email.',
+  'betterAuth.errors.requestFailed':
+    'Could not reach the server. Check your network connection and try again.',
+  'betterAuth.errors.signupEmailInvalid':
+    'Please enter a valid email address, such as name@example.com',
+  'betterAuth.errors.usernameNotFound':
+    'This username is not registered. Check the spelling, or sign in with your email address instead.',
+  'betterAuth.resetPassword.failed':
+    'Could not reset your password. Check your network connection and try again.',
+  'betterAuth.resetPassword.linkExpired':
+    'This reset link is invalid or has expired. Go back to sign in, enter your email and choose "Forgot password?" to get a new link.',
   'betterAuth.signin.backToEmail': 'Back to change email',
   'betterAuth.signin.continueWithApple': 'Continue with Apple',
   'betterAuth.signin.continueWithAuth0': 'Sign in with Auth0',
@@ -161,25 +170,28 @@ export default {
   'betterAuth.signin.emailStep.title': 'Sign In',
   'betterAuth.signin.error': 'Sign in failed, please check your email and password',
   'betterAuth.signin.forgotPassword': 'Forgot password?',
-  'betterAuth.signin.forgotPasswordError': 'Failed to send password reset link',
   'betterAuth.signin.forgotPasswordSent': 'Password reset link sent, please check your email',
   'betterAuth.signin.invalidReferralCodeContent':
     'The referral code "{{code}}" you used is invalid or expired. Do you want to continue signing in?',
   'betterAuth.signin.invalidReferralCodeTitle': 'Invalid Referral Code',
   'betterAuth.signin.magicLinkButton': 'Send sign-in link',
-  'betterAuth.signin.magicLinkError': 'Failed to send sign-in link, please try again later',
   'betterAuth.signin.magicLinkSent': 'Sign-in link sent, please check your email',
   'betterAuth.signin.lastUsed': 'Last used',
+  'betterAuth.signin.magicLinkFailed':
+    'Could not send the sign-in link. Check that the email address is correct and try again in a minute.',
   'betterAuth.signin.nextStep': 'Next',
   'betterAuth.signin.noAccount': "Don't have an account?",
   'betterAuth.signin.orContinueWith': 'OR',
   'betterAuth.signin.passwordPlaceholder': 'Enter your password',
   'betterAuth.signin.passwordStep.subtitle': 'Enter your password to continue',
   'betterAuth.signin.passwordStep.title': 'Enter your password',
+  'betterAuth.signin.resetEmailFailed':
+    'Could not send the password reset email. Try again in a minute; if it keeps failing, check your network connection.',
   'betterAuth.signin.setPassword': 'set a password',
   'betterAuth.signin.sessionExpired': 'Your session has expired. Sign in again to continue.',
   'betterAuth.signin.signupLink': 'Sign up now',
-  'betterAuth.signin.socialError': 'Social sign in failed, please try again',
+  'betterAuth.signin.socialFailed':
+    'Could not continue with {{provider}}. Try again, or sign in with your email instead.',
   'betterAuth.signin.socialOnlyHint':
     'This email was registered via a third-party social account. Sign in with that provider, or',
   'betterAuth.signin.ssoOnlyNoProviders':
@@ -187,7 +199,6 @@ export default {
   'betterAuth.signin.submit': 'Sign In',
   'betterAuth.signup.confirmPasswordPlaceholder': 'Confirm your password',
   'betterAuth.signup.emailPlaceholder': 'Enter your email address',
-  'betterAuth.signup.error': 'Sign up failed, please try again',
   'betterAuth.signup.firstNamePlaceholder': 'First Name',
   'betterAuth.signup.hasAccount': 'Already have an account?',
   'betterAuth.signup.invalidReferralCodeContent':
@@ -201,6 +212,7 @@ export default {
   'betterAuth.signup.subtitle': 'Start your Agents collaboration space',
   'betterAuth.signup.success': 'Sign up successful! Please check your email for verification',
   'betterAuth.signup.cardTitle': 'Create a {{appName}} Account',
+  'betterAuth.signup.failed': 'Sign up failed. Check your network connection and try again.',
   'betterAuth.signup.title': 'Create Account',
   'betterAuth.signup.usernamePlaceholder': 'Enter your username',
   'betterAuth.verifyEmail.backToSignIn': 'Back to Sign In',
@@ -208,8 +220,10 @@ export default {
     "If you don't receive the email, please check your spam folder",
   'betterAuth.verifyEmail.description': 'A verification email has been sent to {{email}}',
   'betterAuth.verifyEmail.resend.button': 'Resend Verification Email',
-  'betterAuth.verifyEmail.resend.error': 'Failed to send. Please try again later.',
-  'betterAuth.verifyEmail.resend.noEmail': 'Email address is missing',
+  'betterAuth.verifyEmail.resend.failed':
+    'Could not resend the verification email. Try again in a minute, and check your spam folder for the earlier one.',
+  'betterAuth.verifyEmail.resend.missingEmail':
+    'We do not know which email to send to. Go back and sign up again with your email address.',
   'betterAuth.verifyEmail.resend.success': 'Verification email resent. Please check your inbox.',
   'betterAuth.verifyEmail.title': 'Verify Your Email',
   'date.prevMonth': 'Last Month',
@@ -387,6 +401,13 @@ export default {
   'profile.changePassword': 'Reset password',
   'profile.email': 'Email Address',
   'profile.emailChangeSuccess': 'Verification email sent. Please check your new email inbox.',
+  'profile.emailChangeFailed':
+    'Could not update your email. Check your network connection and try again.',
+  'profile.emailChangeTooMany':
+    'Too many email change attempts. Please wait a while and try again.',
+  'profile.emailSameAsCurrent': 'This is already your current email. Enter a different address.',
+  'profile.emailInUseHint':
+    '{{email}} is already used by another account. Enter a different email, or if that account is also yours, sign in to it and change its email first, then come back and try again.',
   'profile.emailInvalid': 'Please enter a valid email address',
   'profile.emailPlaceholder': 'new-email@example.com',
   'profile.fullName': 'Fullname',

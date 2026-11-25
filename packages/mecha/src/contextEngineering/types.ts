@@ -17,6 +17,7 @@ import type {
   PlanTodoConfig,
   ProjectInstructionFile,
   RevokedDocumentReads,
+  SkillChangesByMessage,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -112,6 +113,8 @@ export interface ContextToolsSnapshot {
   selectedSkills?: RuntimeSelectedSkill[];
   /** Tools the user pinned for this request. */
   selectedTools?: RuntimeSelectedTool[];
+  /** Change notes for `<available_skills>`, keyed by the user message each belongs to. */
+  skillChanges?: SkillChangesByMessage;
   toolDiscoveryConfig?: ToolDiscoveryConfig;
 }
 

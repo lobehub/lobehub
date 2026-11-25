@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 import { AnswerExtractorSchema, EvalMessageSchema, RubricConfigSchema } from './eval-resource.type';
 
@@ -85,7 +86,7 @@ export const EvalBenchmarkSchema = z
   .meta({ id: 'EvalBenchmark' });
 
 export const EvalBenchmarkListSchema = z
-  .object({ benchmarks: z.array(EvalBenchmarkSchema), total })
+  .object({ ...pageInfoShape, benchmarks: z.array(EvalBenchmarkSchema), ...totalShape })
   .strict();
 
 /** `projectPublicEvalDataset` + the dataset's case count (eval-resource.service). */
@@ -108,7 +109,7 @@ export const EvalDatasetSchema = z
   .meta({ id: 'EvalDataset' });
 
 export const EvalDatasetListSchema = z
-  .object({ datasets: z.array(EvalDatasetSchema), total })
+  .object({ ...pageInfoShape, datasets: z.array(EvalDatasetSchema), ...totalShape })
   .strict();
 
 /** A history message restored before the case input (`ImportedMessage`). */
@@ -153,7 +154,7 @@ export const EvalTestCaseSchema = z
   .meta({ id: 'EvalTestCase' });
 
 export const EvalTestCaseListSchema = z
-  .object({ testCases: z.array(EvalTestCaseSchema), total })
+  .object({ ...pageInfoShape, testCases: z.array(EvalTestCaseSchema), ...totalShape })
   .strict();
 
 // ---------- Runs ----------
@@ -228,7 +229,9 @@ export const EvalRunSchema = z
   .strict()
   .meta({ id: 'EvalRun' });
 
-export const EvalRunListSchema = z.object({ runs: z.array(EvalRunSchema), total }).strict();
+export const EvalRunListSchema = z
+  .object({ ...pageInfoShape, runs: z.array(EvalRunSchema), ...totalShape })
+  .strict();
 
 export const EvalRubricScoreSchema = z
   .object({
@@ -360,7 +363,12 @@ export const EvalRunResultSchema = z
   .meta({ id: 'EvalRunResult' });
 
 export const EvalRunResultListSchema = z
-  .object({ results: z.array(EvalRunResultSchema), runId: z.string(), total })
+  .object({
+    ...pageInfoShape,
+    results: z.array(EvalRunResultSchema),
+    runId: z.string(),
+    ...totalShape,
+  })
   .strict();
 
 /** One case topic of a run in `GET /runs/{id}/topics`. */
@@ -380,7 +388,12 @@ export const EvalRunTopicSchema = z
   .meta({ id: 'EvalRunTopic' });
 
 export const EvalRunTopicListSchema = z
-  .object({ runId: z.string(), topics: z.array(EvalRunTopicSchema), total })
+  .object({
+    ...pageInfoShape,
+    runId: z.string(),
+    topics: z.array(EvalRunTopicSchema),
+    ...totalShape,
+  })
   .strict();
 
 // ---------- External worker lifecycle ----------

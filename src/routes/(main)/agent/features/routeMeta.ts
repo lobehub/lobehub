@@ -3,10 +3,12 @@ import {
   CpuIcon,
   FileTextIcon,
   FileUserIcon,
+  GitBranchIcon,
   GraduationCapIcon,
   LibraryBigIcon,
   MailIcon,
   MessageSquare,
+  MessageSquareHeartIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   RadioTowerIcon,
@@ -28,6 +30,7 @@ import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ReadOnlyConversationSkeleton from '@/components/Skeleton/Conversation/ReadOnly';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -39,6 +42,16 @@ const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMet
 const TopicsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.TopicsDynamicMeta,
+  })),
+);
+const OpeningDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.OpeningDynamicMeta,
+  })),
+);
+const GraphDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.GraphDynamicMeta,
   })),
 );
 const EngineDynamicMeta = lazy(() =>
@@ -144,6 +157,16 @@ export const agentRouteMeta = routeMeta({
 export const agentChatDesktopRouteMeta = routeMeta({
   ...agentRouteMeta,
   Skeleton: AgentConversationLayoutSkeleton,
+});
+
+/** A share visitor's run topic, read-only beside the Agent sidebar. */
+export const agentShareVisitorTopicRouteMeta = routeMeta({
+  // Titled like the Topics page (`Topics · <agent>`): the visitor transcript is fetched by the
+  // page, and a background tab should not poll it just to name itself.
+  DynamicMeta: TopicsDynamicMeta,
+  icon: MessagesSquareIcon,
+  Skeleton: ReadOnlyConversationSkeleton,
+  titleKey: 'navigation.topics',
 });
 
 export const topicsRouteMeta = routeMeta({
@@ -255,6 +278,20 @@ export const agentSelfLearningRouteMeta = routeMeta({
   icon: GraduationCapIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.selfLearning',
+});
+
+export const agentOpeningRouteMeta = routeMeta({
+  DynamicMeta: OpeningDynamicMeta,
+  icon: MessageSquareHeartIcon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.opening',
+});
+
+export const agentGraphRouteMeta = routeMeta({
+  DynamicMeta: GraphDynamicMeta,
+  icon: GitBranchIcon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.graph',
 });
 
 export const agentPermissionRouteMeta = routeMeta({

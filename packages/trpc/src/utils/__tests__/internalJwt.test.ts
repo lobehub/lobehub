@@ -230,6 +230,12 @@ describe('internalJwt', () => {
       expect(validateHeteroOperationClaims(claims)).toEqual(claims);
     });
 
+    it('accepts the capability every run carries to register its own Works', async () => {
+      const { validateHeteroOperationClaims } = await import('../internalJwt');
+      const claims = { ...validClaims, capabilities: ['hetero:ingest', 'work:write'] };
+      expect(validateHeteroOperationClaims(claims)).toEqual(claims);
+    });
+
     it('rejects a capability it does not know', async () => {
       const { validateHeteroOperationClaims } = await import('../internalJwt');
       expect(

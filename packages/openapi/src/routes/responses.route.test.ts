@@ -1,9 +1,20 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  openResponsesErrors,
+  OpenResponsesHttpErrorSchema,
+} from '../middleware/open-responses-errors';
+import { requestIdMiddleware } from '../middleware/request-id';
 import { ResponseObjectSchema } from '../types/responses.type';
 
-const { createResponseMock } = vi.hoisted(() => ({ createResponseMock: vi.fn() }));
+const { assertRunAuthorizedMock, createResponseMock, createStreamingResponseMock } = vi.hoisted(
+  () => ({
+    assertRunAuthorizedMock: vi.fn(),
+    createResponseMock: vi.fn(),
+    createStreamingResponseMock: vi.fn(),
+  }),
+);
 
 // The route and the real controller run; only the db, auth and the responses
 // service behind the controller are stubbed.
@@ -13,7 +24,9 @@ vi.mock('../middleware/auth', () => ({
 }));
 vi.mock('../services/responses.service', () => ({
   ResponsesService: class {
+    assertRunAuthorized = assertRunAuthorizedMock;
     createResponse = createResponseMock;
+    createStreamingResponse = createStreamingResponseMock;
   },
 }));
 
@@ -90,5 +103,73 @@ describe('POST /responses', () => {
     expect(res.status).toBe(200);
     expect(body).not.toHaveProperty('success');
     expect(() => ResponseObjectSchema.parse(body)).not.toThrow();
+  });
+
+  const errorApp = () => {
+    const app = new Hono();
+    app.use('*', requestIdMiddleware);
+    app.use('*', openResponsesErrors);
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'user-1' as never);
+      c.set('authType' as never, 'oidc' as never);
+      await next();
+    });
+    app.route('/', ResponsesRoutes);
+    return app;
+  };
+
+  it('answers a validation failure in the OpenResponses error shape with a requestId', async () => {
+    const res = await errorApp().request('/', {
+      body: JSON.stringify({ input: 'hi' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(OpenResponsesHttpErrorSchema.parse(body)).toMatchObject({
+      error: { code: 'validation_error', type: 'invalid_request_error' },
+    });
+    expect(body.requestId).toBe(res.headers.get('X-Request-Id'));
+    expect(body).not.toHaveProperty('success');
+  });
+
+  // Regression for the responses RBAC gap: a denied streaming request opened
+  // SSE first, answering 200 before any guard ran.
+  it('denies a stream request before SSE opens, answering the error over HTTP', async () => {
+    assertRunAuthorizedMock.mockRejectedValue(
+      Object.assign(new Error('no use'), { code: 'FORBIDDEN', name: 'TRPCError' }),
+    );
+
+    const res = await errorApp().request('/', {
+      body: JSON.stringify({ input: 'hi', model: 'agt_1', stream: true }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.headers.get('content-type')).not.toContain('text/event-stream');
+    expect(await res.json()).toMatchObject({
+      error: { code: 'forbidden', type: 'invalid_request_error' },
+      requestId: res.headers.get('X-Request-Id'),
+    });
+    expect(createStreamingResponseMock).not.toHaveBeenCalled();
+  });
+
+  it('answers a thrown service error in the OpenResponses error shape', async () => {
+    createResponseMock.mockRejectedValue(
+      Object.assign(new Error('agent not found'), { code: 'NOT_FOUND', name: 'TRPCError' }),
+    );
+    const res = await errorApp().request('/', {
+      body: JSON.stringify({ input: 'hi', model: 'agt_missing' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: { code: 'not_found', message: 'agent not found', param: null, type: 'not_found' },
+      requestId: res.headers.get('X-Request-Id'),
+    });
   });
 });

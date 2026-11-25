@@ -6,6 +6,7 @@ export const CodexRenderDisplayControls: Record<string, RenderDisplayControl> = 
   file_change: 'collapsed',
   image_output: 'expand',
   mcp_tool_call: 'collapsed',
+  proposed_plan: 'expand',
   todo_list: 'expand',
   web_search: 'collapsed',
 };

@@ -1,8 +1,11 @@
 import type {
   AgentOperationStatus,
+  ChannelAsk,
   ChannelContextMessage,
   ChannelJobStatus,
+  ChannelReplyError,
 } from '@lobechat/types';
+import { channelAskFallbackText, channelMessageReplyError } from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -13,15 +16,35 @@ import {
   channelMembers,
   channelMessages,
   channels,
+  channelThreads,
+  users,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
-import { claimJob } from './claim';
-import { appendMessage, deliver } from './delivery';
+import { claimJob, notAwaitingAccess } from './claim';
+import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import { channelMemberNicknameSql } from './nickname';
 import type { ChannelOpeningDecision } from './opening';
-import { applyOpening, findCoAddressed, findOpeningCandidate, findOpeningReply } from './opening';
+import {
+  applyOpening,
+  findCoAddressed,
+  findLastSettledReplyOnDevice,
+  findOpeningCandidate,
+  findOpeningReply,
+} from './opening';
+import { markJobRequest } from './reactions';
+import type { ChannelReplyErrorDraft } from './replyError';
+import {
+  findReplyError,
+  readReplyErrorFacts,
+  refineReplyError,
+  replaceReplyError,
+  replyRequestKey,
+  upsertReplyError,
+} from './replyError';
+import { findTextMentions, MAX_REPLY_MENTION_HOPS, replyMentionHops } from './replyMentions';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -153,15 +176,24 @@ export class ChannelExecutionRepository {
       return 'revoked';
     });
 
-  /** Retire only an untouched reservation, racing recordStart on the operation row itself. */
-  retireReservation = async (channelId: string, jobId: string) =>
+  /**
+   * Retire only an untouched reservation, racing recordStart on the operation row itself.
+   * `failure` records why dispatch refused it, for a reason the requester can act on. Returns
+   * the status the operation ended in (`interrupted` when the reply was cancelled meanwhile),
+   * or `false` when there was no untouched reservation to retire.
+   */
+  retireReservation = async (
+    channelId: string,
+    jobId: string,
+    failure?: { message: string; type?: string },
+  ): Promise<'error' | 'interrupted' | false> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (!job.operationId || !job.writerHeld) return false;
       const status = job.publicationRevoked ? 'interrupted' : 'error';
       const [retired] = await tx
         .update(agentOperations)
-        .set({ status, completedAt: new Date() })
+        .set({ status, completedAt: new Date(), ...(failure && { error: failure }) })
         .where(and(eq(agentOperations.id, job.operationId), eq(agentOperations.status, 'idle')))
         .returning({ id: agentOperations.id });
       if (!retired) return false;
@@ -176,7 +208,7 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'reservation_retired', job.id, { status });
-      return true;
+      return status;
     });
 
   /** Writes back a routing decision for `attempt`; null when the result is stale. */
@@ -197,7 +229,7 @@ export class ChannelExecutionRepository {
    * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
-    const [inFlight, heads] = await Promise.all([
+    const [inFlight, heads, awaitingAccess] = await Promise.all([
       this.db
         .select()
         .from(channelJobs)
@@ -216,7 +248,13 @@ export class ChannelExecutionRepository {
         .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-        .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            notAwaitingAccess(),
+          ),
+        )
         // Same order as the head check in claimJob.
         .orderBy(
           channelJobs.memberId,
@@ -224,11 +262,25 @@ export class ChannelExecutionRepository {
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
+      // Out of the queue order while their requester waits for the Agent owner's answer, so each
+      // is tried on its own: the answer moves it on.
+      this.db
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            eq(channelJobs.blockedCode, 'access_request_pending'),
+          ),
+        )
+        .orderBy(asc(channelJobs.createdAt))
+        .limit(limit),
     ]);
     return {
-      heads: heads
-        .map(({ job }) => job)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      heads: [...heads.map(({ job }) => job), ...awaitingAccess].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
       inFlight,
     };
   };
@@ -260,8 +312,9 @@ export class ChannelExecutionRepository {
     );
 
   /**
-   * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
-   * without the channel lock, since nothing at or before the cutoff changes after the claim.
+   * The triggering requests (one, or a merged batch oldest first) and the messages they quote;
+   * see `recentContext` for the rest. Reads without the channel lock, since nothing at or
+   * before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
     const [job] = await this.db
@@ -276,15 +329,19 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
-    const request = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: job.manifest.requestMessageId,
+    const { manifest } = job;
+    const requestIds = manifest.requestMessageIds ?? [manifest.requestMessageId];
+    const requests = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: requestIds,
     });
-    const replyToId = request[0]?.replyToId;
-    if (!replyToId) return request;
-    const quoted = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: replyToId,
+    const quotedIds = [
+      ...new Set(requests.flatMap(({ replyToId }) => (replyToId ? [replyToId] : []))),
+    ].filter((id) => !requestIds.includes(id));
+    if (!quotedIds.length) return requests;
+    const quoted = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: quotedIds,
     });
-    return [...quoted, ...request];
+    return [...quoted, ...requests];
   };
 
   /**
@@ -396,6 +453,12 @@ export class ChannelExecutionRepository {
   openingCandidate = (channelId: string, jobId: string) =>
     findOpeningCandidate(this.db, channelId, jobId);
 
+  /** A member's newest finished reply on a device. See {@link findLastSettledReplyOnDevice}. */
+  lastSettledReplyOnDevice = (
+    channelId: string,
+    params: Parameters<typeof findLastSettledReplyOnDevice>[2],
+  ) => findLastSettledReplyOnDevice(this.db, channelId, params);
+
   /** Opens a queued job's reply once. See {@link applyOpening}. */
   open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
     applyOpening(this.db, channelId, jobId, decision);
@@ -403,9 +466,48 @@ export class ChannelExecutionRepository {
   /** The other Agents the job's request asked to answer alongside it. */
   coAddressed = (channelId: string, jobId: string) => findCoAddressed(this.db, channelId, jobId);
 
-  /** The acknowledgement the job posted before its run, if any. */
-  openingReply = async (channelId: string, jobId: string) =>
-    (await findOpeningReply(this.db, channelId, jobId))?.content;
+  /**
+   * The acknowledgement the job posted before its run, if any. One a failure turned into the job's
+   * card no longer announces the work, so a resumed run is not told it said that.
+   */
+  openingReply = async (channelId: string, jobId: string) => {
+    const opening = await findOpeningReply(this.db, channelId, jobId);
+    return opening && !channelMessageReplyError(opening.metadata) ? opening.content : undefined;
+  };
+
+  /** What a failed job's card is written from. See {@link readReplyErrorFacts}. */
+  replyErrorFacts = (channelId: string, jobId: string) =>
+    readReplyErrorFacts(this.db, channelId, jobId);
+
+  /** Writes a failed job's card into its reply slot. See {@link upsertReplyError}. */
+  postReplyError = (channelId: string, jobId: string, draft: ChannelReplyErrorDraft) =>
+    withChannelLock(this.db, channelId, (tx, channel) =>
+      upsertReplyError(tx, channel, jobId, draft),
+    );
+
+  /** Rewrites a card's explanation in place. See {@link refineReplyError}. */
+  refineReplyError = (
+    channelId: string,
+    jobId: string,
+    operationId: string | null,
+    refined: Pick<ChannelReplyError, 'actions' | 'summary'>,
+  ) =>
+    withChannelLock(this.db, channelId, (tx) =>
+      refineReplyError(tx, channelId, jobId, operationId, refined),
+    );
+
+  /** The card a failed job left in its reply slot, while it still shows. */
+  replyError = async (channelId: string, jobId: string) => {
+    const [job] = await this.db
+      .select({
+        channelId: channelJobs.channelId,
+        id: channelJobs.id,
+        threadId: channelJobs.threadId,
+      })
+      .from(channelJobs)
+      .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
+    return job ? findReplyError(this.db, job) : undefined;
+  };
 
   /** The runtime took the input; only now may the job publish. */
   accepted = async (channelId: string, jobId: string) =>
@@ -422,6 +524,8 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'input_accepted', job.id, {
         cutoff: job.manifest?.cutoffSequence ?? null,
       });
+      // The Agent took the request on, and shows so on it.
+      await markJobRequest(tx, job, 'working');
     });
 
   /** Stores the final answer. Immutable once saved, so a retry cannot change it. */
@@ -461,20 +565,38 @@ export class ChannelExecutionRepository {
         .for('share');
       if (!sender) throw new ChannelError('CONFLICT', 'The replying Agent was deleted');
 
-      const reply = await appendMessage(tx, {
-        agentId: sender.id,
-        channelId,
-        content: job.draft,
-        replyToId: job.messageId,
-        requestKey: `job:${job.id}`,
-        routingStatus: 'reply',
-        threadId: job.threadId,
-      });
+      // Questions the run asked go out with its reply, as a card only its requester answers.
+      const body = job.draft.trim();
+      const ask: ChannelAsk | undefined = job.ask
+        ? {
+            ...job.ask,
+            bodyLength: body.length,
+            requesterMemberId: job.requesterMemberId,
+            status: 'pending',
+          }
+        : undefined;
+      const published = {
+        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('\n\n') : job.draft,
+        ...(ask && { kind: 'ask' as const, metadata: { ask } }),
+      };
+      // A card from an earlier failure of this job is replaced by the reply, in the same slot.
+      const reply =
+        (await replaceReplyError(tx, job, published)) ??
+        (await appendMessage(tx, {
+          ...published,
+          agentId: sender.id,
+          channelId,
+          replyToId: job.messageId,
+          requestKey: replyRequestKey(job.id),
+          routingStatus: 'reply',
+          threadId: job.threadId,
+        }));
       await tx
         .update(channelJobs)
         .set({ publishedMessageId: reply.id, status: 'completed' })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
+      await markJobRequest(tx, job, 'answered');
 
       return reply.id;
     });
@@ -544,6 +666,120 @@ export class ChannelExecutionRepository {
     });
 
   /**
+   * Turns the `@Name` text of a published reply into real mentions: records them on the reply,
+   * so people are notified and see it in their mentions, and queues each mentioned Agent on it,
+   * for the same requester, unless the exchange already took {@link MAX_REPLY_MENTION_HOPS}
+   * Agent-to-Agent hops since a person spoke. A conversation between two Agents has its own
+   * exchange and only records them. Idempotent: a retry finds the mentions already recorded.
+   */
+  deliverReplyMentions = async (
+    channelId: string,
+    replyMessageId: string,
+  ): Promise<{ mentions: string[]; woke: boolean; workspaceId: string | null }> =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const [row] = await tx
+        .select({ channel: channels, reply: channelMessages })
+        .from(channelMessages)
+        .innerJoin(channels, eq(channels.id, channelMessages.channelId))
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, replyMessageId)),
+        )
+        .limit(1);
+      const none = { mentions: [], woke: false, workspaceId: row?.channel.workspaceId ?? null };
+      if (!row || row.reply.routingStatus !== 'reply' || row.reply.mentions.length) return none;
+      const [job] = await tx
+        .select({
+          memberId: channelJobs.memberId,
+          requesterMemberId: channelJobs.requesterMemberId,
+        })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.publishedMessageId, replyMessageId),
+          ),
+        )
+        .limit(1);
+      if (!job) return none;
+
+      const members = await tx
+        .select({
+          actorType: channelMembers.actorType,
+          id: channelMembers.id,
+          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), ${channelMemberNicknameSql(channelMembers.channelId, channelMembers.userId)}, nullif(${users.fullName}, ''), ${users.username}, '')`,
+        })
+        .from(channelMembers)
+        .leftJoin(users, eq(users.id, channelMembers.userId))
+        .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
+      // Resolve against everyone, the speaker included, so a longer or shared name is still
+      // recognised as the speaker's; only then drop the speaker naming itself.
+      const mentions = findTextMentions(row.reply.content, members).filter(
+        (id) => id !== job.memberId,
+      );
+      if (!mentions.length) return none;
+
+      const [request] = row.reply.replyToId
+        ? await tx
+            .select({
+              metadata: channelMessages.metadata,
+              routingStatus: channelMessages.routingStatus,
+            })
+            .from(channelMessages)
+            .where(
+              and(
+                eq(channelMessages.channelId, channelId),
+                eq(channelMessages.id, row.reply.replyToId),
+              ),
+            )
+            .limit(1)
+        : [];
+      // Only a person's message resets the count; an Agent's reply carries the hops so far.
+      const hops =
+        (request?.routingStatus === 'reply' ? replyMentionHops(request.metadata) : 0) + 1;
+      const agentIds = new Set(
+        members.filter((member) => member.actorType === 'agent').map((member) => member.id),
+      );
+      const targets =
+        row.channel.agentPairKey || hops > MAX_REPLY_MENTION_HOPS
+          ? []
+          : await activeMembers(
+              tx,
+              channelId,
+              mentions.filter((id) => agentIds.has(id)),
+            );
+
+      await tx
+        .update(channelMessages)
+        .set({
+          mentions,
+          ...(targets.length && { metadata: { ...row.reply.metadata, mentionHops: hops } }),
+        })
+        .where(eq(channelMessages.id, replyMessageId));
+      if (row.reply.threadId) {
+        // Like a person's mention, the mentioned follow the Thread they were called into.
+        const [thread] = await tx
+          .select({ followerMemberIds: channelThreads.followerMemberIds })
+          .from(channelThreads)
+          .where(eq(channelThreads.id, row.reply.threadId));
+        if (thread && mentions.some((id) => !thread.followerMemberIds.includes(id)))
+          await tx
+            .update(channelThreads)
+            .set({ followerMemberIds: [...new Set([...thread.followerMemberIds, ...mentions])] })
+            .where(eq(channelThreads.id, row.reply.threadId));
+      }
+      const woke = targets.length
+        ? (await deliver(tx, { ...row.reply, mentions }, targets, job.requesterMemberId)).length > 0
+        : false;
+      await audit(tx, channelId, 'reply_mentioned', replyMessageId, {
+        hops,
+        mentions,
+        woke: targets.map((target) => target.id),
+      });
+
+      return { mentions, woke, workspaceId: row.channel.workspaceId };
+    });
+
+  /**
    * The run chose not to answer a `followup` wake (`NO_REPLY`). Settles the job as `silent`:
    * nothing is published, and its conversation stays reusable like a published reply's. Only a
    * job woken as `followup` may stay silent; anything else owes an answer and returns false.
@@ -595,6 +831,9 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await advanceOperation(tx, job, outcome.operation, outcome.error);
+      // Every run ends here. One that ended without a reply takes back the 👀 it showed; one
+      // still finishing an accepted draft keeps it until it publishes.
+      if (!job.publishedMessageId && status !== 'running') await markJobRequest(tx, job, 'cleared');
       await audit(tx, channelId, 'writer_released', job.id, { status });
     });
 
@@ -603,7 +842,7 @@ export class ChannelExecutionRepository {
    * stopped. The writer stays held until termination is confirmed. A late failure after the
    * reply was published or the release settled the job changes nothing.
    */
-  fail = async (channelId: string, jobId: string, failure: { message: string }) =>
+  fail = async (channelId: string, jobId: string, failure: { message: string; type?: string }) =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (job.publishedMessageId || (!job.writerHeld && job.status !== 'running')) return;
@@ -621,7 +860,7 @@ export class ChannelExecutionRepository {
         tx,
         job,
         stopping ? 'interrupted' : 'error',
-        stopping ? undefined : failure.message,
+        stopping ? undefined : failure,
       );
       await audit(tx, channelId, 'execution_failed', job.id, {
         message: failure.message,

@@ -8,11 +8,8 @@ import type { SettingsTabSkeleton } from './types';
 const Body = () => (
   <SkillNavListSkeleton
     fullWidth
+    sections={[{ key: 'skillGroup.communityConnectors', rows: 4 }]}
     titleKey={'skillView.connectors'}
-    sections={[
-      { key: 'skillGroup.builtinTools', rows: 5 },
-      { key: 'skillGroup.communityConnectors', rows: 4 },
-    ]}
   />
 );
 

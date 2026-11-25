@@ -92,6 +92,9 @@ describe('normalizeReplyOpening', () => {
     expect(normalizeReplyOpening({ ...answer, ack: '  ', acknowledge: true }, true)).toEqual({
       placement: 'channel',
     });
+    expect(normalizeReplyOpening({ ...answer, ack: ':', acknowledge: true }, true)).toEqual({
+      placement: 'channel',
+    });
   });
 
   it('keeps the acknowledgement and the title on one short line', () => {

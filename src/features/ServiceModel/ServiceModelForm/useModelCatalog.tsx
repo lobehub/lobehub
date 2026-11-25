@@ -2,6 +2,7 @@ import { type SelectOptions } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { decisionModelProviders } from '../decisionModelProviders';
@@ -31,20 +32,25 @@ export const useModelOptions = (kind: ModelKind) => {
         : s.enabledChatModelList || [],
   );
 
+  // Chat-model kinds leave out what a business policy hides from this user
+  // (e.g. models above the tier a workspace admin allows), like every picker.
+  const { isModelHidden } = useBusinessModelListGuard();
+
   const groups = useMemo<SelectOptions>(() => {
     const candidates =
       kind === 'decision'
         ? decisionModelProviders(decisionModels ?? [], enabledProviders ?? [], runtimeConfig)
         : providers;
+    const hideable = kind === 'chat' || kind === 'vision' || kind === 'decision';
     const withModels = candidates
-      .map((provider) =>
-        kind === 'vision'
-          ? {
-              ...provider,
-              children: provider.children.filter((model) => model.abilities?.vision),
-            }
-          : provider,
-      )
+      .map((provider) => ({
+        ...provider,
+        children: provider.children.filter(
+          (model) =>
+            (kind !== 'vision' || model.abilities?.vision) &&
+            !(hideable && isModelHidden?.(model.id, provider.id)),
+        ),
+      }))
       .filter((provider) => provider.children.length > 0);
 
     return withModels.map((provider) => ({
@@ -57,7 +63,7 @@ export const useModelOptions = (kind: ModelKind) => {
         value: toOptionValue({ model: model.id, provider: provider.id }),
       })),
     }));
-  }, [decisionModels, enabledProviders, kind, providers, runtimeConfig, t]);
+  }, [decisionModels, enabledProviders, isModelHidden, kind, providers, runtimeConfig, t]);
 
   /** Option value → model ref; the model id may itself contain slashes. */
   const parseValue = useCallback((value: string): ModelRef => {

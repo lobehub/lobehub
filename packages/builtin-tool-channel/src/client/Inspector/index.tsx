@@ -2,14 +2,18 @@
 
 import type {
   BuiltinInspectorProps,
+  ChannelAskUserParams,
   ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
   ChannelMessagePersonParams,
   ChannelPeoplePage,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelSendMessageParams,
   ChannelSentMessage,
   ChannelSentPersonMessage,
+  ChannelThreadPage,
 } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
 import { memo } from 'react';
@@ -111,7 +115,79 @@ const MessagePersonInspector = memo<
 });
 MessagePersonInspector.displayName = 'ChannelMessagePersonInspector';
 
+/** The question being asked, so the step reads as what the Agent wants to know. */
+const AskUserInspector = memo<BuiltinInspectorProps<ChannelAskUserParams, unknown>>(
+  ({ args, isArgumentsStreaming, isLoading }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    const question = args?.questions?.[0]?.question;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>{t('builtins.lobe-channel.apiName.askUser')}</span>
+        {question && <span>{question}</span>}
+      </div>
+    );
+  },
+);
+AskUserInspector.displayName = 'ChannelAskUserInspector';
+
+const THREAD_API_NAMES = [
+  ChannelApiName.createThread,
+  ChannelApiName.listThreads,
+  ChannelApiName.steerThread,
+  ChannelApiName.stopThread,
+  ChannelApiName.unwatchThreads,
+  ChannelApiName.watchThreads,
+] as const;
+
+/** Thread actions: the action, and for a listing how many Threads it found. */
+const ThreadInspector = memo<BuiltinInspectorProps<unknown, unknown>>(
+  ({ apiName, isArgumentsStreaming, isLoading, pluginState }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    const threads =
+      pluginState && typeof pluginState === 'object' && 'threads' in pluginState
+        ? (pluginState as ChannelThreadPage).threads
+        : undefined;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>
+          {t(`builtins.lobe-channel.apiName.${apiName as (typeof THREAD_API_NAMES)[number]}`)}
+        </span>
+        {!loading && threads && (
+          <span>{t('builtins.lobe-channel.threadCount', { count: threads.length })}</span>
+        )}
+      </div>
+    );
+  },
+);
+ThreadInspector.displayName = 'ChannelThreadInspector';
+
+const ReactionInspector = memo<BuiltinInspectorProps<ChannelReactParams, ChannelReacted>>(
+  ({ apiName, args, isArgumentsStreaming, isLoading }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>
+          {t(
+            apiName === ChannelApiName.removeReaction
+              ? 'builtins.lobe-channel.apiName.removeReaction'
+              : 'builtins.lobe-channel.apiName.addReaction',
+          )}
+        </span>
+        {args?.emoji && <span>{args.emoji}</span>}
+      </div>
+    );
+  },
+);
+ReactionInspector.displayName = 'ChannelReactionInspector';
+
 export const ChannelInspectors = {
+  [ChannelApiName.addReaction]: ReactionInspector,
+  [ChannelApiName.removeReaction]: ReactionInspector,
+  ...Object.fromEntries(THREAD_API_NAMES.map((name) => [name, ThreadInspector])),
+  [ChannelApiName.askUser]: AskUserInspector,
   [ChannelApiName.listChannels]: ListChannelsInspector,
   [ChannelApiName.listPeople]: ListPeopleInspector,
   [ChannelApiName.messagePerson]: MessagePersonInspector,

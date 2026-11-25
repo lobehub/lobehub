@@ -1,6 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
 import { imageUrl } from '@/const/url';
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   background: css`
@@ -20,12 +21,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
   `,
   footer: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorder};
   `,
   header: css`
     margin-block-end: -24px;
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 24px;
     border-block-end: 1px solid ${cssVar.colorBorder};
 
@@ -33,7 +34,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   role: css`
     margin-block-start: 12px;
-    padding-block-start: 12px;
+    padding-block-start: ${densityVars.contentGap};
     border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
     opacity: 0.75;
 

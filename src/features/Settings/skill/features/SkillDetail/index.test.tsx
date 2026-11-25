@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import ConnectorGate from '@/features/Integrations/ConnectorGate';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import SkillDetail from './index';
@@ -22,10 +23,12 @@ const mocks = vi.hoisted(() => {
     connectors: [] as Array<{ id: string; identifier: string }>,
     createComposioConnection: vi.fn(),
     deleteAgentSkill: vi.fn(),
+    useFetchAgentBoundConnectors: vi.fn(() => ({ isValidating: false })),
     fetchConnectors: vi.fn(),
     getLobehubSkillAuthorizeUrl: vi.fn(),
     installBuiltinTool: vi.fn(),
     installedBuiltinIds: [] as string[],
+    isAgentBoundInit: false,
     installedPlugins: [] as Array<{
       customParams?: { mcp?: Record<string, unknown> };
       identifier: string;
@@ -61,6 +64,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     confirmModal: vi.fn(),
+    githubLocaleReady: true,
     permissions: {
       create_content: true,
       edit_own_content: true,
@@ -88,7 +92,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
+  useTranslation: (namespace: string) => ({
+    ready: namespace !== 'integration' || mocks.githubLocaleReady,
     t: (key: string, options?: { defaultValue?: string; name?: string } | string) => {
       const translations: Record<string, string> = {
         'tools.lobehubSkill.connect': 'Connect',
@@ -109,6 +114,14 @@ vi.mock('react-i18next', () => ({
     },
   }),
 }));
+
+vi.mock('@/features/Integrations/useConnectorConnection', () => ({
+  useConnectorConnection: () => ({ available: false }),
+}));
+vi.mock('@/features/Integrations/Github/RepositoryAccess', () => ({
+  default: () => <div>Repository access</div>,
+}));
+vi.mock('@/features/Settings/skill/features/LobehubSkillItem', () => ({ default: () => null }));
 
 vi.mock('@/features/AgentSkillDetail', () => ({
   default: () => <div data-testid="agent-skill-detail" />,
@@ -224,6 +237,28 @@ describe('SkillDetail', () => {
     mocks.toolState.installedBuiltinIds = [];
     mocks.toolState.installedPlugins = [];
     mocks.toolState.lobehubSkillServers = [];
+  });
+
+  it.each([true, false])(
+    'shows no library install action on a bundled skill detail (previously installed: %s)',
+    (installed) => {
+      const identifier = 'lobe-artifacts';
+      mocks.toolState.installedBuiltinIds = installed ? [identifier] : [];
+      render(<SkillDetail identifier={identifier} type="builtin-skill" />);
+      expect(screen.getByText(identifier)).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    },
+  );
+
+  it('waits for translations before showing GitHub repository access on a cold load', () => {
+    mocks.githubLocaleReady = false;
+    const cold = render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
+    expect(screen.queryByText('Repository access')).toBeNull();
+    cold.unmount();
+
+    mocks.githubLocaleReady = true;
+    render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
+    expect(screen.getByText('Repository access')).toBeTruthy();
   });
 
   it('offers a Configure migration action for an un-migrated legacy custom MCP', async () => {
@@ -360,5 +395,18 @@ describe('SkillDetail', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
+  it('loads the agents’ connectors when an agent connector’s detail is opened by link', () => {
+    render(<SkillDetail identifier="row-1" type="agent-connector" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId('connector-detail')).toHaveTextContent('row-1');
+  });
+
+  it('leaves the agent connector query disabled for other details', () => {
+    render(<SkillDetail identifier="agent-skill-1" type="agent-skill" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(false);
   });
 });

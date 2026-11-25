@@ -1,0 +1,178 @@
+---
+title: LobeHub API 流式、Agent 运行与人工审批
+description: >-
+  通过 LobeHub 公开 API 从 POST /responses 流式获取 Agent 回复、跟踪 Agent 运行事件、审批工具调用并回传客户端工具结果。
+tags:
+  - LobeHub
+  - REST API
+  - 流式
+  - SSE
+  - Agent 运行
+  - 人工审批
+---
+
+# LobeHub API 流式、Agent 运行与人工审批
+
+通过公开 API 运行 Agent 有两种方式：
+
+- **`POST /responses`**（已可用）：一个请求输入，一个回复输出，可选流式。它遵循 OpenResponses 格式，OpenAI Responses 客户端稍作修改即可使用。
+- **`/runs`**（即将推出，[#23253](https://github.com/lobehub/lobehub/pull/23253)）：在后台启动运行，然后读取其状态和事件流、取消或引导运行、审批工具调用，并提供你自己的工具结果。
+
+两者都使用 [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html) 进行流式传输：`Content-Type: text/event-stream`，每个事件包含一行指明类型的 `event:` 和一行 JSON 格式的 `data:`。
+
+## Responses
+
+`POST /api/v1/responses` 需要 `model:invoke`、`chat:write` 和 `agent:write` 三个 scope。
+
+| 字段                                                               | 说明                                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `model`                                                          | 必填。要运行的 **Agent id**（`agt_…`）                                       |
+| `input`                                                          | 必填。字符串，或由 `message`、`function_call`、`function_call_output` 项组成的数组   |
+| `instructions`                                                   | 本次请求的额外指令                                                           |
+| `stream`                                                         | 设为 `true` 以流式返回事件                                                   |
+| `previous_response_id`                                           | 延续某个先前响应的对话                                                         |
+| `tools`、`tool_choice`                                            | 你自己的函数工具（`{ "type": "function", "name", "parameters" }`）以及模型使用它们的方式 |
+| `tools_mode`                                                     | `additional`（默认：你的工具加上 Agent 的工具）或 `exclusive`（仅使用你的工具）             |
+| `max_output_tokens`、`temperature`、`top_p`、`reasoning`、`metadata` | 标准生成选项                                                              |
+
+### 非流式
+
+响应是裸的响应对象（没有 `success` 信封）。运行失败时仍返回 `200`，并带有 `"status": "failed"` 和 `error`。务必检查 `status`。
+
+<a id="with-streaming" />
+
+### 流式
+
+```bash
+curl -N https://app.lobehub.com/api/v1/responses \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"agt_xxx","input":"Summarize my week","stream":true}'
+```
+
+```text
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_…","status":"in_progress",…}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_…","output_index":0,"content_index":0,"delta":"This week you…"}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":31,"response":{"id":"resp_…","status":"completed",…}}
+```
+
+每个事件都有 `type` 和 `sequence_number`。
+
+| 事件                                                                                                     | 额外字段                                             |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `response.created`、`response.in_progress`、`response.completed`、`response.failed`、`response.incomplete` | `response`                                       |
+| `response.output_item.added`、`response.output_item.done`                                               | `item`、`output_index`                            |
+| `response.content_part.added`、`response.content_part.done`                                             | `part`、`item_id`、`output_index`、`content_index`  |
+| `response.output_text.delta`                                                                           | `delta`、`item_id`、`output_index`、`content_index` |
+| `response.output_text.done`                                                                            | `text`、`item_id`、`output_index`、`content_index`  |
+| `response.function_call_arguments.delta` / `.done`                                                     | `delta` / `arguments`、`item_id`、`output_index`   |
+| `response.reasoning_summary_text.delta` / `.done`                                                      | `delta` / `text`、`item_id`、`output_index`        |
+
+流在 `response.completed`、`response.failed` 或 `response.incomplete` 之后结束。`/responses` 流没有事件 id，无法恢复；已结束的响应也没有读取端点 —— 用 `previous_response_id` 重新发起请求**会开启新的一轮 Agent 运行**（topic 相同），重复工具副作用而不是重放中断掉的输出。连接中断时，运行仍会在服务端跑完，回复写进该 Agent 的 topic，可在应用内查看。可重放的流随 `/runs`（[#23253](https://github.com/lobehub/lobehub/pull/23253)）提供：`GET /runs/{id}/events` 返回已存储的事件，每条带 `id`，可据此续读。
+
+当模型调用你的某个函数工具时，响应以一个 `function_call` 输出项结束。请自行执行该工具，然后携带 `previous_response_id` 和一个使用相同 `call_id` 的 `function_call_output` 项发送新请求。
+
+## Agent 运行
+
+<Callout type="info">
+  **即将推出**（[#23253](https://github.com/lobehub/lobehub/pull/23253)）。下文的端点、事件和字段来自该
+  Pull Request，发布前可能变化。它们需要新的 `run:read` / `run:write` scope；启动或恢复运行还需要
+  `model:invoke`。
+</Callout>
+
+目前你已经可以通过 `POST /api/v1/tasks/{id}/runs` 启动**任务**运行（返回 `202`，包含 `operationId` 和 `topicId`），并通过 `GET /api/v1/tasks/{id}/runs` 列出历史运行。
+
+### 端点
+
+| 方法与路径                                            | 用途                                                                                            |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `POST /runs`                                     | 启动 Agent（`agentId`）或群组（`groupId`）的运行。返回 `202`，包含运行 `id` 以及 `status: "queued"` 或 `"scheduled"` |
+| `GET /runs/{id}`                                 | 读取运行：`status`、`result`、`usage`、`cost`、`pendingToolCalls`、`continuedByRunId` 等                 |
+| `GET /runs/{id}/events`                          | 事件流（SSE）                                                                                      |
+| `POST /runs/{id}/cancel`                         | 取消运行                                                                                          |
+| `GET /runs/{id}/interventions`                   | 等待人工处理的工具调用                                                                                   |
+| `POST /runs/{id}/interventions/{interventionId}` | 批准、拒绝、回答或跳过其中一项                                                                               |
+| `POST /runs/{id}/tool-results`                   | 回传你自己的函数工具的结果                                                                                 |
+| `POST /runs/{id}/messages`                       | 通过追加消息引导正在运行的 Agent                                                                           |
+
+`POST /runs` 接受 `input`、`agentId` 或 `groupId`，以及可选的 `topicId`、`fileIds`、`tools`（你的函数工具）、`approvalMode`（默认 `headless`，可选 `manual`、`allow-list` 或 `auto-run`）、`allowList` 和 `scheduledAt`。
+
+运行状态：`scheduled`、`queued`、`running`、`waiting_for_human`、`waiting_for_tool_results`、`waiting_for_async_tool`，以及终态 `completed`、`failed`、`cancelled`、`abandoned`。
+
+### 运行事件
+
+每个 SSE 帧包含 `event: <type>`、`data: <json>`，事件被存储时还带有 `id:`。JSON 结构为 `{ id, runId, stepIndex, timestamp, type, data }`。
+
+| 事件                                | `data`                                                          |
+| --------------------------------- | --------------------------------------------------------------- |
+| `run.started`                     | `{}`                                                            |
+| `step.started`、`step.completed`   | `{ llmCalls }`                                                  |
+| `message.delta`、`reasoning.delta` | `{ delta }`                                                     |
+| `message.completed`               | `{ content, reasoning, toolCalls }`                             |
+| `tool_call.started`               | `{ toolCall: { id, name, arguments } }`                         |
+| `tool_call.completed`             | `{ toolCall, content, isSuccess }`                              |
+| `intervention.requested`          | `{ interventions }`                                             |
+| `tool_results.required`           | `{ toolCalls }`                                                 |
+| `run.error`                       | `{ error }`，某个步骤失败                                              |
+| `run.waiting`                     | `{ status: "waiting_for_human" \| "waiting_for_tool_results" }` |
+| `run.completed`                   | `{ result: { content, messageId } \| null }`                    |
+| `run.failed`                      | `{ error: { message, type } }`                                  |
+| `run.cancelled`                   | `{}`                                                            |
+
+- 服务端在 `run.completed`、`run.failed`、`run.cancelled` 或 `run.waiting` 之后关闭流。
+- 连接中断后，使用 `Last-Event-ID` 请求头（或 `?after=<id>`）**恢复**，值为你收到的最后一个 `id`。不带它时，流会从第一个事件开始重放。
+- 流也会在 5 分钟后关闭；使用 `Last-Event-ID` 重新连接即可继续。空闲期间，服务端每 15 秒发送一次 `: ping` 注释。
+
+<a id="human-approval" />
+
+## 人工审批
+
+当运行使用 `approvalMode: "manual"`，或使用 `allow-list` 且工具不在列表中时，Agent 会在调用工具前停下并请求人工处理。`auto-run` 模式下，始终需要人工处理的调用（例如向用户提问，或被安全检查拦下的调用）同样会停下。
+
+1. 流发送 `intervention.requested`，随后发送 `status: "waiting_for_human"` 的 `run.waiting`，然后关闭。Webhook 订阅者也会收到 `run.intervention_requested`。
+
+2. 读取待处理项：
+
+   ```bash
+   curl https://app.lobehub.com/api/v1/runs/$RUN_ID/interventions -H "Authorization: Bearer $KEY"
+   ```
+
+   每一项为 `{ id, type: "approval" | "question", tool: { identifier, apiName, arguments } }`。
+
+3. 处理该项。请求体为以下之一：
+
+   ```json
+   { "action": "approve" }
+   { "action": "reject", "reason": "Do not email customers", "continue": true }
+   { "action": "answer", "content": "Use the EU region" }
+   { "action": "skip" }
+   ```
+
+   ```bash
+   curl -X POST https://app.lobehub.com/api/v1/runs/$RUN_ID/interventions/$INTERVENTION_ID \
+     -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"action":"approve"}'
+   ```
+
+4. 响应包含 `continuedByRunId`。Agent 在这个**新运行**中继续：订阅 `GET /runs/{continuedByRunId}/events` 跟踪它。等待中的运行不会以原 id 恢复。
+
+## 客户端工具结果
+
+如果你在 `POST /runs` 中传入了自己的 `tools`，模型调用其中之一时运行会暂停：
+
+1. 流发送带 `toolCalls` 的 `tool_results.required`，随后发送 `status: "waiting_for_tool_results"` 的 `run.waiting`。
+
+2. 执行这些工具，并为每个待处理调用发送一个结果：
+
+   ```bash
+   curl -X POST https://app.lobehub.com/api/v1/runs/$RUN_ID/tool-results \
+     -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"results":[{"callId":"call_abc","output":"{\"temperature\":21}"}]}'
+   ```
+
+3. 运行以**同一个** id 恢复。使用 `Last-Event-ID` 重新连接其事件流。

@@ -68,20 +68,13 @@ export const findVisitorTopicOrThrow = async (
  * `{ type }` (or `{ message }` for the narrow allowlisted codes) that
  * `sanitizeVisitorError` already deems visitor-safe.
  *
- * `showErrorDetails` (the owner's opt-in on the share config) bypasses the
- * projection, exactly as it does for persisted rows and live stream events.
- *
  * Also the sink for a RESOLVED (not thrown) `{ success: false, error }` from
  * `AiAgentService.execAgent` — a `createOperation` startup failure resolves
  * rather than rejects there, so the visitor-facing `execAgent` handler (`exec.ts`)
  * re-throws that case through this same function instead of letting the raw
  * message escape via a normal `return`.
  */
-export const toVisitorSafeStartupError = (
-  context: string,
-  error: unknown,
-  options: { showErrorDetails?: boolean } = {},
-): TRPCError => {
+export const toVisitorSafeStartupError = (context: string, error: unknown): TRPCError => {
   log('%s failed: %O', context, error);
 
   const raw = error as { message?: unknown; type?: unknown } | null | undefined;
@@ -92,7 +85,6 @@ export const toVisitorSafeStartupError = (
           type: raw.type,
         } as ChatMessageError)
       : undefined,
-    options,
   );
 
   // `type` widens to `string | number` (the numeric HTTP-status error codes),

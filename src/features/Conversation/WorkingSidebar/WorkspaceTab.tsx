@@ -32,7 +32,7 @@ const styles = stylex.create({
     borderStyle: 'none',
     borderRadius: '4px',
     color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFill },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
     transition: 'color 0.15s, background 0.15s',
     animationName: { 'default': fadeIn, '@media (prefers-reduced-motion: reduce)': 'none' },
@@ -47,15 +47,16 @@ const styles = stylex.create({
     display: 'flex',
     flexShrink: 0,
     alignItems: 'center',
+    height: '24px',
     borderRadius: '6px',
     transition: 'background 0.15s',
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   // Composed after `container`: a conditional value replaces the whole property,
   // so the hover colour is restated here.
   containerActive: {
-    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
   pinned: {
@@ -72,12 +73,16 @@ const styles = stylex.create({
   label: { overflow: 'hidden', minWidth: '24px', maxWidth: '160px', textOverflow: 'ellipsis' },
   tab: {
     cursor: 'pointer',
-    paddingBlock: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    height: '24px',
+    paddingBlock: 0,
     paddingInline: TAB_PADDING,
     borderWidth: 0,
     borderStyle: 'none',
     borderRadius: '6px',
     fontSize: '12px',
+    lineHeight: '16px',
     // attribute selector outranks the base class so the active color can't lose
     // to stylesheet ordering
     color: {

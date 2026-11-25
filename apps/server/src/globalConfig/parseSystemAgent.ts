@@ -1,7 +1,12 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
 import { type UserServiceModelConfig } from '@/types/user/settings';
 
-const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
+// `DEFAULT_FILES_CONFIG` owns the deployment default of the file embedding
+// slot; a second knob here could disagree with what file indexing runs.
+const otherEnvKeys = new Set(['fileEmbedding']);
+const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG).filter(
+  (key) => !otherEnvKeys.has(key),
+);
 
 const defaultTrueLey = new Set(['promptRewrite', 'autoSuggestion']);
 const memoryServiceModelKeys = new Set([

@@ -5,9 +5,12 @@ export type AgentProfileTab =
   | 'channel'
   | 'engine'
   | 'environment'
+  | 'graph'
   | 'instruction'
   | 'knowledge'
   | 'mail'
+  | 'opening'
+  | 'permission'
   | 'profile'
   | 'self-evolving'
   | 'share'
@@ -21,7 +24,8 @@ export interface AgentProfileTabOption {
   value: AgentProfileTab;
 }
 
-export type AgentProfileTabGroupKey = 'general' | 'identity' | 'profile' | 'setup' | 'shape';
+export type AgentProfileTabGroupKey =
+  'advanced' | 'general' | 'growth' | 'identity' | 'profile' | 'setup' | 'shape';
 
 export interface AgentProfileTabGroup {
   key: AgentProfileTabGroupKey;
@@ -32,7 +36,7 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
   urlJoin('/agent', agentId, tab);
 
 const AGENT_PROFILE_ROUTE =
-  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|opening|graph|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|permission|share)\/?$/;
 
 /**
  * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
@@ -63,8 +67,11 @@ export const buildAgentProfileTabOptions = ({
   active,
   automationsSupported = false,
   canConfigure,
+  graphSupported = false,
   labels,
   mailSupported,
+  openingSupported = false,
+  permissionSupported = false,
   selfLearningSupported,
   shareSupported,
   heterogeneous,
@@ -74,8 +81,14 @@ export const buildAgentProfileTabOptions = ({
   /** Inbound webhooks are switched on for this member (`webhook`). */
   automationsSupported?: boolean;
   canConfigure: boolean;
+  /** The Graph runtime option applies to this agent on this surface (`graph`). */
+  graphSupported?: boolean;
   labels: Record<AgentProfileTab, string>;
   mailSupported: boolean;
+  /** This surface lists the opening page; mobile has its own settings screen. */
+  openingSupported?: boolean;
+  /** The agent lives in a workspace and this surface lists the page (`permission`). */
+  permissionSupported?: boolean;
   selfLearningSupported: boolean;
   shareSupported: boolean;
   /**
@@ -96,6 +109,8 @@ export const buildAgentProfileTabOptions = ({
   const showEnvironment = (canConfigure && heterogeneous) || active === 'environment';
   const showTools = (canConfigure && !heterogeneous) || active === 'tools';
   const showSkills = (canConfigure && !heterogeneous) || active === 'skills';
+  const showOpening = (canConfigure && openingSupported) || active === 'opening';
+  const showGraph = (canConfigure && graphSupported) || active === 'graph';
   const showMail = (canConfigure && mailSupported) || active === 'mail';
   // Channels can dispatch to a bound device; cloud sandbox support is not required.
   const showChannel = canConfigure || active === 'channel';
@@ -109,11 +124,14 @@ export const buildAgentProfileTabOptions = ({
   // capability gate (personal, non-builtin agents on deployments that allow it).
   const showShare = (canConfigure && shareSupported) || active === 'share';
   const showSelfLearning = selfLearningSupported || active === 'self-evolving';
+  // The page applies the same edit gate and bounces anyone else back with a toast.
+  const showPermission = (canConfigure && permissionSupported) || active === 'permission';
 
   return [
     showProfile ? { label: labels.profile, value: 'profile' as const } : null,
     showInstruction ? { label: labels.instruction, value: 'instruction' as const } : null,
     showKnowledge ? { label: labels.knowledge, value: 'knowledge' as const } : null,
+    showOpening ? { label: labels.opening, value: 'opening' as const } : null,
     showEngine ? { label: labels.engine, value: 'engine' as const } : null,
     showEnvironment ? { label: labels.environment, value: 'environment' as const } : null,
     showTools ? { label: labels.tools, value: 'tools' as const } : null,
@@ -122,18 +140,22 @@ export const buildAgentProfileTabOptions = ({
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
     showAutomations ? { label: labels.automations, value: 'automations' as const } : null,
     showWebhook ? { label: labels.webhook, value: 'webhook' as const } : null,
+    showGraph ? { label: labels.graph, value: 'graph' as const } : null,
     showSelfLearning ? { label: labels['self-evolving'], value: 'self-evolving' as const } : null,
     { label: labels.statistics, value: 'statistics' as const },
+    showPermission ? { label: labels.permission, value: 'permission' as const } : null,
     showShare ? { label: labels.share, value: 'share' as const } : null,
   ].filter((option) => !!option);
 };
 
 const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfileTab[] }[] = [
   { key: 'profile', tabs: ['profile'] },
-  { key: 'shape', tabs: ['instruction', 'knowledge'] },
+  { key: 'shape', tabs: ['instruction', 'knowledge', 'opening'] },
   { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
-  { key: 'identity', tabs: ['mail', 'channel', 'automations', 'webhook'] },
-  { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
+  { key: 'identity', tabs: ['mail', 'channel'] },
+  { key: 'advanced', tabs: ['automations', 'webhook', 'graph'] },
+  { key: 'growth', tabs: ['self-evolving', 'statistics'] },
+  { key: 'general', tabs: ['permission', 'share'] },
 ];
 
 /** Sidebar sections for the visible tabs; a section with nothing to open is left out. */

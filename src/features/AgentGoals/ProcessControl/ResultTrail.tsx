@@ -28,6 +28,8 @@ import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 import { shinyTextStyles } from '@/styles';
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { coordinatorNodeTitleKey } from './coordinatorCopy';
 import { openTargetOf, useOpenGoalArtifact } from './Deliverables';
@@ -76,7 +78,7 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     width: 100%;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: none;
 
     text-align: start;
@@ -570,11 +572,12 @@ interface ResultTrailProps {
 
 const ResultTrail = ({ documentId, graph, onSelect }: ResultTrailProps) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const openArtifact = useOpenGoalArtifact();
   const openReport = useChatStore((s) => s.openGoalReport);
   const source = resultTrailSource(graph);
   const title = (
-    <Text fontSize={16} weight={600}>
+    <Text fontSize={pageTitleFontSize} weight={600}>
       {t('goalProcess.result.trail.title')}
     </Text>
   );
