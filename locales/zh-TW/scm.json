@@ -28,7 +28,7 @@
   "github.changeRequests.title": "拉取請求",
   "github.connect.action": "連接 GitHub",
   "github.connect.addAnother": "新增另一個帳戶",
-  "github.connect.description": "在您的帳戶或組織上安裝 LobeHub GitHub 應用程式。您的代理將在不進行輪詢的情況下收到 CI 失敗、審查反饋和合併的通知。",
+  "github.connect.description": "在您的帳戶或組織上安裝 LobeHub GitHub 應用程式。您的助手將在不進行輪詢的情況下收到 CI 失敗、審查反饋和合併的通知。",
   "github.connect.disabled": "此部署上未配置 GitHub 應用程式。",
   "github.connect.identity": "以 {{login}} 登入 GitHub",
   "github.connect.title": "GitHub",

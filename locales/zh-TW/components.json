@@ -229,7 +229,7 @@
   "ModelSwitchPanel.detail.rating.modal.rules.missing": "灰色的維度表示該模型尚未被來源列出或樣本數不足——這並不代表零分。",
   "ModelSwitchPanel.detail.rating.modal.rules.price": "價格使用計費的文字輸入費率——價格越低分數越高。速度和價格以對數尺度進行標準化，以符合人類的感知。",
   "ModelSwitchPanel.detail.rating.modal.rules.relative": "分數是基於目前評分模型池的相對值：每個維度的最佳模型得分為100，最低為20。這些分數不是絕對值，並會隨模型池更新而變動。",
-  "ModelSwitchPanel.detail.rating.modal.rules.sources": "智能、代理性、寫作和設計來自公開排行榜（Artificial Analysis、LMArena、Design Arena）；原始值為指數點或Elo評分。",
+  "ModelSwitchPanel.detail.rating.modal.rules.sources": "智能、自主性、寫作和設計來自公開排行榜（Artificial Analysis、LMArena、Design Arena）；原始值為指數點或Elo評分。",
   "ModelSwitchPanel.detail.rating.modal.rules.speed": "速度是基於本平台的真實流量測量：完成典型回答的中位牆時間（第一個字元出現的時間 + 生成速度）來自近期請求——時間越短越快。",
   "ModelSwitchPanel.detail.rating.modal.rules.title": "評分規則與說明",
   "ModelSwitchPanel.detail.rating.modal.table.dimension": "維度",

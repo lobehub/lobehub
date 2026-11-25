@@ -1,8 +1,8 @@
 {
   "guide.agents.replaceBtn": "換一批",
   "guide.agents.title": "新增助手推薦：",
-  "guide.defaultMessage": "我是您的私人智慧助理 {{appName}}，請問現在能為您做些什麼？<br />如果您需要更專業或客製化的助手，可以點擊 <plus /> 建立自訂助手",
-  "guide.defaultMessageWithoutCreate": "我是您的私人智慧助理 {{appName}}，請問現在能為您做些什麼？",
+  "guide.defaultMessage": "我是您的私人智慧助手 {{appName}}，請問現在能為您做些什麼？<br />如果您需要更專業或客製化的助手，可以點擊 <plus /> 建立自訂助手",
+  "guide.defaultMessageWithoutCreate": "我是您的私人智慧助手 {{appName}}，請問現在能為您做些什麼？",
   "guide.groupActivities.analysis.codeReview.description": "針對程式碼變更與實作進行技術討論與同儕審查",
   "guide.groupActivities.analysis.codeReview.emoji": "💻",
   "guide.groupActivities.analysis.codeReview.prompt": "讓我們一起審查一些程式碼。你能協助我們分析這些程式碼並找出改進之處嗎？",
@@ -265,7 +265,7 @@
   "header": "歡迎使用",
   "pickAgent": "或從下列助手模板中選擇",
   "skip": "跳過建立",
-  "slogan.desc1": "啟動大腦群集，激發思維火花。你的智慧助理，隨時待命。",
+  "slogan.desc1": "啟動大腦群集，激發思維火花。你的智慧助手，隨時待命。",
   "slogan.desc2": "建立你的第一個助手，讓我們開始吧～",
   "slogan.title": "給自己一個更聰明的大腦",
   "welcomeMessages": {
