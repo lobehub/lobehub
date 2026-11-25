@@ -12,7 +12,7 @@ const repo = vi.hoisted(() => ({
 const notifyChannel = vi.hoisted(() => vi.fn());
 const submitHeteroInterventionAs = vi.hoisted(() => vi.fn());
 
-vi.mock('@/database/repositories/channel', () => repo);
+vi.mock('@/database/repositories/channel/interventionAsk', () => repo);
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('@/server/routers/lambda/aiAgent/heteroInterventionSubmit', () => ({
   submitHeteroInterventionAs,

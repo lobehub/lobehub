@@ -9,7 +9,10 @@ import { channelAskInterventionResult, normalizeChannelAskInput } from '@lobecha
 import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
 
-import { closeInterventionAsk, postInterventionAsk } from '@/database/repositories/channel';
+import {
+  closeInterventionAsk,
+  postInterventionAsk,
+} from '@/database/repositories/channel/interventionAsk';
 import { agentOperations, messagePlugins, messages } from '@/database/schemas';
 import { submitHeteroInterventionAs } from '@/server/routers/lambda/aiAgent/heteroInterventionSubmit';
 

@@ -4,13 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agentOperations, channelJobs, workspaceMembers } from '../../../schemas';
-import {
-  ChannelExecutionRepository,
-  ChannelHistoryRepository,
-  closeInterventionAsk,
-  postInterventionAsk,
-} from '..';
+import { ChannelExecutionRepository, ChannelHistoryRepository } from '..';
 import { answerAsk } from '../ask';
+import { closeInterventionAsk, postInterventionAsk } from '../interventionAsk';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
