@@ -905,7 +905,14 @@ describe('deviceRpcClients', () => {
     'checkAppUpdate',
     'installAppUpdate',
   ];
-  const cliOnly = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'];
+  const cliOnly = [
+    'getCliUpdateState',
+    'checkCliUpdate',
+    'restartCli',
+    'installAgentCredential',
+    'removeAgentCredential',
+    'checkAgentCredential',
+  ];
 
   it.each(desktopOnly)('routes %s, which the CLI rejects, to the desktop', (method) => {
     expect(deviceRpcClients(method)).toEqual(['desktop']);

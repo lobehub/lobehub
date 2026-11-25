@@ -26,11 +26,18 @@ const DESKTOP_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
  * RPC methods only the CLI daemon (`lh connect`) implements: the desktop app
  * passes no CLI self-update or restart handler, so a call that lands on the
  * desktop is rejected.
+ *
+ * The agent-credential methods are here because only `lh connect` applies an
+ * installed credential when it spawns an agent run; storing one through the
+ * desktop app would leave it unused.
  */
 const CLI_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
   'getCliUpdateState',
   'checkCliUpdate',
   'restartCli',
+  'installAgentCredential',
+  'removeAgentCredential',
+  'checkAgentCredential',
 ]);
 
 /** Device clients that can serve `method`; `undefined` means any client. */
