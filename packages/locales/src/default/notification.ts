@@ -155,12 +155,6 @@ export default {
   'subscription_one_time_expiring_legacy':
     'When your one-time {{plan}} plan ends, your account moves to the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. {{plan}} is no longer offered; once it ends, {{successor}} is the plan that replaces it.',
   'subscription_one_time_expiring_title': 'Your {{plan}} plan ends in {{days}} days',
-  'subscription_one_time_expired_unlisted':
-    'Your one-time {{plan}} plan has ended and your account is now on the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. See the plans page for the plans on sale.',
-  'subscription_one_time_expired_unlisted_action': 'View plans',
-  'subscription_one_time_expired_unlisted_title': 'Your {{plan}} plan has ended',
-  'subscription_one_time_expiring_unlisted':
-    'When your one-time {{plan}} plan ends, your account moves to the Free plan, with lower usage limits and {{freeStorage}} of file storage instead of {{planStorage}}. Once it ends, see the plans page for the plans on sale.',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
