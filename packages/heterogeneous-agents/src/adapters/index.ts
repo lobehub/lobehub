@@ -9,6 +9,7 @@ export { CopilotAcpAdapter } from './copilotAcp';
 export { CursorAdapter } from './cursor';
 export { CursorAcpAdapter } from './cursorAcp';
 export { DevinAcpAdapter } from './devinAcp';
+export { DoubaoAdapter } from './doubao';
 export { DroidAcpAdapter } from './droidAcp';
 export { DshAcpAdapter } from './dshAcp';
 export { GrokBuildAdapter } from './grokBuild';

@@ -159,6 +159,7 @@ export const agentsRouter = router({
           'copilot',
           'cursor',
           'deepseek-harness',
+          'doubao',
           'droid',
           'devin',
           'grok-build',

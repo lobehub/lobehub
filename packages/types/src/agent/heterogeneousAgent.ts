@@ -401,6 +401,33 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://www.doubao.com/work/docs/zh-cn/doubao-cli',
+      errorMessage:
+        'Doubao CLI could not authenticate. Run `doubao login` and scan the QR code, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'login_required',
+        '当前未登录',
+        '请运行\\s*`?doubao\\s+login`?',
+      ],
+      signInCommand: 'doubao login',
+    },
+    defaultCommand: 'doubao',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Doubao',
+    install: {
+      commands: ['npm install -g @bytedance/doubao-cli --registry=https://registry.npmjs.org/'],
+      docsUrl: 'https://www.doubao.com/work/docs/zh-cn/doubao-cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDoubaoAgent',
+    menuLabelKey: 'newDoubaoAgent',
+    resume: { supported: false },
+    title: 'Doubao',
+    type: 'doubao',
+  },
+  {
+    auth: {
       docsUrl: 'https://docs.qoder.com/cli/auth.md',
       errorMessage: 'Qoder could not authenticate. Run `qodercli login`, then retry.',
       patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'not logged in', 'please run \\/login'],

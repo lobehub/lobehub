@@ -724,6 +724,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'devin': {
     validateKeywords: ['devin'],
   },
+  'doubao': {
+    // Doubao prints `doubao 2.37.2`; the help banner is localized (zh-CN).
+    validateKeywords: ['doubao'],
+    validatePattern: /^doubao\s+v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
+  },
   'grok-build': {
     validateHelpArgs: ['agent', '--help'],
     validateHelpKeywords: ['agent', 'stdio'],
@@ -921,6 +926,16 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.local', 'bin', 'pi'),
         path.join(homedir(), '.npm-global', 'bin', 'pi'),
         path.join(homedir(), 'Library', 'pnpm', 'pi'),
+      ];
+    }
+    case 'doubao': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'doubao'),
+        path.join(homedir(), '.bun', 'bin', 'doubao'),
+        path.join(homedir(), '.npm-global', 'bin', 'doubao'),
+        path.join(homedir(), 'Library', 'pnpm', 'doubao'),
       ];
     }
     case 'qoder': {
