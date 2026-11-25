@@ -131,13 +131,13 @@ export const FeatureFlagsSchema = z.object({
   managed_cloud_device: FeatureFlagValue.optional(),
 
   /**
-   * Optional Coding Plans settings tab, in personal settings. Off: the tab is hidden there.
+   * Optional business settings tab, read by the server for personal settings. Off: hidden.
    * Array values are user ids.
    */
   cloud_device_bundle: FeatureFlagValue.optional(),
   /**
-   * Workspace ids whose settings list the optional Coding Plans tab. Membership is checked on the
-   * server. Empty or unset: no workspace lists it.
+   * Workspace ids whose settings list the optional business settings tab. Membership is checked
+   * on the server. Empty or unset: no workspace lists it.
    */
   cloud_device_bundle_workspaces: z.array(z.string()).optional(),
 
@@ -330,11 +330,6 @@ export const mapFeatureFlagsEnvToState = (
       config.managed_cloud_device,
       userId,
       'managed_cloud_device',
-    ),
-    enableCloudDeviceBundle: evaluateFeatureFlag(
-      config.cloud_device_bundle,
-      userId,
-      'cloud_device_bundle',
     ),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId, 'topic_preview'),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId, 'provider_settings'),

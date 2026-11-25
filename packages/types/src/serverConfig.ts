@@ -33,11 +33,6 @@ export type IFeatureFlagsState = {
   enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Optional Coding Plans settings tab in personal settings (`cloud_device_bundle`). Off by
-   * default. Workspaces are opted in separately (`cloud_device_bundle_workspaces`).
-   */
-  enableCloudDeviceBundle: boolean | undefined;
-  /**
    * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
    * default: the pages, Portal view, in-chat previews and the tool are hidden
    * and the widget / dashboard APIs answer FORBIDDEN.

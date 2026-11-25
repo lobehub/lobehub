@@ -11,8 +11,8 @@ import { SettingsGroupKey, useCategory } from './useCategory';
 
 const mocks = vi.hoisted(() => ({ codingPlans: false }));
 
-vi.mock('@/business/client/hooks/useCodingPlansEnabled', () => ({
-  useCodingPlansEnabled: () => mocks.codingPlans,
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
 }));
 
 vi.hoisted(() => {
@@ -131,21 +131,25 @@ describe('settings useCategory', () => {
     expect(keys).not.toContain('drive');
   });
 
-  it('lists Coding Plans after Usage only where the business slot enables it', () => {
-    const subscriptionKeys = () =>
-      renderHook(() => useCategory(), { wrapper: createWrapper(true, true) })
-        .result.current.find((group) => group.key === SettingsGroupKey.Subscription)
-        ?.items.map((item) => item.key);
+  it('lists the business tab after Usage, labelled by its slot, only where the slot supplies it', () => {
+    const subscriptionItems = () =>
+      renderHook(() => useCategory(), { wrapper: createWrapper(true, true) }).result.current.find(
+        (group) => group.key === SettingsGroupKey.Subscription,
+      )?.items;
 
-    expect(subscriptionKeys()).not.toContain(SettingsTabs.CodingPlans);
+    expect(subscriptionItems()?.map((item) => item.key)).not.toContain(SettingsTabs.CodingPlans);
 
     mocks.codingPlans = true;
-    expect(subscriptionKeys()).toEqual([
+    const items = subscriptionItems();
+    expect(items?.map((item) => item.key)).toEqual([
       SettingsTabs.Plans,
       SettingsTabs.Usage,
       SettingsTabs.CodingPlans,
       SettingsTabs.Billing,
     ]);
+    expect(items?.find((item) => item.key === SettingsTabs.CodingPlans)?.label).toBe(
+      'Business tab',
+    );
   });
 
   it('keeps Provider and hides Messenger and OAuth Apps by default', () => {

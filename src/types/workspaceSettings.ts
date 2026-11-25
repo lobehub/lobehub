@@ -14,7 +14,7 @@ export enum WorkspaceSettingsTabs {
   Automations = 'automations',
   Billing = 'billing',
   Budget = 'budget',
-  /** Optional business tab; listed only where `useCodingPlansEnabled` allows it. */
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
   CodingPlans = 'coding-plans',
   Connector = 'connector',
   Conversation = 'conversation',

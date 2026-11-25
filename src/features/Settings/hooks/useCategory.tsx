@@ -35,7 +35,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCodingPlansEnabled } from '@/business/client/hooks/useCodingPlansEnabled';
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -102,7 +102,7 @@ export const useCategory = () => {
     return avatar;
   }, [avatar, remoteServerUrl]);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const enableCodingPlans = useCodingPlansEnabled();
+  const codingPlansTab = useCodingPlansTab();
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
@@ -206,10 +206,10 @@ export const useCategory = () => {
           key: SettingsTabs.Usage,
           label: tSubscription('tab.usage'),
         },
-        enableCodingPlans && {
+        codingPlansTab && {
           icon: CodeXmlIcon,
           key: SettingsTabs.CodingPlans,
-          label: t('tab.codingPlans'),
+          label: codingPlansTab.label,
         },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
       ].filter(Boolean) as CategoryItem[];
@@ -351,7 +351,7 @@ export const useCategory = () => {
     tLabs,
     tSubscription,
     enableBusinessFeatures,
-    enableCodingPlans,
+    codingPlansTab,
     hideDocs,
     mobile,
     showApiKeyManage,

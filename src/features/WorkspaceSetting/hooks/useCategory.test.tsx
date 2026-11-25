@@ -32,8 +32,8 @@ const permissionFlags: Record<string, () => boolean> = {
   view_billing: () => mocks.canViewBilling,
 };
 
-vi.mock('@/business/client/hooks/useCodingPlansEnabled', () => ({
-  useCodingPlansEnabled: () => mocks.codingPlans,
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -279,7 +279,7 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 
-  it('lists Coding Plans only where the business slot enables it, after Usage, for every role', () => {
+  it('lists Coding Plans only where the business slot supplies it, after Usage, for every role', () => {
     expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.CodingPlans);
 
     mocks.codingPlans = true;

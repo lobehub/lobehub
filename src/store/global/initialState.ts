@@ -81,7 +81,7 @@ export enum SettingsTabs {
   Billing = 'billing',
   /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
-  /** Optional business tab; listed only where `useCodingPlansEnabled` allows it. */
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
   CodingPlans = 'coding-plans',
   /** @deprecated Use Appearance instead */
   Common = 'common',
