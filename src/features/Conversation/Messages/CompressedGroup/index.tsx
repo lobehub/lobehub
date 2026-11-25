@@ -141,11 +141,12 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     [t],
   );
 
-  // While the summary streams, the divider already marks the compression point
-  // so the transcript does not swap layouts when generation finishes.
+  // Compression should stay out of the reader's way: while the summary is
+  // generated the group is a single in-progress row at the compression point,
+  // and the summary only appears when the reader opens it afterwards.
   if (isGeneratingSummary && historyInline) {
     return (
-      <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className}>
         <Divider className={stylex.props(styles.divider).className}>
           <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.compressingLabel)}>
             <Icon icon={History} size={14} />
@@ -154,7 +155,6 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             </span>
           </Flexbox>
         </Divider>
-        <StreamingMarkdown>{content}</StreamingMarkdown>
       </Flexbox>
     );
   }
