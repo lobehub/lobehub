@@ -363,6 +363,11 @@ export const RedisKeys = {
      */
     linkPreview: (urlHash: string): string => `link_preview:v1:${urlHash}`,
     /**
+     * Page reads one user caused in the current one-minute window.
+     * Full key: lobechat:link_preview_fetches:v1:{userId}
+     */
+    linkPreviewFetches: (userId: string): string => `link_preview_fetches:v1:${userId}`,
+    /**
      * The skill-index snapshot one conversation renders `<available_skills>` from, and its change notes.
      * Full key: lobechat:skill_index:v1:{topicId}:{threadId|main}:{agentId}
      */

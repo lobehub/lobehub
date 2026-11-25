@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import type { LinkPreview } from '@lobechat/types';
 
 import { getJSONFromRedis, RedisKeys } from '@/server/modules/Redis';
-import { LinkPreviewUnavailableError } from '@/server/services/linkPreview/errors';
+import {
+  LinkPreviewRateLimitedError,
+  LinkPreviewUnavailableError,
+} from '@/server/services/linkPreview/errors';
 
 import { getRedisServiceClient } from './client';
 
@@ -16,6 +19,8 @@ const EMPTY_TTL_MS = 60 * 60 * 1000;
  * of links) is retried soon: it says nothing about whether the page has a card.
  */
 const FAILED_TTL_MS = 5 * 60 * 1000;
+/** Window of the per-user budget of page reads (cache misses). */
+const FETCH_WINDOW_SECONDS = 60;
 
 /** A failed read, remembered briefly; never the same answer as "the page has no card". */
 interface StoredFailure {
@@ -49,6 +54,7 @@ export const linkPreview = {
       try {
         return await resolve();
       } catch (error) {
+        if (error instanceof LinkPreviewRateLimitedError) throw error;
         throw new LinkPreviewUnavailableError({ cause: error });
       }
     }
@@ -64,6 +70,8 @@ export const linkPreview = {
     try {
       preview = await resolve();
     } catch (error) {
+      // A viewer over budget learned nothing about the page; leave it for the next viewer.
+      if (error instanceof LinkPreviewRateLimitedError) throw error;
       const failure: StoredFailure = { failed: true };
       void redis.set(key, JSON.stringify(failure), { px: FAILED_TTL_MS }).catch(() => undefined);
       throw new LinkPreviewUnavailableError({ cause: error });
@@ -74,5 +82,19 @@ export const linkPreview = {
       .set(key, JSON.stringify(stored), { px: preview ? PREVIEW_TTL_MS : EMPTY_TTL_MS })
       .catch(() => undefined);
     return preview;
+  },
+
+  /**
+   * Counts one page read (a cache miss) in the user's fixed one-minute window
+   * and returns the count so far, or `undefined` without Redis. The window is
+   * created with its expiry before the increment, so it can never outlive it.
+   */
+  async countFetch(userId: string): Promise<number | undefined> {
+    const redis = await getClient();
+    if (!redis) return;
+
+    const key = RedisKeys.lobechat.linkPreviewFetches(userId);
+    await redis.set(key, '0', { ex: FETCH_WINDOW_SECONDS, nx: true });
+    return redis.incr(key);
   },
 };

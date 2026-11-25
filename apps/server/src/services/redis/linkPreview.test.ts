@@ -2,14 +2,17 @@ import { createHash } from 'node:crypto';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LinkPreviewUnavailableError } from '@/server/services/linkPreview/errors';
+import {
+  LinkPreviewRateLimitedError,
+  LinkPreviewUnavailableError,
+} from '@/server/services/linkPreview/errors';
 
 import { linkPreview } from './linkPreview';
 
-const { get, set } = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
+const { get, incr, set } = vi.hoisted(() => ({ get: vi.fn(), incr: vi.fn(), set: vi.fn() }));
 let redisAvailable = true;
 vi.mock('./client', () => ({
-  getRedisServiceClient: async () => (redisAvailable ? { get, set } : null),
+  getRedisServiceClient: async () => (redisAvailable ? { get, incr, set } : null),
 }));
 
 const URL = 'https://example.com/post';
@@ -61,6 +64,26 @@ describe('redisService.linkPreview', () => {
       LinkPreviewUnavailableError,
     );
     expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a user hitting their budget, so the next viewer still reads the page', async () => {
+    const resolve = vi.fn().mockRejectedValue(new LinkPreviewRateLimitedError());
+
+    await expect(linkPreview.remember(URL, resolve)).rejects.toBeInstanceOf(
+      LinkPreviewRateLimitedError,
+    );
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('counts page reads per user in a one-minute window', async () => {
+    incr.mockResolvedValue(3);
+
+    await expect(linkPreview.countFetch('user-1')).resolves.toBe(3);
+    expect(set).toHaveBeenCalledWith('link_preview_fetches:v1:user-1', '0', { ex: 60, nx: true });
+    expect(incr).toHaveBeenCalledWith('link_preview_fetches:v1:user-1');
+
+    redisAvailable = false;
+    await expect(linkPreview.countFetch('user-1')).resolves.toBeUndefined();
   });
 
   it('reads live without Redis or when Redis fails', async () => {

@@ -1,9 +1,15 @@
-import { isSSRFBlockedError, type SSRFOptions, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
+import {
+  assertSsrfSafeUrl,
+  isSSRFBlockedError,
+  type SSRFOptions,
+  ssrfSafeFetch,
+} from '@lobechat/ssrf-safe-fetch';
 import type { LinkPreview } from '@lobechat/types';
 import debug from 'debug';
 
 import { redisService } from '@/server/services/redis';
 
+import { LinkPreviewRateLimitedError } from './errors';
 import { parseLinkPreview } from './parse';
 
 const log = debug('lobe-server:link-preview');
@@ -104,22 +110,53 @@ const readPreview = async (url: string): Promise<LinkPreview | null> => {
   const bytes = await response.arrayBuffer();
   const html = new TextDecoder(charsetOf(contentType)).decode(bytes);
   // The card links what the message linked; its image is relative to the page that answered.
-  return parseLinkPreview(html, url, page.url);
+  const preview = parseLinkPreview(html, url, page.url);
+  if (!preview?.image) return preview;
+
+  // Every viewer's browser loads the image directly. A page must not be able
+  // to point that request at a host on the viewer's own network (a router, a
+  // local service), so the image host has to be public too.
+  try {
+    await assertSsrfSafeUrl(preview.image, PUBLIC_ONLY);
+    return preview;
+  } catch {
+    const { image: _, largeImage: __, ...rest } = preview;
+    return rest;
+  }
 };
+
+/**
+ * Page reads (cache misses) one user may cause per minute. Cached cards are
+ * free; this only bounds the outbound fetches a user can drive, e.g. by
+ * calling the endpoint with a stream of unique addresses. A Channel screen
+ * holds far fewer new links than this.
+ */
+export const LINK_PREVIEW_FETCHES_PER_MINUTE = 60;
 
 /**
  * The Open Graph summary of a public web page, or `null` when the address is
  * not a public `http(s)` page (private and reserved hosts included) or the page
- * names neither a title nor a description. Rejects with `LinkPreviewUnavailableError` when the page could
- * not be read (timeout, refused, blocked), so a viewer keeps the card it has. Fetched through the SSRF guard (every redirect hop
- * included), and shared by every viewer through the cache: one page is read
- * once a day however many messages link it.
+ * names neither a title nor a description. Rejects with
+ * `LinkPreviewUnavailableError` when the page could not be read (timeout,
+ * refused), so a viewer keeps the card it has, and with
+ * `LinkPreviewRateLimitedError` once `userId` has caused
+ * {@link LINK_PREVIEW_FETCHES_PER_MINUTE} page reads this minute. Fetched
+ * through the SSRF guard (every redirect hop included), and shared by every
+ * viewer through the cache: one page is read once a day however many messages
+ * link it.
  */
-export const getLinkPreview = async (input: string): Promise<LinkPreview | null> => {
+export const getLinkPreview = async (
+  input: string,
+  userId: string,
+): Promise<LinkPreview | null> => {
   const url = normalizeLinkPreviewUrl(input);
   if (!url) return null;
 
   return redisService.linkPreview.remember(url, async () => {
+    const fetches = await redisService.linkPreview.countFetch(userId);
+    if (fetches !== undefined && fetches > LINK_PREVIEW_FETCHES_PER_MINUTE) {
+      throw new LinkPreviewRateLimitedError();
+    }
     try {
       return await readPreview(url);
     } catch (error) {
