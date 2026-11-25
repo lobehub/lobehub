@@ -43,6 +43,7 @@ import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ProjectManifest } from '@lobechat/builtin-tool-project';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
@@ -632,6 +633,14 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: ArtboardManifest.identifier,
     manifest: ArtboardManifest,
+    type: 'builtin',
+  },
+  {
+    // Project conversations only: server-side discovery injects it there.
+    discoverable: false,
+    hidden: true,
+    identifier: ProjectManifest.identifier,
+    manifest: ProjectManifest,
     type: 'builtin',
   },
   {
