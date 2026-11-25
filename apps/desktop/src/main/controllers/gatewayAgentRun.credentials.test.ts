@@ -97,6 +97,6 @@ describe('buildLhHeteroExecEnv', () => {
     vi.unstubAllEnvs();
 
     expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe(TOKEN);
+    expect(env).toMatchObject({ CLAUDE_CODE_OAUTH_TOKEN: TOKEN });
   });
 });
