@@ -89,32 +89,38 @@ describe('createGoogleVideo', () => {
       expect(result).toEqual({ inferenceId: 'interactions/omni-123' });
     });
 
-    it('should continue a Gemini Omni interaction with only the new edit instruction', async () => {
-      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/edit-456' });
+    it.each(['gemini-omni-1.1-flash', 'gemini-omni-1.2-flash'])(
+      'continues %s with only the edit instruction',
+      async (model) => {
+        mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/edit-456' });
 
-      await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-1.1-flash',
-        params: {
-          imageUrl: 'https://example.com/stale-start-frame.jpg',
-          imageUrls: ['https://example.com/stale-reference.jpg'],
-          prompt: 'Make the camera move more slowly',
-        },
-        previousInteractionId: 'interactions/source-123',
-      });
+        await createGoogleVideo(mockClient as any, 'google', {
+          model,
+          params: {
+            imageUrl: 'https://example.com/stale-start-frame.jpg',
+            imageUrls: ['https://example.com/stale-reference.jpg'],
+            prompt: 'Make the camera move more slowly',
+          },
+          previousInteractionId: 'interactions/source-123',
+        });
 
-      const request = mockClient.interactions.create.mock.calls[0][0];
-      expect(request).toMatchObject({
-        input: 'Make the camera move more slowly',
-        previous_interaction_id: 'interactions/source-123',
-      });
-      expect(request).not.toHaveProperty('generation_config');
-    });
+        const request = mockClient.interactions.create.mock.calls[0][0];
+        expect(request).toMatchObject({
+          model,
+          input: 'Make the camera move more slowly',
+          previous_interaction_id: 'interactions/source-123',
+        });
+        expect(request).not.toHaveProperty('generation_config');
+      },
+    );
 
-    it('should infer image-to-video when a stale text task is sent with media', async () => {
+    it.each([
+      ['gemini-omni-1.1-flash', 'image_to_video'],
+      ['gemini-omni-1.2-flash', 'reference_to_video'],
+    ])('infers %s single-image mode from media instead of a stale task', async (model, task) => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/image-456' });
-
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-1.1-flash',
+        model,
         params: {
           imageUrls: ['https://example.com/reference.jpg'],
           prompt: 'Animate this image',
@@ -122,11 +128,9 @@ describe('createGoogleVideo', () => {
         },
       });
 
-      expect(mockClient.interactions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          generation_config: { video_config: { task: 'image_to_video' } },
-        }),
-      );
+      expect(mockClient.interactions.create.mock.calls[0][0].generation_config).toEqual({
+        video_config: { task },
+      });
     });
 
     it('should preserve all frame inputs and select reference-to-video', async () => {
@@ -156,31 +160,18 @@ describe('createGoogleVideo', () => {
       );
     });
 
-    it('should let Gemini infer first and last frame interpolation', async () => {
+    it.each([
+      { model: 'gemini-omni-1.1-flash', start: { imageUrl: 'https://example.com/start.jpg' } },
+      { model: 'gemini-omni-1.1-flash', start: { imageUrls: ['https://example.com/start.jpg'] } },
+      { model: 'gemini-omni-1.2-flash', start: { imageUrls: ['https://example.com/start.jpg'] } },
+    ])('lets $model infer interpolation from ordered frames', async ({ model, start }) => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/frames-123' });
-
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-1.1-flash',
+        model,
         params: {
+          ...start,
+          duration: 10,
           endImageUrl: 'https://example.com/end.jpg',
-          imageUrl: 'https://example.com/start.jpg',
-          prompt: 'Transition from sunrise to night',
-        },
-      });
-
-      const request = mockClient.interactions.create.mock.calls[0][0];
-      expect(request).not.toHaveProperty('generation_config');
-      expect(request.input).toHaveLength(3);
-    });
-
-    it('should treat a single reference image plus an end image as frame interpolation', async () => {
-      mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/frames-456' });
-
-      await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-1.1-flash',
-        params: {
-          endImageUrl: 'https://example.com/end.jpg',
-          imageUrls: ['https://example.com/start.jpg'],
           prompt: 'Transition from sunrise to night',
         },
       });
@@ -207,19 +198,25 @@ describe('createGoogleVideo', () => {
       });
     });
 
-    it('should send the requested Gemini Omni output resolution', async () => {
+    it.each([
+      { model: 'gemini-omni-1.1-flash', duration: 8, extra: {} },
+      { model: 'gemini-omni-1.2-flash', duration: 3, extra: { duration: '3s' } },
+      { model: 'gemini-omni-1.2-flash', duration: 15, extra: { duration: '15s' } },
+    ])('sends $model output format at $duration seconds', async ({ model, duration, extra }) => {
       mockClient.interactions.create.mockResolvedValueOnce({ id: 'interactions/res-123' });
-
       await createGoogleVideo(mockClient as any, 'google', {
-        model: 'gemini-omni-1.1-flash',
-        params: { prompt: 'A drone shot of mountains', resolution: '1080p' },
+        model,
+        params: { duration, prompt: 'A drone shot of mountains', resolution: '1080p' },
       });
 
-      expect(mockClient.interactions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          response_format: { delivery: 'uri', resolution: '1080p', type: 'video' },
-        }),
-      );
+      const request = mockClient.interactions.create.mock.calls[0][0];
+      expect(request.model).toBe(model);
+      expect(request.response_format).toEqual({
+        delivery: 'uri',
+        resolution: '1080p',
+        type: 'video',
+        ...extra,
+      });
     });
 
     it('should create video with basic prompt', async () => {

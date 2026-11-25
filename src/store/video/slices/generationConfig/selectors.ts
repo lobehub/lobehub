@@ -1,5 +1,7 @@
 import { type RuntimeVideoGenParamsKeys } from 'model-bank';
+import { supportsConversationalVideoEditReferences } from 'model-bank/standardParameters';
 
+import type { VideoStore } from '../../store';
 import {
   getImageInputSlots,
   supportsImageInputMode,
@@ -26,10 +28,19 @@ const isSupportedParam = (paramName: RuntimeVideoGenParamsKeys) => {
 const hasImageInputMode = (s: VideoGenerationConfigState) =>
   supportsImageInputMode(s.parametersSchema);
 const imageInputMode = (s: VideoGenerationConfigState) => s.imageInputMode;
+const aspectRatioFollowsFrames = (s: VideoGenerationConfigState) =>
+  hasImageInputMode(s) &&
+  !s.parametersSchema.aspectRatio?.supportsWithFrames &&
+  s.imageInputMode === 'frames' &&
+  Boolean(s.parameters.imageUrl || s.parameters.endImageUrl);
 /** Whether an upload slot is shown for the current model and active image input mode */
-const isImageInputSlotEnabled =
-  (slot: keyof VideoImageInputSlots) => (s: VideoGenerationConfigState) =>
-    getImageInputSlots(s.parametersSchema, s.imageInputMode)[slot];
+const isImageInputSlotEnabled = (slot: keyof VideoImageInputSlots) => (s: VideoStore) => {
+  if (s.editingGenerationId) {
+    return slot === 'imageUrls' && supportsConversationalVideoEditReferences(s.model);
+  }
+
+  return getImageInputSlots(s.parametersSchema, s.imageInputMode)[slot];
+};
 
 /** Image inputs of `mode`: the submitted parameters when it is active, otherwise its stash */
 const imageInputsOfMode =
@@ -38,6 +49,7 @@ const imageInputsOfMode =
     mode === s.imageInputMode ? s.parameters : (s.stashedImageInputs[mode] ?? {});
 
 export const videoGenerationConfigSelectors = {
+  aspectRatioFollowsFrames,
   hasImageInputMode,
   imageInputMode,
   imageInputsOfMode,

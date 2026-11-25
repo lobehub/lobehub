@@ -4,6 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
+import type { PollVideoStatusResult } from '@lobechat/model-runtime';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -12,6 +13,7 @@ import {
   type SpendOrigin,
 } from '@lobechat/types';
 import debug from 'debug';
+import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -69,7 +71,7 @@ async function pollUntilCompletion(
   inferenceId: string,
   model: string,
   signal: AbortSignal,
-): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
+): Promise<Extract<PollVideoStatusResult, { status: 'success' }> | null> {
   const pollingInterval = 5000;
   const maxRetries = Math.ceil(ASYNC_TASK_TIMEOUT / pollingInterval);
 
@@ -83,7 +85,7 @@ async function pollUntilCompletion(
 
       if (result.status === 'success') {
         log('Video generation succeeded for inferenceId: %s', inferenceId);
-        return { headers: result.headers, videoUrl: result.videoUrl };
+        return result;
       }
 
       if (result.status === 'failed') {
@@ -200,6 +202,7 @@ export const videoRouter = router({
             coverUrl: processResult.coverKey,
             duration: processResult.duration,
             height: processResult.height,
+            ...(supportsConversationalVideoEdit(resolvedModelId) && { interactionId: inferenceId }),
             originalUrl: pollResult.videoUrl,
             thumbnailUrl: processResult.thumbnailKey,
             type: 'video',
@@ -253,7 +256,7 @@ export const videoRouter = router({
               model: resolvedModelId,
               prechargeResult,
               provider,
-              usage: measureVideoOutputUsage(resolvedModelId, processResult),
+              usage: pollResult.usage ?? measureVideoOutputUsage(resolvedModelId, processResult),
               userId: ctx.userId,
               workspaceId,
             });

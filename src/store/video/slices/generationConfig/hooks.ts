@@ -21,6 +21,10 @@ export function useVideoGenerationConfigParam<
   );
 
   const paramConfig = parametersSchema?.[paramName];
+  const endFrameMax =
+    paramName === 'duration' && parameters?.endImageUrl
+      ? parametersSchema.duration?.maxWithEndImage
+      : undefined;
   const paramConstraints = useMemo(() => {
     if (!paramConfig || typeof paramConfig !== 'object') return {};
 
@@ -39,12 +43,12 @@ export function useVideoGenerationConfigParam<
         : undefined;
     const enumValues = 'enum' in paramConfig ? (paramConfig.enum as string[]) : undefined;
     const min = 'min' in paramConfig ? (paramConfig.min as number) : undefined;
-    const max = 'max' in paramConfig ? (paramConfig.max as number) : undefined;
+    const max = endFrameMax ?? ('max' in paramConfig ? (paramConfig.max as number) : undefined);
     const maxCount = 'maxCount' in paramConfig ? (paramConfig.maxCount as number) : undefined;
     const step = 'step' in paramConfig ? (paramConfig.step as number) : undefined;
 
     return { enumValues, imageConstraints, max, maxCount, maxFileSize, min, step };
-  }, [paramConfig]);
+  }, [endFrameMax, paramConfig]);
 
   return {
     setValue,

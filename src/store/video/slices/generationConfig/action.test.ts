@@ -5,10 +5,14 @@ import {
   type RuntimeVideoGenParams,
   type VideoModelParamsSchema,
 } from 'model-bank';
+import googleModels from 'model-bank/google';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
+
+import { useVideoGenerationConfigParam } from './hooks';
+import { getImageInputSlots } from './imageInputMode';
 
 const modelASchema: VideoModelParamsSchema = {
   prompt: { default: '' },
@@ -68,7 +72,14 @@ const testVideoModels: AIVideoModelCard[] = [
   },
 ];
 
+const omni12Model = 'gemini-omni-1.2-flash';
+
 const mockProviders = [
+  {
+    id: 'google',
+    name: 'Google',
+    children: googleModels.filter((model) => model.id === omni12Model),
+  },
   {
     id: 'provider-a',
     name: 'Provider A',
@@ -187,6 +198,7 @@ describe('image input mode', () => {
     });
 
     expect(result.current.imageInputMode).toBe('frames');
+    expect(videoGenerationConfigSelectors.aspectRatioFollowsFrames(result.current)).toBe(true);
     expect(result.current.parameters).toMatchObject({
       endImageUrl: 'end-frame.png',
       imageUrl: 'start-frame.png',
@@ -310,5 +322,83 @@ describe('uploading image previews', () => {
       result.current.removeUploadingImagePreviews(['blob:a', 'blob:c']);
     });
     expect(result.current.uploadingImagePreviews).toEqual(['blob:b']);
+  });
+});
+
+describe('Gemini Omni 1.2 input modes and duration', () => {
+  beforeEach(() => {
+    useVideoStore.setState({
+      imageInputMode: 'frames',
+      parameters: { prompt: 'A rotating square' },
+      stashedImageInputs: {},
+    });
+    useVideoStore.getState().setModelAndProviderOnSelect(omni12Model, 'google');
+  });
+
+  it('reduces the control maximum and selected duration when an end frame is added', () => {
+    const { result } = renderHook(() => useVideoGenerationConfigParam('duration'));
+
+    expect(result.current.max).toBe(15);
+    act(() => result.current.setValue(15));
+    expect(result.current.value).toBe(15);
+
+    act(() => {
+      useVideoStore.getState().setImageInputForMode('frames', 'imageUrl', 'start.png');
+      useVideoStore.getState().setImageInputForMode('frames', 'endImageUrl', 'end.png');
+    });
+
+    expect(result.current).toMatchObject({ max: 10, value: 10 });
+    expect(videoGenerationConfigSelectors.aspectRatioFollowsFrames(useVideoStore.getState())).toBe(
+      false,
+    );
+    act(() => result.current.setValue(15));
+    expect(result.current.value).toBe(10);
+
+    act(() => useVideoStore.getState().setImageInputForMode('frames', 'endImageUrl', null));
+    expect(result.current.max).toBe(15);
+  });
+
+  it('admits six references separately from frame inputs and clamps restored frame duration', () => {
+    const references = Array.from({ length: 6 }, (_, index) => index + '.png');
+
+    useVideoStore.getState().setImageInputForMode('frames', 'imageUrl', 'start.png');
+    useVideoStore.getState().setImageInputForMode('frames', 'endImageUrl', 'end.png');
+    useVideoStore.getState().setImageInputMode('reference');
+    useVideoStore.getState().setImageInputForMode('reference', 'imageUrls', references);
+    useVideoStore.getState().setParamOnInput('duration', 15);
+
+    const referenceState = useVideoStore.getState();
+    expect(
+      getImageInputSlots(referenceState.parametersSchema, referenceState.imageInputMode),
+    ).toEqual({ endImageUrl: false, imageUrl: false, imageUrls: true });
+    expect(referenceState.parameters).toMatchObject({
+      duration: 15,
+      endImageUrl: null,
+      imageUrl: null,
+      imageUrls: references,
+    });
+
+    useVideoStore.getState().setImageInputMode('frames');
+    expect(useVideoStore.getState().parameters).toMatchObject({
+      duration: 10,
+      endImageUrl: 'end.png',
+      imageUrl: 'start.png',
+      imageUrls: [],
+    });
+  });
+
+  it('normalizes a previously stored overlong frame configuration when reused', () => {
+    useVideoStore.getState().reuseVideoSettings(omni12Model, 'google', {
+      duration: 15,
+      endImageUrl: 'end.png',
+      imageUrl: 'start.png',
+      prompt: 'A rotating square',
+    });
+
+    expect(useVideoStore.getState().parameters).toMatchObject({
+      duration: 10,
+      endImageUrl: 'end.png',
+      imageUrl: 'start.png',
+    });
   });
 });

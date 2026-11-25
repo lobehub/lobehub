@@ -57,6 +57,7 @@ interface InlineVideoFramesProps {
   onRemoveImageUrl?: (url: string) => void;
   /** Optional batch upload handler to enable multi-select on the add card. */
   onUploadFiles?: (files: File[]) => void | Promise<void>;
+  onUploadFrameFiles: (files: File[], frame: 'imageUrl' | 'endImageUrl') => Promise<void>;
   /** In-flight upload previews (object URLs) rendered with a spinner. */
   uploadingPreviews?: string[];
 }
@@ -72,6 +73,7 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     onImageUrlsChange,
     onRemoveImageUrl,
     onUploadFiles,
+    onUploadFrameFiles,
     isSupportEndImage = true,
     maxCount = 5,
     maxFileSize,
@@ -143,6 +145,9 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
                   isFromImageUrl
                     ? (data) => onImageChange(data)
                     : (data) => onImageUrlsChange?.(data)
+                }
+                onUploadFiles={
+                  isFromImageUrl ? (files) => onUploadFrameFiles(files, 'imageUrl') : onUploadFiles
                 }
               />
             );
@@ -235,6 +240,7 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
               label={t('config.endImageUrl.label')}
               onRemove={() => onEndImageChange(null)}
               onUpload={(data) => onEndImageChange(data)}
+              onUploadFiles={(files) => onUploadFrameFiles(files, 'endImageUrl')}
             />
           </>
         )}

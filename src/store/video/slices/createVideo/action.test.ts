@@ -1,9 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import type { AIVideoModelCard, RuntimeVideoGenParams, VideoModelParamsSchema } from 'model-bank';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useVideoReferenceUpload } from '@/routes/(main)/(create)/video/features/PromptInput/useVideoReferenceUpload';
 import { videoService } from '@/services/video';
 import { useVideoStore } from '@/store/video';
+
+import { videoGenerationConfigSelectors } from '../generationConfig/selectors';
 
 const omniSchema: VideoModelParamsSchema = {
   aspectRatio: { default: '16:9', enum: ['16:9', '9:16'] },
@@ -19,8 +22,20 @@ const omniModel: AIVideoModelCard = {
   type: 'video',
 };
 
-const { isGenerationPromptModerationErrorMock } = vi.hoisted(() => ({
+const omni12Model: AIVideoModelCard = {
+  ...omniModel,
+  id: 'gemini-omni-1.2-flash',
+  parameters: {
+    ...omniSchema,
+    endImageUrl: { default: null },
+    imageUrl: { default: null },
+    imageUrls: { default: [], maxCount: 6 },
+  },
+};
+
+const { isGenerationPromptModerationErrorMock, uploadWithProgressMock } = vi.hoisted(() => ({
   isGenerationPromptModerationErrorMock: vi.fn(),
+  uploadWithProgressMock: vi.fn(),
 }));
 
 vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
@@ -28,6 +43,14 @@ vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
 }));
 vi.mock('@/business/client/handleLobeHubModelDeprecatedError', () => ({
   handleLobeHubModelDeprecatedError: vi.fn(),
+}));
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: true }),
+}));
+vi.mock('@/store/file', () => ({
+  useFileStore: (
+    selector: (state: { uploadWithProgress: typeof uploadWithProgressMock }) => unknown,
+  ) => selector({ uploadWithProgress: uploadWithProgressMock }),
 }));
 vi.mock('@/services/video', () => ({
   videoService: {
@@ -38,7 +61,7 @@ vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {
     enabledVideoModelList: vi.fn(() => [
       {
-        children: [omniModel],
+        children: [omniModel, omni12Model],
         id: 'google',
         name: 'Google',
       },
@@ -67,7 +90,7 @@ describe('CreateVideoAction', () => {
       parametersSchema: { prompt: { default: '' } },
       provider: 'draft-provider',
       refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
-      uploadingImagePreviews: ['blob:draft'],
+      uploadingImagePreviews: [],
     });
   });
 
@@ -103,8 +126,28 @@ describe('CreateVideoAction', () => {
         prompt: 'An unrelated draft',
       },
       provider: 'draft-provider',
-      uploadingImagePreviews: ['blob:draft'],
     });
+  });
+
+  it('starts an Omni 1.2 edit with an empty reference slot and restores the draft on cancellation', () => {
+    const draft = useVideoStore.getState();
+    draft.startEditingVideo({
+      generationId: 'generation-source',
+      model: omni12Model.id,
+      provider: 'google',
+      sourceParameters: { imageUrls: ['source-reference.png'], prompt: 'Source video' },
+    });
+
+    const edit = useVideoStore.getState();
+    const slot = videoGenerationConfigSelectors.isImageInputSlotEnabled;
+    expect(edit.imageInputMode).toBe('reference');
+    expect(edit.parameters.imageUrls).toEqual([]);
+    expect(slot('imageUrls')(edit)).toBe(true);
+    expect(slot('imageUrl')(edit)).toBe(false);
+    expect(slot('endImageUrl')(edit)).toBe(false);
+
+    edit.cancelEditingVideo();
+    expect(useVideoStore.getState().parameters).toEqual(draft.parameters);
   });
 
   it('should submit the source generation and restore the original draft after success', async () => {
@@ -142,7 +185,376 @@ describe('CreateVideoAction', () => {
       imageUrls: ['draft-reference.png'],
       prompt: 'An unrelated draft',
     });
-    expect(result.current.uploadingImagePreviews).toEqual(['blob:draft']);
+    expect(result.current.uploadingImagePreviews).toEqual([]);
+  });
+
+  describe('pending reference uploads', () => {
+    const source = { generationId: 'generation-source', model: omni12Model.id, provider: 'google' };
+
+    const deferUpload = (preview: string) => {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce(preview);
+      let finish!: (result: { url: string }) => void;
+      uploadWithProgressMock.mockReturnValueOnce(
+        new Promise<{ url: string }>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      return finish;
+    };
+
+    const image = new File(['fixture'], 'reference.png', { type: 'image/png' });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('waits for the reference before submitting the edit', async () => {
+      const edit = useVideoStore.getState();
+      edit.startEditingVideo(source);
+      edit.setParamOnInput('prompt', 'Use the new reference');
+      const { result } = renderHook(useVideoReferenceUpload);
+      const finish = deferUpload('blob:edit-reference');
+      let upload!: Promise<void>;
+      act(() => {
+        upload = result.current.handleUploadFiles([image]);
+      });
+
+      await act(() => useVideoStore.getState().createVideo());
+      const attemptsWhilePending = vi.mocked(videoService.createVideo).mock.calls.length;
+      await act(async () => {
+        finish({ url: 'https://storage.example/edit-reference.png' });
+        await upload;
+      });
+
+      expect(attemptsWhilePending).toBe(0);
+      expect(useVideoStore.getState().uploadingImagePreviews).toEqual([]);
+
+      await act(() => useVideoStore.getState().createVideo());
+      expect(videoService.createVideo).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            imageUrls: ['https://storage.example/edit-reference.png'],
+          }),
+          previousGenerationId: source.generationId,
+        }),
+      );
+    });
+
+    it('drops a cancelled upload after the same source is reopened', async () => {
+      useVideoStore.getState().startEditingVideo(source);
+      const { result } = renderHook(useVideoReferenceUpload);
+      const finishCancelled = deferUpload('blob:cancelled-reference');
+      let cancelled!: Promise<void>;
+      act(() => {
+        cancelled = result.current.handleUploadFiles([image]);
+      });
+
+      act(() => {
+        useVideoStore.getState().cancelEditingVideo();
+        useVideoStore.getState().startEditingVideo(source);
+      });
+      const finishCurrent = deferUpload('blob:current-reference');
+      let current!: Promise<void>;
+      act(() => {
+        current = result.current.handleUploadFiles([image]);
+      });
+
+      await act(async () => {
+        finishCancelled({ url: 'https://storage.example/cancelled-reference.png' });
+        await cancelled;
+      });
+      const stillPending = useVideoStore.getState().uploadingImagePreviews;
+      await act(async () => {
+        finishCurrent({ url: 'https://storage.example/current-reference.png' });
+        await current;
+      });
+
+      expect(stillPending).toEqual(['blob:current-reference']);
+      expect(useVideoStore.getState().uploadingImagePreviews).toEqual([]);
+      expect(useVideoStore.getState().parameters.imageUrls).toEqual([
+        'https://storage.example/current-reference.png',
+      ]);
+    });
+
+    it.each(['imageUrl', 'endImageUrl'] as const)(
+      'tracks a replacement upload and updates only %s',
+      async (frame) => {
+        const original = {
+          endImageUrl: 'https://storage.example/end.png',
+          imageUrl: 'https://storage.example/start.png',
+          prompt: 'Original draft',
+        };
+        useVideoStore.setState({
+          imageInputMode: 'frames',
+          model: omni12Model.id,
+          parameters: original,
+          parametersSchema: omni12Model.parameters,
+          provider: 'google',
+        });
+        const { result } = renderHook(useVideoReferenceUpload);
+        const finish = deferUpload('blob:frame-replacement');
+        let upload!: Promise<void>;
+        act(() => {
+          upload = result.current.handleUploadFrameFiles([image], frame);
+        });
+
+        expect(useVideoStore.getState().uploadingImagePreviews).toEqual(['blob:frame-replacement']);
+        await act(() => useVideoStore.getState().createVideo());
+        expect(videoService.createVideo).not.toHaveBeenCalled();
+        const url = 'https://storage.example/replacement.png';
+        await act(async () => {
+          finish({ url });
+          await upload;
+        });
+
+        expect(useVideoStore.getState().uploadingImagePreviews).toEqual([]);
+        expect(useVideoStore.getState().parameters).toEqual({ ...original, [frame]: url });
+      },
+    );
+
+    it.each([
+      {
+        destination: 'a new topic',
+        navigate: () => useVideoStore.getState().openNewGenerationTopic(),
+        topicId: null,
+      },
+      {
+        destination: 'another topic',
+        navigate: () => useVideoStore.getState().switchGenerationTopic('topic-2'),
+        topicId: 'topic-2',
+      },
+    ])(
+      'restores the creation draft when leaving an edit for $destination',
+      async ({ navigate, topicId }) => {
+        const store = useVideoStore.getState();
+        store.startEditingVideo(source);
+        store.setParamOnInput('prompt', 'An edit instruction');
+        store.setParamOnInput('imageUrls', ['completed-edit-reference.png']);
+        const { result } = renderHook(useVideoReferenceUpload);
+        const finish = deferUpload('blob:topic-edit-reference');
+        let upload!: Promise<void>;
+        act(() => {
+          upload = result.current.handleUploadFiles([image]);
+        });
+        const pendingInEdit = useVideoStore.getState().uploadingImagePreviews;
+
+        act(navigate);
+        const afterNavigation = useVideoStore.getState();
+        await act(async () => {
+          finish({ url: 'https://storage.example/late-edit-reference.png' });
+          await upload;
+        });
+
+        expect(pendingInEdit).toEqual(['blob:topic-edit-reference']);
+        expect(afterNavigation).toMatchObject({
+          activeGenerationTopicId: topicId,
+          editingDraftSnapshot: undefined,
+          editingGenerationId: undefined,
+          model: 'draft-model',
+          uploadingImagePreviews: [],
+        });
+        expect(useVideoStore.getState().parameters).toEqual({
+          imageUrls: ['draft-reference.png'],
+          prompt: 'An unrelated draft',
+        });
+      },
+    );
+
+    it('keeps an upload in the shared creation draft while navigating topics', async () => {
+      useVideoStore.setState({
+        imageInputMode: 'reference',
+        model: omni12Model.id,
+        parametersSchema: omni12Model.parameters,
+        provider: 'google',
+      });
+      const { result } = renderHook(useVideoReferenceUpload);
+      const finish = deferUpload('blob:creation-reference');
+      let upload!: Promise<void>;
+      act(() => {
+        const store = useVideoStore.getState();
+        upload = result.current.handleUploadFiles([image]);
+        store.switchGenerationTopic('topic-2');
+        store.openNewGenerationTopic();
+      });
+      const pendingAfterNavigation = useVideoStore.getState().uploadingImagePreviews;
+
+      await act(async () => {
+        finish({ url: 'https://storage.example/creation-reference.png' });
+        await upload;
+      });
+
+      expect(pendingAfterNavigation).toEqual(['blob:creation-reference']);
+      expect(useVideoStore.getState().parameters.imageUrls).toEqual([
+        'draft-reference.png',
+        'https://storage.example/creation-reference.png',
+      ]);
+    });
+
+    it.each([
+      { draft: 'an edit', editing: true },
+      { draft: 'a creation', editing: false },
+    ])(
+      'keeps reused references when an upload from $draft draft finishes late',
+      async ({ editing }) => {
+        useVideoStore.setState({
+          imageInputMode: 'reference',
+          model: omni12Model.id,
+          parametersSchema: omni12Model.parameters,
+          provider: 'google',
+        });
+        const store = useVideoStore.getState();
+        if (editing) store.startEditingVideo(source);
+        const { result } = renderHook(useVideoReferenceUpload);
+        const finish = deferUpload('blob:replaced-reference');
+        let upload!: Promise<void>;
+        act(() => {
+          upload = result.current.handleUploadFiles([image]);
+          store.reuseVideoSettings(omni12Model.id, 'google', {
+            imageUrls: ['reused-reference.png'],
+            prompt: 'A saved prompt',
+          });
+        });
+
+        await act(async () => {
+          finish({ url: 'https://storage.example/late-replaced-reference.png' });
+          await upload;
+        });
+
+        expect(useVideoStore.getState().editingGenerationId).toBeUndefined();
+        expect(useVideoStore.getState().parameters).toMatchObject({
+          imageUrls: ['reused-reference.png'],
+          prompt: 'A saved prompt',
+        });
+      },
+    );
+
+    it('uses creation references when selecting a model while editing', async () => {
+      useVideoStore.setState({ imageInputMode: 'reference' });
+      const store = useVideoStore.getState();
+      store.startEditingVideo(source);
+      store.setParamOnInput('imageUrls', ['completed-edit-reference.png']);
+      store.setParamOnInput('prompt', 'An edit instruction');
+      const { result } = renderHook(useVideoReferenceUpload);
+      const finish = deferUpload('blob:edit-model-reference');
+      let upload!: Promise<void>;
+      act(() => {
+        upload = result.current.handleUploadFiles([image]);
+        store.setModelAndProviderOnSelect(omni12Model.id, 'google');
+      });
+
+      await act(async () => {
+        finish({ url: 'https://storage.example/late-edit-model-reference.png' });
+        await upload;
+      });
+
+      expect(useVideoStore.getState().editingGenerationId).toBeUndefined();
+      expect(useVideoStore.getState().parameters).toMatchObject({
+        imageUrls: ['draft-reference.png'],
+        prompt: 'An unrelated draft',
+      });
+    });
+
+    it('restores completed draft references without reviving stale previews', async () => {
+      useVideoStore.setState({
+        imageInputMode: 'reference',
+        model: omni12Model.id,
+        parametersSchema: omni12Model.parameters,
+        provider: 'google',
+        uploadingImagePreviews: [],
+      });
+      const { result } = renderHook(useVideoReferenceUpload);
+      const finish = deferUpload('blob:original-pending');
+      let upload!: Promise<void>;
+      act(() => {
+        upload = result.current.handleUploadFiles([image]);
+      });
+      act(() => {
+        useVideoStore.getState().startEditingVideo(source);
+      });
+      await act(async () => {
+        finish({ url: 'https://storage.example/original-pending.png' });
+        await upload;
+      });
+      act(() => {
+        useVideoStore.getState().cancelEditingVideo();
+      });
+
+      expect(useVideoStore.getState().uploadingImagePreviews).toEqual([]);
+      expect(useVideoStore.getState().parameters).toMatchObject({
+        imageUrls: ['draft-reference.png'],
+        prompt: 'An unrelated draft',
+      });
+    });
+  });
+
+  describe('submitted draft cleanup', () => {
+    const source = { generationId: 'generation-source', model: omni12Model.id, provider: 'google' };
+
+    const submitEdit = () => {
+      const store = useVideoStore.getState();
+      store.startEditingVideo(source);
+      store.setParamOnInput('prompt', 'The submitted edit');
+      const result = { success: true } as Awaited<ReturnType<typeof videoService.createVideo>>;
+      let complete!: () => void;
+      let reject!: (error: Error) => void;
+      vi.mocked(videoService.createVideo).mockReturnValueOnce(
+        new Promise((resolve, rejectRequest) => {
+          complete = () => resolve(result);
+          reject = rejectRequest;
+        }),
+      );
+      return { complete, reject, submitting: store.createVideo() };
+    };
+
+    it('restores the creation draft after a successful edit of the current draft', async () => {
+      const { complete, submitting } = submitEdit();
+      complete();
+      await submitting;
+
+      expect(useVideoStore.getState().editingGenerationId).toBeUndefined();
+      expect(useVideoStore.getState().parameters.prompt).toBe('An unrelated draft');
+    });
+
+    it('preserves the restored creation draft after a submitted edit completes', async () => {
+      const { complete, submitting } = submitEdit();
+      useVideoStore.getState().switchGenerationTopic('topic-2');
+      complete();
+      await submitting;
+
+      expect(useVideoStore.getState().parameters).toEqual({
+        imageUrls: ['draft-reference.png'],
+        prompt: 'An unrelated draft',
+      });
+    });
+
+    it('preserves a new edit of the same source after an earlier submission completes', async () => {
+      const { complete, submitting } = submitEdit();
+      const store = useVideoStore.getState();
+      store.cancelEditingVideo();
+      store.startEditingVideo(source);
+      store.setParamOnInput('prompt', 'The next edit');
+      complete();
+      await submitting;
+
+      expect(useVideoStore.getState().editingGenerationId).toBe(source.generationId);
+      expect(useVideoStore.getState().parameters.prompt).toBe('The next edit');
+    });
+
+    it('keeps a stale moderation result out of the draft restored by topic navigation', async () => {
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+      const { reject, submitting } = submitEdit();
+      useVideoStore.getState().openNewGenerationTopic();
+      reject(new Error('blocked'));
+      await expect(submitting).rejects.toThrow('blocked');
+
+      expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
+      expect(useVideoStore.getState().parameters.prompt).toBe('An unrelated draft');
+    });
+
+    it('clears the prompt after submitting the current creation draft', async () => {
+      await useVideoStore.getState().createVideo();
+      expect(useVideoStore.getState().parameters.prompt).toBe('');
+    });
   });
 
   it('should preserve the edit instruction and edit state when creation fails', async () => {

@@ -31,6 +31,8 @@ interface UseReferenceImageUploadOptions {
   addUploadingPreviews: (urls: string[]) => void;
   /** Whether the user is permitted to add references. */
   canCreate: boolean;
+  /** Whether this batch still belongs to the active draft when the uploads settle. */
+  isUploadCurrent?: (previews: string[]) => boolean;
   /** Largest accepted file size in bytes; larger files are skipped. */
   maxFileSize?: number;
   /** Set image dimensions from the first uploaded image (image page only). */
@@ -72,6 +74,7 @@ export const useReferenceImageUpload = ({
   uploadingPreviews,
   addUploadingPreviews,
   removeUploadingPreviews,
+  isUploadCurrent,
   onFirstDimensions,
   onLimitExceeded,
 }: UseReferenceImageUploadOptions) => {
@@ -89,8 +92,8 @@ export const useReferenceImageUpload = ({
   // silently accepts and discards the drop.
   const canDropImage = canCreate && maxCount > 0;
 
-  const handleUploadFiles = useCallback(
-    async (files: File[]) => {
+  const uploadBatch = useCallback(
+    async (files: File[], replaceImage?: (url: string) => void) => {
       if (!canCreate) return;
 
       // Keep files whose type is an image OR empty: OS/browser drops of images
@@ -109,7 +112,9 @@ export const useReferenceImageUpload = ({
       if (uploadableFiles.length === 0) return;
 
       // Account for both landed images and any in-flight uploads.
-      const remaining = maxCount - imagePreviewUrls.length - uploadingPreviews.length;
+      const remaining = replaceImage
+        ? 1
+        : maxCount - imagePreviewUrls.length - uploadingPreviews.length;
       if (remaining <= 0) {
         onLimitExceeded?.(maxCount);
         return;
@@ -118,7 +123,7 @@ export const useReferenceImageUpload = ({
       // Only take as many as there is still room for, and warn when truncating.
       const accepted = uploadableFiles.slice(0, remaining);
       if (uploadableFiles.length > remaining) {
-        onLimitExceeded?.(maxCount);
+        onLimitExceeded?.(replaceImage ? 1 : maxCount);
       }
 
       // Show instant local previews (with spinner) for the whole batch.
@@ -142,6 +147,9 @@ export const useReferenceImageUpload = ({
               : result.url;
           }),
         );
+
+        if (isUploadCurrent?.(previews) === false) return;
+
         const results = settled.map((outcome) =>
           outcome.status === 'fulfilled' ? outcome.value : null,
         );
@@ -158,6 +166,11 @@ export const useReferenceImageUpload = ({
         }
 
         if (firstDimensions) onFirstDimensions?.(firstDimensions);
+
+        if (replaceImage) {
+          if (uploadedUrls[0]) replaceImage(uploadedUrls[0]);
+          return;
+        }
 
         // Distribute uploaded URLs across slots by priority, appending to the
         // slot's *current* store content (read fresh, not the render-time
@@ -189,13 +202,17 @@ export const useReferenceImageUpload = ({
       uploadWithProgress,
       addUploadingPreviews,
       removeUploadingPreviews,
+      isUploadCurrent,
       onFirstDimensions,
       onLimitExceeded,
     ],
   );
 
+  const handleUploadFiles = useCallback((files: File[]) => uploadBatch(files), [uploadBatch]);
+
   return {
     canDropImage,
+    handleReplaceImage: uploadBatch,
     handleUploadFiles,
     imagePreviewUrls,
     maxCount,

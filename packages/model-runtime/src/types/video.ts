@@ -15,6 +15,8 @@ export type CreateVideoErrorPayload = {
 
 export type CreateVideoPayload = {
   callbackUrl?: string;
+  /** New reference images for this edit. The source media is already in the interaction. */
+  editReferenceImageUrls?: string[];
   model: string;
   params: RuntimeVideoGenParams;
   previousInteractionId?: string;

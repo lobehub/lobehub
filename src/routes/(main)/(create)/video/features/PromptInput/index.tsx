@@ -376,7 +376,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useVideoStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
-  const { handleUploadFiles, uploadingPreviews } = useVideoReferenceUpload();
+  const { handleUploadFiles, handleUploadFrameFiles, uploadingPreviews } =
+    useVideoReferenceUpload();
   const versionMap = useVideoVersionMap();
   const inputWrapperRef = useRef<HTMLDivElement>(null);
   useFetchAiVideoConfig();
@@ -494,12 +495,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
   const isReferenceMode = hasImageInputMode && imageInputMode === 'reference';
-  /**
-   * Frame-mode requests of models with both frames and references (MiniMax H3) take the output
-   * aspect ratio from the frames, so the selector would have no effect.
-   */
-  const aspectRatioFollowsFrames =
-    hasImageInputMode && imageInputMode === 'frames' && (!!imageUrl || !!endImageUrl);
+  const aspectRatioFollowsFrames = useVideoStore(
+    videoGenerationConfigSelectors.aspectRatioFollowsFrames,
+  );
   const editingGeneration = editingBatch?.generations.find(
     (generation) => generation.id === editingGenerationId,
   );
@@ -582,7 +580,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       <Flexbox gap={8}>
         <div ref={inputWrapperRef} onKeyDownCapture={handleEditingKeyDown}>
           <GenerationPromptInput
-            disableGenerate={!isInit || isModelUnavailable}
+            disableGenerate={!isInit || isModelUnavailable || uploadingPreviews.length > 0}
             disabled={!canCreate}
             isCreating={isCreating}
             isDarkMode={isDarkMode}
@@ -616,9 +614,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               ) : undefined
             }
             inlineContent={
-              !editingGenerationId && showInlineFrames ? (
+              showInlineFrames ? (
                 <Flexbox gap={6}>
-                  {hasImageInputMode && (
+                  {hasImageInputMode && !editingGenerationId && (
                     <Segmented<VideoImageInputMode>
                       disabled={!canCreate}
                       size={'small'}
@@ -648,6 +646,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     onImageUrlsChange={handleAddImage}
                     onRemoveImageUrl={handleRemoveImage}
                     onUploadFiles={handleUploadFiles}
+                    onUploadFrameFiles={handleUploadFrameFiles}
                     onImageChange={(data) => {
                       if (data === null) {
                         handleRemoveImage(imageUrl || '');
