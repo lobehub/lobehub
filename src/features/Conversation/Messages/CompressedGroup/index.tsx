@@ -35,6 +35,7 @@ import {
 import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
 import { useIsSlow } from './useIsSlow';
+import { useRevealOnExpand } from './useRevealOnExpand';
 
 const styles = stylex.create({
   collapsedButton: {
@@ -77,9 +78,11 @@ const styles = stylex.create({
 export interface CompressedGroupMessageProps {
   id: string;
   index: number;
+  /** The group is the last row, so an opened summary grows under the chat input. */
+  isLatestItem?: boolean;
 }
 
-const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
+const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id, isLatestItem }) => {
   const { t } = useTranslation('chat');
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
   // The chat list renders the original conversation as rows above this group,
@@ -122,6 +125,12 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const storeApi = useConversationStoreApi();
   useFollowCompressingRow(isGeneratingSummary && historyInline, storeApi.getState);
   const isSlow = useIsSlow(isGeneratingSummary);
+  const toggleSummary = useRevealOnExpand({
+    expanded,
+    getScrollState: storeApi.getState,
+    isLastRow: !!isLatestItem,
+    toggleExpanded,
+  });
 
   const showPanelContent = shouldShowCompressedGroupPanel({
     expanded,
@@ -209,7 +218,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           {...stylex.props(styles.statusRow, styles.statusRowButton)}
           aria-expanded={expanded}
           type={'button'}
-          onClick={toggleExpanded}
+          onClick={toggleSummary}
         >
           <Icon icon={FoldVertical} size={16} />
           <span>{t('compression.compacted')}</span>

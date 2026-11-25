@@ -245,7 +245,7 @@ const MessageItem = memo<MessageItemProps>(
         }
 
         case 'compressedGroup': {
-          return <CompressedGroupMessage id={id} index={index} />;
+          return <CompressedGroupMessage id={id} index={index} isLatestItem={isLatestItem} />;
         }
 
         case 'tool': {
