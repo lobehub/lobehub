@@ -1,10 +1,4 @@
-import { type ReactNode } from 'react';
-
 import AsyncError from '@/components/AsyncError';
-import {
-  repositoriesLabel,
-  repositorySlug,
-} from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import EnvironmentForm, {
   type EnvironmentFormValue,
 } from '@/features/EnvironmentManager/EnvironmentForm';
@@ -15,25 +9,46 @@ import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projec
 
 import { ExecutionEnvironments } from './ExecutionEnvironments';
 
-interface ProjectWorkingDirectoriesProps {
-  /** Whether the caller may change the project, and so its environment. */
+interface ProjectSettingsTabProps {
+  /** Whether the caller may change the project, and so its devices and environment. */
   canManage?: boolean;
   projectId: string;
 }
 
 /**
- * The project's execution environments, in the priority a new conversation
- * follows: the cloud sandbox — whose row unfolds into the project's
- * environment, the repositories it clones, the setup that runs and the
- * variables every command sees — and the device folders someone added.
+ * The project's run devices, in priority order: the cloud sandbox and each
+ * device with the workspace root to work under.
  */
-export function ProjectWorkingDirectories({
-  canManage,
-  projectId,
-}: ProjectWorkingDirectoriesProps) {
+export function ProjectRunDevices({ canManage, projectId }: ProjectSettingsTabProps) {
+  // A new device is linked to the project's environment, made with the project.
+  useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const [environment] = useProjectEnvironments(projectId);
+
+  return (
+    <ExecutionEnvironments
+      canManage={!!canManage}
+      environmentId={environment?.id}
+      projectId={projectId}
+    />
+  );
+}
+
+/**
+ * The project's one environment: what any run device prepares before work
+ * starts — the repositories to check out, the setup that runs, the variables
+ * every command sees — and run notes the agent reads when it picks a device.
+ */
+export function ProjectEnvironmentSettings({ canManage, projectId }: ProjectSettingsTabProps) {
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
+
+  if (request.error && !environment)
+    return <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
+  if (!request.hasData || !environment) return <EnvironmentListSkeleton />;
+
+  const value: EnvironmentFormValue = environment;
+  if (!canManage) return <EnvironmentSummary environment={value} />;
 
   const save = async (changes: {
     configuration?: SandboxEnvironmentSpecification;
@@ -46,39 +61,13 @@ export function ProjectWorkingDirectories({
     });
   };
 
-  let cloud: ReactNode;
-  if (request.error && !environment) {
-    cloud = <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
-  } else if (!request.hasData || !environment) {
-    cloud = <EnvironmentListSkeleton />;
-  } else {
-    const value: EnvironmentFormValue = environment;
-    cloud = canManage ? (
-      <EnvironmentForm
-        collapseSetup
-        hideBasics
-        hideRepositoryHints
-        environment={value}
-        onSave={save}
-      />
-    ) : (
-      <EnvironmentSummary environment={value} />
-    );
-  }
-
-  // The sandbox is told apart by the repositories it clones: their name and
-  // the first one's logo on its card.
-  const sandboxRepository = environment
-    ? { label: repositoriesLabel(environment), slug: repositorySlug(environment) }
-    : undefined;
-
   return (
-    <ExecutionEnvironments
-      canManage={!!canManage}
-      environmentId={environment?.id}
-      projectId={projectId}
-      sandboxDetails={cloud}
-      sandboxRepository={sandboxRepository}
+    <EnvironmentForm
+      hideBasics
+      hideRepositoryHints
+      showRunNotes
+      environment={value}
+      onSave={save}
     />
   );
 }

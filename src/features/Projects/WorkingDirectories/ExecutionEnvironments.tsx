@@ -12,24 +12,21 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
-import {
-  BoxIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { BoxIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import RepositoryAvatar from '@/components/RepositoryAvatar';
-import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { useDeviceMetricSeries } from '@/features/DeviceManager/DeviceHealth/shared';
+import { getDeviceIcon, getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
+import ManagedDeviceBadge from '@/features/DeviceManager/ManagedDeviceBadge';
 import { useSingleton } from '@/hooks/useSingleton';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+import { formatSize } from '@/utils/format';
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import {
@@ -39,6 +36,7 @@ import {
 } from './directoryAvailability';
 import { openEditDirectoryModal } from './EditDirectoryModal';
 import type { ProjectExecutionEnvironment } from './executionEnvironmentOrder';
+import { runDeviceFacts } from './runDeviceFacts';
 import { useProjectExecutionEnvironments } from './useProjectExecutionEnvironments';
 
 /**
@@ -69,34 +67,45 @@ const DevicePresence = ({ device }: { device?: DeviceListItem }) => {
   );
 };
 
+/**
+ * The machine's size — cores and memory — from its last health report, or
+ * nothing for a device that never sent one. Read per card: each row fetches
+ * (and caches) its own device's series, the same one the device page shows.
+ */
+const DeviceSpec = ({ device }: { device: DeviceListItem }) => {
+  const { t } = useTranslation('setting');
+  const { data } = useDeviceMetricSeries(device.deviceId, device.scope);
+  const parts = [
+    data?.cpuCount ? t('devices.detail.cores', { count: data.cpuCount }) : undefined,
+    data?.memoryTotalBytes ? formatSize(data.memoryTotalBytes, 0) : undefined,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
+      {`· ${parts.join(' · ')}`}
+    </Text>
+  );
+};
+
 interface ExecutionEnvironmentsProps {
   canManage: boolean;
-  /** The project's environment, which a new folder is linked to. */
+  /** The project's environment, which a new run device is linked to. */
   environmentId?: string;
   projectId: string;
-  /** What the cloud sandbox row unfolds into: the project environment's form. */
-  sandboxDetails: ReactNode;
-  /**
-   * The repositories the cloud sandbox clones: `owner/name` (`+N` for more)
-   * as its card's name, and the first one's slug for its logo.
-   */
-  sandboxRepository?: { label?: string; slug?: string };
 }
 
 /**
- * Where the project's conversations run, as one list in priority order: the
- * cloud sandbox, and every device folder someone added. Dragging a row
- * changes the order a new conversation follows — the first folder that is
- * ready on an online device, or the cloud sandbox, which always is. A project
- * starts with only the sandbox; a folder is added on purpose, device by
- * device.
+ * The project's run devices, as one list in priority order: the cloud
+ * sandbox, and every device someone added with the workspace root to work
+ * under — the same machine may appear more than once, with different roots.
+ * Dragging a row changes the order runs follow. What gets prepared on the
+ * chosen device — repositories, setup, variables — is the project's
+ * environment, edited on its own tab; a device records none of it.
  */
 export function ExecutionEnvironments({
   canManage,
   environmentId,
   projectId,
-  sandboxDetails,
-  sandboxRepository,
 }: ExecutionEnvironmentsProps) {
   const { t } = useTranslation('project');
   const { error, loaded, ordered, reorder, revalidate } =
@@ -106,16 +115,13 @@ export function ExecutionEnvironments({
   const isDeviceListLoaded = useDeviceStore(deviceSelectors.isDeviceListLoaded);
   const removeDirectory = useProjectDirectoryStore((s) => s.removeDirectory);
   const bind = useProjectDirectoryStore((s) => s.bind);
-  const [sandboxOpen, setSandboxOpen] = useState<boolean>();
+  const currentUserId = useUserStore(userProfileSelectors.userId);
   // The order being dragged, shown at once; the saved one replaces it.
   const [pendingOrder, setPendingOrder] = useState<string[]>();
 
   const directories = ordered.flatMap((item) =>
     item.kind === 'directory' ? [item.directory] : [],
   );
-  // The sandbox's configuration is open until folded when it is the only
-  // execution environment: there is nothing else on the page to look at.
-  const isSandboxOpen = sandboxOpen ?? directories.length === 0;
 
   // A folder registered before environments existed is not enabled for the
   // project's environment yet, so nothing can start in it. There is nothing to
@@ -262,40 +268,27 @@ export function ExecutionEnvironments({
     </Text>
   );
 
-  const renderSandbox = () => (
-    <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
-      {card({
-        actions: (
-          <ActionIcon
-            icon={isSandboxOpen ? ChevronDownIcon : ChevronRightIcon}
-            size="small"
-            title={t('settings.configureSandbox')}
-            onClick={() => setSandboxOpen(!isSandboxOpen)}
-          />
-        ),
-        icon: sandboxRepository?.slug ? (
-          <RepositoryAvatar size={24} url={sandboxRepository.slug} />
-        ) : (
-          <Icon icon={BoxIcon} size={20} />
-        ),
-        // Named after its repositories once it has some, so two sandboxes
-        // would never read alike; "cloud sandbox" then says what it is.
-        meta: metaText(
-          sandboxRepository?.label
-            ? t('settings.cloudSandboxGroup')
-            : t('settings.sandboxNoRepository'),
-        ),
-        title: sandboxRepository?.label || t('settings.cloudSandboxGroup'),
-      })}
-      {isSandboxOpen && <div style={{ paddingBlockEnd: 4 }}>{sandboxDetails}</div>}
-    </Flexbox>
-  );
+  // The sandbox has nothing of its own to set: it starts empty each run and
+  // prepares the project's environment, which its tab edits.
+  const renderSandbox = () =>
+    card({
+      icon: <Icon icon={BoxIcon} size={20} />,
+      meta: metaText(t('settings.sandboxRunHint')),
+      title: t('settings.cloudSandboxGroup'),
+    });
 
   const renderDirectory = (directory: ProjectDirectory) => {
     const device = devices.find((item) => item.deviceId === directory.deviceId);
     const presence = device?.onlineUnknown
       ? undefined
       : t(device?.online ? 'settings.deviceOnline' : 'settings.deviceOffline');
+    const platform = getPlatformLabel(device?.platform ?? directory.platform);
+    const facts = runDeviceFacts(device, currentUserId);
+    const separator = (
+      <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
+        ·
+      </Text>
+    );
     return card({
       actions: canManage ? (
         <>
@@ -322,13 +315,37 @@ export function ExecutionEnvironments({
               {presence}
             </Text>
           )}
-          <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
-            ·
-          </Text>
+          {platform && (
+            <>
+              {separator}
+              <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
+                {platform}
+              </Text>
+            </>
+          )}
+          {device && <DeviceSpec device={device} />}
+          {separator}
           {metaText(directory.path)}
         </>
       ),
-      tags: unavailableBadge(directory, device),
+      tags: (
+        <>
+          {unavailableBadge(directory, device)}
+          {facts.managed && (
+            <>
+              <ManagedDeviceBadge />
+              <Tooltip title={t('settings.paidDeviceTooltip')}>
+                <Tag color="warning" size="small">
+                  {t('settings.paidDeviceTag')}
+                </Tag>
+              </Tooltip>
+            </>
+          )}
+          {facts.sharedBy && (
+            <Tag size="small">{t('settings.sharedDeviceTag', { name: facts.sharedBy })}</Tag>
+          )}
+        </>
+      ),
       title: device?.friendlyName || device?.hostname || directory.deviceName || directory.deviceId,
     });
   };

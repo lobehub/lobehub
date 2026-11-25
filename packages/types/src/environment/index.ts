@@ -89,6 +89,13 @@ export interface EnvironmentConfiguration {
   maintenanceCommand?: string;
   /** Requirements, not a selection of a particular machine or provider. */
   requirements?: EnvironmentResourceRequirements;
+  /**
+   * Free-text notes on what running this environment takes — "the dev server
+   * needs at least 8 GB of memory". Read by the agent when it picks one of the
+   * project's run devices; never interpreted by the platform. Product-only like
+   * {@link EnvironmentConfiguration.kind}: stripped before the execution plane.
+   */
+  runNotes?: string;
   sources?: EnvironmentSource[];
 }
 
@@ -127,7 +134,8 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 
 /**
  * A definition as the execution plane receives it: without the fields that are
- * only the product's own (today, {@link EnvironmentConfiguration.kind}). The
+ * only the product's own ({@link EnvironmentConfiguration.kind} and
+ * {@link EnvironmentConfiguration.runNotes}). The
  * execution plane digests what it is sent to decide which build a snapshot
  * belongs to, so a presentation field passed through would mark every
  * existing instance as built from a different specification.
@@ -135,7 +143,7 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 export const toExecutionConfiguration = (
   configuration: EnvironmentConfiguration,
 ): EnvironmentConfiguration => {
-  const { kind: _kind, ...rest } = withRepositorySetup(configuration);
+  const { kind: _kind, runNotes: _runNotes, ...rest } = withRepositorySetup(configuration);
 
   return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
 };

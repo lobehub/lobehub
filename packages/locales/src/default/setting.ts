@@ -5627,4 +5627,8 @@ When I am ___, I need ___
     "Couldn't save the label. Check your network and try again.",
   'workspace.auditLog.actions.budget.model_policy_removed': 'Model tier rule removed',
   'workspace.auditLog.actions.budget.model_policy_updated': 'Model tier rule updated',
+  'environments.form.runNotes': 'Run notes',
+  'environments.form.runNotesHint':
+    'What running this environment takes, in your words. The agent reads it when choosing a run device and checks the device itself too.',
+  'environments.form.runNotesPlaceholder': 'e.g. The dev server needs at least 8 GB of memory',
 };

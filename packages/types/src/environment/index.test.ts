@@ -25,6 +25,12 @@ describe('toExecutionConfiguration', () => {
   it('leaves a definition without a kind as it was', () => {
     expect(toExecutionConfiguration(before)).toEqual(before);
   });
+
+  it('keeps run notes, which only the agent reads, off the execution plane', () => {
+    expect(
+      toExecutionConfiguration({ ...before, runNotes: 'The dev server needs 8 GB of memory' }),
+    ).toEqual(before);
+  });
 });
 
 describe('layoutRepositorySources', () => {

@@ -1,21 +1,21 @@
 export default {
   'directories.currentFolder': 'Current folder',
   'settings.startDirectoryConversation': 'New topic here',
-  'settings.editDirectory': 'Edit folder',
+  'settings.editDirectory': 'Edit run device',
   'settings.editDirectoryBusy':
     'A topic is running in this folder. Wait for it to finish and try again.',
   'settings.editDirectoryOtherEnvironment':
     'This folder already belongs to another environment. Choose a different folder or device.',
   'settings.editDirectoryDescription':
-    'Choose the device and folder this device folder points to. Its topics move to the new folder and start new sessions there.',
-  'settings.editDirectoryFailed': 'Could not update the folder',
-  'settings.removeDirectory': 'Remove folder',
+    'Choose the device and its workspace root. Its topics move with it and start new sessions there.',
+  'settings.editDirectoryFailed': 'Could not update the run device',
+  'settings.removeDirectory': 'Remove run device',
   'settings.removeDirectoryConfirmDescription':
-    '{{path}} on {{device}} will no longer be a device folder of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+    '{{path}} on {{device}} will no longer be a run device of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this device.',
   'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
   'settings.removeDirectoryFailed':
-    'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
-  'settings.addDirectoryFailed': 'Could not add the device folder',
+    'Could not remove the run device. If a topic is running here, wait for it to finish and try again.',
+  'settings.addDirectoryFailed': 'Could not add the run device',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
     'Prefix for this project’s task numbers, set when the project is created. Projects without one use the default prefix.',
@@ -62,9 +62,9 @@ export default {
   'topics.subGroup.byDevice': 'By device',
   'topics.subGroup.byTime': 'By time',
   'topics.subGroup.byStatus': 'By status',
-  'settings.addDirectory': 'Add folder',
+  'settings.addDirectory': 'Add run device',
   'settings.addDirectoryDescription':
-    'Select a connected device, then enter the full path of an existing folder. Files stay on that device.',
+    "Select a connected device and a folder on it as the workspace root. Work happens under this folder: the project environment's repositories are checked out there, reusing a clone already in it. Files stay on that device.",
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -92,7 +92,6 @@ export default {
   'settings.noDirectories':
     'No device folders yet. Add a folder on a connected device to run this project there.',
   'settings.title': 'Project settings',
-  'settings.environments': 'Execution environments',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -116,7 +115,7 @@ export default {
     'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
   'directories.project': 'Select project',
   'directories.device': 'Select device',
-  'directories.path': 'Absolute directory path',
+  'directories.path': 'Workspace root (absolute path)',
   'directories.name': 'Directory name',
   'directories.repository': 'GitHub repository URL (optional)',
   'directories.repositoryHint':
@@ -693,15 +692,13 @@ export default {
   'overview.context.location.emptySandboxDesc':
     'Starts in an empty folder, without the project environment',
   'settings.cloudSandboxGroup': 'Cloud sandbox',
-  'settings.addExecutionEnvironment': 'Add execution environment',
-  'settings.configureSandbox': 'Configure',
+  'settings.addExecutionEnvironment': 'Add run device',
   'settings.executionOrderHint':
-    'New conversations use the first available execution environment in this order. Drag to reorder.',
-  'settings.sandboxNoRepository': 'No repository yet',
+    'New topics run on the first available device in this order. Drag to reorder.',
   'settings.reorderFailed': "Couldn't save the new order. Try again.",
-  'settings.setDeviceDirectory': 'Set folder',
+  'settings.setDeviceDirectory': 'Set workspace root',
   'settings.setDirectoryDescription':
-    'Enter the full path of an existing folder on {{device}}. Files stay on that device.',
+    'Enter the full path of an existing folder on {{device}} to use as the workspace root. Files stay on that device.',
   'settings.directoryUnavailableTag': 'Unavailable',
   'settings.directoryUnavailable_offline':
     'The device is offline. The folder becomes usable once the device is online.',
@@ -711,4 +708,11 @@ export default {
     "This folder couldn't be set up. Check its path, or try again later.",
   'settings.directoryUnavailable_needsManager':
     'A project manager needs to open this page while the device is online.',
+  'settings.runDevices': 'Run devices',
+  'settings.environment': 'Environment',
+  'settings.sandboxRunHint':
+    "Starts fresh for each run and checks out the project environment's repositories",
+  'settings.paidDeviceTag': 'Paid',
+  'settings.paidDeviceTooltip': "Runs in LobeHub's cloud and counts toward your plan's usage.",
+  'settings.sharedDeviceTag': 'Shared by {{name}}',
 };

@@ -167,7 +167,7 @@ const ProjectWorkLocationPicker = ({
   // project's settings, not picked or added here.
   const configureEnvironment = () => {
     setOpen(false);
-    navigate(`/project/${projectId}/settings/environments`);
+    navigate(`/project/${projectId}/settings/environment`);
   };
 
   // What the chip says: the code environment when the run checks one out,

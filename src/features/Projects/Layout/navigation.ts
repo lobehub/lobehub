@@ -29,14 +29,17 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     : `/project/${projectId}/dashboard`;
 
 export type ProjectSettingsSection =
-  'advanced' | 'environments' | 'general' | 'knowledge' | 'members';
+  'advanced' | 'devices' | 'environment' | 'general' | 'knowledge' | 'members';
 
 /**
  * Settings tabs that were folded into another tab. An old link keeps opening
  * where that content now lives instead of falling back to General.
  */
 const LEGACY_PROJECT_SETTINGS_SECTIONS: Record<string, ProjectSettingsSection> = {
-  directories: 'environments',
+  directories: 'devices',
+  // The execution-environment tab, split into run devices and the environment;
+  // its list of places to run is what the run-device tab keeps.
+  environments: 'devices',
   sites: 'advanced',
 };
 

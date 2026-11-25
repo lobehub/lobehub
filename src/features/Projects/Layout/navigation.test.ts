@@ -40,7 +40,9 @@ describe('project workspace navigation', () => {
 describe('resolveProjectSettingsSection', () => {
   it('opens folded-in tabs where their content now lives', () => {
     expect(resolveProjectSettingsSection('sites')).toBe('advanced');
-    expect(resolveProjectSettingsSection('directories')).toBe('environments');
+    expect(resolveProjectSettingsSection('directories')).toBe('devices');
+    expect(resolveProjectSettingsSection('environments')).toBe('devices');
+    expect(resolveProjectSettingsSection('environment')).toBe('environment');
   });
 
   it('keeps current sections unchanged', () => {

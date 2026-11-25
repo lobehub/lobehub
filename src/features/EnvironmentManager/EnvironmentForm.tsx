@@ -81,6 +81,12 @@ interface EnvironmentFormProps {
     description?: string;
     name?: string;
   }) => Promise<void>;
+  /**
+   * Adds the run notes: what running the environment takes, for the agent
+   * choosing one of a project's run devices. Only a project's environment is
+   * run on devices picked that way, so a standalone one leaves them out.
+   */
+  showRunNotes?: boolean;
 }
 
 type GitSource = {
@@ -293,7 +299,7 @@ BranchField.displayName = 'EnvironmentBranchField';
  * tab switch before anyone scrolled down to it.
  */
 const EnvironmentForm = memo<EnvironmentFormProps>(
-  ({ collapseSetup, environment, hideBasics, hideRepositoryHints, onSave }) => {
+  ({ collapseSetup, environment, hideBasics, hideRepositoryHints, onSave, showRunNotes }) => {
     const { t } = useTranslation('setting');
     const [setupOpen, setSetupOpen] = useState(false);
     const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
@@ -483,6 +489,21 @@ const EnvironmentForm = memo<EnvironmentFormProps>(
             onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}
           />
         </PanelSection>
+
+        {showRunNotes && (
+          <PanelSection
+            desc={t('environments.form.runNotesHint')}
+            title={t('environments.form.runNotes')}
+          >
+            <InlineField
+              multiline
+              label={t('environments.form.runNotes')}
+              placeholder={t('environments.form.runNotesPlaceholder')}
+              value={configuration.runNotes ?? ''}
+              onSave={(runNotes) => saveConfiguration({ runNotes })}
+            />
+          </PanelSection>
+        )}
       </>
     );
 

@@ -233,7 +233,7 @@ const ProjectDeviceSwitcher = ({
             type="button"
             onClick={() => {
               setOpen(false);
-              navigate(getProjectSettingsPath(projectId, 'environments'));
+              navigate(getProjectSettingsPath(projectId, 'devices'));
             }}
           >
             <Icon icon={SettingsIcon} size={11} />

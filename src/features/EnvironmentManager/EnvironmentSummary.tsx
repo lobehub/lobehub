@@ -10,7 +10,8 @@ import PanelSection from './PanelSection';
 /**
  * What someone who cannot change an environment reads: what it will do — the
  * repositories it checks out with their own setup, the setup after them, and
- * which variables it sets (names only). Laid out like the form, flat.
+ * which variables it sets (names only), and any run notes. Laid out like the
+ * form, flat.
  */
 const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ environment }) => {
   const { t } = useTranslation('setting');
@@ -59,6 +60,13 @@ const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ enviro
           {variables.length ? variables.join(', ') : t('environments.form.noVariables')}
         </Text>
       </PanelSection>
+      {configuration.runNotes?.trim() && (
+        <PanelSection title={t('environments.form.runNotes')}>
+          <Text fontSize={13} style={{ whiteSpace: 'pre-wrap' }}>
+            {configuration.runNotes}
+          </Text>
+        </PanelSection>
+      )}
     </Flexbox>
   );
 });

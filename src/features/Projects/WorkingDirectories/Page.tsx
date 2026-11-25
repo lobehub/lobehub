@@ -17,7 +17,7 @@ import { MembersSettings } from '../Review/MembersSettings';
 import { useCanManageProject } from '../useCanManageProject';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
-import { ProjectWorkingDirectories } from './index';
+import { ProjectEnvironmentSettings, ProjectRunDevices } from './index';
 
 interface SectionItem {
   key: string;
@@ -58,11 +58,18 @@ export function ProjectDirectoriesPage() {
       label: t('settings.knowledgeBases'),
       render: () => <ProjectKnowledgeBaseSettings detail={detail} />,
     },
+    // Where runs happen, and what is prepared there: two tabs, since a device
+    // records no repository and the environment names no device.
     {
-      key: 'environments',
-      label: t('settings.environments'),
+      key: 'devices',
+      label: t('settings.runDevices'),
+      render: () => <ProjectRunDevices canManage={canManage} projectId={detail.project.id} />,
+    },
+    {
+      key: 'environment',
+      label: t('settings.environment'),
       render: () => (
-        <ProjectWorkingDirectories canManage={canManage} projectId={detail.project.id} />
+        <ProjectEnvironmentSettings canManage={canManage} projectId={detail.project.id} />
       ),
     },
     // Everyone sees Advanced for Sites; it hides its management settings from viewers.

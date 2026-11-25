@@ -77,6 +77,9 @@ export const configurationSchema = z.object({
   // it would leave those environments impossible to change.
   kind: z.enum(['code', 'files']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
+  // What running the environment takes, in the author's words, for the agent
+  // choosing a run device. Stored like `kind` and never sent on.
+  runNotes: z.string().max(4000).optional(),
   // Any number of repositories, or none. The working directory a conversation
   // gets is still one folder: the first repository is checked out at its top
   // and each one after it into a folder of its own (`path`, which the form

@@ -32,3 +32,14 @@ describe('configurationSchema sources', () => {
     ).toBe(true);
   });
 });
+
+describe('configurationSchema runNotes', () => {
+  it('keeps run notes instead of stripping them', () => {
+    const result = configurationSchema.parse({ runNotes: 'Needs 8 GB of memory for dev' });
+    expect(result.runNotes).toBe('Needs 8 GB of memory for dev');
+  });
+
+  it('refuses run notes longer than 4000 characters', () => {
+    expect(configurationSchema.safeParse({ runNotes: 'x'.repeat(4001) }).success).toBe(false);
+  });
+});
