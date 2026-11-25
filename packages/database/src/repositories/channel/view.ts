@@ -8,6 +8,7 @@ import {
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageReplyError,
+  channelMessageSurfaces,
   channelMessageVia,
   type ChannelReplyError,
   type ChatMessageError,
@@ -163,6 +164,12 @@ export const publicMessage = (
     })(),
     // An Agent's failed reply, shown as a card in its reply slot.
     replyError,
+    // Cards the Agent drew in this reply.
+    surfaces: isAgent ? channelMessageSurfaces(message.metadata) : [],
+    surfacesBodyLength:
+      typeof message.metadata?.surfacesBodyLength === 'number'
+        ? message.metadata.surfacesBodyLength
+        : undefined,
     via: isAgent
       ? null
       : (() => {

@@ -23,6 +23,7 @@ export * from './channelAsk';
 export * from './channelMember';
 export * from './channelMessage';
 export * from './channelMessageCard';
+export * from './channelReaction';
 export * from './chunk';
 export * from './contact';
 export * from './conversation';

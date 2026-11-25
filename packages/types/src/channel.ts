@@ -6,7 +6,11 @@ import {
 import type { ChannelAgentAccessCard } from './agentAccess';
 import type { ChannelAsk, ChannelMessageKind } from './channelAsk';
 import type { ChannelPublicMember } from './channelMember';
-import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
+import type {
+  ChannelConnectorRequest,
+  ChannelDeviceGrantCard,
+  ChannelMessageSurface,
+} from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
@@ -493,29 +497,6 @@ export interface ChannelReadMessagesParams {
    * message instead of the run's request cutoff. Omit for the run's own conversation.
    */
   threadId?: string;
-}
-
-/** One emoji on a message: who left it, by member, in the order they did. */
-export interface ChannelMessageReaction {
-  count: number;
-  /** A Unicode emoji. */
-  emoji: string;
-  /** People and Agents alike, by their member in the Channel. */
-  memberIds: string[];
-}
-
-/** An Agent adding or removing its own reaction on a message of its current conversation. */
-export interface ChannelReactParams {
-  emoji: string;
-  messageId: string;
-  /** The Thread `readMessages({ threadId })` returned the message from. */
-  threadId?: string;
-}
-
-export interface ChannelReacted {
-  added: boolean;
-  emoji: string;
-  messageId: string;
 }
 
 export interface ChannelReadMessageParams {
@@ -1007,6 +988,10 @@ export interface ChannelPublicMessage {
   /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
   sourceTopicId?: string | null;
   sourceTopicTitle?: string | null;
+  /** Cards the Agent drew in this reply (A2UI), in the order it drew them. Empty on requests. */
+  surfaces?: ChannelMessageSurface[];
+  /** With `surfaces`: how much of `content` is the reply's own text; the rest is their text form. */
+  surfacesBodyLength?: number;
   threadId: string | null;
   userId: string | null;
   /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */

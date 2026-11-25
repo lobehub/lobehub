@@ -99,8 +99,10 @@ describe('Channel completion physical writer confirmation', () => {
       leftJoin: vi.fn(),
       where: vi.fn(),
       limit: vi.fn(),
+      // The run's cards are read with an ordered query.
+      orderBy: vi.fn(),
     });
-    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'limit'] as const)
+    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'limit', 'orderBy'] as const)
       query[method].mockReturnValue(query);
     return new ChannelCoordinator({ select: () => query } as never);
   };

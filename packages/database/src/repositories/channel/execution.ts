@@ -3,9 +3,14 @@ import type {
   ChannelAsk,
   ChannelContextMessage,
   ChannelJobStatus,
+  ChannelMessageSurface,
   ChannelReplyError,
 } from '@lobechat/types';
-import { channelAskFallbackText, channelMessageReplyError } from '@lobechat/types';
+import {
+  channelAskFallbackText,
+  channelMessageReplyError,
+  channelSurfacesText,
+} from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -544,7 +549,12 @@ export class ChannelExecutionRepository {
    * Publishes the saved draft as the member's reply and completes the job. Idempotent: a
    * second call returns the same message id.
    */
-  publish = async (channelId: string, jobId: string): Promise<string> =>
+  publish = async (
+    channelId: string,
+    jobId: string,
+    /** Cards the run drew; they go out with its reply and keep their text in its content. */
+    surfaces: ChannelMessageSurface[] = [],
+  ): Promise<string> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId);
       if (job.publishedMessageId) return job.publishedMessageId;
@@ -575,9 +585,26 @@ export class ChannelExecutionRepository {
             status: 'pending',
           }
         : undefined;
+      const carded = !!ask || surfaces.length > 0;
       const published = {
-        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('\n\n') : job.draft,
-        ...(ask && { kind: 'ask' as const, metadata: { ask } }),
+        // Cards keep a text form after the reply's own words, read by everything that can't
+        // draw them (previews, notifications, an Agent reading history); views show only the body.
+        content: carded
+          ? [
+              body,
+              surfaces.length > 0 ? channelSurfacesText(surfaces) : '',
+              ask ? channelAskFallbackText(ask) : '',
+            ]
+              .filter(Boolean)
+              .join('\n\n')
+          : job.draft,
+        ...(ask && { kind: 'ask' as const }),
+        ...(carded && {
+          metadata: {
+            ...(ask && { ask }),
+            ...(surfaces.length > 0 && { surfaces, surfacesBodyLength: body.length }),
+          },
+        }),
       };
       // A card from an earlier failure of this job is replaced by the reply, in the same slot.
       const reply =

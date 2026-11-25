@@ -147,3 +147,41 @@ export interface ChannelConnectorRequestResult {
   name: string;
   source: ChannelConnectorSource;
 }
+
+/**
+ * A card an Agent drew in its reply, stored in `metadata.surfaces` and drawn by `@lobehub/a2ui`.
+ * Mirrors `A2uiSurfaceRecord` there; `fallback` is its one-line text where it can't be drawn.
+ */
+export interface ChannelMessageSurface {
+  catalogId: string;
+  fallback: string;
+  operations: Record<string, unknown>[];
+  /** Set once a person acted on it; a submitted card is read-only. */
+  state?: { status: 'open' | 'submitted'; submittedAt?: string };
+  surfaceId: string;
+  title?: string;
+  version: string;
+}
+
+/** `metadata.surfaces` of an Agent's reply, keeping only well-formed entries. */
+export const channelMessageSurfaces = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageSurface[] => {
+  const surfaces = metadata?.surfaces;
+  if (!Array.isArray(surfaces)) return [];
+  return surfaces.filter(
+    (surface): surface is ChannelMessageSurface =>
+      !!surface &&
+      typeof surface === 'object' &&
+      typeof (surface as ChannelMessageSurface).surfaceId === 'string' &&
+      Array.isArray((surface as ChannelMessageSurface).operations),
+  );
+};
+
+/** A reply's cards as text, for where cards can't be drawn: history an Agent reads, previews. */
+export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) =>
+  surfaces
+    .map((surface) => surface.fallback || surface.title)
+    .filter(Boolean)
+    .map((line) => `[Card] ${line}`)
+    .join('\n');

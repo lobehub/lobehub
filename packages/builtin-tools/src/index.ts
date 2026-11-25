@@ -1,3 +1,4 @@
+import { A2uiManifest } from '@lobechat/builtin-tool-a2ui';
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
@@ -544,6 +545,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     manifest: AgentManagementManifest,
     // Context-aware: hides the `callAgent` API inside sub-agent runs.
     resolveManifest: resolveAgentManagementManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: A2uiManifest.identifier,
+    manifest: A2uiManifest,
     type: 'builtin',
   },
   {

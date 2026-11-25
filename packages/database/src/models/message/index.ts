@@ -38,6 +38,7 @@ export class MessageModel {
   findLatestUserTurnHop: MessageLookupQueries['findLatestUserTurnHop'];
   findVerifyMessageByOperationId: MessageLookupQueries['findVerifyMessageByOperationId'];
   findLatestAssistantByOperationId: MessageLookupQueries['findLatestAssistantByOperationId'];
+  listToolStatesByOperationId: MessageLookupQueries['listToolStatesByOperationId'];
   listLatestTurnAssistantContents: MessageLookupQueries['listLatestTurnAssistantContents'];
   getThreadParentMessages: MessageLookupQueries['getThreadParentMessages'];
   findMessageQueriesById: MessageLookupQueries['findMessageQueriesById'];
@@ -161,6 +162,7 @@ export class MessageModel {
     this.findLatestUserTurnHop = lookups.findLatestUserTurnHop;
     this.findVerifyMessageByOperationId = lookups.findVerifyMessageByOperationId;
     this.findLatestAssistantByOperationId = lookups.findLatestAssistantByOperationId;
+    this.listToolStatesByOperationId = lookups.listToolStatesByOperationId;
     this.listLatestTurnAssistantContents = lookups.listLatestTurnAssistantContents;
     this.getThreadParentMessages = lookups.getThreadParentMessages;
     this.findMessageQueriesById = lookups.findMessageQueriesById;

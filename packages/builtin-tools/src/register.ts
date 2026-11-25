@@ -1,3 +1,4 @@
+import { A2uiInspectors, A2uiManifest, A2uiRenders } from '@lobechat/builtin-tool-a2ui/client';
 import {
   LobeActivatorInspectors,
   LobeActivatorManifest,
@@ -285,6 +286,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [A2uiManifest.identifier]: A2uiRenders as Record<string, BuiltinRender>,
     [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
@@ -353,6 +355,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [A2uiManifest.identifier]: A2uiInspectors as Record<string, BuiltinInspector>,
     [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 
-const { executions, findLatest } = vi.hoisted(() => ({
+const { executions, findLatest, toolStates } = vi.hoisted(() => ({
   executions: {
     accepted: vi.fn(),
     deliverAnswerToAsker: vi.fn(),
@@ -17,6 +17,7 @@ const { executions, findLatest } = vi.hoisted(() => ({
     silence: vi.fn().mockResolvedValue(true),
   },
   findLatest: vi.fn(),
+  toolStates: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -28,6 +29,7 @@ vi.mock('@/database/repositories/channel', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
     findLatestAssistantByOperationId = findLatest;
+    listToolStatesByOperationId = toolStates;
   },
 }));
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: class {} }));
@@ -72,7 +74,10 @@ const coordinator = (job: Record<string, unknown>) => {
 };
 
 describe('Channel completion of a wake that may stay silent', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    toolStates.mockResolvedValue([]);
+  });
 
   it('settles a follow-up that answered NO_REPLY without publishing', async () => {
     findLatest.mockResolvedValue({ content: 'NO_REPLY:not_addressed' });
@@ -124,5 +129,48 @@ describe('Channel completion of a wake that may stay silent', () => {
     await coordinator({ ask, wake: null }).complete('channel', 'job', 'op');
     expect(executions.saveDraft).toHaveBeenCalledWith('channel', 'job', '');
     expect(executions.publish).toHaveBeenCalled();
+  });
+
+  it('publishes the cards a run drew, even with no words after them or in silence', async () => {
+    const surface = {
+      catalogId: 'c',
+      fallback: 'Plan',
+      operations: [{}],
+      surfaceId: 'plan',
+      version: '1.0',
+    };
+    toolStates.mockResolvedValue([{ surface }, { nothing: true }]);
+    findLatest.mockResolvedValue({ content: '' });
+    await coordinator({ wake: { kind: 'followup' } }).complete('channel', 'job', 'op');
+    expect(toolStates).toHaveBeenCalledWith({
+      apiName: 'renderUI',
+      identifier: 'lobe-a2ui',
+      operationId: 'op',
+      topicId: 'topic',
+    });
+    expect(executions.silence).not.toHaveBeenCalled();
+    expect(executions.saveDraft).toHaveBeenCalledWith('channel', 'job', '');
+    expect(executions.publish).toHaveBeenCalledWith('channel', 'job', [surface]);
+
+    vi.clearAllMocks();
+    toolStates.mockResolvedValue([{ surface }]);
+    findLatest.mockResolvedValue({ content: 'NO_REPLY' });
+    await coordinator({ wake: { kind: 'followup' } }).complete('channel', 'job', 'op');
+    expect(executions.saveDraft).toHaveBeenCalledWith('channel', 'job', '');
+    expect(executions.publish).toHaveBeenCalledWith('channel', 'job', [surface]);
+  });
+
+  it('keeps the cards when a publish is retried after the draft was saved', async () => {
+    const surface = {
+      catalogId: 'c',
+      fallback: 'Plan',
+      operations: [{}],
+      surfaceId: 'plan',
+      version: '1.0',
+    };
+    toolStates.mockResolvedValue([{ surface }]);
+    await coordinator({ draft: 'Here it is', status: 'running' }).complete('channel', 'job', 'op');
+    expect(findLatest).not.toHaveBeenCalled();
+    expect(executions.publish).toHaveBeenCalledWith('channel', 'job', [surface]);
   });
 });
