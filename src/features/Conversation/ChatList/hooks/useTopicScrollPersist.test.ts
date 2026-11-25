@@ -252,6 +252,47 @@ describe('useTopicScrollPersist', () => {
       }
     });
 
+    it('settles on the owning row when the deep link allows it', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const container = document.createElement('div');
+      const taskGroup = document.createElement('div');
+      taskGroup.id = 'task-group';
+      container.append(taskGroup);
+      document.body.append(container);
+      const onHandled = vi.fn();
+      const originalScrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = vi.fn();
+
+      try {
+        renderHook(() =>
+          useTopicScrollPersist({
+            containerRef: { current: container },
+            contextKey: 'main_agt_1_tpc_a',
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
+            messageDeepLink: {
+              displayMessageId: 'task-group',
+              id: 'task-1',
+              index: 12,
+              navigationKey: 'navigation-1',
+              onHandled,
+              settleOnOwningRow: true,
+            },
+            virtuaRef: refOf(handle),
+          }),
+        );
+
+        await advanceFrames(40);
+
+        expect(onHandled).toHaveBeenCalledWith(
+          expect.objectContaining({ displayMessageId: 'task-group', id: 'task-1' }),
+        );
+      } finally {
+        container.remove();
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      }
+    });
+
     it('consumes a deep link when animation frames are suspended', async () => {
       const handle = createFakeVList({ scrollSize: 6000 });
       const container = document.createElement('div');

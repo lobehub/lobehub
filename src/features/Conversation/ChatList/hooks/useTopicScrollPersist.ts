@@ -329,6 +329,12 @@ export const useTopicScrollPersist = ({
         }
 
         if (attempts >= DEEP_LINK_MAX_ATTEMPTS) {
+          if (targetMatch && targetDeepLink.settleOnOwningRow) {
+            targetMatch.element.scrollIntoView({ block: 'center' });
+            targetDeepLink.onHandled?.(targetDeepLink);
+            finalize(false);
+            return;
+          }
           // A nested message can be absent while its process fold is collapsed
           // or its compressed group is showing the summary tab. Keep the hash
           // pending instead of consuming the deep link at the owning row, so a

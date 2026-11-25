@@ -64,7 +64,17 @@ export const useMessageDeepLink = (): MessageDeepLink | undefined => {
   );
 
   return useMemo(
-    () => (messageId ? { id: messageId, navigationKey: location.key, onHandled } : undefined),
-    [location.key, messageId, onHandled],
+    () =>
+      messageId
+        ? {
+            id: messageId,
+            navigationKey: location.key,
+            onHandled,
+            // A locate link flashes whichever row shows the message, so a task
+            // without its own anchor completes on its task-group row.
+            settleOnOwningRow: isLocate,
+          }
+        : undefined,
+    [isLocate, location.key, messageId, onHandled],
   );
 };

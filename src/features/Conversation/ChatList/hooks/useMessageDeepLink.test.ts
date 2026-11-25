@@ -40,7 +40,7 @@ describe('useMessageDeepLink', () => {
   it('hands a ?locate= target to the list instead of scrolling it from outside', () => {
     const { result } = renderDeepLink('/agent/agt_1/tpc_1?locate=msg_20&foo=1');
 
-    expect(result.current.deepLink?.id).toBe('msg_20');
+    expect(result.current.deepLink).toMatchObject({ id: 'msg_20', settleOnOwningRow: true });
 
     act(() => result.current.deepLink?.onHandled?.({ displayMessageId: 'msg_20', id: 'msg_20' }));
 
@@ -63,7 +63,7 @@ describe('useMessageDeepLink', () => {
     vi.mocked(highlightMessageWhenScrollSettles).mockClear();
     const { result } = renderDeepLink('/agent/agt_1/tpc_1?foo=1#msg_%E4%B8%AD');
 
-    expect(result.current.deepLink?.id).toBe('msg_中');
+    expect(result.current.deepLink).toMatchObject({ id: 'msg_中', settleOnOwningRow: false });
 
     act(() => result.current.deepLink?.onHandled?.({ displayMessageId: 'msg_中', id: 'msg_中' }));
 
