@@ -220,8 +220,10 @@ export function registerProjectRunnerCommands(project: Command) {
   env
     .command('edit <projectId>')
     .description('Edit the environment; unspecified parts stay as they are')
-    .option('--add-repo <url[@ref]...>', 'Add a repository, optionally at a branch or tag')
-    .option('--remove-repo <url...>', 'Remove a repository')
+    // Plain `<name...>` placeholders: commander reads `<url[@ref]...>` as a
+    // single string, which turned every character into a repository.
+    .option('--add-repo <repos...>', 'Add repositories, each as url or url@ref (branch or tag)')
+    .option('--remove-repo <urls...>', 'Remove repositories')
     .option('--setup <command>', 'Set the setup command ("" clears it)')
     .option('--notes <text>', 'Set the run notes ("" clears them)')
     .action(
