@@ -28,8 +28,8 @@ import { useVideoStore } from '@/store/video';
 import { createVideoSelectors } from '@/store/video/selectors';
 import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GenerationBatch, VideoGenerationAsset } from '@/types/generation';
-import { downloadFile } from '@/utils/client/downloadFile';
 
+import { downloadGeneratedVideo } from './downloadVideo';
 import EditSourceLink from './EditSourceLink';
 import VideoErrorItem from './VideoErrorItem';
 import VideoLoadingItem from './VideoLoadingItem';
@@ -93,6 +93,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
     }, [batch.createdAt]);
 
     const generation = batch.generations[0];
+    const videoAsset = generation?.asset as VideoGenerationAsset | null | undefined;
 
     const versionNode = generation ? versionMap.get(generation.id) : undefined;
     const editSource = versionNode?.previousGenerationId
@@ -105,7 +106,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
     const canEdit =
       supportsConversationalVideoEdit(batch.model) &&
       generation?.task.status === AsyncTaskStatus.Success &&
-      Boolean((generation.asset as VideoGenerationAsset | null | undefined)?.interactionId);
+      Boolean(videoAsset?.interactionId);
 
     const isFinalized =
       generation?.task.status === AsyncTaskStatus.Success ||
@@ -177,21 +178,10 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
       }
     }, [activeTopicId, batch.id, removeGenerationBatch]);
 
-    const handleDownload = useCallback(async () => {
-      if (!generation?.asset?.url) return;
-
-      const timestamp = dayjs(generation.createdAt).format('YYYY-MM-DD_HH-mm-ss');
-      const baseName = batch.prompt.slice(0, 30).trim();
-      const sanitizedBaseName = baseName.replaceAll(/["%*/:<>?\\|]/g, '').replaceAll(/\s+/g, '_');
-      const safePrompt = sanitizedBaseName || 'Untitled';
-      const fileName = `${safePrompt}_${timestamp}.mp4`;
-
-      try {
-        await downloadFile(generation.asset.url, fileName, false);
-      } catch (error) {
-        console.error('Failed to download video:', error);
-      }
-    }, [generation?.asset?.url, generation?.createdAt, batch.prompt]);
+    const handleDownload = useCallback(
+      () => downloadGeneratedVideo(generation, batch.prompt),
+      [batch.prompt, generation],
+    );
 
     const canShare = useCanShareGeneration(generation?.fileId, batch.creator?.id);
     const handleShare = useCallback(() => {

@@ -47,6 +47,8 @@ export interface ImageGenerationAsset extends BaseGenerationAsset {
 export interface VideoGenerationAsset extends BaseGenerationAsset {
   coverUrl?: string;
   duration?: number;
+  /** Extension of the stored video, before the access URL is resolved. */
+  fileExtension?: 'mp4' | 'webm';
   height?: number;
   /** Provider interaction id used to continue stateful video editing. */
   interactionId?: string;
