@@ -610,8 +610,8 @@ export default {
   'plans.compare.auto': 'Auto Model',
   'plans.compare.autoAvailable': 'Available',
   'plans.compare.auto.tooltip':
-    "Auto Model picks a suitable model for each conversation. It has a limit of its own and doesn't use your plan limits. Agent run fees come from your plan limits first, then from Auto Model's.",
-  'plans.compare.autoSeparate': 'Extra {{multiple}}× plan limits',
+    "Auto Model picks a suitable model for each conversation. It has a limit of its own and doesn't use your plan limits: up to {{price}}× the plan price each month, and {{window}}× the plan's 5-hour and weekly limits. With your plan limits, that is up to {{total}}× the plan price. Agent run fees come from your plan limits first, then from Auto Model's.",
+  'plans.compare.autoSeparate': 'Up to {{multiple}}× the plan price in usage',
   'plans.compare.baselineNote':
     'Each limit is shown as a multiple of the plan marked Standard in its row.',
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
@@ -687,7 +687,7 @@ export default {
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.autoMonthlySpend.tooltip':
     'Auto Model usage across your billing month has its own limit, separate from other models.',
-  'plans.limits.autoPool': 'Extra {{multiple}}× plan limits for Auto Model',
+  'plans.limits.autoPool': 'Up to {{multiple}}× the plan price in Auto Model usage',
   'plans.limits.autoRolling5hSpend': 'Auto Model 5-hour limit',
   'plans.limits.autoRolling5hSpend.multiple':
     'Auto Model 5-hour limit: {{multiple}}× that of {{plan}}',
