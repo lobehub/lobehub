@@ -101,6 +101,12 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { PostedInterventionAsk } from './interventionAsk';
+export {
+  closeInterventionAsk,
+  interventionAskRequestKey,
+  postInterventionAsk,
+} from './interventionAsk';
 export { removeAgentFromProjectChannels } from './membership';
 export type {
   ChannelCoAddressedAgent,

@@ -403,6 +403,29 @@ describe('useAskUserForm additional notes', () => {
     hook.unmount();
     vi.useRealTimers();
   });
+
+  it('answers nothing on timeout for a question also asked elsewhere', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'));
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: singleQuestionArgs,
+        countdownMs: 1000,
+        noAnswerOnTimeout: true,
+        onInteractionAction,
+        persistedDraft: undefined,
+        writeDraft: vi.fn(),
+      }),
+    );
+
+    expect(hook.result.current.autoSubmitOnTimeout).toBe(false);
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(onInteractionAction).not.toHaveBeenCalled();
+    hook.unmount();
+    vi.useRealTimers();
+  });
 });
 
 describe('useAskUserForm producer deadline', () => {

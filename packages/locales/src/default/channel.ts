@@ -127,6 +127,7 @@ export default {
   'copyThreadLink': 'Copy link',
   'copyThreadLinkSuccess': 'Thread link copied',
   'ask.answeredBy': 'Answered by {{name}}',
+  'ask.closed': 'Closed: answered in the conversation, or the time to answer ran out',
   'ask.failed': "Couldn't send your answer. Try again.",
   'ask.multiSelect': 'Choose all that apply',
   'ask.other': 'Other',
