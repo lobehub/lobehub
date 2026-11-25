@@ -167,8 +167,9 @@ export class FavoriteActionImpl {
       FAVORITE_LIST_KEY,
       (items = []) => {
         const listed = ids.flatMap((id) => findRow(items, id) ?? []);
+        // Rows the drag did not list were added since; new favorites stay on top.
         const rest = items.filter((item) => !listed.includes(item));
-        return [...listed, ...rest];
+        return [...rest, ...listed];
       },
       () => {
         const operation = this.#reorderQueue

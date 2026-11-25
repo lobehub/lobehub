@@ -240,7 +240,7 @@ describe('FavoriteModel', () => {
     expect((await personalModel.query()).map((item) => item.targetId)).toEqual(['tpc_2']);
   });
 
-  it('reorders, keeping unlisted favorites after the listed ones', async () => {
+  it('reorders, keeping favorites added since the caller read the list on top', async () => {
     const a = await personalModel.add(topic('tpc_a'));
     const b = await personalModel.add(topic('tpc_b'));
     const c = await personalModel.add(topic('tpc_c'));
@@ -248,7 +248,7 @@ describe('FavoriteModel', () => {
 
     await personalModel.reorder([c.id, foreign.id, a.id]);
 
-    expect((await personalModel.query()).map((item) => item.id)).toEqual([c.id, a.id, b.id]);
+    expect((await personalModel.query()).map((item) => item.id)).toEqual([b.id, c.id, a.id]);
     expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
   });
 

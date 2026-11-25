@@ -181,7 +181,9 @@ export class FavoriteModel {
 
   /**
    * Store the order the member arranged. Ids outside this sidebar are ignored;
-   * favorites missing from `ids` keep their position after the listed ones.
+   * favorites missing from `ids` were added after the caller read the list
+   * (on another device, or while this reorder waited its turn), so they stay
+   * on top, ahead of the listed ones, as {@link add} placed them.
    */
   reorder = async (ids: string[]): Promise<void> => {
     await this.db.transaction(async (tx) => {
@@ -194,8 +196,8 @@ export class FavoriteModel {
       const existing = rows.map((row) => row.id);
       const listed = new Set(ids);
       const order = [
-        ...ids.filter((id) => existing.includes(id)),
         ...existing.filter((id) => !listed.has(id)),
+        ...ids.filter((id) => existing.includes(id)),
       ];
       if (order.length === 0) return;
 
