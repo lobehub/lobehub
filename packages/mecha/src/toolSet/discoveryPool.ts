@@ -1,3 +1,4 @@
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -56,11 +57,9 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
 /**
  * Build the initial invocation set. Subsequent explicit activations use the full eligible pool.
  *
- * `lobe-web-browsing` stays preloaded whenever search is enabled: it is the
- * highest-frequency tool in general conversations, its slimmed footprint is small,
- * and deferring it forces an extra activation round-trip plus a prompt-cache wipe
- * on providers that lack mid-conversation tool additions. Turning search off still
- * removes it completely via `resolveToolRules` (`runtimeManagedToolIds`).
+ * Core capabilities stay callable on the first step when the run's enable rules
+ * allow them. Readiness, permissions, the execution target and attachment size
+ * are still decided by resolveToolRules before generating the actual functions.
  */
 export const initialToolSelection = (
   toolIds: string[] | undefined,
@@ -76,7 +75,13 @@ export const initialToolSelection = (
     };
   }
   const deferredRuntimeToolIds = runtimeManagedToolIds.filter(
-    (id) => id !== WebBrowsingManifest.identifier,
+    (id) =>
+      ![
+        WebBrowsingManifest.identifier,
+        LocalSystemManifest.identifier,
+        CloudSandboxManifest.identifier,
+        AttachmentsManifest.identifier,
+      ].includes(id),
   );
   return {
     excludeDefaultToolIds: deferredRuntimeToolIds,

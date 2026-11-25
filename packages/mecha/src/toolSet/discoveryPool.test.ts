@@ -69,7 +69,7 @@ describe('resolveInvocationToolIds', () => {
 });
 
 describe('initialToolSelection', () => {
-  it('keeps lobe-web-browsing preloaded while deferring other runtime capabilities in agent mode', () => {
+  it('keeps core capabilities while deferring memory in agent mode', () => {
     const selection = initialToolSelection(
       ['lobe-web-browsing', 'lobe-user-memory', CloudSandboxManifest.identifier, 'my-plugin'],
       { enableAgentMode: true },
@@ -77,8 +77,12 @@ describe('initialToolSelection', () => {
 
     expect(selection.excludeDefaultToolIds).not.toContain('lobe-web-browsing');
     expect(selection.excludeDefaultToolIds).toContain('lobe-user-memory');
-    expect(selection.excludeDefaultToolIds).toContain(CloudSandboxManifest.identifier);
-    expect(selection.toolIds).toEqual(['lobe-web-browsing', 'my-plugin']);
+    expect(selection.excludeDefaultToolIds).not.toContain(CloudSandboxManifest.identifier);
+    expect(selection.toolIds).toEqual([
+      'lobe-web-browsing',
+      CloudSandboxManifest.identifier,
+      'my-plugin',
+    ]);
   });
 
   it('does not defer capabilities in chat mode or when skipDefaultTools is true', () => {
