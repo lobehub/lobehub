@@ -127,8 +127,7 @@ describe('card command', () => {
   it('prints the errors of an invalid card and exits non-zero so the agent fixes it', async () => {
     mockTrpcClient.channel.renderCard.mutate.mockResolvedValue({
       errors: ['root must be a Card'],
-      message:
-        'The card was not drawn. Fix these and run `lh card render` again:\n- root must be a Card',
+      message: 'The card was not drawn. Fix these and call renderUI again:\n- root must be a Card',
       ok: false,
     });
     await expect(run('render', '--file', cardFile(JSON.stringify(operations)))).rejects.toThrow(

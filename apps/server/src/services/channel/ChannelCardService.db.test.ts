@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { systemPrompt } from '@lobechat/builtin-tool-a2ui';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -110,7 +111,6 @@ describe('ChannelCardService.render', () => {
     ]);
     expect(result).toMatchObject({ ok: false });
     expect(result.ok === false && result.errors.join()).toMatch(/Unknown component "Map"/);
-    expect(result.message).toContain('lh card render');
     expect(await service.render('not an array')).toMatchObject({ ok: false });
     expect(await cardRows(topicId)).toEqual([]);
   });
@@ -157,11 +157,9 @@ describe('ChannelCardService.render', () => {
     await expect(service.render(card('Early'))).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
-  it('serves the builtin card guide, framed for the command line', async () => {
+  it('serves the builtin tool’s card guide unchanged', async () => {
     const { service } = await setup();
-    const { guide } = await service.guide();
-    expect(guide).toContain('lh card render --file card.json');
-    expect(guide).toContain('<a2ui_guide>');
+    expect(await service.guide()).toEqual({ guide: systemPrompt });
   });
 });
 

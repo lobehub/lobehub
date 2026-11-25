@@ -9,15 +9,8 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { assertChannelEnabled } from './featureGate';
 
-/** The same validator the builtin `renderUI` runs; stateless. */
+/** The builtin `renderUI` itself: the same validation and messages; stateless. */
 const runtime = new A2uiExecutionRuntime();
-
-/** How `lh card guide` turns the builtin tool's guide into one for the command line. */
-const CLI_CARD_GUIDE_PREFIX = `<card_cli>
-You draw cards from the command line. Wherever the guide below says to call renderUI, write its operations (the JSON array of A2UI messages for one surface) to a file and run \`lh card render --file card.json --json\` (\`--file -\` reads stdin). An invalid card comes back with errors: fix them and run it again. Rendering the same surfaceId again replaces that card. The cards you draw are posted with your reply, so do not repeat their content in text.
-</card_cli>
-
-`;
 
 /**
  * One tool call per surface and run: rendering the surface again finds and replaces it. Not a
@@ -48,10 +41,13 @@ export class ChannelCardService {
     this.messages = new MessageModel(db, userId, workspaceId);
   }
 
-  /** The card-drawing guide and component catalog, current with the server's validator. */
+  /**
+   * The builtin tool's card guide and component catalog as is, so it always matches the validator
+   * the server runs.
+   */
   guide = async () => {
     await assertChannelEnabled(this.userId);
-    return { guide: CLI_CARD_GUIDE_PREFIX + systemPrompt };
+    return { guide: systemPrompt };
   };
 
   render = async (operations: unknown): Promise<ChannelCardRenderResult> => {
@@ -59,11 +55,7 @@ export class ChannelCardService {
     const output = await runtime.renderUI({ operations });
     if (!output.success) {
       const errors = (output.error?.body as { errors?: string[] } | undefined)?.errors ?? [];
-      return {
-        errors,
-        message: `The card was not drawn. Fix these and run \`lh card render\` again:\n- ${errors.join('\n- ')}`,
-        ok: false,
-      };
+      return { errors, message: output.content, ok: false };
     }
     const state = output.state as { surface: { surfaceId: string } };
     const { surfaceId } = state.surface;
@@ -111,7 +103,7 @@ export class ChannelCardService {
       });
     }
     return {
-      message: `Card "${surfaceId}" ${existing ? 'replaced' : 'drawn'}; it is posted with your reply. Do not repeat its content in text.`,
+      message: output.content,
       ok: true,
       replaced: !!existing,
       surfaceId,
