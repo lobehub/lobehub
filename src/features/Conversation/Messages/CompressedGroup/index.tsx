@@ -24,7 +24,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
 import { useCompressedHistoryInline } from '../Contexts/CompressedHistoryInlineContext';
 import CompressedMessageItem from './CompressedMessageItem';
 import {
@@ -32,6 +32,7 @@ import {
   isCompressionSummaryGenerating,
   shouldShowCompressedGroupPanel,
 } from './logic';
+import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
 
 const styles = stylex.create({
@@ -106,6 +107,9 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // Check if generateSummary operation is running for this message
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
   const isGeneratingSummary = isCompressionSummaryGenerating(runningOp?.type);
+
+  const storeApi = useConversationStoreApi();
+  useFollowCompressingRow(isGeneratingSummary && historyInline, storeApi.getState);
 
   const showPanelContent = shouldShowCompressedGroupPanel({
     expanded,
