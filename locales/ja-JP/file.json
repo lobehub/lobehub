@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "いいね済み",
   "pageEditor.likes.more": "+{{count}} 件のその他",
   "pageEditor.linkCopied": "リンクをコピーしました",
-  "pageEditor.lock.editingByOther": "{{name}}がこのページを編集しています。現在、変更を保存することはできません。",
-  "pageEditor.lock.editingBySomeone": "他の誰かがこのページを編集しています。現在、変更を保存することはできません。",
   "pageEditor.menu.copyLink": "リンクをコピー",
   "pageEditor.menu.export": "エクスポート",
   "pageEditor.menu.export.html": "HTML",

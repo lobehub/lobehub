@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "پسندیده شد",
   "pageEditor.likes.more": "+{{count}} بیشتر",
   "pageEditor.linkCopied": "لینک کپی شد",
-  "pageEditor.lock.editingByOther": "{{name}} در حال ویرایش این صفحه است. تغییرات شما در حال حاضر ذخیره نمی‌شود.",
-  "pageEditor.lock.editingBySomeone": "شخص دیگری در حال ویرایش این صفحه است. تغییرات شما در حال حاضر ذخیره نمی‌شود.",
   "pageEditor.menu.copyLink": "کپی لینک",
   "pageEditor.menu.export": "صادرات",
   "pageEditor.menu.export.html": "HTML",

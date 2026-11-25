@@ -430,13 +430,20 @@ export default {
   'pageEditor.editMode.lockedBySelf': 'You’re editing this document in another tab',
   'pageEditor.editMode.lockedBySelfDescription':
     'Saves will resume after the other session closes or its lock expires (~30s).',
+  'pageEditor.editMode.lockedBySelfInRoomDescription':
+    'Your other tab is using Live Page Collaboration, a Labs feature. Turn it on here to edit in both tabs.',
+  'pageEditor.editMode.lockedBySelfReloadDescription':
+    'Turn on Live Page Collaboration, a Labs feature, to edit this document in several tabs at once. Reload your other tab after turning it on.',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.lockedInRoomDescription':
+    'They’re editing with Live Page Collaboration, a Labs feature. Turn it on to edit together in real time.',
   'pageEditor.editMode.lockLostDescription':
     'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
   'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',
   'pageEditor.editMode.lockUnstable': 'Reconnecting edit lock…',
+  'pageEditor.editMode.turnOnPageCollab': 'Turn on',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',
@@ -475,10 +482,6 @@ export default {
   'pageEditor.history.versionCount_other': '{{count}} versions',
 
   'pageEditor.linkCopied': 'Link copied',
-  'pageEditor.lock.editingByOther':
-    '{{name}} is editing this page. Your changes can’t be saved right now.',
-  'pageEditor.lock.editingBySomeone':
-    'Someone else is editing this page. Your changes can’t be saved right now.',
   'pageEditor.menu.copyLink': 'Copy Link',
   'pageEditor.menu.export': 'Export',
   'pageEditor.menu.export.html': 'HTML',

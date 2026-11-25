@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Харесано",
   "pageEditor.likes.more": "+{{count}} още",
   "pageEditor.linkCopied": "Връзката е копирана",
-  "pageEditor.lock.editingByOther": "{{name}} редактира тази страница. Вашите промени не могат да бъдат запазени в момента.",
-  "pageEditor.lock.editingBySomeone": "Някой друг редактира тази страница. Вашите промени не могат да бъдат запазени в момента.",
   "pageEditor.menu.copyLink": "Копирай връзка",
   "pageEditor.menu.export": "Експортирай",
   "pageEditor.menu.export.html": "HTML",

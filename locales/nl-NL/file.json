@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Vind-ik-leuk",
   "pageEditor.likes.more": "+{{count}} meer",
   "pageEditor.linkCopied": "Link gekopieerd",
-  "pageEditor.lock.editingByOther": "{{name}} is deze pagina aan het bewerken. Je wijzigingen kunnen momenteel niet worden opgeslagen.",
-  "pageEditor.lock.editingBySomeone": "Iemand anders is deze pagina aan het bewerken. Je wijzigingen kunnen momenteel niet worden opgeslagen.",
   "pageEditor.menu.copyLink": "Link kopiëren",
   "pageEditor.menu.export": "Exporteren",
   "pageEditor.menu.export.html": "HTML",

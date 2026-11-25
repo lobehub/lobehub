@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "تم الإعجاب",
   "pageEditor.likes.more": "+{{count}} المزيد",
   "pageEditor.linkCopied": "تم نسخ الرابط",
-  "pageEditor.lock.editingByOther": "{{name}} يقوم بتعديل هذه الصفحة. لا يمكن حفظ تغييراتك الآن.",
-  "pageEditor.lock.editingBySomeone": "شخص آخر يقوم بتعديل هذه الصفحة. لا يمكن حفظ تغييراتك الآن.",
   "pageEditor.menu.copyLink": "نسخ الرابط",
   "pageEditor.menu.export": "تصدير",
   "pageEditor.menu.export.html": "HTML",

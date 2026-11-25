@@ -391,8 +391,6 @@
   "pageEditor.likes.liked": "Beğenildi",
   "pageEditor.likes.more": "+{{count}} daha",
   "pageEditor.linkCopied": "Bağlantı kopyalandı",
-  "pageEditor.lock.editingByOther": "{{name}} bu sayfayı düzenliyor. Şu anda değişiklikleriniz kaydedilemiyor.",
-  "pageEditor.lock.editingBySomeone": "Başka biri bu sayfayı düzenliyor. Şu anda değişiklikleriniz kaydedilemiyor.",
   "pageEditor.menu.copyLink": "Bağlantıyı Kopyala",
   "pageEditor.menu.export": "Dışa Aktar",
   "pageEditor.menu.export.html": "HTML",
