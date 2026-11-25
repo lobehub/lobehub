@@ -12,14 +12,14 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
-import { BoxIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useInViewport } from 'ahooks';
+import { BoxIcon, CloudIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useDeviceMetricSeries } from '@/features/DeviceManager/DeviceHealth/shared';
 import { getDeviceIcon, getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
-import ManagedDeviceBadge from '@/features/DeviceManager/ManagedDeviceBadge';
 import { useSingleton } from '@/hooks/useSingleton';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
@@ -69,21 +69,28 @@ const DevicePresence = ({ device }: { device?: DeviceListItem }) => {
 
 /**
  * The machine's size — cores and memory — from its last health report, or
- * nothing for a device that never sent one. Read per card: each row fetches
- * (and caches) its own device's series, the same one the device page shows.
+ * nothing for a device that never sent one. Read per card while it is on
+ * screen, as the device list does: each row fetches (and caches) its own
+ * device's series, the same one the device page shows.
  */
 const DeviceSpec = ({ device }: { device: DeviceListItem }) => {
   const { t } = useTranslation('setting');
-  const { data } = useDeviceMetricSeries(device.deviceId, device.scope);
+  const ref = useRef<HTMLSpanElement>(null);
+  const [inViewport] = useInViewport(ref);
+  const { data } = useDeviceMetricSeries(device.deviceId, device.scope, !!inViewport);
   const parts = [
     data?.cpuCount ? t('devices.detail.cores', { count: data.cpuCount }) : undefined,
     data?.memoryTotalBytes ? formatSize(data.memoryTotalBytes, 0) : undefined,
   ].filter(Boolean);
-  if (parts.length === 0) return null;
+  // The anchor stays mounted while nothing is known, so the row can come into view.
   return (
-    <Text fontSize={12} style={{ flex: 'none' }} type="secondary">
-      {`· ${parts.join(' · ')}`}
-    </Text>
+    <span ref={ref} style={{ flex: 'none' }}>
+      {parts.length > 0 && (
+        <Text fontSize={12} type="secondary">
+          {`· ${parts.join(' · ')}`}
+        </Text>
+      )}
+    </span>
   );
 };
 
@@ -178,7 +185,7 @@ export function ExecutionEnvironments({
     try {
       await reorder(order);
     } catch (error) {
-      console.error('Failed to reorder execution environments', error);
+      console.error('Failed to reorder run devices', error);
       toast.error(t('settings.reorderFailed'));
     } finally {
       setPendingOrder(undefined);
@@ -206,7 +213,7 @@ export function ExecutionEnvironments({
   };
 
   /**
-   * One execution environment as a card: an icon tile, its name with any
+   * One run device as a card: an icon tile, its name with any
    * state tag, a quiet line saying where it works, and its actions.
    */
   // The drag handle sits at the right end of each card's header row, after its
@@ -331,15 +338,14 @@ export function ExecutionEnvironments({
       tags: (
         <>
           {unavailableBadge(directory, device)}
+          {/* One tag for what it is and that it costs: with presence and
+              sharing beside it, a second one would push the name out. */}
           {facts.managed && (
-            <>
-              <ManagedDeviceBadge />
-              <Tooltip title={t('settings.paidDeviceTooltip')}>
-                <Tag color="warning" size="small">
-                  {t('settings.paidDeviceTag')}
-                </Tag>
-              </Tooltip>
-            </>
+            <Tooltip title={t('settings.paidDeviceTooltip')}>
+              <Tag color="info" icon={<Icon icon={CloudIcon} />} size="small">
+                {t('settings.paidDeviceTag')}
+              </Tag>
+            </Tooltip>
           )}
           {facts.sharedBy && (
             <Tag size="small">{t('settings.sharedDeviceTag', { name: facts.sharedBy })}</Tag>

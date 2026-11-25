@@ -5629,6 +5629,6 @@ When I am ___, I need ___
   'workspace.auditLog.actions.budget.model_policy_updated': 'Model tier rule updated',
   'environments.form.runNotes': 'Run notes',
   'environments.form.runNotesHint':
-    'What running this environment takes, in your words. The agent reads it when choosing a run device and checks the device itself too.',
+    'What running this environment takes, such as how much memory it needs. Kept with the environment as guidance for choosing a run device.',
   'environments.form.runNotesPlaceholder': 'e.g. The dev server needs at least 8 GB of memory',
 };

@@ -20,6 +20,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 
 import { environmentRepositoryUrl } from '../environmentSource';
+import { getProjectSettingsPath } from '../Layout/navigation';
 import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
 import { addedFolderTarget } from './useProjectDirectory';
 import { NO_ENVIRONMENT, type useProjectRepository } from './useProjectRepository';
@@ -167,7 +168,7 @@ const ProjectWorkLocationPicker = ({
   // project's settings, not picked or added here.
   const configureEnvironment = () => {
     setOpen(false);
-    navigate(`/project/${projectId}/settings/environment`);
+    navigate(getProjectSettingsPath(projectId, 'environment'));
   };
 
   // What the chip says: the code environment when the run checks one out,

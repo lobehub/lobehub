@@ -64,7 +64,7 @@ export default {
   'topics.subGroup.byStatus': 'By status',
   'settings.addDirectory': 'Add run device',
   'settings.addDirectoryDescription':
-    "Select a connected device and a folder on it as the workspace root. Work happens under this folder: the project environment's repositories are checked out there, reusing a clone already in it. Files stay on that device.",
+    'Select a connected device and a folder on it as the workspace root. New topics on this device start in this folder. Files stay on that device.',
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -712,7 +712,8 @@ export default {
   'settings.environment': 'Environment',
   'settings.sandboxRunHint':
     "Starts fresh for each run and checks out the project environment's repositories",
-  'settings.paidDeviceTag': 'Paid',
-  'settings.paidDeviceTooltip': "Runs in LobeHub's cloud and counts toward your plan's usage.",
+  'settings.paidDeviceTag': 'Cloud · Paid',
+  'settings.paidDeviceTooltip':
+    "A cloud device LobeHub runs for you. Running on it counts toward your plan's usage.",
   'settings.sharedDeviceTag': 'Shared by {{name}}',
 };

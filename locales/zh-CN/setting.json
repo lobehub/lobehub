@@ -992,7 +992,7 @@
   "environments.form.repositorySetupHint": "仓库克隆后在它自己的文件夹里执行，早于环境的初始化命令。",
   "environments.form.repositoryUrlInvalid": "不是有效的 GitHub 仓库链接",
   "environments.form.runNotes": "运行备注",
-  "environments.form.runNotesHint": "用自己的话写下运行这个环境需要注意什么。AI 选运行设备时会参考，也会自己探测设备情况。",
+  "environments.form.runNotesHint": "运行这个环境需要注意什么，比如需要多少内存。会和环境一起保存，作为选择运行设备时的参考。",
   "environments.form.runNotesPlaceholder": "例如：跑 dev 至少需要 8G 内存",
   "environments.form.runtime": "运行与存储",
   "environments.form.saved": "已保存",
