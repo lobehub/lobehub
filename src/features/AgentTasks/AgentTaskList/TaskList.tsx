@@ -27,11 +27,12 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
-import { useInterfaceDensity } from '@/styles/density';
+import { DENSITY_TOKENS, useInterfaceDensity } from '@/styles/density';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import {
   getKanbanCreateTaskModalProps,
   getTaskGroupCreateDefaults,
@@ -133,6 +134,7 @@ const CREATE_ENTRY_GUTTER = 28;
 const renderGroupTitle = (
   group: TaskGroupMeta,
   count: number,
+  fontSize: number,
   sub?: boolean,
   withCreateEntry?: boolean,
 ) => (
@@ -143,8 +145,9 @@ const renderGroupTitle = (
     justify={'space-between'}
     style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
   >
-    <TaskGroupLabel group={group} />
-    <Text fontSize={12} type={'secondary'}>
+    <TaskGroupLabel listHeader group={group} />
+    {/* Same size as the title, muted by color only (like Linear). */}
+    <Text fontSize={fontSize} type={'secondary'}>
       {count}
     </Text>
     {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
@@ -163,6 +166,7 @@ const TaskGroupHeader = memo<{
 }>(({ createScope, item, onToggle }) => {
   const { t } = useTranslation('chat');
   const density = useInterfaceDensity();
+  const { fontSize } = DENSITY_TOKENS[density];
   const sub = item.kind === 'subGroup';
   const createDefaults = !createScope
     ? undefined
@@ -177,16 +181,27 @@ const TaskGroupHeader = memo<{
   return (
     <div style={{ paddingTop: item.first ? 0 : sub ? 6 : GROUP_GAP[density] }}>
       <div {...stylex.props(styles.header)}>
+        {/* The built-in chevron is hidden for the small filled triangle the task
+            detail sections and the sidebar use (like Linear). */}
         <AccordionRoot
-          indicatorPlacement={'start'}
+          hideIndicator
           value={item.collapsed ? [] : [item.key]}
           variant={sub ? 'borderless' : 'filled'}
           onValueChange={() => onToggle(item.key)}
         >
           <AccordionItem value={item.key}>
             <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-                {renderGroupTitle(item.meta, item.count, sub, !!createDefaults)}
+              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 10 }}>
+                <Flexbox horizontal align={'center'} flex={1} gap={6}>
+                  <AccordionArrowIcon
+                    isOpen={!item.collapsed}
+                    size={16}
+                    style={{ color: cssVar.colorTextDescription }}
+                  />
+                  <Flexbox flex={1}>
+                    {renderGroupTitle(item.meta, item.count, fontSize, sub, !!createDefaults)}
+                  </Flexbox>
+                </Flexbox>
               </AccordionTrigger>
             </AccordionHeader>
           </AccordionItem>
