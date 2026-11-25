@@ -42,6 +42,7 @@ export { PlanInjector } from './PlanInjector';
 export { ProjectContextInjector } from './ProjectContextInjector';
 export { ProjectInstructionsInjector } from './ProjectInstructionsInjector';
 export { RuntimeAdditionalContextProvider } from './RuntimeAdditionalContextProvider';
+export { SandboxUploadedFilesInjector } from './SandboxUploadedFilesInjector';
 export {
   formatSelectedSkills,
   formatSelectedSkillsContext,
@@ -156,6 +157,7 @@ export type {
   ProjectInstructionsInjectorConfig,
 } from './ProjectInstructionsInjector';
 export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditionalContextProvider';
+export type { SandboxUploadedFilesInjectorConfig } from './SandboxUploadedFilesInjector';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillChangesInjectorConfig } from './SkillChangesInjector';

@@ -200,7 +200,9 @@ export interface ContextFactProviders {
     | undefined
   >;
   /** Files synced into the topic's sandbox upload dir. */
-  listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
+  listSandboxFiles?: (
+    topicId: string,
+  ) => Promise<{ messageId?: string; name: string; size?: number }[] | undefined>;
   /** Messages of a referenced topic, oldest first. */
   listTopicMessages?: (
     topic: TopicFacts,

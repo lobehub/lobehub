@@ -65,6 +65,13 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 export interface SandboxInitFileItem {
   fileType: string;
   id: string;
+  /**
+   * User message the file was attached to (`messages_files`), when it is not a
+   * session-level file (`files_to_sessions`). Lets the context engine anchor
+   * `<uploaded_files>` onto the turn that uploaded the file instead of mutating
+   * message `[0]`.
+   */
+  messageId?: string;
   name: string;
   size: number;
   /** S3 key / storage url, needs to be turned into a download url before use */
@@ -761,23 +768,28 @@ export class FileModel {
       url: files.url,
     };
 
-    const [messageFiles, sessionFiles] = await Promise.all([
-      this.db
-        .select(columns)
-        .from(messagesFiles)
-        .innerJoin(messages, eq(messagesFiles.messageId, messages.id))
-        .innerJoin(files, eq(messagesFiles.fileId, files.id))
-        .where(and(eq(messages.topicId, topicId), eq(messagesFiles.userId, this.userId))),
+    const [sessionFiles, messageFiles] = await Promise.all([
       this.db
         .select(columns)
         .from(filesToSessions)
         .innerJoin(topics, eq(topics.sessionId, filesToSessions.sessionId))
         .innerJoin(files, eq(filesToSessions.fileId, files.id))
-        .where(and(eq(topics.id, topicId), eq(filesToSessions.userId, this.userId))),
+        .where(and(eq(topics.id, topicId), eq(filesToSessions.userId, this.userId)))
+        .orderBy(asc(files.id)),
+      this.db
+        .select({ ...columns, messageId: messagesFiles.messageId })
+        .from(messagesFiles)
+        .innerJoin(messages, eq(messagesFiles.messageId, messages.id))
+        .innerJoin(files, eq(messagesFiles.fileId, files.id))
+        .where(and(eq(messages.topicId, topicId), eq(messagesFiles.userId, this.userId)))
+        .orderBy(asc(messages.createdAt), asc(files.id)),
     ]);
 
+    // Session-level files come first so a file attached to both the session and
+    // a later message stays anchored at session scope (no `messageId`) instead
+    // of jumping when re-attached. Message files keep their earliest messageId.
     const deduped = new Map<string, SandboxInitFileItem>();
-    for (const file of [...messageFiles, ...sessionFiles]) {
+    for (const file of [...sessionFiles, ...messageFiles]) {
       if (!deduped.has(file.id)) deduped.set(file.id, file);
     }
 

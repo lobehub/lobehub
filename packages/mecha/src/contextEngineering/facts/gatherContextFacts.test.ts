@@ -599,6 +599,56 @@ describe('which tool counts as reaching the sandbox', () => {
   });
 });
 
+describe('gatherContextFacts — sandbox uploaded files anchoring', () => {
+  it('anchors visible message uploads onto step.sandboxUploadedFilesByMessage and keeps system variable empty', async () => {
+    const facts = await gatherContextFacts(
+      request({
+        enabledToolIds: ['lobe-cloud-sandbox'],
+        messages: [
+          { content: 'hi', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 } as never,
+          { content: 'hello', createdAt: 1, id: 'a1', role: 'assistant', updatedAt: 1 } as never,
+          { content: 'analyze csv', createdAt: 2, id: 'u2', role: 'user', updatedAt: 2 } as never,
+        ],
+        topicId: 't1',
+      }),
+      {
+        listSandboxFiles: async () => [{ messageId: 'u2', name: 'report.csv', size: 2048 }],
+      },
+    );
+
+    expect(facts.variables.sandbox_uploaded_files).toBe('');
+    expect(facts.step.sandboxUploadedFilesByMessage?.u2).toContain('/mnt/data/report.csv');
+  });
+
+  it('falls back session-level and truncated-history uploads to variables.sandbox_uploaded_files', async () => {
+    const facts = await gatherContextFacts(
+      request({
+        agent: { chatConfig: { enableHistoryCount: true, historyCount: 1 } },
+        enabledToolIds: ['lobe-cloud-sandbox'],
+        messages: [
+          { content: 'old upload', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 } as never,
+          { content: 'ack', createdAt: 1, id: 'a1', role: 'assistant', updatedAt: 1 } as never,
+          { content: 'latest', createdAt: 2, id: 'u2', role: 'user', updatedAt: 2 } as never,
+        ],
+        topicId: 't1',
+      }),
+      {
+        listSandboxFiles: async () => [
+          { name: 'session.pdf', size: 1024 },
+          { messageId: 'u1', name: 'truncated.csv', size: 512 },
+          { messageId: 'u2', name: 'fresh.csv', size: 256 },
+        ],
+      },
+    );
+
+    expect(facts.variables.sandbox_uploaded_files).toContain('/mnt/data/session.pdf');
+    expect(facts.variables.sandbox_uploaded_files).toContain('/mnt/data/truncated.csv');
+    expect(facts.variables.sandbox_uploaded_files).not.toContain('/mnt/data/fresh.csv');
+    expect(facts.step.sandboxUploadedFilesByMessage?.u2).toContain('/mnt/data/fresh.csv');
+    expect(facts.step.sandboxUploadedFilesByMessage?.u1).toBeUndefined();
+  });
+});
+
 describe('gatherContextFacts — revoked document reads', () => {
   const readKnowledge = (fileIds: string[]) =>
     ({

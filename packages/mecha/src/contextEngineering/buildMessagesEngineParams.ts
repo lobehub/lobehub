@@ -148,6 +148,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
       groupAgentBuilderContext: step?.groupAgentBuilderContext,
       onboardingContext: step?.onboardingContext,
       planTodo: step?.planTodo,
+      sandboxUploadedFilesByMessage: step?.sandboxUploadedFilesByMessage,
       workspaceContext: step?.workspaceContext,
     }),
     ...(step?.topicReferences?.length && { topicReferences: step.topicReferences }),

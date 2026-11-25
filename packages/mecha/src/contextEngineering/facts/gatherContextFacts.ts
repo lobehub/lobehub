@@ -6,8 +6,10 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import {
   CloudSandboxIdentifier,
   formatSandboxStoragePromptVariables,
+  formatSandboxUploadedFilesByMessage,
   formatUploadedFilesPrompt,
   isPersistentSandboxMode,
+  partitionSandboxUploadedFiles,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   type ComposioServiceSummary,
@@ -27,6 +29,7 @@ import {
   type AgentManagementContext,
   collectDocumentReads,
   type DocumentReferenceItem,
+  getSlicedMessages,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
   resolveDocumentReferences,
@@ -639,6 +642,21 @@ export const gatherContextFacts = async (
     workspaceContext,
   ] = await tupleSettled(tasks);
 
+  const visibleUserMessageIds = new Set(
+    getSlicedMessages(request.messages, {
+      enableHistoryCount: request.agent.chatConfig?.enableHistoryCount ?? undefined,
+      historyCount: request.agent.chatConfig?.historyCount ?? undefined,
+    })
+      .filter((message) => message.role === 'user' && typeof message.id === 'string' && message.id)
+      .map((message) => message.id),
+  );
+  const partitionedSandboxFiles = sandboxFiles
+    ? partitionSandboxUploadedFiles(sandboxFiles, visibleUserMessageIds)
+    : undefined;
+  const sandboxUploadedFilesByMessage = partitionedSandboxFiles
+    ? formatSandboxUploadedFilesByMessage(partitionedSandboxFiles.byMessageId)
+    : undefined;
+
   return {
     agentDocumentChanges,
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
@@ -651,6 +669,7 @@ export const gatherContextFacts = async (
       groupAgentBuilderContext,
       onboardingContext,
       planTodo,
+      sandboxUploadedFilesByMessage,
       topicReferences,
       workspaceContext,
     },
@@ -671,7 +690,9 @@ export const gatherContextFacts = async (
       language: userInfo?.language ?? '',
       memory_effort: String(request.agent.chatConfig?.memory?.effort ?? ''),
       sandbox_enabled: String(sandboxEnabled),
-      sandbox_uploaded_files: sandboxFiles ? formatUploadedFilesPrompt(sandboxFiles) : '',
+      sandbox_uploaded_files: partitionedSandboxFiles
+        ? formatUploadedFilesPrompt(partitionedSandboxFiles.systemFiles)
+        : '',
       // Left out entirely for an ephemeral run so the variable generators'
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
