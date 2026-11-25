@@ -34,6 +34,7 @@ import {
 } from './logic';
 import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
+import { useIsSlow } from './useIsSlow';
 
 const styles = stylex.create({
   collapsedButton: {
@@ -51,12 +52,22 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.2s ease',
   },
-  compressingLabel: {
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    fontSize: '12px',
-    color: cssVar.colorTextDescription,
+  // A quiet status line at the compression point, like a turn's own status rows.
+  statusRow: {
+    cursor: 'default',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingBlock: '4px',
+    paddingInline: '0',
+    borderStyle: 'none',
+    fontSize: '14px',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
   },
+  statusRowButton: { cursor: 'pointer' },
   container: { marginBlockEnd: '8px' },
   divider: { margin: '0' },
   summaryTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
@@ -110,6 +121,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
 
   const storeApi = useConversationStoreApi();
   useFollowCompressingRow(isGeneratingSummary && historyInline, storeApi.getState);
+  const isSlow = useIsSlow(isGeneratingSummary);
 
   const showPanelContent = shouldShowCompressedGroupPanel({
     expanded,
@@ -151,14 +163,13 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   if (isGeneratingSummary && historyInline) {
     return (
       <Flexbox className={stylex.props(styles.container).className}>
-        <Divider className={stylex.props(styles.divider).className}>
-          <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.compressingLabel)}>
-            <Icon icon={FoldVertical} size={14} />
-            <span className={cx(shinyTextStyles.shinyText)}>
-              {t('compression.dividerCompressing')}
-            </span>
-          </Flexbox>
-        </Divider>
+        <div {...stylex.props(styles.statusRow)}>
+          <Icon icon={FoldVertical} size={16} />
+          <span className={cx(shinyTextStyles.shinyText)}>
+            {t('compression.compacting')}
+            {isSlow && ` · ${t('compression.compactingSlow')}`}
+          </span>
+        </div>
       </Flexbox>
     );
   }
@@ -193,19 +204,17 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   if (historyInline) {
     return (
       <Flexbox className={stylex.props(styles.container).className} gap={8}>
-        <Divider className={stylex.props(styles.divider).className}>
-          <button
-            {...stylex.props(styles.collapsedButton)}
-            aria-expanded={expanded}
-            type={'button'}
-            onClick={toggleExpanded}
-          >
-            <Icon icon={FoldVertical} size={14} />
-            {/* The reader scrolls through the history right above; a turn count adds nothing. */}
-            <span>{t('compression.dividerAbove')}</span>
-            <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
-          </button>
-        </Divider>
+        {/* The reader scrolls through the history right above; a turn count adds nothing. */}
+        <button
+          {...stylex.props(styles.statusRow, styles.statusRowButton)}
+          aria-expanded={expanded}
+          type={'button'}
+          onClick={toggleExpanded}
+        >
+          <Icon icon={FoldVertical} size={16} />
+          <span>{t('compression.compacted')}</span>
+          <Icon icon={expanded ? ChevronUp : ChevronDown} size={14} />
+        </button>
         {showPanelContent && (
           <Flexbox gap={8}>
             <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
