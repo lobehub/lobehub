@@ -519,6 +519,12 @@ export class ChannelService {
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
+  /** The owner makes a person an admin or a plain member; members see the new mark at once. */
+  setMemberRole = async (channelId: string, memberId: string, role: 'admin' | 'member') => {
+    await this.repository.setMemberRole(channelId, memberId, role);
+    await this.changed(channelId);
+  };
+
   leave = async (channelId: string) => {
     const result = await this.repository.leave(channelId);
     await this.changed(channelId);
