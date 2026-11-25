@@ -58,7 +58,10 @@ export const executeContextCompression = async (
 
   const contextKey = messageMapKey(context as any);
   const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(get()) || [];
-  const messageIds = getCompressionCandidateMessageIds(dbMessages, options);
+  const messageIds = getCompressionCandidateMessageIds(dbMessages, {
+    ...options,
+    threadId: context.threadId,
+  });
   if (messageIds.length === 0) return false;
 
   const tempId = 'tmp_compress_' + nanoid();
@@ -88,9 +91,13 @@ export const executeContextCompression = async (
 
   try {
     // 1. Create compression group on server
+    // Scope the group to the open conversation: without `threadId` the server reads the main
+    // conversation, so a thread compaction summarized and returned the wrong messages.
     const result = await messageService.createCompressionGroup({
       agentId,
+      groupId: context.groupId,
       messageIds,
+      threadId: context.threadId,
       topicId,
     });
     const { messages: serverMessages, messagesToSummarize } = result;
@@ -146,7 +153,9 @@ export const executeContextCompression = async (
     const finalResult = await messageService.finalizeCompression({
       agentId,
       content: summaryContent,
+      groupId: context.groupId,
       messageGroupId: groupId,
+      threadId: context.threadId,
       topicId,
     });
 

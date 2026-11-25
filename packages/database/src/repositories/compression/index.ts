@@ -1,6 +1,6 @@
 import type { CompressionGroupMetadata } from '@lobechat/types';
 import { MessageGroupType } from '@lobechat/types';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 
 import type { MessageGroupItem } from '../../schemas';
 import { messageGroups, messages } from '../../schemas';
@@ -19,6 +19,13 @@ export interface FinalizeCompressionGroupParams {
   content: string;
   groupId: string;
   sourceGroupIds?: string[];
+  /**
+   * Conversation the new group belongs to: a thread id, or `null` for the main
+   * conversation. Prior groups holding a member from another conversation are
+   * not merged, so a compaction never moves rows across conversations. Omit to
+   * merge every requested group of the topic.
+   */
+  threadId?: string | null;
   topicId: string;
 }
 
@@ -189,7 +196,24 @@ export class CompressionRepository {
             this.groupsOwnership(),
           ),
         );
-      const sourceGroupIds = sourceGroups.map((group) => group.id);
+      let sourceGroupIds = sourceGroups.map((group) => group.id);
+
+      if (sourceGroupIds.length > 0 && params.threadId !== undefined) {
+        const outOfScopeGroups = await trx
+          .selectDistinct({ id: messages.messageGroupId })
+          .from(messages)
+          .where(
+            and(
+              this.messagesOwnership(),
+              inArray(messages.messageGroupId, sourceGroupIds),
+              params.threadId
+                ? or(isNull(messages.threadId), ne(messages.threadId, params.threadId))
+                : isNotNull(messages.threadId),
+            ),
+          );
+        const outOfScopeIds = new Set(outOfScopeGroups.map((group) => group.id));
+        sourceGroupIds = sourceGroupIds.filter((id) => !outOfScopeIds.has(id));
+      }
 
       if (sourceGroupIds.length === 0) return;
 
