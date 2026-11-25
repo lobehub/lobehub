@@ -657,7 +657,6 @@
   "plansModal.creditLimit.title": "Du hast dein Nutzungslimit erreicht",
   "plansModal.default.desc": "Schalten Sie mehr Kapazität und erweiterte Funktionen frei.",
   "plansModal.default.title": "Aktualisieren Sie Ihren Plan",
-  "plansModal.fileStorageLimit.desc": "Ihr Dateispeicher ist voll. Aktualisieren Sie, um weiterhin Dateien hochzuladen und zu verwalten.",
   "plansModal.fileStorageLimit.title": "Speicherlimit erreicht",
   "plansModal.messengerWechat.desc": "Der WeChat-System-Bot ist in kostenpflichtigen persönlichen Tarifen verfügbar. Upgrade, um ihn zu verbinden und zu nutzen.",
   "plansModal.messengerWechat.title": "WeChat nach dem Upgrade verbinden",

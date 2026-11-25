@@ -75,17 +75,17 @@ export default {
     'Every file you uploaded, sorted by type, including files filed into knowledge bases.',
   'docs.mergeNotice.drive.title': 'Files are in Drive',
   'docs.mergeNotice.intro':
-    'Pages and Resources are now one place: Docs. Here is where everything moved.',
+    'Pages and Resources now live in one place: Library. Here is where everything moved.',
   'docs.mergeNotice.knowledgeBase.desc':
-    'Your libraries are now called knowledge bases, each with its own cover.',
-  'docs.mergeNotice.knowledgeBase.title': 'Libraries are Knowledge Bases',
+    'The libraries you kept in Resources are now called knowledge bases, each with its own cover.',
+  'docs.mergeNotice.knowledgeBase.title': 'Resource libraries are Knowledge Bases',
   'docs.mergeNotice.links.desc':
-    'Links you saved to pages and resources open the same content in Docs.',
+    'Links you saved to pages and resources open the same content in Library.',
   'docs.mergeNotice.links.title': 'Old links still work',
   'docs.mergeNotice.pages.desc':
     'Pages you wrote are under My docs in the sidebar; pages teammates shared are under Shared docs.',
   'docs.mergeNotice.pages.title': 'Pages are in My docs',
-  'docs.mergeNotice.title': 'Pages and Resources are now Docs',
+  'docs.mergeNotice.title': 'Pages and Resources now live in Library',
   'docs.myDocs.empty': 'Create a page',
   'docs.myDocs.title': 'My docs',
   'docs.recentLibraries': 'Recent knowledge bases',
@@ -183,7 +183,7 @@ export default {
   'library.list.transferTitle': 'Move knowledge base',
   'library.list.transferTo': 'Move to…',
   'library.new': 'New Knowledge Base',
-  'library.backToResources': 'Back to Docs',
+  'library.backToResources': 'Back to Library',
   'library.publish': 'Publish to workspace',
   'library.publishConfirm.title': 'Publish knowledge base to workspace?',
   'library.title': 'Knowledge Base',

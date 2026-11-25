@@ -797,7 +797,7 @@
   "plansModal.creditLimit.title": "用量额度已用完",
   "plansModal.default.desc": "解锁更多容量与高级功能。",
   "plansModal.default.title": "升级套餐",
-  "plansModal.fileStorageLimit.desc": "文件存储已达上限，升级以继续上传，或前往<1>「资源」页面</1>删除不需要的文件以释放空间。",
+  "plansModal.fileStorageLimit.desc": "文件存储已达上限，升级以继续上传，或前往<1>「资料库」页面</1>删除不需要的文件以释放空间。",
   "plansModal.fileStorageLimit.title": "存储空间不足",
   "plansModal.messengerWechat.desc": "微信 System Bot 仅面向个人付费套餐开放，升级后即可连接并使用。",
   "plansModal.messengerWechat.title": "升级后连接微信",
