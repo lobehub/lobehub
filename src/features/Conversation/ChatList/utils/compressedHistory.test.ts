@@ -103,6 +103,24 @@ describe('expandCompressedRows', () => {
     ]);
   });
 
+  it('adds no gap row where members cannot be paged in', () => {
+    const older = msg('older', 'compressedGroup', {
+      compressedMessages: [msg('u0', 'user')],
+      compressedOmittedIds: ['o0'],
+    });
+    const later = group({ compressedOmittedIds: ['o1'] });
+    const messages = [older, later, msg('u2', 'user')];
+
+    const result = expandCompressedRows(
+      messages.map((m) => ({ id: m.id })),
+      messages,
+      {},
+      { pageable: false },
+    );
+
+    expect(result.rows.map((row) => row.id)).toEqual(['u0', 'older', 'u1', 'a1', 'group', 'u2']);
+  });
+
   it('leaves a transcript without compression untouched', () => {
     const messages = [msg('u1', 'user')];
     const rows = [{ id: 'u1' }];

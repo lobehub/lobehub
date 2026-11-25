@@ -100,6 +100,11 @@ export const expandCompressedRows = (
   rows: ChatRow[],
   messages: UIChatMessage[],
   pages: Record<string, CompressedHistoryPage>,
+  /**
+   * Whether unloaded members can be paged in. Share views cannot (the member
+   * page is owner-only), so they get no gap row that would load nothing.
+   */
+  { pageable = true }: { pageable?: boolean } = {},
 ): { messages: UIChatMessage[]; rows: CompressedRow[] } => {
   if (!messages.some(isCompressedGroup)) return { messages, rows };
 
@@ -115,7 +120,12 @@ export const expandCompressedRows = (
   const expandedRows: CompressedRow[] = [];
   for (const row of rows) {
     const group = groupById.get(row.id);
-    if (group && group.id !== firstId && getCompressedHistoryNextUntilId(group, pages[group.id]))
+    if (
+      pageable &&
+      group &&
+      group.id !== firstId &&
+      getCompressedHistoryNextUntilId(group, pages[group.id])
+    )
       expandedRows.push({ compressedGap: group.id, id: compressedGapRowId(group.id) });
     for (const member of membersByGroup.get(row.id) ?? []) {
       expandedRows.push({ compressedMember: member, id: member.id });

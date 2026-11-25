@@ -225,39 +225,38 @@ const ChatList = memo<ChatListProps>(
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
     const compressedHistoryPages = useConversationStore((s) => s.compressedHistoryPages);
-    // Steered follow-up turns fold into the turn they interrupted, and a
-    // compression group's original conversation unfolds into rows above the
-    // group. Custom item renderers address messages by id, so they keep the
-    // flat list (and the group keeps its own history view).
+    // Share views cannot page a group's older members (owner-only endpoint).
+    const canPageCompressedHistory = !context.agentShareId && !context.topicShareId;
+    // A compression group's original conversation unfolds into rows above the
+    // group on every surface; this list renders those rows itself. Steered
+    // follow-up turns fold into the turn they interrupted only for the default
+    // renderer: custom ones render each message on its own.
     const expandedRows = useMemo(
       () =>
-        itemContent
-          ? undefined
-          : expandCompressedRows(
-              buildChatRows(displayMessages),
-              displayMessages,
-              compressedHistoryPages,
-            ),
-      [compressedHistoryPages, displayMessages, itemContent],
+        expandCompressedRows(
+          itemContent
+            ? displayMessages.map((message) => ({ id: message.id }))
+            : buildChatRows(displayMessages),
+          displayMessages,
+          compressedHistoryPages,
+          { pageable: canPageCompressedHistory },
+        ),
+      [canPageCompressedHistory, compressedHistoryPages, displayMessages, itemContent],
     );
-    const rows = expandedRows?.rows;
-    const rowIds = useMemo(
-      () => rows?.map((row) => row.id) ?? displayMessageIds,
-      [displayMessageIds, rows],
-    );
-    const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
+    const rows = expandedRows.rows;
+    const rowIds = useMemo(() => rows.map((row) => row.id), [rows]);
+    const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () =>
-        resolveMessageDeepLink(expandedRows?.messages ?? displayMessages, rowIds, messageDeepLink),
-      [displayMessages, expandedRows, messageDeepLink, rowIds],
+      () => resolveMessageDeepLink(expandedRows.messages, rowIds, messageDeepLink),
+      [expandedRows, messageDeepLink, rowIds],
     );
     const resolveMessageRow = useCallback(
       (messageId: string) =>
-        resolveMessageDeepLink(expandedRows?.messages ?? displayMessages, rowIds, {
+        resolveMessageDeepLink(expandedRows.messages, rowIds, {
           id: messageId,
           navigationKey: messageId,
         })?.index ?? -1,
-      [displayMessages, expandedRows, rowIds],
+      [expandedRows, rowIds],
     );
     const storeApi = useConversationStoreApi();
     const rowIdsRef = useRef(rowIds);
@@ -337,15 +336,6 @@ const ChatList = memo<ChatListProps>(
       (index: number, id: string) => {
         const isLatestItem = rowIds.length === index + 1;
         const row = rowById.get(id);
-        if (row?.compressedMember) return <CompressedMemberRow id={id} index={index} />;
-        if (row?.compressedGap)
-          return (
-            <CompressedHistoryGap
-              anchorId={rowIds[index + 1]}
-              groupId={row.compressedGap}
-              onLoad={loadCompressedGap}
-            />
-          );
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -363,7 +353,26 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [rowIds, rowById, defaultWorkflowExpandLevel, loadCompressedGap, receiptsByAnchor],
+      [rowIds, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+    );
+    // Compressed-history rows are this list's own, whichever renderer draws the
+    // messages: custom renderers only know message ids.
+    const renderItem = useCallback(
+      (index: number, id: string) => {
+        const row = rowById.get(id);
+        if (row?.compressedMember) return <CompressedMemberRow id={id} index={index} />;
+        if (row?.compressedGap)
+          return (
+            <CompressedHistoryGap
+              anchorId={rowIds[index + 1]}
+              groupId={row.compressedGap}
+              onLoad={loadCompressedGap}
+            />
+          );
+
+        return (itemContent ?? defaultItemContent)(index, id);
+      },
+      [defaultItemContent, itemContent, loadCompressedGap, rowById, rowIds],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -482,13 +491,13 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <BackgroundRunHintContext value={!hideBackgroundRunHint}>
-            <CompressedHistoryInlineContext value={!itemContent}>
+            <CompressedHistoryInlineContext value>
               <VirtualizedList
                 dataSource={rowIds}
                 footerSlot={footerSlot}
                 headerSlot={headerSlot}
                 initialScrollPosition={initialScrollPosition}
-                itemContent={itemContent ?? defaultItemContent}
+                itemContent={renderItem}
                 messageDeepLink={resolvedMessageDeepLink}
                 paging={paging}
                 printable={printable}
