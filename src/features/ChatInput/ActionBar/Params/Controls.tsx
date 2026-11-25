@@ -417,7 +417,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const toggleAgentMode = useToggleAgentMode();
   const gatewayMode = useGatewayMode();
   const { canUseResource } = useChatInputResourceAccess();
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isModeLocked } =
+  const { canSelectAgentMode, currentMode, isAgentMode, isAgentModeUnavailable, isModeLocked } =
     useEffectiveAgentMode(agentId);
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
@@ -444,7 +444,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
     REASONING_PARAMS_SET.has(param),
   );
-  const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
+  const enableAgentMode = isAgentMode;
   const form = useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>

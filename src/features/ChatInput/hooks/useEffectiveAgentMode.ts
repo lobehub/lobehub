@@ -84,8 +84,10 @@ const useAgentModeForModel = (
  */
 export const useEffectiveAgentMode = (agentId: string) => {
   const { conversationMode, isModeLocked } = useTopicConversationMode();
+  const mode = useAgentModeForModel(agentId, useEffectiveModel(agentId), conversationMode);
   return {
-    ...useAgentModeForModel(agentId, useEffectiveModel(agentId), conversationMode),
+    ...mode,
+    isAgentMode: mode.currentMode === 'agent',
     isModeLocked,
   };
 };

@@ -203,6 +203,18 @@ describe('useEffectiveAgentMode', () => {
     expect(result.current).toMatchObject({ currentMode: 'chat', isModeLocked: true });
   });
 
+  it('keeps panel mode flags aligned with committed Chat after the Agent preference changes', () => {
+    testState.topic.mode = 'chat';
+    testState.agent.enableAgentMode = false;
+    const { result, rerender } = renderHook(() => useEffectiveAgentMode('agent-1'));
+    testState.agent.enableAgentMode = true;
+    rerender();
+    expect(result.current).toMatchObject({ currentMode: 'chat', isAgentMode: false });
+    testState.topic.mode = undefined;
+    rerender();
+    expect(result.current).toMatchObject({ currentMode: 'agent', isAgentMode: true });
+  });
+
   it('keeps a precreated empty topic selectable', () => {
     const { result } = renderHook(() => useEffectiveAgentMode('agent-1'));
     expect(result.current.isModeLocked).toBe(false);
