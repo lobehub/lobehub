@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import compressImage, {
   COMPRESSIBLE_IMAGE_TYPES,
@@ -11,6 +11,12 @@ import compressImage, {
 const getContextSpy = vi.spyOn(global.HTMLCanvasElement.prototype, 'getContext');
 const drawImageSpy = vi.spyOn(CanvasRenderingContext2D.prototype, 'drawImage');
 const toDataURLSpy = vi.spyOn(global.HTMLCanvasElement.prototype, 'toDataURL');
+
+// A test that fails mid-way must not leave its mocked Image to the next one.
+const OriginalImage = global.Image;
+afterEach(() => {
+  global.Image = OriginalImage;
+});
 
 beforeEach(() => {
   getContextSpy.mockClear();
@@ -211,6 +217,13 @@ describe('compressImageFile', () => {
       }
     } as any;
 
+    // Environments differ on whether canvas.toBlob produces a blob; pin it to one that does.
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback, type) =>
+        setTimeout(() => callback(new Blob([new Uint8Array(10)], { type })), 0),
+      );
+
     const result = await compressImageFile(file);
 
     expect(result).not.toBe(file);
@@ -218,7 +231,8 @@ describe('compressImageFile', () => {
     // was hardcoded to 'image/png', which inflated photographic JPEGs.
     expect(result.type).toBe('image/jpeg');
     expect(result.name).toBe('photo.jpg');
-    expect(toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.85);
+    expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85);
+    toBlobSpy.mockRestore();
     global.Image = originalImage;
   });
 
