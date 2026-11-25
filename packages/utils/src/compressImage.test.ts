@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import compressImage, {
   COMPRESSIBLE_IMAGE_TYPES,
@@ -126,6 +126,15 @@ describe('constants', () => {
 });
 
 describe('compressImageFile', () => {
+  const originalImage = global.Image;
+
+  // Restore here rather than at the end of each test: a test that fails before its own
+  // cleanup would leave its MockImage installed, and every later mock would then extend it
+  // and fail with "Cannot redefine property: width".
+  afterEach(() => {
+    global.Image = originalImage;
+  });
+
   const createMockFile = (name: string, type: string, size: number) => {
     const content = new Uint8Array(size);
     return new File([content], name, { type });
@@ -200,26 +209,25 @@ describe('compressImageFile', () => {
 
   it('should preserve JPEG type when compressing large JPEG inputs (no PNG re-encoding)', async () => {
     const file = createMockFile('photo.jpg', 'image/jpeg', 1000);
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback, type) =>
+        setTimeout(() => callback(new Blob([new Uint8Array(10)], { type })), 0),
+      );
+    mockImageLoad(3000, 2000);
 
-    const originalImage = global.Image;
-    global.Image = class MockImage extends originalImage {
-      constructor() {
-        super();
-        Object.defineProperty(this, 'width', { value: 3000, writable: false });
-        Object.defineProperty(this, 'height', { value: 2000, writable: false });
-        setTimeout(() => this.dispatchEvent(new Event('load')), 0);
-      }
-    } as any;
+    try {
+      const result = await compressImageFile(file);
 
-    const result = await compressImageFile(file);
-
-    expect(result).not.toBe(file);
-    // Output File MIME type must match the source format — previously this
-    // was hardcoded to 'image/png', which inflated photographic JPEGs.
-    expect(result.type).toBe('image/jpeg');
-    expect(result.name).toBe('photo.jpg');
-    expect(toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.85);
-    global.Image = originalImage;
+      expect(result).not.toBe(file);
+      // Output File MIME type must match the source format — previously this
+      // was hardcoded to 'image/png', which inflated photographic JPEGs.
+      expect(result.type).toBe('image/jpeg');
+      expect(result.name).toBe('photo.jpg');
+      expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85);
+    } finally {
+      toBlobSpy.mockRestore();
+    }
   });
 
   it('should preserve WebP inputs as PNG (existing fallback behaviour)', async () => {
