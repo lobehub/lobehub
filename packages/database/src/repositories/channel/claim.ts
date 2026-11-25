@@ -45,6 +45,13 @@ export interface ChannelClaimOptions {
   /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
   onlineDeviceIds?: string[];
   /**
+   * Called when the job waits for the device picked for its member in the Channel because that
+   * device is offline, with the member who picked it. The caller may start the device (a managed
+   * cloud device sleeps until woken) once the claim commits; the job is claimed again when the
+   * device is online. Only consulted with `onlineDeviceIds`.
+   */
+  onPickedDeviceOffline?: (device: { deviceId: string; ownerId?: string }) => void;
+  /**
    * The device a run with no device picked in the Channel will route to, from the Agent's own
    * settings as the execution identity's ordinary conversation would resolve them, and whether it
    * is online for that identity; undefined when it needs none or would wake it. Lets an offline
@@ -608,6 +615,11 @@ export const claimJob = async (
         ? routed.deviceId
         : undefined;
   if (offlineDeviceId) {
+    if (offlineDeviceId === channelDeviceId)
+      options.onPickedDeviceOffline?.({
+        deviceId: channelDeviceId,
+        ownerId: member.config.deviceOwnerId,
+      });
     await block(
       tx,
       job,

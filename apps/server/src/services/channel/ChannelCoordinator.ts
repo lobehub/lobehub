@@ -43,6 +43,7 @@ import { ChannelRoutingService } from './ChannelRoutingService';
 import { announceDeviceGrants } from './deviceGrantCard';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
+import { type PickedOfflineDevice, wakePickedDevices } from './pickedDeviceWake';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { deliverRelayReceipt } from './relayReceipt';
 import { reportChannelReplyFailure } from './replyError';
@@ -249,6 +250,8 @@ export class ChannelCoordinator {
       .flat()
       .filter((device) => device.online)
       .map((device) => device.deviceId);
+    // Devices picked in the Channel that a claim found offline; a sleeping cloud one is woken.
+    const pickedOffline: PickedOfflineDevice[] = [];
 
     try {
       await pMap(
@@ -281,6 +284,9 @@ export class ChannelCoordinator {
                   accessDenied = true;
                 },
                 onlineDeviceIds,
+                onPickedDeviceOffline: (device) => {
+                  pickedOffline.push(device);
+                },
                 routedDevice: (run) => resolveChannelRoutedDevice(this.db, run, routedPresence),
                 serverDefaultAgentConfig: getServerDefaultAgentConfig(),
               });
@@ -302,6 +308,13 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    if (pickedOffline.length)
+      await wakePickedDevices(this.db, {
+        channelId,
+        devices: pickedOffline,
+        onlineDeviceIds,
+        workspaceId: channel.workspaceId,
+      });
     // A claim that found the device made private since it was picked files a request, and so does
     // one whose requester may not use the Agent; ask their owners now.
     if (pending.length) {
