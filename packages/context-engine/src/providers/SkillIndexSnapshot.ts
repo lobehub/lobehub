@@ -185,29 +185,30 @@ const removedSinceNoted = (
 };
 
 /**
- * Skills an earlier note reported as updated that now match their snapshot row
- * again (description reverted, say). The row diff no longer lists them, so
- * without this the earlier note — which supersedes the index — would stay the
- * last word.
+ * Skills an earlier note reported as updated or removed that now match their
+ * snapshot row again (description reverted, or disabled and re-enabled). The
+ * row diff no longer lists them, so without this the earlier note — which
+ * supersedes the index — would stay the last word, and a re-enabled skill would
+ * keep reading as unavailable.
  */
-const revertedSinceNoted = (
+const restoredSinceNoted = (
   snapshot: SkillIndexSnapshot,
   skills: SkillMeta[],
   diffed: SkillIndexChange[],
 ): SkillIndexChange[] => {
   const liveListed = new Map(listedSkills(skills).map((s) => [s.identifier, s]));
   const inDiff = new Set(diffed.map((change) => change.identifier));
-  const reverted = new Map<string, SkillIndexChange>();
+  const restored = new Map<string, SkillIndexChange>();
 
   for (const note of snapshot.notes) {
     for (const change of note.changes) {
       const skill = liveListed.get(change.identifier);
-      if (change.kind !== 'updated' || !skill || inDiff.has(change.identifier)) continue;
-      reverted.set(change.identifier, toChange(toRow(skill), 'updated'));
+      if (change.kind === 'added' || !skill || inDiff.has(change.identifier)) continue;
+      restored.set(change.identifier, toChange(toRow(skill), 'updated'));
     }
   }
 
-  return [...reverted.values()];
+  return [...restored.values()];
 };
 
 const sameChanges = (a: SkillIndexChange[], b: SkillIndexChange[]) =>
@@ -231,7 +232,7 @@ export function noteSkillChanges(
   if (snapshot.notes.some((note) => note.messageId === messageId)) return snapshot;
 
   const diffed = [...diffSkillIndex(snapshot.rows, skills), ...removedSinceNoted(snapshot, skills)];
-  const changes = [...diffed, ...revertedSinceNoted(snapshot, skills, diffed)];
+  const changes = [...diffed, ...restoredSinceNoted(snapshot, skills, diffed)];
   if (changes.length === 0) return snapshot;
 
   const newestPresent = snapshot.notes.findLast((note) => presentMessageIds.has(note.messageId));

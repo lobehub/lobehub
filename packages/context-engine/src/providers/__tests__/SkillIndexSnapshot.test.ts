@@ -267,6 +267,46 @@ describe('SkillIndexSnapshot', () => {
     });
   });
 
+  it('notes when a skill removed on an earlier turn is re-enabled unchanged', () => {
+    const base = takeSkillIndexSnapshot([docWriter(), chartMaker()], { takenAt: new Date(at(0)) });
+    const disabled = noteSkillChanges(base, [chartMaker()], {
+      messageId: 'u2',
+      presentMessageIds: new Set(['u1', 'u2']),
+    });
+    expect(disabled.notes[0].changes).toEqual([
+      { identifier: 'doc-writer', kind: 'removed', name: 'doc-writer' },
+    ]);
+
+    const restored = noteSkillChanges(disabled, [docWriter(), chartMaker()], {
+      messageId: 'u3',
+      presentMessageIds: new Set(['u1', 'u2', 'u3']),
+    });
+
+    expect(restored.notes).toHaveLength(2);
+    expect(restored.notes[1]).toEqual({
+      changes: [
+        {
+          description: 'Drafts and edits technical documentation.',
+          identifier: 'doc-writer',
+          kind: 'updated',
+          name: 'doc-writer',
+        },
+      ],
+      messageId: 'u3',
+    });
+
+    const rendered = formatSkillChanges(restored.notes[1].changes);
+    expect(rendered).toContain('<skill name="doc-writer">');
+    expect(rendered).not.toContain('<removed_skills>');
+
+    // The correction already says it: a later unchanged turn adds nothing.
+    const later = noteSkillChanges(restored, [docWriter(), chartMaker()], {
+      messageId: 'u4',
+      presentMessageIds: new Set(['u1', 'u2', 'u3', 'u4']),
+    });
+    expect(later).toBe(restored);
+  });
+
   it('keeps live pre-activated skills without duplicating them or marking them removed', () => {
     const base = takeSkillIndexSnapshot([docWriter(), chartMaker()], { takenAt: new Date(at(0)) });
     const live: SkillMeta[] = [
