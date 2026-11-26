@@ -370,9 +370,11 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
     const dialogRef = useRef<HTMLDivElement>(null);
     const [storedMode, setStoredMode] = useLocalStorageState<ComparisonMode>(
       MODE_STORAGE_KEY,
-      'side',
+      'flip',
     );
-    const mode: ComparisonMode = storedMode === 'flip' ? 'flip' : 'side';
+    // Flip is the default: one capture at a time is what opening evidence
+    // already shows, so side by side is an opt-in the toggle remembers.
+    const mode: ComparisonMode = storedMode === 'side' ? 'side' : 'flip';
     const flip = mode === 'flip';
     // Read by the key handler: as an effect dependency, a mode change would
     // re-run the focus lifecycle below and pull focus back to Close.
