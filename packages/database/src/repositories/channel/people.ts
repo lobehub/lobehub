@@ -1,14 +1,21 @@
 import type { SQL } from 'drizzle-orm';
-import { and, asc, eq, isNull, ne, notExists, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 
 import { channelMembers, users, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
 import { ilikeContains } from '../../utils/like';
+import { memberNicknameSql } from '../../utils/workspaceMemberNickname';
+import type { ChannelContacts } from './contacts';
 import { ChannelError } from './error';
+import { requirePeerRelation } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 
-const requireWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
+export const requireWorkspaceMember = async (
+  tx: Transaction,
+  workspaceId: string,
+  userId: string,
+) => {
   const [member] = await tx
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)
@@ -23,69 +30,92 @@ const requireWorkspaceMember = async (tx: Transaction, workspaceId: string, user
   if (!member) throw new ChannelError('NOT_FOUND', 'Workspace member not found');
 };
 
-const requireWorkspace = async (tx: Transaction, { channel, member }: ChannelAccess) => {
-  if (!channel.workspaceId)
-    throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-  await requireWorkspaceMember(tx, channel.workspaceId, member.userId!);
-  return channel.workspaceId;
+/** Only group Channels take people; a direct conversation starts a group instead. */
+const requireGroup = ({ channel }: ChannelAccess) => {
+  if (channel.agentId || channel.peerUserId)
+    throw new ChannelError('BAD_REQUEST', 'People can only be added to group channels');
 };
 
-const requireGroupWorkspace = async (tx: Transaction, access: ChannelAccess) => {
-  if (access.channel.agentId)
-    throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-  return requireWorkspace(tx, access);
-};
-
-const workspaceUserCandidates = (
+/**
+ * Who `userId` can bring into a Channel in this scope: in a workspace, its active members; in the
+ * personal space, their mutual contacts, the same people they can talk with one-on-one.
+ */
+const userCandidates = async (
   tx: Transaction,
-  workspaceId: string,
+  contacts: ChannelContacts,
+  workspaceId: string | null,
+  userId: string,
   exclude: SQL,
   search: string,
 ) => {
+  if (workspaceId) await requireWorkspaceMember(tx, workspaceId, userId);
   const query = search.trim();
-  return tx
+  // Inside a workspace a person goes by their nickname there; the membership join below makes
+  // `workspace_members` available only in that case.
+  const nickname = memberNicknameSql();
+  const name = workspaceId
+    ? sql<string | null>`coalesce(${nickname}, ${users.fullName})`
+    : users.fullName;
+  const base = tx
     .select({
       avatar: users.avatar,
-      fullName: users.fullName,
+      fullName: name,
       userId: users.id,
       username: users.username,
     })
-    .from(workspaceMembers)
-    .innerJoin(users, eq(users.id, workspaceMembers.userId))
+    .from(users);
+  const scoped = workspaceId
+    ? base.innerJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.userId, users.id),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+    : base;
+  return scoped
     .where(
       and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        isNull(workspaceMembers.deletedAt),
+        workspaceId ? undefined : contacts.mutualPersonalContactWhere(userId, sql`${users.id}`),
+        ne(users.id, userId),
         exclude,
         query
-          ? or(ilikeContains(users.fullName, query), ilikeContains(users.username, query))
+          ? or(
+              workspaceId ? ilikeContains(nickname, query) : undefined,
+              ilikeContains(users.fullName, query),
+              ilikeContains(users.username, query),
+            )
           : undefined,
       ),
     )
-    .orderBy(asc(users.fullName), asc(users.id))
+    .orderBy(asc(name), asc(users.id))
     .limit(50);
 };
 
 /**
- * Only active people in this workspace; search the full directory, not a client-side page. A
- * direct conversation lists them for the group that inviting from it starts.
+ * Only people the caller can bring in that are not already active here; search the full
+ * directory, not a client-side page. A direct conversation lists them for the group that inviting
+ * from it starts.
  */
 export const channelUserCandidates = async (
   tx: Transaction,
-  access: ChannelAccess,
+  contacts: ChannelContacts,
+  { channel, member }: ChannelAccess,
   search = '',
-) => {
-  const workspaceId = await requireWorkspace(tx, access);
-  return workspaceUserCandidates(
+) =>
+  userCandidates(
     tx,
-    workspaceId,
+    contacts,
+    channel.workspaceId,
+    member.userId!,
     notExists(
       tx
         .select({ id: channelMembers.id })
         .from(channelMembers)
         .where(
           and(
-            eq(channelMembers.channelId, access.channel.id),
+            eq(channelMembers.channelId, channel.id),
             eq(channelMembers.userId, users.id),
             eq(channelMembers.status, 'active'),
           ),
@@ -93,22 +123,41 @@ export const channelUserCandidates = async (
     ),
     search,
   );
-};
 
-/** The people a new workspace Channel can start with: everyone active except its creator. */
-export const newChannelUserCandidates = async (
+/** The people a new Channel in this scope can start with: everyone the creator can bring in. */
+export const newChannelUserCandidates = (
   tx: Transaction,
-  workspaceId: string,
+  contacts: ChannelContacts,
+  workspaceId: string | null,
   userId: string,
   search = '',
-) => {
-  await requireWorkspaceMember(tx, workspaceId, userId);
-  return workspaceUserCandidates(tx, workspaceId, ne(users.id, userId), search);
-};
+) => userCandidates(tx, contacts, workspaceId, userId, sql`true`, search);
 
-export const addChannelUser = async (tx: Transaction, access: ChannelAccess, userId: string) => {
-  const workspaceId = await requireGroupWorkspace(tx, access);
-  await requireWorkspaceMember(tx, workspaceId, userId);
+/**
+ * Member metadata naming who added the member, merged into what it already holds. A null inviter,
+ * someone joining on their own, drops an earlier one so a rejoin does not keep the old adder.
+ */
+export const memberInviterMetadata = (invitedBy: string | null) =>
+  invitedBy
+    ? sql`coalesce(${channelMembers.metadata}, '{}'::jsonb) || jsonb_build_object('invitedBy', ${invitedBy}::text)`
+    : sql`coalesce(${channelMembers.metadata}, '{}'::jsonb) - 'invitedBy'`;
+
+export const addChannelUser = async (
+  tx: Transaction,
+  contacts: ChannelContacts,
+  access: ChannelAccess,
+  userId: string,
+) => {
+  requireGroup(access);
+  const { workspaceId } = access.channel;
+  const inviterId = access.member.userId!;
+  if (workspaceId) {
+    await requireWorkspaceMember(tx, workspaceId, inviterId);
+    await requireWorkspaceMember(tx, workspaceId, userId);
+  } else if (userId !== inviterId) {
+    // A personal group takes the inviter's mutual contacts, checked like a one-on-one chat.
+    await requirePeerRelation(tx, contacts, null, inviterId, userId);
+  }
   const [existing] = await tx
     .select()
     .from(channelMembers)
@@ -117,7 +166,11 @@ export const addChannelUser = async (tx: Transaction, access: ChannelAccess, use
   const [member] = existing
     ? await tx
         .update(channelMembers)
-        .set({ role: 'member', status: 'active' })
+        .set({
+          metadata: memberInviterMetadata(access.member.id),
+          role: 'member',
+          status: 'active',
+        })
         .where(eq(channelMembers.id, existing.id))
         .returning()
     : await tx
@@ -126,6 +179,7 @@ export const addChannelUser = async (tx: Transaction, access: ChannelAccess, use
           actorType: 'user',
           channelId: access.channel.id,
           lastReadSequence: 0,
+          metadata: { invitedBy: access.member.id },
           role: 'member',
           userId,
         })

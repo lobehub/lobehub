@@ -1,7 +1,7 @@
 import type { CDPSession, Page } from '@playwright/test';
 
-import type { StyleSnapshot } from './snapshot';
-import { captureInPage } from './snapshot';
+import type { StyleSnapshot } from '../../../../packages/style-equivalence/src/capture/snapshot';
+import { captureInPage } from '../../../../packages/style-equivalence/src/capture/snapshot';
 
 /** Blink batches standard computed properties and interns their values in DOMSnapshot.
  * Custom properties are not accepted by this CDP method. Resolved consumers still are.
@@ -10,7 +10,12 @@ import { captureInPage } from './snapshot';
 export const createFastCapture = async (
   page: Page,
   cdp: CDPSession,
-  options?: { properties: string[]; prepared: StyleSnapshot; nodeStyles?: boolean },
+  options?: {
+    properties: string[];
+    prepared: StyleSnapshot;
+    nodeStyles?: boolean;
+    scope?: { selector: string; keyPrefix: string; originSelector: string };
+  },
 ) => {
   const properties =
     options?.properties ??
@@ -37,6 +42,7 @@ export const createFastCapture = async (
     const metadata =
       options?.prepared ??
       (await page.evaluate(captureInPage, {
+        ...options?.scope,
         animationTime,
         properties: ['animation-name'],
       }));
@@ -57,7 +63,12 @@ export const createFastCapture = async (
         const attributes = nodes.attributes?.[index] ?? [];
         for (let item = 0; item < attributes.length; item += 2) {
           if (snapshot.strings[attributes[item]] !== 'data-experiment-node') continue;
-          const key = normalKeys[Number(snapshot.strings[attributes[item + 1]])];
+          const marker = snapshot.strings[attributes[item + 1]];
+          const prefix = options?.scope?.keyPrefix ?? '';
+          if (!marker.startsWith(prefix)) continue;
+          const ordinal = marker.slice(prefix.length);
+          if (!/^\d+$/.test(ordinal)) continue;
+          const key = normalKeys[Number(ordinal)];
           if (key) keys.set(index, key);
         }
       }
@@ -90,6 +101,7 @@ export const createFastCapture = async (
     let fallbackReads = 0;
     if (missing.length) {
       const fallback = await page.evaluate(captureInPage, {
+        ...options?.scope,
         animationTime,
         properties,
         styleKeys: missing,

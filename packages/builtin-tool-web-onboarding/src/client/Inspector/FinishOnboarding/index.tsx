@@ -1,19 +1,16 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  done: css`
-    color: ${cssVar.colorSuccess};
-  `,
-}));
+const styles = stylex.create({ done: { color: cssVar.colorSuccess } });
 
 export const FinishOnboardingInspector = memo<
   BuiltinInspectorProps<Record<string, never>, Record<string, unknown>>
@@ -26,7 +23,9 @@ export const FinishOnboardingInspector = memo<
       <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-web-onboarding.apiName.finishOnboarding')}
       </span>
-      {succeeded && <Icon className={styles.done} icon={CheckCircle2} size={14} />}
+      {succeeded && (
+        <Icon className={stylex.props(styles.done).className} icon={CheckCircle2} size={14} />
+      )}
     </div>
   );
 });

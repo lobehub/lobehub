@@ -35,12 +35,10 @@ const rows = Array.from({ length: 12 }, (_, index) => ({
   type: index === 0 ? 'speechRecognition' : 'chat',
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({ data: rows, isLoading: false, mutate: vi.fn() }),
-}));
-
-vi.mock('@/services/usage', () => ({
-  usageService: { findByMonth: vi.fn() },
+vi.mock('@/store/stats', () => ({
+  statsActions: { useFetchUsageLogs: () => ({ error: undefined, revalidate: vi.fn() }) },
+  statsSelectors: { settledUsageLogs: () => () => rows },
+  useStatsStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 // Keep pagination lightweight while exercising the actual type column renderer.
@@ -95,7 +93,7 @@ const renderTable = () =>
 
 describe('UsageTable', () => {
   it.each([
-    ['en-US', 'Voice Transcription'],
+    ['en-US', 'Voice transcription'],
     ['zh-CN', '语音转写'],
   ])('renders the speech-recognition icon and label in %s', async (lng, label) => {
     const i18n = createInstance();

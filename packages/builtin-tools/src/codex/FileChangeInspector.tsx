@@ -3,32 +3,20 @@
 import { FilePathDisplay } from '@lobechat/shared-tool-ui/components';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type CodexFileChangeArgs, type CodexFileChangeState, getFileChangeStats } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  count: css`
-    margin-inline-start: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  lineAdded: css`
-    margin-inline-start: 6px;
-    font-size: 12px;
-    color: ${cssVar.colorSuccess};
-  `,
-  lineDeleted: css`
-    margin-inline-start: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorError};
-  `,
-  summary: css`
-    margin-inline-end: 6px;
-  `,
-}));
+const styles = stylex.create({
+  count: { marginInlineStart: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  lineAdded: { marginInlineStart: '6px', fontSize: '12px', color: cssVar.colorSuccess },
+  lineDeleted: { marginInlineStart: '4px', fontSize: '12px', color: cssVar.colorError },
+  summary: { marginInlineEnd: '6px' },
+});
 
 const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
@@ -55,17 +43,17 @@ const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, Code
       <div className={cx(inspectorTextStyles.root, isEditing && shinyTextStyles.shinyText)}>
         {stats.firstPath ? (
           <>
-            <span className={styles.summary}>{summary}:</span>
+            <span {...stylex.props(styles.summary)}>{summary}:</span>
             <FilePathDisplay filePath={stats.firstPath} />
           </>
         ) : (
           <span>{summary}</span>
         )}
-        {stats.total > 1 && <span className={styles.count}>+{stats.total - 1}</span>}
+        {stats.total > 1 && <span {...stylex.props(styles.count)}>+{stats.total - 1}</span>}
         {hasLineStats && (
           <>
-            <span className={styles.lineAdded}>+{stats.linesAdded}</span>
-            <span className={styles.lineDeleted}>-{stats.linesDeleted}</span>
+            <span {...stylex.props(styles.lineAdded)}>+{stats.linesAdded}</span>
+            <span {...stylex.props(styles.lineDeleted)}>-{stats.linesDeleted}</span>
           </>
         )}
       </div>

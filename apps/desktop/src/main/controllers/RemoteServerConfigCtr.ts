@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs';
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
 
 import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electron-client-ipc';
 import { safeStorage, session as electronSession } from 'electron';
 
-import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { isDev, OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { refreshAppSignIn, withdrawAppSignIn } from '@/modules/cliEmbedding/appSignInFile';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
@@ -259,7 +261,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
-      this.syncGatewayAccessToken(accessToken);
+      this.pushRefreshedAccessToken(accessToken);
       return;
     }
 
@@ -282,11 +284,13 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       refreshToken: this.encryptedRefreshToken,
     });
 
-    this.syncGatewayAccessToken(accessToken);
+    this.pushRefreshedAccessToken(accessToken);
   }
 
   /**
-   * Hand a freshly stored access token to the live device-gateway socket.
+   * Hand a freshly stored access token to everything that holds a copy of it:
+   * the live device-gateway socket, and the sign-in file `lh` reads inside
+   * local agent runs (which would otherwise keep the expired token).
    *
    * The gateway client caches the token it was constructed with and replays it
    * on every backoff / heartbeat reconnect, while the token itself is rotated
@@ -295,8 +299,9 @@ export default class RemoteServerConfigCtr extends ControllerModule {
    * — the socket dropped, the client replayed the stale token, and `auth_failed`
    * left the device offline.
    */
-  private syncGatewayAccessToken(accessToken: string) {
+  private pushRefreshedAccessToken(accessToken: string) {
     this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
+    void refreshAppSignIn(accessToken);
   }
 
   /**
@@ -378,6 +383,8 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
+    // Signed out: agent runs must not keep acting as the previous user.
+    await withdrawAppSignIn();
 
     // Disconnect gateway when tokens are cleared (logout / token refresh failure)
     const gatewaySrv = this.app.getService(GatewayConnectionService);
@@ -572,10 +579,43 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     return this.lastRefreshAt;
   }
 
+  // Before windows open: the main window picks onboarding vs app from this config.
+  beforeAppReady() {
+    const login = this.readDevRemoteLogin();
+    if (!login) return;
+    logger.info(`Dev login: signing in to ${login.remoteServerUrl}`);
+    this.app.storeManager.set('dataSyncConfig', {
+      active: true,
+      remoteServerUrl: login.remoteServerUrl,
+      storageMode: 'selfHost',
+    });
+    this.app.storeManager.set('desktopOnboardingCompleted', true);
+  }
+
   // Initialize by loading tokens from store when the controller is ready
   // We might need a dedicated lifecycle method if constructor is too early for storeManager
   afterAppReady() {
+    const login = this.readDevRemoteLogin();
+    // safeStorage encrypts only once the app is ready. No refresh token exists for a minted
+    // login; the access token outlives the dev session.
+    if (login) void this.saveTokens(login.accessToken, 'dev-login', login.expiresIn);
     this.loadTokensFromStore();
+  }
+
+  /**
+   * Dev builds only: a sign-in to a local server without the OAuth flow. The dev launcher
+   * (`electron-dev.sh start-local`) mints an access token with the local server's own signing key
+   * and points LOBE_DESKTOP_DEV_REMOTE_LOGIN at a file holding it. Tokens are then stored the
+   * normal way, so keychain encryption and the `lh` sign-in file stay the app's business.
+   */
+  private readDevRemoteLogin() {
+    const file = process.env.LOBE_DESKTOP_DEV_REMOTE_LOGIN;
+    if (!isDev || !file) return;
+    return JSON.parse(readFileSync(file, 'utf8')) as {
+      accessToken: string;
+      expiresIn: number;
+      remoteServerUrl: string;
+    };
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {

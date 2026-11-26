@@ -1,12 +1,21 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { CodexCollaborationMode } from '@lobechat/types';
+import { isCodexCollaborationMode } from '@lobechat/types';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { CodexAppServerAdapter } from '../adapters/codexAppServer';
+import type { AskUserBridge, InterventionAnswer } from '../askUser';
+import { COLLABORATION_MODE_PHASE, type CollaborationModeReportData } from '../codexPlanMode';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
+import {
+  codexAsyncAnswers,
+  formatCodexAsyncReplies,
+  readCodexAsyncQuestion,
+} from './asyncUserInput';
 import type { CodexAppServerClient } from './CodexAppServerClient';
-import { CodexAppServerConnectionError } from './CodexAppServerClient';
+import { CodexAppServerConnectionError, CodexAppServerRpcError } from './CodexAppServerClient';
 import type { CodexRunProvenance } from './environment';
 import { isSameCodexRunProvenance, withCodexThreadEnv } from './environment';
 import type {
@@ -22,11 +31,23 @@ import type {
   TurnStartResponse,
   UserInput,
 } from './protocol';
+import type { CollaborationMode } from './protocol/experimental/CollaborationMode';
+import type { ReasoningEffort } from './protocol/experimental/ReasoningEffort';
+import type { ThreadSettingsUpdatedNotification } from './protocol/experimental/v2/ThreadSettingsUpdatedNotification';
+import type { ThreadSettingsUpdateParams } from './protocol/experimental/v2/ThreadSettingsUpdateParams';
+import {
+  codexUserInputArguments,
+  codexUserInputResponse,
+  parseCodexUserInput,
+} from './requestUserInput';
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
 /** An interrupted turn settled within 250 ms in probes; this bounds slow tool teardown. */
 const RESUME_SETTLE_DELAY_MS = 200;
 const RESUME_SETTLE_TIMEOUT_MS = 10_000;
+
+/** `turn/start.collaborationMode` is EXPERIMENTAL in 0.169 and absent from the stable params. */
+type ExperimentalTurnStartParams = TurnStartParams & { collaborationMode?: CollaborationMode };
 
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
@@ -37,19 +58,36 @@ const toThreadResumeParams = (threadId: string, params: ThreadStartParams): Thre
   return { ...resumeParams, threadId };
 };
 
+type AsyncQuestion = NonNullable<ReturnType<typeof readCodexAsyncQuestion>>;
+
 interface ActiveTurn {
   adapter: CodexAppServerAdapter;
+  askUserBridge?: AskUserBridge;
+  asyncQuestions: Map<string, { answer: Promise<InterventionAnswer>; request: AsyncQuestion }>;
   completion: Promise<void>;
+  deferredCompletion?: TurnCompletedNotification;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
   notificationError?: Error;
   notificationQueue: Promise<void>;
   operationId: string;
   resolve: () => void;
+  synchronousQuestions: Set<string>;
   terminalNotificationReceived: boolean;
   transportInterrupted: boolean;
   turnId?: string;
 }
+
+/** `turn/steer` (app-server v2): add input to the active turn, which must still be `expectedTurnId`. */
+interface TurnSteerParams {
+  clientUserMessageId?: string | null;
+  expectedTurnId: string;
+  input: TurnStartParams['input'];
+  threadId: string;
+}
+
+/** How a steer ended: taken by the active turn, or left for a turn of its own. */
+export type CodexSteerOutcome = 'accepted' | 'rejected';
 
 interface ThreadNameSetParams {
   name: string;
@@ -57,6 +95,13 @@ interface ThreadNameSetParams {
 }
 
 export interface CodexThreadTurnOptions {
+  askUserBridge?: AskUserBridge;
+  /**
+   * Codex Plan switch: the collaboration mode every
+   * native turn of this run sends. Omitted sends none, exactly as before. Codex
+   * keeps the mode on the thread, so it stays until a turn sends another.
+   */
+  collaborationMode?: CodexCollaborationMode;
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
   operationId: string;
@@ -92,6 +137,15 @@ export class CodexThreadSession {
   private interruptRequested = false;
   private lastOperationId?: string;
   private model?: string;
+  private effort?: ReasoningEffort | null;
+  /** The mode this run's turns send; a mid-run switch changes it for the next turn. */
+  private collaborationMode?: CodexCollaborationMode;
+  /**
+   * Modes sent since the last `turn/start`, oldest first, that Codex has not
+   * acknowledged yet. A `thread/settings/updated` naming one of them answers
+   * that request (and supersedes the older ones), not the latest pick.
+   */
+  private pendingModeRequests: CodexCollaborationMode[] = [];
   private running = false;
   private readonly sessionUnsubscribers: Array<() => void> = [];
   private threadId?: string;
@@ -120,6 +174,7 @@ export class CodexThreadSession {
     this.running = true;
     this.interruptRequested = false;
     this.lastOperationId = options.operationId;
+    this.collaborationMode = options.collaborationMode;
     this.emitStatus('starting', options.operationId);
     const traceUnsubscribers: Array<() => void> = [];
 
@@ -139,50 +194,14 @@ export class CodexThreadSession {
       if (!threadId) throw new Error('Codex thread is not attached');
       traceUnsubscribers.push(this.options.client.onRawMessage(threadId, options.onRawMessage));
 
-      const adapter = new CodexAppServerAdapter({
-        initialCumulativeUsage: this.cumulativeUsage,
-        initialModel: this.model,
-        // An ephemeral thread cannot be resumed, so it is never reported as the session.
-        sessionId: this.options.threadParams.ephemeral ? undefined : threadId,
-      });
-      let resolveTurn!: () => void;
-      const completion = new Promise<void>((resolve) => {
-        resolveTurn = resolve;
-      });
-      const activeTurn: ActiveTurn = {
-        adapter,
-        completion,
-        interruptRequested: this.interruptRequested,
-        notificationQueue: Promise.resolve(),
-        operationId: options.operationId,
-        resolve: resolveTurn,
-        terminalNotificationReceived: false,
-        transportInterrupted: false,
-      };
-      this.activeTurn = activeTurn;
-
-      const turnParams: TurnStartParams = { input: options.input, threadId };
-      this.canFallback = false;
-      const turn = await this.options.client.request<TurnStartResponse>('turn/start', turnParams);
-      activeTurn.turnId = turn?.turn?.id;
-      if (!activeTurn.turnId) throw new Error('Codex app-server returned no turn id');
-      if (activeTurn.interruptRequested || this.closedByHost)
-        await this.requestInterrupt(activeTurn);
-      if (this.closedByHost) return;
-      this.emitStatus('running', options.operationId);
-
-      await activeTurn.completion;
-      await activeTurn.notificationQueue;
-      if (this.closedByHost) return;
-      if (activeTurn.notificationError) throw activeTurn.notificationError;
-      if (activeTurn.transportInterrupted) {
-        this.cumulativeUsage = adapter.cumulativeUsage;
-        this.emitStatus('idle', options.operationId);
-        return;
+      let input: UserInput[] | undefined = options.input;
+      let stepIndex = 0;
+      while (input && !this.closedByHost) {
+        const result = await this.runNativeTurn(options, threadId, input, stepIndex);
+        input = result?.input;
+        stepIndex = result?.stepIndex ?? 0;
       }
-      await this.emitEvents(adapter.flush(), options.operationId);
-      this.cumulativeUsage = adapter.cumulativeUsage;
-      this.emitStatus('idle', options.operationId);
+      if (!this.closedByHost) this.emitStatus('idle', options.operationId);
     } catch (error) {
       if (this.closedByHost) return;
       if (this.activeTurn?.transportInterrupted) {
@@ -198,10 +217,116 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      this.activeTurn?.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
       this.interruptRequested = false;
       this.running = false;
+    }
+  }
+
+  private async runNativeTurn(
+    options: CodexThreadTurnOptions,
+    threadId: string,
+    input: UserInput[],
+    stepIndex: number,
+  ): Promise<{ input: UserInput[]; stepIndex: number } | undefined> {
+    const adapter = new CodexAppServerAdapter({
+      initialCumulativeUsage: this.cumulativeUsage,
+      initialModel: this.model,
+      initialStepIndex: stepIndex,
+      // An ephemeral thread cannot be resumed, so it is never reported as the session.
+      sessionId: this.options.threadParams.ephemeral ? undefined : threadId,
+    });
+    let resolveTurn!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveTurn = resolve;
+    });
+    const activeTurn: ActiveTurn = {
+      adapter,
+      askUserBridge: options.askUserBridge,
+      asyncQuestions: new Map(),
+      completion,
+      interruptRequested: this.interruptRequested,
+      notificationQueue: Promise.resolve(),
+      operationId: options.operationId,
+      resolve: resolveTurn,
+      synchronousQuestions: new Set(),
+      terminalNotificationReceived: false,
+      transportInterrupted: false,
+    };
+    this.activeTurn = activeTurn;
+
+    const collaborationMode = this.collaborationModeParams(this.collaborationMode);
+    // Each turn states its mode afresh: earlier unanswered requests are moot.
+    this.pendingModeRequests = collaborationMode ? [collaborationMode.mode] : [];
+    const turnParams: ExperimentalTurnStartParams = {
+      input,
+      threadId,
+      ...(collaborationMode && { collaborationMode }),
+    };
+    this.canFallback = false;
+    const turn = await this.options.client.request<TurnStartResponse>('turn/start', turnParams);
+    activeTurn.turnId = turn?.turn?.id;
+    if (!activeTurn.turnId) throw new Error('Codex app-server returned no turn id');
+    if (activeTurn.interruptRequested || this.closedByHost) await this.requestInterrupt(activeTurn);
+    if (this.closedByHost) return;
+    if (stepIndex === 0) this.emitStatus('running', options.operationId);
+
+    await activeTurn.completion;
+    await activeTurn.notificationQueue;
+    if (this.closedByHost) return;
+    if (activeTurn.notificationError) throw activeTurn.notificationError;
+    const continuation = activeTurn.deferredCompletion
+      ? await this.finishAsyncQuestions(activeTurn, activeTurn.deferredCompletion)
+      : undefined;
+    if (!activeTurn.transportInterrupted) {
+      await this.emitEvents(adapter.flush(), options.operationId);
+    }
+    this.cumulativeUsage = adapter.cumulativeUsage;
+    return continuation
+      ? {
+          input: [{ text: continuation, text_elements: [], type: 'text' }],
+          stepIndex: adapter.nextStepIndex,
+        }
+      : undefined;
+  }
+
+  /**
+   * Add a user message to the running turn (`turn/steer`). The model reads it
+   * at its next step; the app-server reports it back as a `userMessage` item
+   * carrying `clientUserMessageId`. A turn that cannot take input (none
+   * running, a review or compaction turn, a different turn than the one
+   * started here) refuses it, and the caller sends it as a turn of its own.
+   */
+  async steer(
+    input: TurnStartParams['input'],
+    clientUserMessageId: string,
+  ): Promise<CodexSteerOutcome> {
+    const activeTurn = this.activeTurn;
+    const threadId = this.threadId;
+    if (
+      !activeTurn?.turnId ||
+      !threadId ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.interruptRequested ||
+      this.closedByHost
+    )
+      return 'rejected';
+
+    try {
+      const params: TurnSteerParams = {
+        clientUserMessageId,
+        expectedTurnId: activeTurn.turnId,
+        input,
+        threadId,
+      };
+      await this.options.client.request('turn/steer', params);
+      return 'accepted';
+    } catch (error) {
+      // A definite refusal (`activeTurnNotSteerable`, a turn mismatch) was not stored.
+      if (error instanceof CodexAppServerRpcError) return 'rejected';
+      throw error;
     }
   }
 
@@ -212,7 +337,8 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
-    if (!activeTurn.turnId) return;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
+    if (!activeTurn.turnId || activeTurn.terminalNotificationReceived) return;
     try {
       await this.requestInterrupt(activeTurn);
     } catch (error) {
@@ -233,7 +359,7 @@ export class CodexThreadSession {
     this.interruptRequested = true;
     if (this.activeTurn) {
       this.activeTurn.interruptRequested = true;
-      if (this.activeTurn.turnId) {
+      if (this.activeTurn.turnId && !this.activeTurn.terminalNotificationReceived) {
         void this.requestInterrupt(this.activeTurn).catch((error) => {
           console.error('Failed to interrupt Codex turn while closing the session:', error);
         });
@@ -263,7 +389,7 @@ export class CodexThreadSession {
             toThreadResumeParams(this.threadId, this.threadParams),
           );
       if (!response || this.closedByHost) return;
-      await this.attachThread(response.thread.id, response.model);
+      await this.attachThread(response.thread.id, response.model, response.reasoningEffort);
       return;
     }
 
@@ -280,7 +406,7 @@ export class CodexThreadSession {
       );
     }
 
-    await this.attachThread(threadId, response.model);
+    await this.attachThread(threadId, response.model, response.reasoningEffort);
     if (!this.options.threadParams.ephemeral) {
       await this.setThreadName(threadId);
       this.options.onSessionId(threadId);
@@ -332,25 +458,33 @@ export class CodexThreadSession {
     }
   }
 
-  private async attachThread(threadId: string, model?: string): Promise<void> {
+  private async attachThread(
+    threadId: string,
+    model?: string,
+    effort?: ReasoningEffort | null,
+  ): Promise<void> {
     this.releaseThread ??= this.options.client.acquireThread(threadId);
     this.threadId = threadId;
     this.attached = true;
     this.canFallback = false;
     if (model) this.updateModel(model);
+    // The effort the thread resolved from this run's config (a pick made in
+    // LobeHub reaches it here), which a collaboration mode must carry along.
+    if (effort !== undefined) this.effort = effort;
     if (this.threadUnsubscribers.length > 0) return;
 
     this.threadUnsubscribers.push(
       this.options.client.subscribe(threadId, (method, params) =>
         this.enqueueNotification(method, params),
       ),
-      this.options.client.subscribeServerRequests(threadId, (method) => {
+      this.options.client.subscribeServerRequests(threadId, (method, params) => {
         if (
           method === 'item/commandExecution/requestApproval' ||
           method === 'item/fileChange/requestApproval'
         ) {
           return { decision: 'cancel' };
         }
+        if (method === 'item/tool/requestUserInput') return this.requestUserInput(params);
         throw new Error(`Unsupported Codex app-server request: ${method}`);
       }),
       this.options.client.registerThread(
@@ -366,16 +500,140 @@ export class CodexThreadSession {
     );
   }
 
+  /**
+   * The Plan switch flipped while this run goes: Codex takes the mode from its
+   * next turn (`thread/settings/update` never changes the turn in flight), and
+   * this run's own next turn — a continuation after async answers — sends it too.
+   */
+  async setCollaborationMode(mode: CodexCollaborationMode): Promise<void> {
+    this.collaborationMode = mode;
+    if (!this.running || !this.attached || !this.threadId || this.closedByHost) return;
+    const collaborationMode = this.collaborationModeParams(mode);
+    if (!collaborationMode) return;
+    this.pendingModeRequests.push(mode);
+    await this.options.client.request('thread/settings/update', {
+      collaborationMode,
+      threadId: this.threadId,
+    } satisfies ThreadSettingsUpdateParams);
+  }
+
+  /**
+   * The `collaborationMode` for `mode`, carrying the thread's own model and
+   * effort (`developer_instructions: null` keeps the mode's built-in
+   * instructions; the thread's developer instructions stay in force, verified
+   * on codex-cli 0.169.0). Undefined without a mode, or before the thread
+   * reported its model.
+   */
+  private collaborationModeParams(
+    mode: CodexCollaborationMode | undefined,
+  ): CollaborationMode | undefined {
+    if (!mode || !this.model) return;
+    return {
+      mode,
+      settings: {
+        developer_instructions: null,
+        model: this.model,
+        reasoning_effort: this.effort ?? null,
+      },
+    };
+  }
+
+  /**
+   * Codex reports the thread's mode after `turn/start` set it, or after a
+   * mid-run switch (it only reports a change). The report carries the request
+   * it answers, so the topic follows Codex only where the two disagree. A
+   * notification naming a pending request acknowledges that one: with Plan
+   * flipped on and back off before Codex answered, its `plan` answers the
+   * first flip and must not read as Codex refusing the second.
+   */
+  private handleThreadSettingsUpdated(
+    activeTurn: ActiveTurn,
+    params: ThreadSettingsUpdatedNotification,
+  ): Promise<void> {
+    const mode = params?.threadSettings?.collaborationMode?.mode;
+    if (params?.threadId !== this.threadId || !this.collaborationMode) return Promise.resolve();
+    if (!isCodexCollaborationMode(mode)) return Promise.resolve();
+    const acknowledged = this.pendingModeRequests.indexOf(mode);
+    const requested = acknowledged >= 0 ? mode : this.collaborationMode;
+    if (acknowledged >= 0) this.pendingModeRequests.splice(0, acknowledged + 1);
+    const data: CollaborationModeReportData = {
+      collaborationMode: mode,
+      phase: COLLABORATION_MODE_PHASE,
+      requested,
+    };
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.options.onEvents([
+        toStreamEvent(
+          { data, stepIndex: 0, timestamp: Date.now(), type: 'step_complete' },
+          activeTurn.operationId,
+        ),
+      ]),
+    );
+    return activeTurn.notificationQueue;
+  }
+
   private async handleReconnect(response: ThreadResumeResponse): Promise<void> {
     if (this.closedByHost) return;
     this.attached = true;
     if (response.model) this.updateModel(response.model);
+    if (response.reasoningEffort !== undefined) this.effort = response.reasoningEffort;
+  }
+
+  private async requestUserInput(params: unknown) {
+    const request = parseCodexUserInput(params);
+    const activeTurn = this.activeTurn;
+    const bridge = activeTurn?.askUserBridge;
+    if (
+      !activeTurn ||
+      !bridge ||
+      bridge.operationId !== activeTurn.operationId ||
+      request.threadId !== this.threadId ||
+      request.turnId !== activeTurn.turnId ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.interruptRequested
+    )
+      throw new Error('Codex user input has no matching active operation');
+
+    const args = codexUserInputArguments(request);
+    // Serialize visible tool events with native notifications, but never put
+    // the human wait on that queue: interrupts and nonblocking turns must flow.
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.startUserInput(request.itemId, args),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    if (
+      activeTurn.interruptRequested ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.transportInterrupted
+    )
+      return { answers: {} };
+    activeTurn.synchronousQuestions.add(request.itemId);
+    const answer = await bridge
+      .pending(
+        { arguments: args, toolCallId: request.itemId },
+        request.autoResolutionMs ? { timeoutMs: request.autoResolutionMs } : {},
+      )
+      .finally(() => activeTurn.synchronousQuestions.delete(request.itemId));
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.completeUserInput(request.itemId, answer),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    return codexUserInputResponse(request, answer);
   }
 
   private handleDisconnect(): void {
     if (this.closedByHost) return;
     this.attached = false;
-    if (this.activeTurn && !this.activeTurn.terminalNotificationReceived) {
+    if (
+      this.activeTurn &&
+      (!this.activeTurn.terminalNotificationReceived || this.activeTurn.asyncQuestions.size > 0)
+    ) {
       this.interruptActiveTurn();
     }
   }
@@ -383,7 +641,7 @@ export class CodexThreadSession {
   private requestInterrupt(activeTurn: ActiveTurn): Promise<void> {
     const threadId = this.threadId;
     const turnId = activeTurn.turnId;
-    if (!threadId || !turnId) return Promise.resolve();
+    if (!threadId || !turnId || activeTurn.terminalNotificationReceived) return Promise.resolve();
     if (activeTurn.interruptRequest) return activeTurn.interruptRequest;
 
     const params: TurnInterruptParams = { threadId, turnId };
@@ -395,6 +653,7 @@ export class CodexThreadSession {
     const activeTurn = this.activeTurn;
     if (!activeTurn || activeTurn.transportInterrupted) return;
     activeTurn.transportInterrupted = true;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(() =>
         this.emitEvents(activeTurn.adapter.interruptForTransportFailure(), activeTurn.operationId),
@@ -408,16 +667,42 @@ export class CodexThreadSession {
     if (!activeTurn || !this.isCurrentTurnNotification(method, params, activeTurn)) {
       return Promise.resolve();
     }
+    if (method === 'thread/settings/updated') {
+      return this.handleThreadSettingsUpdated(
+        activeTurn,
+        params as ThreadSettingsUpdatedNotification,
+      );
+    }
     if (method === 'turn/completed') {
       const notification = params as TurnCompletedNotification;
       if (notification.turn.status !== 'inProgress') {
         activeTurn.terminalNotificationReceived = true;
+        for (const id of activeTurn.synchronousQuestions) {
+          activeTurn.askUserBridge?.cancel(id, 'session_ended');
+        }
       }
     }
 
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(async () => {
         if (activeTurn.notificationError) return;
+        if (method === 'item/completed' && (await this.startAsyncQuestion(activeTurn, params)))
+          return;
+        if (method === 'turn/completed') {
+          const notification = params as TurnCompletedNotification;
+          if (
+            notification.turn.status === 'completed' &&
+            activeTurn.asyncQuestions.size > 0 &&
+            !activeTurn.transportInterrupted
+          ) {
+            activeTurn.deferredCompletion = notification;
+            activeTurn.resolve();
+            return;
+          }
+          if (notification.turn.status !== 'inProgress') {
+            activeTurn.askUserBridge?.cancelAll('session_ended');
+          }
+        }
         await this.emitEvents(activeTurn.adapter.adapt(method, params), activeTurn.operationId);
         if (method !== 'turn/completed') return;
         const notification = params as TurnCompletedNotification;
@@ -429,6 +714,64 @@ export class CodexThreadSession {
         activeTurn.resolve();
       });
     return activeTurn.notificationQueue;
+  }
+
+  private async startAsyncQuestion(activeTurn: ActiveTurn, params: unknown): Promise<boolean> {
+    const bridge = activeTurn.askUserBridge;
+    if (!bridge || bridge.operationId !== activeTurn.operationId) return false;
+    const request = readCodexAsyncQuestion(params);
+    if (!request) return false;
+    if (activeTurn.asyncQuestions.has(request.itemId)) return true;
+    if (activeTurn.interruptRequested || activeTurn.transportInterrupted) return false;
+
+    const { itemId } = request;
+    const args = codexUserInputArguments(request);
+    await this.emitEvents(activeTurn.adapter.startUserInput(itemId, args), activeTurn.operationId);
+    if (activeTurn.interruptRequested || activeTurn.transportInterrupted) return true;
+
+    const answer = bridge.pending({ arguments: args, toolCallId: itemId }).catch((error) => {
+      this.recordNotificationError(activeTurn, error);
+      return { cancelled: true };
+    });
+    activeTurn.asyncQuestions.set(itemId, { answer, request });
+    return true;
+  }
+
+  private async finishAsyncQuestions(
+    activeTurn: ActiveTurn,
+    notification: TurnCompletedNotification,
+  ): Promise<string | undefined> {
+    const { adapter, asyncQuestions, operationId } = activeTurn;
+    // Codex completes its native turn while the LobeHub operation is still collecting answers.
+    // Continue the same thread only after that native turn has settled.
+    const answers = await Promise.all(
+      [...asyncQuestions.values()].map(async ({ answer, request }) => ({
+        answer: await answer,
+        request,
+      })),
+    );
+    if (activeTurn.notificationError) throw activeTurn.notificationError;
+    if (this.closedByHost || activeTurn.transportInterrupted) {
+      await activeTurn.notificationQueue;
+      return;
+    }
+    const replies = [];
+    for (const { answer, request } of answers) {
+      await this.emitEvents(adapter.completeUserInput(request.itemId, answer), operationId);
+      replies.push(...codexAsyncAnswers(request, answer));
+    }
+
+    const turnEnded = ({ type }: { type: string }) =>
+      type === 'agent_runtime_end' || type === 'visible_output_end';
+    const events = adapter.adapt('turn/completed', notification);
+    await this.emitEvents(
+      events.filter((event) => !turnEnded(event)),
+      operationId,
+    );
+    if (!activeTurn.interruptRequested && !activeTurn.transportInterrupted && replies.length > 0) {
+      return formatCodexAsyncReplies(replies);
+    }
+    await this.emitEvents(events.filter(turnEnded), operationId);
   }
 
   private isCurrentTurnNotification(

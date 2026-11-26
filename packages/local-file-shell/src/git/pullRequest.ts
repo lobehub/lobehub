@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 
 import { createLogger } from '../logger';
@@ -356,8 +357,12 @@ export const getPullRequestDetail = async (payload: {
   }
 };
 
-export const pullRequestActionArgs = (number: number, action: GitPullRequestAction): string[][] => {
-  const n = String(number);
+export const pullRequestActionArgs = (
+  number: number,
+  action: GitPullRequestAction,
+  url?: string,
+): string[][] => {
+  const n = url ?? String(number);
   if (
     (action.type === 'merge' || action.type === 'autoMerge') &&
     !/^[a-f\d]{40}$/i.test(action.headRefOid ?? '')
@@ -415,7 +420,17 @@ export const pullRequestActionArgs = (number: number, action: GitPullRequestActi
     }
     case 'deleteBranch': {
       assertBranchName(action.head);
-      return [['api', '-X', 'DELETE', `repos/{owner}/{repo}/git/refs/heads/${action.head}`]];
+      const repo = url ? repoFromPullRequestUrl(url) : { name: '{repo}', owner: '{owner}' };
+      const host = url ? ['--hostname', 'github.com'] : [];
+      return [
+        [
+          'api',
+          ...host,
+          '-X',
+          'DELETE',
+          `repos/${repo.owner}/${repo.name}/git/refs/heads/${action.head}`,
+        ],
+      ];
     }
     case 'changeBase': {
       assertBranchName(action.base);
@@ -428,12 +443,33 @@ export const runPullRequestAction = async (payload: {
   action: GitPullRequestAction;
   number: number;
   path: string;
+  url?: string;
 }): Promise<GitPullRequestActionResult> => {
-  const { path: dirPath, number, action } = payload;
+  const { path: dirPath, number, action, url } = payload;
 
   try {
-    for (const argv of pullRequestActionArgs(number, action)) {
-      await execFileAsync('gh', argv, { cwd: dirPath, timeout: 60_000 });
+    const commands = pullRequestActionArgs(number, action, url);
+    if (url) {
+      if (action.type === 'merge' && action.deleteBranch)
+        throw new Error('Deleting the local branch requires the selected checkout');
+      // The cloud has approved dirPath. Resolve the numeric PR there first, so
+      // a workspace member cannot use the device's GitHub account on a PR in
+      // another repository by supplying its URL.
+      const { stdout } = await execFileAsync(
+        'gh',
+        ['pr', 'view', String(number), '--json', 'url'],
+        {
+          cwd: dirPath,
+          timeout: 8000,
+        },
+      );
+      const confirmed = JSON.parse(stdout) as { url?: string };
+      if (confirmed.url?.toLowerCase() !== url.toLowerCase())
+        throw new Error('The pull request does not match the approved repository');
+    }
+
+    for (const argv of commands) {
+      await execFileAsync('gh', argv, { cwd: url ? tmpdir() : dirPath, timeout: 60_000 });
     }
     return { success: true };
   } catch (error: any) {

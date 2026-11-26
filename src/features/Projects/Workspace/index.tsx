@@ -1,7 +1,7 @@
 'use client';
 
 import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
-import { memo } from 'react';
+import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -12,7 +12,9 @@ import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import ProjectComposer from './ProjectComposer';
+import ProjectComposer, { type ProjectComposerRequest } from './ProjectComposer';
+
+const ProjectOnboardingCard = lazy(() => import('../Onboarding/ProjectOnboardingCard'));
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -53,6 +55,7 @@ const ProjectWorkspace = memo(() => {
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const detail = useCurrentProjectDetail(projectId);
   const { error, revalidate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const [composerRequest, setComposerRequest] = useState<ProjectComposerRequest>();
 
   if (!enabled) return <ProjectDisabled />;
   if (error && !detail)
@@ -70,7 +73,14 @@ const ProjectWorkspace = memo(() => {
               </Text>
               <Text type={'secondary'}>{t('overview.description')}</Text>
             </Flexbox>
-            <ProjectComposer detail={detail} key={detail.project.id} />
+            <ProjectComposer detail={detail} key={detail.project.id} request={composerRequest} />
+            <Suspense fallback={null}>
+              <ProjectOnboardingCard
+                detail={detail}
+                key={detail.project.id}
+                onComposerRequest={(mode) => setComposerRequest({ at: Date.now(), mode })}
+              />
+            </Suspense>
           </Flexbox>
           {/* The overview dashboard (./ProjectDashboard) is hidden until its replacement is designed */}
         </Flexbox>

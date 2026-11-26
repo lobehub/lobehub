@@ -39,8 +39,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('![](https://example.com/f/abc-123)');
-      // Ensure no double URL prefix
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should convert audio content with full URL without double prefix', () => {
@@ -53,7 +51,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('<resource type="audio" url="https://example.com/f/audio-123" />');
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should join multiple content blocks with double newlines', () => {
@@ -308,8 +305,6 @@ describe('contentProcessor', () => {
       const str = contentBlocksToString(processed);
 
       expect(str).toBe('Here is the screenshot:\n\n![](https://myapp.com/f/img-uuid)');
-      // The critical assertion: no double URL prefix
-      expect(str).not.toContain('https://myapp.com/https://myapp.com');
     });
   });
 });

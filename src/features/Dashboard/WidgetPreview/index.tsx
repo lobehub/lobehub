@@ -24,6 +24,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { formatDuration } from '../utils/format';
 import { getDashboardPath } from '../utils/path';
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   root: css`
     width: 100%;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,

@@ -1,6 +1,7 @@
 import type { BuiltinManifestResolver, BuiltinToolResolveContext } from '@lobechat/types';
 
 import { SkillsManifest } from './manifest';
+import { appendExecutionEnvironment, deviceSystemPrompt } from './systemRole';
 import { SkillsApiName } from './types';
 
 /**
@@ -122,7 +123,12 @@ const resolveUnroutedTexts = (
  * additionally drop the sandbox-only APIs (`runCommand` / `exportFile`).
  */
 export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
-  const basePreamble = context.executionEnv && EXEC_ENV_PREAMBLES[context.executionEnv];
+  // `local` is a routed device too — the user's own desktop, kept distinct
+  // only so local-system can return images (`executionPlanToManifestExecutionEnv`).
+  // The server runtime gets the same `activeDeviceId` and refuses sandbox
+  // runCommand / exportFile, so the manifest must not offer them either.
+  const executionEnv = context.executionEnv === 'local' ? 'device' : context.executionEnv;
+  const basePreamble = executionEnv && EXEC_ENV_PREAMBLES[executionEnv];
   const isPageScope = context.scope === 'page';
   if (!basePreamble) {
     return isPageScope
@@ -133,16 +139,17 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
       : SkillsManifest;
   }
 
-  const isDeviceRun = context.executionEnv === 'device';
+  const isDeviceRun = executionEnv === 'device';
   const isHidden = (name: string) =>
     (isDeviceRun && DEVICE_HIDDEN_API_NAMES.has(name)) ||
     (isPageScope && PAGE_HIDDEN_API_NAMES.has(name));
   const unrouted =
-    context.executionEnv === 'device-unrouted'
+    executionEnv === 'device-unrouted'
       ? resolveUnroutedTexts(context.executionEnvUnroutedReason)
       : {};
   const preamble = unrouted.preamble ?? basePreamble;
-  const fact = unrouted.fact ?? (context.executionEnv && EXEC_ENV_FACTS[context.executionEnv]);
+  const fact = unrouted.fact ?? (executionEnv && EXEC_ENV_FACTS[executionEnv]);
+  const baseSystemRole = isDeviceRun ? deviceSystemPrompt : SkillsManifest.systemRole;
 
   return {
     ...SkillsManifest,
@@ -153,8 +160,6 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
           ? { ...api, description: `${preamble} ${api.description}` }
           : api,
       ),
-    ...(fact && {
-      systemRole: `${SkillsManifest.systemRole}\n<execution_environment>\n${fact}\n</execution_environment>\n`,
-    }),
+    systemRole: fact ? appendExecutionEnvironment(baseSystemRole, fact) : baseSystemRole,
   };
 };

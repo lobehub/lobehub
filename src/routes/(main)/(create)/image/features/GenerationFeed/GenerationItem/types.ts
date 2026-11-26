@@ -10,6 +10,8 @@ export interface ActionButtonsProps {
   onCopySeed?: () => void;
   onDelete: () => void;
   onDownload?: () => void;
+  /** Opens the share panel; the item is left out when absent. */
+  onShare?: () => void;
   seedTooltip?: string;
   showCopySeed?: boolean;
   showDownload?: boolean;
@@ -22,6 +24,7 @@ export interface SuccessStateProps {
   onCopySeed?: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onShare?: () => void;
   prompt: string;
   seedTooltip?: string;
 }

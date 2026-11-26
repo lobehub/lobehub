@@ -26,6 +26,7 @@ const startRolloutInput = z
   .object({
     probeNodeIds: z.array(z.string().min(1)).min(2).max(10),
     recipe: z.string().trim().min(1).max(8000),
+    skillName: z.string().trim().max(80).optional(),
     trigger: z.enum(['canary', 'full']).optional(),
     unitNodeIds: z.array(z.string().min(1)).max(60).optional(),
     variants: z
@@ -168,8 +169,8 @@ export const lifecycleRouter = router({
   }),
   /**
    * Put a goal away, or bring it back. User-only, like a task's archive: no
-   * agent tool exposes it. Only a goal that is done with — signed off by its
-   * owner, or canceled — can be archived: archived goals leave every list, so
+   * agent tool exposes it. Only a goal that is done with — completed or
+   * canceled — can be archived: archived goals leave every list, so
    * one still waiting on a decision would wait out of sight. `status` is left
    * untouched.
    */
@@ -192,7 +193,7 @@ export const lifecycleRouter = router({
         if (!data) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Only a signed-off or canceled goal can be archived',
+            message: 'Only a completed or canceled goal can be archived',
           });
         }
         return { data, message: archived ? 'Goal archived' : 'Goal restored', success: true };

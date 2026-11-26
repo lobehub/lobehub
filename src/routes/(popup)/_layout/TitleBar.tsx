@@ -56,7 +56,7 @@ const PopupTitleBar = memo<PopupTitleBarProps>(({ title }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={sx([styles.container], electronStylish.draggable).className}
+      className={sx(styles.container, electronStylish.draggable).className}
       flex={'none'}
       gap={4}
       height={TITLE_BAR_HEIGHT}

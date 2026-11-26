@@ -31,7 +31,10 @@ export class KnowledgeBaseController extends BaseController {
 
       const result = await knowledgeBaseService.getKnowledgeBaseList(query);
 
-      return this.success(c, result, 'Knowledge bases retrieved successfully');
+      return this.list(c, 'knowledgeBases', result, {
+        message: 'Knowledge bases retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -72,7 +75,10 @@ export class KnowledgeBaseController extends BaseController {
 
       const result = await fileService.getKnowledgeBaseFileList(id, query);
 
-      return this.success(c, result, 'Knowledge base files retrieved successfully');
+      return this.list(c, 'files', result, {
+        message: 'Knowledge base files retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

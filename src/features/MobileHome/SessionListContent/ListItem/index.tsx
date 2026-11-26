@@ -5,6 +5,7 @@ import { memo, useMemo, useRef } from 'react';
 import AgentAvatar from '@/components/AgentAvatar';
 import GroupAvatar from '@/features/GroupAvatar';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import Item from './BaseListItem';
 import type { ListItemProps } from './type';
@@ -14,12 +15,12 @@ const styles = createStaticStyles(({ css, cssVar }) => {
     container: css`
       position: relative;
       margin-block: 2px;
-      padding-inline: 12px 16px;
+      padding-inline: ${densityVars.contentGap} 16px;
       border-radius: ${cssVar.borderRadius};
     `,
     mobile: css`
       margin-block: 0;
-      padding-inline-start: 12px;
+      padding-inline-start: ${densityVars.contentGap};
       border-radius: 0;
     `,
     title: css`

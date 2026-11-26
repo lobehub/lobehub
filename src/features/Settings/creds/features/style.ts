@@ -1,38 +1,60 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-    padding-inline: 0;
-  `,
-  description: css`
-    overflow: hidden;
+import { densityTokens } from '@/styles/density.stylex';
 
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  key: css`
-    font-family: monospace;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-size: 15px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+export const styles = stylex.create({
+  // The row opens the item: a hover wash that reaches 8px past the content,
+  // inside the list card's own padding.
+  clickable: {
+    cursor: 'pointer',
+    marginInline: '-8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  container: {
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: 0,
+  },
+  // Compact density: 6px block padding, 36px tile, 14px title → ~55px two-line rows.
+  containerCompact: {
+    paddingBlock: '6px',
+  },
+  description: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  descriptionCompact: { lineHeight: '18px' },
+  icon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  iconCompact: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+  },
+  title: {
+    overflow: 'hidden',
+    fontSize: '15px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  titleCompact: {
+    fontSize: '14px',
+  },
+});

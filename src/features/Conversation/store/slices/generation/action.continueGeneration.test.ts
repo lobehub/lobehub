@@ -9,72 +9,37 @@ vi.mock('@/services/topic', () => ({
 }));
 
 // Mock useChatStore
-const mockCancelOperations = vi.fn();
-const mockCancelOperation = vi.fn();
-const mockCancelSendMessageInServer = vi.fn();
-const mockRegenerateUserMessage = vi.fn();
-const mockRegenerateAssistantMessage = vi.fn();
-const mockContinueGenerationMessage = vi.fn();
-const mockDeleteMessage = vi.fn();
-const mockSwitchMessageBranch = vi.fn();
 const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
 const mockAssociateMessageWithOperation = vi.fn();
 const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
-const mockExecuteGatewayAgent = vi.fn();
-const mockUpdateTopicMetadata = vi.fn();
-const mockUpdateTopicStatus = vi.fn();
-const mockOpenThreadCreator = vi.fn();
-const mockSourceTopic = {
-  status: 'scheduled',
-  metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
-};
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
-    getState: vi.fn(() => ({
-      dbMessagesMap: {},
-      messagesMap: {
-        'session-1-': [
-          { id: 'msg-1', role: 'user', content: 'Hello' },
-          { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
-        ],
-      },
-      topicDataMap: {},
-      topicDetailMap: { 'source-topic': mockSourceTopic },
-      operations: {},
-      operationsByMessage: {},
-
-      cancelOperations: mockCancelOperations,
-      cancelOperation: mockCancelOperation,
-      cancelSendMessageInServer: mockCancelSendMessageInServer,
-      regenerateUserMessage: mockRegenerateUserMessage,
-      regenerateAssistantMessage: mockRegenerateAssistantMessage,
-      continueGenerationMessage: mockContinueGenerationMessage,
-      deleteMessage: mockDeleteMessage,
-      switchMessageBranch: mockSwitchMessageBranch,
-      startOperation: mockStartOperation,
-      associateMessageWithOperation: mockAssociateMessageWithOperation,
-      completeOperation: mockCompleteOperation,
-      failOperation: mockFailOperation,
-      executeClientAgent: mockExecuteClientAgent,
-      isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      executeGatewayAgent: mockExecuteGatewayAgent,
-      internal_dispatchTopic: vi.fn(),
-      openThreadCreator: mockOpenThreadCreator,
-      updateTopicMetadata: mockUpdateTopicMetadata,
-      updateTopicStatus: mockUpdateTopicStatus,
-    })),
+    getState: vi.fn(),
     setState: vi.fn(),
   },
 }));
 
+const createContinueChatState = (executeClientAgent = mockExecuteClientAgent) => ({
+  dbMessagesMap: {},
+  messagesMap: {},
+  operations: {},
+  operationsByMessage: {},
+  topicDataMap: {},
+  startOperation: mockStartOperation,
+  associateMessageWithOperation: mockAssociateMessageWithOperation,
+  completeOperation: mockCompleteOperation,
+  failOperation: mockFailOperation,
+  executeClientAgent,
+  isGatewayModeEnabled: mockIsGatewayModeEnabled,
+});
+
 describe('Generation Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSourceTopic.status = 'scheduled';
   });
 
   afterEach(() => {
@@ -84,19 +49,9 @@ describe('Generation Actions', () => {
   describe('continueGeneration', () => {
     it('should continue generation from assistantGroup message with last child as blockId', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState() as any,
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',
@@ -147,19 +102,9 @@ describe('Generation Actions', () => {
 
     it('should not continue if message is not assistantGroup', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState() as any,
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',
@@ -187,19 +132,9 @@ describe('Generation Actions', () => {
 
     it('should not continue if assistantGroup has no children', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState() as any,
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',
@@ -229,19 +164,9 @@ describe('Generation Actions', () => {
 
     it('should call onBeforeContinue hook and respect false return', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState() as any,
+      );
 
       const onBeforeContinue = vi.fn().mockResolvedValue(false);
 
@@ -279,19 +204,9 @@ describe('Generation Actions', () => {
 
     it('should call onContinueComplete hook after continuation', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent.mockResolvedValue(undefined),
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState(mockExecuteClientAgent.mockResolvedValue(undefined)) as any,
+      );
 
       const onContinueComplete = vi.fn();
 
@@ -327,19 +242,9 @@ describe('Generation Actions', () => {
 
     it('should not continue if message is not found', async () => {
       // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue(
+        createContinueChatState() as any,
+      );
 
       const context: ConversationContext = {
         agentId: 'session-1',

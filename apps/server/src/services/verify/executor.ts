@@ -30,6 +30,7 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
 import { settledCarriedItemIds } from './carryForward';
+import { resolveCheckInstruction } from './checkInstruction';
 import { executionGapTypes, runEvidenceGaps, runEvidenceSpecs } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
 import { GIF_FRAME_SHEET_NOTE, isGifFrameSheet, resolveModelReadableFrameUrl } from './modelFrames';
@@ -91,6 +92,7 @@ const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
 export class VerifyExecutorService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
   private readonly runModel: VerifyRunModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
@@ -103,6 +105,7 @@ export class VerifyExecutorService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
@@ -113,16 +116,9 @@ export class VerifyExecutorService {
     this.aiModelModel = new AiModelModel(db, userId, workspaceId);
   }
 
-  /**
-   * Resolve a check item's detailed judging instruction — the criterion's rule
-   * body lives in its linked document (the single source of truth).
-   */
-  private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
-    if (item.definition || item.resourceSnapshot)
-      return JSON.stringify({ definition: item.definition, resources: item.resourceSnapshot });
-    if (!item.documentId) return undefined;
-    const doc = await this.documentModel.findById(item.documentId);
-    return doc?.content ?? undefined;
+  /** The check item's detailed judging instruction; see {@link resolveCheckInstruction}. */
+  private resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    return resolveCheckInstruction(this.documentModel, item);
   }
 
   /**
@@ -481,7 +477,7 @@ export class VerifyExecutorService {
       mode: 'batch',
     });
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
         ...chain,
@@ -559,7 +555,7 @@ export class VerifyExecutorService {
       mode: 'single',
     });
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
         ...chain,

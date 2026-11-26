@@ -30,7 +30,7 @@ View agent configuration details. `agentId` may be omitted when `-s, --slug` is 
 lh agent view [agentId] [-s <slug>] [--json [fields]]
 ```
 
-**Displays**: Title, description, model, provider, system role, plugins, tools.
+**Displays**: Title, description, visibility (workspace agents only), model, provider, system role, plugins, tools.
 
 ---
 
@@ -39,19 +39,45 @@ lh agent view [agentId] [-s <slug>] [--json [fields]]
 Create a new agent.
 
 ```bash
-lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>]
+lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>] [--visibility <private|public>] [--json [fields]]
 ```
 
-| Option                      | Description    | Required |
-| --------------------------- | -------------- | -------- |
-| `-t, --title <title>`       | Agent title    | No       |
-| `-d, --description <desc>`  | Description    | No       |
-| `-m, --model <model>`       | Model ID       | No       |
-| `-p, --provider <provider>` | Provider ID    | No       |
-| `-s, --system-role <role>`  | System prompt  | No       |
-| `--group <groupId>`         | Agent group ID | No       |
+| Option                      | Description                                                                                                                 | Required |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `-t, --title <title>`       | Agent title                                                                                                                 | No       |
+| `-d, --description <desc>`  | Description                                                                                                                 | No       |
+| `-m, --model <model>`       | Model ID                                                                                                                    | No       |
+| `-p, --provider <provider>` | Provider ID                                                                                                                 | No       |
+| `-s, --system-role <role>`  | System prompt                                                                                                               | No       |
+| `--group <groupId>`         | Agent group ID                                                                                                              | No       |
+| `--visibility <visibility>` | Who can see the agent in a workspace: `private` (only you) or `public` (workspace members). Omit to keep the server default | No       |
+| `--json [fields]`           | Print the created agent as JSON, optionally selecting fields (e.g. `--json id,visibility`)                                  | No       |
 
-**Output**: Created agent ID and session ID.
+The workspace comes from the current scope (`LOBEHUB_WORKSPACE_ID` or `lh workspace use`); `--visibility` only chooses who inside that scope can see the agent. An invalid value exits 1 before any request is sent.
+
+**Output**: Without `--json`, the created agent ID, its session ID when there is one, the requested visibility, and the agent URL. With `--json`, an object `{ id, sessionId?, title, url, visibility, workspaceId }`. `visibility` and `workspaceId` are read back from the server after creation, so they are the stored values (server default or folder-inherited included), not an echo of the flag. If that read-back fails, the agent still exists: `id` is printed, `visibility` and `workspaceId` are `null`, and a warning goes to stderr. Do not retry the create in that case.
+
+---
+
+## `lh agent connect [types...]`
+
+Connect external agent CLIs (Claude Code, Codex, Antigravity, OpenClaw, …) as agents bound to a device: the CLI form of the Web "Connect agent" wizard, creating the same agent config.
+
+```bash
+lh agent connect [types...] [--device <deviceId>] [--visibility <private|public>] [-n <name>] [-d <desc>] [--yes] [--json [fields]]
+```
+
+| Option                      | Description                                                                                         |
+| --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `types...`                  | Agent types to connect (e.g. `antigravity`, `claude-code`); omit to connect every one found         |
+| `--device <deviceId>`       | Bind to this device instead of this machine (see `lh device list`)                                  |
+| `--visibility <visibility>` | Inside a workspace: `private` (default, only you) or `public` (workspace members)                   |
+| `-n, --name <name>`         | Agent name; only with exactly one type                                                              |
+| `-d, --description <desc>`  | Agent description; only with exactly one type                                                       |
+| `--yes`                     | Skip the confirmation prompt (required without an interactive terminal)                             |
+| `--json [fields]`           | Print `{ created: [{ id, title, type, url, version? }], deviceId, skipped: [{ id, title, type }] }` |
+
+The device defaults to this machine in the current scope's pool: its workspace device inside a workspace (only workspace devices qualify there), else its personal device. It must be connected (`lh connect`, or `lh connect --workspace <id>` for a workspace) and online. The device is scanned through the server, so a named type that is not installed there fails with the scan's reason. Types you already have an agent for on the device are skipped (teammates' agents on a shared workspace device do not count), so rerunning connects only what is missing. The scan checks the binary only: an agent CLI that needs sign-in (Antigravity, Codex, …) must be signed in on the device before its first run.
 
 ---
 

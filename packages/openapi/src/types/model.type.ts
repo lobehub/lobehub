@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicModel } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
 
 // ==================== Model List Query Types ====================
 
@@ -45,7 +46,7 @@ export const ModelsListQuerySchema = PaginationQuerySchema.extend({
 // ==================== Model Response Types ====================
 
 export type GetModelsResponse = PaginationQueryResponse<{
-  models?: PublicModel[];
+  models: PublicModel[];
 }>;
 
 // ==================== Model Detail / Mutation Types ====================
@@ -95,3 +96,36 @@ export const ModelIdParamSchema = z.object({
     .min(1, 'Provider ID cannot be empty')
     .max(64, 'Provider ID cannot exceed 64 characters'),
 });
+
+// ==================== Response Schemas ====================
+
+/** A model row projected through `PUBLIC_MODEL_FIELDS`; every field is always present. */
+export const ModelSchema = z
+  .object({
+    abilities: jsonObjectSchema.nullable(),
+    config: jsonObjectSchema.nullable(),
+    contextWindowTokens: z.number().int().nullable(),
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    displayName: z.string().nullable(),
+    enabled: z.boolean().nullable(),
+    id: z.string(),
+    organization: z.string().nullable(),
+    parameters: jsonObjectSchema.nullable(),
+    pricing: jsonObjectSchema.nullable(),
+    providerId: z.string(),
+    /** `YYYY-MM-DD`. */
+    releasedAt: z.string().nullable(),
+    settings: jsonObjectSchema.nullable(),
+    sort: z.number().int().nullable(),
+    source: z.enum(['remote', 'custom', 'builtin']).nullable(),
+    /** One of the model types; a legacy `stt` row is reported as `asr`. */
+    type: z.string(),
+    updatedAt: dateTimeSchema,
+  } satisfies Record<keyof PublicModel, z.ZodType>)
+  .strict()
+  .meta({ id: 'Model' });
+
+export const ModelListSchema = z
+  .object({ ...pageInfoShape, models: z.array(ModelSchema), ...totalShape })
+  .strict();

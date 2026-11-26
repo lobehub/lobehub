@@ -1,9 +1,12 @@
-import { Button, createStaticStyles, Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { Button, Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
@@ -11,42 +14,35 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
+import { resolveConfigGroupList } from './sections';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    height: 36px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius}px;
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    height: '36px',
+    paddingInline: '8px',
+    borderRadius: `${cssVar.borderRadius}px`,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ConfigGroupModalProps {
   onCancel?: () => void;
   open?: boolean;
-  scope?: 'private' | 'public';
 }
 
-const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 'public' }) => {
+/** Manages the folders the sidebar shows; see {@link resolveConfigGroupList}. */
+const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  // Map SidebarGroup to SessionGroupItem-like structure for the sortable list
-  const sessionGroupItems = useHomeStore(
-    (s) =>
-      (scope === 'private'
-        ? homeAgentListSelectors.privateAgentGroups(s)
-        : homeAgentListSelectors.agentGroups(s)
-      ).map((g) => ({
-        id: g.id,
-        name: g.name,
-        sort: g.sort,
-      })),
-    isEqual,
-  ) as SessionGroupItemBase[];
+  const isWorkspace = !!useActiveWorkspaceId();
+  const groups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const { createVisibility, items: sessionGroupItems } = useMemo(
+    () => resolveConfigGroupList({ groups, isWorkspace, privateGroups }),
+    [groups, isWorkspace, privateGroups],
+  );
   const [addGroup, updateGroupSort] = useHomeStore((s) => [s.addGroup, s.updateGroupSort]);
   const [loading, setLoading] = useState(false);
 
@@ -66,7 +62,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 
             <SortableList.Item
               horizontal
               align={'center'}
-              className={styles.container}
+              className={stylex.props(styles.container).className}
               gap={4}
               id={item.id}
               justify={'space-between'}
@@ -89,8 +85,11 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 
             if (!canEdit) return;
 
             setLoading(true);
-            await addGroup(t('sessionGroup.newGroup'), scope === 'private' ? 'private' : undefined);
-            setLoading(false);
+            try {
+              await addGroup(t('sessionGroup.newGroup'), createVisibility);
+            } finally {
+              setLoading(false);
+            }
           }}
         >
           {t('sessionGroup.createGroup')}

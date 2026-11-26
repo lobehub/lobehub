@@ -11,15 +11,15 @@ import {
 import ActionBar from '@/features/ChatInput/ActionBar';
 import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import { useChatStore } from '@/store/chat';
+import { useDensity } from '@/styles/density';
 
 import type { HomeMode } from '../types';
-import { HOME_INPUT_BODY_HEIGHT } from './constants';
+import { HOME_INPUT_METRICS, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
 const rightActions: ActionKeys[] = ['model'];
 
-const CONTAINER_RADIUS = 20;
 /** Clearance from the container edge to the round controls sitting in its corners. */
 const ACTION_BAR_INSET = 8;
 
@@ -49,16 +49,18 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
     placeholder,
     send,
   }) => {
+    const { density } = useDensity();
+    const { bodyHeight, radius, sendButtonSize } = HOME_INPUT_METRICS[density];
     const inputContainerProps = useMemo(
       () => ({
-        minHeight: HOME_INPUT_BODY_HEIGHT,
+        minHeight: bodyHeight,
         resize: false,
         style: {
-          borderRadius: CONTAINER_RADIUS,
+          borderRadius: radius,
           boxShadow: '0 1px 2px rgba(0,0,0,.03), 0 12px 32px rgba(0,0,0,.04)',
         },
       }),
-      [],
+      [bodyHeight, radius],
     );
 
     const actionBarStyle = useMemo(
@@ -77,6 +79,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
         leftActions={leftActions}
         rightActions={rightActions}
         slashPlacement="bottom"
+        uploadContextKey={HOME_UPLOAD_CONTEXT_KEY}
         chatInputEditorRef={(instance) => {
           if (!instance) return;
           useChatStore.setState({ mainInputEditor: instance });
@@ -86,6 +89,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           generating: loading,
           onStop: () => {},
           shape: 'round',
+          size: sendButtonSize,
         }}
         onMarkdownContentChange={onValueChange}
         onSend={send}

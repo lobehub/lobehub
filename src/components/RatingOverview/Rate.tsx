@@ -9,7 +9,7 @@ const styles = stylex.create({
 });
 
 const Rate = memo<RateProps>(({ className, size = 16, ...props }) => (
-  <BaseRate allowHalf readOnly size={size} {...sx([styles.rate], className)} {...props} />
+  <BaseRate allowHalf readOnly size={size} {...sx(styles.rate, className)} {...props} />
 ));
 
 export default Rate;

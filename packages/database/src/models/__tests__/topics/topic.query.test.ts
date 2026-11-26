@@ -1097,7 +1097,7 @@ describe('TopicModel - Query', () => {
         'a short description',
         'cron',
       );
-
+      await serverDB.update(topics).set({ totalCost: 0.25, totalTokens: 300 });
       const result = await topicModel.query({
         agentId: 'agt-detailed-topic',
         withDetails: true,
@@ -1110,10 +1110,9 @@ describe('TopicModel - Query', () => {
       expect(item.messageCount).toBe(4);
       expect(item.description).toBe('a short description');
       expect(item.trigger).toBe('cron');
-      // cost / tokenUsage are not yet returned — waiting on a schema
-      // migration to add real columns before they come back.
-      expect(item).not.toHaveProperty('cost');
-      expect(item).not.toHaveProperty('tokenUsage');
+      // Spend totals are the topic's own rolled-up usage columns.
+      expect(item.cost).toBe(0.25);
+      expect(item.tokenUsage).toBe(300);
     });
 
     it('returns null firstUserMessage when no user message exists', async () => {

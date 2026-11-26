@@ -15,6 +15,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import type { MessengerPlatform } from '../constants';
 
@@ -32,8 +33,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorText};
   `,
   row: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -91,10 +92,7 @@ const CommandsSection = memo<CommandsSectionProps>(({ platform }) => {
   const { t } = useTranslation('messenger');
   // Same gate as the workspace scope selector in `UserAgentConnection` —
   // without workspaces, `/switch` has nothing to switch between.
-  const enableWorkspaceScopes = useServerConfigStore(
-    (s) =>
-      serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
-  );
+  const enableWorkspaceScopes = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const commands = COMMANDS.filter(({ name }) => {
     if (platform === 'wechat' && WECHAT_HIDDEN_COMMANDS.has(name)) return false;

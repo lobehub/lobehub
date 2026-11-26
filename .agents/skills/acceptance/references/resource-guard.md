@@ -27,9 +27,11 @@ signal rather than terminating services because of a low free-page percentage.
   so its used percentage is not an exhaustion signal either. Explicit RSS/count
   budgets still apply. Missing or unrecognized pressure is `unknown`, exits 2
   on `check`, and never triggers automatic termination.
-- **Linux:** existing `MemAvailable / MemTotal` and swap-percentage thresholds
-  remain unchanged. They describe the host; this guard does not yet account for
-  cgroup limits or PSI. Do not infer container safety from a green host sample.
+- **Linux:** host memory tiers use `MemAvailable / MemTotal`: yellow at 25% or
+  less, red at 10% or less by default. Swap occupancy is diagnostic only: swapped
+  pages can remain in zram after memory pressure has subsided, so high swap use
+  alone must not block healthy work. This guard does not yet account for cgroup
+  limits or PSI. Do not infer container safety from a green host sample.
 - **Native Windows:** unsupported. WSL uses the Linux policy, not Windows host
   memory monitoring.
 
@@ -55,8 +57,8 @@ bash "$GUARD" start \
   --state-dir "$RUN_DIR" --run-tag "$RUN_TAG" --interval 10 \
   --group browser='Google Chrome for Testing|agent-browser' \
   --group devserver='next-server|vite' \
-  --yellow 'swap=70,free=25' \
-  --red 'swap=85,free=10,total.rss=4000,group.browser.rss=1500' \
+  --yellow 'free=25' \
+  --red 'free=10,total.rss=4000,group.browser.rss=1500' \
   --on-red stop-owned
 
 bash "$GUARD" claim --state-dir "$RUN_DIR" --pid "$BROWSER_DAEMON_PID"  # what this run started
@@ -67,8 +69,9 @@ bash "$GUARD" stop   --state-dir "$RUN_DIR"        # at teardown, always
 ```
 
 Threshold spec: comma-separated `KEY=VALUE`, any subset of
-`swap=PCT`, `free=PCT`, `total.rss=MB`, `group.NAME.rss=MB`, `group.NAME.count=N`.
-`swap` and `free` thresholds apply on Linux only, per the platform policy above.
+`free=PCT`, `total.rss=MB`, `group.NAME.rss=MB`, `group.NAME.count=N`.
+`free` thresholds apply on Linux only, per the platform policy above. Swap is
+still included in samples but never determines the tier on either platform.
 `total.rss` is the summed RSS of the declared groups, so it stays 0 without
 `--group`. `--group NAME=PATTERN` is repeatable; the pattern is an ERE matched
 against each process command line. Keep patterns specific to the processes this run

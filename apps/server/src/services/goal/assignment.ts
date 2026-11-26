@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 
 import { isResourceAuthorOrAdmin } from '../resourcePermission';
+import { TaskService } from '../task';
 import { resolveMissingTaskModelConfig } from '../task/modelSnapshot';
 import { goalTaskAgentId } from './GoalService/utils';
 import { GoalManagerService } from './manager';
@@ -458,7 +459,44 @@ export class GoalAssignmentService {
    */
   newTaskAssignment = async (goal: GoalItem) => {
     const assigneeAgentId = await this.resolveTaskAssignee(goal);
-    return { assigneeAgentId, model: liveTaskModelOverride(goal, assigneeAgentId) };
+    return {
+      assigneeAgentId,
+      assigneeUserId: await this.resolveTaskOwner(goal, assigneeAgentId),
+      model: liveTaskModelOverride(goal, assigneeAgentId),
+    };
+  };
+
+  /**
+   * The member a coordinator-created Task is assigned to: whoever created the
+   * goal.
+   *
+   * `createTask` rejects an unassignable member, and a creator can stop being
+   * one while their goal keeps running (they left the Workspace or lost its
+   * Task permission). The goal must still be able to create work, so such a
+   * Task goes unassigned. The same applies when someone else drives the goal
+   * and the Task would be private, from the goal or from its executor, because a
+   * private Task can only be assigned to whoever created it.
+   */
+  resolveTaskOwner = async (
+    goal: Pick<GoalItem, 'userId' | 'visibility'>,
+    executorId?: string,
+  ): Promise<string | undefined> => {
+    if (goal.userId !== this.userId) {
+      if (goal.visibility === 'private') return undefined;
+      const executor = executorId
+        ? await this.agentModel.getAgentSnapshotForTaskCreate(executorId)
+        : undefined;
+      if (executor?.visibility === 'private') return undefined;
+    }
+    try {
+      await new TaskService(this.db, this.userId, this.workspaceId).assertAssigneeUserAssignable(
+        goal.userId,
+      );
+      return goal.userId;
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') return undefined;
+      throw error;
+    }
   };
 
   /**

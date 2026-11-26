@@ -64,6 +64,55 @@ const makeState = (ended: boolean) => {
 beforeEach(() => vi.resetAllMocks());
 
 describe('question actions racing tool completion', () => {
+  it('refuses delivery when neither runtime memory nor the card identifies an operation', async () => {
+    const { control, state } = makeState(false);
+    state.operations = {};
+    state.dbMessagesMap[key][0].pluginIntervention = { status: 'pending' };
+    state.checkQuestionSubmission = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      control.submitHeteroIntervention('question', 'skip', undefined, context),
+    ).rejects.toThrow('Question runtime is unavailable');
+
+    expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).not.toHaveBeenCalled();
+    expect(heterogeneousAgentService.submitIntervention).not.toHaveBeenCalled();
+  });
+
+  it.each(['submit', 'skip', 'cancel'] as const)(
+    'delivers a cold-loaded %s using the persisted operation when OSS has no generic claim store',
+    async (action) => {
+      const { control, state } = makeState(false);
+      state.operations = {};
+      state.internal_getConversationContext = () => context;
+      state.checkQuestionSubmission = vi.fn().mockResolvedValue(false);
+      vi.mocked(aiAgentService.resolveAgentInterventionBySource).mockResolvedValue({
+        handled: false,
+      });
+      vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate).mockResolvedValue(undefined);
+      const answers = { 'Which drink?': 'Tea' };
+
+      await control.submitHeteroIntervention(
+        'question',
+        action,
+        action === 'submit' ? answers : undefined,
+        context,
+      );
+
+      expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'operation',
+          toolCallId: 'call',
+          ...(action === 'submit' ? { result: answers } : { cancelled: true }),
+        }),
+      );
+      expect(heterogeneousAgentService.submitIntervention).not.toHaveBeenCalled();
+      expect(state.dbMessagesMap[key][0].pluginIntervention).toMatchObject({
+        status: 'pending',
+        resolving: true,
+      });
+    },
+  );
+
   it.each(['desktop', 'remote', 'source'] as const)(
     'preserves skip intent until the %s ACK and clears it for a later cancel',
     async (transport) => {

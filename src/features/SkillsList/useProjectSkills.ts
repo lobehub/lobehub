@@ -1,31 +1,21 @@
 import type { ListProjectSkillsResult, ProjectSkillItem } from '@lobechat/electron-client-ipc';
-import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import path from 'pathe';
 import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { projectSkillsSelectors } from '@/store/tool/selectors';
 
-import type { SkillListItem, SkillRowAction } from './SkillsList';
+import type { SkillListItem } from './SkillsList';
 
 export interface UseProjectSkillsResult {
   deviceItems: SkillListItem[];
   /** The thrown error from the latest scan, if it failed. */
   error: unknown;
-  /**
-   * Per-row actions for filesystem skills: "view" opens the SKILL.md (locally
-   * via IPC, or on a bound device over RPC — same as the Files tab), while
-   * rename / delete are stubbed (disabled) until filesystem-mutation IPC lands.
-   */
-  getRowActions: (item: SkillListItem) => SkillRowAction[];
   /** No scan (persisted or fresh) for this device + directory yet. */
   isLoading: boolean;
   items: SkillListItem[];
   /** Retry the failed scan. */
   mutate: () => void;
-  onOpenFile: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill: (item: SkillListItem) => void;
   projectItems: SkillListItem[];
   raw: ListProjectSkillsResult | undefined;
@@ -33,8 +23,9 @@ export interface UseProjectSkillsResult {
 
 /**
  * Shared scan + handlers for filesystem-backed skills. Project skills live
- * under `.agents/skills` / `.claude/skills` in `workingDirectory`; device
- * skills live under those directories in the execution device's home.
+ * under `.agents/skills` / `.claude/skills` / `.codex/skills` in
+ * `workingDirectory` and its parents up to the repository root; device skills
+ * live under those directories in the execution device's home.
  *
  * `deviceId` picks the transport for both listing and preview: when set, the
  * scan and file reads run on that bound device via RPC (`device.listProjectSkills`
@@ -49,7 +40,6 @@ export const useProjectSkills = (
   workingDirectory: string | undefined,
   deviceId?: string,
 ): UseProjectSkillsResult => {
-  const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
 
   const { error, revalidate } = useToolStore((s) => s.useFetchProjectSkills)(
@@ -70,8 +60,6 @@ export const useProjectSkills = (
     () =>
       (data?.skills ?? []).map((skill) => ({
         description: skill.description,
-        fileCount: skill.fileCount,
-        files: skill.files,
         id: skill.skillDir,
         name: skill.name,
         scope: skill.scope,
@@ -98,7 +86,10 @@ export const useProjectSkills = (
   const openSkillFile = useCallback(
     (skill: ProjectSkillItem, filePath: string) => {
       openLocalFile({
-        allowExternalFilePreview: skill.scope === 'device',
+        // Project skills found in a parent of the working directory preview
+        // against their own source directory, outside the project scope too.
+        allowExternalFilePreview:
+          skill.scope === 'device' || (!!skill.previewRoot && skill.previewRoot !== previewRoot),
         // A bound device (remote, or this machine as a device) reads the preview
         // over RPC, exactly like the Files tab; an undefined deviceId falls back to
         // local Electron IPC. The old `isRemote` no-op predated remote preview.
@@ -110,15 +101,6 @@ export const useProjectSkills = (
     [deviceId, openLocalFile, previewRoot],
   );
 
-  const onOpenFile = useCallback(
-    (item: SkillListItem, relativePath: string) => {
-      const skill = skillByDir.get(item.id);
-      if (!skill) return;
-      openSkillFile(skill, path.join(skill.skillDir, relativePath));
-    },
-    [openSkillFile, skillByDir],
-  );
-
   const onOpenSkill = useCallback(
     (item: SkillListItem) => {
       const skill = skillByDir.get(item.id);
@@ -128,44 +110,6 @@ export const useProjectSkills = (
     [openSkillFile, skillByDir],
   );
 
-  const getRowActions = useCallback(
-    (_item: SkillListItem): SkillRowAction[] => {
-      const comingSoon = t('workingPanel.skills.actions.comingSoon');
-      return [
-        {
-          // Preview works in every mode: local via IPC, bound device via RPC
-          // (matches the Files tab, which reads remote files over RPC).
-          icon: EyeIcon,
-          key: 'view',
-          label: t('workingPanel.skills.actions.view'),
-          onClick: onOpenSkill,
-          sfSymbol: 'eye',
-        },
-        {
-          // Renaming a filesystem skill needs an IPC/RPC that doesn't exist yet.
-          disabled: true,
-          icon: PencilIcon,
-          key: 'rename',
-          label: t('workingPanel.skills.actions.rename'),
-          onClick: () => {},
-          sfSymbol: 'pencil',
-          tooltip: comingSoon,
-        },
-        {
-          danger: true,
-          disabled: true,
-          icon: Trash2Icon,
-          key: 'delete',
-          label: t('workingPanel.skills.actions.delete'),
-          onClick: () => {},
-          sfSymbol: 'trash',
-          tooltip: comingSoon,
-        },
-      ];
-    },
-    [onOpenSkill, t],
-  );
-
   const retry = useCallback(() => {
     void revalidate();
   }, [revalidate]);
@@ -173,11 +117,9 @@ export const useProjectSkills = (
   return {
     deviceItems,
     error,
-    getRowActions,
     isLoading,
     items,
     mutate: retry,
-    onOpenFile,
     onOpenSkill,
     projectItems,
     raw: data,

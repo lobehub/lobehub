@@ -1,21 +1,11 @@
-import { createStaticStyles, Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
+import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { type WorkingModel } from '@/types/agent';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
-
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  select: css`
-    &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
-      padding-inline-start: 12px;
-    }
-  `,
-}));
 
 interface ModelOption {
   label: ReactNode;
@@ -30,7 +20,7 @@ interface ModelSelectProps extends Omit<SelectProps, 'onChange' | 'value'> {
 }
 
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
-  const enabledList = useEnabledChatModels();
+  const enabledList = useSelectableChatModels();
 
   const options = useMemo<SelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>
@@ -71,7 +61,6 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
     <TooltipGroup>
       <Select
         options={options}
-        popupClassName={styles.select}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}

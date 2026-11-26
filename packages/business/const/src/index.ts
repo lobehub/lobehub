@@ -2,6 +2,7 @@ import { BRANDING_PROVIDER } from './branding';
 
 export * from './branding';
 export * from './llm';
+export * from './oidc';
 export * from './url';
 
 export const ENABLE_BUSINESS_FEATURES = false;

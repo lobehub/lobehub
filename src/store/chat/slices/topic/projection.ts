@@ -163,6 +163,39 @@ export const topicDetailResource = defineReplica<string, ChatTopic, ChatTopic | 
   version: 1,
 });
 
+export type TopicShareVisibility = 'private' | 'link';
+
+/** A topic's share record as the owner sees it (`topic.getShareInfo`). */
+export interface TopicShareInfo {
+  id: string;
+  topicId: string;
+  userId: string;
+  visibility: TopicShareVisibility;
+}
+
+/**
+ * The value of one share entry. A topic without a record is private — the
+ * record is created on the first visibility change — so `share: null` is a
+ * settled answer, distinct from "nothing loaded yet" (no entry).
+ */
+export interface TopicShareEntry {
+  share: TopicShareInfo | null;
+}
+
+/**
+ * The share record behind the topic Share popover, by topic id
+ * (`topicShareMap[topicId]`). Only an existing record is persisted: "no record"
+ * reads as private, and a stale copy of that could hide a link published from
+ * another device, so a reload waits for the server instead.
+ */
+export const topicShareResource = defineReplica<string, TopicShareEntry>({
+  key: (topicId) => topicId,
+  name: 'topicShareInfo',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
 /** Apply a topic dispatch to one container bucket (counts and `hasMore` included). */
 export const applyTopicDispatchToBucket = (
   bucket: TopicData | undefined,

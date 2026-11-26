@@ -65,7 +65,7 @@ describe('createTaskRunHooks', () => {
     expect(onTopicComplete).toHaveBeenCalledWith(expect.objectContaining({ reason: 'done' }));
   });
 
-  it('carries the run in the static webhook body, so a lost socket still settles it', () => {
+  it('carries the run and its workspace in the static webhook body, so a lost socket still settles it', () => {
     // The production callback rebuilds the lifecycle params server-side from
     // this body — it never sees the in-process handler's closure.
     const [hook] = createTaskRunHooks({
@@ -78,7 +78,15 @@ describe('createTaskRunHooks', () => {
     });
 
     expect(hook.webhook).toMatchObject({
-      body: { runTrigger: 'schedule', taskId: 'task-1', taskIdentifier: 'T-1', userId: 'user-1' },
+      body: {
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'T-1',
+        userId: 'user-1',
+        // The runner may not be the Task's creator, so the callback cannot
+        // rebuild the scope from the Task row's creator.
+        workspaceId: 'ws-1',
+      },
       url: '/api/workflows/task/on-topic-complete',
     });
   });

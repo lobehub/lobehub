@@ -83,3 +83,31 @@ export const countTasksCreatedByOthers = (
   if (!userId) return 0;
   return tasks.filter((task) => !!task.createdByUserId && task.createdByUserId !== userId).length;
 };
+
+export interface TaskToPrivatize {
+  id: string;
+  /** Another member created it: going private takes it over as the caller's own. */
+  takeOwnership: boolean;
+}
+
+/**
+ * The selected tasks that must go private before a private agent can be
+ * assigned to them, as the single-task picker does after its confirmation.
+ * A running task keeps its assignee (the batch skips it), so it is left as it
+ * is rather than made private for nothing.
+ */
+export const pickTasksToPrivatize = (
+  tasks: readonly {
+    createdByUserId?: string | null;
+    id: string;
+    status?: string | null;
+    visibility?: string | null;
+  }[],
+  userId: string | null | undefined,
+): TaskToPrivatize[] =>
+  tasks
+    .filter((task) => task.visibility === 'public' && task.status !== 'running')
+    .map((task) => ({
+      id: task.id,
+      takeOwnership: !!task.createdByUserId && task.createdByUserId !== userId,
+    }));

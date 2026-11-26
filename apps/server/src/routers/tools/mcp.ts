@@ -1,13 +1,16 @@
 import {
+  getDisabledPluginIds,
   GetStreamableMcpServerManifestInputSchema,
   StreamableHTTPAuthSchema,
 } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -17,6 +20,7 @@ import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { scheduleToolCallReport } from './_helpers';
 
@@ -73,13 +77,15 @@ const mcpProcedure = wsCompatProcedure
 export const mcpRouter = router({
   getStreamableMcpServerManifest: mcpProcedure
     .input(GetStreamableMcpServerManifestInputSchema)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       return await mcpService.getStreamableMcpServerManifest(
         input.identifier,
         input.url,
         input.metadata,
         input.auth,
         input.headers,
+        // With MCP Apps on, the tools only views call are listed and kept too
+        { mcpApps: await isMcpAppsEnabled(ctx.userId) },
       );
     }),
   // --- MCP Interaction ---
@@ -107,6 +113,23 @@ export const mcpRouter = router({
       return await mcpService.listPrompts(input);
     }),
 
+  /**
+   * Read an MCP Apps `ui://` resource so the chat can render a tool result's
+   * interactive view. A mutation, though it only reads: the params carry the
+   * plugin's auth and headers, which must travel in a POST body, not a GET URL.
+   * Refused while the `mcp_apps` flag is off, since the read opens a session
+   * that advertises MCP Apps.
+   */
+  readUiResource: mcpProcedure
+    .input(z.object({ params: mcpClientParamsSchema, uri: z.string().startsWith('ui://') }))
+    .mutation(async ({ ctx, input }) => {
+      if (!(await isMcpAppsEnabled(ctx.userId))) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Interactive views are turned off' });
+      }
+
+      return await mcpService.readUiResource(input.params, input.uri);
+    }),
+
   // callTool now accepts MCPClientParams, toolName, and args
   callTool: mcpProcedure
     // Executes tools with side effects — workspace viewers are read-only.
@@ -114,24 +137,54 @@ export const mcpRouter = router({
     .input(
       z.object({
         args: z.any(), // Arguments for the tool call
+        /** An MCP App view's `tools/call`: only tools visible to the app run. */
+        fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
+        agentId: z.string().optional(),
         meta: metaSchema, // Optional metadata for reporting
         params: mcpClientParamsSchema, // Use the unified schema for client params
         toolName: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.fromEntrypoint && input.agentId) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const config = await agentModel.getAgentConfigById(input.agentId);
+        if (
+          !config ||
+          getDisabledPluginIds(config.plugins ?? undefined).includes(input.params.name)
+        )
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'This app is unavailable for the agent',
+          });
+      }
       // ── Connector tool permission gate ────────────────────────────────────
       // If the connector identifier matches a user_connectors entry, check whether
       // this specific tool has been disabled by the user. Disabled tools are still
       // present in the AI manifest (so the AI knows they exist) but are hard-blocked
       // here at execution time so the MCP server is never actually called.
+      //
+      // The row is the one the conversation runs the identifier on, ranked as
+      // its runs rank them: a plugin call keeps the bare identifier, and the
+      // owner's private row shadows the shared one in their private agent's own
+      // topic. Only an agent the caller can see names the run.
       const connectorId = input.params.name;
       if (connectorId && ctx.userId) {
         const wsId = ctx.workspaceId ?? undefined;
         const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
-        const [connector] = await connectorModel.queryByIdentifiers([connectorId]);
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, wsId);
+        const agentId =
+          input.agentId && (await agentModel.existsById(input.agentId)) ? input.agentId : undefined;
+        const [connector] = await connectorModel.resolveByIdentifiers([connectorId], {
+          agentId,
+          topicId: agentId ? input.meta?.sessionId : undefined,
+        });
         if (connector) {
-          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
+          // A personal row's tools live in the personal scope
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, {
+            agentRun: true,
+          });
           const tools = await connectorToolModel.queryByConnector(connector.id);
           const tool = tools.find((t) => t.toolName === input.toolName);
           if (tool?.permission === ConnectorToolPermission.disabled) {
@@ -175,6 +228,9 @@ export const mcpRouter = router({
         result = await mcpService.callTool({
           argsStr: input.args,
           clientParams: input.params,
+          fromApp: input.fromApp,
+          fromEntrypoint: input.fromEntrypoint,
+          mcpApps: await isMcpAppsEnabled(ctx.userId),
           processContentBlocks: boundProcessContentBlocks,
           toolName: input.toolName,
         });

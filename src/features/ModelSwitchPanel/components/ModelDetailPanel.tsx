@@ -5,6 +5,7 @@ import {
   AccordionRoot,
   AccordionTrigger,
   createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   Tag,
@@ -16,6 +17,7 @@ import type { FC } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { getModelDescriptionI18nKey } from '@/utils/modelDescriptionI18n';
 
@@ -34,7 +36,7 @@ export type { PricingMode } from '../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionText: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
@@ -52,7 +54,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   radarClickable: css`
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: ${densityVars.radius};
     transition: background 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
@@ -85,9 +87,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: inline-flex;
     gap: 4px;
     align-items: baseline;
+    font-variant-numeric: tabular-nums;
   `,
   titleText: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 400;
     color: ${cssVar.colorTextSecondary};
   `,
@@ -113,6 +116,19 @@ const PriceValue: FC<PriceValueProps> = ({ price, prefix = '', suffix = '' }) =>
       {suffix}
     </span>
   </span>
+);
+
+/** The short colored bar before a section title; tokens keep it in step with the theme. */
+const SectionAccent: FC<{ color: string }> = ({ color }) => (
+  <div
+    style={{
+      background: color,
+      borderRadius: 2,
+      flexShrink: 0,
+      height: 14,
+      width: 3,
+    }}
+  />
 );
 
 interface ModelDetailPanelProps {
@@ -208,15 +224,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#eb2f96',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.magenta} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.rating')}
                       </span>
@@ -277,15 +285,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
               <AccordionItem disabled value="context">
                 <AccordionHeader style={{ paddingBlock: 6, paddingInline: 8 }}>
                   <Flexbox horizontal align={'center'} flex={1} gap={8}>
-                    <div
-                      style={{
-                        background: '#1677ff',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        height: 14,
-                        width: 3,
-                      }}
-                    />
+                    <SectionAccent color={cssVar.blue} />
                     <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
                   </Flexbox>
                   <span className={styles.actionText}>{contextWindowLabel}</span>
@@ -299,15 +299,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#722ed1',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.purple} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.abilities')}
                       </span>
@@ -361,15 +353,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#fa8c16',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.orange} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.pricing')}
                       </span>
@@ -389,20 +373,20 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           >
                             <Flexbox horizontal align={'center'} gap={2}>
                               <Icon icon={CircleFadingArrowUp} size={'small'} />
-                              <PriceValue price={formatPrice!.cachedInput} />
+                              <PriceValue prefix="$" price={formatPrice!.cachedInput} />
                             </Flexbox>
                           </Tooltip>
                         )}
                         <Tooltip title={getPricingTooltip('input', formatPrice!.input.current)}>
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={ArrowUpFromDot} size={'small'} />
-                            <PriceValue price={formatPrice!.input} />
+                            <PriceValue prefix="$" price={formatPrice!.input} />
                           </Flexbox>
                         </Tooltip>
                         <Tooltip title={getPricingTooltip('output', formatPrice!.output.current)}>
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={ArrowDownToDot} size={'small'} />
-                            <PriceValue price={formatPrice!.output} />
+                            <PriceValue prefix="$" price={formatPrice!.output} />
                           </Flexbox>
                         </Tooltip>
                       </Flexbox>

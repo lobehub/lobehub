@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 import type { LocalHeterogeneousAgentType } from '../config';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
+import { findCommandInUserBinDirs } from './userBinDirs';
+import { findWslCommandCandidates, invalidateWslCache, isWslCommand } from './wsl';
 
 /**
  * Shared resolver for external CLI-agent binaries.
@@ -67,7 +69,7 @@ interface RecoveredProbeEnvironment {
   resolvedPathEnv: string;
 }
 
-const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
+const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?(?:\+[\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
   versionBanner.match(VERSION_PATTERN)?.[1];
@@ -224,6 +226,8 @@ const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
  * fresh scan.
  */
 export const invalidateLoginShellPathCache = (): void => {
+  // A Rescan must also see agents installed inside WSL since the last scan.
+  invalidateWslCache();
   cachedShellPath = undefined;
   shellPathGeneration += 1;
   shellPathPromise = undefined;
@@ -305,6 +309,28 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
     });
 
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+/**
+ * The PATH a child spawned by this process should search: the login shell's
+ * PATH (the Windows registry's on Windows) merged ahead of the inherited one.
+ *
+ * Use when: a long-lived host started by a service manager (launchd, systemd)
+ * spawns user tools — `npx`, `uvx`, nvm-installed binaries — that only the
+ * user's login shell puts on PATH.
+ * Returns: the inherited PATH when nothing could be recovered; never throws.
+ */
+export const resolveUserSpawnPath = async (
+  currentPath: string | undefined = process.env.PATH,
+): Promise<string | undefined> => {
+  try {
+    const recovered = isWindows()
+      ? await getWindowsRegistryPath()
+      : await getCurrentLoginShellPath();
+    return mergePathValues(recovered, currentPath) ?? currentPath;
+  } catch {
+    return currentPath;
+  }
 };
 
 const recoverProbeEnvironment = async (
@@ -458,7 +484,7 @@ const execProbe = async (
   }
 
   return execFilePromise(spawnPlan.command, spawnPlan.args, {
-    env,
+    env: spawnPlan.env ?? env,
     timeout: 5000,
     windowsHide: true,
   });
@@ -627,8 +653,9 @@ export const detectValidatedCommandCandidates = async (
     lastStatus = inheritedStatus;
 
     // Invalid Windows shell expressions must not trigger even the registry
-    // helper processes used for PATH recovery.
-    if (!isProbeableCommand(command)) continue;
+    // helper processes used for PATH recovery. A WSL command runs on the WSL
+    // side's own PATH, so a recovered Windows PATH can't help it either.
+    if (!isProbeableCommand(command) || isWslCommand(command)) continue;
 
     if (!recoveryAttempted) {
       recoveryAttempted = true;
@@ -665,6 +692,13 @@ export const detectValidatedCommand = async (
 ): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'antigravity': {
+    // `agy --help` lists the ACP server from 1.5.6, the release that steers a
+    // running turn when another prompt arrives.
+    validateHelpKeywords: ['Agent Client Protocol'],
+    validatePattern:
+      /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
+  },
   'amp': {
     validateFlag: '--help',
     validateKeywords: ['Amp CLI'],
@@ -687,7 +721,8 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'cursor': {
     validateFlag: '--help',
-    validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
+    // Help names the program as it was invoked: `agent` or its `cursor-agent` alias.
+    validatePattern: /^Usage: (?:cursor-)?agent[\s\S]*Cursor Agent/im,
   },
   'droid': {
     validateHelpArgs: ['exec', '--help'],
@@ -709,9 +744,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'opencode': {
-    // OpenCode prints only a bare version (for example `1.18.3`) for
-    // `--version`, without a product-name prefix.
-    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+    // OpenCode 1.x prints a bare version (`1.18.3`); 2.x prefixes the product
+    // name (`opencode v2.2.6`).
+    validatePattern: /^(?:opencode\s+)?v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
   },
   'pi': {
     // Pi prints a bare semantic version for `--version`.
@@ -745,6 +780,14 @@ export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
 // desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'antigravity': {
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        return localAppData ? [path.win32.join(localAppData, 'agy', 'bin', 'agy.exe')] : [];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'agy')];
+    }
     case 'amp': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
@@ -826,6 +869,18 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
       ];
     }
     case 'cursor': {
+      // Cursor's Windows installer (`irm 'https://cursor.com/install?win32=true' | iex`)
+      // puts its `agent.cmd` launcher in `%LOCALAPPDATA%\cursor-agent` and only adds
+      // that to the registry User PATH, which an already-running app never sees.
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (!localAppData) return [];
+
+        return [
+          path.win32.join(localAppData, 'cursor-agent', 'agent.cmd'),
+          path.win32.join(localAppData, 'cursor-agent', 'cursor-agent.cmd'),
+        ];
+      }
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
       return [
         path.join(homedir(), '.local', 'bin', 'agent'),
@@ -937,12 +992,94 @@ export const detectHeterogeneousCliCommand = async (
   // default command: the well-known paths hold the *default* binary, so applying
   // them to a custom command (e.g. `claude-beta`) would silently resolve it to
   // stock `claude` instead of reporting the configured command as missing.
-  const commands =
-    command.trim() === DEFAULT_HETERO_COMMAND[agentType]
-      ? [command, ...getWellKnownCommandPaths(agentType)]
-      : [command];
+  const isDefaultCommand = command.trim() === DEFAULT_HETERO_COMMAND[agentType];
+  if (!isDefaultCommand) return detectValidatedCommandCandidates([command], validator, probeEnv);
 
-  return detectValidatedCommandCandidates(commands, validator, probeEnv);
+  const names = [command, ...(DEFAULT_COMMAND_ALIASES[agentType] ?? [])];
+  const status = await detectValidatedCommandCandidates(
+    [...names, ...getWellKnownCommandPaths(agentType)],
+    validator,
+    probeEnv,
+  );
+  const swept = await detectInUserBinDirs(status, names, validator, probeEnv);
+  return detectInWslWhenMissing(swept, names, validator);
+};
+
+// Other names an agent's installer gives the default binary. Cursor's creates
+// `agent` and the unambiguous `cursor-agent` alias, which is the one left
+// standing when another tool's `agent` comes first on PATH.
+const DEFAULT_COMMAND_ALIASES: Partial<Record<HeterogeneousCliAgentType, string[]>> = {
+  cursor: ['cursor-agent'],
+};
+
+/** Same-environment copy of `env` with `file`'s folder put first on PATH. */
+const withFolderOnPath = (file: string, env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const base = env ?? process.env;
+  const windows = isWindows();
+  const dir = windows ? path.win32.dirname(file) : path.posix.dirname(file);
+  const delimiter = windows ? ';' : ':';
+  // A copied Windows environment keeps the variable's own spelling (`Path`).
+  // Written back as `PATH`, which Node passes ahead of `Path` to the child.
+  const key =
+    base.PATH === undefined && windows
+      ? Object.keys(base).find((name) => name.toLowerCase() === 'path')
+      : 'PATH';
+  const current = (key && base[key]) || '';
+  const onPath = current
+    .split(delimiter)
+    .some((entry) => (windows ? entry.toLowerCase() === dir.toLowerCase() : entry === dir));
+  return onPath ? base : { ...base, PATH: current ? `${dir}${delimiter}${current}` : dir };
+};
+
+/**
+ * When PATH and the agent's own install locations have nothing, look through
+ * the folders every package and version manager installs CLIs into
+ * (`userBinDirs`): an `npm i -g` under nvm or fnm, a bun / pnpm / Volta global,
+ * a Scoop or winget shim. Each hit is validated with its own folder first on
+ * PATH — an npm CLI under nvm is a `#!/usr/bin/env node` script whose `node`
+ * sits beside it — and that PATH is handed to the spawn site with the result.
+ */
+export const detectInUserBinDirs = async (
+  status: CliCommandStatus,
+  commandNames: string[],
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => {
+  if (status.available) return status;
+
+  const candidates = await findCommandInUserBinDirs(commandNames, {
+    env: probeEnv ?? process.env,
+  }).catch(() => []);
+  for (const candidate of candidates) {
+    const found = await detectValidatedCommandInEnvironment(
+      candidate,
+      options,
+      withFolderOnPath(candidate, probeEnv),
+    );
+    if (found.available) return found;
+  }
+  return status;
+};
+
+/**
+ * When nothing on the Windows side answers, look for the command inside WSL.
+ * Only then: probing a distro may boot its VM, which a user whose agents are
+ * all on Windows should never pay for. A hit is a `wsl://` command that
+ * `resolveCliSpawnPlan` launches through `wsl.exe`. No-op off Windows.
+ */
+export const detectInWslWhenMissing = async (
+  status: CliCommandStatus,
+  commandNames: string[],
+  options: ValidateOptions,
+): Promise<CliCommandStatus> => {
+  if (status.available || !isWindows()) return status;
+
+  const candidates: string[] = [];
+  for (const name of commandNames) candidates.push(...(await findWslCommandCandidates(name)));
+  if (candidates.length === 0) return status;
+
+  const wslStatus = await detectValidatedCommandCandidates(candidates, options);
+  return wslStatus.available ? wslStatus : status;
 };
 
 /**

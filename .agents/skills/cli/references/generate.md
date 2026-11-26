@@ -268,24 +268,33 @@ lh gen tts <text> [-o <file>] [--voice <voice>] [-m <model>] [-p <provider>] \
   [--sample-rate <hz>] [--instructions <text>] [--params <json>]
 ```
 
-| Option                      | Description                                                  | Default               |
-| --------------------------- | ------------------------------------------------------------ | --------------------- |
-| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`     |
-| `--voice <voice>`           | Voice id from the model card's `voices`                      | model's default voice |
-| `--speed <n>`               | Speed multiplier                                             | model default         |
-| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default         |
-| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default         |
-| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default         |
-| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`                 |
-| `--sample-rate <hz>`        | Output sample rate                                           | model default         |
-| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                     |
-| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                     |
-| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`               |
-| `-p, --provider <provider>` | Provider (derived from model if omitted)                     | `openai`              |
+| Option                      | Description                                                  | Default             |
+| --------------------------- | ------------------------------------------------------------ | ------------------- |
+| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`   |
+| `--voice <voice>`           | Voice id from the model card's `voices`                      | saved default voice |
+| `--speed <n>`               | Speed multiplier                                             | model default       |
+| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default       |
+| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default       |
+| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default       |
+| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`               |
+| `--sample-rate <hz>`        | Output sample rate                                           | model default       |
+| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                   |
+| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                   |
+| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`             |
+| `-p, --provider <provider>` | Provider (model prefix, else the built-in card's provider)   | card's provider     |
 
 Params are standard TTS parameters (`TTSModelParamsMetaSchema` in model-bank). The server
 rejects params the model card does not declare or values outside its range. On success the
 command prints the file size plus usage (characters, tokens, cost) when the provider reports it.
+
+Without `--voice`, the server uses the **Default Voice** saved for the model in
+Settings → AI Providers (model config dialog), then the card's default voice. Without a
+provider or a `provider/` prefix, the server takes the provider of the model's built-in card
+(`gemini-3.8-flash-tts` → `google`, `speech-2.8-hd` → `minimax`), then `openai`.
+
+Gemini TTS (`-p google`, models `gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`, legacy
+`gemini-2.5-flash-preview-tts` / `gemini-2.5-pro-preview-tts`): 30 prebuilt voices (default
+`Kore`), style through `--instructions`, no speed/pitch/volume/emotion, output MP3 24 kHz mono.
 
 Uses the selected provider's saved configuration through ModelRuntime, with the same
 authenticated tRPC client as `lh gen asr`.

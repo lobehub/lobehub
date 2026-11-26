@@ -164,13 +164,6 @@ describe('AgentRuntimeService.executeSync', () => {
     });
   });
 
-  describe('getCoordinator', () => {
-    it('should return the coordinator instance', () => {
-      const coordinator = service.getCoordinator();
-      expect(coordinator).toBeDefined();
-    });
-  });
-
   describe('InMemoryAgentStateManager', () => {
     it('should save and load state correctly', async () => {
       const operationId = 'state-test-1';

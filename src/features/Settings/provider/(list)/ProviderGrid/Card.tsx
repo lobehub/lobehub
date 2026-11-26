@@ -1,11 +1,13 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { Avatar, cssVar, cx, Divider, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Avatar, cssVar, Divider, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
 import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useDensityTokens } from '@/styles/density';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
@@ -17,9 +19,10 @@ const isCodingPlanProvider = (id: string) => id.endsWith('codingplan');
  * ChatGPT is an OpenAI subscription, so its icon config points at the OpenAI
  * mark — ProviderCombine renders the OpenAI wordmark and the card reads as a
  * duplicate of the OpenAI one right beside it. Name these providers after the
- * plan instead, the way the detail page header does.
+ * plan instead, the way the detail page header does. Doubao Speech borrows the Doubao
+ * mark, whose wordmark reads 豆包大模型 (the Ark models), so it is named too.
  */
-const sharesVendorMark = (id: string) => id === 'chatgpt';
+const sharesVendorMark = (id: string) => id === 'chatgpt' || id === 'doubaospeech';
 
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
@@ -29,13 +32,16 @@ const ProviderCard = memo<ProviderCardProps>(
   ({ id, description, name, enabled, source, logo, loading, onProviderSelect }) => {
     const { t } = useTranslation('providers');
     const isDarkMode = useIsDark();
+    const { pageTitleFontSize } = useDensityTokens();
 
     if (loading)
       return (
         <Flexbox
-          className={cx(isDarkMode ? styles.containerDark : styles.containerLight)}
           gap={24}
           padding={16}
+          className={
+            stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+          }
         >
           <Skeleton />
         </Flexbox>
@@ -46,7 +52,12 @@ const ProviderCard = memo<ProviderCardProps>(
     }
 
     return (
-      <Flexbox className={cx(isDarkMode ? styles.containerDark : styles.containerLight)} gap={24}>
+      <Flexbox
+        gap={24}
+        className={
+          stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+        }
+      >
         <Flexbox gap={12} padding={16} width={'100%'}>
           <div
             style={{ cursor: 'pointer' }}
@@ -66,7 +77,9 @@ const ProviderCard = memo<ProviderCardProps>(
                           style={{ borderRadius: 6 }}
                           type={'avatar'}
                         />
-                        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{name || id}</Text>
+                        <Text style={{ fontSize: pageTitleFontSize, fontWeight: 'bold' }}>
+                          {name || id}
+                        </Text>
                       </Flexbox>
                     ) : (
                       <ProviderCombine
@@ -90,12 +103,14 @@ const ProviderCard = memo<ProviderCardProps>(
                         type={'avatar'}
                       />
                     )}
-                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{name || id}</Text>
+                    <Text style={{ fontSize: pageTitleFontSize, fontWeight: 'bold' }}>
+                      {name || id}
+                    </Text>
                   </Flexbox>
                 )}
               </Flexbox>
               <Text
-                className={styles.desc}
+                className={stylex.props(styles.desc).className}
                 ellipsis={{
                   rows: 2,
                 }}

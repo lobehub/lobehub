@@ -44,6 +44,7 @@ describe('ProtocolManager', () => {
 
   // Store event handlers
   let openUrlHandler: ((event: any, url: string) => void) | undefined;
+  let openFileHandler: ((event: any, filePath: string) => void) | undefined;
   let secondInstanceHandler: ((event: any, commandLine: string[]) => void) | undefined;
 
   beforeEach(() => {
@@ -56,10 +57,13 @@ describe('ProtocolManager', () => {
 
     // Capture event handlers
     openUrlHandler = undefined;
+    openFileHandler = undefined;
     secondInstanceHandler = undefined;
     mockApp.on.mockImplementation((event: string, handler: any) => {
       if (event === 'open-url') {
         openUrlHandler = handler;
+      } else if (event === 'open-file') {
+        openFileHandler = handler;
       } else if (event === 'second-instance') {
         secondInstanceHandler = handler;
       }
@@ -91,6 +95,8 @@ describe('ProtocolManager', () => {
   it('queues deep links while the startup update window is blocking entry', async () => {
     mockAppCore.startupUpdatePending = true;
     manager.initialize();
+    // The runner's own argv is not part of what this test asserts.
+    manager['pendingTargets'] = [];
     openUrlHandler!(
       { preventDefault: vi.fn() },
       'lobehub://plugin/install?url=https://example.com',
@@ -98,7 +104,7 @@ describe('ProtocolManager', () => {
     expect(mockShowMainWindow).not.toHaveBeenCalled();
     expect(mockHandleProtocolRequest).not.toHaveBeenCalled();
     mockAppCore.startupUpdatePending = false;
-    await manager.processPendingUrls();
+    await manager.processPendingTargets();
     expect(mockHandleProtocolRequest).toHaveBeenCalledOnce();
   });
 
@@ -125,12 +131,6 @@ describe('ProtocolManager', () => {
   });
 
   describe('protocol registration', () => {
-    it('should use simple registration in production mode', () => {
-      manager.initialize();
-
-      expect(app.setAsDefaultProtocolClient).toHaveBeenCalledWith('lobehub');
-    });
-
     it('should use explicit parameters in development mode', async () => {
       vi.doMock('@/const/env', () => ({ isDev: true }));
       vi.resetModules();
@@ -154,55 +154,101 @@ describe('ProtocolManager', () => {
     });
   });
 
-  describe('getProtocolUrlFromArgs', () => {
+  describe('parseLaunchTarget', () => {
     beforeEach(() => {
       manager.initialize();
     });
 
     it('should extract protocol URL from command line arguments', () => {
       // Access private method through prototype
-      const result = manager['getProtocolUrlFromArgs']([
+      const result = manager['parseLaunchTarget']([
         '/path/to/app',
         'lobehub://plugin/install?url=https://example.com',
       ]);
 
-      expect(result).toBe('lobehub://plugin/install?url=https://example.com');
+      expect(result).toEqual({
+        kind: 'url',
+        url: 'lobehub://plugin/install?url=https://example.com',
+      });
     });
 
-    it('should return null when no matching URL found', () => {
-      const result = manager['getProtocolUrlFromArgs'](['/path/to/app', '--some-flag']);
+    it('should return null when no target found', () => {
+      const result = manager['parseLaunchTarget'](['/path/to/app', '--some-flag']);
 
       expect(result).toBeNull();
     });
 
     it('should return first matching URL when multiple exist', () => {
-      const result = manager['getProtocolUrlFromArgs']([
+      const result = manager['parseLaunchTarget']([
+        '/path/to/app',
         'lobehub://first/action',
         'lobehub://second/action',
       ]);
 
-      expect(result).toBe('lobehub://first/action');
+      expect(result).toEqual({ kind: 'url', url: 'lobehub://first/action' });
+    });
+
+    it('should read a directory argument instead of dropping it', () => {
+      // Regression: only `scheme://` URLs were scanned, so `LobeHub .` started
+      // a window that knew nothing about the directory it was launched from.
+      const result = manager['parseLaunchTarget'](['/path/to/app', process.cwd()]);
+
+      expect(result).toMatchObject({ kind: 'path', newWindow: false, path: process.cwd() });
+    });
+
+    it('should carry --new-window with a directory target', () => {
+      const result = manager['parseLaunchTarget'](['/path/to/app', '--new-window', process.cwd()]);
+
+      expect(result).toMatchObject({ kind: 'path', newWindow: true });
     });
   });
 
-  describe('handleProtocolUrl', () => {
+  describe('open-file event', () => {
     beforeEach(() => {
       manager.initialize();
     });
 
-    it('should store URL when app is not ready', () => {
+    it('should open a directory dropped on the app', async () => {
+      expect(openFileHandler).toBeDefined();
+
+      const mockEvent = { preventDefault: vi.fn() };
+      openFileHandler!(mockEvent, process.cwd());
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(mockHandleProtocolRequest).toHaveBeenCalledWith('open', 'path', {
+          newWindow: false,
+          path: process.cwd(),
+        });
+      });
+    });
+
+    it('should ignore a dropped file that is not a directory', () => {
+      const mockEvent = { preventDefault: vi.fn() };
+      openFileHandler!(mockEvent, '/definitely/not/a/real/path/file.txt');
+
+      expect(mockHandleProtocolRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleLaunchTarget', () => {
+    beforeEach(() => {
+      manager.initialize();
+    });
+
+    it('should store target when app is not ready', () => {
       mockApp.isReady.mockReturnValue(false);
 
-      manager['handleProtocolUrl']('lobehub://plugin/install');
+      manager['handleLaunchTarget']({ kind: 'url', url: 'lobehub://plugin/install' });
 
-      expect(manager['pendingUrls']).toContain('lobehub://plugin/install');
+      expect(manager['pendingTargets']).toEqual([{ kind: 'url', url: 'lobehub://plugin/install' }]);
       expect(mockShowMainWindow).not.toHaveBeenCalled();
     });
 
     it('should process URL immediately when app is ready', async () => {
       mockApp.isReady.mockReturnValue(true);
 
-      manager['handleProtocolUrl']('lobehub://plugin/install');
+      manager['handleLaunchTarget']({ kind: 'url', url: 'lobehub://plugin/install' });
 
       // Allow async processing
       await vi.waitFor(() => {
@@ -210,10 +256,23 @@ describe('ProtocolManager', () => {
       });
     });
 
+    it('should dispatch a directory to the open:path handler', async () => {
+      manager['handleLaunchTarget']({ kind: 'path', newWindow: true, path: process.cwd() });
+
+      await vi.waitFor(() => {
+        expect(mockHandleProtocolRequest).toHaveBeenCalledWith('open', 'path', {
+          newWindow: true,
+          path: process.cwd(),
+        });
+      });
+      expect(mockShowMainWindow).toHaveBeenCalled();
+    });
+
     it('should ignore URLs with invalid protocol scheme', async () => {
       mockApp.isReady.mockReturnValue(true);
+      vi.mocked(parseProtocolUrl).mockReturnValue(null);
 
-      manager['handleProtocolUrl']('invalid://plugin/install');
+      manager['handleLaunchTarget']({ kind: 'url', url: 'invalid://plugin/install' });
 
       await Promise.resolve(); // Allow any async work
 
@@ -259,41 +318,38 @@ describe('ProtocolManager', () => {
     });
   });
 
-  describe('processPendingUrls', () => {
+  describe('processPendingTargets', () => {
     beforeEach(() => {
       manager.initialize();
     });
 
-    it('should process all pending URLs', async () => {
-      // Add pending URLs
-      manager['pendingUrls'] = ['lobehub://action1', 'lobehub://action2'];
+    it('should process all pending targets', async () => {
+      // Add pending targets
+      manager['pendingTargets'] = [
+        { kind: 'url', url: 'lobehub://action1' },
+        { kind: 'url', url: 'lobehub://action2' },
+      ];
 
-      await manager.processPendingUrls();
+      await manager.processPendingTargets();
 
-      // Should have shown main window for each URL
+      // Should have shown main window for each target
       expect(mockShowMainWindow).toHaveBeenCalledTimes(2);
     });
 
-    it('should clear pending URLs after processing', async () => {
-      manager['pendingUrls'] = ['lobehub://action1'];
+    it('should clear pending targets after processing', async () => {
+      manager['pendingTargets'] = [{ kind: 'url', url: 'lobehub://action1' }];
 
-      await manager.processPendingUrls();
+      await manager.processPendingTargets();
 
-      expect(manager['pendingUrls']).toHaveLength(0);
+      expect(manager['pendingTargets']).toHaveLength(0);
     });
 
-    it('should skip when no pending URLs', async () => {
-      manager['pendingUrls'] = [];
+    it('should skip when no pending targets', async () => {
+      manager['pendingTargets'] = [];
 
-      await manager.processPendingUrls();
+      await manager.processPendingTargets();
 
       expect(mockShowMainWindow).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getScheme', () => {
-    it('should return the protocol scheme', () => {
-      expect(manager.getScheme()).toBe('lobehub');
     });
   });
 
@@ -316,7 +372,7 @@ describe('ProtocolManager', () => {
       manager.initialize();
     });
 
-    it('should show main window and dispatch to handler', async () => {
+    it('should dispatch the parsed request to its handler', async () => {
       vi.mocked(parseProtocolUrl).mockReturnValue({
         action: 'install',
         originalUrl: 'lobehub://plugin/install?url=https://example.com',
@@ -326,7 +382,6 @@ describe('ProtocolManager', () => {
 
       await manager['processProtocolUrl']('lobehub://plugin/install');
 
-      expect(mockShowMainWindow).toHaveBeenCalled();
       expect(mockHandleProtocolRequest).toHaveBeenCalledWith('plugin', 'install', {
         url: 'https://example.com',
       });
@@ -337,7 +392,6 @@ describe('ProtocolManager', () => {
 
       await manager['processProtocolUrl']('lobehub://invalid');
 
-      expect(mockShowMainWindow).toHaveBeenCalled();
       expect(mockHandleProtocolRequest).not.toHaveBeenCalled();
     });
 

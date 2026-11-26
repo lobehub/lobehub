@@ -198,12 +198,6 @@ describe('createContextInner', () => {
     expect(context2.resHeaders).toBeInstanceOf(Headers);
   });
 
-  it('should always provide resHeaders', async () => {
-    const ctx = await createContextInner();
-
-    expect(ctx.resHeaders).toBeInstanceOf(Headers);
-  });
-
   it('should keep provided traceContext', async () => {
     const traceContext = { test: 'ctx' } as any;
     const ctx = await createContextInner({ traceContext });
@@ -240,6 +234,22 @@ describe('createLambdaContext', () => {
       type: 'web',
       version: '2.2.10',
     });
+  });
+
+  it('reads the Work types the client renders', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'x-lobe-work-types': 'artboard,file' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.workTypeOptIn).toEqual({ includeArtboardWorks: true, includeFileWorks: true });
+  });
+
+  it('leaves the Work opt-in empty when the client sent none', async () => {
+    const context = await createLambdaContext(new NextRequest('https://example.com/trpc/lambda'));
+
+    expect(context.workTypeOptIn).toEqual({});
   });
 
   it('should carry the one-shot relay headers of the requesting tab', async () => {
@@ -280,21 +290,9 @@ describe('createLambdaContext', () => {
   });
 
   it('should authenticate with API key and skip session fallback', async () => {
-    const apiKeyRecord = {
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      enabled: true,
-      expiresAt: null,
-      id: 'key-1',
-      key: 'encrypted-key',
-      keyHash: 'hashed-key',
-      lastUsedAt: null,
-      name: 'Test API Key',
-      scopes: null,
-      updatedAt: new Date(),
-      userId: 'api-user',
-      workspaceId: null,
-    } satisfies NonNullable<Awaited<ReturnType<typeof ApiKeyModel.findByKey>>>;
+    const apiKeyRecord = makeApiKeyRecord(null) satisfies NonNullable<
+      Awaited<ReturnType<typeof ApiKeyModel.findByKey>>
+    >;
 
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(apiKeyRecord);
 

@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Klasörleri yenile",
   "workingDirectory.refreshGitStatus": "Dal ve PR durumunu yenile",
   "workingDirectory.removeRecent": "Son öğelerden kaldır",
+  "workingDirectory.removeRecentFailed": "Bu klasör kaldırılamadı. Lütfen tekrar deneyin.",
   "workingDirectory.removeWorktreeAction": "Çalışma ağacını sil",
   "workingDirectory.removeWorktreeConfirm": "Çalışma ağacı “{{name}}” silinsin mi? Bu işlem çalışma ağacı dizinini kaldırır ancak dalını korur. Git, kaydedilmemiş değişiklikler varsa reddedecektir.",
   "workingDirectory.removeWorktreeFailed": "Çalışma ağacı silinemedi",

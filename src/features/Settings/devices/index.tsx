@@ -1,14 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
 import { DeviceConnectModal, DeviceDetailPage, DeviceManager } from '@/features/DeviceManager';
-import NavHeader from '@/features/NavHeader';
-import SettingContainer from '@/features/Setting/SettingContainer';
 
 import ThisComputer from './ThisComputer';
 
@@ -16,8 +13,7 @@ interface PageProps {
   mobile?: boolean;
 }
 
-const Page = memo<PageProps>(({ mobile }) => {
-  const { t } = useTranslation('setting');
+const Page = memo<PageProps>(() => {
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'cli' | 'desktop'>();
   // `/settings/devices/:sub` — the second level is one device's detail page.
@@ -33,20 +29,12 @@ const Page = memo<PageProps>(({ mobile }) => {
   const openDevice = (id: string) => navigate(`/settings/devices/${encodeURIComponent(id)}`);
   const backToList = () => navigate('/settings/devices');
 
-  // Same toolbar + card grid as the workspace devices page; the personal
-  // pool has no visibility tabs, so its leading slot carries the page title.
+  // Same toolbar + card grid as the workspace devices page. The personal pool
+  // has no visibility tabs, and the shared settings header already shows the
+  // page title, so the toolbar's leading slot stays empty.
   const list = (
     <Flexbox gap={24}>
-      <DeviceManager
-        scope={'personal'}
-        toolbarLeading={
-          <Text fontSize={16} weight={600}>
-            {t('devices.title')}
-          </Text>
-        }
-        onConnect={handleConnect}
-        onOpenDevice={openDevice}
-      />
+      <DeviceManager scope={'personal'} onConnect={handleConnect} onOpenDevice={openDevice} />
       {isDesktop && <ThisComputer />}
     </Flexbox>
   );
@@ -66,23 +54,11 @@ const Page = memo<PageProps>(({ mobile }) => {
     list
   );
 
-  if (mobile)
-    return (
-      <>
-        {content}
-        {connectModal}
-      </>
-    );
-
+  // Desktop renders inside the shared settings header + container, mobile under
+  // the mobile layout header.
   return (
     <>
-      <NavHeader styles={{ center: { alignItems: 'center' } }}>
-        <Text weight={500}>{t('devices.title')}</Text>
-      </NavHeader>
-      {/* Full width: the card grid adds columns as the pane widens. */}
-      <SettingContainer maxWidth={'100%'} paddingBlock={'24px 128px'} paddingInline={24}>
-        {content}
-      </SettingContainer>
+      {content}
       {connectModal}
     </>
   );

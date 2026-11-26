@@ -4,17 +4,23 @@ import type {
   Generation,
   GenerationAsset,
   ImageGenerationAsset,
+  MusicGenerationAsset,
   VideoGenerationAsset,
   VideoGenerationTaskMetadata,
 } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import debug from 'debug';
-import { and, eq, exists } from 'drizzle-orm';
+import { and, count, desc, eq, exists, inArray } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
 import type { NewFile } from '../schemas';
-import type { GenerationItem, GenerationWithAsyncTask, NewGeneration } from '../schemas/generation';
+import type {
+  GenerationBatchItem,
+  GenerationItem,
+  GenerationWithAsyncTask,
+  NewGeneration,
+} from '../schemas/generation';
 import { generationBatches, generations, generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -22,6 +28,20 @@ import { FileModel } from './file';
 
 // Create debug logger
 const log = debug('lobe-image:generation-model');
+
+export type GenerationKind = 'image' | 'music' | 'video';
+
+/** A generation with its async task and the batch (and topic kind) it belongs to. */
+export type GenerationWithBatch = GenerationWithAsyncTask & {
+  batch: Pick<GenerationBatchItem, 'generationTopicId' | 'id' | 'model' | 'prompt' | 'provider'> & {
+    topic: { type: string } | null;
+  };
+};
+
+const BATCH_RELATION = {
+  columns: { generationTopicId: true, id: true, model: true, prompt: true, provider: true },
+  with: { topic: { columns: { type: true } } },
+} as const;
 
 export class GenerationModel {
   private db: LobeChatDatabase;
@@ -137,7 +157,7 @@ export class GenerationModel {
 
   async createAssetAndFile(
     id: string,
-    asset: GenerationAsset,
+    asset: GenerationAsset | MusicGenerationAsset,
     file: Omit<NewFile, 'id' | 'userId'>,
     source: FileSource = FileSource.ImageGeneration,
   ): Promise<{ file: { id: string } } | undefined> {
@@ -164,7 +184,8 @@ export class GenerationModel {
       await this.update(
         id,
         {
-          asset,
+          // The column type predates music; the stored JSON shape is self-describing via `type`
+          asset: asset as GenerationAsset,
           fileId: newFile.id,
         },
         tx,
@@ -176,6 +197,66 @@ export class GenerationModel {
         file: newFile,
       };
     });
+  }
+
+  /** The visible generations among `ids`, in the order of `ids`. */
+  async findByIdsWithBatch(ids: string[]): Promise<GenerationWithBatch[]> {
+    if (ids.length === 0) return [];
+
+    const rows = (await this.db.query.generations.findMany({
+      where: and(inArray(generations.id, ids), this.ownership()),
+      with: { asyncTask: true, batch: BATCH_RELATION },
+    })) as GenerationWithBatch[];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }
+
+  /**
+   * The caller's generations, newest first, optionally narrowed to one kind
+   * (the kind of the topic they were generated in).
+   */
+  async queryWithBatch({
+    limit,
+    offset,
+    type,
+  }: {
+    limit: number;
+    offset: number;
+    type?: GenerationKind;
+  }): Promise<{ items: GenerationWithBatch[]; total: number }> {
+    const where = type
+      ? and(
+          this.ownership(),
+          exists(
+            this.db
+              .select({ id: generationBatches.id })
+              .from(generationBatches)
+              .innerJoin(
+                generationTopics,
+                eq(generationTopics.id, generationBatches.generationTopicId),
+              )
+              .where(
+                and(
+                  eq(generationBatches.id, generations.generationBatchId),
+                  eq(generationTopics.type, type),
+                ),
+              ),
+          ),
+        )
+      : this.ownership();
+
+    const [items, [{ total }]] = await Promise.all([
+      this.db.query.generations.findMany({
+        limit,
+        offset,
+        orderBy: [desc(generations.createdAt), desc(generations.id)],
+        where,
+        with: { asyncTask: true, batch: BATCH_RELATION },
+      }),
+      this.db.select({ total: count() }).from(generations).where(where),
+    ]);
+
+    return { items: items as GenerationWithBatch[], total };
   }
 
   async findByAsyncTaskId(asyncTaskId: string) {
@@ -226,7 +307,19 @@ export class GenerationModel {
   async transformGeneration(generation: GenerationWithAsyncTask): Promise<Generation> {
     // Process asset URLs if they exist, following the same logic as in generationBatch.ts
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
-    if (asset && asset.url && asset.thumbnailUrl) {
+    const musicAsset = asset?.type === 'audio' ? (asset as unknown as MusicGenerationAsset) : null;
+    if (musicAsset?.url) {
+      // Songs have no thumbnail: resolve the audio and the optional cover art
+      const [url, coverUrl] = await Promise.all([
+        this.fileService.getFileAccessUrl({
+          fileId: generation.fileId ?? undefined,
+          url: musicAsset.url,
+        }),
+        musicAsset.coverUrl ? this.fileService.getFullFileUrl(musicAsset.coverUrl) : undefined,
+      ]);
+      musicAsset.url = url;
+      if (coverUrl) musicAsset.coverUrl = coverUrl;
+    } else if (asset && asset.url && asset.thumbnailUrl) {
       const urlPromises: Promise<string>[] = [
         this.fileService.getFileAccessUrl({
           fileId: generation.fileId ?? undefined,

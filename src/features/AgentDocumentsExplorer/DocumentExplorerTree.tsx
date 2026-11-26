@@ -1,5 +1,5 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, createStaticStyles, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, createStaticStyles, cx, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   FilePlusIcon,
@@ -10,7 +10,7 @@ import {
   PenLineIcon,
   Trash2Icon,
 } from 'lucide-react';
-import type { ChangeEvent, CSSProperties, MouseEvent } from 'react';
+import type { ChangeEvent, CSSProperties, DragEvent, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,12 +37,14 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
 import type { AgentDocumentSort } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem, AgentDocumentListMutator } from './types';
-import { isOrphanSkillBundleItem } from './types';
+import { isOrphanSkillBundleItem, isPendingId } from './types';
 import { canDropDocument } from './utils/canDrop';
 import { createDocumentComparator } from './utils/sortDocuments';
 
@@ -55,6 +57,14 @@ const DOCUMENT_TREE_UNSAFE_CSS = [
   DOCUMENT_TREE_ROW_CSS,
   HIDE_POINTER_FOCUS_RING_CSS,
   DISABLE_ROW_TEXT_SELECTION_CSS,
+].join('\n');
+
+// The WorkingSidebar row system pads rows by its own inset instead of DOCUMENT_TREE_ROW_CSS's 8px.
+const DOCUMENT_TREE_COMPACT_UNSAFE_CSS = [
+  DOCUMENT_TREE_UNSAFE_CSS,
+  `[data-type='item'] {
+    padding-inline-start: ${sidebarRow.paddingInline};
+  }`,
 ].join('\n');
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
@@ -109,17 +119,36 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
     --explorer-tree-icon-fg: ${cssVar.colorTextDescription};
   `,
+  treeCompact: css`
+    --trees-fg-override: ${cssVar.colorTextSecondary};
+    --trees-fg-muted-override: ${cssVar.colorTextTertiary};
+    --trees-font-size-override: ${sidebarRow.textFontSize};
+    --trees-item-padding-x-override: ${sidebarRow.paddingInline};
+    --trees-padding-inline-override: ${sidebarRow.paneInline};
+    --trees-border-radius-override: ${sidebarRow.radius};
+    --explorer-tree-icon-fg: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 interface Props {
   agentId: string;
   data: AgentDocumentItem[];
+  /** `compact`: the WorkingSidebar row system. */
+  density?: 'compact' | 'default';
   mutate: AgentDocumentListMutator;
+  /**
+   * Starts dragging a plain document out of the tree (e.g. into the chat
+   * input). Folders, skills and web pages never reach it.
+   */
+  onDocumentDragStart?: (doc: AgentDocumentItem, event: DragEvent<HTMLElement>) => void;
   onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
 
-const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
+const DocumentExplorerTree = memo<Props>((props) => {
+  const { agentId, data, density, mutate, onDocumentDragStart, onOpenDocument, style } = props;
+  const compact = density === 'compact';
+  const densityTokens = useDensityTokens();
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
@@ -360,6 +389,17 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [],
   );
 
+  const handleNodeDragStart = useCallback(
+    (node: ExplorerTreeNode<AgentDocumentItem>, event: DragEvent<HTMLElement>) => {
+      const doc = node.data;
+      if (!onDocumentDragStart || !doc || doc.isFolder) return;
+      // A row still being created has no persisted id the agent could read.
+      if (doc.category !== AGENT_DOCUMENT_CATEGORY || isPendingId(doc.id)) return;
+      onDocumentDragStart(doc, event);
+    },
+    [onDocumentDragStart],
+  );
+
   const canRename = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>) =>
       !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
@@ -513,6 +553,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
   const toolbar = (
     <DocumentExplorerToolbar
+      compact={compact}
       sort={sort}
       onCreateDocument={() => handleCreateDocument(null)}
       onCreateFolder={() => handleCreateFolder(null)}
@@ -522,7 +563,11 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   );
 
   return (
-    <div className={styles.tree} ref={containerRef} style={treeStyle}>
+    <div
+      className={cx(styles.tree, compact && styles.treeCompact)}
+      ref={containerRef}
+      style={treeStyle}
+    >
       <input
         hidden
         multiple
@@ -549,15 +594,16 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           getContextMenuItems={getContextMenuItems}
           header={toolbar}
           iconSet="complete"
-          itemHeight={DOCUMENT_TREE_LAYOUT.itemHeight}
+          itemHeight={compact ? densityTokens.treeItemHeight : DOCUMENT_TREE_LAYOUT.itemHeight}
           nodes={nodes}
           ref={treeRef}
           sort={compareNodes}
           style={{ height: '100%' }}
-          unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
+          unsafeCSS={compact ? DOCUMENT_TREE_COMPACT_UNSAFE_CSS : DOCUMENT_TREE_UNSAFE_CSS}
           onCommitRename={handleCommitRename}
           onMove={handleMove}
           onNodeClick={handleNodeClick}
+          onNodeDragStart={onDocumentDragStart ? handleNodeDragStart : undefined}
         />
       )}
     </div>

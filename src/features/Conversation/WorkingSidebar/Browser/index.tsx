@@ -1,17 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
-import {
-  ActionIcon,
-  Button,
-  Center,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Center, Empty, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Camera,
   ChevronLeft,
@@ -27,13 +18,14 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrowserIcon } from '@/components/BrowserIcon';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
+import { useHeaderActionSize } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
@@ -45,129 +37,128 @@ import {
   normalizeBrowserUrl,
 } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  loadingBar: css`
-    pointer-events: none;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+const NARROW_BANNER = '@container (max-width: 480px)';
 
-    position: absolute;
-    z-index: 3;
+const loadingProgress = stylex.keyframes({
+  from: { transform: 'translateX(-110%)' },
+  to: { transform: 'translateX(310%)' },
+});
 
-    /* Anchored to the toolbar's bottom border. */
-    inset-block-end: -1px;
-    inset-inline: 0;
-
-    overflow: hidden;
-
-    height: 2px;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 0;
-
-      width: 36%;
-
-      background: ${cssVar.colorInfo};
-
-      animation: browser-loading-progress 1.15s ease-in-out infinite;
-    }
-
-    @keyframes browser-loading-progress {
-      from {
-        transform: translateX(-110%);
-      }
-
-      to {
-        transform: translateX(310%);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        width: 100%;
-        animation: none;
-      }
-    }
-  `,
-  container: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: 1;
-
-    width: 100%;
-    min-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  toolbar: css`
-    position: relative;
-
-    flex-shrink: 0;
-
-    min-height: 56px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  address: css`
-    flex: 1;
-    min-width: 0;
-    max-width: 720px;
-
-    /* The filled variant keeps its tinted fill while focused; lift it to the
-       container surface so the focus ring reads as an editable field. Doubling
-       the class outranks antd's own :focus rule. */
-    &&:focus {
-      background: ${cssVar.colorBgContainer};
-    }
-  `,
-  importBanner: css`
-    container-type: inline-size;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-
-    min-height: 72px;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  importCopy: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  importActions: css`
-    margin-inline-start: auto;
-
-    @container (max-width: 480px) {
-      flex-basis: 100%;
-      justify-content: flex-end;
-      margin-inline-start: 44px;
-    }
-  `,
-  toolbarActions: css`
-    margin-inline-start: auto;
-  `,
-  /* The retained Electron webview is imperatively attached inside this host. */
-  viewport: css`
-    position: absolute;
-    inset: 0;
-  `,
-}));
+const styles = stylex.create({
+  loadingBar: {
+    'pointerEvents': 'none',
+    'position': 'absolute',
+    'zIndex': 3,
+    // Anchored to the toolbar's bottom border.
+    'insetBlockEnd': '-1px',
+    'insetInline': 0,
+    'overflow': 'hidden',
+    'height': '2px',
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      insetBlock: 0,
+      insetInlineStart: 0,
+      width: { default: '36%', [REDUCED_MOTION]: '100%' },
+      backgroundColor: cssVar.colorInfo,
+      backgroundImage: 'none',
+      animationName: { default: loadingProgress, [REDUCED_MOTION]: 'none' },
+      animationDuration: { default: '1.15s', [REDUCED_MOTION]: '0s' },
+      animationTimingFunction: { default: 'ease-in-out', [REDUCED_MOTION]: 'ease' },
+      animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
+    },
+  },
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    width: '100%',
+    minHeight: 0,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  toolbar: {
+    position: 'relative',
+    flexShrink: 0,
+    minHeight: '56px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  toolbarCompact: {
+    height: sidebarRow.toolbarHeight,
+    minHeight: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+  },
+  address: {
+    flex: '1',
+    minWidth: 0,
+    maxWidth: '720px',
+    // The filled variant keeps its tinted fill while focused; lift it to the
+    // container surface so the focus ring reads as an editable field.
+    backgroundColor: { 'default': null, ':focus': cssVar.colorBgContainer },
+    backgroundImage: { 'default': null, ':focus': 'none' },
+  },
+  importBanner: {
+    containerType: 'inline-size',
+    flexShrink: 0,
+    flexWrap: 'wrap',
+    minHeight: '72px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  importCopy: { flex: '1', minWidth: 0 },
+  importActions: {
+    flexBasis: { default: null, [NARROW_BANNER]: '100%' },
+    justifyContent: { default: null, [NARROW_BANNER]: 'flex-end' },
+    marginInlineStart: { default: 'auto', [NARROW_BANNER]: '44px' },
+  },
+  toolbarActions: { marginInlineStart: 'auto' },
+  // The retained Electron webview is imperatively attached inside this host.
+  viewport: { position: 'absolute', insetBlock: 0, insetInline: 0 },
+});
 
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
   agentId?: string;
+  /** The WorkingSidebar pane toolbar: density-driven height, small icon buttons and address field. */
+  compactToolbar?: boolean;
   composerTarget: ComposerTarget;
   onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
+  /**
+   * A host that owns its own open requests (the Portal) passes them here and retires
+   * them in `onRequestConsumed`. Without it the pane follows the working sidebar's
+   * global request.
+   */
+  onRequestConsumed?: () => void;
+  request?: BrowserOpenRequest | null;
   sessionId: string;
 }
 
+export interface BrowserOpenRequest {
+  nonce: number;
+  url: string;
+}
+
 const BrowserPane = memo<BrowserPaneProps>((props) => {
-  const { agentId, composerTarget, onMetadataChange, sessionId } = props;
+  const {
+    agentId,
+    compactToolbar,
+    composerTarget,
+    onMetadataChange,
+    onRequestConsumed,
+    sessionId,
+  } = props;
+  const headerActionSize = useHeaderActionSize(true);
+  const toolbarIconSize = compactToolbar ? 'small' : headerActionSize;
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
@@ -179,8 +170,10 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
     BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
     false,
   );
-  const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
+  const globalRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const clearBrowserTabRequest = useGlobalStore((s) => s.clearBrowserTabRequest);
+  const ownsRequest = props.request !== undefined;
+  const browserRequest = ownsRequest ? props.request : globalRequest;
   const consumedNonce = useRef<number>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -242,7 +235,8 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
   };
 
   const addScreenshotToInput = async () => {
-    if (isCapturing || !agentId) return;
+    if (isCapturing || !agentId || !composerTarget.writable) return;
+    const { contextKey } = composerTarget;
     setIsCapturing(true);
     try {
       const result = await electronBrowserSidebarService.captureScreenshot({ sessionId });
@@ -254,7 +248,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
       const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
       // The attachment appears in the input immediately (pending state); the
       // upload itself reports its own progress and errors.
-      void useFileStore.getState().uploadChatFiles([file], agentId);
+      void useFileStore.getState().uploadChatFiles(contextKey, [file], agentId);
       toast.success(t('workingPanel.browser.actions.captured'));
       focusChatInput();
     } catch (error) {
@@ -342,7 +336,8 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
     if (!browserRequest || consumedNonce.current === browserRequest.nonce) return;
     consumedNonce.current = browserRequest.nonce;
     openUrl(browserRequest.url);
-    clearBrowserTabRequest();
+    if (ownsRequest) onRequestConsumed?.();
+    else clearBrowserTabRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browserRequest?.nonce]);
 
@@ -355,26 +350,31 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
-      <Flexbox horizontal align={'center'} className={styles.toolbar} gap={4}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        {...stylex.props(styles.toolbar, compactToolbar && styles.toolbarCompact)}
+        gap={4}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           <ActionIcon
             disabled={!state.canGoBack}
             icon={ChevronLeft}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.back')}
             onClick={() => runAction(() => electronBrowserSidebarService.goBack({ sessionId }))}
           />
           <ActionIcon
             disabled={!state.canGoForward}
             icon={ChevronRight}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.forward')}
             onClick={() => runAction(() => electronBrowserSidebarService.goForward({ sessionId }))}
           />
           <ActionIcon
             disabled={!state.attached}
             icon={state.isLoading ? XCircle : RefreshCw}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={
               state.isLoading
                 ? t('workingPanel.browser.actions.stop')
@@ -390,8 +390,9 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           />
         </Flexbox>
         <Input
-          className={styles.address}
+          {...stylex.props(styles.address)}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
+          size={compactToolbar ? 'small' : undefined}
           value={address}
           variant={'filled'}
           onBlur={() => setIsEditing(false)}
@@ -405,12 +406,12 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             openUrl(address);
           }}
         />
-        <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
+        <Flexbox horizontal align={'center'} {...stylex.props(styles.toolbarActions)} gap={4}>
           {isPicking ? (
             <ActionIcon
               active
               icon={SquareDashedMousePointer}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={toolbarIconSize}
               title={t('workingPanel.browser.context.pickCancel')}
               onClick={() =>
                 void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {})
@@ -420,7 +421,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             <ActionIcon
               disabled={!state.attached || state.isLoading || !composerTarget.writable}
               icon={SquareDashedMousePointer}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={toolbarIconSize}
               title={t('workingPanel.browser.context.pickElement')}
               onClick={() => void pickElementContext()}
             />
@@ -428,17 +429,17 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.openExternal')}
             onClick={() =>
               runAction(() => electronBrowserSidebarService.openExternal({ sessionId }))
             }
           />
           <ActionIcon
-            disabled={!state.attached || !agentId}
+            disabled={!state.attached || !agentId || !composerTarget.writable}
             icon={Camera}
             loading={isCapturing}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.capture')}
             onClick={() => void addScreenshotToInput()}
           />
@@ -448,21 +449,21 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           <div
             aria-label={t('workingPanel.browser.loading')}
             aria-valuetext={t('workingPanel.browser.loading')}
-            className={styles.loadingBar}
+            {...stylex.props(styles.loadingBar)}
             role="progressbar"
           />
         )}
       </Flexbox>
       {!isImportBannerDismissed && (
-        <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
+        <Flexbox horizontal align={'center'} {...stylex.props(styles.importBanner)} gap={12}>
           <BrowserIcon browser={'Chrome'} size={32} />
-          <Flexbox className={styles.importCopy} gap={0}>
+          <Flexbox {...stylex.props(styles.importCopy)} gap={0}>
             <Text strong>{t('workingPanel.browser.import.title')}</Text>
             <Text ellipsis type={'secondary'}>
               {t('workingPanel.browser.import.desc')}
             </Text>
           </Flexbox>
-          <Flexbox horizontal align={'center'} className={styles.importActions} gap={4}>
+          <Flexbox horizontal align={'center'} {...stylex.props(styles.importActions)} gap={4}>
             <Button
               icon={<Icon icon={Import} />}
               loading={isImporting}
@@ -472,15 +473,15 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             </Button>
             <ActionIcon
               icon={XCircle}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSize}
               title={t('workingPanel.browser.import.dismiss')}
               onClick={() => setIsImportBannerDismissed(true)}
             />
           </Flexbox>
         </Flexbox>
       )}
-      <Flexbox className={styles.container}>
-        <div className={styles.viewport} ref={viewportRef} />
+      <Flexbox {...stylex.props(styles.container)}>
+        <div {...stylex.props(styles.viewport)} ref={viewportRef} />
       </Flexbox>
     </Flexbox>
   );

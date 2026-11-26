@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   carryPassedResultsForward: vi.fn(),
 
   confirmPlan: vi.fn(),
+  detachUndeliveredRound: vi.fn(),
+  recomputeStatus: vi.fn(),
   ensureForOperation: vi.fn(),
   generateDraftPlan: vi.fn(),
   operationFindById: vi.fn(),
@@ -43,6 +45,7 @@ vi.mock('../acceptanceService', async (original) => ({
       acceptanceModel: { update: mocks.acceptanceUpdate },
       attachPolicyRun: mocks.acceptanceAttachPolicyRun,
       ensureForSubject: mocks.acceptanceEnsureForSubject,
+      recomputeStatus: mocks.recomputeStatus,
     };
   }),
 }));
@@ -79,6 +82,7 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
     return {
       confirmPlan: mocks.confirmPlan,
+      detachUndeliveredRound: mocks.detachUndeliveredRound,
       ensureForOperation: mocks.ensureForOperation,
       findByOperation: mocks.runFindByOperation,
       setMetadata: mocks.setMetadata,
@@ -154,6 +158,33 @@ describe('Verify acceptance lifecycle', () => {
     );
 
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  /**
+   * Regression: a run that failed at dispatch was over before its plan was
+   * split, and in queue mode its completion ran in another process — the
+   * round landed after the release had looked for it and stayed `planned`.
+   */
+  it('releases the round once it lands when the run already failed', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'The novel is complete and coherent',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Novel' });
+    const round = { id: 'run-1', acceptanceId: 'acceptance-1', plan, status: 'planned' };
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'run-1', plan })
+      .mockResolvedValue(round);
+    mocks.operationFindById.mockResolvedValue({ parentOperationId: null, status: 'error' });
+    mocks.detachUndeliveredRound.mockResolvedValue(true);
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', { operationId: 'operation-1', taskId: 't' });
+
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+    expect(mocks.detachUndeliveredRound).toHaveBeenCalledWith('run-1');
+    expect(mocks.recomputeStatus).toHaveBeenCalledWith('acceptance-1');
   });
 
   /**

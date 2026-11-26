@@ -1,4 +1,4 @@
-import type { WorkListItem, WorkVersionItem } from '@lobechat/types';
+import type { TopicPullRequestItem, WorkListItem, WorkVersionItem } from '@lobechat/types';
 import type { ReplicaSyncOptions } from 'local-replica/zustand';
 
 import type { ReplicaSyncResult } from '@/libs/replica';
@@ -10,6 +10,7 @@ import { WorkPrivateAction } from './privateAction';
 import {
   type AgentWorksParams,
   type ConversationWorksParams,
+  type TopicPullRequestsParams,
   workspaceWorksKey,
   type WorkspaceWorksParams,
   type WorkVersionsParams,
@@ -83,6 +84,12 @@ export class WorkActionImpl {
     params: ConversationWorksParams | null,
     options?: ReplicaSyncOptions<WorkListItem[], WorkListItem[]>,
   ): ReplicaSyncResult => this.#private.conversationWorks.useSync(params, options);
+
+  /** Pull requests linked to a topic; `null` disables the read. */
+  useFetchTopicPullRequests = (
+    params: TopicPullRequestsParams | null,
+    options?: ReplicaSyncOptions<TopicPullRequestItem[], TopicPullRequestItem[]>,
+  ): ReplicaSyncResult => this.#private.topicPullRequests.useSync(params, options);
 
   useFetchWorkVersions = (
     params: WorkVersionsParams | null,

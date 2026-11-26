@@ -7,17 +7,26 @@ import { CircleDollarSignIcon, CoinsIcon, GitBranchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openArtboard } from '@/features/Artboard/openArtboard';
+import { openCollectionModal } from '@/features/CollectionModal/loader';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import CanvasWorkCard from './CanvasWorkCard';
+import CollectionFan from './CollectionFan';
 import {
+  getCollectionCoverUrl,
+  getCollectionFanUrls,
+  getCollectionImageCount,
   getWorkTypeDescriptor,
-  isSafeExternalUrl,
   type WorkBranch,
   type WorkIcon,
 } from './descriptors';
+import { openExternalWork } from './openExternalWork';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -25,8 +34,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -42,6 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   branch: css`
     flex: 1 1 0;
     min-width: 0;
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
   cost: css`
@@ -74,7 +84,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   identifierIcon: css`
     flex-shrink: 0;
   `,
+  cover: css`
+    flex-shrink: 0;
+    display: block;
+    border-radius: 4px;
+    object-fit: cover;
+  `,
+  coverFill: css`
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  `,
   icon: css`
+    overflow: hidden;
     flex-shrink: 0;
 
     width: 36px;
@@ -158,6 +181,39 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
     font-size: 15px;
     font-weight: 500;
+  `,
+  row: css`
+    overflow: hidden;
+
+    width: 100%;
+    padding-block: 5px;
+    padding-inline: ${sidebarRow.paddingInline};
+    border-radius: ${sidebarRow.radius};
+  `,
+  rowClickable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  rowIcon: css`
+    flex-shrink: 0;
+    width: ${sidebarRow.iconBox};
+    height: ${sidebarRow.textLineHeight};
+    color: ${cssVar.colorTextTertiary};
+  `,
+  rowTitle: css`
+    min-width: 0;
+    font-size: ${sidebarRow.textFontSize};
+    line-height: ${sidebarRow.textLineHeight};
+    color: ${cssVar.colorText};
+  `,
+  rowMeta: css`
+    min-width: 0;
+    font-size: ${sidebarRow.metaFontSize};
+    line-height: 18px;
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -250,15 +306,17 @@ interface WorkSummaryCardProps {
    * `card` (default) renders the elevated 36×36 icon-box layout used across the
    * chat portal and the works gallery. `inline` renders a flat row (17px icon,
    * 6px hover fill) for the WorkingSidebar Overview, so a shared card doesn't
-   * dictate the flat sidebar's visual vocabulary.
+   * dictate the flat sidebar's visual vocabulary. `row` is the WorkingSidebar
+   * two-line row: the row-text title, then the meta line and usage.
    */
-  variant?: 'card' | 'inline';
+  variant?: 'card' | 'inline' | 'row';
 }
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
     const { t: tTopic } = useTranslation('topic');
+    const density = useDensityTokens();
     const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
@@ -290,7 +348,23 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     // (e.g. `QA-1989`, `owner/repo#2`) on the card itself, unless the title
     // already fell back to it.
     const identifier = descriptor.getIdentifier(item);
-    const metaIdentifier = identifier && identifier !== title ? identifier : null;
+    // A collection shows its cover in place of the icon and its image count in the identifier slot.
+    const coverUrl = item.type === 'collection' ? getCollectionCoverUrl(item) : null;
+    const imageCount = item.type === 'collection' ? getCollectionImageCount(item) : null;
+    // The card fans a multi-image collection so it reads as a set; smaller rows keep the cover alone.
+    const fanUrls = item.type === 'collection' ? getCollectionFanUrls(item) : [];
+    const metaIdentifier =
+      imageCount !== null
+        ? t('workingPanel.works.collectionCount', { count: imageCount })
+        : identifier && identifier !== title
+          ? identifier
+          : null;
+    const renderIcon = (size: number) =>
+      coverUrl ? (
+        <img alt="" className={styles.cover} height={size} src={coverUrl} width={size} />
+      ) : (
+        <Icon size={size} />
+      );
     const identifierIcon = descriptor.getIdentifierIcon?.(item) ?? null;
     const branch = descriptor.getBranch?.(item) ?? null;
     const description = descriptor.getDescription(item);
@@ -314,6 +388,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'artboard': {
+          void openArtboard(openTarget.artboardId);
+          return;
+        }
         case 'canvas': {
           openCanvas(openTarget.canvasId, openTarget.version);
           return;
@@ -323,13 +401,15 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'external': {
-          // Defense in depth: only ever hand http(s) to shell.openExternal.
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          openExternalWork(openTarget.url);
           return;
         }
         case 'filePreview': {
           openFilePreview({ fileId: openTarget.fileId });
+          return;
+        }
+        case 'collection': {
+          void openCollectionModal(openTarget);
           return;
         }
         case 'task': {
@@ -348,6 +428,42 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       );
     }
 
+    if (variant === 'row') {
+      return (
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={cx(styles.row, clickable && styles.rowClickable, className)}
+          gap={density.gap}
+          onClick={clickable ? handleOpen : undefined}
+        >
+          <Center className={styles.rowIcon} title={stateLabel}>
+            {renderIcon(density.iconSize)}
+          </Center>
+          <Flexbox flex={1} style={{ minWidth: 0 }}>
+            <Text ellipsis className={styles.rowTitle} title={title}>
+              {title}
+            </Text>
+            <Flexbox horizontal align={'center'} className={styles.rowMeta} gap={4}>
+              <WorkMetaLine
+                branch={branch}
+                description={description}
+                identifier={metaIdentifier}
+                identifierIcon={identifierIcon}
+                variant={'card'}
+              />
+              {usage && (
+                <Center horizontal className={styles.cost} gap={2} title={usageTitle}>
+                  <LobeIcon icon={usage.icon} />
+                  {usage.value}
+                </Center>
+              )}
+            </Flexbox>
+          </Flexbox>
+        </Flexbox>
+      );
+    }
+
     if (variant === 'inline') {
       return (
         <Flexbox
@@ -358,7 +474,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           onClick={clickable ? handleOpen : undefined}
         >
           <Center className={styles.inlineIcon} title={stateLabel}>
-            <Icon size={17} />
+            {renderIcon(17)}
           </Center>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
@@ -392,9 +508,17 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         gap={12}
         onClick={clickable ? handleOpen : undefined}
       >
-        <Flexbox align={'center'} className={styles.icon} justify={'center'} title={stateLabel}>
-          <Icon size={18} />
-        </Flexbox>
+        {fanUrls.length > 1 ? (
+          <CollectionFan urls={fanUrls} />
+        ) : (
+          <Flexbox align={'center'} className={styles.icon} justify={'center'} title={stateLabel}>
+            {coverUrl ? (
+              <img alt="" className={styles.coverFill} src={coverUrl} />
+            ) : (
+              <Icon size={18} />
+            )}
+          </Flexbox>
+        )}
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             <Text ellipsis className={styles.title} style={{ flex: 1 }} title={title}>

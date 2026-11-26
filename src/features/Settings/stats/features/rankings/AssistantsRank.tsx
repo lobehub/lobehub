@@ -13,11 +13,9 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { type AgentRankItem } from '@/types/agent';
 
 import StatsFormGroup from '../components/StatsFormGroup';
@@ -27,9 +25,11 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation(['auth', 'chat']);
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.rankAgents(), async () =>
-    agentService.rankAgents(),
-  );
+  const { error, revalidate } = statsActions.useFetchRank('agents');
+  // A restored empty ranking stays unsettled until the server confirms it, so
+  // a failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledRank('agents'));
+  const loading = !data;
 
   const showExtra = Boolean(data && data?.length > 5);
 
@@ -75,12 +75,17 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
           )
         }
       >
-        <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+        <AsyncBoundary
+          data={data}
+          error={error}
+          errorVariant={'block'}
+          onRetry={() => revalidate()}
+        >
           <BarList
             data={data?.slice(0, 5).map((item) => mapData(item)) || []}
             height={220}
             leftLabel={t('stats.assistantsRank.left')}
-            loading={isLoading || !data}
+            loading={loading}
             rightLabel={t('stats.assistantsRank.right')}
             noDataText={{
               desc: t('stats.empty.desc'),
@@ -93,7 +98,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
       {showExtra && (
         <ImperativeModal
           footer={null}
-          loading={isLoading || !data}
+          loading={loading}
           open={open}
           title={t('stats.assistantsRank.title')}
           onCancel={() => setOpen(false)}
@@ -102,7 +107,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
             data={data?.map((item) => mapData(item)) || []}
             height={340}
             leftLabel={t('stats.assistantsRank.left')}
-            loading={isLoading || !data}
+            loading={loading}
             rightLabel={t('stats.assistantsRank.right')}
             onValueChange={(item) => navigate(item.link)}
           />

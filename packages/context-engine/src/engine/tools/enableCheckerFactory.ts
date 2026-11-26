@@ -6,6 +6,8 @@ export interface EnableCheckerConfig {
    * When true, tools with `context.isExplicitActivation` skip all filters.
    */
   allowExplicitActivation?: boolean;
+  /** A restricted toolset may activate only these additional ids after platform checks. */
+  explicitActivationIds?: ReadonlySet<string>;
 
   /**
    * Platform-specific filter extension point.
@@ -40,6 +42,8 @@ export function createEnableChecker(config: EnableCheckerConfig): PluginEnableCh
     // 2. Platform-specific filter (return undefined = fall through)
     const platformResult = config.platformFilter?.({ context, manifest, pluginId });
     if (platformResult !== undefined) return platformResult;
+
+    if (context?.isExplicitActivation && config.explicitActivationIds?.has(pluginId)) return true;
 
     // 3. Tool-specific rules
     if (config.rules && pluginId in config.rules) {

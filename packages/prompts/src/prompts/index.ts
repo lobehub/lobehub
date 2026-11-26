@@ -16,6 +16,7 @@ export * from './goal';
 export * from './groupChat';
 export * from './knowledgeBaseQA';
 export * from './messagesToText';
+export * from './optionalReply';
 export * from './planTodo';
 export * from './plugin';
 export * from './project';

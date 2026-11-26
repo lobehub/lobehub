@@ -9,10 +9,11 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensity } from '@/styles/density';
 
 import { HOME_NEW_MODELS_BANNER_ID, NewModelShortcuts } from '../NewModelShortcuts';
 import type { HomeMode } from '../types';
-import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
+import { HOME_INPUT_METRICS, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import { EditorSlot } from './EditorSlot';
 import { stripMarkdownLinks } from './hintFormat';
 import { InputBannerQueue, InputBannerSegment } from './InputBanner';
@@ -23,7 +24,11 @@ import { useSend } from './useSend';
 const styles = createStaticStyles(({ css }) => ({
   inputSlot: css`
     width: 100%;
-    min-height: ${HOME_INPUT_RESERVED_HEIGHT}px;
+    min-height: ${HOME_INPUT_METRICS.loose.reservedHeight}px;
+
+    html[data-density='compact'] & {
+      min-height: ${HOME_INPUT_METRICS.compact.reservedHeight}px;
+    }
   `,
 }));
 
@@ -43,6 +48,7 @@ const InputArea = ({
   showNewModelShortcuts,
 }: InputAreaProps) => {
   const { t } = useTranslation('home');
+  const { density } = useDensity();
   const { agentId, contextSelectionKey, loading, send } = useSend(mode);
   // Mount the config sync so `internal_refreshAgentConfig`'s revalidation has
   // a listener after toggleFile / toggleKnowledgeBase — otherwise the Library
@@ -70,7 +76,12 @@ const InputArea = ({
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: resolvedAgentId,
+    contextKey: HOME_UPLOAD_CONTEXT_KEY,
+    model,
+    provider,
+  });
 
   // Daily-generated input hint paired with the fixed Home greeting.
   const { currentPair } = useHomeDailyBrief();
@@ -101,7 +112,7 @@ const InputArea = ({
     <Flexbox>
       <Flexbox ref={chatInputRef}>
         <InputDragUpload
-          radius={20}
+          radius={HOME_INPUT_METRICS[density].radius}
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
         >

@@ -14,7 +14,7 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import { buildBotSender, formatPrompt as formatPromptUtil } from '../formatPrompt';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
-import { platformFromThreadId, platformRegistry } from '../platforms';
+import { platformFromThreadId, platformRegistry, shouldPostProcessingMessage } from '../platforms';
 import { resolveUnsupportedMessageApis } from '../platforms/messageCapabilities';
 import { buildRecentChannelHistory } from '../recentChannelHistory';
 import { renderStart } from '../replyTemplate';
@@ -107,11 +107,18 @@ export async function executeWithCallback(
   // required, and which most platforms have no `listChannels` to discover —
   // is unusable, and the model falls back to asking the user for a group ID.
   const currentChannel = resolveCurrentChannel(opts.botContext, opts.client);
+  // A group on a platform that delivers only the messages addressed to the bot (WeCom).
+  const seesOnlyAddressedMessages =
+    !!platformDef &&
+    'groupMessagesAddressedOnly' in platformDef &&
+    !!platformDef.groupMessagesAddressedOnly &&
+    opts.botContext?.platformThreadId?.split(':')[1] === 'group';
   const botPlatformContext: BotPlatformContext | undefined = platformDef
     ? {
         canReadHistory,
         ...(currentChannel && { currentChannel }),
         platformName: platformDef.name,
+        ...(seesOnlyAddressedMessages && { seesOnlyAddressedMessages }),
         supportsMarkdown: platformDef.supportsMarkdown !== false,
       }
     : undefined;
@@ -123,6 +130,7 @@ export async function executeWithCallback(
   // `progressMessage` so downstream hooks post the final reply fresh instead
   // of editing the placeholder.
   const supportsMessageEdit = platformDef?.supportsMessageEdit !== false;
+  const postProcessingMessage = shouldPostProcessingMessage(opts.botSettings);
 
   const {
     agentId,
@@ -267,6 +275,10 @@ export async function executeWithCallback(
           log('executeWithWebhooks: gateway provider lookup failed: %O', err);
         }
       }
+    } else if (!postProcessingMessage) {
+      // The "working on it" message is off (the default): typing only. With no
+      // `progressMessage`, the hooks post the final reply as its own message.
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
     } else if (!supportsMessageEdit) {
       // Edit-incapable platform (QQ today): the user still wants immediate
       // feedback that we received their message, but every "edit" the

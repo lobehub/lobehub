@@ -9,11 +9,11 @@ import type {
   TrashVisibility,
 } from '@lobechat/types';
 import {
-  Avatar,
   Button,
   Center,
   confirmModal,
   controlHeight,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- LiteTable body rows and title cells take no className
   createStaticStyles,
   Empty,
   Flexbox,
@@ -23,6 +23,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -30,6 +32,7 @@ import { Trash2Icon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
@@ -40,6 +43,8 @@ import { trashSelectors, useTrashStore } from '@/store/trash';
 import { TrashEmptyScopeChangedError } from '@/store/trash/action';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import DeletedByCell, { DELETED_BY_TEXT_INSET } from './DeletedByCell';
 import { ProjectFilter } from './ProjectFilter';
@@ -60,38 +65,58 @@ const EMPTY_COUNTS: TrashCountByType = {};
 const NAME_ICON_SIZE = 28;
 const NAME_ICON_GAP = 10;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    padding-block: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
-  `,
-  /**
-   * Type chips on the small control height: with the track's 3px padding and
-   * 1px border the whole Segmented is `controlHeight.middle` tall, level with
-   * the side switch, the project picker and the empty button beside it.
-   */
-  filterItem: css`
-    height: ${controlHeight.small}px;
-  `,
-  header: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
+const CARD_LAYOUT_QUERY = `@container (max-width: ${TRASH_LIST_BREAKPOINT}px)`;
 
-    padding-block-end: 16px;
-    padding-inline: 24px;
-  `,
-  muted: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  name: css`
-    width: 100%;
-    min-width: 0;
-  `,
+/**
+ * Type chips on the small control height: with the track's 3px padding and
+ * 1px border the whole Segmented is `controlHeight.middle` tall, level with
+ * the side switch, the project picker and the empty button beside it.
+ * Loose only: in compact the global small-Segmented rule (20px chips, 28px
+ * track) already lines up with the 28px picker and button.
+ */
+const segmentedStyles = { item: { height: controlHeight.small } };
+
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    // No top padding: the retention note above already owns the gap, so the card
+    // inset only pushed the filters down off the table's own row baseline.
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  header: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: densityTokens['--lobe-density-content-gap'],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    // Exactly one table row tall: the filters and the column heads below them then
+    // sit on the same baseline instead of the filters owning padding the heads do not.
+    minHeight: densityTokens['--lobe-density-row-height'],
+    paddingInline: '24px',
+  },
+  muted: {
+    color: cssVar.colorTextSecondary,
+  },
+  name: {
+    width: '100%',
+    minWidth: 0,
+  },
+  title: {
+    overflow: 'hidden',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: { default: 'nowrap', [CARD_LAYOUT_QUERY]: 'normal' },
+    display: { default: null, [CARD_LAYOUT_QUERY]: '-webkit-box' },
+    WebkitBoxOrient: { default: null, [CARD_LAYOUT_QUERY]: 'vertical' },
+    WebkitLineClamp: { default: null, [CARD_LAYOUT_QUERY]: '2' },
+    overflowWrap: { default: null, [CARD_LAYOUT_QUERY]: 'anywhere' },
+  },
+});
+
+const fallback = createStaticStyles(({ css }) => ({
   table: css`
     @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
       tbody tr {
@@ -101,21 +126,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       td[data-list-slot='title'] {
         min-width: 0;
       }
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-
-      overflow-wrap: anywhere;
-      white-space: normal;
     }
   `,
 }));
@@ -134,6 +144,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
+  const compact = useInterfaceDensity() === 'compact';
   const containerRef = useRef<HTMLDivElement>(null);
   const containerSize = useSize(containerRef);
   const cardLayout = !!containerSize && containerSize.width <= TRASH_LIST_BREAKPOINT;
@@ -352,7 +363,12 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
         const avatar = item.meta?.avatar;
         const title = item.title || t('trash.untitled');
         return (
-          <Flexbox horizontal align={'center'} className={styles.name} gap={NAME_ICON_GAP}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.name).className}
+            gap={NAME_ICON_GAP}
+          >
             {avatar ? (
               <Avatar
                 avatar={avatar}
@@ -372,7 +388,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               <Text
                 as={'span'}
-                className={styles.title}
+                className={stylex.props(styles.title).className}
                 tabIndex={0}
                 ellipsis={{
                   rows: cardLayout ? 2 : undefined,
@@ -412,7 +428,10 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
     {
       key: 'deletedAt',
       render: (item) => (
-        <span className={styles.muted} title={dayjs(item.deletedAt).format('YYYY-MM-DD HH:mm')}>
+        <span
+          {...stylex.props(styles.muted)}
+          title={dayjs(item.deletedAt).format('YYYY-MM-DD HH:mm')}
+        >
           {dayjs(item.deletedAt).fromNow()}
         </span>
       ),
@@ -432,7 +451,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
       : []),
     {
       key: 'expiresAt',
-      render: (item) => <span className={styles.muted}>{expiresLabel(item.expiresAt)}</span>,
+      render: (item) => <span {...stylex.props(styles.muted)}>{expiresLabel(item.expiresAt)}</span>,
       title: t('trash.columns.expiresIn'),
     },
     {
@@ -479,13 +498,13 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
   };
 
   return (
-    <div className={styles.container} ref={containerRef}>
-      <div className={styles.header}>
+    <div {...stylex.props(styles.container)} ref={containerRef}>
+      <div {...stylex.props(styles.header)}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap', minWidth: 0 }}>
           {visibility && (
             <Segmented
-              classNames={{ item: styles.filterItem }}
               size={'small'}
+              styles={compact ? undefined : segmentedStyles}
               value={visibility}
               options={[
                 { label: t('trash.side.public'), value: 'public' },
@@ -498,10 +517,10 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
             />
           )}
           <Segmented
-            classNames={{ item: styles.filterItem }}
             options={typeOptions}
             size={'small'}
             style={{ flexWrap: 'wrap', maxWidth: '100%' }}
+            styles={compact ? undefined : segmentedStyles}
             value={activeType ?? 'all'}
             onChange={(value) =>
               changeFilter({
@@ -539,7 +558,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
         )}
       </div>
       <LiteTable
-        className={styles.table}
+        className={fallback.table}
         columns={columns}
         dataSource={items}
         listBreakpoint={TRASH_LIST_BREAKPOINT}

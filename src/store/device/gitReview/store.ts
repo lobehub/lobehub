@@ -12,17 +12,14 @@ import {
   recordLens,
   type ReplicaState,
 } from '@/libs/replica';
-import { type GitLinkedPRSummary, gitService } from '@/services/git';
+import { gitService } from '@/services/git';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
 
 import {
   boundedPersist,
-  type GitLinkedPRParams,
-  gitLinkedPRResource,
   gitPullRequestActivityResource,
   gitPullRequestDetailResource,
-  gitPullRequestKey,
   type GitPullRequestMergeContextParams,
   gitPullRequestMergeContextResource,
   type GitPullRequestParams,
@@ -33,15 +30,11 @@ import {
   toReviewPatchesSummary,
 } from './projection';
 
-type LinkedPRRead = GitReviewRead<GitLinkedPRSummary>;
 type DetailRead = GitReviewRead<DeviceGitPullRequestDetailResult>;
 type ActivityRead = GitReviewRead<DeviceGitPullRequestActivity>;
 type MergeContextRead = GitReviewRead<DeviceGitPullRequestMergeContext | null>;
 
 export interface GitReviewStoreState {
-  /** `gitLinkedPRKey(params)` → PR linked to a branch. */
-  gitLinkedPRMap: Record<string, LinkedPRRead>;
-  gitLinkedPRReplica: ReplicaState<LinkedPRRead>;
   /** `gitPullRequestKey(params)` → comments / reviews / commits. */
   gitPullRequestActivityMap: Record<string, ActivityRead>;
   gitPullRequestActivityReplica: ReplicaState<ActivityRead>;
@@ -57,8 +50,6 @@ export interface GitReviewStoreState {
 }
 
 export const initialGitReviewState: GitReviewStoreState = {
-  gitLinkedPRMap: {},
-  gitLinkedPRReplica: createReplicaState(),
   gitPullRequestActivityMap: {},
   gitPullRequestActivityReplica: createReplicaState(),
   gitPullRequestDetailMap: {},
@@ -110,25 +101,6 @@ const createSlices = (
   set: (partial: Partial<GitReviewStore>, replace?: false, action?: any) => void,
   get: () => GitReviewStore,
 ) => ({
-  linkedPR: createReplicaSlice(gitLinkedPRResource, {
-    actionPrefix: 'gitReview/linkedPR',
-    // "No PR" is an answer (`pullRequest: null`, status `ok`); `undefined` (a
-    // failed remote read) and status `error` (a transient `gh` failure) are not.
-    // `gh-missing` stays an answer: the composer shows it.
-    fetcher: async (params: GitLinkedPRParams) => {
-      const value = requireAnswer(
-        await gitService.getLinkedPullRequest(params),
-        'linked pull request',
-      );
-      if (value.pullRequestStatus === 'error')
-        throw new Error('Unable to load linked pull request');
-      return { value };
-    },
-    get,
-    set,
-    stateKey: 'gitLinkedPRReplica',
-    view: recordLens<GitReviewStore, LinkedPRRead>('gitLinkedPRMap'),
-  }),
   pullRequestActivity: createReplicaSlice(gitPullRequestActivityResource, {
     actionPrefix: 'gitReview/pullRequestActivity',
     fetcher: async (params: GitPullRequestParams) => ({
@@ -202,15 +174,3 @@ export const useGitReviewStore = createWithEqualityFn<GitReviewStore>()(
 );
 
 expose('gitReview', useGitReviewStore);
-
-/**
- * Read a PR's persisted detail and activity into memory ahead of the PR tab's
- * own hydration. Rows already in memory are left alone.
- */
-export const warmPullRequestReplicas = (params: GitPullRequestParams) => {
-  const { gitPullRequestActivityMap, gitPullRequestDetailMap, slices } =
-    useGitReviewStore.getState();
-  const key = gitPullRequestKey(params);
-  if (!gitPullRequestDetailMap[key]) void slices.pullRequestDetail.hydrate(params);
-  if (!gitPullRequestActivityMap[key]) void slices.pullRequestActivity.hydrate(params);
-};

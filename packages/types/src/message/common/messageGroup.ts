@@ -1,4 +1,3 @@
-
 /**
  * Message group type
  * - parallel: multi-model parallel conversations
@@ -23,6 +22,12 @@ export interface CompressionGroupMetadata {
   endMessageId?: string;
   // UI state
   expanded?: boolean;
+  /**
+   * Client-only, on a pending group: it already sits right after the history it
+   * folds (`/compact` over the whole topic), so the list must not lift it above
+   * the last question.
+   */
+  keepPosition?: boolean;
   originalMessageCount?: number;
 
   // Statistics

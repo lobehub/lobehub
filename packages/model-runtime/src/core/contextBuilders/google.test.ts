@@ -1,8 +1,8 @@
 // @vitest-environment node
-import * as imageToBase64Module from '../../utils/imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {
@@ -13,6 +13,50 @@ import {
   buildGoogleTools,
   GEMINI_MAGIC_THOUGHT_SIGNATURE,
 } from './google';
+
+const createUrlParseResult = (): ReturnType<typeof parseDataUri> => ({
+  base64: null,
+  mimeType: null,
+  type: 'url',
+});
+
+const createImagePart = (
+  imageUrl: string,
+): Extract<UserMessageContentPart, { type: 'image_url' }> => ({
+  image_url: { url: imageUrl },
+  type: 'image_url',
+});
+
+const createTestTool = (): ChatCompletionTool => ({
+  function: {
+    description: 'A test tool',
+    name: 'testTool',
+    parameters: {
+      properties: {
+        param1: { type: 'string' },
+        param2: { type: 'number' },
+      },
+      required: ['param1'],
+      type: 'object',
+    },
+  },
+  type: 'function',
+});
+
+const createSearchAssistantMessage = (): OpenAIChatMessage => ({
+  content: '',
+  role: 'assistant',
+  tool_calls: [
+    {
+      function: {
+        arguments: '{"query":"杭州天气","searchEngines":["google"]}',
+        name: 'lobe-web-browsing____search',
+      },
+      id: 'call_001',
+      type: 'function',
+    },
+  ],
+});
 
 // Mock the utils
 vi.mock('../../utils/uriParser', () => ({
@@ -131,10 +175,7 @@ describe('google contextBuilders', () => {
         mimeType: 'image/png',
       });
 
-      const content: UserMessageContentPart = {
-        image_url: { url: imageUrl },
-        type: 'image_url',
-      };
+      const content: UserMessageContentPart = createImagePart(imageUrl);
 
       const result = await buildGooglePart(content);
 
@@ -152,11 +193,7 @@ describe('google contextBuilders', () => {
     it('should use fileData for external URL images on gemini-3+', async () => {
       const imageUrl = 'https://example.com/image.png';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
       vi.mocked(validateExternalUrl).mockResolvedValueOnce({
@@ -167,10 +204,7 @@ describe('google contextBuilders', () => {
 
       const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
-      const content: UserMessageContentPart = {
-        image_url: { url: imageUrl },
-        type: 'image_url',
-      };
+      const content: UserMessageContentPart = createImagePart(imageUrl);
 
       const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
 
@@ -188,11 +222,7 @@ describe('google contextBuilders', () => {
     it('should fallback to inlineData when external URL validation fails for HEIC', async () => {
       const imageUrl = 'https://example.com/image.heic';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
       vi.mocked(validateExternalUrl).mockResolvedValueOnce({
@@ -209,10 +239,7 @@ describe('google contextBuilders', () => {
           mimeType: 'image/heic',
         });
 
-      const content: UserMessageContentPart = {
-        image_url: { url: imageUrl },
-        type: 'image_url',
-      };
+      const content: UserMessageContentPart = createImagePart(imageUrl);
 
       const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
 
@@ -230,11 +257,7 @@ describe('google contextBuilders', () => {
     it('should force inlineData for external URL images on gemini-2.5 and earlier', async () => {
       const imageUrl = 'https://example.com/image.png';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       const imageToBase64Spy = vi
         .spyOn(imageToBase64Module, 'imageUrlToBase64')
@@ -243,10 +266,7 @@ describe('google contextBuilders', () => {
           mimeType: 'image/png',
         });
 
-      const content: UserMessageContentPart = {
-        image_url: { url: imageUrl },
-        type: 'image_url',
-      };
+      const content: UserMessageContentPart = createImagePart(imageUrl);
 
       const result = await buildGooglePart(content, { model: 'gemini-2.5-flash' });
 
@@ -283,10 +303,7 @@ describe('google contextBuilders', () => {
 
       const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
-      const content: UserMessageContentPart = {
-        image_url: { url: imageUrl },
-        type: 'image_url',
-      };
+      const content: UserMessageContentPart = createImagePart(imageUrl);
 
       await expect(buildGooglePart(content, { model: 'gemini-3-flash' })).rejects.toThrow(
         RangeError,
@@ -339,11 +356,7 @@ describe('google contextBuilders', () => {
     it('should use fileData for external URL videos on gemini-3+', async () => {
       const videoUrl = 'https://example.com/video.mp4';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
       vi.mocked(validateExternalUrl).mockResolvedValueOnce({
@@ -446,11 +459,7 @@ describe('google contextBuilders', () => {
     it('should use fileData for external URL audio on gemini-3+', async () => {
       const audioUrl = 'https://example.com/audio.mp3';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
       vi.mocked(validateExternalUrl).mockResolvedValueOnce({
@@ -481,11 +490,7 @@ describe('google contextBuilders', () => {
     it('should use persisted recorder metadata when an external URL is octet-stream', async () => {
       const audioUrl = 'https://example.com/voice';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
       vi.mocked(validateExternalUrl).mockResolvedValueOnce({
         contentLength: 1024,
@@ -510,11 +515,7 @@ describe('google contextBuilders', () => {
     it('should send audio MIME when an inlined audio URL is sniffed as a video container', async () => {
       const audioUrl = 'https://example.com/voice-message.m4a';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
       vi.mocked(isPublicExternalUrl).mockReturnValueOnce(false);
       vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
         base64: 'm4aBase64Data',
@@ -554,11 +555,7 @@ describe('google contextBuilders', () => {
     it('should return undefined for unsupported SVG image (URL)', async () => {
       const svgUrl = 'https://example.com/image.svg';
 
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        base64: null,
-        mimeType: null,
-        type: 'url',
-      });
+      vi.mocked(parseDataUri).mockReturnValueOnce(createUrlParseResult());
 
       vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
         base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
@@ -758,20 +755,7 @@ describe('google contextBuilders', () => {
             content: '杭州天气如何',
             role: 'user',
           },
-          {
-            content: '',
-            role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"query":"杭州天气","searchEngines":["google"]}',
-                  name: 'lobe-web-browsing____search',
-                },
-                id: 'call_001',
-                type: 'function',
-              },
-            ],
-          },
+          createSearchAssistantMessage(),
           {
             content: 'Tool execution was aborted by user.',
             name: 'lobe-web-browsing____search',
@@ -1087,20 +1071,7 @@ describe('google contextBuilders', () => {
             content: '杭州天气如何',
             role: 'user',
           },
-          {
-            content: '',
-            role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"query":"杭州天气","searchEngines":["google"]}',
-                  name: 'lobe-web-browsing____search',
-                },
-                id: 'call_001',
-                type: 'function',
-              },
-            ],
-          },
+          createSearchAssistantMessage(),
           {
             content: 'Tool execution was aborted by user.',
             name: 'lobe-web-browsing____search',
@@ -1587,21 +1558,7 @@ describe('google contextBuilders', () => {
 
   describe('buildGoogleTool', () => {
     it('should use parametersJsonSchema to pass standard JSON Schema directly', () => {
-      const tool: ChatCompletionTool = {
-        function: {
-          description: 'A test tool',
-          name: 'testTool',
-          parameters: {
-            properties: {
-              param1: { type: 'string' },
-              param2: { type: 'number' },
-            },
-            required: ['param1'],
-            type: 'object',
-          },
-        },
-        type: 'function',
-      };
+      const tool: ChatCompletionTool = createTestTool();
 
       const result = buildGoogleTool(tool);
 
@@ -1772,23 +1729,7 @@ describe('google contextBuilders', () => {
     });
 
     it('should correctly convert ChatCompletionTool array to GoogleFunctionCallTool', () => {
-      const tools: ChatCompletionTool[] = [
-        {
-          function: {
-            description: 'A test tool',
-            name: 'testTool',
-            parameters: {
-              properties: {
-                param1: { type: 'string' },
-                param2: { type: 'number' },
-              },
-              required: ['param1'],
-              type: 'object',
-            },
-          },
-          type: 'function',
-        },
-      ];
+      const tools: ChatCompletionTool[] = [createTestTool()];
 
       const googleTools = buildGoogleTools(tools);
 

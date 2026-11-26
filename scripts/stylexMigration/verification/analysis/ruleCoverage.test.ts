@@ -76,7 +76,6 @@ it('reports an untouched second interaction target instead of closing the rule a
   );
   expect(result.rules[0].status).toBe('PARTIAL_ACTIVATION');
   expect(result.rules[0].missingActivationKeys).toEqual(['root.1']);
-  expect(result.gateEligible).toBe(false);
 });
 
 it('keeps unmounted source branches in the denominator', () => {

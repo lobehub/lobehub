@@ -1,3 +1,9 @@
+export {
+  buildClaudeCodeEntrypointEnv,
+  CLAUDE_CODE_ENTRYPOINT_ENV,
+  DEFAULT_CLAUDE_CODE_ENTRYPOINT,
+  normalizeClaudeCodeEntrypoint,
+} from '../claudeCodeEntrypoint';
 /**
  * Wire contract between hetero dispatch sites and the executing
  * `lh hetero exec` CLI. Pure and isomorphic — no fs, no process, no node-only

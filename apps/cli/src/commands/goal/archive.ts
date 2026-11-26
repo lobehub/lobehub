@@ -7,7 +7,7 @@ import { resolveAppUrlBuilder } from '../task/url';
 
 /**
  * `lh goal archive` / `unarchive`. Archiving is the user's call, like a task's:
- * it hides a signed-off or canceled goal from every list without changing its
+ * it hides a completed or canceled goal from every list without changing its
  * status. Agents run it only when the user asks.
  */
 export function registerGoalArchiveCommands(goal: Command) {
@@ -32,7 +32,7 @@ export function registerGoalArchiveCommands(goal: Command) {
   register(
     'archive',
     true,
-    'Archive a signed-off or canceled goal (hidden from lists; status unchanged)',
+    'Archive a completed or canceled goal (hidden from lists; status unchanged)',
   );
   register('unarchive', false, 'Restore an archived goal to lists');
 }

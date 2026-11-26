@@ -37,9 +37,10 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
-import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
+import { gitMenuTriggerStyles } from './gitMenuTrigger';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { useWorktreeHomeDir } from './useWorktreeHomeDir';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
@@ -100,10 +101,11 @@ const styles = stylex.create({
     display: 'flex',
     gap: '8px',
     alignItems: 'center',
-    paddingBlock: '6px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
     paddingInline: '8px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -134,7 +136,7 @@ const styles = stylex.create({
     minWidth: '44px',
   },
   emptyState: {
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -145,11 +147,11 @@ const styles = stylex.create({
     gridTemplateColumns: 'minmax(0, 1fr) minmax(44px, auto) 20px',
     gap: '10px',
     alignItems: 'center',
-    minHeight: '48px',
-    paddingBlock: '6px',
+    minHeight: sidebarRow.listRowHeight,
+    paddingBlock: '4px',
     paddingInline: '8px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -221,7 +223,7 @@ const styles = stylex.create({
   },
   searchBar: {
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,
@@ -541,7 +543,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
       openCreateWorktreeModal({
         // The modal reads the repo's full local branch list itself and draws the
         // generated default from it, so a name is not handed out twice and does
-        // not collide with a ref on the `wt` namespace path (see
+        // not collide with a ref on the `lobehub` namespace path (see
         // `generateWorktreeBranchName`). It lives there rather than here so the
         // list can be awaited: snapshotting an in-flight (empty) list would hand
         // out a name git is guaranteed to refuse.

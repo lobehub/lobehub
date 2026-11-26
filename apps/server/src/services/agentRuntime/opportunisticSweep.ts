@@ -3,8 +3,10 @@ import debug from 'debug';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { recoverChannels } from '@/server/services/channel/recover';
+import { sweepStuckVerifyRuns } from '@/server/services/verify/sweep';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { ParkedInterventionExpiry } from './ParkedInterventionExpiry';
 import { StaleOperationReaper } from './StaleOperationReaper';
 
 const log = debug('lobe-server:agent-runtime:opportunistic-sweep');
@@ -25,6 +27,27 @@ export const OPPORTUNISTIC_SWEEP_INTERVAL_MS = 60_000;
  * claim again until the TTL expires.
  */
 export const OPPORTUNISTIC_SWEEP_SLOT_KEY = 'agent_runtime:stale_sweep:slot';
+
+/**
+ * Spacing between two opportunistic verify sweeps, cluster-wide. The verify
+ * sweep acts on rounds stalled for minutes (its shortest bound is five), so a
+ * tighter tick would only repeat the same scan.
+ */
+export const OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/** The Redis slot that decides which caller runs the verify sweep. */
+export const OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY = 'agent_runtime:verify_sweep:slot';
+
+/**
+ * Spacing between two parked-intervention expiry sweeps, cluster-wide. Expiry
+ * waits a day, so a minute of slack is immaterial; the cadence only sets how
+ * fast a backlog drains (one bounded batch per tick).
+ */
+export const OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS = 60_000;
+
+/** The Redis slot that decides which caller runs the parked-intervention expiry. */
+export const OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY =
+  'agent_runtime:intervention_expiry_sweep:slot';
 
 export interface OpportunisticSweepDeps {
   /** Resolves true for exactly one caller per interval, cluster-wide. */
@@ -69,6 +92,39 @@ export async function runOpportunisticSweep({
 }
 
 /**
+ * Claim `slotKey` for `intervalMs` and, on a win, run `sweep` as post-response
+ * work. Deliberately not awaited by the caller: background repair must never
+ * add latency to, or fail, the step delivery that carries it; that is also why
+ * it does not join the step loop's `runWithScheduledWorkScope` (whose boundary
+ * flush would then wait on it).
+ */
+const scheduleSlottedSweep = (
+  name: string,
+  slotKey: string,
+  intervalMs: number,
+  sweep: () => Promise<void>,
+): void => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return;
+
+  after(() =>
+    runOpportunisticSweep({
+      claim: async () => {
+        const claimed = await redis.set(slotKey, String(Date.now()), 'PX', intervalMs, 'NX');
+
+        return claimed === 'OK';
+      },
+      onError: (error, phase) => {
+        // A failed tick is invisible by design (the delivery that hosted it
+        // succeeded), so log it loudly enough to be found from the timeline.
+        console.error(`[${name}] ${phase} failed: %O`, error);
+      },
+      sweep,
+    }),
+  );
+};
+
+/**
  * Recover operations whose executing host died mid-step, without depending on a
  * scheduler being configured.
  *
@@ -99,35 +155,57 @@ export async function runOpportunisticSweep({
  * `runWithScheduledWorkScope` (whose boundary flush would then wait on it).
  */
 export const scheduleOpportunisticStaleSweep = (): void => {
-  const redis = getAgentRuntimeRedisClient();
-  if (!redis) return;
+  scheduleSlottedSweep(
+    'opportunistic-sweep',
+    OPPORTUNISTIC_SWEEP_SLOT_KEY,
+    OPPORTUNISTIC_SWEEP_INTERVAL_MS,
+    async () => {
+      const db = await getServerDB();
+      const [result] = await Promise.all([
+        new StaleOperationReaper(db).sweep(),
+        recoverChannels(db),
+      ]);
+      log('sweep: %O', result);
+    },
+  );
+};
 
-  after(() =>
-    runOpportunisticSweep({
-      claim: async () => {
-        const claimed = await redis.set(
-          OPPORTUNISTIC_SWEEP_SLOT_KEY,
-          String(Date.now()),
-          'PX',
-          OPPORTUNISTIC_SWEEP_INTERVAL_MS,
-          'NX',
-        );
+/**
+ * Recover verification rounds stranded in `verifying` (see
+ * `sweepStuckVerifyRuns`), on the same always-exercised path as the stale
+ * operation sweep.
+ *
+ * Its dedicated route, `/api/workflows/verify/sweep`, expects a QStash
+ * Schedule that no deployment registers, so a round whose judging died after
+ * claiming `verifying` stayed there for good, and with it the acceptance and
+ * the task waiting on its verdict.
+ */
+export const scheduleOpportunisticVerifySweep = (): void => {
+  scheduleSlottedSweep(
+    'opportunistic-verify-sweep',
+    OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY,
+    OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS,
+    async () => {
+      const result = await sweepStuckVerifyRuns(await getServerDB());
+      log('verify sweep: %O', result);
+    },
+  );
+};
 
-        return claimed === 'OK';
-      },
-      onError: (error, phase) => {
-        // A failed tick is invisible by design (the delivery that hosted it
-        // succeeded), so log it loudly enough to be found from the timeline.
-        console.error(`[opportunistic-sweep] ${phase} failed: %O`, error);
-      },
-      sweep: async () => {
-        const db = await getServerDB();
-        const [result] = await Promise.all([
-          new StaleOperationReaper(db).sweep(),
-          recoverChannels(db),
-        ]);
-        log('sweep: %O', result);
-      },
-    }),
+/**
+ * End runs parked on a human answer for over a day (see
+ * `ParkedInterventionExpiry`), on the same always-exercised path as the stale
+ * operation sweep. Nothing else ever ends such a run, and an open legacy tab
+ * polls its pending card every 2 s for as long as it stays parked.
+ */
+export const scheduleOpportunisticInterventionExpirySweep = (): void => {
+  scheduleSlottedSweep(
+    'opportunistic-intervention-expiry-sweep',
+    OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY,
+    OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS,
+    async () => {
+      const result = await new ParkedInterventionExpiry(await getServerDB()).sweep();
+      log('intervention expiry sweep: %O', result);
+    },
   );
 };

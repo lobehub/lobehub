@@ -17,6 +17,11 @@ export const isSubscriptionProvider = (provider: string): provider is Subscripti
 const EXHAUSTED_PERCENT = 100;
 
 export interface AccountWindowView {
+  /**
+   * The latest the window can reset when the provider did not say: a reading
+   * holds for one window from its capture. Only set for a live window with usage.
+   */
+  latestResetAt?: number;
   /** Window boundary of the live window; null once it rolled over or when unreported. */
   resetsAt: number | null;
   usedPercent: number;
@@ -44,10 +49,17 @@ const newest = <T extends QuotaDisplayReading>(
     undefined,
   );
 
-const windowOf = (reading: QuotaDisplayReading | undefined, now: number) => {
+const windowOf = (
+  reading: QuotaDisplayReading | undefined,
+  now: number,
+): AccountWindowView | undefined => {
   if (!reading) return undefined;
   const window = toQuotaWindow(reading, now);
-  return { resetsAt: window.resetsAt, usedPercent: window.usedPercent };
+  const view: AccountWindowView = { resetsAt: window.resetsAt, usedPercent: window.usedPercent };
+  // A rolled-over window reads 0%, so usage with no reset means an unreported one.
+  if (window.resetsAt == null && window.usedPercent > 0)
+    view.latestResetAt = reading.capturedAt + window.windowMinutes * 60_000;
+  return view;
 };
 
 /**

@@ -36,7 +36,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
 
   it('awaits the start-time verify-plan instantiation before running the completion gate', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
@@ -50,7 +50,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
       .spyOn(verifyServices, 'instantiateVerifyPlanOnStart')
       .mockReturnValue(instantiation);
     const runVerifySpy = vi
-      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .spyOn(verifyServices, 'scheduleVerifyOnCompletion')
       .mockResolvedValue(undefined);
 
     // A top-level task op registers the (still-pending) instantiation at start.
@@ -87,6 +87,58 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
   });
 });
 
+describe('CompletionLifecycle.waitForVerifyPlan', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const startWithPendingPlan = async () => {
+    const lifecycle = buildLifecycle();
+    let settle: () => void = () => {};
+    vi.spyOn(verifyServices, 'instantiateVerifyPlanOnStart').mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await lifecycle.recordStart({ operationId: 'op-1', taskId: 'task-1' } as any);
+    return { lifecycle, settle };
+  };
+
+  const track = (promise: Promise<void>) => {
+    const state = { done: false };
+    void promise.then(() => {
+      state.done = true;
+    });
+    return state;
+  };
+
+  it('resolves once the plan has settled', async () => {
+    const { lifecycle, settle } = await startWithPendingPlan();
+    const wait = track(lifecycle.waitForVerifyPlan('op-1'));
+
+    await flushMicrotasks();
+    expect(wait.done).toBe(false);
+
+    settle();
+    await flushMicrotasks();
+    expect(wait.done).toBe(true);
+  });
+
+  it('stops waiting at the bound so a slow plan cannot hold the dispatch', async () => {
+    const { lifecycle } = await startWithPendingPlan();
+    vi.useFakeTimers();
+    const wait = lifecycle.waitForVerifyPlan('op-1', 1000);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(wait).resolves.toBeUndefined();
+  });
+
+  it('returns at once for an operation with no plan in flight', async () => {
+    await expect(buildLifecycle().waitForVerifyPlan('op-none')).resolves.toBeUndefined();
+  });
+});
+
 describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -100,7 +152,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
   it('persists the parked status but does NOT fire onComplete or unregister hooks', async () => {
     const lifecycle = buildLifecycle();
-    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -111,6 +163,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
       parkedState,
       'waiting_for_async_tool',
       undefined,
+      undefined,
     );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
@@ -118,21 +171,27 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
   it('treats a waiting_for_client park the same way: persisted, no onComplete, hooks kept', async () => {
     const lifecycle = buildLifecycle();
-    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const clientPark = { ...parkedState, status: 'waiting_for_client' };
 
     await lifecycle.dispatchHooks('op-1', clientPark, 'waiting_for_client');
 
-    expect(persistSpy).toHaveBeenCalledWith('op-1', clientPark, 'waiting_for_client', undefined);
+    expect(persistSpy).toHaveBeenCalledWith(
+      'op-1',
+      clientPark,
+      'waiting_for_client',
+      undefined,
+      undefined,
+    );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
   });
 
   it('fires onComplete and unregisters on a terminal completion', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -151,11 +210,11 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
   });
 
   const stubSideEffects = (lifecycle: CompletionLifecycle) => {
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
-    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    vi.spyOn(verifyServices, 'scheduleVerifyOnCompletion').mockResolvedValue(undefined);
     // The recall gate falls back to the op row when metadata carries no trigger.
     (lifecycle as any).agentOperationModel = { findById: vi.fn(async () => null) };
   };
@@ -218,18 +277,21 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
   // Scheduled = a user-deferred chat turn; Cron = the rate-limit auto-resume of
   // a user's chat turn. Both are "user walked away" runs the recall exists for.
-  it.each([RequestTrigger.Chat, RequestTrigger.Scheduled, RequestTrigger.Cron])(
-    'notifies for a user-recallable %s-triggered completion',
-    async (trigger) => {
-      const lifecycle = buildLifecycle();
-      stubSideEffects(lifecycle);
+  it.each([
+    RequestTrigger.Chat,
+    RequestTrigger.Scheduled,
+    RequestTrigger.Cron,
+    RequestTrigger.McpEvent,
+    RequestTrigger.Webhook,
+  ])('notifies for a user-recallable %s-triggered completion', async (trigger) => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
 
-      await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
-      await flushMicrotasks();
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
+    await flushMicrotasks();
 
-      expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+  });
 
   it('falls back to the op row trigger when metadata carries none (synthetic hetero path)', async () => {
     const lifecycle = buildLifecycle();
@@ -344,5 +406,23 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
       [],
     );
     expect(hookDispatcher.unregister).toHaveBeenCalledWith('op-1');
+  });
+});
+
+describe('CompletionLifecycle.buildStateFromInput share visitor', () => {
+  const build = (input: Record<string, unknown>) =>
+    (new CompletionLifecycle({} as any, 'user-1') as any).buildStateFromInput({
+      operationId: 'op-share',
+      ...input,
+    });
+
+  it('marks the synthesized state as a share visitor run', () => {
+    const shareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+    expect(build({ shareVisitor }).principal).toEqual({ actor: { shareVisitor } });
+  });
+
+  it('adds no principal for an ordinary run', () => {
+    expect(build({}).principal).toBeUndefined();
   });
 });

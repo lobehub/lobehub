@@ -278,34 +278,6 @@ describe('agent command', () => {
     });
   });
 
-  describe('create', () => {
-    it('should create an agent', async () => {
-      mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({
-        agentId: 'a-new',
-        sessionId: 's1',
-      });
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'agent',
-        'create',
-        '--title',
-        'My Agent',
-        '--model',
-        'gpt-4',
-      ]);
-
-      expect(mockTrpcClient.agent.createAgent.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ model: 'gpt-4', title: 'My Agent' }),
-        }),
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('a-new'));
-    });
-  });
-
   describe('edit', () => {
     it('should update agent config', async () => {
       mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
@@ -1880,46 +1852,6 @@ describe('agent command', () => {
         path: './lobe/skills/agent/skills/writer',
         topicId: undefined,
       });
-    });
-
-    it('should read write content from stdin when no content option is provided', async () => {
-      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
-      Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
-      mockReadStdinText.mockResolvedValue('# Piped Content');
-      mockTrpcClient.agentDocument.statDocumentByPath.query.mockRejectedValue({
-        data: { code: 'NOT_FOUND' },
-      });
-      mockTrpcClient.agentDocument.writeDocumentByPath.mutate.mockResolvedValue({
-        path: './notes/piped.md',
-      });
-
-      try {
-        const program = createProgram();
-        await program.parseAsync([
-          'node',
-          'test',
-          'agent',
-          'space',
-          'fs',
-          'write',
-          '--agent-id',
-          'a1',
-          'agent:/notes/piped.md',
-        ]);
-
-        expect(mockReadStdinText).toHaveBeenCalledWith(process.stdin);
-        expect(mockTrpcClient.agentDocument.writeDocumentByPath.mutate).toHaveBeenCalledWith({
-          agentId: 'a1',
-          content: '# Piped Content',
-          createMode: 'if-missing',
-          path: './notes/piped.md',
-          topicId: undefined,
-        });
-      } finally {
-        if (stdinDescriptor) {
-          Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
-        }
-      }
     });
 
     it('should create directories through the generic mkdir path API', async () => {

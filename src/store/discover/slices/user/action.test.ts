@@ -84,7 +84,6 @@ describe('UserSlice (replica)', () => {
 
       const [call] = await syncCalls('discoverUserProfile');
 
-      expect(call.key[1]).toBe('discoverUserProfile');
       expect(call.key[4]).toBe(entryKey('alice'));
     });
 

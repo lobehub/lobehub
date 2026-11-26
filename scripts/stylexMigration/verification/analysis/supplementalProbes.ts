@@ -74,6 +74,5 @@ export const planSupplementalProbes = (options: {
     requirements,
     scheduled,
     blocked: planned.slice(scheduled.length),
-    gateEligible: false as const,
   };
 };

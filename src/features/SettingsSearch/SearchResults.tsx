@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Spin, Text } from '@lobehub/ui';
+import { Flexbox, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,11 +13,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { useSettingsSearchAnalytics } from './analytics';
 import type { SettingsSearchResult } from './useSettingsSearch';
 
-const styles = createStaticStyles(({ css }) => ({
-  match: css`
-    color: ${cssVar.colorPrimary};
-  `,
-}));
+const styles = stylex.create({ match: { color: cssVar.colorPrimary } });
 
 const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) => {
   const index = text.toLowerCase().indexOf(query.toLowerCase());
@@ -24,7 +22,7 @@ const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) =
   return (
     <>
       {text.slice(0, index)}
-      <span className={styles.match}>{text.slice(index, index + query.length)}</span>
+      <span {...stylex.props(styles.match)}>{text.slice(index, index + query.length)}</span>
       {text.slice(index + query.length)}
     </>
   );
@@ -82,7 +80,9 @@ const SearchResults = memo<SearchResultsProps>(({ isIndexing, query, results }) 
             // Modifier clicks (cmd/ctrl) open a new tab via the href; don't also
             // navigate the current tab.
             if (isModifierClick(e)) return;
-            navigate(result.url);
+            // Result URLs are complete: workspace results carry their slug and
+            // a personal page linked from a workspace must not gain one.
+            navigate(result.url, { escape: true });
           }}
         />
       ))}

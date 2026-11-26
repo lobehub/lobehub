@@ -1,6 +1,10 @@
 import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
+import {
+  CURRENT_ONBOARDING_VERSION,
+  DEFAULT_INBOX_AVATAR,
+  DEFAULT_INBOX_TITLE,
+} from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type {
@@ -16,6 +20,7 @@ import type {
   UserOnboarding,
 } from '@lobechat/types';
 import {
+  agentDisplayName,
   MAX_ONBOARDING_STEPS,
   MIN_DISCOVERY_USER_MESSAGES,
   RECOMMENDED_DISCOVERY_USER_MESSAGES,
@@ -339,8 +344,12 @@ export class OnboardingService {
 
     // Agent identity fields — stored on inbox agent
     const inboxAgent = await this.agentModel.getBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
-    if (!inboxAgent?.title?.trim()) missingFields.push('agentName');
-    if (!inboxAgent?.avatar?.trim()) missingFields.push('agentEmoji');
+    // `getBuiltinAgent` already fills a blank inbox with the default name and avatar, so those
+    // defaults count as not chosen yet.
+    const agentName = agentDisplayName(inboxAgent);
+    const agentAvatar = inboxAgent?.avatar?.trim();
+    if (!agentName || agentName === DEFAULT_INBOX_TITLE) missingFields.push('agentName');
+    if (!agentAvatar || agentAvatar === DEFAULT_INBOX_AVATAR) missingFields.push('agentEmoji');
 
     // User fields
     if (!userState.fullName?.trim()) missingFields.push('fullName');
@@ -794,7 +803,8 @@ export class OnboardingService {
       await this.userModel.updateUser(userPatch);
     }
 
-    // Update inbox agent avatar and title when agent identity fields are provided
+    // The name the user gives the assistant is its personal `name`, the label every surface shows
+    // first; `title` stays the role it plays.
     const agentName =
       typeof parsed.agentName === 'string' && parsed.agentName.trim()
         ? parsed.agentName.trim()
@@ -818,9 +828,9 @@ export class OnboardingService {
     } else if (agentName || agentEmoji) {
       try {
         const inboxAgentId = await this.getInboxAgentId();
-        const agentPatch: { avatar?: string; title?: string } = {};
+        const agentPatch: { avatar?: string; name?: string } = {};
 
-        if (agentName) agentPatch.title = agentName;
+        if (agentName) agentPatch.name = agentName;
         if (agentEmoji) agentPatch.avatar = agentEmoji;
 
         // Update both inbox and web-onboarding agents so the current conversation reflects the change
@@ -1032,8 +1042,8 @@ export class OnboardingService {
     try {
       const inboxAgentId = await this.getInboxAgentId();
 
-      // Reset inbox agent title and avatar
-      await this.agentModel.update(inboxAgentId, { avatar: null, title: null });
+      // Reset the inbox agent's name, legacy title, and avatar
+      await this.agentModel.update(inboxAgentId, { avatar: null, name: null, title: null });
 
       await this.agentDocumentsService.deleteTemplateDocuments(inboxAgentId, 'claw');
       this.inboxDocumentsInitialized = false;

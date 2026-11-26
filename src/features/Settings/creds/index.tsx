@@ -1,14 +1,13 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Plus } from 'lucide-react';
+import { type CredType } from '@lobechat/types';
+import { Flexbox, Tooltip } from '@lobehub/ui';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import NavHeader from '@/features/NavHeader';
-import SettingContainer from '@/features/Setting/SettingContainer';
 import { usePermission } from '@/hooks/usePermission';
 
+import SettingsPageActions from '../features/SettingsPageActions';
+import CreateCredButton from './features/CreateCredButton';
 import { createCreateCredModal } from './features/CreateCredModal';
 import CredsList from './features/CredsList';
 import { personalCredsApi } from './features/useCredsApi';
@@ -18,29 +17,27 @@ interface PageProps {
 }
 
 const Page = ({ mobile }: PageProps) => {
-  const { t } = useTranslation('setting');
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleCreate = () => {
+  const handleCreate = (type: CredType) => {
     if (!canManageCredentials) return;
     createCreateCredModal({
       credsApi: personalCredsApi,
       onSuccess: () => setRefreshKey((k) => k + 1),
+      type,
     });
   };
 
   const createButton = (
     <Tooltip title={reason}>
-      <Button
-        disabled={!canManageCredentials}
-        icon={<Icon icon={Plus} />}
-        size={mobile ? 'large' : 'small'}
-        type={'primary'}
-        onClick={handleCreate}
-      >
-        {t('creds.create')}
-      </Button>
+      <span>
+        <CreateCredButton
+          disabled={!canManageCredentials}
+          size={mobile ? 'large' : undefined}
+          onCreate={handleCreate}
+        />
+      </span>
     </Tooltip>
   );
 
@@ -55,14 +52,11 @@ const Page = ({ mobile }: PageProps) => {
     );
   }
 
+  // The shared settings header shows the title; the button joins its right slot.
   return (
     <>
-      <NavHeader right={createButton} styles={{ center: { alignItems: 'center' } }}>
-        <Text weight={500}>{t('tab.creds')}</Text>
-      </NavHeader>
-      <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
-        <CredsList key={refreshKey} />
-      </SettingContainer>
+      <SettingsPageActions>{createButton}</SettingsPageActions>
+      <CredsList key={refreshKey} />
     </>
   );
 };

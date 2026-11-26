@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
@@ -7,8 +8,10 @@ import {
   BOT_WAKE_SETTING_KEYS,
   flattenBotWakeSettings,
   hasPassiveListeningRule,
-} from '@/server/services/agentSignal/scenarios/botWake/config';
+} from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
+import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 
 import { getBotMessageRouter } from './BotMessageRouter';
 import {
@@ -19,6 +22,8 @@ import {
   resolveConnectionMode,
   validateAccessSettings,
 } from './platforms';
+
+const log = debug('lobe-server:bot:provider-settings');
 
 /**
  * Merge schema defaults into incoming settings before persisting, so the DB
@@ -57,8 +62,33 @@ function withNewBotReactionMode(
   return { ...withDefaults, [REACTION_MODE_KEY]: NEW_BOT_REACTION_MODE };
 }
 
+const CONNECTION_MODE_KEY = 'connectionMode';
+
+/**
+ * Webhook mode for a new bot on a platform the external message gateway cannot host, when the
+ * gateway is on and the caller did not pick a mode. The settings form gets the same default from
+ * `restrictPlatformToWebhook`; this covers callers that skip the form (the Message tool), whose
+ * schema-default persistent mode would otherwise be refused on connect.
+ */
+function withGatewayConnectionMode(
+  platform: string | undefined,
+  requested: Record<string, unknown> | undefined,
+  merged: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!platform || requested?.[CONNECTION_MODE_KEY] !== undefined) return merged;
+  if (!isMessageGatewayHostingUnavailable(platformRegistry.getPlatform(platform))) return merged;
+  if (!new GatewayService().useMessageGateway) return merged;
+
+  return {
+    ...(merged ?? mergeBotSettingsForPersist(platform, {})),
+    [CONNECTION_MODE_KEY]: 'webhook',
+  };
+}
+
 /**
  * The settings to persist for a bot being created: {@link mergeBotSettingsForPersist}, with
+ * - webhook mode when the external message gateway is on and cannot host the platform's
+ *   persistent connection ({@link withGatewayConnectionMode}), unless the caller chose a mode.
  * - status reactions off ({@link NEW_BOT_REACTION_MODE}) when the platform offers them and the
  *   caller did not choose. The schema default stays on, since it is also what a bot saved before
  *   the field existed reads as; only a new bot starts quiet.
@@ -73,7 +103,11 @@ export async function mergeBotSettingsForCreate(
   platform: string | undefined,
   settings: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown> | undefined> {
-  const merged = withNewBotReactionMode(platform, settings);
+  const merged = withGatewayConnectionMode(
+    platform,
+    settings,
+    withNewBotReactionMode(platform, settings),
+  );
   const key = BOT_WAKE_SETTING_KEYS.disabled;
   if (settings?.[key] !== undefined) return merged;
   // Omitted settings persist as `{}`, where an absent switch reads as on: the defaults are written
@@ -170,6 +204,11 @@ export async function assertWatchKeywordsWritable(params: {
 
 interface BotInvalidationTarget {
   applicationId: string;
+  /**
+   * Previous decrypted credentials. Lets an in-process connection restart only when they
+   * really changed: a full save resends the stored (unmasked) values unchanged.
+   */
+  credentials?: Record<string, unknown> | null;
   platform: string;
   /** Previous settings — enables capability-delta detection (e.g. watch keywords). */
   settings?: Record<string, unknown> | null;
@@ -179,10 +218,24 @@ interface BotInvalidationTarget {
 
 interface BotInvalidationDelta {
   applicationId?: string;
+  credentials?: Record<string, unknown>;
   enabled?: boolean;
   platform?: string;
   settings?: Record<string, unknown>;
 }
+
+const haveCredentialsChanged = (
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown>,
+): boolean => {
+  // Without the previous values, assume a change: a missed restart drops every message.
+  if (!previous) return true;
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const key of keys) {
+    if ((previous[key] ?? '') !== (next[key] ?? '')) return true;
+  }
+  return false;
+};
 
 /**
  * Drop the cached `RegisteredBot` so the next inbound webhook re-reads the
@@ -230,4 +283,28 @@ export async function invalidateBotAfterUpdate(
   }
 
   await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+
+  // A platform that replies over its own connection signs what it forwards with its credentials,
+  // and the reloaded webhook adapter now verifies with the new ones: restart the connection on
+  // them, or every inbound message is refused from here on.
+  const replyHost =
+    platformRegistry.getPlatform(existing.platform)?.repliesOverConnection &&
+    resolveReplyConnectionHost(existing.platform);
+  if (
+    replyHost &&
+    !shouldStopRuntime &&
+    value.credentials !== undefined &&
+    haveCredentialsChanged(existing.credentials, value.credentials)
+  ) {
+    const restart = service
+      .startClient(existing.platform, existing.applicationId, existing.userId)
+      .catch((error) => {
+        log('Restart after credential change failed for %s: %O', existing.platform, error);
+      });
+    // In-process, the subscribe handshake can take up to its connect timeout and the save has
+    // already succeeded, so it is not awaited; the client records the outcome in its runtime
+    // status. A gateway connect returns at once, and on serverless a promise left running after
+    // the response may never finish.
+    if (replyHost === 'message-gateway') await restart;
+  }
 }

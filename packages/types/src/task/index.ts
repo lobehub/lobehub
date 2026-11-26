@@ -1,8 +1,11 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { TaskLabelRef } from './label';
 
 export * from './archive';
+export * from './delivery';
 export * from './execution';
+export * from './label';
 export * from './listFilter';
 
 // ── Task type aliases ──
@@ -250,9 +253,18 @@ export interface TaskTopicHandoff {
 
 // ── Task context (runtime state pockets stored in tasks.context JSONB) ──
 
+/**
+ * Consecutive automation-tick failures after which a recurring task stops: a
+ * schedule is paused, a heartbeat is no longer re-armed. One transient upstream
+ * hiccup (429 / network / upstream 500) must not stop a recurring task for
+ * good; only this many in a row do. Shared so the scheduled tasks table reads
+ * "stopped" off the same number the lifecycle acts on.
+ */
+export const TASK_AUTOMATION_FAILURE_FUSE = 3;
+
 export interface TaskSchedulerContext {
   // Count of consecutive automation-tick 'error' reasons since the last 'done'.
-  // When it hits the fuse threshold (currently 3) we pause the task / stop
+  // When it hits `TASK_AUTOMATION_FAILURE_FUSE` we pause the task / stop
   // re-arming until the user resolves the urgent brief. Manual "run now"
   // failures do NOT touch this counter.
   consecutiveFailures?: number;
@@ -363,6 +375,8 @@ export interface TaskItem {
   id: string;
   identifier: string;
   instruction: string;
+  /** Labels on the task, attached by task list and detail reads. */
+  labels?: TaskLabelRef[];
   lastHeartbeatAt: Date | null;
   maxTopics: number | null;
   name: string | null;
@@ -388,8 +402,32 @@ export interface TaskItem {
   workspaceId: string | null;
 }
 
+/**
+ * One run of a task as a list row shows it: enough to draw the outcome strip
+ * of a recurring task and to open the run, nothing more.
+ */
+export interface TaskRecentRun {
+  /** When the run's topic finished; null while it is still going. */
+  completedAt: Date | null;
+  createdAt: Date;
+  seq: number;
+  /** `task_topics.status`: 'running', 'completed', 'failed', 'timeout', 'canceled', … */
+  status: string;
+  topicId: string | null;
+  /** Null for runs recorded before the trigger was tracked. */
+  trigger: TaskRunTrigger | null;
+}
+
 export type TaskListItem = TaskItem & {
+  /**
+   * The task has an unresolved urgent brief, so its schedule and heartbeat
+   * ticks are skipped until the user answers. Only set when the list was asked
+   * for `recentRuns`.
+   */
+  awaitingHuman?: boolean;
   participants: TaskParticipant[];
+  /** Latest runs, newest first. Only set when the list was asked for `recentRuns`. */
+  recentRuns?: TaskRecentRun[];
 };
 
 export interface NewTask {
@@ -444,6 +482,23 @@ export interface TaskDetailSubtaskRunningTopic {
   id: string;
   operationId?: string | null;
 }
+
+/**
+ * Why the server refused to move a task into or out of a project. Sent as
+ * `errorData.projectMoveRefusal` on the BAD_REQUEST, so the client can say what
+ * blocks the move instead of one generic message.
+ */
+export type TaskProjectMoveRefusal =
+  /** A dependency would link tasks in different projects. */
+  | 'external_dependency'
+  /** A subtask of the tree already belongs to a project. */
+  | 'filed_subtask'
+  /** The task already belongs to a project, so its tree cannot move as a whole. */
+  | 'filed_task'
+  /** The task is a subtask; it shares its parent's project. */
+  | 'has_parent'
+  /** Moving only this task would split it from its subtasks. */
+  | 'split_subtasks';
 
 export interface TaskDetailSubtask {
   /** ISO time the subtask was archived; null when it is not archived. */
@@ -649,9 +704,12 @@ export interface TaskDetailData {
   id?: string;
   identifier: string;
   instruction: string;
+  labels?: TaskLabelRef[];
   name?: string | null;
   parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
+  /** The project this task is filed under; null when it has none. */
+  projectId?: string | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;

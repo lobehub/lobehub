@@ -1,6 +1,7 @@
 import type { TaskListItem, TaskParticipant } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
@@ -12,7 +13,7 @@ export const queriesRouter = router({
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
-      const detail = await ctx.taskService.getTaskDetail(task.id);
+      const detail = await ctx.taskService.getTaskDetail(task.id, task);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }
@@ -132,6 +133,16 @@ export const queriesRouter = router({
     try {
       const model = ctx.taskModel;
       const { completedWithin, parentIdentifier, scope, ...query } = input;
+      if (query.groupBy === 'label') {
+        const group = await new TaskLabelModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(query.labelGroupId!);
+        if (!group?.isGroup) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Label group not found' });
+        }
+      }
       const parentRef = query.parentTaskId !== undefined ? query.parentTaskId : parentIdentifier;
       const parentTaskId =
         typeof parentRef === 'string'
@@ -158,7 +169,7 @@ export const queriesRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { completedWithin, parentIdentifier, scope, ...query } = input;
+      const { completedWithin, parentIdentifier, recentRuns, scope, ...query } = input;
       const parentRef = query.parentTaskId !== undefined ? query.parentTaskId : parentIdentifier;
       const parentTaskId =
         typeof parentRef === 'string'
@@ -179,11 +190,18 @@ export const queriesRouter = router({
       const assigneeUserIds = [
         ...new Set(result.tasks.map((t) => t.assigneeUserId).filter((id): id is string => !!id)),
       ];
-      const [agents, users] = await Promise.all([
+      const taskIds = result.tasks.map((t) => t.id);
+      const [agents, users, runsByTaskId, awaitingHumanTaskIds] = await Promise.all([
         assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
         assigneeUserIds.length > 0
           ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
           : [],
+        recentRuns ? ctx.taskTopicModel.findRecentRunsByTaskIds(taskIds, recentRuns) : undefined,
+        // Same rule the schedule and heartbeat ticks skip on: an urgent brief
+        // that is not an error is a question only the user can answer.
+        recentRuns
+          ? ctx.briefModel.findTaskIdsWithUnresolvedUrgent(taskIds, { excludeTypes: ['error'] })
+          : undefined,
       ]);
       const agentMap = new Map(agents.map((a) => [a.id, a]));
       const userMap = new Map(users.map((u) => [u.id, u]));
@@ -214,7 +232,13 @@ export const queriesRouter = router({
             });
           }
         }
-        return { ...task, participants };
+        if (!runsByTaskId || !awaitingHumanTaskIds) return { ...task, participants };
+        return {
+          ...task,
+          awaitingHuman: awaitingHumanTaskIds.has(task.id),
+          participants,
+          recentRuns: runsByTaskId.get(task.id) ?? [],
+        };
       });
 
       return { data, success: true, total: result.total };

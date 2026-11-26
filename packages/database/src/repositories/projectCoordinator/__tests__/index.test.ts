@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { deleteTestUsers } from '../../../core/testCleanup';
 import { AgentModel } from '../../../models/agent';
 import { ProjectModel } from '../../../models/project';
 import { TaskModel } from '../../../models/task';
@@ -23,18 +24,20 @@ import {
   widgets,
 } from '../../../schemas';
 import { ChannelRepository } from '../../channel';
+import { ProjectRepository } from '../../project';
 import { ProjectCoordinatorRepository } from '../index';
 
 const serverDB = await getTestDB();
 const userId = 'project-coordinator-user';
 const otherUserId = 'project-coordinator-other-user';
 const model = new ProjectModel(serverDB, userId);
+const projectRepo = new ProjectRepository(serverDB, userId);
 const repo = new ProjectCoordinatorRepository(serverDB, userId);
 const otherRepo = new ProjectCoordinatorRepository(serverDB, otherUserId);
 let identifierSequence = 0;
 
 const createProject = (input: { coordinatorAgentId?: string; name: string }) =>
-  model.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
+  projectRepo.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
 
 /** Projects created before main agents were ordinary agents got a virtual coordinator. */
 const createLegacyProject = async (name: string) => {
@@ -47,12 +50,12 @@ const createLegacyProject = async (name: string) => {
 
 describe('ProjectCoordinatorRepository.replaceCoordinator', () => {
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   });
 
   afterEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
   });
 
   it('hands a dedicated coordinator history to the new main agent, then deletes it', async () => {

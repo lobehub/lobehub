@@ -38,7 +38,7 @@ const buildTaskState = (
   const { agentId = 'agt_assignee', detail = true, taskError } = overrides;
   return {
     activeTaskId: undefined,
-    setActiveTaskId: vi.fn(),
+    claimActiveTask: vi.fn(() => () => {}),
     taskDetailMap: detail ? { 'T-194': { agentId } } : {},
     // `useFetchTaskDetail` is read off the store and called with the id.
     useFetchTaskDetail: () => ({ error: taskError, mutate: vi.fn() }),

@@ -70,8 +70,15 @@ const AddWorkingDirContent = ({
     }
   };
 
-  const environmentSelect = withEnvironment ? (
-    <EnvironmentSelect disabled={loading} value={environmentId} onChange={setEnvironmentId} />
+  // A row of its own, not beside the footer's buttons: next to them it pushed
+  // the buttons onto a second line in longer languages.
+  const environmentRow = withEnvironment ? (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <Text style={{ flex: 'none' }} type={'secondary'}>
+        {tPlugin('workingDirectory.environment.label')}
+      </Text>
+      <EnvironmentSelect disabled={loading} value={environmentId} onChange={setEnvironmentId} />
+    </Flexbox>
   ) : undefined;
 
   if (!manual && deviceId) {
@@ -80,8 +87,8 @@ const AddWorkingDirContent = ({
         defaultPath={value.trim() || undefined}
         deviceId={deviceId}
         error={error}
-        footerExtra={environmentSelect}
         loading={loading}
+        pickExtra={environmentRow}
         onCancel={close}
         onSelect={handleSubmit}
         onManual={(path) => {
@@ -114,8 +121,8 @@ const AddWorkingDirContent = ({
         />
         {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
       </Flexbox>
+      {environmentRow}
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
-        {environmentSelect}
         {deviceId && (
           <Button
             disabled={loading}

@@ -1,4 +1,3 @@
-import { isGoalArchiveBlocked } from '@lobechat/types';
 import { confirmModal, copyToClipboard, type DropdownItem, Icon, toast } from '@lobehub/ui';
 import {
   ArchiveIcon,
@@ -28,6 +27,7 @@ import {
   toManualStatus,
 } from './goalStatusMenu';
 import { useConfirmDeleteGoal, useGoalRename, useGoalShareUrl } from './useGoalActions';
+import { useGoalArchiveToggle } from './useGoalArchiveToggle';
 
 interface UseGoalMenuItemsOptions {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -36,6 +36,8 @@ interface UseGoalMenuItemsOptions {
   archivedAt?: Date | string | null;
   creatorUserId?: string | null;
   goalId: string;
+  /** Leaves the archive action out for a host that shows it on its own, like the detail header. */
+  omitArchive?: boolean;
   /** Replaces the default redirect to the goal list after a delete. */
   onDeleted?: () => void;
   /** Replaces the rename dialog, for a host that already edits the title in place. */
@@ -43,8 +45,6 @@ interface UseGoalMenuItemsOptions {
   /** Runs after a status change lands, for hosts that render the status from another read. */
   onStatusChanged?: () => void;
   projectId?: string | null;
-  /** Achieved and accepted by its owner — with `canceled`, what archiving needs. */
-  signedOff?: boolean;
   status?: string;
   /** The current title, prefilled by the rename dialog. */
   title?: string;
@@ -56,11 +56,11 @@ export const useGoalMenuItems = ({
   archivedAt,
   creatorUserId,
   goalId,
+  omitArchive,
   onDeleted,
   onRename,
   onStatusChanged,
   projectId,
-  signedOff,
   status,
   title,
 }: UseGoalMenuItemsOptions): DropdownItem[] => {
@@ -75,27 +75,20 @@ export const useGoalMenuItems = ({
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const startGoal = useGoalStore((s) => s.startGoal);
   const closeGoal = useGoalStore((s) => s.closeGoal);
-  const archiveGoal = useGoalStore((s) => s.archiveGoal);
   const transferItems = useGoalTransferMenuItem(goalId) as DropdownItem[] | null;
   const { autoRename, openRename } = useGoalRename(goalId);
   // The server lets a workspace goal be renamed only by its creator or an owner.
   const canRename = canEditTask && canClose;
 
   const current = toManualStatus(status);
-  const isArchived = !!archivedAt;
-  // Archived goals leave every list, so only a goal that is done with — signed
-  // off, or canceled — may be put away. Restoring is always fine.
-  const archiveBlocked = !isArchived && (!status || isGoalArchiveBlocked({ signedOff, status }));
-
-  const toggleArchive = useCallback(async () => {
-    try {
-      await archiveGoal(goalId, !isArchived);
-      toast.success(t(isArchived ? 'goalList.unarchiveSuccess' : 'goalList.archiveSuccess'));
-      onStatusChanged?.();
-    } catch {
-      toast.error(t(isArchived ? 'goalList.unarchiveFailed' : 'goalList.archiveFailed'));
-    }
-  }, [archiveGoal, goalId, isArchived, onStatusChanged, t]);
+  const archive = useGoalArchiveToggle({
+    archivedAt,
+    creatorUserId,
+    goalId,
+    onArchived: onStatusChanged,
+    status,
+  });
+  const { isArchived } = archive;
 
   const changeStatus = useCallback(
     (next: ManualGoalStatus) => {
@@ -110,7 +103,15 @@ export const useGoalMenuItems = ({
         okButtonProps: { danger: next === 'canceled' },
         okText: t(`goalDetail.closeConfirm.${next}.ok`),
         onOk: async () => {
-          await closeGoal(goalId, next);
+          try {
+            await closeGoal(goalId, next);
+          } catch (error) {
+            // The server refuses while it cannot confirm a run has stopped. Say
+            // so instead of leaving the dialog sitting there; it has already
+            // paused the goal, so the list is refreshed either way.
+            console.error('[goal:close] failed to close goal', error);
+            toast.error(t('goalDetail.closeConfirm.failed'));
+          }
           onStatusChanged?.();
         },
         title: t(`goalDetail.closeConfirm.${next}.title`),
@@ -183,20 +184,16 @@ export const useGoalMenuItems = ({
       },
       ...(transferItems ?? []),
       { type: 'divider' },
-      ...(archivedAt === undefined
+      ...(omitArchive || archivedAt === undefined
         ? []
         : [
             {
-              desc: !canClose
-                ? t('goalList.archiveDenied')
-                : archiveBlocked
-                  ? t('goalList.archiveBlocked')
-                  : undefined,
-              disabled: !canClose || archiveBlocked,
+              desc: archive.deniedReason,
+              disabled: !!archive.deniedReason,
               icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
               key: 'archive',
-              label: t(isArchived ? 'goalList.unarchive' : 'goalList.archive'),
-              onClick: toggleArchive,
+              label: archive.label,
+              onClick: archive.toggle,
             } satisfies DropdownItem,
           ]),
       {
@@ -209,7 +206,7 @@ export const useGoalMenuItems = ({
       },
     ],
     [
-      archiveBlocked,
+      archive,
       archivedAt,
       autoRename,
       canClose,
@@ -220,13 +217,13 @@ export const useGoalMenuItems = ({
       current,
       goalId,
       isArchived,
+      omitArchive,
       onRename,
       openRename,
       shareUrl,
       status,
       t,
       title,
-      toggleArchive,
       transferItems,
     ],
   );
@@ -249,8 +246,6 @@ interface UseGoalItemMenuOptions {
   projectId?: string;
   /** The route's agent, which keys the list scope on an agent's page. */
   routeAgentId?: string;
-  /** The list row's sign-off state (`GoalListItem.signedOff`). */
-  signedOff?: boolean;
 }
 
 /** The action menu of a goal-list row (list or card view). */
@@ -260,7 +255,6 @@ export const useGoalItemMenu = ({
   goal,
   projectId,
   routeAgentId,
-  signedOff,
 }: UseGoalItemMenuOptions): DropdownItem[] => {
   // The row reads its status from the list, not the goal graph the store
   // actions refresh, so a status change refetches the list it was rendered in.
@@ -280,7 +274,6 @@ export const useGoalItemMenu = ({
     onDeleted: noop,
     onStatusChanged: handleStatusChanged,
     projectId,
-    signedOff,
     status: goal.status,
     title: goal.title,
   });

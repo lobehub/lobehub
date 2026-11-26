@@ -24,7 +24,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { BOT_WAKE_FOLLOWUP_REASONS } from '@/server/services/bot/BotMessageRouter/wakeDecision';
 import { NO_REPLY_LABEL_SOURCE } from '@/server/services/bot/noReplyLabel';
-import { pickWakeJudgeScore } from '@/server/services/bot/wake/judgeScore';
+import { pickWakeJudgeScore } from '@/server/services/conversationWake/judgeScore';
 
 import {
   agentBotProviderProcedure,

@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { ChatAssistSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Conversation';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -70,10 +70,10 @@ const ChatAssistControl = memo<ChatAssistControlProps>(({ itemKey }) => {
 ChatAssistControl.displayName = 'ChatAssistControl';
 
 /**
- * The chat-assist entries of the service-model settings that stay personal
- * inside a workspace (follow-up chips, input completion). Unlike
- * `ServiceModelForm`, nothing here is gated on workspace permissions:
- * every member configures their own.
+ * The chat-assist entries (follow-up chips, input completion) shown on the
+ * Conversation settings page. They are personal, so unlike `ServiceModelForm`
+ * nothing here is gated on workspace permissions: every member configures
+ * their own.
  */
 const ChatAssistForm = memo(() => {
   const { t } = useTranslation('setting');
@@ -94,7 +94,9 @@ const ChatAssistForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <RouteLoading />;
+    // The same group the conversation route skeleton draws, so loading never
+    // swaps between two shapes.
+    return <ChatAssistSectionSkeleton />;
   }
 
   const items: FormFieldProps[] = PERSONAL_SYSTEM_AGENT_KEYS.map((key) => {
@@ -104,7 +106,7 @@ const ChatAssistForm = memo(() => {
       children: <ChatAssistControl itemKey={key} />,
       desc: t(`systemAgent.${key}.modelDesc`),
       label: (
-        <SettingsSearchAnchor id={`chat-preference-${key}`}>
+        <SettingsSearchAnchor id={`conversation-${key}`}>
           <span style={{ opacity: featureDisabled ? 0.45 : 1 }}>
             {t(`systemAgent.${key}.title`)}
           </span>

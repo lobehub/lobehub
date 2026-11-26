@@ -197,17 +197,14 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     const tone = isLocalPathReferenceOverlay ? LOCAL_PATH_TONE : DEFAULT_TONE;
 
     return (
-      <div {...sx([styles.container], className, style)} {...getContainerProps()}>
+      <div {...sx(styles.container, className, style)} {...getContainerProps()}>
         {children}
         {showOverlay && (
           <div {...stylex.props(styles.overlay)}>
             <div
               {...sx(
-                [
-                  styles.overlayContent,
-                  isLocalPathReferenceOverlay && styles.overlayContentLocalPath,
-                ],
-                undefined,
+                styles.overlayContent,
+                isLocalPathReferenceOverlay && styles.overlayContentLocalPath,
                 { minHeight: overlayMinHeight },
               )}
             >

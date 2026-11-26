@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { HeterogeneousAgentModel } from '@lobechat/types';
+import type { CodexSpeedMode, HeterogeneousAgentModel } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import { CodexAppServerClient, CodexAppServerRpcError } from '../codex/CodexAppServerClient';
@@ -95,6 +95,26 @@ export const listCodexModels = async ({
           id: item.model,
           ...(typeof item.displayName === 'string' && item.displayName.trim()
             ? { label: item.displayName }
+            : {}),
+          ...(typeof item.isDefault === 'boolean' ? { isDefault: item.isDefault } : {}),
+          ...(Array.isArray(item.serviceTiers) || Array.isArray(item.additionalSpeedTiers)
+            ? {
+                speedModes: [
+                  ...new Set<CodexSpeedMode>([
+                    'normal',
+                    ...(Array.isArray(item.serviceTiers)
+                      ? item.serviceTiers.map((tier) => (isRecord(tier) ? tier.id : undefined))
+                      : (item.additionalSpeedTiers as unknown[])
+                    ).flatMap((tier): CodexSpeedMode[] =>
+                      tier === 'fast' || tier === 'priority'
+                        ? ['fast']
+                        : tier === 'ultrafast'
+                          ? ['ultrafast']
+                          : [],
+                    ),
+                  ]),
+                ],
+              }
             : {}),
           modelId: item.model,
           providerId: 'codex',

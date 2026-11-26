@@ -8,7 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { ConversationHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -29,21 +29,7 @@ const HotkeySetting = memo(() => {
     onValuesChange: (values) => save(() => setSettings({ hotkey: values })),
   });
 
-  if (!isUserStateInit)
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          {
-            // Hotkey recorder inputs settle at 335x36.
-            control: { height: 36, width: 335 },
-            rows: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Conversation)
-              .length,
-            titleWidth: 96,
-            withDesc: false,
-          },
-        ]}
-      />
-    );
+  if (!isUserStateInit) return <ConversationHotkeysSkeleton />;
 
   const clearHotkeyBinding = (id: HotkeyItem['id']) => {
     if (!hotkey[id]) return;

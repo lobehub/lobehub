@@ -35,7 +35,7 @@ const CardBanner = memo<CardBannerProps>(
         align={'center'}
         justify={'center'}
         width={'100%'}
-        {...sx([styles.banner, !avatar && styles.bannerEmpty], className)}
+        {...sx(styles.banner, !avatar && styles.bannerEmpty, className)}
         {...props}
       >
         {avatar && (

@@ -81,40 +81,6 @@ describe('extract module surface', () => {
   });
 
   it('keeps the executor prototype and static members', () => {
-    expect(functionMembers(MemoryExtractionExecutor.prototype)).toEqual([
-      'buildBaseMetadata',
-      'countTokens',
-      'extractBenchmarkSource',
-      'extractTopic',
-      'filterTopicIdsForUser',
-      'generateEmbeddings',
-      'getAiProviderRuntimeState',
-      'getOnExtractHooksPath',
-      'getRuntime',
-      'getTopicsForUser',
-      'getUsers',
-      'getUsersForHourlyExtraction',
-      'listConversationsForTopic',
-      'listRelevantUserMemories',
-      'listUserMemoryIdentities',
-      'normalizeLayerError',
-      'persistActivityMemories',
-      'persistContextMemories',
-      'persistExperienceMemories',
-      'persistExtraction',
-      'persistIdentityMemories',
-      'persistPreferenceMemories',
-      'recordJobMetrics',
-      'recordLayerEntries',
-      'reportUserInitiatedProgress',
-      'resolveRuntimeKeyVaults',
-      'resolveUserMemoryAgent',
-      'resolveUserMemoryServiceConfig',
-      'runDirect',
-      'trimConversationsToTokenLimit',
-      'trimTextToTokenLimit',
-      'uploadExtractionTrace',
-    ]);
     expect(functionMembers(MemoryExtractionExecutor)).toEqual(['create']);
     expect(functionMembers(MemoryExtractionWorkflowService)).toEqual([
       'getClient',

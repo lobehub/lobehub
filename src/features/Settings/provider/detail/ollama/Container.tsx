@@ -1,30 +1,25 @@
-import { ActionIcon, createStaticStyles, Flexbox, responsive } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useState } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  close: css`
-    position: absolute;
-    inset-block-start: 16px;
-    inset-inline-end: 16px;
-  `,
-  container: css`
-    position: relative;
-
-    width: 100%;
-    padding-inline: 40px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    background: ${cssVar.colorBgContainer};
-
-    ${responsive.sm} {
-      width: 100%;
-      padding-inline: 12px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  close: { position: 'absolute', insetBlockStart: '16px', insetInlineEnd: '16px' },
+  container: {
+    position: 'relative',
+    width: '100%',
+    paddingInline: { default: '40px', [media.sm]: '12px' },
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const Container = ({
   setError,
@@ -37,9 +32,9 @@ const Container = ({
 
   return (
     show && (
-      <Flexbox className={styles.container}>
+      <Flexbox className={stylex.props(styles.container).className}>
         <ActionIcon
-          className={styles.close}
+          className={stylex.props(styles.close).className}
           icon={XIcon}
           onClick={() => {
             setShow(false);

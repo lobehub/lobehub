@@ -22,8 +22,14 @@ import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceView
 import AsyncError from '@/components/AsyncError';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
+import { densityTokens } from '@/styles/density.stylex';
 
-import { formatLinearSyncResult, isActiveLinearSyncJob, linearSyncErrorMessage } from './utils';
+import {
+  formatLinearSyncResult,
+  isActiveLinearSyncJob,
+  linearScopeProjectLabel,
+  linearSyncErrorMessage,
+} from './utils';
 
 const styles = stylex.create({
   list: {
@@ -34,8 +40,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   row: {
-    paddingBlock: 12,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   rowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -72,6 +78,10 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   // Tucked into each rule's sync menu; applies to the next run of any rule, and
   // re-running with it on fills in the comments already-synced tasks lack.
   const [syncComments, setSyncComments] = useState(true);
+  // Likewise for labels: a run also labels the tasks it reads that were synced without them.
+  const [syncLabels, setSyncLabels] = useState(true);
+  // Off by default, as in Linear; on, a run also reaches the rule's archived issues.
+  const [includeArchived, setIncludeArchived] = useState(false);
   const optionItems: DropdownItem[] = [
     {
       children: [
@@ -82,6 +92,24 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
           key: 'syncComments',
           label: t('linear.sync.options.syncComments'),
           onCheckedChange: setSyncComments,
+          type: 'checkbox',
+        },
+        {
+          checked: syncLabels,
+          closeOnClick: false,
+          desc: t('linear.sync.options.syncLabelsRuleDesc'),
+          key: 'syncLabels',
+          label: t('linear.sync.options.syncLabels'),
+          onCheckedChange: setSyncLabels,
+          type: 'checkbox',
+        },
+        {
+          checked: includeArchived,
+          closeOnClick: false,
+          desc: t('linear.sync.options.includeArchivedRuleDesc'),
+          key: 'includeArchived',
+          label: t('linear.sync.options.includeArchived'),
+          onCheckedChange: setIncludeArchived,
           type: 'checkbox',
         },
       ],
@@ -113,7 +141,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const runRule = async (rule: LinearSyncRuleView) => {
     setStarting(rule.id);
     try {
-      await linearService.startRuleSync(rule.id, { syncComments });
+      await linearService.startRuleSync(rule.id, { includeArchived, syncComments, syncLabels });
       onJobStarted();
     } catch (error) {
       toast.error(linearSyncErrorMessage(error, t));
@@ -146,6 +174,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
         {rules.map((rule, index) => {
           // A disconnected workspace's rule can still be deleted, not run.
           const disconnected = !organizationOf(rule);
+          const running = starting === rule.id || runningRuleIds.has(rule.id);
           return (
             <Flexbox
               horizontal
@@ -156,7 +185,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
             >
               <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
                 <Text ellipsis weight={500}>
-                  {[organizationOf(rule), rule.teamName, rule.linearProjectName]
+                  {[organizationOf(rule), rule.teamName, linearScopeProjectLabel(rule, t)]
                     .filter(Boolean)
                     .join(' › ')}
                 </Text>
@@ -174,13 +203,12 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
                   ].join(' · ')}
                 </Text>
               </Flexbox>
-              <SplitButton
-                disabled={isViewer || disconnected}
-                loading={starting === rule.id || runningRuleIds.has(rule.id)}
-                size={'small'}
-              >
+              {/* Only the main half spins while running; the options half just
+                  turns disabled (SplitButton-level `loading` spins both halves). */}
+              <SplitButton disabled={isViewer || disconnected} size={'small'}>
                 <SplitButton.Main
                   icon={<Icon icon={RefreshCwIcon} />}
+                  loading={running}
                   title={
                     viewerHint ?? (disconnected ? t('linear.sync.rules.disconnected') : undefined)
                   }
@@ -190,7 +218,11 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
                     ? t('linear.sync.rules.running')
                     : t('linear.sync.rules.run')}
                 </SplitButton.Main>
-                <SplitButton.Menu items={optionItems} placement={'bottomRight'} />
+                <SplitButton.Menu
+                  disabled={running}
+                  items={optionItems}
+                  placement={'bottomRight'}
+                />
               </SplitButton>
               <ActionIcon
                 disabled={isViewer || runningRuleIds.has(rule.id)}

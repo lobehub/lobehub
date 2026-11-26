@@ -24,11 +24,8 @@ import {
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 import { managedProcessEnvironment, spawnManaged } from '@lobechat/utils/managedProcess';
-import { app as electronApp } from 'electron';
 
 import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
-import { updaterConfig } from '@/modules/updater/configs';
-import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService, {
@@ -41,6 +38,13 @@ import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
+import { createDesktopDeviceControlDeps } from './gatewayDeviceControlDeps';
+import {
+  type AgentNotifyParams,
+  postAgentNotify,
+  postDeviceRegistration,
+  requestWorktreeCleanupDrain,
+} from './gatewayDeviceServerCalls';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -225,7 +229,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
     srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
-    srv.setDeviceRegistrar((info, auth) => this.registerDevice(info, auth));
+    srv.setDeviceRegistrar((info, auth) => postDeviceRegistration(info, auth));
+
+    // Back online: the server runs the worktree cleanups that waited for this
+    // device (topics archived or trashed while it was offline).
+    srv.setConnectedHandler(({ deviceId, workspaceId }) =>
+      this.drainWorktreeCleanups(deviceId, workspaceId),
+    );
 
     // Wire up the workspace-share hooks: connect-token minting (startup restore
     // + token expiry) and the "row still registered?" probe that keeps a share
@@ -301,8 +311,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     hostname: string;
     platform: string;
   }> {
-    // Signed in, report the stable id the gateway registers — not the pre-connect
-    // fallback — so the renderer's "this device" matches the pins it writes.
+    // Report the gateway's stable id, not the pre-connect fallback, so "this device" matches pins.
     const stableId = await this.service.resolveCurrentDeviceId().catch(() => undefined);
     const info = { ...this.service.getDeviceInfo(), ...(stableId && { deviceId: stableId }) };
     try {
@@ -318,6 +327,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           deviceId: info.deviceId,
           headers,
           serverUrl,
+          userId: this.remoteServerConfigCtr.getDesktopBootstrapIdentity().userId,
         });
       }
     } catch (error) {
@@ -401,44 +411,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.localSystemRuntime;
   }
 
-  /**
-   * Desktop handlers for the shared `@lobechat/device-control` dispatcher: only
-   * file preview / index (and preview approval) route back to controllers here.
-   */
+  /** Desktop handlers for the shared `@lobechat/device-control` dispatcher. */
   private get deviceControlDeps(): DeviceControlDeps {
-    return {
-      approveProjectRoot: async (root) => {
-        try {
-          await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
-        } catch (error) {
-          logger.error(`Failed to approve project preview root ${root}:`, error);
-        }
-      },
-      // Workspace share (server-driven enroll/unenroll RPCs): the service owns
-      // the gateway connections, so both handlers route straight to it.
-      enrollWorkspace: (params) => this.service.enrollWorkspace(params),
-      getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
-      readExternalAssetForPublish: (params) =>
-        this.localFileCtr.readExternalAssetForPublish(params),
-      copyAssetForPublish: (params) => this.localFileCtr.copyAssetForPublish(params),
-      getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
-      listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
-      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
-      // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
-      // as the local Files tree, so it stays recoverable.
-      trashLocalFiles: (params) => this.localFileCtr.trashLocalFiles(params),
-      unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
-      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
-      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
-      ...this.localFileCtr.getSkillDirectoryDeps(),
-      // Remote app update from the web device page, over the same updater the
-      // local "Check for updates" menu drives.
-      ...createRemoteAppUpdateDeps({
-        currentVersion: electronApp.getVersion(),
-        enabled: updaterConfig.enableAppUpdate,
-        getUpdater: () => this.app.getUpdaterManager(),
-      }),
-    };
+    return createDesktopDeviceControlDeps(this.app);
   }
 
   /**
@@ -1224,76 +1199,33 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /**
    * Send a notify message to the server so the frontend receives agent output or
-   * a completion signal. Uses the tRPC agentNotify.notify endpoint directly —
-   * this is the desktop counterpart to `lh notify` used by the CLI path.
+   * a completion signal — the desktop counterpart to `lh notify` used by the CLI path.
    */
-  private async sendNotify(params: {
-    agentId?: string;
-    cancelled?: boolean;
-    content: string;
-    done?: boolean;
-    error?: { message: string; type?: string };
-    operationId?: string;
-    role: string;
-    topicId: string;
-    /**
-     * Workspace scope for the notify. When set, attaches `X-Workspace-Id` so
-     * agentNotify resolves the workspace-owned topic instead of falling back
-     * to personal mode (which would 404 the lookup).
-     */
-    workspaceId?: string;
-  }): Promise<void> {
+  private async sendNotify(params: AgentNotifyParams): Promise<void> {
     try {
       const [serverUrl, token] = await Promise.all([
         this.remoteServerConfigCtr.getRemoteServerUrl(),
         this.remoteServerConfigCtr.getAccessToken(),
       ]);
       if (!serverUrl || !token) return;
-
-      const { workspaceId, ...body } = params;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      };
-      if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
-      setDesktopUserAgentHeader(headers);
-
-      await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
-        body: JSON.stringify({ json: body }),
-        headers,
-        method: 'POST',
-      });
+      await postAgentNotify(params, { serverUrl, token });
     } catch {
       // Fire-and-forget: openclaw's own `lh notify` calls are the primary channel.
     }
   }
 
   /**
-   * Persist this device to the server registry via `device.register`.
-   * Fire-and-forget from the connect path: a failure must not block the WS
-   * connection, the device just won't appear in the offline list until the
-   * next successful connect.
+   * Ask the server to run the worktree cleanups waiting on this device (topics
+   * archived or trashed while it was offline). Best-effort: anything missed
+   * waits for the next connect, or for the renderer's drain on startup.
    */
-  private async registerDevice(
-    info: {
-      deviceId: string;
-      hostname: string;
-      identitySource: string;
-      platform: string;
-    },
-    { serverUrl, token }: { serverUrl: string; token: string },
-  ): Promise<void> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Oidc-Auth': token,
-    };
-    setDesktopUserAgentHeader(headers);
-
-    await fetch(`${serverUrl}/trpc/lambda/device.register`, {
-      body: JSON.stringify({ json: info }),
-      headers,
-      method: 'POST',
-    });
+  private async drainWorktreeCleanups(deviceId: string, workspaceId?: string): Promise<void> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (serverUrl && token)
+      await requestWorktreeCleanupDrain({ deviceId, workspaceId }, { serverUrl, token });
   }
 
   /**

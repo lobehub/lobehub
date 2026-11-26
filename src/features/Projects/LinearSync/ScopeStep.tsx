@@ -1,7 +1,7 @@
 'use client';
 
 import type { LinearIssueStateType } from '@lobechat/types';
-import { LINEAR_ISSUE_STATE_TYPES } from '@lobechat/types';
+import { LINEAR_ISSUE_STATE_TYPES, LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import { Flexbox, Select, Text } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { memo } from 'react';
@@ -94,12 +94,17 @@ const ScopeStep = memo<ScopeStepProps>(({ connectionId, onChange, value }) => {
             variant={'filled'}
             options={[
               { label: t('linear.sync.filter.allProjects'), value: ALL_PROJECTS },
+              { label: t('linear.sync.filter.noProject'), value: LINEAR_NO_PROJECT_ID },
               ...(projects.data ?? []).map((project) => ({
                 label: project.name,
                 value: project.id,
               })),
             ]}
             onChange={(projectId) => {
+              if (projectId === LINEAR_NO_PROJECT_ID) {
+                onChange({ linearProjectId: LINEAR_NO_PROJECT_ID, linearProjectName: null });
+                return;
+              }
               const project = projects.data?.find((item) => item.id === projectId);
               onChange({
                 linearProjectId: project?.id ?? null,

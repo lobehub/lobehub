@@ -1,21 +1,49 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import {
+  CURRENT_VERSION,
+  hasCallableMcpEndpoint,
+  isDesktop,
+  isMarketplaceInstallRunnable,
+  keepsDesktopStdioExecution,
+} from '@lobechat/const';
+import {
+  getMcpServerFingerprint,
+  isSyncedMcpToolVisibleTo,
+  type McpServerAddress,
+} from '@lobechat/const/mcpApp';
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
   type CustomPluginMetadata,
 } from '@lobechat/types';
-import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
+import { safeParseJSON } from '@lobechat/utils';
+import {
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  isDeviceOnlyMcpEndpoint,
+  type McpConnectVia,
+} from '@lobechat/utils/mcpEndpoint';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
 import { toRecord } from '@lobechat/utils/object';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
+import { type ReadResourceResult } from '@modelcontextprotocol/client';
+import { omit } from 'es-toolkit/compat';
 
+import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
 import { type MCPToolCallResult } from '@/libs/mcp';
+import {
+  resolveLocalConnectorHttpParams,
+  takeLocalConnectorAccount,
+} from '@/libs/mcp/localConnector';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+import { resolveRunConnector } from './connectorRun';
 import { discoverService } from './discover';
 
 /**
@@ -33,11 +61,216 @@ function calculateObjectSizeBytes(obj: any): number {
   }
 }
 
+/**
+ * Report a tool call this machine ran to the Market, without affecting the
+ * call. The server reports the calls it runs (`tools.mcp.callTool`,
+ * `market.callCloudMcpEndpoint`, `connector.callTool`).
+ */
+const reportLocalCall = (call: {
+  args?: string;
+  command?: string;
+  customPluginInfo?: CallReportRequest['customPluginInfo'];
+  failure?: unknown;
+  identifier: string;
+  isCustomPlugin: boolean;
+  mcpType?: string;
+  result?: MCPToolCallResult;
+  sessionId?: string;
+  startTime: number;
+  toolName: string;
+  version: string;
+}) => {
+  const success = call.failure === undefined;
+  const reportData: CallReportRequest = {
+    callDurationMs: Date.now() - call.startTime,
+    customPluginInfo: call.customPluginInfo,
+    errorCode: success ? undefined : 'CALL_FAILED',
+    errorMessage: success ? undefined : (call.failure as Error)?.message,
+    identifier: call.identifier,
+    isCustomPlugin: call.isCustomPlugin,
+    metadata: { appVersion: CURRENT_VERSION, command: call.command, mcpType: call.mcpType },
+    methodName: call.toolName,
+    methodType: 'tool' as const,
+    requestSizeBytes: calculateObjectSizeBytes(safeParseJSON(call.args) || call.args),
+    responseSizeBytes: success && call.result ? calculateObjectSizeBytes(call.result.state) : 0,
+    sessionId: call.sessionId,
+    success,
+    version: call.version,
+  };
+
+  discoverService.reportPluginCall(reportData).catch((reportError) => {
+    console.warn('Failed to report MCP tool call:', reportError);
+  });
+};
+
+/** A tool a local MCP server lists, as the desktop main process reports it. */
+export interface LocalMcpTool {
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  mcpAppMeta?: Record<string, unknown> | null;
+  name: string;
+  /** The tool's MCP Apps `_meta.ui.visibility`, when it declares one. */
+  visibility?: string[];
+}
+
+/**
+ * IPC and cloud-gateway calls can't be cancelled once sent, so a request
+ * cancelled during the awaits before them must stop here.
+ */
+const throwIfAborted = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The tool call was cancelled', 'AbortError');
+};
+
+/**
+ * A view this machine's MCP process (stdio, localhost / LAN) marked on its
+ * result can only be served here, where the view and its calls run: record
+ * which desktop that is, so another one falls back to the plain result.
+ */
+const markLocalView = async <T>(result: T): Promise<T> => {
+  const state = (result as { state?: { mcpApp?: { deviceId?: string } } } | undefined)?.state;
+  if (!state?.mcpApp) return result;
+
+  const { getElectronStoreState } = await import('@/store/electron');
+  const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
+  // Unmarked would read as a view any client can serve: offer none instead
+  if (deviceId) state.mcpApp.deviceId = deviceId;
+  else delete state.mcpApp;
+
+  return result;
+};
+
+/**
+ * Whether `address` is the MCP server a view came from (`server`, a
+ * `getMcpServerFingerprint`). A view is read, and its calls run, on no other.
+ */
+const isViewServer = async (server: string | undefined, address: McpServerAddress) =>
+  !!server && (await getMcpServerFingerprint(address)) === server;
+
+const VIEW_SERVER_MOVED = 'This view came from another server than the tool reaches now';
+
+/**
+ * The params, of a plugin's two current ones, that reach the server a view came
+ * from: as configured here (its settings merged in), or as the server's runtime
+ * ran it (`manifest.mcpParams`). The view is read, and calls, with exactly those.
+ */
+const pickViewServerParams = async (
+  server: string | undefined,
+  plugin: { manifest?: unknown },
+  configured: any,
+): Promise<any | undefined> => {
+  const runtime = (plugin.manifest as { mcpParams?: { type?: string } } | undefined)?.mcpParams;
+  for (const params of [configured, runtime]) {
+    if (params?.type !== 'http' && params?.type !== 'stdio') continue;
+    if (await isViewServer(server, params)) return params;
+  }
+  return undefined;
+};
+const VIEW_SITE_MISMATCH = "This view's server runs elsewhere than this call would";
+
+/** The user's `mcp_apps` flag: whether sessions on this machine announce MCP Apps. */
+const isMcpAppsOn = () => {
+  const state = getServerConfigStoreState();
+  return !!state && serverConfigSelectors.enableMcpApps(state);
+};
+
+/**
+ * Build the MCP client params for an installed/custom plugin: its stored
+ * connection plus the user's plugin settings as HTTP headers or stdio env.
+ */
+const buildPluginMcpParams = (
+  plugin: { customParams?: { mcp?: any } | null; settings?: unknown },
+  identifier: string,
+) => {
+  const connection = plugin.customParams?.mcp;
+  const settingsEntries = plugin.settings
+    ? Object.entries(plugin.settings as Record<string, any>).filter(
+        ([, value]) => value !== undefined && value !== null,
+      )
+    : [];
+  const pluginSettings =
+    settingsEntries.length > 0
+      ? settingsEntries.reduce<Record<string, unknown>>((acc, [key, value]) => {
+          acc[key] = value;
+
+          return acc;
+        }, {})
+      : undefined;
+
+  const params = {
+    ...connection,
+    name: identifier,
+  } as any;
+
+  if (connection?.type === 'http') {
+    // Settings the URL asks for (`{{KEY}}`) go into the URL, matching the install
+    // that produced `manifest.mcpParams`; the rest are headers
+    const rendered = renderMcpUrlTemplate(connection.url ?? '', pluginSettings);
+    if (connection.url) params.url = rendered.url;
+    const headers = {
+      ...connection.headers,
+      ...(pluginSettings && omit(pluginSettings, rendered.usedKeys)),
+    };
+    // Left out when empty, as the runtime's manifest params leave it: MCP
+    // sessions are cached by these params, so `{}` would open a second one
+    if (Object.keys(headers).length > 0) params.headers = headers;
+  }
+
+  if (connection?.type === 'stdio') {
+    // Match the install that produced `manifest.mcpParams`: args get the settings they ask for
+    if (connection.args) params.args = renderMcpArgs(connection.args, pluginSettings);
+    params.env = {
+      ...connection?.env,
+      ...pluginSettings,
+    };
+  }
+
+  return { params, pluginSettings };
+};
+
 class MCPService {
   async invokeMcpToolCall(
     payload: ChatToolPayload,
-    { signal, topicId }: { signal?: AbortSignal; topicId?: string },
-  ) {
+    {
+      agentId,
+      fromMcpApp,
+      fromEntrypoint,
+      linkId,
+      onThisDevice,
+      server,
+      signal,
+      topicId,
+    }: {
+      /** Resolve connectors the way this agent's conversation does (agent-owned first). */
+      agentId?: string;
+      /**
+       * The call is an MCP App view's `tools/call`, not the model's:
+       * - only tools whose `_meta.ui.visibility` includes "app" run, which the
+       *   process holding the MCP session (server or desktop main) checks;
+       * - on desktop, servers only this machine can reach (stdio connectors,
+       *   localhost / LAN http plugins) run over IPC whether or not a device
+       *   gateway is configured, as the view's HTML was read the same way.
+       *   Conversation calls keep their existing route.
+       */
+      fromMcpApp?: boolean;
+      fromEntrypoint?: boolean;
+      linkId?: string;
+      /**
+       * With `fromMcpApp`: the view's result came from this desktop's own MCP
+       * process (it carries this device's id), so its calls run there too;
+       * otherwise on the server. A URL alone can't tell a server-side
+       * `localhost` from this machine's.
+       */
+      onThisDevice?: boolean;
+      /** With `fromMcpApp`: the server the view came from; its calls reach no other. */
+      server?: string;
+      signal?: AbortSignal;
+      topicId?: string;
+    },
+  ): Promise<MCPToolCallResult | undefined> {
     await discoverService.safeInjectMPToken();
 
     const { pluginSelectors } = await import('@/store/tool/selectors');
@@ -45,56 +278,181 @@ class MCPService {
 
     const s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
+    // Calls run on this machine announce MCP Apps only under the user's flag
+    const mcpApps = isMcpAppsOn();
+    if (fromEntrypoint && !mcpApps) throw new Error('Interactive views are turned off');
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
-    // gateways keep the existing server route.
+    // gateways keep the existing server route for conversation calls, except
+    // for marketplace and protocol-link stdio installs, which ran here as plugins.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
-    // original executor path.
-    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifier(identifier)(s);
-    if (
-      connector &&
-      connector.isEnabled &&
-      (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
-    ) {
+    // original executor path. The route follows the row the server resolves for
+    // this conversation: a private stdio row the conversation may not use must
+    // not send its call over IPC when the server runs a shared HTTP row.
+    const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
+    const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
+
+    const plugin = installPlugin || customPlugin;
+    // An unfinished marketplace install (an interrupted reinstall over a plugin
+    // row, a late OAuth callback after a cancel) is not routed to: its tool rows
+    // may not match its endpoint. A plugin row still serves the call.
+    const resolved = await resolveRunConnector(identifier, { agentId, topicId });
+    const connector =
+      resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
+
+    // An agent's own connectors may not be loaded on the client yet; with no
+    // plugin to fall back to, let the server resolve the identifier for the agent.
+    // A market-hosted (cloud) connector has no URL: the server's connector route runs it.
+    const isConnector = connector
+      ? connector.isEnabled && hasCallableMcpEndpoint(connector)
+      : !!agentId && !plugin;
+    if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
-      if (
+      // An HTTP server only this machine reaches (localhost / LAN, or set to
+      // connect through the device) runs here over IPC, as its tool list was
+      // read here: the server would have to tunnel it back to this device. A
+      // view's call still runs where its result was produced.
+      const isDeviceHttp =
+        connector?.mcpConnectionType !== 'stdio' &&
+        !!connector?.mcpServerUrl &&
+        isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector));
+      // A connector bound to another device runs there, through the server
+      const runsHere =
+        connector &&
         isDesktop &&
-        connector.mcpConnectionType === 'stdio' &&
-        getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false
-      ) {
-        // Persisted connector projections omit env secrets and may be stale.
-        // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        !runsOnAnotherDevice(connectorDeviceBinding(connector)?.deviceId) &&
+        ((connector.mcpConnectionType === 'stdio' &&
+          (fromMcpApp ||
+            fromEntrypoint ||
+            // These stdio servers ran on this desktop as plugins, gateway or not
+            keepsDesktopStdioExecution(connector) ||
+            getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)) ||
+          (isDeviceHttp && (fromMcpApp ? !!onThisDevice : true)));
+      // A view's calls run where its result was produced
+      if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
+      // Persisted connector projections omit env secrets and may be stale.
+      // This protected read retains the connector's credential ownership gate,
+      // runs the row the server resolves for this conversation (a private
+      // connector the conversation may not use never runs here), and carries
+      // the current binding: a connector rebound to another device since this
+      // projection loaded runs there, through the server.
+      const detail = runsHere
+        ? await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId })
+        : undefined;
+      const reboundElsewhere =
+        !!detail && runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId);
+      if (reboundElsewhere && fromMcpApp) throw new Error(VIEW_SITE_MISMATCH);
+      if (connector && detail && !reboundElsewhere) {
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
           throw new Error(`Tool '${apiName}' is unavailable or disabled for this connector`);
         }
+        if (!fromEntrypoint && !fromMcpApp && !isSyncedMcpToolVisibleTo(tool, 'model', mcpApps)) {
+          throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
+        }
+        if (detail.mcpConnectionType !== 'stdio') {
+          const account = takeLocalConnectorAccount(connector, detail.tools, args, linkId);
+          // The token of the row this conversation runs, read in its scope: a
+          // private agent's own topic may run its owner's personal connector
+          const http = await resolveLocalConnectorHttpParams(detail, (id) =>
+            lambdaClient.connector.getLocalCallToken.mutate({
+              id,
+              linkId: account.linkId,
+              run: { agentId, identifier, topicId },
+            }),
+          );
+          if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
+            throw new Error(VIEW_SERVER_MOVED);
+          throwIfAborted(signal);
+          const result = await ensureElectronIpc().mcp.callTool(
+            serializeMcpIpcPayload({
+              args: safeParseJSON(account.args) ?? {},
+              http,
+              mcpApps,
+              ...(fromMcpApp && { fromApp: true }),
+              ...(fromEntrypoint && { fromEntrypoint: true }),
+              toolName: apiName,
+            }),
+          );
+          return markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(result));
+        }
         const config = detail.mcpStdioConfig;
         if (detail.mcpConnectionType !== 'stdio' || !config?.command) {
           throw new Error('Connector does not have a stdio command configured');
         }
-        const result = await ensureElectronIpc().mcp.callTool(
-          serializeMcpIpcPayload({
-            args: safeParseJSON(args) ?? {},
+        if (
+          fromMcpApp &&
+          !(await isViewServer(server, {
+            args: config.args ?? [],
+            command: config.command,
             env: config.env,
-            params: {
-              args: config.args ?? [],
+            type: 'stdio',
+          }))
+        ) {
+          throw new Error(VIEW_SERVER_MOVED);
+        }
+        throwIfAborted(signal);
+        const startTime = Date.now();
+        let failure: unknown;
+        let result: MCPToolCallResult | undefined;
+        try {
+          const serialized = await ensureElectronIpc().mcp.callTool(
+            serializeMcpIpcPayload({
+              args: safeParseJSON(args) ?? {},
+              env: config.env,
+              ...(fromMcpApp && { fromApp: true }),
+              ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
+              mcpApps,
+              params: {
+                args: config.args ?? [],
+                command: config.command,
+                name: detail.identifier,
+                type: 'stdio',
+              },
+              toolName: apiName,
+            }),
+          );
+          result = await markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(serialized));
+          return result;
+        } catch (error) {
+          failure = error ?? new Error('MCP tool call failed');
+          throw error;
+        } finally {
+          // A marketplace server's calls are reported as its plugin's were
+          if (connector.sourceType === 'marketplace') {
+            const version = (detail.metadata as { version?: unknown } | null)?.version;
+            reportLocalCall({
+              args,
               command: config.command,
-              name: detail.identifier,
-              type: 'stdio',
-            },
-            toolName: apiName,
-          }),
-        );
-        return deserializeMcpIpcPayload<MCPToolCallResult>(result);
+              failure,
+              identifier,
+              isCustomPlugin: false,
+              mcpType: 'stdio',
+              result,
+              sessionId: topicId,
+              startTime,
+              toolName: apiName,
+              version: typeof version === 'string' ? version : 'unknown',
+            });
+          }
+        }
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
-          { args, identifier, toolName: apiName },
+          {
+            agentId,
+            linkId,
+            args,
+            // The server checks the view's server against the connector it resolves
+            ...(fromMcpApp && { fromApp: true, server }),
+            ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
+            identifier,
+            toolName: apiName,
+            topicId,
+          },
           { signal },
         )) as MCPToolCallResult;
       } catch (error) {
@@ -113,49 +471,35 @@ class MCPService {
       }
     }
 
-    const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
-    const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
-
-    const plugin = installPlugin || customPlugin;
-
     if (!plugin) return;
 
     const connection = plugin.customParams?.mcp;
-    const settingsEntries = plugin.settings
-      ? Object.entries(plugin.settings as Record<string, any>).filter(
-          ([, value]) => value !== undefined && value !== null,
-        )
-      : [];
-    const pluginSettings =
-      settingsEntries.length > 0
-        ? settingsEntries.reduce<Record<string, unknown>>((acc, [key, value]) => {
-            acc[key] = value;
-
-            return acc;
-          }, {})
-        : undefined;
-
-    const params = {
-      ...connection,
-      name: identifier,
-    } as any;
-
-    if (connection?.type === 'http') {
-      params.headers = {
-        ...connection.headers,
-        ...pluginSettings,
-      };
-    }
-
-    if (connection?.type === 'stdio') {
-      params.env = {
-        ...connection?.env,
-        ...pluginSettings,
-      };
-    }
+    const configured = buildPluginMcpParams(plugin, identifier);
+    const { pluginSettings } = configured;
 
     const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
+    // A view's calls reach the server its result came from, never another
+    // (cloud servers refuse view calls below)
+    let params = configured.params;
+    if (fromMcpApp && !isCloud) {
+      params = await pickViewServerParams(server, plugin, configured.params);
+      if (!params) throw new Error(VIEW_SERVER_MOVED);
+    }
+    // An http server only this machine reaches (localhost / LAN, or set to
+    // connect through the device) runs here over IPC, the route its manifest
+    // was read on. A view's call runs where its result was produced: here when
+    // this desktop's process produced it, else on the server.
+    const isLocalHttp =
+      isDesktop &&
+      plugin?.customParams?.mcp?.type === 'http' &&
+      (fromMcpApp
+        ? !!onThisDevice
+        : isDeviceOnlyMcpEndpoint({
+            connectVia: params.connectVia,
+            type: 'http',
+            url: params.url,
+          }));
     const isCustomPlugin = !!customPlugin;
 
     // Build meta for server-side reporting
@@ -177,19 +521,35 @@ class MCPService {
       // (IPC layer serializes the whole payload into a JSON envelope).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
+      ...(fromMcpApp && { fromApp: true }),
+      // The conversation's agent: the server gates the tool on the row it runs
+      ...((fromMcpApp || fromEntrypoint) && agentId && { agentId }),
+      ...(fromEntrypoint && { fromEntrypoint: true }),
       meta,
       params,
       toolName: apiName,
     };
 
+    // Cloud servers refuse view calls below
+    // Stdio runs only on this desktop, which then marked the result as its own
+    if (fromMcpApp && isStdio && !(isDesktop && onThisDevice)) {
+      throw new Error(VIEW_SITE_MISMATCH);
+    }
+
+    // Before the timing starts: a call cancelled here never ran, so isn't reported
+    throwIfAborted(signal);
+
     // Record call start time
     const callStartTime = Date.now();
-    let success = false;
-    let errorCode: string | undefined;
-    let errorMessage: string | undefined;
+    let failure: unknown;
     let result: MCPToolCallResult | undefined;
 
     try {
+      // Cloud servers render no views, and their gateway can't check visibility
+      if (isCloud && (fromMcpApp || fromEntrypoint)) {
+        throw new Error(`Tool '${apiName}' can't be called from an interactive view`);
+      }
+
       // For cloud type, call via cloud gateway
       if (isCloud) {
         // Parse args
@@ -208,65 +568,289 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = serializeMcpIpcPayload(data);
+        const serialized = serializeMcpIpcPayload({ ...data, mcpApps });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
-        result = deserializeMcpIpcPayload(serializedResult) as any;
+        result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
+      } else if (isLocalHttp) {
+        // Same routing as the manifest fetch: the server relay can't reach it
+        const serialized = serializeMcpIpcPayload({
+          args: safeParseJSON(args) ?? {},
+          ...(fromMcpApp && { fromApp: true }),
+          ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
+          http: { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+          mcpApps,
+          toolName: apiName,
+        });
+        const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
+        result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else {
         // For other types, use the toolsClient
         result = await toolsClient.mcp.callTool.mutate(data, { signal });
       }
 
-      success = true;
       return result;
     } catch (error) {
-      const err = error as Error;
-      errorCode = 'CALL_FAILED';
-      errorMessage = err.message;
+      failure = error ?? new Error('MCP tool call failed');
 
       // Rethrow error, maintain original error handling logic
       throw error;
     } finally {
       // HTTP/SSE/streamable types: reporting is handled by server-side via mcp.callTool
       // Cloud type: reporting is handled by server-side via market.callCloudMcpEndpoint
-      // Only report from frontend for stdio types (desktop only)
-      if (isStdio) {
-        const callEndTime = Date.now();
-        const callDurationMs = callEndTime - callStartTime;
-
-        // Calculate request size
-        const inputParams = safeParseJSON(args) || args;
-        const requestSizeBytes = calculateObjectSizeBytes(inputParams);
-        // Calculate response size
-        const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
-
-        // Construct report data
-        const reportData: CallReportRequest = {
-          callDurationMs,
+      // Only report from frontend for calls that ran on this machine (desktop only)
+      if (isStdio || isLocalHttp) {
+        reportLocalCall({
+          args,
+          command: plugin.customParams?.mcp?.command,
           customPluginInfo: meta.customPluginInfo,
-          errorCode,
-          errorMessage,
+          failure,
           identifier,
           isCustomPlugin,
-          metadata: {
-            appVersion: CURRENT_VERSION,
-            command: plugin.customParams?.mcp?.command,
-            mcpType: plugin.customParams?.mcp?.type,
-          },
-          methodName: apiName,
-          methodType: 'tool' as const,
-          requestSizeBytes,
-          responseSizeBytes,
+          mcpType: plugin.customParams?.mcp?.type,
+          result,
           sessionId: topicId,
-          success,
+          startTime: callStartTime,
+          toolName: apiName,
           version: meta.version,
-        };
-
-        // Asynchronously report without affecting main flow
-        discoverService.reportPluginCall(reportData).catch((reportError) => {
-          console.warn('Failed to report MCP tool call:', reportError);
         });
       }
     }
+  }
+
+  /**
+   * Read the MCP Apps `ui://` resource (HTML view) a tool result renders with,
+   * from the same server the tool ran on: `server` names it
+   * (`getMcpServerFingerprint`), and the identifier must still resolve to it.
+   * Returns undefined when it doesn't, or when that server can't serve views
+   * from here (cloud plugins, stdio off desktop).
+   */
+  async readMcpAppResource(
+    identifier: string,
+    uri: string,
+    {
+      agentId,
+      linkId,
+      toolArguments,
+      onThisDevice = false,
+      server,
+      topicId,
+    }: {
+      agentId?: string;
+      linkId?: string;
+      toolArguments?: string;
+      /**
+       * The result came from this desktop's own MCP process (it carries this
+       * device's id): read the view there, over IPC. Otherwise it came from the
+       * server, which reads it. Never the other one: a URL can't tell a
+       * server-side `localhost` from this machine's.
+       */
+      onThisDevice?: boolean;
+      server?: string;
+      /**
+       * The conversation the result belongs to. The server resolves the
+       * connector with the same run scope the tool call used, so a private
+       * agent's own conversation can read a view off its owner's private
+       * connector; without it the read resolves the shared rows only.
+       */
+      topicId?: string;
+    },
+  ): Promise<ReadResourceResult | undefined> {
+    // A result that doesn't name its server can't be matched to one
+    if (!server) return;
+    const reaches = (address: McpServerAddress) => isViewServer(server, address);
+
+    const { pluginSelectors } = await import('@/store/tool/selectors');
+    const { getToolStoreState } = await import('@/store/tool/store');
+    let s = getToolStoreState();
+
+    // An agent's own connectors (e.g. a stdio one only it has) may not be loaded
+    // in a conversation opened cold; without them the view would be read from
+    // the base connector, or sent to the server route. If they can't be loaded,
+    // the read fails, so its fetcher retries rather than settling on no view;
+    // it is never read from another server meanwhile.
+    if (agentId) {
+      await s.ensureConfirmedConnectors(agentId);
+      s = getToolStoreState();
+    }
+
+    // The row the conversation's calls run on, as in `invokeMcpToolCall`
+    const resolved = await resolveRunConnector(identifier, { agentId, topicId });
+    // Resolve only after the agent's confirmed list loads: a cold view may
+    // otherwise mistake a tool's business link_id for the account selector.
+    if (!linkId && toolArguments && resolved) {
+      const param = resolveConnectorLinkParam(
+        resolved.tools?.map((tool) => tool.inputSchema) ?? [],
+      );
+      const value = toRecord(safeParseJSON(toolArguments))?.[param];
+      if (typeof value === 'string') linkId = value;
+    }
+
+    // Same test as `invokeMcpToolCall`: only an enabled connector with its own
+    // endpoint and a finished install serves the view. Any other (e.g. the
+    // endpoint-less row a plugin's tools are synced to) leaves it to the plugin.
+    const serves = (c: typeof resolved, hasPluginRow: boolean) =>
+      !!c?.isEnabled &&
+      (!!c.mcpServerUrl || c.mcpConnectionType === 'stdio') &&
+      isMarketplaceInstallRunnable(c, hasPluginRow);
+
+    // A conversation opened cold has not loaded the installed plugins yet, and an
+    // unloaded list would lose a plugin's view or send it to the connector route.
+    // Load the server's records first, as the tool call did before it ran.
+    if (!serves(resolved, false) && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
+      await s.refreshPlugins();
+      s = getToolStoreState();
+    }
+
+    const plugin =
+      pluginSelectors.getInstalledPluginById(identifier)(s) ||
+      pluginSelectors.getCustomPluginById(identifier)(s);
+    const connectorServes = serves(resolved, !!plugin);
+    const connector = connectorServes ? resolved : undefined;
+
+    // Stdio connectors run on a desktop app, never on the server, so only the
+    // desktop can read their view: it spawns the same command over IPC.
+    if (connectorServes && connector?.mcpConnectionType === 'stdio') {
+      if (!isDesktop || !onThisDevice) return;
+
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      // Persisted connector projections omit env secrets and may be stale.
+      // This protected read retains the connector's credential ownership gate,
+      // and reads the row the server resolves for this conversation, as the
+      // tool call did.
+      const detail = await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId });
+      const config = detail.mcpStdioConfig;
+      if (!detail.isEnabled || detail.mcpConnectionType !== 'stdio' || !config?.command) return;
+      if (
+        !(await reaches({
+          args: config.args ?? [],
+          command: config.command,
+          env: config.env,
+          type: 'stdio',
+        }))
+      ) {
+        return;
+      }
+
+      const result = await ensureElectronIpc().mcp.readUiResource(
+        serializeMcpIpcPayload({
+          env: config.env,
+          params: {
+            args: config.args ?? [],
+            command: config.command,
+            name: detail.identifier,
+            type: 'stdio',
+          },
+          uri,
+        }) as any,
+      );
+      return deserializeMcpIpcPayload(result) as ReadResourceResult;
+    }
+
+    // Same resolution as `invokeMcpToolCall`: the view comes from the connector
+    // the tool ran on. The agent's lists are loaded by now, so an identifier
+    // with no connector here has none on the server either.
+    if (connector) {
+      if (onThisDevice) {
+        if (!isDesktop || !isMcpAppsOn()) return;
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        // The row the server resolves for this conversation, as the tool call read
+        const detail = await lambdaClient.connector.getForRun.query({
+          agentId,
+          identifier,
+          topicId,
+        });
+        if (!detail.isEnabled) return;
+        const http = await resolveLocalConnectorHttpParams(detail, (id) =>
+          lambdaClient.connector.getLocalCallToken.mutate({
+            id,
+            linkId,
+            run: { agentId, identifier, topicId },
+          }),
+        );
+        if (!(await reaches({ ...http, type: 'http' }))) return;
+        return deserializeMcpIpcPayload(
+          await ensureElectronIpc().mcp.readUiResource(serializeMcpIpcPayload({ http, uri })),
+        ) as ReadResourceResult;
+      }
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      // The server checks `server` against the connector it resolves
+      return (await lambdaClient.connector.readUiResource.query({
+        agentId,
+        identifier,
+        linkId,
+        server,
+        topicId,
+        uri,
+      })) as ReadResourceResult;
+    }
+
+    const type = plugin?.customParams?.mcp?.type;
+    if (!plugin || (type !== 'http' && type !== 'stdio')) return;
+
+    const params = await pickViewServerParams(
+      server,
+      plugin,
+      buildPluginMcpParams(plugin, identifier).params,
+    );
+    if (!params) return;
+
+    // A result this desktop's process produced (stdio, or a localhost / LAN
+    // endpoint only it reaches) has its view read here over IPC; any other on
+    // the server relay. Stdio never runs on the server.
+    const isLocalHttp = type === 'http' && onThisDevice;
+    if (type === 'stdio' || isLocalHttp) {
+      if (!isDesktop || !onThisDevice) return;
+
+      const input = isLocalHttp
+        ? {
+            http: {
+              auth: params.auth,
+              headers: params.headers,
+              name: params.name,
+              url: params.url,
+            },
+            uri,
+          }
+        : { env: params.env, params, uri };
+      const result = await ensureElectronIpc().mcp.readUiResource(
+        serializeMcpIpcPayload(input) as any,
+      );
+      return deserializeMcpIpcPayload(result) as ReadResourceResult;
+    }
+
+    // POST: the params carry the plugin's auth and headers
+    return (await toolsClient.mcp.readUiResource.mutate({ params, uri })) as ReadResourceResult;
+  }
+
+  /**
+   * An installed plugin's MCP manifest, read with the same params its tool
+   * calls use: the stored connection with the user's plugin settings merged
+   * in (`buildPluginMcpParams`). `undefined` for a plugin with no MCP server.
+   */
+  async getPluginMcpManifest(plugin: {
+    customParams?: { mcp?: any } | null;
+    identifier: string;
+    settings?: unknown;
+  }) {
+    const { params } = buildPluginMcpParams(plugin, plugin.identifier);
+    if (params.type === 'stdio' && params.command) {
+      return this.getStdioMcpServerManifest({
+        args: params.args,
+        command: params.command,
+        env: params.env,
+        name: plugin.identifier,
+      });
+    }
+    if (params.type === 'http' && params.url) {
+      return this.getStreamableMcpServerManifest({
+        auth: params.auth,
+        connectVia: params.connectVia,
+        headers: params.headers,
+        identifier: plugin.identifier,
+        url: params.url,
+      });
+    }
+    return undefined;
   }
 
   async getStreamableMcpServerManifest(
@@ -276,6 +860,13 @@ class MCPService {
         token?: string;
         type: 'none' | 'bearer' | 'oauth2';
       };
+      /**
+       * The device a server reached from the user's device is pinned to: it is
+       * read there, through the server, unless that device is this desktop.
+       */
+      boundDeviceId?: string;
+      /** `device`: reach the server from the user's device, whatever its address. */
+      connectVia?: McpConnectVia;
       headers?: Record<string, string>;
       identifier: string;
       metadata?: CustomPluginMetadata;
@@ -283,24 +874,86 @@ class MCPService {
     },
     signal?: AbortSignal,
   ) {
-    // If in Desktop mode and URL is local address, use IPC (main process)
-    // This avoids accessing user local services through remote server in production
-    if (isDesktop && isLocalOrPrivateUrl(params.url)) {
+    const { boundDeviceId, connectVia, ...connection } = params;
+
+    if (
+      runsOnAnotherDevice(boundDeviceId) &&
+      isDeviceOnlyMcpEndpoint({ connectVia, type: 'http', url: params.url })
+    ) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      const manifest = (await lambdaClient.connector.getDeviceMcpManifest.mutate(
+        { ...connection, boundDeviceId },
+        { signal },
+      )) as any;
+      // An `auto` server keeps the params its calls send (no `connectVia`)
+      return connectVia === 'device' || !manifest?.mcpParams
+        ? manifest
+        : { ...manifest, mcpParams: omit(manifest.mcpParams, 'connectVia') };
+    }
+
+    // A server only this machine reaches (a localhost / LAN address, or one set
+    // to connect through the device) is read from the desktop over IPC (main
+    // process), never through the remote server.
+    if (isDesktop && isDeviceOnlyMcpEndpoint({ connectVia, type: 'http', url: params.url })) {
       // Note: IPC doesn't support AbortSignal yet
-      const serialized = serializeMcpIpcPayload(params);
+      // With MCP Apps on, the tools only views call are listed and kept too
+      const serialized = serializeMcpIpcPayload({ ...connection, mcpApps: isMcpAppsOn() });
       const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
         serialized as any,
       );
-      return deserializeMcpIpcPayload(serializedResult) as any;
+      const manifest = deserializeMcpIpcPayload(serializedResult) as any;
+      // The desktop builds `mcpParams` from the connection alone. Server-side
+      // agent runs route by the persisted `mcpParams`, so the choice must stay
+      // in it, as the device-gateway manifest below keeps it.
+      return connectVia === 'device' && manifest?.mcpParams
+        ? { ...manifest, mcpParams: { ...manifest.mcpParams, connectVia } }
+        : manifest;
+    }
+
+    // On the web, a server set to connect through the device is read on the
+    // user's desktop app through the device gateway (the server connects itself
+    // when it has no gateway).
+    if (connectVia === 'device') {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return lambdaClient.connector.getDeviceMcpManifest.mutate(connection, { signal }) as any;
     }
 
     // Otherwise use toolsClient (via server relay)
-    return toolsClient.mcp.getStreamableMcpServerManifest.query(params, { signal });
+    return toolsClient.mcp.getStreamableMcpServerManifest.query(connection, { signal });
+  }
+
+  /**
+   * Every tool a server only this machine can reach (stdio or local-network
+   * HTTP) lists, including view-only ones, with each tool's MCP Apps
+   * visibility. Desktop only.
+   */
+  async listLocalMcpTools(
+    params:
+      | {
+          http: {
+            auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+            headers?: Record<string, string>;
+            name: string;
+            url: string;
+          };
+        }
+      | { stdio: { args?: string[]; command: string; env?: Record<string, string>; name: string } },
+  ): Promise<LocalMcpTool[]> {
+    const serializedResult = await ensureElectronIpc().mcp.listTools(
+      // With MCP Apps on, a server may list its view-only tools only then
+      serializeMcpIpcPayload({ ...params, mcpApps: isMcpAppsOn() }) as any,
+    );
+    return deserializeMcpIpcPayload<LocalMcpTool[]>(serializedResult);
   }
 
   async getStdioMcpServerManifest(
     stdioParams: {
       args?: string[];
+      /**
+       * The device the server is pinned to: it is started there, through the
+       * server, unless that device is this desktop.
+       */
+      boundDeviceId?: string;
       command: string;
       env?: Record<string, string>;
       name: string;
@@ -308,9 +961,26 @@ class MCPService {
     metadata?: CustomPluginMetadata,
     _signal?: AbortSignal,
   ) {
+    const { boundDeviceId, ...localParams } = stdioParams;
+    if (runsOnAnotherDevice(boundDeviceId)) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return lambdaClient.connector.getDeviceMcpManifest.mutate(
+        {
+          args: localParams.args ?? [],
+          boundDeviceId,
+          command: localParams.command,
+          env: localParams.env,
+          identifier: localParams.name,
+          metadata,
+          type: 'stdio',
+        },
+        { signal: _signal },
+      ) as any;
+    }
     void _signal;
     // Note: IPC doesn't support AbortSignal yet
-    const serialized = serializeMcpIpcPayload({ ...stdioParams, metadata });
+    // With MCP Apps on, the tools only views call are listed and kept too
+    const serialized = serializeMcpIpcPayload({ ...localParams, mcpApps: isMcpAppsOn(), metadata });
     const serializedResult = await ensureElectronIpc().mcp.getStdioMcpServerManifest(
       serialized as any,
     );

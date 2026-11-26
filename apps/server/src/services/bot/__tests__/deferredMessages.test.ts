@@ -6,6 +6,9 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
+// No `redisService` connection: the replay budget fails open, as it does without Redis.
+vi.mock('@/server/services/redis/client', () => ({ getRedisServiceClient: async () => null }));
+
 const {
   buildDeferredMessagesKey,
   deferBotMessages,
@@ -25,7 +28,12 @@ function createRedis(execResult: unknown = []) {
     });
   }
   chain.exec = vi.fn().mockResolvedValue(execResult);
-  return { calls, chain, lrange: vi.fn().mockResolvedValue([]), multi: vi.fn(() => chain) };
+  return {
+    calls,
+    chain,
+    lrange: vi.fn().mockResolvedValue([]),
+    multi: vi.fn(() => chain),
+  };
 }
 
 const makeMessage = (id: string) => ({ id, toJSON: () => ({ _type: 'chat:Message', id }) }) as any;
@@ -91,13 +99,14 @@ describe('deferredMessages', () => {
       .fn()
       .mockRejectedValueOnce(new Error('adapter unavailable'))
       .mockResolvedValueOnce(undefined);
+    const acknowledged = () => redis.calls.filter(([cmd]) => cmd === 'lrem');
     await expect(replayDeferredBotMessages('app-1', 't', replay)).rejects.toThrow(
       'adapter unavailable',
     );
-    expect(redis.calls).toEqual([]);
+    expect(acknowledged()).toEqual([]);
     await replayDeferredBotMessages('app-1', 't', replay);
     expect(replay).toHaveBeenNthCalledWith(2, [{ id: '1' }, { id: '2' }]);
-    expect(redis.calls).toEqual(
+    expect(acknowledged()).toEqual(
       payloads.map((payload) => ['lrem', 'bot:deferred-messages:app-1:t', 1, payload]),
     );
   });

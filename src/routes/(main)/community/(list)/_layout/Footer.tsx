@@ -41,7 +41,7 @@ const Footer = memo(() => {
       align={'center'}
       flex={'none'}
       gap={4}
-      {...sx(styles.footer, undefined, {
+      {...sx(styles.footer, {
         // The image URL is resolved at runtime (CDN base), so it cannot live in stylex.create.
         backgroundBlendMode: isDarkMode ? 'screen' : 'multiply',
         backgroundImage: `url(${imageUrl(isDarkMode ? 'community_footer_dark.webp' : 'community_footer_light.webp')})`,

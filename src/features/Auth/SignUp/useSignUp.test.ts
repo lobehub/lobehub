@@ -207,12 +207,14 @@ describe('useSignUp', () => {
       });
 
       const { result } = renderHook(() => useSignUp());
+      const setErrors = vi.spyOn(result.current.form, 'setErrors');
 
       await act(async () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(setErrors).toHaveBeenCalledWith({ email: 'betterAuth.errors.emailRegistered' });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(window.location.href).toBe('');
     });
@@ -223,19 +225,22 @@ describe('useSignUp', () => {
       });
 
       const { result } = renderHook(() => useSignUp());
+      const setErrors = vi.spyOn(result.current.form, 'setErrors');
 
       await act(async () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(setErrors).toHaveBeenCalledWith({ email: 'betterAuth.errors.signupEmailInvalid' });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(window.location.href).toBe('');
     });
 
-    it('should show translated error for known error codes', async () => {
+    it('should show actionable copy next to submit for unknown codes, never the raw message', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
       mockSignUpEmail.mockResolvedValue({
-        error: { code: 'SOME_KNOWN_CODE', message: 'fallback msg' },
+        error: { code: 'SOME_UNKNOWN_CODE', message: 'SOME_UNKNOWN_CODE' },
       });
 
       const { result } = renderHook(() => useSignUp());
@@ -244,12 +249,32 @@ describe('useSignUp', () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.formError).toBe('betterAuth.signup.failed');
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(window.location.href).toBe('');
     });
 
-    it('should show the rounded remaining cooldown in days', async () => {
+    it('should show a translated non-field error next to the submit button', async () => {
+      mockTranslate.mockImplementation((key: string, options?: Record<string, unknown>) => {
+        if (key === 'authError:codes.SIGNUP_IP_BURST') return 'Too many sign-ups, wait a while';
+        return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+      });
+      mockSignUpEmail.mockResolvedValue({
+        error: { code: 'SIGNUP_IP_BURST', message: 'Please try again later.' },
+      });
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(result.current.formError).toBe('Too many sign-ups, wait a while');
+      expect(mockMessageError).not.toHaveBeenCalled();
+    });
+
+    it('should show the rounded remaining cooldown in days under the email field', async () => {
       mockSignUpEmail.mockResolvedValue({
         error: {
           code: 'DELETED_ACCOUNT_EMAIL',
@@ -259,12 +284,14 @@ describe('useSignUp', () => {
       });
 
       const { result } = renderHook(() => useSignUp());
+      const setErrors = vi.spyOn(result.current.form, 'setErrors');
 
       await act(async () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalledWith('Retry within 4 days');
+      expect(setErrors).toHaveBeenCalledWith({ email: 'Retry within 4 days' });
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it.each([0, -1, 1.5, '4', Number.POSITIVE_INFINITY])(
@@ -279,12 +306,13 @@ describe('useSignUp', () => {
         });
 
         const { result } = renderHook(() => useSignUp());
+        const setErrors = vi.spyOn(result.current.form, 'setErrors');
 
         await act(async () => {
           await result.current.onSubmit(validValues);
         });
 
-        expect(mockMessageError).toHaveBeenCalledWith('Static cooldown');
+        expect(setErrors).toHaveBeenCalledWith({ email: 'Static cooldown' });
       },
     );
 
@@ -302,12 +330,13 @@ describe('useSignUp', () => {
       });
 
       const { result } = renderHook(() => useSignUp());
+      const setErrors = vi.spyOn(result.current.form, 'setErrors');
 
       await act(async () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalledWith('Static cooldown');
+      expect(setErrors).toHaveBeenCalledWith({ email: 'Static cooldown' });
     });
 
     it('should retry sign up with captcha token when captcha is required', async () => {
@@ -352,7 +381,8 @@ describe('useSignUp', () => {
       expect(window.location.href).toBe('');
     });
 
-    it('should show generic error on unexpected exception', async () => {
+    it('should show a network hint next to submit on unexpected exception', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
       mockSignUpEmail.mockRejectedValue(new Error('network error'));
 
       const { result } = renderHook(() => useSignUp());
@@ -361,7 +391,8 @@ describe('useSignUp', () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.formError).toBe('betterAuth.errors.requestFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it('should set loading during sign up and reset after', async () => {

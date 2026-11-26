@@ -1,4 +1,6 @@
 import type {
+  CodexSpeedMode,
+  HeterogeneousAgentModel,
   HeterogeneousProviderConfig,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
@@ -12,6 +14,7 @@ import {
 } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 
+import { findAntigravityVariant } from './antigravityModels';
 import type { TriggerLabel } from './labels';
 import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerLabel } from './labels';
 import { getStaticModelOptions } from './modelOptions';
@@ -23,6 +26,7 @@ export type ModelCapability = Required<Pick<HeteroSelectorCapability, 'model'>> 
 
 export interface SelectorDimensionOption {
   desc?: string;
+  disabled?: boolean;
   label: string;
   value: string;
 }
@@ -42,9 +46,11 @@ export interface SelectorView {
   dimensions: SelectorDimension[];
   isCatalogModel: boolean;
   isFastSpeed: boolean;
+  legacyEffort?: HeterogeneousReasoningEffort;
   model: string;
   /** Where the current model comes from; shown on the catalog model submenu too. */
   modelSource: string;
+  speed: HeterogeneousSpeedMode;
   triggerLabel: TriggerLabel;
 }
 
@@ -84,36 +90,51 @@ export const resolveSelectorShape = (
 export const resolveModelSwitchSelection = ({
   capability,
   effort,
-  isFastSpeed,
+  models,
+  speed = HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   value,
 }: {
   capability: ModelCapability;
   effort?: HeterogeneousReasoningEffort;
-  isFastSpeed: boolean;
+  models?: HeterogeneousAgentModel[];
+  speed?: HeterogeneousSpeedMode;
   value: string;
 }): HeteroSelection => {
-  const resetSpeed = isFastSpeed && !!capability.speed && !capability.speed.supported(value);
+  const resetSpeed =
+    (speed === 'fast' || speed === 'ultrafast') &&
+    !!capability.speed &&
+    !getSpeedModes(models, value).includes(speed);
   const resetEffort =
     !!effort &&
     effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
     !!capability.effort &&
-    !capability.effort.levels(value).includes(effort);
+    !capability.effort.levels(value, models).includes(effort);
 
   return {
     ...(resetEffort ? { effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
     model: value,
-    ...(resetSpeed ? { speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+    ...(resetSpeed ? { speed: 'normal' as const } : {}),
   };
 };
 
+const getSpeedModes = (
+  models: HeterogeneousAgentModel[] | undefined,
+  model: string,
+): CodexSpeedMode[] =>
+  models?.find((entry) =>
+    model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? entry.isDefault : entry.id === model,
+  )?.speedModes ?? ['normal'];
+
 export const buildSelectorView = ({
   capability,
+  models,
   provider,
   t,
   topicPin,
   topicScoped = false,
 }: {
   capability: HeteroSelectorCapability;
+  models?: HeterogeneousAgentModel[];
   /** The effective config, with any topic pins already applied. */
   provider: HeterogeneousProviderConfig;
   t: Translate;
@@ -122,17 +143,20 @@ export const buildSelectorView = ({
   /** Whether a topic is active, so picks write to it instead of the Agent. */
   topicScoped?: boolean;
 }): SelectorView => {
-  const model = capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-  const effort = capability.effort?.resolve(provider);
+  const configuredModel =
+    capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const variant =
+    provider.type === 'antigravity' ? findAntigravityVariant(models, configuredModel) : undefined;
+  const model = variant?.model.id ?? configuredModel;
+  const effort = variant?.effort ?? capability.effort?.resolve(provider);
   const mode = capability.mode?.resolve(provider);
-  const speedSupported = capability.speed?.supported(model) ?? false;
-  const speed: HeterogeneousSpeedMode = speedSupported
-    ? capability.speed!.resolve(provider)
-    : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-  const isFastSpeed = speed === 'fast';
+  const speed = capability.speed?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const isFastSpeed = speed === 'fast' || speed === 'ultrafast';
 
   const defaultLabel = t('heteroAgent.modelSelector.default');
-  const modelLabel = getModelLabel(model, defaultLabel);
+  const catalogLabel =
+    provider.type === 'antigravity' ? models?.find(({ id }) => id === model)?.label : undefined;
+  const modelLabel = catalogLabel ?? getModelLabel(model, defaultLabel);
   const effortLabelKeys = getEffortLabelKeys(provider.type);
   const effortLabel = effort ? t(effortLabelKeys[effort]) : undefined;
   const modeLabel = mode ? t(getModeLabelKey(mode)) : undefined;
@@ -151,7 +175,9 @@ export const buildSelectorView = ({
   };
 
   // A pin from another runtime or auth mode is ignored, so it is not the source.
-  const modelSource = getSource(topicPin?.model !== undefined && topicPin.model === model);
+  const modelSource = getSource(
+    topicPin?.model !== undefined && topicPin.model === configuredModel,
+  );
 
   const dimensions: SelectorDimension[] = [];
 
@@ -191,14 +217,15 @@ export const buildSelectorView = ({
   }
 
   if (capability.effort && effort) {
+    const levels = capability.effort.levels(model, models ?? []);
     dimensions.push({
       current: effort,
       key: 'reasoning',
       label: t('heteroAgent.modelSelector.reasoning'),
-      source: getSource(topicPin?.effort !== undefined),
+      source: variant ? modelSource : getSource(topicPin?.effort !== undefined),
       options: [
         { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
-        ...capability.effort.levels(model).map((level) => ({
+        ...levels.map((level) => ({
           label: t(effortLabelKeys[level]),
           value: level,
         })),
@@ -207,30 +234,40 @@ export const buildSelectorView = ({
     });
   }
 
-  if (speedSupported) {
+  if (capability.speed) {
+    const speedModes = getSpeedModes(models, model);
+    const speedOptions: SelectorDimensionOption[] = speedModes.map((value) => ({
+      desc: t(`heteroAgent.modelSelector.speed.${value}Desc`),
+      label: t(`heteroAgent.modelSelector.speed.${value}`),
+      value,
+    }));
+    if (speed !== 'default' && !speedModes.includes(speed)) {
+      speedOptions.push({
+        desc: t('heteroAgent.modelSelector.speed.unavailable'),
+        disabled: true,
+        label: t(`heteroAgent.modelSelector.speed.${speed}`),
+        value: speed,
+      });
+    }
     dimensions.push({
       current: speed,
       key: 'speed',
       label: t('heteroAgent.modelSelector.speed'),
-      // Only Fast emits a flag. Without it the CLI's own config (Codex
-      // `service_tier`) picks the tier, so neither the Agent nor the topic is
-      // the source, and the value must not be presented as Standard.
-      source: isFastSpeed
-        ? getSource(topicPin?.speed !== undefined)
-        : t('heteroAgent.modelSelector.source.cli'),
+      // An explicit Normal overrides the CLI config; Default inherits it.
+      source:
+        speed !== 'default'
+          ? getSource(topicPin?.speed !== undefined)
+          : t('heteroAgent.modelSelector.source.cli'),
       options: [
         {
           desc: t('heteroAgent.modelSelector.speed.defaultDesc'),
           label: defaultLabel,
           value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
         },
-        {
-          desc: t('heteroAgent.modelSelector.speed.fastDesc'),
-          label: t('heteroAgent.modelSelector.speed.fast'),
-          value: 'fast',
-        },
+        ...speedOptions,
       ],
-      valueLabel: isFastSpeed ? t('heteroAgent.modelSelector.speed.fast') : defaultLabel,
+      valueLabel:
+        speed === 'default' ? defaultLabel : t(`heteroAgent.modelSelector.speed.${speed}`),
     });
   }
 
@@ -244,7 +281,9 @@ export const buildSelectorView = ({
     dimensions,
     isCatalogModel,
     isFastSpeed,
+    legacyEffort: variant?.effort,
     model,
+    speed,
     modelSource,
     triggerLabel: isModeOnly
       ? {

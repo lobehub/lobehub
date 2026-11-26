@@ -33,6 +33,11 @@ export interface UseAskUserFormParams {
   deadlineAt?: number;
   /** Preserve the form but disable every action while a remote submit awaits producer ACK. */
   disabled?: boolean;
+  /**
+   * Never answer with option 1 when the countdown ends: the clock only closes the question.
+   * For a question the person may answer elsewhere (a Channel), where a default is not theirs.
+   */
+  noAnswerOnTimeout?: boolean;
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
@@ -49,6 +54,8 @@ export interface UseAskUserFormParams {
 export interface AskUserFormApi {
   activeQuestion?: AskUserQuestionItem;
   activeTab: string;
+  /** Whether this form can supply fallback answers when the countdown ends. */
+  autoSubmitOnTimeout: boolean;
   /**
    * The timeout fallback has fired for this card. Distinguishes "we answered
    * on your behalf" from "the clock ran out and nothing was sent", which the
@@ -104,6 +111,7 @@ export const useAskUserForm = ({
   countdownMs,
   deadlineAt,
   disabled = false,
+  noAnswerOnTimeout = false,
   onInteractionAction,
   persistedDraft,
   requireAllAnswered = true,
@@ -166,6 +174,7 @@ export const useAskUserForm = ({
   const hasProviderOwnedOptionIds = questions.some((question) =>
     question.options.some((option) => !!option.id),
   );
+  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds && !noAnswerOnTimeout;
 
   // A resolved `onInteractionAction` means the answer was published, not that
   // the producer consumed it — the card stays disabled until the host settles
@@ -467,7 +476,7 @@ export const useAskUserForm = ({
     // A stable id means this is a provider-owned choice (permission/plan or a
     // newer exact-id question). Never infer consent by selecting option one:
     // let the producer timeout/cancel fail closed.
-    if (hasProviderOwnedOptionIds) return;
+    if (!autoSubmitOnTimeout) return;
     setAutoSubmitted(true);
     if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
@@ -501,7 +510,7 @@ export const useAskUserForm = ({
     custom,
     supplementText,
     submitWith,
-    hasProviderOwnedOptionIds,
+    autoSubmitOnTimeout,
   ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
@@ -517,6 +526,7 @@ export const useAskUserForm = ({
   return {
     activeQuestion,
     activeTab,
+    autoSubmitOnTimeout,
     autoSubmitted,
     custom,
     escapeActive: inEscape,

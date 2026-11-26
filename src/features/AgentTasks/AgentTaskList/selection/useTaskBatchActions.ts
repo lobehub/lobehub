@@ -21,6 +21,15 @@ import { useBackgroundTaskListRefresh } from './useBackgroundTaskListRefresh';
 
 export type { TaskBatchAction, TaskBatchStatus } from './optimisticBatch';
 
+export interface TaskBatchRunOptions {
+  /**
+   * Work the batch depends on, run in the request queue ahead of it (after the
+   * optimistic overlay is up), e.g. making tasks private before a private
+   * agent is assigned to them. It receives the selected ids.
+   */
+  prepare?: (ids: string[]) => Promise<unknown>;
+}
+
 const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchResponse> => {
   switch (action.kind) {
     case 'archive': {
@@ -56,7 +65,7 @@ export const useTaskBatchActions = () => {
   const { undo } = useTaskBatchUndo();
 
   const run = useCallback(
-    async (action: TaskBatchAction) => {
+    async (action: TaskBatchAction, runOptions?: TaskBatchRunOptions) => {
       const ids = [...useTaskSelectionStore.getState().selectedIds];
       if (ids.length === 0) return;
 
@@ -70,6 +79,7 @@ export const useTaskBatchActions = () => {
       let requestError: unknown;
       await enqueueBatchRequest(async () => {
         try {
+          await runOptions?.prepare?.(ids);
           // Sequential: each chunk is already a set-based write on the server,
           // and ordering keeps a later chunk from racing an earlier one.
           for (const chunk of chunkIds(ids)) outcomes.push(await runChunk(action, chunk));

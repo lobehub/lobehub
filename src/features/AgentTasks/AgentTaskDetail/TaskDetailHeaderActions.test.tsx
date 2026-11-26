@@ -1,11 +1,19 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
+
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
+// No router is mounted here; the task-list origin reads the history state.
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useLocation: () => ({ state: locationMock.state }),
+}));
 
 interface MenuItem {
   key?: string;
@@ -14,6 +22,10 @@ interface MenuItem {
 }
 
 const mocks = vi.hoisted(() => ({
+  /** Subscribers of the mocked task store, so a state change re-renders like zustand. */
+  storeListeners: new Set<() => void>(),
+  storeVersion: 0,
+  toastInfo: vi.fn(),
   activeWorkspaceId: 'ws-1' as string | undefined,
   archiveTask: vi.fn(),
   confirmModal: vi.fn(),
@@ -58,7 +70,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     async (importOriginal) => ({
       ...(await importOriginal<object>()),
       confirmModal: (opts: unknown) => mocks.confirmModal(opts),
-      toast: { error: vi.fn(), success: vi.fn() },
+      toast: { error: vi.fn(), info: mocks.toastInfo, success: vi.fn() },
     }),
   ];
   const merged: Record<string, unknown> = { ...actual };
@@ -104,6 +116,9 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: {
+    interfaceDensity: () => 'loose',
+  },
   userProfileSelectors: {
     userId: () => mocks.currentUserId,
   },
@@ -121,19 +136,36 @@ vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.com',
 }));
 
-vi.mock('@/store/task', () => ({
-  useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      ...mocks.taskState,
-      archiveTask: mocks.archiveTask,
-      deleteTask: mocks.deleteTask,
-      updateTaskVisibility: mocks.updateTaskVisibility,
-    }),
-}));
+vi.mock('@/store/task', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    mocks.storeListeners.add(listener);
+    return () => mocks.storeListeners.delete(listener);
+  };
+  return {
+    useTaskStore: (selector: (state: Record<string, unknown>) => unknown) => {
+      useSyncExternalStore(subscribe, () => mocks.storeVersion);
+      return selector({
+        ...mocks.taskState,
+        archiveTask: mocks.archiveTask,
+        deleteTask: mocks.deleteTask,
+        updateTaskVisibility: mocks.updateTaskVisibility,
+      });
+    },
+  };
+});
+
+const setTaskDetailMap = (map: typeof mocks.taskState.taskDetailMap) =>
+  act(() => {
+    mocks.taskState.taskDetailMap = map;
+    mocks.storeVersion += 1;
+    mocks.storeListeners.forEach((listener) => listener());
+  });
 
 describe('TaskDetailHeaderActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    locationMock.state = undefined;
     mocks.dropdownItems = [];
     mocks.taskState.activeTaskId = 'T-1';
     mocks.taskState.taskDetailMap = { 'T-1': { visibility: 'private' } };
@@ -153,13 +185,6 @@ describe('TaskDetailHeaderActions', () => {
       'transfer-task',
       'copy-task',
     ]);
-  });
-
-  it('includes task transfer and copy actions in the detail menu', () => {
-    render(<TaskDetailHeaderActions />);
-
-    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('transfer-task');
-    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('copy-task');
   });
 
   it('shows "publish to workspace" only for private tasks inside a workspace', () => {
@@ -264,7 +289,6 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('archive');
     const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
     const moreButton = screen.getAllByRole('button').at(-1);
-    expect(button).not.toBe(moreButton);
     expect(
       button.compareDocumentPosition(moreButton!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -303,17 +327,64 @@ describe('TaskDetailHeaderActions', () => {
     await waitFor(() => expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', false));
   });
 
-  it('keeps a blocked button focusable with its reason and makes clicks a no-op', () => {
+  // ActionIcon styles `[aria-disabled="true"]` with `pointer-events: none`, which
+  // swallows the hover that shows the reason and, when left behind, every click.
+  it('keeps a blocked button hoverable and answers a click with the reason', () => {
     mocks.taskState.taskDetailMap = { 'T-1': { status: 'running', visibility: 'private' } };
     render(<TaskDetailHeaderActions />);
 
     const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
-    // aria-disabled but not natively disabled, so keyboard users can focus it and read the reason.
-    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('aria-disabled');
     expect(button).not.toBeDisabled();
     expect(button).toHaveAttribute('aria-description', 'taskList.contextMenu.archiveBlocked');
+    expect(button).toHaveStyle({ cursor: 'not-allowed' });
     fireEvent.click(button);
 
     expect(mocks.archiveTask).not.toHaveBeenCalled();
+    expect(mocks.toastInfo).toHaveBeenCalledWith('taskList.contextMenu.archiveBlocked');
+  });
+
+  // Locks the behavior, not the production trigger: happy-dom ignores
+  // `pointer-events`, and the stale attribute never reproduced here.
+  it('lets the same mounted button archive once the running task completes', async () => {
+    mocks.taskState.taskDetailMap = { 'T-1': { status: 'running', visibility: 'private' } };
+    render(<TaskDetailHeaderActions />);
+
+    setTaskDetailMap({ 'T-1': { status: 'completed', visibility: 'private' } });
+
+    const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).not.toHaveAttribute('aria-description');
+    fireEvent.click(button);
+
+    await waitFor(() => expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', true));
+  });
+
+  describe('after deleting the task', () => {
+    const deleteAndConfirm = async () => {
+      render(<TaskDetailHeaderActions />);
+      const item = mocks.dropdownItems.find((i) => i?.key === 'delete') as
+        { onClick?: () => void } | undefined;
+      item?.onClick?.();
+      const opts = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
+      await opts.onOk();
+    };
+
+    it('returns to the filtered task list the detail was opened from', async () => {
+      // The origin is the list's real URL, so it already carries the workspace prefix.
+      locationMock.state = { taskListOrigin: '/ws-slug/tasks?collection=mine' };
+      await deleteAndConfirm();
+
+      expect(mocks.deleteTask).toHaveBeenCalledWith('T-1');
+      expect(mocks.navigate).toHaveBeenCalledWith('/ws-slug/tasks?collection=mine', {
+        escape: true,
+      });
+    });
+
+    it('returns to the bare task list without a carried origin', async () => {
+      await deleteAndConfirm();
+
+      expect(mocks.navigate).toHaveBeenCalledWith('/tasks', { escape: false });
+    });
   });
 });

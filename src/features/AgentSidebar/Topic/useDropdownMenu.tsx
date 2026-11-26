@@ -16,8 +16,8 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { archiveMergedPullRequestTopics } from './archiveMergedPullRequestTopics';
 import { useAddFolderMenuItem } from './useAddFolderMenuItem';
-import { getMergedPullRequestTopics } from './utils/mergedPullRequestTopics';
 
 const hotArea = css`
   &::before {
@@ -46,41 +46,21 @@ export const useTopicActionsDropdownMenu = (
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const topics = useChatStore(topicSelectors.currentTopics);
-  const [
-    removeUnstarredTopic,
-    removeAllTopic,
-    importTopic,
-    updateTopicStatus,
-    refreshTopic,
-    activeAgentId,
-  ] = useChatStore((s) => [
+  const [removeUnstarredTopic, removeAllTopic, importTopic, activeAgentId] = useChatStore((s) => [
     s.removeUnstarredTopic,
     s.removeSessionTopics,
     s.importTopic,
-    s.updateTopicStatus,
-    s.refreshTopic,
     s.activeAgentId,
   ]);
 
   const handleArchiveMergedPullRequests = useCallback(
-    async (scope: TopicMaintenanceScope = 'own') => {
-      const mergedTopics = getMergedPullRequestTopics(
-        topics ?? [],
-        activeWorkspaceId && scope === 'own' ? (currentUserId ?? null) : undefined,
-      );
-
-      if (mergedTopics.length === 0) {
-        toast.info(t('actions.archiveMergedPullRequestsNone'));
-        return;
-      }
-
-      await Promise.all(
-        mergedTopics.map(({ id }) => updateTopicStatus({ status: 'completed', topicId: id })),
-      );
-      await refreshTopic();
-      toast.success(t('actions.archiveMergedPullRequestsSuccess', { count: mergedTopics.length }));
-    },
-    [activeWorkspaceId, currentUserId, refreshTopic, t, topics, updateTopicStatus],
+    (scope: TopicMaintenanceScope = 'own') =>
+      archiveMergedPullRequestTopics({
+        ownerId: activeWorkspaceId && scope === 'own' ? (currentUserId ?? null) : undefined,
+        t,
+        topics: topics ?? [],
+      }),
+    [activeWorkspaceId, currentUserId, t, topics],
   );
 
   const handleImport = useCallback(

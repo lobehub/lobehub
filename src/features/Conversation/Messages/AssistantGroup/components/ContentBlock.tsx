@@ -6,6 +6,7 @@ import AssistantMessageNotice from '@/business/client/components/AssistantMessag
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
+import { useDensity } from '@/styles/density';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
@@ -40,6 +41,7 @@ const ContentBlock = memo<ContentBlockProps>(
     showTaskCompletionNotice,
   }) => {
     const errorContent = useErrorContent(error);
+    const { compact } = useDensity();
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, retryFailedAssistantStep] = useConversationStore((s) => [
       messageStateSelectors.isMessageInReasoning(id)(s),
@@ -52,7 +54,7 @@ const ContentBlock = memo<ContentBlockProps>(
     );
     /** The persisted reason may arrive after the grouped projection without changing its props. */
     const persistedFinishType = useConversationStore(
-      (s) => s.dbMessages.find((message) => message.id === id)?.metadata?.finishType,
+      (s) => dataSelectors.getDbMessageById(id)(s)?.metadata?.finishType,
     );
     const finishType = metadata?.finishType ?? persistedFinishType;
     // The call that launched the finished task can sit in an earlier step or
@@ -122,7 +124,7 @@ const ContentBlock = memo<ContentBlockProps>(
     }
 
     return (
-      <Flexbox gap={8} id={domId ?? id}>
+      <Flexbox gap={compact ? 4 : 8} id={domId ?? id}>
         {taskCompletionNotice}
 
         {showReasoning && (

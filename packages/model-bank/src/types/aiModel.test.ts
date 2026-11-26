@@ -27,12 +27,16 @@ describe('Gemini reasoning config persistence', () => {
       thinkingLevel2: 'low',
       thinkingLevel3: 'medium',
       thinkingLevel4: 'high',
+      thinkingLevel5: 'xhigh',
     };
     expect(AiModelReasoningConfigSchema.parse(config)).toEqual(config);
     expect(AiModelReasoningConfigSchema.safeParse({ thinkingLevel3: 'minimal' }).success).toBe(
       false,
     );
     expect(AiModelReasoningConfigSchema.safeParse({ thinkingLevel4: 'medium' }).success).toBe(
+      false,
+    );
+    expect(AiModelReasoningConfigSchema.safeParse({ thinkingLevel5: 'minimal' }).success).toBe(
       false,
     );
   });

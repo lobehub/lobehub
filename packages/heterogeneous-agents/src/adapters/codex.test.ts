@@ -12,6 +12,13 @@ const loadFixture = async (name: string) => {
     .map((line) => JSON.parse(line));
 };
 
+const runningCommandItem = () => ({
+  command: '/bin/zsh -lc pwd',
+  id: 'item_1',
+  status: 'in_progress',
+  type: 'command_execution',
+});
+
 describe('CodexAdapter', () => {
   it('captures the session id from thread.started', () => {
     const adapter = new CodexAdapter();
@@ -141,7 +148,7 @@ describe('CodexAdapter', () => {
       {
         data: {
           chunkType: 'tool_state',
-          pluginState: { output: 'hel', stdout: 'hel' },
+          pluginState: { stdout: 'hel' },
           snapshotMode: 'replace',
           snapshotSeq: 1,
           toolCallId: 'command-1',
@@ -149,8 +156,9 @@ describe('CodexAdapter', () => {
         type: 'stream_chunk',
       },
     ]);
+    expect(first[0].data.pluginState).not.toHaveProperty('output');
     expect(second[0]).toMatchObject({
-      data: { pluginState: { output: 'hello' }, snapshotSeq: 2 },
+      data: { pluginState: { stdout: 'hello' }, snapshotSeq: 2 },
       type: 'stream_chunk',
     });
 
@@ -164,7 +172,7 @@ describe('CodexAdapter', () => {
       item_id: 'command-1',
       type: 'item.command_execution.output_delta',
     });
-    expect(truncated[0].data.pluginState.output).toContain('[Output truncated:');
+    expect(truncated[0].data.pluginState.stdout).toContain('[Output truncated:');
     expect(afterTruncation).toEqual([]);
   });
 
@@ -548,12 +556,7 @@ describe('CodexAdapter', () => {
       type: 'item.completed',
     });
     adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     adapter.adapt({
@@ -717,12 +720,7 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter();
 
     const started = adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     const completed = adapter.adapt({
@@ -763,7 +761,6 @@ describe('CodexAdapter', () => {
         pluginState: {
           exitCode: 0,
           isBackground: false,
-          output: '/tmp\\n',
           stdout: '/tmp\\n',
           success: true,
         },
@@ -919,7 +916,7 @@ describe('CodexAdapter', () => {
       outputTruncated: true,
       success: true,
     });
-    expect(result.data.pluginState.output).toBe(result.data.content);
+    expect(result.data.pluginState).not.toHaveProperty('output');
     expect(result.data.pluginState.stdout).toBe(result.data.content);
   });
 
@@ -1572,12 +1569,7 @@ describe('CodexAdapter', () => {
     adapter.adapt({ type: 'turn.started' });
 
     const firstTool = adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     const secondTool = adapter.adapt({
@@ -1623,12 +1615,7 @@ describe('CodexAdapter', () => {
       type: 'item.completed',
     });
     adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     adapter.adapt({

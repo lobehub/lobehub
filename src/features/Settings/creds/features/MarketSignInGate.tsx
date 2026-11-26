@@ -6,14 +6,15 @@ import { LogIn } from 'lucide-react';
 import { type FC, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ListSkeleton from '@/components/ListSkeleton';
+import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   signInPrompt: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'center',
     padding: '48px',
@@ -28,7 +29,7 @@ const MarketSignInGate: FC<{ children: ReactNode }> = ({ children }) => {
   const { t } = useTranslation('setting');
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
 
-  if (isLoading) return <ListSkeleton paddingInline={0} />;
+  if (isLoading) return <CredsListSkeleton />;
 
   if (!isAuthenticated) {
     return (

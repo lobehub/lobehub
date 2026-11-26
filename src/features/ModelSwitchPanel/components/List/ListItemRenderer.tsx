@@ -21,6 +21,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { ProviderItemRender } from '@/components/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { styles } from '../../styles';
 import { type ListItem } from '../../types';
@@ -33,6 +34,8 @@ interface ListItemRendererProps {
   activeKey: string;
   /** Muted text shown after the active model's name, e.g. its reasoning effort */
   activeSecondaryText?: string;
+  /** Badge text of a restricted model */
+  getRestrictedLabel?: (modelId: string, providerId: string) => string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
@@ -40,7 +43,6 @@ interface ListItemRendererProps {
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
-  proLabel?: string;
   subscribeScroll?: (cb: () => void) => () => void;
 }
 
@@ -48,6 +50,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
   ({
     activeKey,
     activeSecondaryText,
+    getRestrictedLabel,
     isModelRestricted,
     item,
     newLabel,
@@ -55,12 +58,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     onModelChange,
     onClose,
     onRestrictedModelClick,
-    proLabel,
     subscribeScroll,
   }) => {
     const { t } = useTranslation('components');
     const navigate = useWorkspaceAwareNavigate();
     const activeSlug = useActiveWorkspaceSlug();
+    const compact = useInterfaceDensity() === 'compact';
     const [detailOpen, setDetailOpen] = useState(false);
 
     const selectModel = async (modelId: string, providerId: string) => {
@@ -103,8 +106,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             className={styles.groupHeader}
             justify="space-between"
             key={`header-${item.provider.id}`}
-            paddingBlock={'12px 4px'}
-            paddingInline={'12px 8px'}
+            paddingBlock={compact ? '8px 2px' : '12px 4px'}
+            paddingInline={compact ? '10px 8px' : '12px 8px'}
           >
             <ProviderItemRender
               logo={item.provider.logo}
@@ -161,8 +164,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-                style={{ paddingBlock: 8, paddingInline: 8 }}
+                className={cx(
+                  menuSharedStyles.item,
+                  styles.rowTrigger,
+                  isActive && styles.menuItemActive,
+                )}
                 onClick={(e) => {
                   e.preventDefault();
                   setDetailOpen(false);
@@ -179,8 +185,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   isActive={isActive}
                   model={item.model}
                   newLabel={newLabel}
-                  proBadgeLabel={restricted ? proLabel : undefined}
                   provider={item.provider.id}
+                  proBadgeLabel={
+                    restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -205,8 +213,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-                style={{ paddingBlock: 8, paddingInline: 8 }}
+                className={cx(
+                  menuSharedStyles.item,
+                  styles.rowTrigger,
+                  isActive && styles.menuItemActive,
+                )}
                 onClick={(e) => {
                   e.preventDefault();
                   setDetailOpen(false);
@@ -223,8 +234,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   isActive={isActive}
                   model={item.data.model}
                   newLabel={newLabel}
-                  proBadgeLabel={restricted ? proLabel : undefined}
                   provider={singleProvider.id}
+                  proBadgeLabel={
+                    restricted
+                      ? getRestrictedLabel?.(item.data.model.id, singleProvider.id)
+                      : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -246,9 +261,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeKey={activeKey}
               activeSecondaryText={activeSecondaryText}
               data={item.data}
+              getRestrictedLabel={getRestrictedLabel}
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}
-              proLabel={proLabel}
               onBeforeModelSelect={onBeforeModelSelect}
               onClose={onClose}
               onModelChange={onModelChange}

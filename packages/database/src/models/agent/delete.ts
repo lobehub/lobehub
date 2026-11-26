@@ -1,6 +1,6 @@
-import { and, inArray } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, notInArray, or } from 'drizzle-orm';
 
-import { agents, agentsToSessions } from '../../schemas';
+import { agents, agentsToSessions, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
@@ -37,6 +37,41 @@ export const assertDeletable = async (
     }
   };
   return trx ? run(trx) : run(ctx.db);
+};
+
+/**
+ * Clear these agents from messages and threads inside a topic that outlives
+ * them. An old topic can carry only `session_id` while later messages carry
+ * `agent_id`; the `agent_id` FK cascade would empty a topic that is meant to
+ * stay. Group topics are left alone: their members' rows keep today's cascade.
+ */
+export const detachFromSurvivingTopics = async (
+  ctx: Pick<AgentModelContext, 'db'>,
+  agentIds: string[],
+) => {
+  if (agentIds.length === 0) return;
+  const survivingTopic = (topicId: typeof messages.topicId | typeof threads.topicId) =>
+    exists(
+      ctx.db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, topicId),
+            isNull(topics.groupId),
+            or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+          ),
+        ),
+    );
+
+  await ctx.db
+    .update(messages)
+    .set({ agentId: null, updatedAt: messages.updatedAt })
+    .where(and(inArray(messages.agentId, agentIds), survivingTopic(messages.topicId)));
+  await ctx.db
+    .update(threads)
+    .set({ agentId: null, updatedAt: threads.updatedAt })
+    .where(and(inArray(threads.agentId, agentIds), survivingTopic(threads.topicId)));
 };
 
 /** Legacy session shells linked to the given agents (used to stamp `topics.session_id` rows). */

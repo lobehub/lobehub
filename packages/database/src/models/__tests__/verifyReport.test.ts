@@ -8,6 +8,17 @@ import { AgentOperationModel } from '../agentOperation';
 import { VerifyReportModel } from '../verifyReport';
 import { VerifyRunModel } from '../verifyRun';
 
+const createPassedReport = (
+  verifyRunId: string,
+): Parameters<VerifyReportModel['upsertByRun']>[0] => ({
+  failedChecks: 0,
+  passedChecks: 1,
+  totalChecks: 1,
+  uncertainChecks: 0,
+  verdict: 'passed',
+  verifyRunId,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'verify-report-test-user';
@@ -134,14 +145,7 @@ describe('VerifyReportModel', () => {
 
   it('marks a report reviewed by its run', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    await model.upsertByRun(createPassedReport(verifyRunId));
 
     await model.markReviewed(verifyRunId);
     expect((await model.findByRun(verifyRunId))?.reviewedByUser).toBe(true);
@@ -149,14 +153,7 @@ describe('VerifyReportModel', () => {
 
   it('survives deletion of the linked Agent Run (decoupled from agent_operations)', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    await model.upsertByRun(createPassedReport(verifyRunId));
 
     // Deleting the operation only nulls verify_runs.operation_id; the session and
     // its report live on.
@@ -166,14 +163,7 @@ describe('VerifyReportModel', () => {
 
   it('cascades when its verification session is removed', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    await model.upsertByRun(createPassedReport(verifyRunId));
 
     await new VerifyRunModel(serverDB, userId).delete(verifyRunId);
     expect(await model.findByRun(verifyRunId)).toBeUndefined();
@@ -181,14 +171,7 @@ describe('VerifyReportModel', () => {
 
   it('reads a report by id and hides it from other users', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    const created = await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    const created = await model.upsertByRun(createPassedReport(verifyRunId));
 
     expect((await model.findById(created.id))?.id).toBe(created.id);
     expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
@@ -206,14 +189,7 @@ describe('VerifyReportModel', () => {
       secondOperationId,
     );
 
-    const first = await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    const first = await model.upsertByRun(createPassedReport(verifyRunId));
     const second = await model.upsertByRun({
       failedChecks: 1,
       passedChecks: 0,

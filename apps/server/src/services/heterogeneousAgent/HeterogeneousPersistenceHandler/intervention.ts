@@ -141,7 +141,9 @@ export const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
 ]);
 
 export const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
+  'antigravity',
   'claude-code',
+  'codex',
   'copilot',
   'cursor',
   'devin',

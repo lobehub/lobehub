@@ -55,12 +55,16 @@ describe('archived goals stay put', () => {
     expect((await new GoalModel(serverDB, userId).findById(graph.goal.id))?.status).toBe('draft');
   });
 
-  it('does not archive an achieved goal before its owner signs it off', async () => {
+  // Marking a goal completed by hand leaves no Goal-level acceptance to sign
+  // off, so archiving it cannot wait on one.
+  it('archives a goal marked completed by hand, with nothing to sign off', async () => {
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ tasks: ['Only'], title: 'Awaiting sign-off' });
+    const graph = await service.create({ tasks: ['Only'], title: 'Marked completed' });
     await service.close(graph.goal.id, 'achieved');
 
-    expect(await new GoalArchiveModel(serverDB, userId).archive(graph.goal.id)).toBeNull();
+    expect(
+      (await new GoalArchiveModel(serverDB, userId).archive(graph.goal.id))?.archivedAt,
+    ).toBeInstanceOf(Date);
   });
 
   it('refuses a change request on a Task of an archived goal until it is restored', async () => {

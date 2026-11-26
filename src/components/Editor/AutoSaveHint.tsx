@@ -64,7 +64,7 @@ const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTi
 
   if (saveStatus === 'saving')
     return (
-      <span {...sx(styles.hint, undefined, style)}>
+      <span {...sx(styles.hint, style)}>
         <Spin size="small" />
         {t('autoSave.saving')}
       </span>
@@ -72,7 +72,7 @@ const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTi
 
   if (saveStatus === 'failed')
     return (
-      <span {...sx([styles.hint, styles.failed], undefined, style)} role="alert">
+      <span {...sx(styles.hint, styles.failed, style)} role="alert">
         <Icon icon={TriangleAlertIcon} size={14} />
         {t('autoSave.failed')}
         {onRetry && (
@@ -87,7 +87,7 @@ const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTi
     );
 
   return (
-    <span {...sx(styles.hint, undefined, style)}>
+    <span {...sx(styles.hint, style)}>
       <Icon icon={CloudIcon} size={14} />
       {saveStatus === 'saved' && lastUpdatedTime
         ? `${t('autoSave.saved')} ${dayjs(lastUpdatedTime).fromNow()}`

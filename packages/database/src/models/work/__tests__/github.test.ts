@@ -443,9 +443,9 @@ describe('WorkModel · github', () => {
 
     const versions = await workModel.listVersions(created!.id);
     expect(versions.map((item) => [item.version, item.metadata])).toEqual([
-      [3, { baseBranch: 'main', headBranch: 'feat/branch-card' }],
-      [2, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
-      [1, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
+      [3, { baseBranch: 'main', headBranch: 'feat/branch-card', pullRequestLink: 'command' }],
+      [2, { baseBranch: 'canary', headBranch: 'feat/branch-card', pullRequestLink: 'command' }],
+      [1, { baseBranch: 'canary', headBranch: 'feat/branch-card', pullRequestLink: 'command' }],
     ]);
 
     // Summary cards render the current version, so an older message's card
@@ -454,6 +454,10 @@ describe('WorkModel · github', () => {
       rootOperationIds: ['op-pr-branch-retitle'],
     });
     const summary = expectExternalSummaryItem(byOperation['op-pr-branch-retitle']?.[0]);
-    expect(summary.event.metadata).toEqual({ baseBranch: 'main', headBranch: 'feat/branch-card' });
+    expect(summary.event.metadata).toEqual({
+      baseBranch: 'main',
+      headBranch: 'feat/branch-card',
+      pullRequestLink: 'command',
+    });
   });
 });

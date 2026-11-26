@@ -1,0 +1,59 @@
+name: Overlay Type Check
+description: >-
+  Type-check this checkout together with the private business overlay, from the overlay root. Bundling does not type-check, so an overlay that still reads an API this checkout removed would otherwise build, ship and fail at runtime.
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+  overlay-repository:
+    description: Overlay repository (owner/name)
+    required: true
+  overlay-ref:
+    description: Overlay commit to check against (defaults to the overlay's default branch)
+    required: false
+    default: ''
+  log-name:
+    description: File name under the runner temp directory that receives the type check output
+    required: false
+    default: overlay-type-check.log
+  overlay-token:
+    description: GitHub token with permission to read the overlay repository
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup environment
+      uses: ./.github/actions/setup-env
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Overlay business repository
+      uses: ./.github/actions/business-overlay
+      with:
+        overlay-repository: ${{ inputs.overlay-repository }}
+        overlay-ref: ${{ inputs.overlay-ref }}
+        overlay-token: ${{ inputs.overlay-token }}
+
+    # The overlay root ships no lockfile, so pnpm resolves from package.json ranges
+    # on every run. The root `pnpm-lock.yaml` is gitignored, so the key hashes the
+    # tracked dependency declarations instead — hashing an absent file would pin one
+    # key forever and stop the store from ever taking new tarballs.
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/pnpm-store
+        key: pnpm-store-${{ runner.os }}-v1-${{ hashFiles('package.json', 'pnpm-workspace.yaml', 'apps/*/package.json', 'packages/*/package.json', 'patches/*.patch', 'apps/desktop/pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-v1-
+
+    - name: Install dependencies
+      shell: bash
+      run: cd .. && pnpm install --node-linker=hoisted --store-dir "$RUNNER_TEMP/pnpm-store" --prefer-offline
+
+    - name: Type check overlaid sources
+      shell: bash
+      env:
+        LOG_NAME: ${{ inputs.log-name }}
+      run: cd .. && bun run type-check 2>&1 | tee "$RUNNER_TEMP/$LOG_NAME"

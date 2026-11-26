@@ -1,73 +1,69 @@
-import { useCallback, useEffect } from 'react';
-import useSWRInfinite from 'swr/infinite';
+import { useCallback, useMemo } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { inboxKeys } from '@/libs/swr/keys';
-import { notificationService } from '@/services/notification';
-
-export const PAGE_SIZE = 20;
-
-export interface NotificationListHandle {
-  /** Optimistically empty the list (mark all read / archive all). */
-  optimisticClear: () => void;
-  /** Optimistically drop one item (mark as read / archive). */
-  optimisticRemove: (id: string) => void;
-  refresh: () => void;
-}
+import { useHomeStore } from '@/store/home';
+import { homeNotificationSelectors } from '@/store/home/selectors';
 
 interface UseNotificationListOptions {
   category?: string;
   /** Filter by read state; omit for the combined "all" view. */
   isRead?: boolean;
-  /**
-   * Registers the list's bound mutate operations with the caller. The global
-   * filter-form `mutate` cannot reach this list: SWR's key-filter mutate
-   * explicitly skips `$inf$` (useSWRInfinite) cache keys, so actions in the
-   * modal must go through the hook's own `mutate`. The optimistic operations
-   * update the cache without revalidating; callers roll back a failed action
-   * by calling `refresh` (server state is the source of truth).
-   */
-  registerHandle: (handle: NotificationListHandle) => void;
 }
 
-export const useNotificationList = ({
-  category,
-  isRead,
-  registerHandle,
-}: UseNotificationListOptions) => {
-  const workspaceId = useActiveWorkspaceId();
+/**
+ * One inbox view of the notification stream, backed by the `inboxNotifications`
+ * replica: it paints its last head page at once (even after a reload) while the
+ * server confirms it in the background. Writes go through the home store's
+ * notification actions, which update the replica and its storage.
+ */
+export const useNotificationList = ({ category, isRead }: UseNotificationListOptions) => {
+  const view = useMemo(() => ({ category, isRead }), [category, isRead]);
+  const {
+    error: headError,
+    isValidating: isHeadValidating,
+    revalidate,
+  } = useHomeStore((s) => s.useFetchInboxNotifications)(view);
+  const feed = useHomeStore(homeNotificationSelectors.notificationFeed(view));
+  const isConfirmed = useHomeStore(homeNotificationSelectors.isNotificationFeedConfirmed(view));
 
-  const getKey = useCallback(
-    (_pageIndex: number, previousPageData: any[] | null) => {
-      if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
-
-      const lastItem = previousPageData?.at(-1);
-      return inboxKeys.notifications(workspaceId, lastItem?.id, category, isRead);
-    },
-    [category, isRead, workspaceId],
+  const loadMore = useCallback(
+    () => void useHomeStore.getState().loadMoreInboxNotifications(view),
+    [view],
   );
 
-  const swr = useSWRInfinite(getKey, async ([, , cursor, filterCategory, filterIsRead]) => {
-    return notificationService.list({
-      category: filterCategory as string | undefined,
-      cursor: cursor as string | undefined,
-      isRead: filterIsRead as boolean | undefined,
-      limit: PAGE_SIZE,
-    });
-  });
+  // A row read from another view stays in this view's copy until the next
+  // refresh; the read-state filter keeps it on the side it now belongs to.
+  const notifications = useMemo(
+    () => feed?.items.filter((item) => isRead === undefined || item.isRead === isRead) ?? undefined,
+    [feed?.items, isRead],
+  );
+  const loadMoreError = feed?.loadMoreError;
 
-  const { mutate } = swr;
-  useEffect(() => {
-    registerHandle({
-      optimisticClear: () => void mutate([], { revalidate: false }),
-      optimisticRemove: (id) =>
-        void mutate(
-          (pages?: any[][]) => pages?.map((page) => page.filter((item) => item.id !== id)),
-          { revalidate: false },
-        ),
-      refresh: () => void mutate(),
-    });
-  }, [mutate, registerHandle]);
+  const retry = useCallback(() => {
+    if (feed && loadMoreError) loadMore();
+    else void revalidate();
+  }, [feed, loadMore, loadMoreError, revalidate]);
 
-  return swr;
+  return {
+    /**
+     * Any failure to surface: with rows on screen it renders as the inline
+     * Retry row below them (a failed "load more" or a failed refresh), with
+     * none it is the first-load failure.
+     */
+    error: feed ? (loadMoreError ?? headError) : headError,
+    hasMore: !!feed?.hasMore,
+    /** A failed first load with nothing persisted to fall back on. */
+    headError: feed ? undefined : headError,
+    /**
+     * Whether the server answered this view in this session. A restored
+     * snapshot may be empty or stale, so an empty list is "loading" until then.
+     */
+    isConfirmed,
+    isHeadValidating,
+    isLoadingMore: !!feed?.isLoadingMore,
+    /** Rows on screen; `undefined` until hydrated or fetched. */
+    notifications,
+    loadMore,
+    loadMoreError,
+    retry,
+  };
 };

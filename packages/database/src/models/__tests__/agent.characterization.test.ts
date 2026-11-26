@@ -58,6 +58,7 @@ const PUBLIC_METHODS = [
   'delete',
   'deleteAgentFile',
   'deleteAgentKnowledgeBase',
+  'detachFromSurvivingTopics',
   'duplicate',
   'existsById',
   'existsOwnedById',
@@ -79,10 +80,12 @@ const PUBLIC_METHODS = [
   'getAgentVisibilityMeta',
   'getAssignableSessionGroupVisibility',
   'getBuiltinAgent',
+  'getDeleteImpact',
   'getGroupMembershipImpact',
   'getTopicShareSubject',
   'hasTrashedOwner',
   'listMessengerBindableAgents',
+  'listPluginModes',
   'lockTrashedForPurge',
   'publishToWorkspace',
   'purge',
@@ -92,6 +95,7 @@ const PUBLIC_METHODS = [
   'rank',
   'resolveIdBySlug',
   'restore',
+  'setPluginMode',
   'setVisibility',
   'softDelete',
   'toggleFile',
@@ -170,6 +174,32 @@ afterEach(async () => {
 });
 
 describe('AgentModel - characterization', () => {
+  it('persists four on-demand tools for new agents and respects an explicit tool list', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const created = await model.create({ title: 'New assistant' });
+    const [ordinary, empty, configured, virtual, market] = await model.batchCreate([
+      { title: 'Second assistant' },
+      { plugins: [] },
+      { plugins: ['custom-tool'] },
+      { virtual: true },
+      { marketIdentifier: 'from-market' },
+    ]);
+
+    // All four starter tools use the two-state on-demand representation; Chat mode accepts auto too.
+    const expected = [
+      { identifier: 'lobe-image-generation', mode: 'auto' },
+      { identifier: 'lobe-video-generation', mode: 'auto' },
+      { identifier: 'lobe-agent-documents', mode: 'auto' },
+      { identifier: 'lobe-agent', mode: 'auto' },
+    ];
+    expect(created.plugins).toEqual(expected);
+    expect(ordinary.plugins).toEqual(expected);
+    expect(empty.plugins).toEqual([]);
+    expect(configured.plugins).toEqual(['custom-tool']);
+    expect(virtual.plugins).toBeNull();
+    expect(market.plugins).toBeNull();
+  });
+
   describe('public surface', () => {
     it('exposes the same instance methods', () => {
       const model = new AgentModel(serverDB, userId);
@@ -223,15 +253,21 @@ describe('AgentModel - characterization', () => {
       expect(await model.getAgentAgencyConfig('foreign-slug')).toBeNull();
     });
 
-    it('getAgentVisibilityMeta returns slug, author and visibility', async () => {
+    it('getAgentVisibilityMeta returns pin, slug, author and visibility', async () => {
       const model = new AgentModel(serverDB, userId);
 
       expect(await model.getAgentVisibilityMeta('own-private')).toEqual({
+        pinned: false,
         slug: 'own-private-slug',
         userId,
         visibility: 'private',
       });
       expect(await model.getAgentVisibilityMeta('foreign')).toBeNull();
+
+      // Publishing reads this flag to move a private pin onto the creator's
+      // personal pin list instead of turning it into a team pin.
+      await serverDB.update(agents).set({ pinned: true }).where(eq(agents.id, 'own-private'));
+      expect(await model.getAgentVisibilityMeta('own-private')).toMatchObject({ pinned: true });
     });
 
     it('resolveIdBySlug trims, and ignores blank or foreign slugs', async () => {

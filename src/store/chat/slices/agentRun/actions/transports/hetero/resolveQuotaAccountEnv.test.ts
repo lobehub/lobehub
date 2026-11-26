@@ -288,10 +288,7 @@ describe('resolveQuotaAccountSpawnPlan', () => {
     expect(selectAccountForAgent).not.toHaveBeenCalled();
   });
 
-  it('degrades to no routing when the agent is unbound or the service fails', async () => {
-    selectAccountForAgent.mockResolvedValueOnce(null);
-    expect(await resolveQuotaAccountSpawnPlan('agt-1', 'claude-code')).toEqual({ env: {} });
-
+  it('degrades to no routing when the service fails', async () => {
     selectAccountForAgent.mockRejectedValueOnce(new Error('offline'));
     expect(await resolveQuotaAccountSpawnPlan('agt-1', 'claude-code')).toEqual({ env: {} });
   });

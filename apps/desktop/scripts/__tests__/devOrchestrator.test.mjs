@@ -239,12 +239,30 @@ describe('createDevOrchestrator', () => {
     h.orchestrator.shutdown(0);
     h.orchestrator.shutdown(1);
 
-    expect(h.options.exit).toHaveBeenCalledTimes(1);
-    expect(h.options.exit).toHaveBeenCalledWith(0);
-    expect(h.electronSpawns()[0].child.kill).toHaveBeenCalled();
+    expect(h.electronSpawns()[0].child.kill).toHaveBeenCalledTimes(1);
     for (const { child } of h.viteChildren()) {
       expect(child.kill).toHaveBeenCalled();
     }
+    // A group signal must not reach Electron too: its second SIGTERM is fatal.
+    expect(h.electronSpawns()[0].opts.detached).toBe(process.platform !== 'win32');
+    // Electron is still quitting: the launcher must outlive it.
+    expect(h.options.exit).not.toHaveBeenCalled();
+
+    h.electronSpawns()[0].child.emit('exit', 0);
+    expect(h.options.exit).toHaveBeenCalledTimes(1);
+    expect(h.options.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('kills an electron whose quit hangs past the timeout', async () => {
+    const h = createHarness({ electronQuitTimeoutMs: 5000 });
+    h.orchestrator.start();
+    await h.becomeReady();
+
+    h.orchestrator.shutdown(0);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(h.electronSpawns()[0].child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(h.options.exit).toHaveBeenCalledWith(0);
   });
 
   it('fails with exit(1) when the initial build never produces bundles', async () => {

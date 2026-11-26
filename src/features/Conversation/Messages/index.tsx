@@ -1,7 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- the antd textarea inside a message has no slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
@@ -26,8 +30,7 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import cssModule from './index.module.css';
-import { getMessageInteractionState } from './messageInteraction';
+import { getMessageContextMenuAction, getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
 import TasksMessage from './Tasks';
@@ -40,11 +43,22 @@ const styles = stylex.create({
   message: { position: 'relative' },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  message: css`
+    /* Prevent the antd textarea from growing too long. */
+    .ant-input {
+      max-height: 900px;
+    }
+  `,
+}));
+
 export interface MessageItemProps {
   className?: string;
   continuations?: SteerContinuation[];
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
+  /** Keep the row out of multi-select (compressed history rows). */
+  disableSelection?: boolean;
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
   footerRender?: ReactNode;
@@ -64,6 +78,7 @@ const MessageItem = memo<MessageItemProps>(
     endRender,
     footerRender,
     disableEditing,
+    disableSelection,
     inPortalThread = false,
     index,
     isLatestItem,
@@ -103,7 +118,10 @@ const MessageItem = memo<MessageItemProps>(
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
-        if (shouldSuppressContextMenu) {
+        const action = getMessageContextMenuAction(event.target, shouldSuppressContextMenu);
+        if (action === 'native') return;
+
+        if (action === 'suppress') {
           event.preventDefault();
           return;
         }
@@ -278,13 +296,14 @@ const MessageItem = memo<MessageItemProps>(
         {enableHistoryDivider && <History />}
         <Flexbox
           {...sx(
-            [styles.message, shouldDimCreatingMessage && styles.loading],
-            [cssModule.message, className].filter(Boolean).join(' '),
+            styles.message,
+            shouldDimCreatingMessage && styles.loading,
+            [fallback.message, className].filter(Boolean).join(' '),
           )}
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <MessageSelectionWrapper id={id} role={role}>
+          <MessageSelectionWrapper id={id} readOnlyHistory={disableSelection} role={role}>
             {selectableContent}
           </MessageSelectionWrapper>
           {!shouldInjectFooter && footerRender}

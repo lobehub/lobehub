@@ -1,3 +1,5 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
+
 import { type SidebarAgentItem, type SidebarGroup } from '@/database/repositories/home';
 import { type HomeStore } from '@/store/home/store';
 
@@ -7,6 +9,13 @@ import { AGENT_LIST_KEY } from './projection';
  * Get all pinned agents
  */
 const pinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.pinnedAgents;
+
+/**
+ * Ids of the Agents / chat groups recommended to every workspace member, in
+ * the owners'/admins' order. Empty in personal mode.
+ */
+const EMPTY_IDS: string[] = [];
+const recommendedAgentIds = (s: HomeStore): string[] => s.recommendedAgentIds ?? EMPTY_IDS;
 
 /**
  * Get all agent groups (folders)
@@ -96,6 +105,14 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
 };
 
 /**
+ * Whether the loaded list carries Lobe AI (the inbox). It can be missing from a
+ * list cached before the server started returning it, or one fetched before
+ * the inbox row was first created.
+ */
+const hasInboxAgent = (s: HomeStore): boolean =>
+  allAgents(s).some((item) => item.slug === INBOX_SESSION_ID);
+
+/**
  * Agents every workspace member can see: the sidebar list without the
  * current user's private bucket.
  */
@@ -134,6 +151,7 @@ export const homeAgentListSelectors = {
   allAgents,
   getAgentById,
   hasCustomAgents,
+  hasInboxAgent,
   hasPrivateAgents,
   isAgentListConfirmed,
   isAgentListInit,
@@ -143,6 +161,7 @@ export const homeAgentListSelectors = {
   privateUngroupedAgents,
   privateUngroupedAgentsCount,
   privateUngroupedAgentsLimited,
+  recommendedAgentIds,
   sharedAgents,
   ungroupedAgents,
   ungroupedAgentsCount,

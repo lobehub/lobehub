@@ -102,13 +102,17 @@ export class AcpStdioClient {
     if (this.child) return;
     if (this.closed) throw new Error('ACP stdio client is closed');
 
-    const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
+    const spawnPlan = await resolveCliSpawnPlan(
+      this.options.commandPath,
+      this.options.args,
+      this.options.env,
+    );
     if (this.closed) throw new Error('ACP stdio client is closed');
     const detached = process.platform !== 'win32' && (this.options.detached ?? true);
     const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached,
-      env: this.options.env,
+      env: spawnPlan.env ?? this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;

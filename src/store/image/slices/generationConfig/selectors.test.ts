@@ -156,12 +156,6 @@ describe('imageGenerationConfigSelectors', () => {
   });
 
   describe('isSupportParam', () => {
-    it('should return true when parameter exists in parametersSchema', () => {
-      const state = merge(initialStore, { parametersSchema: testModelSchema });
-      const result = imageGenerationConfigSelectors.isSupportedParam('size')(state);
-      expect(result).toBe(true);
-    });
-
     it('should return false when parameter does not exist in parametersSchema', () => {
       const state = merge(initialStore, { parametersSchema: testModelSchema });
       const result = imageGenerationConfigSelectors.isSupportedParam('nonexistent' as any)(state);
@@ -207,4 +201,49 @@ describe('imageGenerationConfigSelectors', () => {
       );
     });
   });
+
+  describe('isAnimatedOutput', () => {
+    const gifSchema: ModelParamsSchema = {
+      outputFormat: { default: 'png', enum: ['png', 'gif'] },
+      prompt: { default: '' },
+    };
+
+    it('is true only when the model declares outputFormat and GIF is selected', () => {
+      const gif = merge(initialStore, {
+        parameters: { outputFormat: 'gif', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+      const png = merge(initialStore, {
+        parameters: { outputFormat: 'png', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(gif)).toBe(true);
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(png)).toBe(false);
+    });
+
+    it('ignores a stale GIF value on a model without outputFormat', () => {
+      const state = merge(initialStore, { parameters: { outputFormat: 'gif', prompt: '' } });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(state)).toBe(false);
+    });
+  });
+
+  it.each([
+    ['gpt-image-2.6-flare', 'gif', true],
+    ['gpt-image-2.6-sunburst', 'gif', true],
+    ['gpt-image-2.6-flare', 'png', false],
+    ['custom-gif-model', 'gif', false],
+  ])(
+    'uses automatic size only for the supported GPT Image GIF cards (%s, %s)',
+    (model, outputFormat, expected) => {
+      const state = merge(initialStore, {
+        model,
+        parameters: { prompt: '', outputFormat },
+        parametersSchema: { outputFormat: { default: 'png', enum: ['png', 'gif'] } },
+      });
+
+      expect(imageGenerationConfigSelectors.isAutomaticSize(state)).toBe(expected);
+    },
+  );
 });

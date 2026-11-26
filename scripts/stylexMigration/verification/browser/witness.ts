@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import type { RuleInventory } from './snapshot';
+import type { RuleInventory } from '../../../../packages/style-equivalence/src/capture/snapshot';
 
 /** Independent marker rules prove that a discovered branch was actually activated.
  * These internal-only custom properties are excluded from the product snapshot.

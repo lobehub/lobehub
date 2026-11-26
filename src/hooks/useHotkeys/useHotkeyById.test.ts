@@ -1,6 +1,5 @@
 import { HotkeyEnum, HOTKEYS_REGISTRATION, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { renderHook } from '@testing-library/react';
-import { uniq } from 'es-toolkit/compat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useHotkeyById } from './useHotkeyById';
@@ -118,8 +117,6 @@ describe('useHotkeyById', () => {
       }),
       undefined,
     );
-
-    expect(uniq).toHaveBeenCalled();
   });
 
   it('should handle dependencies parameter correctly', () => {

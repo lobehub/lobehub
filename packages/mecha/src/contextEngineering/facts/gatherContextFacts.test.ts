@@ -103,7 +103,16 @@ describe('gatherContextFacts', () => {
       expect(facts.step.planTodo?.todos?.items.map((t) => t.text)).toEqual(['from history']);
     });
 
-    it('does not read the plan document without lobe-agent', async () => {
+    it('keeps an existing topic plan available before Lobe Agent is activated', async () => {
+      const facts = await gatherContextFacts(
+        request({ discoverableTools: [{ identifier: 'lobe-agent' }] }),
+        providers,
+      );
+
+      expect(facts.step.planTodo?.plan?.goal).toBe('Ship it');
+    });
+
+    it('does not read the plan document when Lobe Agent is unavailable', async () => {
       const getPlanDocument = vi.fn(providers.getPlanDocument);
       const facts = await gatherContextFacts(request(), { getPlanDocument });
 
@@ -138,12 +147,80 @@ describe('gatherContextFacts', () => {
       expect(off.variables.COMPOSIO_SERVICES_LIST).toBe('');
 
       const on = await gatherContextFacts(
-        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds'] }),
+        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds', 'gmail'] }),
         { listConnectedConnectorIds },
       );
       const list = on.variables.COMPOSIO_SERVICES_LIST as string;
       expect(list).toContain('gmail');
       expect(list).not.toContain('slack');
+    });
+
+    it('lists connected Composio services available for this run to activate', async () => {
+      const listConnectedConnectorIds = vi.fn(async () => ['gmail', 'slack']);
+
+      const facts = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-creds'], discoverableTools: [{ identifier: 'gmail' }] }),
+        { listConnectedConnectorIds },
+      );
+      const list = facts.variables.COMPOSIO_SERVICES_LIST as string;
+
+      expect(list).toContain('gmail');
+      expect(list).not.toContain('slack');
+    });
+  });
+
+  describe('document references', () => {
+    it('resolves referenced documents against the executing agent', async () => {
+      const findAgentDocument = vi.fn(async (_agentId: string, documentId: string) =>
+        documentId === 'doc-1' ? { content: 'Voice rules', title: 'Voice' } : null,
+      );
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [
+            message(
+              'Use <refer_document name="Voice" id="doc-1" /> and <refer_document name="X" id="doc-2" />',
+            ),
+          ],
+        }),
+        { findAgentDocument },
+      );
+
+      expect(findAgentDocument).toHaveBeenCalledWith('agt_1', 'doc-1');
+      expect(facts.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+        { documentId: 'doc-2', title: 'X' },
+      ]);
+    });
+
+    it('lists earlier-turn references without a lookup only when the documents tool can read them', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'Voice rules' }));
+      const messages = [message('<refer_document name="Voice" id="doc-1" />'), message('Next')];
+
+      const withTool = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-agent-documents'], messages }),
+        { findAgentDocument },
+      );
+      expect(withTool.step.documentReferences).toEqual([
+        { documentId: 'doc-1', earlierTurn: true, title: 'Voice' },
+      ]);
+      expect(findAgentDocument).not.toHaveBeenCalled();
+
+      const withoutTool = await gatherContextFacts(request({ messages }), { findAgentDocument });
+      expect(withoutTool.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+      ]);
+    });
+
+    it('skips the lookup when no message references a document', async () => {
+      const findAgentDocument = vi.fn();
+
+      const facts = await gatherContextFacts(request({ messages: [message('hello')] }), {
+        findAgentDocument,
+      });
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
   });
 
@@ -196,6 +273,21 @@ describe('gatherContextFacts', () => {
       const summaries = facts.step.topicReferences?.map((r) => r.summary) ?? [];
       expect(summaries).toContain('my summary');
       expect(summaries).not.toContain('creator secret');
+    });
+
+    it('never resolves document references for a visitor', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'creator secret', title: 'Doc' }));
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [message('<refer_document name="Doc" id="doc-1" />')],
+          shareVisitor: visitor,
+        }),
+        { findAgentDocument },
+      );
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
 
     it('never enumerates the owner’s agents, providers or plugins for a visitor', async () => {
@@ -494,5 +586,123 @@ describe('which tool counts as reaching the sandbox', () => {
     });
 
     expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
+
+  it('skips sandbox persistence lookup when lobe-skills is routed to a local device without cloud-sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(
+      request({ activeDeviceId: 'dev_1', enabledToolIds: ['lobe-skills'] }),
+      { resolveSandboxPersistence },
+    );
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
+});
+
+describe('gatherContextFacts — revoked document reads', () => {
+  const readKnowledge = (fileIds: string[]) =>
+    ({
+      content: 'rule body',
+      createdAt: 0,
+      id: 't',
+      plugin: {
+        apiName: 'readKnowledge',
+        arguments: JSON.stringify({ fileIds }),
+        identifier: 'lobe-knowledge-base',
+      },
+      role: 'tool',
+      updatedAt: 0,
+    }) as never;
+
+  it('asks the host only about documents the history read', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({
+      agentDocumentReadIds: ['docs_kb'],
+      documentIds: ['docs_b', 'docs_a'],
+    }));
+    const facts = await gatherContextFacts(
+      request({ messages: [message('hi'), readKnowledge(['docs_a', 'docs_b'])] }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_a', 'docs_b']);
+    // Sorted so the filtered prefix is stable whatever order the host returns.
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: ['docs_kb'], documentIds: ['docs_a', 'docs_b'] },
+    ]);
+  });
+
+  it('skips the lookup without a document read, for a share visitor, or without an agent', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: ['docs_a'] }));
+
+    const noRead = await gatherContextFacts(request({ messages: [message('hi')] }), {
+      findRevokedDocumentReads,
+    });
+    const visitor = await gatherContextFacts(
+      request({
+        messages: [readKnowledge(['docs_a'])],
+        shareVisitor: { agentId: 'agt_1', visitorUserId: 'u_2' },
+      }),
+      { findRevokedDocumentReads },
+    );
+    const noAgent = await gatherContextFacts(
+      request({ agentId: undefined, messages: [readKnowledge(['docs_a'])] }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).not.toHaveBeenCalled();
+    expect(noRead.revokedDocumentReads).toBeUndefined();
+    expect(visitor.revokedDocumentReads).toBeUndefined();
+    expect(noAgent.revokedDocumentReads).toBeUndefined();
+  });
+
+  it('checks the edited agent while the agent builder is active', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: [] }));
+    await gatherContextFacts(
+      request({
+        editingAgentId: 'agt_edit',
+        enabledToolIds: ['lobe-agent-builder'],
+        messages: [readKnowledge(['docs_a'])],
+      }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_edit', ['docs_a']);
+  });
+
+  it('leaves the fact out when nothing is revoked, and fails closed when the lookup fails', async () => {
+    const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedDocumentReads: async () => ({ agentDocumentReadIds: [], documentIds: [] }),
+    });
+    const failed = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedDocumentReads: async () => {
+        throw new Error('db down');
+      },
+    });
+
+    expect(none.revokedDocumentReads).toBeUndefined();
+    // An unknown binding state must not let a deleted body back in.
+    expect(failed.revokedDocumentReads).toEqual([{ documentIds: [], unverifiedIds: ['docs_a'] }]);
+  });
+
+  it("checks another group member's reads against that member's bindings", async () => {
+    const findRevokedDocumentReads = vi.fn(async (agentId: string) =>
+      agentId === 'agt_a' ? { documentIds: ['docs_a'] } : { documentIds: [] },
+    );
+    const facts = await gatherContextFacts(
+      request({
+        messages: [
+          { ...readKnowledge(['docs_a']), agentId: 'agt_a' } as never,
+          { ...readKnowledge(['docs_own']), agentId: 'agt_1' } as never,
+        ],
+      }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_a', ['docs_a']);
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_own']);
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: [], agentId: 'agt_a', documentIds: ['docs_a'] },
+      { agentDocumentReadIds: [], documentIds: [] },
+    ]);
   });
 });

@@ -94,6 +94,8 @@ describe('agentSkills.ensureFromMarket', () => {
     ]);
     expect(mocks.modelConstructor).toHaveBeenCalledWith({}, 'user', 'workspace');
     expect(mocks.importerConstructor).toHaveBeenLastCalledWith({}, 'user', 'workspace', {
+      githubProxy: expect.any(Function),
+      githubToken: expect.any(Function),
       workspaceRole: 'member',
     });
     expect(mocks.importFromUrl).toHaveBeenCalledWith(

@@ -80,17 +80,13 @@ describe('UserMemoryPreferenceModel', () => {
       ]);
     });
 
-    it('should return preferences for current user only', async () => {
+    it('returns current user preferences newest first', async () => {
       const result = await preferenceModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((p) => p.userId === userId)).toBe(true);
-    });
 
-    it('should order by createdAt desc', async () => {
-      const result = await preferenceModel.query();
-
-      expect(result[0].id).toBe('preference-2'); // Most recent first
+      expect(result[0].id).toBe('preference-2');
       expect(result[1].id).toBe('preference-1');
     });
 
@@ -99,13 +95,6 @@ describe('UserMemoryPreferenceModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('preference-2');
-    });
-
-    it('should not return other users preferences', async () => {
-      const result = await preferenceModel.query();
-
-      const otherPreference = result.find((p) => p.id === 'other-preference');
-      expect(otherPreference).toBeUndefined();
     });
   });
 

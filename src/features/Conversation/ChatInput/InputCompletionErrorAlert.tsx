@@ -1,11 +1,12 @@
 'use client';
 
-import { Alert, Button, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
+import { NoticeAlert } from '@/components/NoticeAlert';
 import { selectors, useChatInputStore } from '@/features/ChatInput/store';
 import type { InputCompletionError } from '@/features/ChatInput/store/initialState';
 
@@ -33,14 +34,18 @@ export const InputCompletionErrorAlertContent = memo<{
     </Flexbox>
   );
 
+  // The title names what stopped; the business description, when there is one,
+  // says why and when it resumes. Before, that sentence stood in for the title
+  // and never said it was the input suggestions that paused.
   return (
     <>
-      <Flexbox paddingBlock={'0 6px'}>
-        <Alert
+      <Flexbox paddingBlock={'0 8px'}>
+        <NoticeAlert
           closable
           showIcon
           action={action}
-          title={businessAlert.description ?? t('input.inputCompletionError.title')}
+          description={businessAlert.description}
+          title={t('input.inputCompletionError.title')}
           type={'warning'}
           onClose={dismissInputCompletionError}
         />

@@ -9,6 +9,15 @@ import { messageService } from '@/services/message';
 import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import type { ChatStore } from '@/store/chat/store';
 
+const createClientExecutorContext = (
+  store: ChatStore,
+): Parameters<typeof createClientRuntimeExecutors>[0] => ({
+  agentConfig: createResolvedAgentConfig(),
+  get: () => store,
+  messageKey,
+  operationId,
+});
+
 const messageKey = 'agent-1_topic-1';
 const operationId = 'operation-1';
 
@@ -133,12 +142,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       });
       return new Response();
     });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     const result = await executor(
       createInstruction({ messages: [userMessage] }),
@@ -185,12 +189,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       await options?.onFinish?.('Answer after compression', { type: 'stop' });
       return new Response();
     });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     const result = await executor(
       createInstruction({
@@ -224,12 +223,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
         await options?.onFinish?.('', { type: 'stop' });
         return new Response();
       });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     const result = await executor(
       createInstruction({ messages: [userMessage] }),
@@ -262,12 +256,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       await options?.onFinish?.('Regenerated', { type: 'stop' });
       return new Response();
     });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     await executor(
       createInstruction({
@@ -301,12 +290,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       await options?.onFinish?.('Partial', { type: 'abort' });
       return new Response();
     });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     const result = await executor(
       createInstruction({ messages: [userMessage] }),
@@ -329,12 +313,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       operation.abortController.abort();
       throw new DOMException('The operation was aborted', 'AbortError');
     });
-    const executor = createClientRuntimeExecutors({
-      agentConfig: createResolvedAgentConfig(),
-      get: () => store,
-      messageKey,
-      operationId,
-    }).call_llm!;
+    const executor = createClientRuntimeExecutors(createClientExecutorContext(store)).call_llm!;
 
     const result = await executor(
       createInstruction({ messages: [userMessage] }),

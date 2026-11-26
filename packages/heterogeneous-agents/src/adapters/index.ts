@@ -1,4 +1,5 @@
 export { AmpAdapter } from './amp';
+export { AntigravityAcpAdapter } from './antigravityAcp';
 export { ClaudeCodeAdapter } from './claudeCode';
 export { ClaudeCodeSdkAdapter } from './claudeCodeSdk';
 export { CodeBuddyAdapter } from './codeBuddy';

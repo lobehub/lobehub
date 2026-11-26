@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Input,
-  SortableList,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Empty, Flexbox, Input, SortableList } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircle, PlusIcon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,27 +11,13 @@ import useMergeState from 'use-merge-value';
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    margin-block: 24px;
-    margin-inline: auto;
-  `,
-  questionItemContainer: css`
-    padding-block: 8px;
-    padding-inline-end: 8px;
-  `,
-  questionItemContent: css`
-    flex: 1;
-  `,
-  questionsList: css`
-    width: 100%;
-    margin-block-start: 16px;
-  `,
-  repeatError: css`
-    margin: 0;
-    color: ${cssVar.colorErrorText};
-  `,
-}));
+const styles = stylex.create({
+  empty: { marginBlock: '24px', marginInline: 'auto' },
+  questionItemContainer: { paddingBlock: '8px', paddingInlineEnd: '8px' },
+  questionItemContent: { flex: '1' },
+  questionsList: { width: '100%', marginBlockStart: '16px' },
+  repeatError: { margin: '0', color: cssVar.colorErrorText },
+});
 
 interface QuestionItem {
   content: string;
@@ -121,22 +101,22 @@ const OpeningQuestions = memo(() => {
         </Flexbox>
 
         {isRepeat && (
-          <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>
+          <p {...stylex.props(styles.repeatError)}>{t('settingOpening.openingQuestions.repeat')}</p>
         )}
       </Flexbox>
 
-      <div className={styles.questionsList}>
+      <div {...stylex.props(styles.questionsList)}>
         {openingQuestions.length > 0 ? (
           <SortableList
             items={items}
             renderItem={(item: QuestionItem) => (
               <SortableList.Item
-                className={styles.questionItemContainer}
+                className={stylex.props(styles.questionItemContainer).className}
                 id={item.id}
                 variant={'filled'}
               >
                 {!disabled && <SortableList.DragHandle />}
-                <div className={styles.questionItemContent}>{item.content}</div>
+                <div {...stylex.props(styles.questionItemContent)}>{item.content}</div>
                 <ActionIcon
                   disabled={disabled}
                   icon={Trash}
@@ -149,7 +129,7 @@ const OpeningQuestions = memo(() => {
           />
         ) : (
           <Empty
-            className={styles.empty}
+            className={stylex.props(styles.empty).className}
             description={t('settingOpening.openingQuestions.empty')}
             descriptionProps={{ fontSize: 14 }}
             icon={MessageCircle}

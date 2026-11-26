@@ -239,4 +239,138 @@ describe('createReviewRuntimePrimitives', () => {
       ),
     ).rejects.toThrow('actions[0] has no actionType');
   });
+
+  describe('createSelfReviewProposal action counts', () => {
+    const createProposalService = () => {
+      const writeDailyBrief = vi.fn().mockResolvedValue({ id: 'brief-1' });
+      const service = createReviewRuntimePrimitives({
+        agentId: 'agent-1',
+        briefModel: {} as never,
+        db: {} as unknown as LobeChatDatabase,
+        localDate: '2026-11-17',
+        proposalBriefWriter: { writeDailyBrief } as never,
+        reviewWindowEnd: '2026-11-17T14:00:00.000Z',
+        reviewWindowStart: '2026-11-16T14:00:00.000Z',
+        skillDocumentService: {
+          listSkills: vi.fn().mockResolvedValue([]),
+          readSkillTargetSnapshot: vi.fn().mockResolvedValue({
+            agentDocumentId: 'agd-testing',
+            contentHash: 'hash-1',
+            documentId: 'doc-testing',
+            managed: true,
+            targetType: 'skill',
+            writable: true,
+          }),
+        } as unknown as SkillManagementDocumentService,
+        sourceId: 'nightly-review:user-1:agent-1:2026-11-17',
+        userId: 'user-1',
+      });
+
+      return { service, writeDailyBrief };
+    };
+
+    const createSkillAction = (name: string) => ({
+      actionType: 'create_skill',
+      operation: {
+        domain: 'skill',
+        input: { bodyMarkdown: `# ${name}\n\nSteps...`, description: name, name, title: name },
+        operation: 'create',
+      },
+      rationale: `Repeated ${name} workflow across topics.`,
+      target: { skillName: name },
+    });
+
+    const refineSkillAction = {
+      actionType: 'refine_skill',
+      operation: {
+        domain: 'skill',
+        input: { bodyMarkdown: '# Testing\n\nRun one file.', skillDocumentId: 'agd-testing' },
+        operation: 'refine',
+      },
+      rationale: 'The user corrected the full-suite command twice.',
+      target: { skillDocumentId: 'agd-testing' },
+    };
+
+    const getStoredProposalActions = (writeDailyBrief: ReturnType<typeof vi.fn>) =>
+      writeDailyBrief.mock.calls[0][0].metadata.agentSignal.nightlySelfReview.selfReviewProposal
+        .actions;
+
+    it.each([
+      { actions: [refineSkillAction], label: '1 refine_skill' },
+      { actions: [createSkillAction('release-notes')], label: '1 create_skill' },
+      {
+        actions: [createSkillAction('release-notes'), refineSkillAction],
+        label: '2',
+      },
+      {
+        actions: [createSkillAction('a-skill'), createSkillAction('b-skill'), refineSkillAction],
+        label: '3',
+      },
+    ])('stores a proposal with $label action(s) on the first call', async ({ actions }) => {
+      const { service, writeDailyBrief } = createProposalService();
+
+      const result = await service.createSelfReviewProposal?.(
+        {
+          actions,
+          idempotencyKey: 'proposal-n',
+          proposalKey: 'skill:proposal-n',
+          summary: 'Proposal with several actions.',
+          userId: 'user-1',
+        },
+        {},
+      );
+
+      expect(result).toMatchObject({ proposalId: 'brief-1' });
+      expect(writeDailyBrief).toHaveBeenCalledTimes(1);
+      expect(
+        getStoredProposalActions(writeDailyBrief).map(
+          (action: { actionType: string }) => action.actionType,
+        ),
+      ).toEqual(actions.map((action) => action.actionType));
+    });
+
+    it('stores a single action sent as an object instead of an array', async () => {
+      const { service, writeDailyBrief } = createProposalService();
+
+      await expect(
+        service.createSelfReviewProposal?.(
+          {
+            actions: refineSkillAction as unknown as unknown[],
+            idempotencyKey: 'proposal-object',
+            proposalKey: 'skill:testing',
+            summary: 'Refine the testing skill.',
+            userId: 'user-1',
+          },
+          {},
+        ),
+      ).resolves.toMatchObject({ proposalId: 'brief-1' });
+      expect(getStoredProposalActions(writeDailyBrief)).toHaveLength(1);
+    });
+
+    /**
+     * @example
+     * The vent shape: one action object, then the rest of the call spilled into
+     * the array as bare strings. The error must name that stray string instead
+     * of a bare "actions[1] has no actionType", and nothing is written.
+     */
+    it('rejects a spilled single action with the stray value and missing fields', async () => {
+      const { service, writeDailyBrief } = createProposalService();
+
+      const call = service.createSelfReviewProposal?.(
+        {
+          actions: [refineSkillAction, 'rationale?', 'summary?', 'idempotencyKey?'],
+          userId: 'user-1',
+        } as never,
+        {},
+      );
+
+      await expect(call).rejects.toThrow(
+        'actions[1] is the string "rationale?", not an action object',
+      );
+      await expect(call).rejects.toThrow(
+        'Top-level fields idempotencyKey, proposalKey, summary are missing',
+      );
+      expect(writeDailyBrief).not.toHaveBeenCalled();
+    });
+  });
 });

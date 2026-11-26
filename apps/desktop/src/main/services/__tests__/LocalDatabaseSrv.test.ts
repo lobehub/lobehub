@@ -62,6 +62,37 @@ describe('LocalDatabaseService', () => {
     ]);
   });
 
+  it('lists, counts, searches and groups keys without reading values', async () => {
+    await service.batch([
+      { collection: 'cache', key: 'replica:topicList:v1:user:Agent_1', type: 'set', value: 'a' },
+      { collection: 'cache', key: 'replica:topicList:v1:user:agent_2', type: 'set', value: 'b' },
+      { collection: 'cache', key: 'replica:agentDetail:v1:user:agent_1', type: 'set', value: 'c' },
+      { collection: 'cache', key: 'plain', type: 'set', value: 'd' },
+      { collection: 'other', key: 'replica:topicList:v1:user:agent_1', type: 'set', value: 'e' },
+    ]);
+
+    await expect(service.keysByPrefix('cache', '', { limit: 2 })).resolves.toEqual({
+      keys: ['plain', 'replica:agentDetail:v1:user:agent_1'],
+      total: 4,
+    });
+    await expect(service.keysByPrefix('cache', 'replica:topicList:')).resolves.toEqual({
+      keys: ['replica:topicList:v1:user:Agent_1', 'replica:topicList:v1:user:agent_2'],
+      total: 2,
+    });
+    await expect(service.keysByPrefix('cache', '', { search: ' AGENT_1 ' })).resolves.toEqual({
+      keys: ['replica:agentDetail:v1:user:agent_1', 'replica:topicList:v1:user:Agent_1'],
+      total: 2,
+    });
+    await expect(service.keysByPrefix('cache', '', { search: 'cache' })).resolves.toEqual({
+      keys: [],
+      total: 0,
+    });
+    await expect(service.keyGroupsByPrefix('cache', 'replica:', ':')).resolves.toEqual([
+      { entryCount: 1, name: 'agentDetail' },
+      { entryCount: 2, name: 'topicList' },
+    ]);
+  });
+
   it('commits mixed batch operations atomically', async () => {
     await service.set('cache', 'legacy', 'old');
     await service.batch([

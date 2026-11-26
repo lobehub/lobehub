@@ -21,6 +21,8 @@ const expiredCredentials = (refreshToken?: string): StoredCredentials => ({
 
 describe('getValidToken', () => {
   beforeEach(() => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
     vi.mocked(loadCredentials).mockClear();
     vi.mocked(saveCredentials).mockClear();
     vi.mocked(resolveServerUrl).mockClear();
@@ -30,6 +32,22 @@ describe('getValidToken', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * Regression: inside an agent run without its own sign-in, `lh` used this machine's stored
+   * login, which on a shared device belongs to someone other than the run's user.
+   */
+  it('never reads the stored login inside an agent run', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op_1');
+    vi.mocked(loadCredentials).mockReturnValue({
+      accessToken: 'machine-login',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    await expect(getValidToken()).resolves.toEqual({ status: 'agent-run' });
+    expect(loadCredentials).not.toHaveBeenCalled();
   });
 
   it('should report no login when no credentials stored', async () => {
@@ -321,7 +339,24 @@ describe('describeTokenLookup', () => {
     expect(report?.fix).toContain('signing in again will not change the answer');
   });
 
-  it('leaves the caller its own wording when there is nothing to diagnose', () => {
-    expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+  describe('no login', () => {
+    beforeEach(() => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('leaves the caller its own wording when there is nothing to diagnose', () => {
+      expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+    });
+
+    /** The fix must not send the agent after the machine's own credentials. */
+    it('explains a run without its sign-in and rules out the machine credentials', () => {
+      const report = describeTokenLookup({ status: 'agent-run' });
+
+      expect(report?.detail).toContain('passed no LobeHub sign-in');
+      expect(report?.detail).toContain("never this machine's login or API key");
+      expect(report?.fix).toContain("Do not run 'lh login'");
+    });
   });
 });

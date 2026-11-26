@@ -2,44 +2,37 @@
 
 import type { GrepContentState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  baseline: css`
-    align-items: baseline;
-  `,
-  separator: css`
-    margin-inline: 2px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  tag: css`
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tagsList: css`
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  baseline: { alignItems: 'baseline' },
+  separator: { marginInline: '2px', color: cssVar.colorTextQuaternary },
+  tag: {
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  tagsList: {
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const splitPattern = (pattern: string): string[] =>
   pattern
@@ -52,11 +45,11 @@ const PatternTags = memo<{ pattern: string }>(({ pattern }) => {
   if (parts.length === 0) return null;
 
   return (
-    <span className={styles.tagsList}>
+    <span {...stylex.props(styles.tagsList)}>
       {parts.map((part, index) => (
         <Fragment key={`${index}-${part}`}>
-          {index > 0 && <span className={styles.separator}>|</span>}
-          <span className={styles.tag}>{part}</span>
+          {index > 0 && <span {...stylex.props(styles.separator)}>|</span>}
+          <span {...stylex.props(styles.tag)}>{part}</span>
         </Fragment>
       ))}
     </span>
@@ -94,7 +87,7 @@ export const createGrepContentInspector = ({
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+          <div className={cx(stylex.props(styles.baseline).className, inspectorTextStyles.root)}>
             <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}:</span>
             <PatternTags pattern={pattern} />
           </div>
@@ -105,7 +98,7 @@ export const createGrepContentInspector = ({
       const hasResults = resultCount > 0;
 
       return (
-        <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+        <div className={cx(stylex.props(styles.baseline).className, inspectorTextStyles.root)}>
           <span className={cx(isLoading && shinyTextStyles.shinyText)}>
             {t(translationKey as any)}:
           </span>

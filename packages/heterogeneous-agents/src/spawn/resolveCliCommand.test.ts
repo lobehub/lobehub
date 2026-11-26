@@ -177,18 +177,17 @@ describe('resolveCliCommand', () => {
       expect(execFileMock.mock.calls[1]![1]).toEqual(['agent', '--help']);
     });
 
-    it('resolves and validates OpenCode using its bare semver output', async () => {
+    it.each([
+      ['1.18.3', '1.18.3'],
+      ['opencode v2.2.6\n', '2.2.6'],
+      ['othertool v2.2.6\n', undefined],
+    ])('validates the OpenCode version banner %j', async (banner, version) => {
       callExecFile('/Users/x/.opencode/bin/opencode\n');
-      callExecFile('1.18.3');
-
+      callExecFile(banner);
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
 
-      expect(status).toMatchObject({
-        available: true,
-        path: '/Users/x/.opencode/bin/opencode',
-        version: '1.18.3',
-      });
+      expect(status).toMatchObject(version ? { available: true, version } : { available: false });
     });
 
     it('validates Kimi Code using its bare semver and stream-json capabilities', async () => {
@@ -269,8 +268,9 @@ describe('resolveCliCommand', () => {
       try {
         callExecFile('/Users/x/.grok/bin/agent\n');
         callExecFile('Usage: agent [flags]\nGrok CLI agent');
+        callExecFileError(new Error('cursor-agent not found'));
         callExecFile('Usage: agent [flags]\nGrok CLI agent');
-        callExecFile('Usage: agent [options] [command] [prompt...]\nStart the Cursor Agent');
+        callExecFile('Usage: cursor-agent [options] [command] [prompt...]\nStart the Cursor Agent');
 
         const { detectHeterogeneousCliCommand } = await importModule();
         const status = await detectHeterogeneousCliCommand('cursor', 'agent');
@@ -280,9 +280,8 @@ describe('resolveCliCommand', () => {
           path: path.join(os.homedir(), '.local', 'bin', 'cursor-agent'),
           version: undefined,
         });
-        expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
-        expect(execFileMock.mock.calls[2]![1]).toEqual(['--help']);
-        expect(execFileMock.mock.calls[3]![1]).toEqual(['--help']);
+        const argv = execFileMock.mock.calls.map((call) => call[1]);
+        expect(argv).toEqual([['agent'], ['--help'], ['cursor-agent'], ['--help'], ['--help']]);
       } finally {
         process.env.PATH = originalPath;
         if (originalShell === undefined) delete process.env.SHELL;

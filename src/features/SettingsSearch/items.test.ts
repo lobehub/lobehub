@@ -16,11 +16,11 @@ const webContext: SettingsSearchContext = {
   enableChannels: false,
   enableComposio: true,
   enableGatewayMode: true,
-  enableWorkspace: false,
   hasEmail: true,
   hideDocs: false,
   isDesktop: false,
   isLogin: true,
+  isMobile: false,
   isWindows: false,
   showAiImage: true,
 };
@@ -33,6 +33,31 @@ describe('settings search index', () => {
 
     expect(item.visible?.({ ...webContext, enableChannels: false }) ?? true).toBe(false);
     expect(item.visible?.({ ...webContext, enableChannels: true }) ?? true).toBe(true);
+  });
+
+  it('indexes the conversation settings under the Conversation tab only', () => {
+    const conversationLabels = [
+      'settingCommon.responseLanguage.title',
+      'hotkey.sendMessage.title',
+      'settingConversation.voiceMessage.title',
+      'settingChatAppearance.fontSize.title',
+      'systemAgent.followUpAction.title',
+      'systemAgent.inputCompletion.title',
+    ];
+
+    for (const labelKey of conversationLabels) {
+      const tabs = SETTINGS_SEARCH_ITEMS.filter((item) => item.labelKey === labelKey).map(
+        (item) => item.tab,
+      );
+      expect(tabs, labelKey).toEqual([SettingsTabs.Conversation]);
+    }
+  });
+
+  it('hides the send-key choice on the mobile surface', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find((entry) => entry.anchor === 'conversation-send-key')!;
+
+    expect(item.visible?.(webContext) ?? true).toBe(true);
+    expect(item.visible?.({ ...webContext, isMobile: true }) ?? true).toBe(false);
   });
 
   it('derives one search item per lab feature in catalog order', () => {
@@ -48,9 +73,28 @@ describe('settings search index', () => {
 
     for (const feature of LAB_FEATURES) {
       const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
-      expect(item.visible?.(webContext) ?? true).toBe(
-        !feature.desktopOnly && !feature.workspaceOnly,
-      );
+      expect(item.visible?.(webContext) ?? true).toBe(!feature.desktopOnly);
+    }
+  });
+
+  it('offers Codex App Server in web settings search for connected-device runs', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find(
+      (entry) => entry.anchor === 'labs-enableCodexAppServer',
+    );
+
+    expect(item).toBeDefined();
+    expect(item!.visible?.(webContext) ?? true).toBe(true);
+  });
+
+  it('shows workspace lab features exactly where business features are enabled', () => {
+    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
+    const workspaceItems = LAB_FEATURES.filter((feature) => feature.workspaceOnly).map(({ flag }) =>
+      labsItems.find(({ anchor }) => anchor === `labs-${flag}`)!,
+    );
+
+    for (const item of workspaceItems) {
+      expect(item.visible?.(webContext)).toBe(true);
+      expect(item.visible?.({ ...webContext, enableBusinessFeatures: false })).toBe(false);
     }
   });
 
@@ -77,14 +121,23 @@ describe('settings search index', () => {
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Provider]).toEqual(
       expect.arrayContaining(['api', 'model provider', 'language model', 'custom provider']),
     );
-    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Messenger]).toEqual(
-      expect.arrayContaining(['telegram', 'slack', 'discord', 'wechat']),
-    );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).toEqual(
       expect.arrayContaining(['search', 'model assignment']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Storage]).toEqual(
       expect.arrayContaining(['knowledge base']),
     );
+  });
+});
+
+describe('settings search after the Marketplace migration', () => {
+  // Skills and connectors moved to the Marketplace; searching settings for them
+  // must not offer a result that opens a settings tab that no longer exists.
+  it('indexes no skill or connector tab', () => {
+    for (const tab of [SettingsTabs.Skill, SettingsTabs.Connector]) {
+      expect(TAB_SEARCH_EN_KEYWORDS[tab]).toBeUndefined();
+      expect(TAB_SEARCH_KEYWORDS_KEYS[tab]).toBeUndefined();
+      expect(SETTINGS_SEARCH_ITEMS.some((item) => item.tab === tab)).toBe(false);
+    }
   });
 });

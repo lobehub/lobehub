@@ -63,6 +63,12 @@ vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/taskLabel', () => ({
+  TaskLabelModel: vi.fn(function () {
+    return { getTaskLabels: vi.fn().mockResolvedValue([]) };
+  }),
+}));
+
 vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));
@@ -153,9 +159,7 @@ describe('TaskService', () => {
     batchDeleteIncludingTrashed: vi.fn().mockResolvedValue(undefined),
   };
 
-  const mockBriefModel = {
-    findByTaskId: vi.fn(),
-  };
+  const mockBriefModel = { findByTaskId: vi.fn() };
 
   const mockRbacModel = {
     hasAnyPermission: vi.fn().mockResolvedValue(true),
@@ -163,6 +167,7 @@ describe('TaskService', () => {
 
   const mockWorkspaceMemberModel = {
     getMember: vi.fn().mockResolvedValue({ role: 'member', userId: 'member-1' }),
+    getNicknames: vi.fn().mockResolvedValue(new Map()),
   };
 
   beforeEach(() => {
@@ -1228,7 +1233,7 @@ describe('TaskService', () => {
       expect(running?.cost).toBeNull();
     });
 
-    it('should not include topicCount when no topics exist', async () => {
+    it('should omit topicCount and heartbeat when both are absent', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -1263,6 +1268,7 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.topicCount).toBeUndefined();
+      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should build workspace tree nodes from pinned documents', async () => {
@@ -1380,43 +1386,6 @@ describe('TaskService', () => {
         scheduledAt: '2024-01-01T12:00:05.000Z',
         timeout: 60,
       });
-    });
-
-    it('should not include heartbeat when neither heartbeatTimeout nor lastHeartbeatAt is set', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      mockTaskModel.findById.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue([]);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should gracefully handle failing optional calls via catch', async () => {

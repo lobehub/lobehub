@@ -46,6 +46,7 @@ const matchesRunningTurnSettings = (
   if (request.clientProtocol && request.clientProtocol !== (state.host?.clientProtocol ?? 1)) {
     return false;
   }
+  if (!!request.acceptsArtboardWorks !== !!state.host?.acceptsArtboardWorks) return false;
   if (!!request.acceptsFileWorks !== !!state.host?.acceptsFileWorks) return false;
 
   if (request.llmExecutor) {
@@ -83,6 +84,7 @@ export const canJoinRunningTurn = (entry: QueuedFollowUp, state: AgentState): bo
 
   const runAgentId = state.origin?.agentId;
   if (!request.agentId || !runAgentId || request.agentId !== runAgentId) return false;
+  if (entry.subAgentSteer) return true;
 
   return matchesRunningTurnSettings(request, state);
 };

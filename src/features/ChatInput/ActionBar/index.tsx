@@ -1,14 +1,20 @@
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { ChatInputActions } from '@lobehub/editor/react';
+import * as stylex from '@stylexjs/stylex';
+import { type StyleXStyles } from '@stylexjs/stylex';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { type ActionKey, type ActionKeys } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
+import { resolveLeftActionsForVoicePlacement } from '../utils/resolveVoiceActionPlacement';
 import { type DropdownPlacement } from './context';
 import { ActionBarContext, useActionBarContext } from './context';
 import { filterChatOnlyActions } from './filterChatOnlyActions';
@@ -55,16 +61,28 @@ export interface ActionToolbarProps {
   extraActionItems?: ChatInputActionsProps['items'];
 }
 
-const ActionToolbar = memo<ActionToolbarProps>(
-  ({ borderRadius, disableCollapse = false, dropdownPlacement, extraActionItems = [] }) => {
+interface ActionToolbarComponentProps extends ActionToolbarProps {
+  xstyle?: StyleXStyles;
+}
+
+const ActionToolbar = memo<ActionToolbarComponentProps>(
+  ({ borderRadius, disableCollapse = false, dropdownPlacement, extraActionItems = [], xstyle }) => {
     const [expandInputActionbar, toggleExpandInputActionbar] = useGlobalStore((s) => [
       systemStatusSelectors.expandInputActionbar(s),
       s.toggleExpandInputActionbar,
     ]);
+    const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
     const { canConfigureResource, canShowControls } = useChatInputResourceAccess();
 
-    const leftActions = useChatInputStore((s) =>
-      canConfigureResource ? s.leftActions : filterChatOnlyActions(s.leftActions),
+    const scopedLeftActions = useChatInputStore(
+      (s) => (canConfigureResource ? s.leftActions : filterChatOnlyActions(s.leftActions)),
+      isEqual,
+    );
+    const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
+    const leftActions = useMemo(
+      () =>
+        resolveLeftActionsForVoicePlacement(scopedLeftActions, rightActions, enableVoiceMessage),
+      [enableVoiceMessage, rightActions, scopedLeftActions],
     );
 
     const mobile = useChatInputStore((s) => s.mobile);
@@ -88,6 +106,7 @@ const ActionToolbar = memo<ActionToolbarProps>(
       <ActionBarContext value={contextValue}>
         <ChatInputActions
           autoCollapse={!disableCollapse}
+          className={stylex.props(xstyle).className}
           collapseOffset={mobile ? 48 : 80}
           defaultGroupCollapse={!disableCollapse}
           groupCollapse={disableCollapse ? false : !expandInputActionbar}

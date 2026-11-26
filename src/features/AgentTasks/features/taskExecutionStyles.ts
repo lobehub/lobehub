@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 /**
  * Shared look for the task-side execution chips (environment + working
  * directory) and their popover rows.
@@ -105,7 +107,7 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
   `,
   emptyHint: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 8px;
 
     font-size: 12px;

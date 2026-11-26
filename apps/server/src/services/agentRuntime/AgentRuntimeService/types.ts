@@ -1,6 +1,8 @@
 import type { Agent, AgentState, GeneralAgentConfig } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import {
+  type CancelVirtualSubAgentParams,
+  type CancelVirtualSubAgentResult,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
@@ -72,6 +74,7 @@ import type {
   usesGatewayMessagePatch,
 } from './messages';
 import type {
+  acceptsArtboardWorks,
   acceptsFileWorks,
   acceptsMemberRuntimeEnd,
   controlCompletedToolResult,
@@ -127,6 +130,14 @@ export interface InterventionLifecycleCheckpoint {
  * top-level option. One named home for the whole upward-call surface.
  */
 export interface AgentRuntimeDelegate {
+  /**
+   * Stop a running `lobe-agent.callSubAgent` child on behalf of the agent that
+   * dispatched it (`lobe-agent.cancelSubAgent`). The thread and its history are
+   * kept, so the same sub-agent can be continued afterwards.
+   */
+  cancelVirtualSubAgent?: (
+    params: CancelVirtualSubAgentParams,
+  ) => Promise<CancelVirtualSubAgentResult>;
   /**
    * Hand the topic's finished background sub-agent results to their parent
    * agent as a new turn, unless a run of that topic is still going (its own
@@ -200,6 +211,8 @@ export interface AgentRuntimeDelegate {
   verifyShareRunStillAuthorized?: (params: {
     agentId: string;
     shareId: string;
+    /** The visitor the run serves: a `card` share admits only its grantees. */
+    visitorUserId?: string;
   }) => Promise<boolean>;
 }
 
@@ -283,6 +296,7 @@ type Bound<F> = F extends (svc: any, ...args: infer A) => infer R ? (...args: A)
  * module picks the members it uses), so the members stay private on the class.
  */
 export interface AgentRuntimeServiceContext {
+  acceptsArtboardWorks: Bound<typeof acceptsArtboardWorks>;
   acceptsFileWorks: Bound<typeof acceptsFileWorks>;
   acceptsMemberRuntimeEnd: Bound<typeof acceptsMemberRuntimeEnd>;
   readonly agentFactory: ((config: GeneralAgentConfig) => Agent) | undefined;

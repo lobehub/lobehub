@@ -5,21 +5,69 @@ import type {
   DeviceRunningSummary,
   DeviceScope,
   DeviceWorkspaceShare,
+  ManagedDevicePhase,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { sortDevicesByActivity, workingDirConfigSchema } from '@lobechat/types';
+import {
+  isManagedCloudDevice,
+  sortDevicesByActivity,
+  workingDirConfigSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
+import { managedDeviceProvider } from '@/business/server/managedDevice';
 import { getTopicDeviceId, TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
+import { probeAgentRunRuntimes } from '@/server/services/aiAgent/pipeline/codexDeviceRuntime';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
+import { recordDevicesSeen } from '@/server/services/deviceGateway/lastSeen';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
+import { clientIdentitySourceSchema, toRegistrationError } from './guards';
+import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 import { deviceProcedure } from './procedures';
+
+const log = debug('lobe-server:device-registry');
+
+/** How long the device list waits for managed device phases. */
+export const MANAGED_PHASES_TIMEOUT_MS = 3000;
+
+/**
+ * Phases of the managed cloud devices in one pool of the device list. Asks the
+ * provider only when the pool holds a managed row, so a list without managed
+ * devices makes no provider call. A provider failure or a reply slower than
+ * {@link MANAGED_PHASES_TIMEOUT_MS} leaves the phases unknown: the list must
+ * still load, and a managed device then reads like any other offline device.
+ */
+const loadManagedPhases = async (
+  rows: { identitySource: string }[],
+  scope: { userId: string; workspaceId?: string },
+): Promise<Record<string, ManagedDevicePhase>> => {
+  if (!rows.some(isManagedCloudDevice)) return {};
+  if (!(await managedDeviceProvider.isAvailable())) return {};
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<Record<string, ManagedDevicePhase>>((resolve) => {
+    timer = setTimeout(() => {
+      log('listStates timed out for scope=%o', scope);
+      resolve({});
+    }, MANAGED_PHASES_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([managedDeviceProvider.listStates(scope), timeout]);
+  } catch (error) {
+    log('listStates failed for scope=%o: %O', scope, error);
+    return {};
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /**
  * Display info for the members behind a set of running topics. The ids come
@@ -155,6 +203,22 @@ export const registryRouter = router({
       return deviceGateway.queryDeviceSystemInfo(ctx.userId, input.deviceId, ctx.workspaceId);
     }),
   /**
+   * The native runtimes of the connection an agent run on this device would
+   * reach (`lh connect` before the Desktop app, as the dispatch routes it),
+   * for controls that depend on them — e.g. the Codex Plan switch needs
+   * `codex-collaboration-mode-v1`. Empty when nothing answered.
+   */
+  getAgentRunRuntimes: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const probe = await probeAgentRunRuntimes((clientKinds) =>
+        deviceGateway.readDeviceSystemInfo(ctx.userId, input.deviceId, ctx.workspaceId, {
+          clientKinds,
+        }),
+      );
+      return { runtimes: [...(probe.runtimes ?? [])] };
+    }),
+  /**
    * All devices the user has ever registered (incl. offline). A device is keyed
    * by its `deviceId`; the gateway's live WS sessions are NOT separate devices —
    * each session is surfaced as a `channel` nested under its device. A single
@@ -178,6 +242,16 @@ export const registryRouter = router({
         deviceGateway.queryDeviceList(ctx.userId),
         wsId ? deviceGateway.queryDeviceList(ctx.userId, wsId) : Promise.resolve([]),
       ]);
+
+    // Personal and workspace managed devices belong to different provider
+    // scopes, so each pool that holds one asks once; a pool without managed
+    // rows asks nothing.
+    const [personalPhases, workspacePhases] = await Promise.all([
+      loadManagedPhases(personalRows, { userId: ctx.userId }),
+      wsId
+        ? loadManagedPhases(workspaceRows, { userId: ctx.userId, workspaceId: wsId })
+        : Promise.resolve({}),
+    ]);
 
     // Shares the caller created from their personal device list, grouped by the
     // source personal deviceId — attached to personal rows below so the list can
@@ -242,6 +316,7 @@ export const registryRouter = router({
       rows: Awaited<ReturnType<typeof ctx.deviceModel.queryPersonal>>,
       onlineList: DeviceAttachment[],
       scope: DeviceScope,
+      phases: Record<string, ManagedDevicePhase>,
     ): DeviceListItem[] => {
       const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
       const channelsByDevice = new Map<string, DeviceChannel[]>();
@@ -275,6 +350,9 @@ export const registryRouter = router({
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
           lastSeen: d.lastSeenAt.toISOString(),
+          // Only a managed row takes a phase: the provider never relabels a
+          // machine a user connected.
+          managedPhase: isManagedCloudDevice(d) ? phases[d.deviceId] : undefined,
           metadata: d.metadata,
           online: channels.length > 0,
           platform: d.platform ?? live?.platform ?? null,
@@ -332,10 +410,19 @@ export const registryRouter = router({
     // and their ghosts have to be merged first, then ordered as one list.
     // Consumers (settings list, picker) filter this down to a single scope, and
     // filtering preserves order, so one pass serves every surface.
-    return sortDevicesByActivity([
-      ...buildItems(personalRows, personalOnline, 'personal'),
-      ...buildItems(workspaceRows, workspaceOnline, 'workspace'),
+    const personalItems = buildItems(personalRows, personalOnline, 'personal', personalPhases);
+    const workspaceItems = buildItems(workspaceRows, workspaceOnline, 'workspace', workspacePhases);
+
+    // Record what each pool's gateway reports online, so an offline row's
+    // `lastSeen` is when it was last alive rather than when it registered.
+    const onlineRegistered = (items: DeviceListItem[]) =>
+      new Set(items.filter((item) => item.registered && item.online).map((item) => item.deviceId));
+    await Promise.all([
+      recordDevicesSeen(ctx.deviceModel, personalRows, onlineRegistered(personalItems)),
+      recordDevicesSeen(ctx.deviceModel, workspaceRows, onlineRegistered(workspaceItems)),
     ]);
+
+    return sortDevicesByActivity([...personalItems, ...workspaceItems]);
   }),
 
   // ─── Tunnel links ───
@@ -348,7 +435,8 @@ export const registryRouter = router({
   /**
    * Auto-register the calling device (desktop after OIDC login / CLI on first
    * `lh connect`). Upserts on (userId, deviceId); user-owned fields are
-   * preserved on conflict.
+   * preserved on conflict. A managed cloud device's id is refused with
+   * CONFLICT: the platform owns that row.
    */
   register: deviceProcedure
     .input(
@@ -356,7 +444,7 @@ export const registryRouter = router({
         architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
-        identitySource: z.enum(['machine-id', 'fallback']),
+        identitySource: clientIdentitySourceSchema,
         /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
         metadata: z
           .record(z.string().max(64), z.string().max(200))
@@ -366,12 +454,17 @@ export const registryRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.deviceModel.register(input);
+      try {
+        return await ctx.deviceModel.register(input);
+      } catch (error) {
+        throw toRegistrationError(error);
+      }
     }),
   removeDevice: deviceProcedure
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.deviceModel.delete(input.deviceId);
+      const removed = await ctx.deviceModel.delete(input.deviceId);
+      await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),
   status: deviceProcedure.query(async ({ ctx }) => {

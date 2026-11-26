@@ -7,6 +7,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, ne, not, or, sql } from 'driz
 import {
   agentsToSessions,
   embeddings,
+  messagePlugins,
   messageQueries,
   messages,
   threads,
@@ -182,11 +183,15 @@ export class MessageLookupQueries extends MessageScope {
    * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
    * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
    * persist the failure feedback onto the card it belongs to.
+   *
+   * Pass the run's `topicId` when known: it keeps the JSONB predicate inside
+   * the topic's own (indexed) rows instead of every row the user owns.
    */
-  findVerifyMessageByOperationId = async (operationId: string) => {
+  findVerifyMessageByOperationId = async (operationId: string, topicId?: string) => {
     return this.db.query.messages.findFirst({
       where: and(
         this.ownership(),
+        topicId ? eq(messages.topicId, topicId) : undefined,
         eq(messages.role, 'verify'),
         sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
       ),
@@ -231,6 +236,66 @@ export class MessageLookupQueries extends MessageScope {
       ),
       orderBy: [desc(messages.createdAt)],
     });
+  };
+
+  /**
+   * The states one run's calls of a builtin tool API left, oldest first. A Channel reply reads
+   * the cards its run drew this way (`lobe-a2ui` / `renderUI`), so they publish with its text.
+   */
+  listToolStatesByOperationId = async ({
+    apiName,
+    identifier,
+    operationId,
+    topicId,
+  }: {
+    apiName: string;
+    identifier: string;
+    operationId: string;
+    topicId: string;
+  }): Promise<unknown[]> => {
+    // The runtime stamps the operation on the assistant step, not on the tool result under it,
+    // so the run is resolved through the step that called the tool.
+    const rows = await this.db
+      .select({ state: messagePlugins.state })
+      .from(messages)
+      .innerJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          this.ownership(),
+          inArray(
+            messages.topicId,
+            this.db
+              .select({ id: topics.id })
+              .from(topics)
+              .where(
+                and(
+                  eq(topics.id, topicId),
+                  buildWorkspaceWhere(
+                    { userId: this.userId, workspaceId: this.workspaceId },
+                    topics,
+                  ),
+                ),
+              ),
+          ),
+          eq(messages.role, 'tool'),
+          inArray(
+            messages.parentId,
+            this.db
+              .select({ id: messages.id })
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.topicId, topicId),
+                  sql`${messages.metadata}->>'operationId' = ${operationId}`,
+                ),
+              ),
+          ),
+          eq(messagePlugins.identifier, identifier),
+          eq(messagePlugins.apiName, apiName),
+        ),
+      )
+      .orderBy(asc(messages.createdAt));
+    return rows.map((row) => row.state);
   };
 
   /**

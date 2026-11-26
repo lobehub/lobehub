@@ -21,6 +21,7 @@ import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { densityVars } from '@/styles/densityVars';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -28,7 +29,7 @@ import { useTopicsViewStore } from './store';
 import type { GroupBy, TriggerFilter } from './types';
 import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './utils';
 
-const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
+const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'bot', 'webhook', 'api', 'task', 'eval'];
 
 const styles = createStaticStyles(({ css }) => ({
   cell: css`
@@ -44,7 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: baseline;
 
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     font-size: 12px;
@@ -65,11 +66,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     font-size: 12px;
@@ -97,11 +98,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     transition: background 0.12s;

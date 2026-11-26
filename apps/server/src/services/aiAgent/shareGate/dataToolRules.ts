@@ -120,6 +120,7 @@ export const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
       KnowledgeBaseApiName.createKnowledgeBase,
       KnowledgeBaseApiName.deleteKnowledgeBase,
       KnowledgeBaseApiName.createDocument,
+      KnowledgeBaseApiName.updateDocument,
       KnowledgeBaseApiName.addFiles,
       KnowledgeBaseApiName.removeFiles,
     ],

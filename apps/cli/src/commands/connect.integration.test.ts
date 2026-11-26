@@ -53,6 +53,9 @@ async function runCli(
           LOBEHUB_CLI_API_KEY: '',
           LOBEHUB_CLI_HOME: '.lobehub',
           LOBEHUB_JWT: '',
+          // Not an agent run, whatever shell runs the suite.
+          LOBEHUB_OPERATION_ID: '',
+          LOBEHUB_TOPIC_ID: '',
           ...extraEnv,
         },
         timeout: 10_000,

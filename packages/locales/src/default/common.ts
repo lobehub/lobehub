@@ -1,11 +1,12 @@
 export default {
   'about': 'About',
   'advanceSettings': 'Advanced Settings',
+  'agentViewAll.groupBy.folder': 'Category',
+  'agentViewAll.groupBy.noFolder': 'No category',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
-    'All registered users get ${{credit}} of free usage per month—no setup needed. Includes global cloud sync and advanced web search.',
-  'alert.cloud.descOnMobile':
-    'All registered users get ${{credit}} of free usage per month—no setup needed.',
+    'All registered users get ${{credit}} of free usage—no setup needed. Includes global cloud sync and advanced web search.',
+  'alert.cloud.descOnMobile': 'All registered users get ${{credit}} of free usage—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
   'agentViewAll.addToSidebar': 'Show in my sidebar',
   'agentViewAll.empty': 'No agents yet',
@@ -28,6 +29,9 @@ export default {
   'agentViewAll.orderBy.updatedAt': 'Updated at',
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
+  'agentViewAll.recommendedSection.title': 'Recommended agents',
+  'agentViewAll.recommendedSection.empty':
+    'No recommended agents yet. Use “Add to recommended agents” in an agent’s menu.',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
   'agentViewAll.sidebarSection.title': 'In Sidebar',
@@ -56,6 +60,7 @@ export default {
     'Current topic is not saved, please save it first to use subtopic feature',
   'forkRequiresSavedTopic': 'Current topic is not saved. Save it first to fork a new topic',
   'forkTopic': 'Continue in new topic',
+  'navPanel.browseAllAgents': 'All agents',
   'supportAgent.troubleshoot.question': 'This message failed. Please help me troubleshoot it.',
   'viewExecutionDetails': 'View execution details',
   'cancel': 'Cancel',
@@ -79,11 +84,10 @@ export default {
   'cmdk.askAgentHeading': 'Ask Agent',
   'cmdk.askAgentPlaceholder': 'Ask {{agent}} something...',
   'cmdk.askLobeAI': 'Ask Lobe AI',
-  'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Community',
+  'cmdk.context.community': 'Marketplace',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -104,7 +108,8 @@ export default {
 
   'cmdk.keywords.billing': 'billing payment invoice transaction',
 
-  'cmdk.keywords.community': 'discover market assistant model provider mcp',
+  'cmdk.keywords.marketplace':
+    'plugin plugins marketplace market community discover agent skill connector model provider mcp',
 
   // CMDK search keywords (space-separated for i18n)
   'cmdk.keywords.contactUs': 'feedback issue bug problem',
@@ -159,7 +164,7 @@ export default {
 
   'cmdk.newAgentTeam': 'Create New Group',
 
-  'cmdk.newLibrary': 'Create New Library',
+  'cmdk.newLibrary': 'Create New Knowledge Base',
 
   'cmdk.newPage': 'Create New Page',
   'cmdk.newTask': 'Create New Task',
@@ -174,7 +179,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Docs',
+  'cmdk.resource': 'Library',
 
   'cmdk.search.agent': 'Agent',
 
@@ -188,7 +193,7 @@ export default {
 
   'cmdk.search.chatGroups': 'Groups',
 
-  'cmdk.search.communityAgent': 'Community Agent',
+  'cmdk.search.communityAgent': 'Marketplace Agent',
 
   'cmdk.search.file': 'File',
 
@@ -198,13 +203,17 @@ export default {
 
   'cmdk.search.folders': 'Folders',
 
-  'cmdk.search.knowledgeBase': 'Library',
+  'cmdk.search.goal': 'Goal',
 
-  'cmdk.search.knowledgeBases': 'Libraries',
+  'cmdk.search.goals': 'Goals',
+
+  'cmdk.search.knowledgeBase': 'Knowledge Base',
+
+  'cmdk.search.knowledgeBases': 'Knowledge Bases',
 
   'cmdk.search.loading': 'Searching...',
 
-  'cmdk.search.market': 'Community',
+  'cmdk.search.market': 'Marketplace',
 
   'cmdk.search.mcp': 'MCP Server',
 
@@ -293,18 +302,26 @@ export default {
   'exportType.allAgent': 'Export All Agent Settings',
   'exportType.allAgentWithMessage': 'Export All Agents and Messages',
   'exportType.globalSetting': 'Export Global Settings',
-  'favorite.add': 'Add to Favorites',
+  'favorite.add': 'Add to Home Favorites',
   'favorite.limitReached': 'Favorites can hold up to {{count}} items. Remove one to add another.',
   'favorite.remove': 'Remove from Favorites',
   'favorite.reorderError': "Couldn't save the order of your favorites. Try again.",
   'favorite.section': 'Favorites',
   'favorite.updateError': "Couldn't update your favorites. Try again.",
   'feedback': 'Feedback',
+  'diagnostics.export.action': 'Export Diagnostics',
+  'diagnostics.export.failed': "Couldn't export diagnostics. Try again.",
+  'diagnostics.export.success': 'Diagnostics exported',
+  'diagnostics.export.successDesc': 'Saved {{fileName}} and selected it in its folder.',
   'feedback.emailContact': 'You can also email us at <email>{{email}}</email>',
   'feedback.errors.fileTooLarge': 'File exceeds 5MB',
   'feedback.errors.submitFailed': 'Submit failed. Try again.',
   'feedback.errors.teamNotFound': 'Configuration error',
   'feedback.errors.uploadFailed': 'Upload failed',
+  'feedback.fields.diagnostics.exported': 'Exported {{fileName}}',
+  'feedback.fields.diagnostics.hint':
+    'Includes the last 24 hours of logs, the app version and system details. After exporting, email the file to <email>{{email}}</email>.',
+  'feedback.fields.diagnostics.label': 'Diagnostics (optional)',
   'feedback.fields.message.label': 'Message',
   'feedback.fields.message.maxLength': 'Message must be 5000 characters or less',
   'feedback.fields.message.placeholder': 'Tell us more...',
@@ -426,22 +443,14 @@ export default {
     "Can't delete: this includes other members' topics, comments, or tasks. Ask a workspace owner to delete it.",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
   'openOnRight': 'Open on the right',
+  'openOriginalFile': 'Open original file',
   'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',
   'more': 'More',
-  'contacts.create': 'New agent',
-  'contacts.empty': 'None yet',
-  'contacts.groups': 'Groups',
-  'messageList.empty': 'No conversations yet',
-  'messageList.newChat': 'New conversation',
-  'messageList.running': 'Running…',
-  'messageList.search': 'Search',
-  'taskNav.all': 'All tasks',
-  'taskNav.noProjects': 'No projects yet',
   'navPanel.agent': 'Agents',
-  'navPanel.bottomDivider': 'Items below anchor to bottom',
+  'navPanel.privateTooltip': 'Private · only you can see this',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
@@ -449,7 +458,7 @@ export default {
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
   'navPanel.hideSection': 'Hide Section',
-  'navPanel.library': 'Library',
+  'navPanel.library': 'Knowledge Base',
   'navPanel.moveDown': 'Move Down',
   'navPanel.pinned': 'Pinned',
   'navPanel.privateAgents': 'Private',
@@ -493,7 +502,7 @@ export default {
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
   'visibilityConfirm.makePrivate.itemLibrary':
-    'It stays in the library you filed it in — other members just stop seeing it there',
+    'It stays in the knowledge base you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',
@@ -608,12 +617,8 @@ export default {
   'tab.image': 'Image',
   'tab.audio': 'Audio',
   'tab.chat': 'Chat',
-  'tab.contacts': 'Contacts',
-  'tab.messages': 'Messages',
-  'tab.more': 'More',
   'tab.projects': 'Projects',
   'recents': 'Recents',
-  'tab.community': 'Community',
   'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',
@@ -622,12 +627,13 @@ export default {
   'tab.generation': 'Generation',
   'tab.goals': 'Goals',
   'tab.home': 'Home',
-  'tab.knowledgeBase': 'Library',
+  'tab.knowledgeBase': 'Knowledge Base',
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
+  'tab.music': 'Music',
   'tab.pages': 'Pages',
-  'tab.resource': 'Docs',
+  'tab.resource': 'Library',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',
@@ -679,14 +685,19 @@ export default {
   'userPanel.inviteFriend': 'Invite a friend',
   'userPanel.moveGuide': 'The settings button has been moved here',
   'userPanel.myUsage': 'My Usage',
-  'userPanel.plans': 'Subscription Plans',
+  'userPanel.plans': 'Subscription plans',
   'userPanel.quota': 'Quota',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
-  'userPanel.upgradePlan': 'Upgrade Plan',
+  'userPanel.upgradePlan': 'Upgrade plan',
   'userPanel.usages': 'Usage',
   'userPanel.workspaceSetting': 'Workspace Settings',
   'userPanel.workspaceUsage': 'Workspace Usage',
   'version': 'Version',
+  'visibilityFilter.all': 'All',
+  'visibilityFilter.empty': 'Nothing matches this filter',
+  'visibilityFilter.label': 'Filter by visibility',
+  'visibilityFilter.private': 'Private',
+  'visibilityFilter.workspace': 'Workspace',
   'zoom': 'Zoom',
 };

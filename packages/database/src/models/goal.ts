@@ -60,10 +60,8 @@ export class GoalModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
   /** Visibility-aware task scope for recursive raw-SQL carrier aggregation. */
-  private taskOwnershipSql = (alias?: string) => {
-    const prefix = alias
-      ? sql.raw(`${alias}.`)
-      : /* v8 ignore next -- unreachable: every caller passes an alias */ sql.raw('');
+  private taskOwnershipSql = (alias: string) => {
+    const prefix = sql.raw(`${alias}.`);
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
             AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
@@ -479,7 +477,7 @@ export class GoalModel {
     // Every status write — resume, pause, close, a sign-off sent back, the
     // coordinator — lands here, so this is where an archived goal is kept put:
     // its status is frozen until it is restored, which keeps the archive's own
-    // rule (signed off or canceled) true while it is hidden. The check is part
+    // rule (completed or canceled) true while it is hidden. The check is part
     // of the UPDATE, which serializes with the guarded archive write.
     const row = await this.update(
       id,

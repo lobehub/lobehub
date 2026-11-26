@@ -4,13 +4,20 @@ import * as stylex from '@stylexjs/stylex';
 import { CircleAlert, LocateFixed } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { unresolvedFailures } from './jobStatus';
+import { mainTimelineFailures } from './jobStatus';
 import type { ReplyEntry } from './MessageReceipts';
 import { ReplyDetail, replyEntries } from './MessageReceipts';
+import { REPLY_FAILURE_ATTRIBUTE } from './ReplyFailure';
 import { statusStyles, toneStyles } from './styles';
 
-/** Scrolls the main conversation to a message, if it is in the loaded page. */
-const findMessage = (messageId: string) =>
+/**
+ * The failure's card in the main conversation, else the request it answered, if either is in
+ * the loaded page.
+ */
+const findFailure = ({ id, messageId }: ReplyEntry['job']) =>
+  document.querySelector<HTMLElement>(
+    `[data-channel-conversation="main"] [${REPLY_FAILURE_ATTRIBUTE}="${CSS.escape(id)}"]`,
+  ) ??
   document.querySelector<HTMLElement>(
     `[data-channel-conversation="main"] [data-message-id="${CSS.escape(messageId)}"]`,
   );
@@ -28,7 +35,7 @@ function FailureRow({ channelId, entry }: { channelId: string; entry: ReplyEntry
         type="text"
         onClick={() => {
           close();
-          findMessage(entry.job.messageId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          findFailure(entry.job)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }}
       >
         {t('failure.locate')}
@@ -38,12 +45,12 @@ function FailureRow({ channelId, entry }: { channelId: string; entry: ReplyEntry
 }
 
 /**
- * Replies that failed and were not settled by a newer reply from the same Agent. Lives in
- * the header so the timeline stays readable; each message keeps a small marker.
+ * Replies that failed and were not settled by a newer reply from the same Agent. The header
+ * gathers them; each one's card sits under the Agent's message in the timeline.
  */
 export function FailureIndicator({ detail }: { detail: ChannelDetail }) {
   const { t } = useTranslation('channel');
-  const failures = unresolvedFailures(detail.jobs);
+  const failures = mainTimelineFailures(detail.jobs);
   if (!failures.length) return null;
   const entries = replyEntries(detail, failures, t('unnamedAgent'));
   const label = t('failure.title', { count: failures.length });

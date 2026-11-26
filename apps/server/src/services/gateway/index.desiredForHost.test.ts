@@ -12,6 +12,13 @@ import {
   resetGatewayServiceMocks,
 } from './testUtils';
 
+const createWechatLink = () => ({
+  applicationId: 'wx-app',
+  credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+  tenantId: 't1',
+  userId: 'u1',
+});
+
 vi.mock('@/envs/gateway', () => import('./testUtils').then((m) => m.envsGatewayModule()));
 vi.mock('./MessageGatewayClient', () =>
   import('./testUtils').then((m) => m.messageGatewayClientModule()),
@@ -183,12 +190,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([]);
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
+        createWechatLink(),
         { applicationId: 'wx-app', credentials: {}, tenantId: 't2', userId: 'u2' },
       ]);
 
@@ -222,14 +224,7 @@ describe('GatewayService', () => {
       });
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindEnabledByPlatform.mockResolvedValue([]);
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
 
       const result = await service.listDesiredConnectionsForHost('node');
@@ -245,14 +240,7 @@ describe('GatewayService', () => {
       mockNodeGateway.platforms = [];
       mockNodeGatewayClient.isConfigured = true;
       mockResolveConnectionMode.mockReturnValue('polling');
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
 
       const result = await service.listDesiredConnectionsForHost('node');
 
@@ -269,14 +257,7 @@ describe('GatewayService', () => {
       mockNodeGatewayClient.isConfigured = true;
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindEnabledByPlatform.mockResolvedValue([]);
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
       // The default host still holds it — mid-migration.
       mockGatewayClient.getRegisteredIds.mockResolvedValue({
         ids: ['messenger:wechat:t1:user-u1'],
@@ -301,14 +282,7 @@ describe('GatewayService', () => {
       mockNodeGatewayClient.isConfigured = true;
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindEnabledByPlatform.mockResolvedValue([]);
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
       // Stats answered, registered-ids did not: a live host we can only half see.
       mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
       mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registry unavailable'));
@@ -326,14 +300,7 @@ describe('GatewayService', () => {
       mockNodeGatewayClient.isConfigured = true;
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindEnabledByPlatform.mockResolvedValue([]);
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
 
       const result = await service.listDesiredConnectionsForHost('node');
@@ -353,14 +320,7 @@ describe('GatewayService', () => {
       mockNodeGatewayClient.isConfigured = true;
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindEnabledByPlatform.mockResolvedValue([]);
-      mockFindAllLinksByPlatform.mockResolvedValue([
-        {
-          applicationId: 'wx-app',
-          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
-          tenantId: 't1',
-          userId: 'u1',
-        },
-      ]);
+      mockFindAllLinksByPlatform.mockResolvedValue([createWechatLink()]);
       mockGatewayClient.getStats.mockRejectedValue(new Error('admin down'));
       mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('admin down'));
 

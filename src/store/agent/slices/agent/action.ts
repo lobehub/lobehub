@@ -30,7 +30,6 @@ import { resolveAgentDocumentsContext } from '@/services/agentDocument';
 import { aiAgentService } from '@/services/aiAgent';
 import { refreshChannelListIfEnabled } from '@/store/channel/refreshIfEnabled';
 import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
-import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 // Projection module only (no store import), so this does not cycle through the home store.
@@ -330,11 +329,7 @@ export class AgentSliceActionImpl {
           : randomAgentName(locale, await getSidebarAgentNames())),
     };
 
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const result = await agentService.createAgent({ ...params, config, localDeviceId });
+    const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
     // The server opened the creator's direct Channel to the new Agent alongside it.
     refreshChannelListIfEnabled();
@@ -419,26 +414,10 @@ export class AgentSliceActionImpl {
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
-    const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
+    const { activeAgentId, togglePlugin } = this.#get();
     if (!activeAgentId) return;
 
-    const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
-    const hasPlugin = currentPlugins.includes(pluginId);
-
-    // Determine new state
-    const shouldEnable = state !== undefined ? state : !hasPlugin;
-
-    let newPlugins: string[];
-    if (shouldEnable && !hasPlugin) {
-      newPlugins = [...currentPlugins, pluginId];
-    } else if (!shouldEnable && hasPlugin) {
-      newPlugins = currentPlugins.filter((id) => id !== pluginId);
-    } else {
-      // No change needed
-      return;
-    }
-
-    await updateAgentConfig({ plugins: newPlugins });
+    await togglePlugin(pluginId, state);
   };
 
   updateAgentChatConfig = async (

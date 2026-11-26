@@ -24,11 +24,17 @@ import { useTranslation } from 'react-i18next';
 import { formatSize } from '@/utils/format';
 
 import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
+import { LOAD_THRESHOLDS } from './DeviceHealth/format';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { buildDeviceHoverSummary } from './deviceHoverSummary';
 import { getDeviceIcon } from './getDeviceIcon';
+import {
+  getManagedDeviceStatus,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   code: css`
@@ -121,6 +127,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
   const usage = latestUsageView({ data, error });
   const summary = buildDeviceHoverSummary(device, data);
   const { online } = summary;
+  const managedStatus = getManagedDeviceStatus(device);
 
   return (
     <Flexbox className={styles.container}>
@@ -128,7 +135,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
         <span
           style={{
-            background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary,
+            background: presenceDotColor(managedStatus, online),
             borderRadius: '50%',
             flex: 'none',
             height: 6,
@@ -136,11 +143,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
           }}
         />
         <span>
-          {summary.onlineUnknown
-            ? t('devices.status.checking')
-            : online
-              ? t('devices.status.online')
-              : t('devices.status.offline')}
+          {managedStatus
+            ? t(managedStatusLabelKey[managedStatus])
+            : summary.onlineUnknown
+              ? t('devices.status.checking')
+              : online
+                ? t('devices.status.online')
+                : t('devices.status.offline')}
         </span>
       </InfoRow>
       {online && (
@@ -177,6 +186,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
                 {usage.reportsLoad && (
                   <UsageMeter
                     label={t('devices.detail.loadUsage')}
+                    thresholds={LOAD_THRESHOLDS}
                     value={usage.latest?.loadPercent}
                   />
                 )}

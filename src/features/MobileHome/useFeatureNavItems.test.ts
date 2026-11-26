@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react';
-import { FileText, HomeIcon, ListTodo, SearchIcon, Target } from 'lucide-react';
+import { FileText, FolderKanban, HomeIcon, ListTodo, SearchIcon, Target } from 'lucide-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFeatureNavItems } from './useFeatureNavItems';
@@ -12,29 +12,30 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useNavLayout', () => ({
   useNavLayout: () => ({
     bottomMenuItems: [
-      { icon: FileText, key: 'community', title: 'Community', url: '/community' },
+      { icon: FileText, key: 'community', title: 'Community', url: '/marketplace' },
       { icon: FileText, key: 'pages', title: 'Pages', url: '/page' },
     ],
     topNavItems: [
       { icon: SearchIcon, key: 'search', onClick: vi.fn(), title: 'Search' },
       { icon: HomeIcon, key: 'home', title: 'Home', url: '/' },
       { icon: ListTodo, key: 'tasks', title: 'Tasks', url: '/tasks' },
-      // `useNavLayout` hides goals while the lab is off.
-      { hidden: true, icon: Target, key: 'goals', title: 'Goals', url: '/goals' },
+      ...(mocks.workspaceSlug
+        ? [{ icon: Target, key: 'goals', title: 'Goals', url: '/goals' }]
+        : []),
+      // `useNavLayout` hides projects while the lab is off.
+      {
+        hidden: !mocks.enableProjects,
+        icon: FolderKanban,
+        key: 'project',
+        title: 'Projects',
+        url: '/projects',
+      },
     ],
   }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.workspaceSlug,
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableProjects: () => mocks.enableProjects },
 }));
 
 const keysOf = () => renderHook(() => useFeatureNavItems()).result.current.map((i) => i.key);
@@ -54,13 +55,13 @@ describe('useFeatureNavItems', () => {
   it('adds projects only while the projects lab is on', () => {
     mocks.enableProjects = true;
 
-    expect(keysOf()).toEqual(['tasks', 'projects', 'pages']);
+    expect(keysOf()).toEqual(['tasks', 'project', 'pages']);
   });
 
   it('adds the workspace settings entry inside a workspace', () => {
     mocks.workspaceSlug = 'acme';
 
-    expect(keysOf()).toEqual(['tasks', 'pages', 'settings']);
+    expect(keysOf()).toEqual(['tasks', 'goals', 'pages', 'settings']);
   });
 
   it('gives every item a destination the shortcut can navigate to', () => {

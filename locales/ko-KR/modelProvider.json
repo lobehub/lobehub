@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "비디오 인식 지원",
   "providerModels.item.modelConfig.vision.extra": "이 설정은 애플리케이션 내 이미지 업로드 기능만 활성화합니다. 실제 인식 가능 여부는 모델에 따라 다르므로 직접 테스트해 주세요",
   "providerModels.item.modelConfig.vision.title": "시각 인식 지원",
+  "providerModels.item.pricing.audioOutputTokens": "오디오 출력 ${{amount}}/백만",
   "providerModels.item.pricing.image": "${{amount}}/이미지",
   "providerModels.item.pricing.inputCharts": "${{amount}}/백만 문자",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/분",

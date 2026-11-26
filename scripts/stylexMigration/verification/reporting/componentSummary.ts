@@ -1,6 +1,5 @@
 import type { runFixtureComparison } from '../pipeline/componentRunner';
 
-/** Equality is explicitly limited to executed samples, never a gate PASS. */
 export const sampledStyleStatus = (
   probes: Array<{
     aaStable: boolean;

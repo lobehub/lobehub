@@ -9,4 +9,5 @@ Call listCriteria to read the criteria of the current run, then submit evidence 
 - Every file artifact submitted with fileId MUST have a non-empty description: explain what the file contains and what it demonstrates for this criterion, so the reviewer knows why to open it. A filename, path, id, or generic label such as "JSON" or "evidence" is insufficient. Apply the same rule to file contents submitted inline. Base the description on the actual artifact; do not invent findings.
 - Payload fields (content, description, documentId, fileId) must be written as literal item fields inside the evidence array of the arguments JSON; writing them anywhere else, or only stating the intent in prose, means the server never receives them.
 - Do not decide whether a criterion passes and do not invent evidence.
-- If evidence is missing, state that plainly in a note for that criterion.`;
+- If evidence is missing, state that plainly in a note for that criterion.
+- If a criterion is itself wrong (outside the requirement, contradictory, or impossible), call disputeCriterion with kind invalid_criterion rather than bending the work to it. If an earlier review rejected a criterion your evidence already proves, re-submit that evidence and call disputeCriterion with kind missed_evidence. A dispute is an argument for a reviewer, not a verdict.`;

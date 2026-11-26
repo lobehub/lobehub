@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskExecutionConfig } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskLabelRef } from '@lobechat/types';
 import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
@@ -10,24 +10,30 @@ import {
   confirmModal,
   cssVar,
   Flexbox,
+  Icon,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
-import { Minimize2, Paperclip, X } from 'lucide-react';
+import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -37,9 +43,11 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
@@ -57,6 +65,8 @@ import { useTitleEnterToInstruction } from './useTitleEnterToInstruction';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /** Initial labels, e.g. the label column of a board grouped by a label group. */
+  defaultLabelIds?: string[];
   /** Initial priority, e.g. the Kanban priority column the modal was opened from. */
   defaultPriority?: number;
   /**
@@ -65,6 +75,7 @@ export interface CreateTaskContentProps {
    */
   lockAssignee?: boolean;
   onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
+  /** The project the task starts in, e.g. the page it was opened from. The user can change it. */
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -81,6 +92,7 @@ export interface CreateTaskContentProps {
 const CreateTaskContent = memo<CreateTaskContentProps>(
   ({
     agentId,
+    defaultLabelIds,
     defaultPriority = 0,
     lockAssignee,
     onCreated,
@@ -99,7 +111,30 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const activeWorkspaceId = useActiveWorkspaceId();
 
     const [title, setTitle] = useState('');
+    /** Create failure, shown above the footer buttons: the modal stays open with the user's draft. */
+    const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
     const [priority, setPriority] = useState(defaultPriority);
+    const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+    const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+    const [labels, setLabels] = useState<TaskLabelRef[]>(() =>
+      resolveTaskLabelRefs(getTaskStoreState().taskLabels, defaultLabelIds),
+    );
+    // Opened before the registry loaded (a cold start on a label-grouped
+    // list): hold the column's labels until they can be resolved, instead of
+    // filtering them against an empty registry and losing them.
+    const pendingDefaultLabelIdsRef = useRef(
+      getTaskStoreState().taskLabelsInit ? undefined : defaultLabelIds,
+    );
+    useEffect(() => {
+      const pending = pendingDefaultLabelIdsRef.current;
+      if (!isLabelsInit || !pending?.length) return;
+      pendingDefaultLabelIdsRef.current = undefined;
+      // Keep anything the user already picked meanwhile.
+      setLabels((current) =>
+        current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+      );
+    }, [isLabelsInit, labelRegistry]);
+    const { createProjectId, projectChoice, setProjectChoice } = useTaskProjectChoice(projectId);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -168,7 +203,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const handleContentChange = useCallback(() => {
       if (!canCreateTask) return;
       if (!editor) return;
-      instructionRef.current = String(editor.getDocument('markdown') ?? '');
+      instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     }, [canCreateTask, editor]);
 
     const handleAttach = useCallback(() => {
@@ -181,6 +216,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
 
+      setSubmitError(null);
       const editorJson = editor?.getDocument?.('json') as unknown;
 
       // Only present when the user pinned a run location / directory —
@@ -196,9 +232,10 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...(isScheduled ? toScheduledCreateParams(scheduleDraft, config) : { config }),
           editorData: editorJson,
           instruction: instruction || title.trim(),
+          ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
-          projectId,
+          projectId: createProjectId,
           // Only send visibility in workspace mode; personal mode ignores it.
           visibility: activeWorkspaceId ? visibility : undefined,
         });
@@ -212,8 +249,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             name: result.name ?? undefined,
           });
         }
-      } catch {
-        toast.error(t('createTask.createFailed'));
+      } catch (error) {
+        console.error(error);
+        setSubmitError(toInlineError(t('createTask.createFailedRetry'), error));
       }
     }, [
       activeWorkspaceId,
@@ -221,14 +259,15 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       assigneeUserId,
       canCreateTask,
       close,
+      createProjectId,
       execution,
       createTask,
       editor,
       isMemberPending,
       isScheduled,
+      labels,
       onCreated,
       priority,
-      projectId,
       scheduleDraft,
       t,
       title,
@@ -301,9 +340,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               outline: 'none',
               padding: '4px 0',
             }}
-            onChange={(e) => setTitle(e.target.value)}
             onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setSubmitError(null);
+            }}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
             {showInlineToggle && (
@@ -334,6 +376,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             />
           </div>
         </div>
+
+        {submitError && (
+          <div style={{ flexShrink: 0, padding: '0 16px 8px' }}>
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+          </div>
+        )}
 
         <Flexbox
           horizontal
@@ -375,6 +423,30 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
+
+            <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector
@@ -477,6 +549,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             )}
 
             <TaskExecutionControls
+              canPinPrivateDevices
               assigneeAgentId={assigneeAgentId}
               disabled={!canCreateTask}
               value={execution}

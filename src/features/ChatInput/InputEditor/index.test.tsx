@@ -94,10 +94,6 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: false,
   TRACING_SCENARIOS: { InputCompletion: 'input_completion' },
 }));
-vi.mock('@lobechat/const/hotkeys', () => ({
-  HotkeyEnum: { AddUserMessage: 'add-user-message' },
-  KeyEnum: { Alt: 'alt', Enter: 'enter' },
-}));
 vi.mock('@lobechat/heterogeneous-agents', () => ({ HETEROGENEOUS_TYPE_LABELS: {} }));
 vi.mock('@lobechat/prompts', () => ({
   chainInputCompletion: mocks.chainInputCompletion,
@@ -143,12 +139,6 @@ vi.mock('fuse.js', () => ({
   },
 }));
 vi.mock('lexical', () => ({ KEY_ESCAPE_COMMAND: 'escape' }));
-vi.mock('react-hotkeys-hook', () => ({
-  useHotkeysContext: () => ({
-    disableScope: vi.fn(),
-    enableScope: vi.fn(),
-  }),
-}));
 
 vi.mock('@/components/DragUploadZone', () => ({
   usePasteFile: vi.fn(),
@@ -210,7 +200,6 @@ vi.mock('@/store/user', () => {
   return { useUserStore };
 });
 vi.mock('@/store/user/selectors', () => ({
-  settingsSelectors: { getHotkeyById: () => () => 'alt+enter' },
   systemAgentSelectors: {
     inputCompletion: () => mocks.inputCompletionConfig,
   },
@@ -221,6 +210,7 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 vi.mock('../hooks/useAgentId', () => ({ useAgentId: () => 'agent-id' }));
+vi.mock('../hooks/useChatInputUpload', () => ({ useChatInputUploadKey: () => 'composer-key' }));
 vi.mock('../hooks/useLargeFileLocalPath', () => ({
   useLargeFileLocalPath: () => (files: File[]) => files,
 }));
@@ -251,6 +241,7 @@ vi.mock('./ActionTag', () => ({
   INSERT_ACTION_TAG_COMMAND: 'insert-action-tag',
   useSlashActionItems: () => [],
 }));
+vi.mock('./ImageRefTag', () => ({ useImageRefTagSync: vi.fn() }));
 vi.mock('./MentionMenu', () => ({ createMentionMenu: vi.fn(() => vi.fn(() => null)) }));
 vi.mock('./Placeholder', () => ({
   default: () => <span>placeholder</span>,
@@ -335,7 +326,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.markdownOption).toBeUndefined();
   });
 
-  it('converts pasted markdown when paste auto-convert is on', async () => {
+  it('enables the editor markdown-paste option when auto-convert is on', async () => {
     render(<InputEditor />);
 
     const props = await getEditorProps();
@@ -343,7 +334,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.pasteAsPlainText).toBe(true);
   });
 
-  it('pastes verbatim when paste auto-convert is off', async () => {
+  it('disables the editor markdown-paste option when auto-convert is off', async () => {
     userSettings.enablePasteAutoConvert = false;
 
     render(<InputEditor />);

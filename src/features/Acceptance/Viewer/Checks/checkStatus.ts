@@ -1,5 +1,14 @@
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import { cssVar } from '@lobehub/ui';
-import { Check, CheckCheck, CircleDashed, HelpCircle, MessageSquareX, XCircle } from 'lucide-react';
+import {
+  Check,
+  CheckCheck,
+  CircleDashed,
+  HelpCircle,
+  MessageSquareX,
+  Scale,
+  XCircle,
+} from 'lucide-react';
 
 import { userReviewState } from './checkState';
 import type { AcceptanceCheck, AcceptanceCheckState } from './types';
@@ -18,6 +27,11 @@ export const checkHeadMeta = (check: AcceptanceCheck) => {
 
   if (reviewState === 'rejected') {
     return { color: cssVar.colorError, icon: MessageSquareX };
+  }
+
+  // Waived by an upheld dispute: no longer counted, so it must not read as a failure.
+  if (isCheckWaivedByDispute(check.result?.metadata)) {
+    return { color: cssVar.colorTextQuaternary, icon: Scale };
   }
 
   if (check.state === 'passed' && reviewState === 'accepted') {

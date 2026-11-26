@@ -6,6 +6,7 @@ import {
   files,
   messageGroups,
   messages,
+  messagesFiles,
   sessions,
   topics,
   users,
@@ -23,6 +24,13 @@ import { MessageService } from '../index';
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(function () {
     return {
+      // Carries both inputs, so a caller passing the wrong id or path shows up.
+      getFileAccessUrl: vi.fn().mockImplementation(async function (file: {
+        id?: string;
+        url: string;
+      }) {
+        return `/proxy/${file.id}?path=${file.url}`;
+      }),
       getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
         return path ? `/files${path}` : null;
       }),
@@ -476,6 +484,83 @@ describe('MessageService Integration Tests', () => {
 
       expect(updatedGroup).toHaveLength(1);
       expect(updatedGroup[0].content).toBe('Summary content');
+    });
+  });
+
+  // A protocol 2 step diffs `prepareUiMessages` over its raw topic read, and the
+  // client reads the same topic through `queryMessages`. If the two resolved
+  // attachments differently, a patch would rewrite them on every step.
+  describe('prepareUiMessages over a raw read', () => {
+    it('matches the signed read for every attachment kind', async () => {
+      const messageService = new MessageService(serverDB, userId);
+      await serverDB.insert(agents).values({ id: 'agent-1', userId });
+      await serverDB.insert(topics).values({ id: 'topic-1', userId });
+      await serverDB.insert(files).values([
+        { fileType: 'video/mp4', id: 'f-video', name: 'v', size: 1, url: 'video', userId },
+        { fileType: 'audio/mpeg', id: 'f-audio', name: 'a', size: 1, url: 'audio', userId },
+        { fileType: 'application/pdf', id: 'f-doc', name: 'd', size: 1, url: 'doc', userId },
+        // Another user's file: the viewer gets a tombstone, not its path.
+        {
+          fileType: 'image/png',
+          id: 'f-private',
+          name: 'p',
+          size: 1,
+          url: 'private',
+          userId: otherUserId,
+        },
+      ]);
+      await serverDB.insert(messageGroups).values({
+        content: 'summary',
+        createdAt: new Date('2024-01-01T10:00:30Z'),
+        id: 'group-1',
+        topicId: 'topic-1',
+        type: MessageGroupType.Compression,
+        userId,
+      });
+      const message = { agentId: 'agent-1', role: 'user' as const, topicId: 'topic-1', userId };
+      await serverDB.insert(messages).values([
+        {
+          ...message,
+          content: 'compressed',
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          id: 'msg-compressed',
+          messageGroupId: 'group-1',
+        },
+        {
+          ...message,
+          content: 'latest',
+          createdAt: new Date('2024-01-01T10:01:00Z'),
+          id: 'msg-latest',
+        },
+      ]);
+      await serverDB.insert(messagesFiles).values(
+        [
+          ['msg-compressed', 'f1'],
+          ['msg-latest', 'f1'],
+          ['msg-latest', 'f-video'],
+          ['msg-latest', 'f-audio'],
+          ['msg-latest', 'f-doc'],
+          ['msg-latest', 'f-private'],
+        ].map(([messageId, fileId]) => ({ fileId, messageId, userId })),
+      );
+
+      const params = { agentId: 'agent-1', skipWorks: true, topicId: 'topic-1' };
+      const raw = await (messageService as any).messageModel.query(params, {
+        allowShareVisitor: true,
+      });
+      const signed = await messageService.queryMessages(params, { allowShareVisitor: true });
+
+      // Guards the fixture: every attachment kind, the tombstone and the
+      // compressed member are really in the read.
+      const serialized = JSON.stringify(signed);
+      for (const url of ['f-video?path=video', 'f-audio?path=audio', 'f-doc?path=doc'])
+        expect(serialized).toContain(`/proxy/${url}`);
+      // Once on the latest message, once on the compressed member.
+      expect(serialized.split('/proxy/f1?path=abc')).toHaveLength(3);
+      expect(serialized).toContain('"inaccessible":true');
+      expect(serialized).not.toContain('path=private');
+
+      expect(await messageService.prepareUiMessages(raw)).toEqual(signed);
     });
   });
 });

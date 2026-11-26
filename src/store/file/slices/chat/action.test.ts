@@ -7,11 +7,15 @@ import { UnreadableServerResponseError } from '@/libs/trpc/client/unreadableServ
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
+import { UploadRequestError } from '@/services/upload';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import { useFileStore as useStore } from '../../store';
 
 const AGENT_ID = 'agent-1';
+const CONTEXT_KEY = 'main_agent-1_new';
+const uploadList = () => useStore.getState().chatUploadFileListByContext[CONTEXT_KEY] ?? [];
 
 /** Force the conversation agent into chat / agent / heterogeneous mode for the by-id selectors. */
 const mockAgentMode = ({
@@ -53,8 +57,19 @@ vi.mock('@/services/shareChat', () => ({
 vi.mock('i18next', () => ({
   t: (
     key: string,
-    options?: { message?: string; reason?: string; requestId?: string; status?: number },
+    options?: {
+      detail?: string;
+      max?: string;
+      message?: string;
+      reason?: string;
+      requestId?: string;
+      status?: number;
+    },
   ) => {
+    if (key === 'upload.storageRejected') return `Storage rejected the upload (${options?.detail})`;
+
+    if (key === 'upload.fileTooLarge') return `Over the ${options?.max} limit`;
+
     if (key === 'upload.permissionDenied') {
       return 'You do not have permission to upload files in this workspace.';
     }
@@ -203,30 +218,32 @@ describe('useFileStore:chat', () => {
     const { result } = renderHook(() => useStore());
 
     act(() => {
-      useStore.setState({ chatUploadFileList: [{ id: 'abc' }] as any });
+      useStore.setState({ chatUploadFileListByContext: { [CONTEXT_KEY]: [{ id: 'abc' }] } as any });
     });
 
-    expect(result.current.chatUploadFileList).toEqual([{ id: 'abc' }]);
+    expect(uploadList()).toEqual([{ id: 'abc' }]);
 
     act(() => {
-      result.current.clearChatUploadFileList();
+      result.current.clearChatUploadFileList(CONTEXT_KEY);
     });
 
-    expect(result.current.chatUploadFileList).toEqual([]);
+    expect(uploadList()).toEqual([]);
   });
 
   it('clears only submitted uploads while retaining newer files and their status', () => {
     const { result } = renderHook(() => useStore());
     const newerFile = { id: 'new', status: 'uploading' };
     act(() => {
-      useStore.setState({ chatUploadFileList: [{ id: 'submitted' }, newerFile] as any });
-      result.current.clearChatUploadFileList(['submitted']);
+      useStore.setState({
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [{ id: 'submitted' }, newerFile] } as any,
+      });
+      result.current.clearChatUploadFileList(CONTEXT_KEY, ['submitted']);
     });
-    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    expect(uploadList()).toEqual([newerFile]);
     act(() => {
-      result.current.clearChatUploadFileList([]);
+      result.current.clearChatUploadFileList(CONTEXT_KEY, []);
     });
-    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    expect(uploadList()).toEqual([newerFile]);
   });
 
   it('restoreChatUploadFileList puts cleared uploads back without duplicating newer drafts', () => {
@@ -237,16 +254,206 @@ describe('useFileStore:chat', () => {
     // The composer cleared everything on send; a fresh draft arrived while the
     // rejected send was still unwinding.
     act(() => {
-      useStore.setState({ chatUploadFileList: [newerFile] as any });
-      result.current.restoreChatUploadFileList([submittedFile, newerFile] as any);
+      useStore.setState({ chatUploadFileListByContext: { [CONTEXT_KEY]: [newerFile] } as any });
+      result.current.restoreChatUploadFileList(CONTEXT_KEY, [submittedFile, newerFile] as any);
     });
 
-    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+    expect(uploadList()).toEqual([newerFile, submittedFile]);
 
     act(() => {
-      result.current.restoreChatUploadFileList([]);
+      result.current.restoreChatUploadFileList(CONTEXT_KEY, []);
     });
-    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+    expect(uploadList()).toEqual([newerFile, submittedFile]);
+  });
+
+  it('restoreChatUploadFileList puts restored uploads back around a retained failed one', () => {
+    const { result } = renderHook(() => useStore());
+    const a = { id: 'a', status: 'success' };
+    const failed = { id: 'b', status: 'error' };
+    const c = { id: 'c', status: 'success' };
+    const newer = { id: 'new', status: 'uploading' };
+
+    // The send took a and c; the failed b stayed, and a newer draft arrived meanwhile.
+    act(() => {
+      useStore.setState({
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [failed, newer] } as any,
+      });
+      result.current.restoreChatUploadFileList(CONTEXT_KEY, [a, c] as any, ['a', 'b', 'c']);
+    });
+
+    expect(uploadList()).toEqual([a, failed, c, newer]);
+  });
+
+  // Regression: one global upload list showed a conversation's attachments in
+  // every other conversation, while its text draft stayed behind.
+  it('keeps the uploads of each conversation to itself', () => {
+    const { result } = renderHook(() => useStore());
+    const fileA = { id: 'a', status: 'success' };
+    const fileB = { id: 'b', status: 'success' };
+
+    act(() => {
+      useStore.setState({ chatUploadFileListByContext: {} });
+      result.current.dispatchChatUploadFileList('topic-a', {
+        files: [fileA] as any,
+        type: 'addFiles',
+      });
+      result.current.dispatchChatUploadFileList('topic-b', {
+        files: [fileB] as any,
+        type: 'addFiles',
+      });
+    });
+
+    expect(result.current.chatUploadFileListByContext).toEqual({
+      'topic-a': [fileA],
+      'topic-b': [fileB],
+    });
+
+    act(() => {
+      result.current.clearChatUploadFileList('topic-a');
+    });
+
+    // Back on topic-b its upload is untouched; the emptied topic-a bucket is gone.
+    expect(result.current.chatUploadFileListByContext).toEqual({ 'topic-b': [fileB] });
+  });
+
+  it('moves staged uploads and context selections together to the new key', () => {
+    const { result } = renderHook(() => useStore());
+    const staged = { id: 'staged', status: 'success' };
+    const existing = { id: 'existing', status: 'success' };
+    const selection: ChatContextContent = { content: 'quote', id: 'sel', type: 'text' };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: { blank: [selection] },
+        chatUploadFileListByContext: { blank: [staged], topic: [existing] } as any,
+      });
+      result.current.moveChatComposerAttachments('blank', 'topic');
+    });
+
+    expect(result.current.chatUploadFileListByContext).toEqual({ topic: [existing, staged] });
+    expect(result.current.chatContextSelectionsByContext).toEqual({ topic: [selection] });
+  });
+
+  // Regression: a moved in-flight upload was found by its pending id (the file
+  // name), so a same-named upload staged later under the old key took its result.
+  it('reports a moved in-flight upload to its own chip, not a same-named later one', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+    const { result } = renderHook(() => useStore());
+    const finishes: (() => void)[] = [];
+    vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+      ({ file, onStatusUpdate, uploadId }) =>
+        new Promise((resolve) => {
+          const n = finishes.length + 1;
+          finishes.push(() => {
+            onStatusUpdate?.({
+              id: uploadId ?? file.name,
+              type: 'updateFile',
+              value: { fileUrl: `url-${n}`, id: `server-${n}`, status: 'success' },
+            });
+            resolve({ id: `server-${n}`, url: `url-${n}` } as any);
+          });
+        }),
+    );
+    useStore.setState({ chatUploadFileListByContext: {} });
+
+    let firstUpload!: Promise<void>;
+    let secondUpload!: Promise<void>;
+    await act(async () => {
+      firstUpload = result.current.uploadChatFiles(
+        'blank',
+        [new File(['a'], 'notes.txt', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(1));
+    });
+
+    // The blank conversation becomes a topic mid-upload; the user then stages a
+    // same-named file in the next blank conversation.
+    await act(async () => {
+      result.current.moveChatUploadFileList('blank', 'topic');
+      secondUpload = result.current.uploadChatFiles(
+        'blank',
+        [new File(['b'], 'notes.txt', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(2));
+    });
+
+    await act(async () => {
+      finishes[0]();
+      await firstUpload;
+    });
+
+    const lists = useStore.getState().chatUploadFileListByContext;
+    expect(lists.topic).toEqual([
+      expect.objectContaining({ fileUrl: 'url-1', id: 'server-1', status: 'success' }),
+    ]);
+    expect(lists.blank).toEqual([expect.objectContaining({ status: 'pending' })]);
+
+    await act(async () => {
+      finishes[1]();
+      await secondUpload;
+    });
+  });
+
+  // Regression: pasted images are all named `image.png`. Both pending chips had that name as
+  // their id, so whichever upload finished first claimed the first chip, and a chip could
+  // show one image while sending the other.
+  it('reports each same-named upload to its own chip when they finish out of order', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+    const { result } = renderHook(() => useStore());
+    const finishes: (() => void)[] = [];
+    vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+      ({ file, onStatusUpdate, uploadId }) =>
+        new Promise((resolve) => {
+          const n = finishes.length + 1;
+          finishes.push(() => {
+            onStatusUpdate?.({
+              id: uploadId ?? file.name,
+              type: 'updateFile',
+              value: { fileUrl: `url-${n}`, id: `server-${n}`, status: 'success' },
+            });
+            resolve({ id: `server-${n}`, url: `url-${n}` } as any);
+          });
+        }),
+    );
+    useStore.setState({ chatUploadFileListByContext: {} });
+
+    let firstUpload!: Promise<void>;
+    let secondUpload!: Promise<void>;
+    await act(async () => {
+      firstUpload = result.current.uploadChatFiles(
+        CONTEXT_KEY,
+        [new File(['a'], 'image.png', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(1));
+      secondUpload = result.current.uploadChatFiles(
+        CONTEXT_KEY,
+        [new File(['b'], 'image.png', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(2));
+    });
+
+    // The second paste finishes first.
+    await act(async () => {
+      finishes[1]();
+      await secondUpload;
+    });
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ status: 'pending' }),
+      expect.objectContaining({ fileUrl: 'url-2', id: 'server-2', status: 'success' }),
+    ]);
+
+    await act(async () => {
+      finishes[0]();
+      await firstUpload;
+    });
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ fileUrl: 'url-1', id: 'server-1', status: 'success' }),
+      expect.objectContaining({ fileUrl: 'url-2', id: 'server-2', status: 'success' }),
+    ]);
   });
 
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
@@ -258,13 +465,14 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
       await result.current.uploadChatFiles(
+        CONTEXT_KEY,
         [
           new File(['<svg />'], 'icon.svg', { type: 'image/svg+xml' }),
           new File(['zip'], 'archive.zip', { type: 'application/zip' }),
@@ -274,7 +482,7 @@ describe('useFileStore:chat', () => {
     });
 
     expect(uploadWithProgress).not.toHaveBeenCalled();
-    expect(result.current.chatUploadFileList).toEqual([]);
+    expect(uploadList()).toEqual([]);
     expect(toast.error).toHaveBeenCalledWith(expect.any(String));
   });
 
@@ -286,13 +494,14 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
       await result.current.uploadChatFiles(
+        CONTEXT_KEY,
         [new File(['zip'], 'archive.zip', { type: 'application/zip' })],
         AGENT_ID,
       );
@@ -300,6 +509,9 @@ describe('useFileStore:chat', () => {
 
     expect(toast.error).not.toHaveBeenCalled();
     expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+    expect(uploadWithProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationAgentId: AGENT_ID }),
+    );
   });
 
   it('uploadChatFiles should allow any file type for heterogeneous agents', async () => {
@@ -310,13 +522,14 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
       await result.current.uploadChatFiles(
+        CONTEXT_KEY,
         [new File(['profile'], 'Communication_Notifications.provisionprofile')],
         AGENT_ID,
       );
@@ -338,17 +551,146 @@ describe('useFileStore:chat', () => {
     });
 
     await act(async () => {
-      await result.current.uploadChatFiles([file], AGENT_ID);
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
     });
 
-    expect(result.current.chatUploadFileList).toEqual([
+    expect(uploadList()).toEqual([
       expect.objectContaining({
         agentId: AGENT_ID,
         error: 'You do not have permission to upload files in this workspace.',
-        id: 'test.txt',
+        id: expect.stringMatching(/^test\.txt#/),
         status: 'error',
       }),
     ]);
+  });
+
+  // Regression (T-14442): a 117 MB zip's last S3 part was refused over HTTP/2, the
+  // rejection carried the empty `statusText`, and the chip failed with no reason.
+  it('never leaves a failed upload without a reason', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue('');
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ error: 'File upload failed.', status: 'error' }),
+    ]);
+  });
+
+  it('names the storage status and code when storage refuses the upload', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue(
+      new UploadRequestError({ code: 'RequestTimeout', status: 400 }),
+    );
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({
+        error: 'Storage rejected the upload (HTTP 400 · RequestTimeout)',
+        status: 'error',
+      }),
+    ]);
+    expect(uploadList()[0].retryable).not.toBe(false);
+  });
+
+  it('states the size limit and offers no retry for a file over it', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'huge.zip', { type: 'application/zip' });
+    const uploadWithProgress = vi
+      .spyOn(result.current, 'uploadWithProgress')
+      .mockRejectedValue(new Error('Files larger than 2147483647 bytes cannot be uploaded'));
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ error: 'Over the 2 GB limit', retryable: false, status: 'error' }),
+    ]);
+
+    await act(async () => {
+      await result.current.retryChatUploadFile(CONTEXT_KEY, uploadList()[0].id);
+    });
+    expect(uploadWithProgress).toHaveBeenCalledOnce();
+  });
+
+  describe('removing a chip while it uploads', () => {
+    it('cancels the transfer and deletes nothing server-side', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useStore());
+      const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+      let signal: AbortSignal | undefined;
+      vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+        ({ abortController }) =>
+          new Promise((resolve) => {
+            signal = abortController?.signal;
+            signal?.addEventListener('abort', () => resolve(undefined));
+          }),
+      );
+
+      let upload!: Promise<void>;
+      await act(async () => {
+        upload = result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+        await vi.waitFor(() => expect(uploadList()).toHaveLength(1));
+      });
+      const pending = uploadList()[0] as UploadFileItem;
+      expect(pending.status).toBe('pending');
+
+      await act(async () => {
+        await result.current.removeChatUploadFile(CONTEXT_KEY, pending.id);
+        await upload;
+      });
+
+      expect(signal?.aborted).toBe(true);
+      expect(uploadList()).toEqual([]);
+      expect(removeFile).not.toHaveBeenCalled();
+    });
+
+    it('deletes a file record that lands after the chip was removed', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useStore());
+      const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+      let finish!: () => void;
+      vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            // createFile is not cancellable: the record arrives despite the abort.
+            finish = () => resolve({ id: 'file-landed', url: 'https://example.com/f' });
+          }),
+      );
+
+      let upload!: Promise<void>;
+      await act(async () => {
+        upload = result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+        await vi.waitFor(() => expect(uploadList()).toHaveLength(1));
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile(CONTEXT_KEY, uploadList()[0].id);
+        finish();
+        await upload;
+      });
+
+      expect(removeFile).toHaveBeenCalledWith('file-landed');
+      expect(ragService.parseFileContent).not.toHaveBeenCalled();
+    });
   });
 
   // Regression: a gateway HTML error page answered the upload API and the card
@@ -369,16 +711,96 @@ describe('useFileStore:chat', () => {
     );
 
     await act(async () => {
-      await result.current.uploadChatFiles([file], AGENT_ID);
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
     });
 
-    expect(result.current.chatUploadFileList).toEqual([
+    expect(uploadList()).toEqual([
       expect.objectContaining({
         error: 'The upload service is unavailable. (HTTP 502 · Request ID: a4f7-SJC)',
-        id: 'report.docx',
+        id: expect.stringMatching(/^report\.docx#/),
         status: 'error',
       }),
     ]);
+  });
+
+  // Regression: pasting the same image twice showed two cards and uploaded it twice, but
+  // the server kept one file, so the message said [Image #1] [Image #2] with one image.
+  describe('uploadChatFiles with an image already in the draft', () => {
+    const gif = (name = 'image.gif') => new File(['same-pixels'], name, { type: 'image/gif' });
+
+    beforeEach(() => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      useStore.setState({ chatUploadFileListByContext: {} });
+    });
+
+    it('does not add or upload the same image again', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([
+        expect.objectContaining({
+          contentHash: expect.any(String),
+          repastedAt: expect.any(Number),
+        }),
+      ]);
+    });
+
+    it('keeps one card for the same image pasted twice at once', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif('a.gif'), gif('b.gif')], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toHaveLength(1);
+    });
+
+    it('still uploads images where hashing is unavailable (insecure context)', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+      vi.spyOn(crypto.subtle, 'digest').mockRejectedValue(new TypeError('no subtle'));
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([expect.objectContaining({ contentHash: undefined })]);
+    });
+
+    it('uploads the image again when its earlier upload failed', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(2);
+      expect(uploadList()).toHaveLength(2);
+    });
   });
 
   describe('uploadChatFiles as an agent-share visitor', () => {
@@ -394,7 +816,7 @@ describe('useFileStore:chat', () => {
       const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
 
       await act(async () => {
-        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+        await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID, { shareId: SHARE_ID });
       });
 
       expect(mockUploadShareVisitorFile).toHaveBeenCalledWith(
@@ -404,8 +826,12 @@ describe('useFileStore:chat', () => {
       // Creator-owned row: the visitor's `document.parseFileContent` could not
       // reach it; the run parses it on the creator's account instead.
       expect(ragService.parseFileContent).not.toHaveBeenCalled();
-      expect(result.current.chatUploadFileList).toEqual([
-        expect.objectContaining({ agentId: AGENT_ID, id: 'notes.pdf', shareId: SHARE_ID }),
+      expect(uploadList()).toEqual([
+        expect.objectContaining({
+          agentId: AGENT_ID,
+          id: expect.stringMatching(/^notes\.pdf#/),
+          shareId: SHARE_ID,
+        }),
       ]);
     });
 
@@ -415,12 +841,12 @@ describe('useFileStore:chat', () => {
       const file = new File(['x'], 'tool.exe', { type: 'application/octet-stream' });
 
       await act(async () => {
-        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+        await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID, { shareId: SHARE_ID });
       });
 
       expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalled();
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
     });
 
     it('rejects a file over SHARE_VISITOR_MAX_FILE_SIZE before any request', async () => {
@@ -430,12 +856,12 @@ describe('useFileStore:chat', () => {
       Object.defineProperty(big, 'size', { value: 33 * 1024 * 1024 });
 
       await act(async () => {
-        await result.current.uploadChatFiles([big], AGENT_ID, { shareId: SHARE_ID });
+        await result.current.uploadChatFiles(CONTEXT_KEY, [big], AGENT_ID, { shareId: SHARE_ID });
       });
 
       expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledWith('share.visitor.upload.fileTooLarge');
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
     });
 
     it("surfaces the creator's storage block as share copy, not the visitor's own plan", async () => {
@@ -445,13 +871,13 @@ describe('useFileStore:chat', () => {
       const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
 
       await act(async () => {
-        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+        await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID, { shareId: SHARE_ID });
       });
 
-      expect(result.current.chatUploadFileList).toEqual([
+      expect(uploadList()).toEqual([
         expect.objectContaining({
           error: 'share.visitor.upload.creatorStorageBlocked',
-          id: 'notes.pdf',
+          id: expect.stringMatching(/^notes\.pdf#/),
           status: 'error',
         }),
       ]);
@@ -465,15 +891,17 @@ describe('useFileStore:chat', () => {
 
       act(() => {
         useStore.setState({
-          chatUploadFileList: [{ id: 'file-1', shareId: 'share-1', status: 'success' }] as any,
+          chatUploadFileListByContext: {
+            [CONTEXT_KEY]: [{ id: 'file-1', shareId: 'share-1', status: 'success' }],
+          } as any,
         });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('file-1');
+        await result.current.removeChatUploadFile(CONTEXT_KEY, 'file-1');
       });
 
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
       expect(shareChatService.removeFile).toHaveBeenCalledWith('share-1', 'file-1');
       expect(removeFile).not.toHaveBeenCalled();
     });
@@ -484,15 +912,17 @@ describe('useFileStore:chat', () => {
       act(() => {
         // Still keyed by file name: nothing exists server-side to delete.
         useStore.setState({
-          chatUploadFileList: [{ id: 'cat.png', shareId: 'share-1', status: 'error' }] as any,
+          chatUploadFileListByContext: {
+            [CONTEXT_KEY]: [{ id: 'cat.png', shareId: 'share-1', status: 'error' }],
+          } as any,
         });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('cat.png');
+        await result.current.removeChatUploadFile(CONTEXT_KEY, 'cat.png');
       });
 
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
       expect(shareChatService.removeFile).not.toHaveBeenCalled();
     });
 
@@ -501,14 +931,16 @@ describe('useFileStore:chat', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({ chatUploadFileList: [{ id: 'file-1' }] as any });
+        useStore.setState({
+          chatUploadFileListByContext: { [CONTEXT_KEY]: [{ id: 'file-1' }] } as any,
+        });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('file-1');
+        await result.current.removeChatUploadFile(CONTEXT_KEY, 'file-1');
       });
 
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
       expect(removeFile).toHaveBeenCalledWith('file-1');
     });
 
@@ -518,17 +950,19 @@ describe('useFileStore:chat', () => {
 
       act(() => {
         useStore.setState({
-          chatUploadFileList: [{ id: 'file-1', skipRemoveFile: true }] as any,
+          chatUploadFileListByContext: {
+            [CONTEXT_KEY]: [{ id: 'file-1', skipRemoveFile: true }],
+          } as any,
         });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('file-1');
+        await result.current.removeChatUploadFile(CONTEXT_KEY, 'file-1');
       });
 
       // draft entry is dropped, but the persisted file backing the original
       // message must NOT be deleted
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploadList()).toEqual([]);
       expect(removeFile).not.toHaveBeenCalled();
     });
   });

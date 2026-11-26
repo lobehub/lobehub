@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
@@ -23,6 +24,7 @@ export const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
@@ -44,12 +46,13 @@ export const getKnowledgeItemStatusMap = async (
   fileItems: Array<{
     chunkTaskId?: string | null;
     embeddingTaskId?: string | null;
+    fileId?: string | null;
     id: string;
   }>,
 ): Promise<Map<string, KnowledgeItemStatus>> => {
   if (fileItems.length === 0) return new Map();
 
-  const fileIds = fileItems.map((item) => item.id);
+  const fileIds = fileItems.map((item) => item.fileId ?? item.id);
   const chunkTaskIds = [
     ...new Set(fileItems.map((item) => item.chunkTaskId).filter(Boolean)),
   ] as string[];
@@ -87,7 +90,7 @@ export const getKnowledgeItemStatusMap = async (
       return [
         item.id,
         {
-          chunkCount: chunkCountMap.get(item.id) ?? null,
+          chunkCount: chunkCountMap.get(item.fileId ?? item.id) ?? null,
           chunkingError: (chunkTask?.error as IAsyncTaskError | null | undefined) ?? null,
           chunkingStatus: (chunkTask?.status as AsyncTaskStatus | null | undefined) ?? null,
           embeddingError: (embeddingTask?.error as IAsyncTaskError | null | undefined) ?? null,

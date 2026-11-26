@@ -7,6 +7,24 @@ import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { getRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
+import type { RouterInstance, RouterOptions } from './routerOptions';
+
+const createOpenAITestRuntime = (
+  runtime: NonNullable<RouterInstance['runtime']>,
+  models: string[],
+  options: RouterOptions,
+) =>
+  createRouterRuntime({
+    id: 'test-runtime',
+    routers: [
+      {
+        apiType: 'openai',
+        options,
+        runtime,
+        models,
+      },
+    ],
+  });
 
 describe('createRouterRuntime', () => {
   beforeEach(() => {
@@ -45,16 +63,8 @@ describe('createRouterRuntime', () => {
         textToSpeech = vi.fn();
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: { apiKey: 'test-key' },
-            runtime: MockRuntime as any,
-            models: ['gpt-4', 'gpt-3.5-turbo'],
-          },
-        ],
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4', 'gpt-3.5-turbo'], {
+        apiKey: 'test-key',
       });
 
       const runtime = new Runtime();
@@ -119,17 +129,7 @@ describe('createRouterRuntime', () => {
         chat = mockChat;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'gpt-4', messages: [], temperature: 0.7 };
@@ -342,17 +342,7 @@ describe('createRouterRuntime', () => {
         chat = mockChat;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: { id: 'channel-1' },
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4'], { id: 'channel-1' });
 
       const runtime = new Runtime();
       const metadata: Record<string, unknown> = { traceId: 'trace-1', trigger: 'chat' };
@@ -410,17 +400,7 @@ describe('createRouterRuntime', () => {
 
       const handleError = vi.fn().mockReturnValue(undefined);
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4'], {});
 
       const runtime = new Runtime({
         chat: {
@@ -511,17 +491,7 @@ describe('createRouterRuntime', () => {
         embeddings = mockEmbeddings;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['text-embedding-ada-002'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['text-embedding-ada-002'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'text-embedding-ada-002', input: 'test input' };
@@ -541,17 +511,7 @@ describe('createRouterRuntime', () => {
         textToSpeech = mockTextToSpeech;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['tts-1'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['tts-1'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'tts-1', input: 'Hello world', voice: 'alloy' };
@@ -1595,17 +1555,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatAlwaysFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: AlwaysFailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        AlwaysFailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -1759,20 +1713,14 @@ describe('createRouterRuntime', () => {
         chat = mockChatSuccess;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [
-              { apiKey: 'key-1', runtime: FailRuntime as any },
-              { apiKey: 'key-2', runtime: SuccessRuntime as any },
-            ],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [
+          { apiKey: 'key-1', runtime: FailRuntime as any },
+          { apiKey: 'key-2', runtime: SuccessRuntime as any },
         ],
-      });
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -1801,17 +1749,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -1963,17 +1905,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -2004,17 +1940,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -2088,17 +2018,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -2123,17 +2047,11 @@ describe('createRouterRuntime', () => {
         chat = mockChatFail;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
-            runtime: FailRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        FailRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+      );
 
       const runtime = new Runtime();
       await expect(
@@ -2153,17 +2071,11 @@ describe('createRouterRuntime', () => {
         chat = vi.fn().mockResolvedValue('response');
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: [{ apiKey: 'openai-key' }, { apiKey: 'anthropic-key', apiType: 'anthropic' }],
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(
+        MockRuntime as any,
+        ['gpt-4'],
+        [{ apiKey: 'openai-key' }, { apiKey: 'anthropic-key', apiType: 'anthropic' }],
+      );
 
       const runtime = new Runtime();
       await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
@@ -2359,17 +2271,7 @@ describe('createRouterRuntime', () => {
         createImage = mockCreateImage;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['gpt-image-1'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-image-1'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'gpt-image-1', params: { prompt: 'a cat' } };
@@ -2426,17 +2328,7 @@ describe('createRouterRuntime', () => {
         getVideoGenerationCapabilities = () => ({ completionModes: ['polling'] as const });
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['sora-1'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['sora-1'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'sora-1', params: { prompt: 'a cat' } } as any;
@@ -2734,17 +2626,7 @@ describe('createRouterRuntime', () => {
         generateObject = mockGenerateObject;
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4'], {});
 
       const runtime = new Runtime();
       const payload = { model: 'gpt-4', messages: [{ role: 'user' as const, content: 'test' }] };
@@ -2798,17 +2680,7 @@ describe('createRouterRuntime', () => {
         chat = vi.fn().mockResolvedValue('response');
       }
 
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['gpt-4'],
-          },
-        ],
-      });
+      const Runtime = createOpenAITestRuntime(MockRuntime as any, ['gpt-4'], {});
 
       const runtime = new Runtime({
         apiKey: '  trimmed-key  ',

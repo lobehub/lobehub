@@ -60,6 +60,16 @@ export const scanRepo = (root = repoRoot): FileReport[] => {
 export const readLegacyFiles = (): string[] =>
   JSON.parse(readFileSync(legacyFilesPath, 'utf8')) as string[];
 
+export const plainCssImportersPath = path.join(import.meta.dirname, 'plainCssImporters.json');
+
+export const readPlainCssImporters = (): string[] =>
+  JSON.parse(readFileSync(plainCssImportersPath, 'utf8')) as string[];
+
+const PLAIN_CSS_IMPORT =
+  /^import\s+(?:[^'"]+\s+from\s+)?["'](?:\.{1,2}|@)\/(?:[^"']*\/)?[^/"']+(?<!\.module)\.css(?:\?[^"']*)?["']/m;
+
+export const importsPlainCss = (source: string) => PLAIN_CSS_IMPORT.test(source);
+
 /** Listed files that no longer use an emotion style import, or no longer exist. */
 export const findStaleLegacyFiles = (reports: FileReport[], legacy = readLegacyFiles()) => {
   const current = new Set(reports.map((r) => r.file));

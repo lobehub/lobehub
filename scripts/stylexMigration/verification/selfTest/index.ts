@@ -2,16 +2,19 @@ import path from 'node:path';
 
 import { chromium } from '@playwright/test';
 
+import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { createFastCapture } from '../browser/fastCapture';
 import { createProbeDriver } from '../browser/probes';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 import { writeArtifactManifest, writeHtmlReport, writeJson } from '../reporting/report';
 import { boundaries, boundaryHtml } from './boundaries';
-import { runBrowserPipelineSelfTest } from './browserPipelineSelfTest';
 import { runCapturePreparationSelfTest } from './capturePreparationSelfTest';
 import { runCollectorSelfTest } from './collectorSelfTest';
 import { runBoundaryMatrix } from './matrix';
 import { runRuleWitnessSelfTest } from './ruleWitnessSelfTest';
+import { runSurfaceSelfTest } from './surfaceSelfTest';
 
 /** The prototype corpus remains regression evidence, never a whole-PR PASS. */
 export const runSelfTest = async (
@@ -55,10 +58,10 @@ export const runSelfTest = async (
       if (!entry.passed) regressions.push(`COLLECTOR_REGRESSION:${entry.id}`);
     const capturePreparation = await runCapturePreparationSelfTest(browser);
     if (capturePreparation.summary.failed) regressions.push('CAPTURE_PREPARATION_REGRESSION');
-    const pipeline = await runBrowserPipelineSelfTest(output, executablePath);
-    if (pipeline.summary.failed) regressions.push('BROWSER_PIPELINE_REGRESSION');
     const ruleWitness = await runRuleWitnessSelfTest(browser);
     if (ruleWitness.summary.failed) regressions.push('RULE_WITNESS_REGRESSION');
+    const surfaces = await runSurfaceSelfTest(browser);
+    if (surfaces.summary.failed) regressions.push('CAPTURE_SURFACE_REGRESSION');
 
     const parity: Array<{ caseId: string; differences: number; nodes: number; side: string }> = [];
     const page = await browser.newPage();
@@ -101,9 +104,8 @@ export const runSelfTest = async (
       collector: collector.summary,
       capturePreparation: capturePreparation.summary,
       ruleWitness: ruleWitness.summary,
-      pipeline: pipeline.summary,
+      surfaces: surfaces.summary,
       durationMs: performance.now() - started,
-      gateEligible: false,
       mode: 'self-test',
       parity: {
         comparisons: parity.length,
@@ -120,8 +122,8 @@ export const runSelfTest = async (
     await writeJson(output, 'parity.json', parity);
     await writeJson(output, 'collector.json', collector);
     await writeJson(output, 'capture-preparation.json', capturePreparation);
-    await writeJson(output, 'pipeline.json', pipeline);
     await writeJson(output, 'rule-witness.json', ruleWitness);
+    await writeJson(output, 'surfaces.json', surfaces);
     await writeJson(output, 'self-test.json', result);
     await writeHtmlReport(output, result);
     await writeArtifactManifest(output, [
@@ -130,16 +132,8 @@ export const runSelfTest = async (
       'parity.json',
       'collector.json',
       'capture-preparation.json',
-      'pipeline.json',
       'rule-witness.json',
-      'pipeline-equal/artifacts.json',
-      'pipeline-difference/artifacts.json',
-      'pipeline-supplemental/artifacts.json',
-      'pipeline-condition-intersection/artifacts.json',
-      'pipeline-condition-fraction/artifacts.json',
-      'pipeline-shards-complete/artifacts.json',
-      'pipeline-shards-truncated/artifacts.json',
-      'pipeline-shards-difference-truncated/artifacts.json',
+      'surfaces.json',
       'self-test.json',
       'report.html',
     ]);

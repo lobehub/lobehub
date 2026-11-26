@@ -52,7 +52,7 @@ describe('resolvePrecreatedTopicSnapshot', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('pins the agent model and provider for the pre-created topic', async () => {
@@ -67,7 +67,7 @@ describe('createGroupAgentTopic', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   // Re-parenting `topicMessageIds` is a cross-aggregate write: it must go
@@ -94,5 +94,18 @@ describe('createGroupAgentTopic', () => {
         title: 'Group topic',
       }),
     );
+  });
+
+  // Regression: a message sent as "[Image #1] [Image #2] dup test" was titled
+  // "Image #1 dup test".
+  it('leaves inline image references out of the fallback title', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'topic-new' });
+
+    await createGroupAgentTopic(
+      { ...deps(), topicRepo: { create } as never },
+      { agentId: 'agent-a', groupId: 'group-1', message: '[Image #1] [Image #2] dup test' },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ title: 'dup test' }));
   });
 });

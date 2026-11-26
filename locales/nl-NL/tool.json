@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "Geen sjablonen beschikbaar.",
   "agentMarketplace.picker.failedToLoad": "Laden van sjablonen mislukt. Probeer het later opnieuw.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} sjablonen beschikbaar.",
-  "agentMarketplace.render.alreadyInLibraryTag": "Al in bibliotheek",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} al in bibliotheek",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} al in bibliotheek",
   "askUserQuestion.checkStatus": "Controleer de indieningsstatus",
   "askUserQuestion.checking": "Indieningsstatus controleren…",
   "askUserQuestion.customOption.placeholder": "Of schrijf je eigen…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-connectors kunnen alleen synchroniseren in de desktop-app. Open LobeHub Desktop om deze connector te synchroniseren.",
   "connector.kind.agent": "Agentconnector",
   "connector.kind.builtin": "Ingebouwd hulpmiddel",
-  "connector.kind.community": "Community-hulpmiddel",
+  "connector.kind.community": "Marktplaats-tool",
   "connector.kind.custom": "Aangepaste connector",
   "connector.kind.oauth": "OAuth-connector",
   "connector.manageOnlyCreator": "Alleen de maker of een werkruimte-eigenaar kan deze connector beheren",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "Item toevoegen",
   "updateArgs.form.key": "Veldsleutel",
   "updateArgs.form.value": "Veldwaarde",
-  "updateArgs.formValidationFailed": "Formulier validatie mislukt, controleer het parameterformaat",
   "updateArgs.keyRequired": "Veldsleutel mag niet leeg zijn",
   "updateArgs.stringifyError": "Kan parameters niet serialiseren, controleer het parameterformaat"
 }

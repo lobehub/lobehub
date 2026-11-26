@@ -8,10 +8,10 @@ import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
-} from '../../core/anthropicCompatibleFactory';
-import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
-import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+} from '../../core/anthropicCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
+import type { AnthropicGenerateObjectConfig } from '../../core/protocols/anthropicMessages/generateObject';
+import { createAnthropicGenerateObject } from '../../core/protocols/anthropicMessages/generateObject';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
@@ -534,9 +534,7 @@ const createAnthropicRouter = ({
 } = {}) => ({
   apiType: 'anthropic' as const,
   ...(baseURLPattern ? { baseURLPattern } : {}),
-  options: {
-    ...(baseURL ? { baseURL } : {}),
-  },
+  options: baseURL ? { baseURL } : {},
   runtime: LobeMoonshotAnthropicAI,
 });
 

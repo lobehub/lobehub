@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentState } from '../types';
 import {
+  buildEmptyArgsToolContent,
   EMPTY_ARGS_TOOL_CONTENT,
-  EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
   toolExpectsNoArguments,
 } from './emptyArgumentsCalls';
@@ -186,9 +186,16 @@ describe('partitionEmptyArgumentsCalls', () => {
   });
 });
 
-describe('rejection feedback constants', () => {
-  it('keeps the actionable single-call escape hint in the blocked content', () => {
-    expect(EMPTY_ARGS_TOOL_CONTENT).toContain('Call the tool again one call at a time');
-    expect(EMPTY_ARGS_TOOL_REASON).toBe('tool_arguments_empty');
+describe('buildEmptyArgsToolContent', () => {
+  it('names the tool and call id so a rejected parallel call is diagnosable', () => {
+    const content = buildEmptyArgsToolContent(
+      call({ apiName: 'writeFile', id: 'call_7', identifier: 'lobe-local-system' }),
+    );
+
+    expect(content).toContain(
+      'the arguments of this call (tool: lobe-local-system.writeFile, call id: call_7) arrived empty',
+    );
+    expect(content).toContain('The call was not executed.');
+    expect(content).not.toBe(EMPTY_ARGS_TOOL_CONTENT);
   });
 });

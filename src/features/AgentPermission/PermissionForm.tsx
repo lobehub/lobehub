@@ -14,6 +14,7 @@ import { getSelectionPolicyLabelKeys } from '@/features/ResourcePermission/selec
 import { useAccessLevelOptions } from '@/features/ResourcePermission/useAccessLevelOptions';
 
 import { useAgentPermission } from './useAgentPermission';
+import { useSharingGroup } from './useSharingGroup';
 
 const styles = createStaticStyles(({ css }) => ({
   // FormTitle centres the avatar against title+description; a one-line icon
@@ -53,6 +54,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     topicSharePolicy,
   } = useAgentPermission(agentId);
   const form = useForm();
+  const sharingGroup = useSharingGroup(agentId);
 
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
 
@@ -265,9 +267,13 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
       <Form
         collapsible={false}
         form={form}
-        items={[...(memberGroup ? [memberGroup] : []), configGroup]}
         itemsType={'group'}
         variant={'filled'}
+        items={[
+          ...(sharingGroup ? [sharingGroup] : []),
+          ...(memberGroup ? [memberGroup] : []),
+          configGroup,
+        ]}
         {...FORM_STYLE}
       />
     </>

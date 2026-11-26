@@ -1,4 +1,4 @@
-import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type { TaskAutomationMode, TaskChannelDeliveryInput, TaskStatus } from '@lobechat/types';
 
 export const TaskApiName = {
   /** Add a comment to a task */
@@ -59,6 +59,8 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Existing task label names to attach; unknown names fail, nothing is created. */
+  labels?: string[];
   /** Model the task runs with; omitted pins the assignee agent's current model. */
   model?: string;
   name: string;
@@ -144,6 +146,8 @@ export interface CreateTasksState {
 
 export interface ListTasksParams {
   assigneeAgentId?: string;
+  /** Label or label group names; matches tasks carrying any of them. */
+  labels?: string[];
   limit?: number;
   offset?: number;
   parentIdentifier?: string;
@@ -225,6 +229,8 @@ export interface DeleteTaskCommentState {
 
 export interface EditTaskParams {
   addDependencies?: string[];
+  /** Existing label names to add; a grouped label replaces its sibling. */
+  addLabels?: string[];
   assigneeAgentId?: string | null;
   /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
   assigneeUserId?: string | null;
@@ -239,6 +245,7 @@ export interface EditTaskParams {
   /** Provider for the task model; `null` clears it. */
   provider?: string | null;
   removeDependencies?: string[];
+  removeLabels?: string[];
 }
 
 export interface EditTaskState {
@@ -299,6 +306,11 @@ export interface RunTasksState {
 export interface SetTaskScheduleParams {
   /** Switch automation mode. Pass null to disable automation entirely. */
   automationMode?: TaskAutomationMode | null;
+  /**
+   * Where each run's answer is also posted: `{}` = where the caller is answering now, otherwise
+   * `channelId` (+ `threadId`). Pass null to stop posting.
+   */
+  channelDelivery?: TaskChannelDeliveryInput | null;
   /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
   heartbeatInterval?: number;
   identifier: string;

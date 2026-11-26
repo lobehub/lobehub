@@ -85,6 +85,118 @@ describe('TaskSearchRepo', () => {
     expect(untitled.title).toBe('T-3');
   });
 
+  it('finds a task by a phrase in its instruction and shows the matched passage', async () => {
+    const model = new TaskModel(serverDB, userId);
+    const task = await model.create({
+      instruction: [
+        '![image.png](https://example.com/f/file_1)',
+        '',
+        'The **resource drive** toolbar has a batch-actions button that does nothing when clicked, so files cannot be moved.',
+      ].join('\n'),
+      name: 'Drive bug',
+    });
+
+    const results = await new TaskSearchRepo(serverDB, userId).search({ query: 'Does Nothing' });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ id: task.id, relevance: 5, title: 'Drive bug' });
+    expect(results[0].description).toBe(
+      '…toolbar has a batch-actions button that does nothing when clicked, so files cannot be moved.',
+    );
+  });
+
+  it('finds a task by its description and keeps the description as subtitle', async () => {
+    const model = new TaskModel(serverDB, userId);
+    const task = await model.create({
+      description: 'Customer escalation from Acme',
+      instruction: 'Investigate the report',
+      name: 'Escalation',
+    });
+
+    const [result] = await new TaskSearchRepo(serverDB, userId).search({ query: 'acme' });
+
+    expect(result).toMatchObject({
+      description: 'Customer escalation from Acme',
+      id: task.id,
+      relevance: 5,
+    });
+  });
+
+  it('shows the matched passage instead of a description without the term', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({ description: 'Short summary', instruction: 'Refactor widget', name: 'X' });
+
+    const [result] = await new TaskSearchRepo(serverDB, userId).search({ query: 'widget' });
+
+    expect(result.description).toBe('Refactor widget');
+  });
+
+  it('ranks name matches ahead of content-only matches', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({ instruction: 'Mention payments in the body', name: 'Body only' });
+    await model.create({ instruction: 'Unrelated', name: 'Fix payments retry' });
+
+    const results = await new TaskSearchRepo(serverDB, userId).search({ query: 'payments' });
+
+    expect(results.map((r) => [r.title, r.relevance])).toEqual([
+      ['Fix payments retry', 4],
+      ['Body only', 5],
+    ]);
+  });
+
+  it('falls back to the opening text when the match is inside stripped markdown', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({
+      instruction: '![shot](https://example.com/f/file_zzz)\n\nSee the screenshot',
+      name: 'Shot',
+    });
+
+    const [result] = await new TaskSearchRepo(serverDB, userId).search({ query: 'file_zzz' });
+
+    expect(result.description).toBe('See the screenshot');
+  });
+
+  it.each(['retry_count', 'C#'])(
+    'keeps literal punctuation such as %s in the matched passage',
+    async (query) => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({
+        instruction: `${'Background context that pushes the match past the opening. '.repeat(3)}Then rename ${query} in the worker.`,
+        name: 'Punctuation',
+      });
+
+      const [result] = await new TaskSearchRepo(serverDB, userId).search({ query });
+
+      expect(result.description).toContain(`rename ${query} in the worker.`);
+      expect(result.description?.startsWith('…')).toBe(true);
+    },
+  );
+
+  it('finds a passage across stripped markdown and drops heading markers', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({
+      instruction: '## Steps\n\nClick the **batch** button',
+      name: 'Markdown',
+    });
+
+    const repo = new TaskSearchRepo(serverDB, userId);
+    const [byHeading] = await repo.search({ query: 'Steps' });
+    expect(byHeading.description).toBe('Steps Click the batch button');
+
+    const [byRawMarkdown] = await repo.search({ query: '**batch** button' });
+    expect(byRawMarkdown.description).toBe('Steps Click the batch button');
+  });
+
+  it('treats LIKE wildcards in the content literally', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({ instruction: 'Coverage must reach 100%', name: 'A' });
+    await model.create({ instruction: 'Coverage must reach 1000 lines', name: 'B' });
+
+    const results = await new TaskSearchRepo(serverDB, userId).search({ query: '100%' });
+
+    expect(results.map((r) => r.title)).toEqual(['A']);
+  });
+
   it('treats LIKE wildcards in the query literally', async () => {
     const model = new TaskModel(serverDB, userId);
     await createTasks(model, ['Raise to 100%', 'Raise to 1000']);

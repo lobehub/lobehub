@@ -2,6 +2,50 @@
 
 LobeHub command-line interface.
 
+## Release to npm
+
+The `Release CLI` GitHub Actions workflow publishes to npm's `latest` tag when
+CLI production inputs change on `canary`. Merge the feature or fix PR after its
+checks and required product acceptance; no separate version-bump PR is needed.
+
+Automatic inputs are `apps/cli/src/**`, build scripts, `package.json`, the CLI
+workspace/TypeScript/tsdown configuration, and the release workflow/helper.
+Tests, fixtures, Markdown documentation, E2E-only changes and generated manuals
+are excluded. Changes only to shared workspace packages or the offline report
+can be released by manually dispatching `Release CLI` on `canary`.
+
+CI allocates the next patch above the highest stable npm version (for example,
+`0.0.78` → `0.0.79`). A higher stable version intentionally set in `package.json`
+is honored for a minor/major release. The generated version is used for the
+bundle and manual; CI does not commit version changes back to the branch. The
+checked-in version is therefore a development baseline, not necessarily npm's
+latest release. Use `npm view @lobehub/cli version` to check the published version.
+
+The workflow tests the bundle, runs the complete `prepublishOnly` build, checks
+the built CLI and packs it. Immediately before publication it creates a
+`cli-release/v<version>` Git tag pointing at the source commit. The tag reserves
+the version for retries; the published package also records `gitHead`.
+Publication is serialized and the workflow waits up to ten minutes for npm to
+expose the matching version/source under `latest`. A successful upload alone is
+not reported as a verified publication.
+
+Use **Re-run failed jobs** on the original run to recover a failed publication.
+A retry reuses its reserved version or skips it if already published. If npm is
+still processing an earlier reserved release, a different commit's release stops
+with a recovery message instead of allocating another version. Older reruns do
+not publish over newer source commits. Build/test failures before reservation
+can be fixed by the next PR normally. Do not delete reservation tags to retry a
+release. Registry errors stop the workflow.
+
+GitHub may coalesce queued runs while another release is running; the surviving
+newer commit includes the earlier merged changes. This publishes source snapshots,
+not necessarily one version per merged PR.
+
+Publishing uses the repository's `NPM_TOKEN` secret, as the SDK release does.
+It must have publish permission for `@lobehub/cli` and support unattended
+publishing under the package's npm authentication policy. PR previews continue
+to publish separately to `pkg.pr.new`.
+
 ## Update a connected device
 
 ```bash
@@ -49,6 +93,79 @@ you should update the connector's installation or change its service configurati
 Diagnostics never dump the service's command line or environment. Older connectors
 on Linux use a conservative `/proc` lookup; an inaccessible or unsupported entry
 is reported as unknown instead of guessed.
+
+## Managed cloud devices
+
+A managed cloud device is a device that LobeHub creates and runs for you. The
+platform that runs it starts the agent with:
+
+```bash
+lh connect --managed
+```
+
+Managed mode reads everything from the environment. It does not use a stored
+login, a keychain or a browser, and it writes no credentials to disk, so it runs
+headless in a container. `lh connect service install` is not needed: the
+platform supervises the process and restarts it when it exits.
+
+| Variable                          | Required | Meaning                                                     |
+| --------------------------------- | -------- | ----------------------------------------------------------- |
+| `LOBEHUB_MANAGED_DEVICE_ID`       | yes      | The device id. It replaces the id derived from the machine. |
+| `LOBEHUB_MANAGED_DEVICE_SECRET`   | yes      | The bootstrap secret. The CLI never prints it.              |
+| `LOBEHUB_SERVER`                  | yes      | The LobeHub server URL.                                     |
+| `LOBEHUB_DEVICE_GATEWAY_URL`      | yes      | The device gateway URL.                                     |
+| `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A JSON array: a command to run while the device does work.  |
+
+If a required variable is missing, the CLI names it and exits with status 1.
+`LOBEHUB_SERVER` and `LOBEHUB_DEVICE_GATEWAY_URL` must use `https`; `http` is
+accepted only for `localhost` and the loopback addresses `127.0.0.0/8` and
+`::1`. The URLs must not contain a user name, a password, a query or a fragment.
+A path is kept, so `https://example.com/lobehub` sends the token request to
+`https://example.com/lobehub/api/device/managed/token`. `--managed` cannot be used
+with `--token`, `--gateway`, `--device-id`, `--workspace`, `--public` or
+`--daemon`.
+
+After the CLI reads the secret, it removes it from its own environment, so the
+processes it starts (tool calls, agent runs) do not inherit it. This does not
+hide the secret from the device: other processes of the same user can still
+read the environment the CLI started with (for example `/proc/<pid>/environ`).
+The secret only gets tokens for this device, and it stops working when the
+device is deleted.
+
+**Token.** The CLI sends `POST {LOBEHUB_SERVER}/api/device/managed/token` with
+`{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`, where
+`expiresAt` is an RFC 3339 time with `Z` or an offset. The token's
+`workspace_id` claim, when present, makes the device a workspace device;
+otherwise its `sub` is the owning user.
+
+- The CLI gets a new token when 80% of the token's lifetime has passed (at least
+  5 s after it got the previous one). The open gateway connection stays up:
+  only the next connection uses the new token, so running tool calls, agent
+  runs and tunnels continue.
+- On HTTP 408, 429 or 5xx, a network error or an unreadable response, the CLI
+  tries again after 1 s, then 2 s, 4 s and so on, up to 60 s between attempts
+  (each delay ±20%). It continues until the server answers.
+- On HTTP 401 (wrong secret, or the device was deleted), 404 (the server has no
+  managed cloud devices) or another 4xx, the CLI exits with status 1.
+- If the gateway rejects a token, the CLI gets a new token and connects again.
+  If the gateway also rejects that token before a connection succeeds, the CLI
+  exits with status 1.
+
+**Activity command.** When `LOBEHUB_DEVICE_ACTIVITY_COMMAND` is set, the CLI runs
+it while the device serves a tool call, an RPC, an agent run or an open tunnel.
+It runs when the work starts and then every 30 s while work continues, never
+more than once in 30 s and never two at a time. The work does not wait for it.
+A run that takes longer than 10 s is stopped. Failures appear only in the debug
+log (`--verbose`).
+
+The value is a JSON array of strings: the program, then its arguments, for
+example `["my-agent","touch"]`. The CLI runs the program directly, without a
+shell, so there is no quoting, `$VAR`, `~` or glob expansion, and `|`, `;`, `&`,
+`>` and `<` are ordinary characters. If the value is not a non-empty JSON array
+of non-empty strings, the CLI exits with status 1 at startup. To use shell
+features, give an explicit shell, for example
+`["sh","-c","my-agent touch >> /var/log/activity"]`. When the CLI stops, it
+also stops a command that is still running.
 
 ## Publish local artifacts
 

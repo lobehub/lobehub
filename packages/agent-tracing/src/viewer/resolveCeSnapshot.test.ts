@@ -77,3 +77,46 @@ describe('resolveCeSnapshot', () => {
     });
   });
 });
+
+describe('resolveCeSnapshot — pooled refs', () => {
+  const m1 = { content: 'one', role: 'user' };
+  const m2 = { content: 'two', role: 'assistant' };
+
+  it('resolves refs whatever order the steps are stored in', () => {
+    const steps = [
+      ceStep(2, { inputRefs: { toolCount: 'r3' }, outputRef: 'n2' }),
+      ceStep(0, {
+        inputRefs: { toolCount: 'r3' },
+        outputRef: 'n1',
+        pool: { m1, n1: { refs: ['m1'] }, r3: 3 },
+      }),
+      ceStep(1, { outputRef: 'n1', pool: { m2, n2: { base: 'n1', refs: ['m2'] } } }),
+    ];
+
+    expect(resolveCeSnapshot(steps[0], steps)).toEqual({
+      input: { toolCount: 3 },
+      metadata: undefined,
+      output: [m1, m2],
+    });
+    // Step 1 pooled n2 but only references n1; its input carries over from step 0.
+    expect(resolveCeSnapshot(steps[2], steps)?.output).toEqual([m1]);
+    expect(resolveCeSnapshot(steps[2], steps)?.input).toEqual({ toolCount: 3 });
+  });
+
+  it('fails loudly when a referenced pool entry is missing', () => {
+    const steps = [ceStep(0, { outputRef: 'gone' })];
+
+    expect(() => resolveCeSnapshot(steps[0], steps)).toThrow(/gone .*step 0 is missing/);
+  });
+
+  it('fails instead of looping on a cyclic output list', () => {
+    const steps = [
+      ceStep(0, {
+        outputRef: 'a',
+        pool: { a: { base: 'b', refs: [] }, b: { base: 'a', refs: [] } },
+      }),
+    ];
+
+    expect(() => resolveCeSnapshot(steps[0], steps)).toThrow(/cyclic/);
+  });
+});

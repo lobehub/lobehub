@@ -532,16 +532,17 @@ describe('AgentRuntimeService', () => {
 
       const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
-      mockCoordinator.loadAgentState
-        .mockResolvedValueOnce(mockState)
-        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+      mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+      mockCoordinator.loadAgentStatus.mockResolvedValueOnce('interrupted');
       mockCoordinator.isInterrupted.mockResolvedValueOnce(false);
 
       const result = await service.executeStep(mockParams);
 
       expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
       expect(result.nextStepScheduled).toBe(false);
-      expect(mockCoordinator.loadAgentState).toHaveBeenCalledTimes(2);
+      // The fallback reads only the status, not a second copy of the blob.
+      expect(mockCoordinator.loadAgentState).toHaveBeenCalledTimes(1);
+      expect(mockCoordinator.loadAgentStatus).toHaveBeenCalledWith('test-operation-1');
       expect(mockCoordinator.saveStepResult).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
@@ -575,9 +576,8 @@ describe('AgentRuntimeService', () => {
             },
           };
         });
-        mockCoordinator.loadAgentState
-          .mockResolvedValueOnce(mockState)
-          .mockResolvedValue({ ...mockState, status: 'interrupted' });
+        mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+        mockCoordinator.loadAgentStatus.mockResolvedValue('interrupted');
         mockCoordinator.isInterrupted.mockResolvedValue(false);
 
         const execution = service.executeStep(mockParams);

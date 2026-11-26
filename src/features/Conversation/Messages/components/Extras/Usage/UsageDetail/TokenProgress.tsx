@@ -58,7 +58,9 @@ const TokenProgress = memo<TokenProgressProps>(
                 )}
                 <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
               </Flexbox>
-              <div style={{ fontWeight: 500 }}>{formatValue(item.value)}</div>
+              <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                {formatValue(item.value)}
+              </div>
             </Flexbox>
           ))}
         </Flexbox>

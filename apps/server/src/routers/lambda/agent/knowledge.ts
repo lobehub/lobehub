@@ -174,16 +174,20 @@ export const knowledgeRouter = router({
           // Filter out all images
           .filter((file) => !file.fileType.startsWith('image'))
           .map((file) => ({
+            createdAt: file.createdAt,
             enabled: knowledge.files.some((item) => item.id === file.id),
             fileType: file.fileType,
             id: file.id,
             name: file.name,
             ownerUserId: file.userId,
+            size: file.size,
             type: KnowledgeType.File,
+            updatedAt: file.updatedAt,
             visibility: file.visibility as 'private' | 'public',
           })),
         ...visibleKnowledgeBases.map((knowledgeBase) => ({
           avatar: knowledgeBase.avatar,
+          createdAt: knowledgeBase.createdAt,
           description: knowledgeBase.description,
           enabled: knowledge.knowledgeBases.some((item) => item.id === knowledgeBase.id),
           id: knowledgeBase.id,
@@ -191,6 +195,7 @@ export const knowledgeRouter = router({
           name: knowledgeBase.name,
           ownerUserId: knowledgeBase.userId,
           type: KnowledgeType.KnowledgeBase,
+          updatedAt: knowledgeBase.updatedAt,
           visibility: knowledgeBase.visibility,
         })),
       ];
