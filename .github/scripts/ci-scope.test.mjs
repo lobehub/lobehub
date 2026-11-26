@@ -12,6 +12,7 @@ import {
   parseNameStatus,
   readWorkspace,
   testPackages,
+  vitestConfigReachesApp,
 } from './ci-scope.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -24,7 +25,8 @@ const workspace = new Map([
     { dir: 'packages/database', deps: ['@lobechat/utils', '@lobechat/types'], hasTest: true },
   ],
   ['@lobechat/editor', { dir: 'packages/editor', deps: [], hasTest: true }],
-  ['@lobechat/openapi', { dir: 'packages/openapi', deps: [], hasTest: true }],
+  // its vitest config resolves `@/server` into apps/server/src
+  ['@lobechat/openapi', { dir: 'packages/openapi', deps: [], hasTest: true, reachesApp: true }],
   ['@lobehub/sdk', { dir: 'packages/sdk', deps: ['@lobechat/openapi'], hasTest: true }],
   ['@lobechat/no-tests', { dir: 'packages/no-tests', deps: ['@lobechat/types'], hasTest: false }],
   ['@lobechat/local-file-shell', { dir: 'packages/local-file-shell', deps: [], hasTest: true }],
@@ -117,6 +119,7 @@ test('app source runs the app, server, database and E2E jobs; a test-only change
   assert.deepEqual(ran(computeScope(pr('src/features/a.tsx'))), [
     'app',
     'server',
+    'packages',
     'database',
     'e2e',
     'renderBudget',
@@ -125,6 +128,7 @@ test('app source runs the app, server, database and E2E jobs; a test-only change
   assert.deepEqual(ran(computeScope(pr('apps/server/src/a.ts'))), [
     'app',
     'server',
+    'packages',
     'database',
     'e2e',
   ]);
@@ -157,6 +161,27 @@ test('a package change selects it and its dependents, and runs the database test
     'packages',
     'windowsShell',
   ]);
+});
+
+test('app or server source reruns the packages whose tests import it, with their dependents', () => {
+  const server = computeScope(
+    pr('apps/server/src/modules/AgentRuntime/InMemoryStreamEventManager.ts'),
+  );
+  assert.equal(server.packages, true);
+  assert.deepEqual(server.packageNames, ['@lobechat/openapi', '@lobehub/sdk']);
+  assert.deepEqual(computeScope(pr('src/store/a.ts')).packageNames, [
+    '@lobechat/openapi',
+    '@lobehub/sdk',
+  ]);
+  // test files of the app or the server are not imported by package tests
+  assert.deepEqual(computeScope(pr('apps/server/src/a.test.ts')).packageNames, []);
+});
+
+test('vitestConfigReachesApp spots aliases and tsconfig paths into app or server code', () => {
+  for (const reaching of ['openapi', 'trpc', 'utils', 'builtin-tool-task']) {
+    assert.equal(vitestConfigReachesApp(path.join(repoRoot, 'packages', reaching)), true, reaching);
+  }
+  assert.equal(vitestConfigReachesApp(path.join(repoRoot, 'packages/fetch-sse')), false);
 });
 
 test('affectedTestPackages follows dependents transitively and drops packages without tests', () => {
