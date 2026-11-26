@@ -3,11 +3,13 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { MessageModel } from '@/database/models/message';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { redriveClaimedVerification } from './lifecycle';
 import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
 import { finalizeVerifyRun } from './settle';
@@ -26,6 +28,8 @@ const SWEEP_MAX_RUNS = 1000;
 export interface VerifySweepOutcome {
   /** Runs whose outstanding checks were closed as `errored` before the rollup. */
   abandoned: string[];
+  /** Runs whose judging never started a verifier and was started again. */
+  redriven: string[];
   /** Task rounds taken off their acceptance because the run never delivered. */
   released: string[];
   /** Runs whose checks had all landed and only needed the missing rollup. */
@@ -56,6 +60,14 @@ export interface VerifySweepOutcome {
  *   carry no verdict and never will, so after {@link VERIFY_ABANDONED_MS} they
  *   are closed as `errored` (an infra failure, not a delivery judgment, so they
  *   neither gate delivery nor seed auto-repair) and the rollup follows.
+ * - **no verifier ever started** — the attempt died between claiming
+ *   `verifying` and spawning its verifiers, so the builder's evidence was never
+ *   judged at all. Closing it as `errored` would end the round without a
+ *   verdict, so the latest round of a successful run is judged again, once
+ *   (see {@link canRedrive}). A second stall falls back to `errored`.
+ *
+ * A round a later round of its acceptance superseded only gets its rollup; the
+ * task is driven by the latest round alone.
  *
  * A check bound to a verifier operation that is still live keeps the whole run
  * out of the sweep however old it is — an agent verifier is a full sub-agent run
@@ -71,7 +83,13 @@ export const sweepStuckVerifyRuns = async (
   const now = options?.now ?? new Date();
   const pageSize = options?.pageSize ?? SWEEP_PAGE_SIZE;
   const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
-  const outcome: VerifySweepOutcome = { abandoned: [], released: [], settled: [], skipped: 0 };
+  const outcome: VerifySweepOutcome = {
+    abandoned: [],
+    redriven: [],
+    released: [],
+    settled: [],
+    skipped: 0,
+  };
 
   // Walk the whole stranded set, not just its oldest page: rows the sweep leaves
   // alone keep their timestamp, so a single fixed-size read would return the same
@@ -115,7 +133,7 @@ const recoverRun = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
   now: Date,
-): Promise<'abandoned' | 'released' | 'settled' | 'skipped'> => {
+): Promise<'abandoned' | 'redriven' | 'released' | 'settled' | 'skipped'> => {
   const operationId = run.operationId;
   if (!operationId) return 'skipped';
   const workspaceId = run.workspaceId ?? undefined;
@@ -141,10 +159,13 @@ const recoverRun = async (
       return !result || PENDING_RESULT_STATUSES.has(result.status);
     });
 
+  const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
+  const latest = await isLatestRound(db, run);
+  let redrive = false;
+
   if (outstanding.length > 0) {
     if (now.getTime() - run.updatedAt.getTime() < VERIFY_ABANDONED_MS) return 'skipped';
 
-    const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
     for (const item of outstanding) {
       const verifierOperationId = byItem.get(item.id)?.verifierOperationId;
       if (!verifierOperationId) continue;
@@ -155,6 +176,8 @@ const recoverRun = async (
       // A still-live verifier (parked ones included) can still produce a verdict.
       if (verifierOp && isAgentOperationInFlight(verifierOp.status)) return 'skipped';
     }
+
+    redrive = latest && (await canRedrive(run, outstanding, byItem, operationModel));
   }
 
   // Committed to acting — take the lease first. Everything below has side effects
@@ -175,6 +198,22 @@ const recoverRun = async (
     ))
   )
     return 'skipped';
+
+  if (redrive) {
+    // Stamped before judging so a re-drive that dies the same way is not
+    // re-driven forever: the next tick sees the stamp and closes it as errored.
+    await new VerifyRunModel(db, run.userId, workspaceId).recordVerifierRedrive(run.id, now);
+    const builder = await operationModel.findById(operationId);
+    const deliverable = await resolveFinalDeliverable(
+      db,
+      run.userId,
+      { operationId, topicId: builder?.topicId ?? undefined },
+      workspaceId,
+    );
+    await redriveClaimedVerification(db, run.userId, { deliverable, operationId }, workspaceId);
+    log('re-drove run %s (op %s): no verifier had started', run.id, operationId);
+    return 'redriven';
+  }
 
   if (outstanding.length > 0) {
     await Promise.all(
@@ -200,10 +239,61 @@ const recoverRun = async (
 
   await statusService.recompute(operationId);
   // No report context — the sweep holds no deliverable. The task is still driven,
-  // which is the whole point: the goal has been waiting on this verdict.
-  await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+  // which is the whole point: the goal has been waiting on this verdict. Not for
+  // a superseded round, though: its task now waits on the later round, and
+  // driving it from here would pause the task under that round's feet.
+  if (latest) await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
 
   const action = outstanding.length > 0 ? 'abandoned' : 'settled';
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;
+};
+
+/** Whether no later round of the same acceptance superseded this one. */
+const isLatestRound = async (db: LobeChatDatabase, run: VerifyRunItem): Promise<boolean> => {
+  if (!run.acceptanceId) return true;
+  const rounds = await new VerifyRunModel(
+    db,
+    run.userId,
+    run.workspaceId ?? undefined,
+  ).listByAcceptance(run.acceptanceId);
+  return rounds.every((round) => (round.roundIndex ?? 0) <= (run.roundIndex ?? 0));
+};
+
+/**
+ * Whether a stalled latest round should be judged again rather than closed as
+ * errored. Only when nothing was ever judged (no outstanding check reached a
+ * verifier), the builder run finished successfully, and the round was not
+ * re-driven before.
+ */
+const canRedrive = async (
+  run: VerifyRunItem,
+  outstanding: VerifyCheckItem[],
+  byItem: Map<string, { verifierOperationId: string | null }>,
+  operationModel: AgentOperationModel,
+): Promise<boolean> => {
+  if (run.metadata?.verifierRedrivenAt) return false;
+  if (outstanding.some((item) => byItem.get(item.id)?.verifierOperationId)) return false;
+
+  const builder = await operationModel.findById(run.operationId!);
+  return builder?.status === 'done';
+};
+
+/**
+ * The builder's final reply, read back the way the completion gate received it:
+ * the run's delivery-checker card hangs off the assistant message that
+ * completion carried.
+ */
+const resolveFinalDeliverable = async (
+  db: LobeChatDatabase,
+  userId: string,
+  { operationId, topicId }: { operationId: string; topicId?: string },
+  workspaceId?: string,
+): Promise<string> => {
+  const messageModel = new MessageModel(db, userId, workspaceId);
+  const card = await messageModel.findVerifyMessageByOperationId(operationId, topicId);
+  if (!card?.parentId) return '';
+
+  const reply = await messageModel.findById(card.parentId);
+  return typeof reply?.content === 'string' ? reply.content : '';
 };

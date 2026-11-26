@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   countLinearIssues,
+  getArchivedLinearIssuesByIds,
   getLinearIssuesByIds,
   getLinearProjectTeamIds,
   listLinearIssues,
@@ -105,7 +106,20 @@ describe('archived issues', () => {
     expect(issues).toMatchObject([{ id: 'archived-1' }]);
     const body = requestBody(fetchMock.mock.calls[0]);
     expect(body.query).toContain('includeArchived: true');
+    expect(body.query).toContain('archivedAt');
     expect(body.variables.filter).toEqual({ id: { in: ['archived-1'] } });
+  });
+});
+
+describe('issue labels', () => {
+  it('reads each label with its color and group, which a sync needs to create it', async () => {
+    fetchMock.mockImplementation(async () => reply(emptyIssues));
+
+    await listLinearIssues('token', { stateTypes: ['completed'], teamId: 'team-pkg' });
+
+    expect(requestBody(fetchMock.mock.calls[0]).query).toContain(
+      'nodes { name color parent { name color } }',
+    );
   });
 });
 
@@ -210,5 +224,27 @@ describe('countLinearIssues', () => {
     expect(
       await countLinearIssues('token', { stateTypes: ['started'], teamId: 'team-pkg' }, 50),
     ).toEqual({ capped: false, count: 50 });
+  });
+});
+
+describe('getArchivedLinearIssuesByIds', () => {
+  it('asks Linear for only the archived ones, including them in the query', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: { issues: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } } },
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getArchivedLinearIssuesByIds('token', ['a', 'b']);
+
+    const { query, variables } = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(query).toContain('includeArchived: true');
+    expect(variables.filter).toEqual({ archivedAt: { null: false }, id: { in: ['a', 'b'] } });
+    vi.unstubAllGlobals();
   });
 });

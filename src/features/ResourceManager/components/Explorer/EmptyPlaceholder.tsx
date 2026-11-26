@@ -19,6 +19,7 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getResourceSourceFilter } from '@/features/ResourceManager/store/selectors';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { ResourceSourceFilter } from '@/types/files';
 
 const ICON_SIZE = 80;
@@ -26,7 +27,7 @@ const ICON_SIZE = 80;
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTitle: css`
     margin-block-start: 12px;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   card: css`

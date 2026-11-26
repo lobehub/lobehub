@@ -5,12 +5,9 @@ import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const'
 import {
   Avatar,
   Center,
-  createStaticStyles,
   cssVar,
-  cx,
   Flexbox,
   Icon,
-  responsive,
   Skeleton,
   Spin,
   stopPropagation,
@@ -25,6 +22,9 @@ import {
   useForm,
   useWatch,
 } from '@lobehub/ui/form';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useDebounceFn } from 'ahooks';
 import { get, set } from 'es-toolkit/compat';
 import { InfoIcon, LockIcon } from 'lucide-react';
@@ -41,6 +41,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useInterfaceDensity } from '@/styles/density';
+import { sx } from '@/styles/sx';
 import {
   type AiProviderDetailItem,
   type AiProviderSourceType,
@@ -56,49 +58,28 @@ import EnableSwitch from './EnableSwitch';
 import OAuthDeviceFlowAuth from './OAuthDeviceFlowAuth';
 import UpdateProviderInfo from './UpdateProviderInfo';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  aceGcm: css`
-    width: 100%;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-
-    opacity: 0.66;
-
-    transition: opacity 0.2s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  form: css`
-    ${responsive.sm} {
-      width: 100%;
-      min-width: unset !important;
-    }
-  `,
-  help: css`
-    border-radius: 50%;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextDescription};
-
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFill};
-    }
-  `,
-  switchLoading: css`
-    width: 44px !important;
-    min-width: 44px !important;
-    height: 22px !important;
-    border-radius: 12px !important;
-  `,
-}));
+const styles = stylex.create({
+  aceGcm: {
+    width: '100%',
+    fontSize: '12px',
+    color: sxVar.colorTextSecondary,
+    textAlign: 'center',
+    opacity: { 'default': 0.66, ':hover': 1 },
+    transition: `opacity 0.2s ${sxVar.motionEaseInOut}`,
+  },
+  form: {
+    width: { default: null, [media.sm]: '100%' },
+    minWidth: { default: null, [media.sm]: 'unset !important' },
+  },
+  help: {
+    borderRadius: '50%',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': sxVar.colorTextDescription, ':hover': sxVar.colorText },
+    backgroundColor: { 'default': sxVar.colorFillTertiary, ':hover': sxVar.colorFill },
+    backgroundImage: 'none',
+  },
+});
 
 export interface ProviderConfigProps extends Omit<AiProviderDetailItem, 'enabled' | 'source'> {
   apiKeyItems?: FormFieldProps[];
@@ -141,6 +122,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
   }) => {
     const {
       authType,
+      checkMode,
       proxyUrl,
       showApiKey = true,
       defaultShowBrowserRequest,
@@ -149,6 +131,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       supportResponsesApi,
     } = settings || {};
     const { t } = useTranslation('modelProvider');
+    const compact = useInterfaceDensity() === 'compact';
     const form = useForm({
       onValuesChange: (_, values) => handleFormValuesChange(values),
     });
@@ -316,7 +299,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     const aceGcmItem: FormFieldProps = {
       bare: true,
       children: (
-        <div className={styles.aceGcm}>
+        <div {...stylex.props(styles.aceGcm)}>
           <Icon icon={LockIcon} style={{ marginRight: 4 }} />
           <Trans
             i18nKey="providerModels.config.aesGcm"
@@ -401,7 +384,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       showResponsesApiSwitch
         ? {
             children: isLoading ? (
-              <Skeleton height={36} />
+              <Skeleton height={compact ? 28 : 36} />
             ) : (
               <Switch disabled={!canManageProvider} loading={configUpdating} />
             ),
@@ -415,10 +398,11 @@ const ProviderConfig = memo<ProviderConfigProps>(
       showChecker
         ? {
             children: isLoading ? (
-              <Skeleton height={36} />
+              <Skeleton height={compact ? 28 : 36} />
             ) : (
               <Checker
                 checkErrorRender={checkErrorRender}
+                checkMode={checkMode}
                 model={data?.checkModel || checkModel!}
                 provider={id}
                 onAfterCheck={async () => {
@@ -518,7 +502,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 target="_blank"
                 onClick={stopPropagation}
               >
-                <Center className={styles.help} height={20} width={20}>
+                <Center className={stylex.props(styles.help).className} height={20} width={20}>
                   ?
                 </Center>
               </a>
@@ -577,7 +561,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
         )}
         {shouldShowForm && (
           <Form
-            className={cx(styles.form, className)}
+            {...sx(styles.form, className)}
             form={form}
             items={[model]}
             variant={'borderless'}

@@ -160,6 +160,25 @@ describe('BenchmarkAction replica wiring', () => {
       expect(agentEvalService.deleteBenchmark).toHaveBeenCalledWith('b1');
       expect(useEvalStore.getState().benchmarkDetailMap.b1).toBeUndefined();
     });
+
+    it('throws when the server refuses (built-in benchmark) and keeps the detail cache', async () => {
+      const { agentEvalService } = await import('@/services/agentEval');
+      vi.mocked(agentEvalService.deleteBenchmark).mockResolvedValue({
+        error: 'system benchmarks cannot be deleted',
+        success: false,
+      } as any);
+      useEvalStore.setState({
+        benchmarkDetailMap: { b1: { id: 'b1', name: 'Lobe Bench' } as any },
+      });
+
+      await expect(useEvalStore.getState().deleteBenchmark('b1')).rejects.toThrow(
+        'system benchmarks cannot be deleted',
+      );
+      expect(useEvalStore.getState().benchmarkDetailMap.b1).toEqual({
+        id: 'b1',
+        name: 'Lobe Bench',
+      });
+    });
   });
 
   describe('updateBenchmark', () => {

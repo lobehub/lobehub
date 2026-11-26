@@ -1,11 +1,10 @@
 import { createElement } from 'react';
 
-import { SettingsBodySkeleton } from '@/components/Skeleton/Settings/Page';
-import SettingsProfileSkeleton from '@/components/Skeleton/Settings/Profile';
+import { SettingsChunkSkeleton } from '@/components/Skeleton/Settings/Page';
 import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
 
-const loading = (_debugId: string) => () => createElement(SettingsBodySkeleton);
+const loading = (_debugId: string) => () => createElement(SettingsChunkSkeleton);
 
 export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
@@ -17,6 +16,9 @@ export const componentMap = {
   [SettingsTabs.Appearance]: dynamic(() => import('../appearance'), {
     loading: loading('Settings > Appearance'),
   }),
+  [SettingsTabs.Conversation]: dynamic(() => import('../conversation'), {
+    loading: loading('Settings > Conversation'),
+  }),
   [SettingsTabs.Provider]: dynamic(() => import('../provider'), {
     loading: loading('Settings > Provider'),
   }),
@@ -25,12 +27,6 @@ export const componentMap = {
   }),
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
-  }),
-  [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
-    loading: loading('Settings > Messenger'),
-  }),
-  [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
-    loading: loading('Settings > Integrations'),
   }),
   [SettingsTabs.Notification]: dynamic(
     () => import('@/business/client/BusinessSettingPages/Notification'),
@@ -62,12 +58,15 @@ export const componentMap = {
   [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
     loading: loading('Settings > Environments'),
   }),
+  [SettingsTabs.SubscriptionAccounts]: dynamic(() => import('../subscription-accounts'), {
+    loading: loading('Settings > Subscription Accounts'),
+  }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
   // Profile related tabs
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
-    loading: () => createElement(SettingsProfileSkeleton),
+    loading: loading('Settings > Profile'),
   }),
   [SettingsTabs.Stats]: dynamic(() => import('../stats'), {
     loading: loading('Settings > Stats'),
@@ -87,11 +86,11 @@ export const componentMap = {
   [SettingsTabs.Security]: dynamic(() => import('../security'), {
     loading: loading('Settings > Security'),
   }),
-  [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
-    loading: loading('Settings > Skill'),
+  [SettingsTabs.Automations]: dynamic(() => import('../automations'), {
+    loading: loading('Settings > Automations'),
   }),
-  [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
-    loading: loading('Settings > Connector'),
+  [SettingsTabs.Webhooks]: dynamic(() => import('../webhooks'), {
+    loading: loading('Settings > Webhooks'),
   }),
   [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
     loading: loading('Settings > Tools'),
@@ -100,6 +99,12 @@ export const componentMap = {
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {
     loading: loading('Settings > Plans'),
   }),
+  [SettingsTabs.CodingPlans]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/CodingPlans'),
+    {
+      loading: loading('Settings > CodingPlans'),
+    },
+  ),
   [SettingsTabs.Credits]: dynamic(() => import('@/business/client/BusinessSettingPages/Credits'), {
     loading: loading('Settings > Credits'),
   }),

@@ -1,7 +1,9 @@
 'use client';
 
 import type { AgentGroupMember, BuiltinStreamingProps } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Markdown, useTheme } from '@lobehub/ui';
+import { Flexbox, Markdown, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -11,27 +13,17 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import type { ExecuteTasksParams } from '../../../types';
 import { MemberTaskTitle, useMemberAnchors } from '../../MemberProgress';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  `,
-  instruction: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  taskCard: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  taskTitle: css`
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  instruction: { fontSize: '13px', color: cssVar.colorTextSecondary },
+  taskCard: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  taskTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorText },
+});
 
 export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksParams>>(
   ({ args, toolCallId }) => {
@@ -59,9 +51,9 @@ export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksPara
     if (!tasksWithAgents.length) return null;
 
     return (
-      <div className={styles.container}>
+      <div {...stylex.props(styles.container)}>
         {tasksWithAgents.map((task, index) => (
-          <div className={styles.taskCard} key={task.agentId || index}>
+          <div {...stylex.props(styles.taskCard)} key={task.agentId || index}>
             <Flexbox gap={8}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <AgentAvatar
@@ -73,13 +65,13 @@ export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksPara
                   size={20}
                 />
                 <MemberTaskTitle anchor={anchors[index]}>
-                  <span className={styles.taskTitle}>
+                  <span {...stylex.props(styles.taskTitle)}>
                     {task.title || task.agent?.title || 'Task'}
                   </span>
                 </MemberTaskTitle>
               </Flexbox>
               {task.instruction && (
-                <div className={styles.instruction}>
+                <div {...stylex.props(styles.instruction)}>
                   <Markdown animated variant={'chat'}>
                     {task.instruction}
                   </Markdown>

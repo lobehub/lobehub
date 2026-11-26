@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentIdentity.desc':
+    'Give an agent its own email address, and read what arrives in its inbox from the agent settings.',
+  'features.agentIdentity.title': 'Agent Identity',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -17,7 +20,7 @@ export default {
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
   'features.codexAppServer.desc':
-    'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
+    'Run Codex through App Server on desktop or a connected device for interactive questions and native turn control. Applies to subsequent runs.',
   'features.codexAppServer.title': 'Codex App Server Runtime',
   'features.desktopSplitView.desc':
     'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
@@ -31,9 +34,6 @@ export default {
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
-  'features.goals.desc':
-    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
-  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -43,11 +43,14 @@ export default {
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.messageTextSelectionActions.desc':
-    'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
+    'Show Quote and Copy actions when selecting text in chat messages. Quote adds the selected text to your message as a quote.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
+  'features.pageCollab.desc':
+    "Edit workspace pages together in real time and see who else is on the page. When off, pages still save normally and show teammates' changes after a refresh.",
+  'features.pageCollab.title': 'Live Page Collaboration',
   'features.projects.desc':
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',

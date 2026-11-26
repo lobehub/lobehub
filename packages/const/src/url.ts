@@ -78,6 +78,16 @@ export const AGENT_CHAT_TOPIC_PAGE_URL = (agentId: string, topicId: string, mobi
   return urlJoin('/agent', agentId, topicId, 'page');
 };
 
+/**
+ * Visitors' conversations with the shared Agent, opened from its Share settings. Lands on the
+ * newest visitor topic, with the visitors listed in the sidebar.
+ */
+export const AGENT_SHARE_VISITORS_URL = (agentId: string) => urlJoin('/agent', agentId, 'visitor');
+
+/** A share visitor's run topic, opened read-only by the shared Agent's owner. */
+export const AGENT_SHARE_VISITOR_TOPIC_URL = (agentId: string, topicId: string) =>
+  urlJoin('/agent', agentId, 'visitor', topicId);
+
 export const AGENT_PROFILE_URL = (agentId: string) => `/agent/${agentId}/profile`;
 
 export const GROUP_CHAT_URL = (groupId: string) => `/group/${groupId}`;
@@ -86,8 +96,9 @@ export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
   urlJoin('/group', groupId, topicId);
 
 /**
- * A Channel page; a thread opens beside its Channel. A project's Channel opens inside the
- * project so its sidebar stays in place.
+ * A Channel page. A thread link opens the thread as the page (`/threads/:threadId`); opening one
+ * from a message instead shows it beside the Channel (`?thread=`). A project's Channel opens
+ * inside the project so its sidebar stays in place.
  */
 export const CHANNEL_URL = (
   channelId: string,
@@ -95,7 +106,7 @@ export const CHANNEL_URL = (
   projectId?: string | null,
 ) => {
   const path = projectId ? `/project/${projectId}/channels/${channelId}` : `/channels/${channelId}`;
-  return threadId ? `${path}?thread=${encodeURIComponent(threadId)}` : path;
+  return threadId ? `${path}/threads/${encodeURIComponent(threadId)}` : path;
 };
 
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);

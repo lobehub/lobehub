@@ -91,6 +91,7 @@ vi.mock('@/server/services/agent', () => ({
 }));
 
 vi.mock('@/server/services/workspacePermission', () => ({
+  getWorkspaceScopedPermissionMatches: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn(),
   isWorkspacePrimaryOwner: vi.fn(),
 }));
@@ -189,6 +190,7 @@ describe('agentRouter', () => {
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
+      getAgentVisibilityMeta: vi.fn().mockResolvedValue(null),
       publishToWorkspace: vi.fn(),
       resolveIdBySlug: vi.fn().mockResolvedValue(null),
       toggleFile: vi.fn(),
@@ -311,6 +313,19 @@ describe('agentRouter', () => {
       visibility: 'public',
       workspaceId: 'ws-1',
     };
+
+    it('returns null from getAgentConfigById for an agent outside the caller scope', async () => {
+      // Another member's private agent is filtered out by the scoped lookup.
+      vi.mocked(resolveAgentReference).mockRejectedValueOnce(
+        new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' }),
+      );
+      agentServiceMock.getAgentConfigById = vi.fn();
+
+      const caller = agentRouter.createCaller({ ...mockCtx, serverDB: {}, workspaceId: 'ws-1' });
+
+      await expect(caller.getAgentConfigById({ agentId: 'agt_private' })).resolves.toBeNull();
+      expect(agentServiceMock.getAgentConfigById).not.toHaveBeenCalled();
+    });
 
     it('redacts getAgentConfigById for a member who can view but not edit', async () => {
       agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(fullConfig);
@@ -761,7 +776,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('rejects promotion of another member agent even for a workspace owner', async () => {
+    it('rejects promotion when resource permission denies access to another member agent', async () => {
       agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
         slug: null,
         userId: 'other-member',
@@ -772,24 +787,6 @@ describe('agentRouter', () => {
       );
 
       const caller = agentRouter.createCaller(wsCtx());
-      await expect(
-        caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
-    });
-
-    it('rejects promotion of another member agent for a plain member', async () => {
-      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
-        slug: null,
-        userId: 'other-member',
-        visibility: 'private',
-      });
-      vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
-        new TRPCError({ code: 'FORBIDDEN' }),
-      );
-
-      const caller = agentRouter.createCaller(wsCtx());
-
       await expect(
         caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -937,6 +934,26 @@ describe('agentRouter', () => {
           );
         },
       );
+
+      it('drops a team pin even when the policy strip rebuilds the patch', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        await agentRouter.createCaller(wsCtx()).updateAgentConfig({
+          agentId: 'agent-1',
+          value: {
+            agencyConfig: { boundDeviceId: 'device-1', modelSelectionPolicy: 'fixed' },
+            pinned: true,
+          },
+        });
+
+        // `pinned` is the owner/admin team pin; only `updateAgentPinned` writes it.
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          { agencyConfig: { boundDeviceId: 'device-1' } },
+          undefined,
+        );
+      });
 
       it('strips fully merged stale policies before a collaborator update', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });

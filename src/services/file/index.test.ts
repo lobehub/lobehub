@@ -9,16 +9,17 @@ const { mockGetDocumentById, mockGetFileItemById } = vi.hoisted(() => ({
   mockGetFileItemById: vi.fn(),
 }));
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
+vi.mock('@/libs/trpc/client', () => {
+  const lambdaClient = {
     document: {
       getDocumentById: { query: mockGetDocumentById },
     },
     file: {
       getFileItemById: { query: mockGetFileItemById },
     },
-  },
-}));
+  };
+  return { lambdaClient, scopedLambdaClient: () => lambdaClient };
+});
 
 describe('FileService.getKnowledgeItem', () => {
   const service = new FileService();

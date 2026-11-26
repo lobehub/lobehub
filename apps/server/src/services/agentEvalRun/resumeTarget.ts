@@ -3,11 +3,22 @@ import type { EvalRunTopicResult, EvalThreadResult } from '@lobechat/types';
 import pMap from 'p-map';
 
 import type { ThreadModel } from '@/database/models/thread';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
+import {
+  AgentEvalMemoryService,
+  EvalMemoryFixtureConflictError,
+} from '@/server/services/agentEvalMemory';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
+import { resolveTopicAgentId } from './caseAgent';
+import { assertRunCaseCompatibility, EvalCaseCompatibilityError } from './caseCompatibility';
+import { withResolvedEnvironment } from './caseEnvironment';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import { loadTrajectoryData } from './trajectory';
 import type { EvalRunDeps } from './types';
 import { getCaseId, log } from './utils';
+
+export class EvalResumeConflictError extends Error {}
 
 const RESUMABLE_THREAD_STATUSES = new Set(['error', 'timeout']);
 /** Caps concurrent per-case resume checks (each issues several DB reads). */
@@ -44,6 +55,13 @@ export async function canResumeTrajectory(
 
   const runTopic = await deps.runTopicModel.findByRunAndTestCase(params.runId, params.testCaseId);
   if (!runTopic) return { canResume: false, reason: invalidResumeTargetReason };
+  try {
+    await assertRunCaseCompatibility(deps, run, [runTopic]);
+  } catch (error) {
+    if (error instanceof EvalCaseCompatibilityError)
+      return { canResume: false, reason: error.message };
+    throw error;
+  }
 
   log('canResumeTrajectory: runTopic.status=%s topicId=%s', runTopic.status, runTopic.topicId);
 
@@ -91,17 +109,38 @@ export async function canResumeTrajectory(
     }
   }
 
-  // pass@1 resumes track steps on the runTopic; pass@k uses per-thread metadata above.
-  if (k > 1) return { canResume: true as const };
-
-  // Reject if the previous run already exhausted maxSteps
-  const maxSteps = run.config?.maxSteps;
-  const prevSteps = runTopic.evalResult?.steps ?? 0;
-  if (maxSteps && prevSteps >= maxSteps) {
-    log('canResumeTrajectory: rejected — prevSteps=%d >= maxSteps=%d', prevSteps, maxSteps);
-    return { canResume: false, reason: resumeLimitReachedReason };
+  // pass@1 tracks steps on the runTopic; pass@k uses per-thread metadata above.
+  if (k === 1) {
+    const maxSteps = run.config?.maxSteps;
+    const prevSteps = runTopic.evalResult?.steps ?? 0;
+    if (maxSteps && prevSteps >= maxSteps) {
+      log('canResumeTrajectory: rejected — prevSteps=%d >= maxSteps=%d', prevSteps, maxSteps);
+      return { canResume: false, reason: resumeLimitReachedReason };
+    }
   }
 
+  if (!runTopic.testCase) return { canResume: false, reason: invalidResumeTargetReason };
+  const testCase = await withResolvedEnvironment(deps, runTopic.testCase);
+  try {
+    await assertCaseConnectorBindings(
+      deps,
+      run.datasetId,
+      testCase.content.environment,
+      run.config?.connectorSnapshots?.[params.testCaseId],
+    );
+    await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).assertResumeFixture({
+      fixture: testCase.content.environment?.memory ?? {},
+      ...params,
+      topicId: runTopic.topicId,
+    });
+  } catch (error) {
+    if (
+      error instanceof EvalMemoryFixtureConflictError ||
+      error instanceof EvalConnectorBindingError
+    )
+      return { canResume: false, reason: error.message };
+    throw error;
+  }
   return { canResume: true as const };
 }
 
@@ -152,11 +191,12 @@ export async function resumeTrajectory(
   const resumeCheck = await canResumeTrajectory(deps, params);
   if (!resumeCheck.canResume) {
     log('resumeTrajectory: canResume=false reason=%s', resumeCheck.reason);
-    throw new Error(resumeCheck.reason);
+    throw new EvalResumeConflictError(resumeCheck.reason);
   }
 
   const target = await resolveTrajectoryResumeTarget(deps, params);
-  const { caseId, envPrompt, environment, parentMessageId, run, thread, topicId } = target;
+  const { caseId, envPrompt, environment, parentMessageId, run, runTopic, thread, topicId } =
+    target;
   log(
     'resumeTrajectory: resolved target — topicId=%s parentMessageId=%s threadId=%s',
     topicId,
@@ -164,16 +204,20 @@ export async function resumeTrajectory(
     thread?.id,
   );
 
+  // Resume on the Agent the topic belongs to (a hidden case Agent or the target Agent).
+  const targetAgentId = await resolveTopicAgentId(deps, topicId, run.targetAgentId);
+
   if (thread) {
     log('resumeTrajectory: triggering resume-thread-trajectory');
     await AgentEvalRunWorkflow.triggerResumeThreadTrajectory({
+      expectedExecutionId: runTopic.evalResult?.executionId,
       appContext: { threadId: thread.id, topicId },
       caseId,
       envPrompt,
       maxSteps: run.config?.maxSteps,
       parentMessageId,
       runId: run.id,
-      targetAgentId: run.targetAgentId ?? undefined,
+      targetAgentId,
       testCaseId: params.testCaseId,
       threadId: thread.id,
       topicId,
@@ -183,13 +227,14 @@ export async function resumeTrajectory(
   } else {
     log('resumeTrajectory: triggering resume-agent-trajectory');
     await AgentEvalRunWorkflow.triggerResumeAgentTrajectory({
+      expectedExecutionId: runTopic.evalResult?.executionId,
       appContext: { topicId },
       caseId,
       envPrompt,
       maxSteps: run.config?.maxSteps,
       parentMessageId,
       runId: run.id,
-      targetAgentId: run.targetAgentId ?? undefined,
+      targetAgentId,
       testCaseId: params.testCaseId,
       topicId,
       environment,
@@ -271,6 +316,18 @@ async function resolveTrajectoryResumeTarget(
   const { envPrompt, environment, run, testCase } = loaded;
   const runTopic = await deps.runTopicModel.findByRunAndTestCase(params.runId, params.testCaseId);
   if (!runTopic?.topicId) throw new Error('RunTopic topicId is required');
+
+  try {
+    await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).assertResumeFixture({
+      fixture: environment?.memory ?? {},
+      ...params,
+      topicId: runTopic.topicId,
+    });
+  } catch (error) {
+    if (error instanceof EvalMemoryFixtureConflictError)
+      throw new EvalResumeConflictError(error.message);
+    throw error;
+  }
 
   log(
     'resolveTrajectoryResumeTarget: topicId=%s runTopic.status=%s',

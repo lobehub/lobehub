@@ -1,3 +1,4 @@
+import { goalDecisionIslandKey, goalSignOffIslandKey } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import { useMemo } from 'react';
 import { useLocation } from 'react-router';
@@ -6,8 +7,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { goalIdFromPath } from './usePendingGoalClarifications';
 
@@ -59,13 +58,13 @@ export const selectIslandGoalItems = (
       .filter((decision) => decision.goalId !== portalGoalId)
       .map((decision) => ({
         decision,
-        key: `goal-decision:${decision.decisionId}`,
+        key: goalDecisionIslandKey(decision.decisionId),
         type: 'decision' as const,
       })),
     ...data.signOffs
       .filter((signOff) => signOff.goalId !== portalGoalId)
       .map((signOff) => ({
-        key: `goal-sign-off:${signOff.acceptanceId}`,
+        key: goalSignOffIslandKey(signOff.acceptanceId),
         signOff,
         type: 'signOff' as const,
       })),
@@ -74,10 +73,9 @@ export const selectIslandGoalItems = (
 
 /** Goal gates and sign-offs the island should ask, oldest first. */
 export const usePendingGoalDecisions = (): IslandGoalItem[] => {
-  const enabled = useUserStore(labPreferSelectors.enableGoals);
   const { allowed: canAnswer } = usePermission('create_content');
   const useFetchPendingForIsland = useGoalStore((s) => s.useFetchPendingForIsland);
-  const { data } = useFetchPendingForIsland(enabled && canAnswer);
+  const { data } = useFetchPendingForIsland(canAnswer);
   const { pathname } = useLocation();
   const portalGoalId = useChatStore(chatPortalSelectors.goalPortalId);
 

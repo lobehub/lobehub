@@ -27,7 +27,6 @@ import { agents } from '@/database/schemas';
 import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
@@ -48,7 +47,9 @@ import {
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
@@ -202,6 +203,7 @@ const resolveCredentials = async (
 
 /** Platforms the message tool can reach through a per-agent bot provider. */
 const PROVIDER_PLATFORMS = [
+  'dingtalk',
   'discord',
   'feishu',
   'imessage',
@@ -451,6 +453,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
       createBot: async (params) => {
         assertOwnerMayManageBots();
+        const unavailableReason = getReplyConnectionUnavailableReason(
+          platformRegistry.getPlatform(params.platform),
+        );
+        if (unavailableReason) throw new Error(unavailableReason);
         await assertBotFeatureAccess({
           action: 'manage',
           applicationId: params.applicationId,
@@ -525,22 +531,27 @@ export const messageRuntime: ServerRuntimeRegistration = {
         }));
       },
       listPlatforms: async () => {
-        return platformRegistry.listSerializedPlatforms().map((p) => {
-          const credSchema = (p.schema ?? []).find(
-            (f: any) => f.key === 'credentials' && f.properties,
-          );
-          const credFields = (credSchema as any)?.properties ?? [];
-          return {
-            credentialFields: credFields.map((f: any) => ({
-              key: f.key,
-              label: f.label ?? f.key,
-              required: !!f.required,
-              type: f.type ?? 'string',
-            })),
-            id: p.id,
-            name: p.name,
-          };
-        });
+        // Platforms this deployment cannot run are not offered for new bots; existing ones still
+        // show up in `listBots` so they can be disabled or removed.
+        return platformRegistry
+          .listSerializedPlatforms()
+          .filter((p) => !getReplyConnectionUnavailableReason(p))
+          .map((p) => {
+            const credSchema = (p.schema ?? []).find(
+              (f: any) => f.key === 'credentials' && f.properties,
+            );
+            const credFields = (credSchema as any)?.properties ?? [];
+            return {
+              credentialFields: credFields.map((f: any) => ({
+                key: f.key,
+                label: f.label ?? f.key,
+                required: !!f.required,
+                type: f.type ?? 'string',
+              })),
+              id: p.id,
+              name: p.name,
+            };
+          });
       },
       toggleBot: async (botId, enabled) => {
         assertOwnerMayManageBots();
@@ -603,6 +614,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         await invalidateBotAfterUpdate(
           {
             applicationId: existing.applicationId,
+            credentials: existing.credentials,
             platform: existing.platform,
             settings: existing.settings,
             userId: context.userId!,
@@ -614,7 +626,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       // ─── System Bot messenger management ─────────────────────────────────
       // Mirrors `messenger.*` TRPC procedures but exposed via the tool runtime
       // so LLM-driven flows can manage installs + links the same way the
-      // Settings → Messenger UI does. Each handler enforces user ownership;
+      // Marketplace → Apps UI does. Each handler enforces user ownership;
       // the underlying models are already user-scoped where applicable.
       listMessengers: async () => {
         if (!context.userId || !context.serverDB) {

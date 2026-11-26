@@ -18,6 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
+import { useDensityTokens } from '@/styles/density';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
@@ -52,6 +53,20 @@ const styles = createStaticStyles(({ css }) => {
       &,
       &:hover {
         background: ${cssVar.colorPrimaryBg};
+      }
+    `,
+
+    dropAfter: css`
+      &,
+      &:hover {
+        box-shadow: inset 0 -2px 0 0 ${cssVar.colorPrimary};
+      }
+    `,
+
+    dropBefore: css`
+      &,
+      &:hover {
+        box-shadow: inset 0 2px 0 0 ${cssVar.colorPrimary};
       }
     `,
 
@@ -139,6 +154,7 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  allowReorder?: boolean;
   columnWidths: {
     date: number;
     name: number;
@@ -154,6 +170,7 @@ interface FileListItemProps extends FileListItemType {
 }
 
 const FileListItem = ({
+  allowReorder = true,
   chunkCount,
   chunkingError,
   chunkingStatus,
@@ -170,6 +187,7 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
+  parentId,
   selectable = true,
   selected,
   showUploader = true,
@@ -180,6 +198,7 @@ const FileListItem = ({
   userId,
   visibility,
 }: FileListItemProps) => {
+  const { listRowHeight } = useDensityTokens();
   const { t } = useTranslation(['components', 'file', 'chat', 'common']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
@@ -221,17 +240,20 @@ const FileListItem = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
+    dropPosition,
     handleDragEnd,
     handleDragLeave,
     handleDragOver,
     handleDragStart,
     handleDrop,
     isDragging,
-    isOver,
+    parentKey,
   } = useFileListItemDrag({
+    allowReorder,
     fileType,
     id,
     isFolder,
+    itemParentId: parentId,
     libraryId: resourceManagerState.libraryId,
     name,
     sourceType,
@@ -335,11 +357,14 @@ const FileListItem = ({
       <Flexbox
         horizontal
         align={'center'}
+        data-allow-reorder={allowReorder ? undefined : 'false'}
+        data-drop-item="true"
         data-drop-target-id={id}
         data-is-folder={String(isFolder)}
+        data-parent-key={parentKey}
         data-row-index={index}
         draggable={!!resourceManagerState.libraryId}
-        height={48}
+        height={listRowHeight}
         paddingInline={8}
         className={cx(
           styles.container,
@@ -347,7 +372,9 @@ const FileListItem = ({
           index % 2 === 0 && styles.evenRow,
           isSelected && styles.selected,
           isDragging && styles.dragging,
-          isOver && styles.dragOver,
+          dropPosition === 'inside' && styles.dragOver,
+          dropPosition === 'before' && styles.dropBefore,
+          dropPosition === 'after' && styles.dropAfter,
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,

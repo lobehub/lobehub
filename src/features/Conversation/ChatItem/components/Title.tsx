@@ -1,28 +1,41 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useDensity } from '@/styles/density';
 
+import { revealStyles } from '../revealStyles';
 import { type ChatItemProps } from '../type';
 
 export interface TitleProps {
   avatar: ChatItemProps['avatar'];
+  quiet?: boolean;
   showTitle?: ChatItemProps['showTitle'];
   time?: ChatItemProps['time'];
   titleAddon?: ChatItemProps['titleAddon'];
 }
 
-const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
+const Title = memo<TitleProps>(({ showTitle, time, avatar, quiet, titleAddon }) => {
   const { t } = useTranslation('chat');
   const title = agentDisplayName(avatar, t('untitledAgent'));
   const { text: timeText, title: timeTitle } = useActivityTime(time);
+  const { tokens } = useDensity();
 
   return (
     <>
       {showTitle && (
-        <Text fontSize={14} style={{ whiteSpace: 'nowrap' }} weight={500}>
+        <Text
+          // `type="secondary"` is the description colour, the time's own step; a quiet name sits
+          // one step above it.
+          color={quiet ? cssVar.colorTextSecondary : undefined}
+          fontSize={tokens.fontSize}
+          style={{ whiteSpace: 'nowrap' }}
+          weight={500}
+        >
           {title}
         </Text>
       )}
@@ -31,6 +44,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
         <Text
           aria-label="published-date"
           as={'time'}
+          className={stylex.props(revealStyles.time).className}
           fontSize={12}
           title={timeTitle}
           type={'secondary'}

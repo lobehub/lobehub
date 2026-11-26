@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "沒有可用的範本。",
   "agentMarketplace.picker.failedToLoad": "範本載入失敗。請稍後再試。",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} 個範本可用。",
-  "agentMarketplace.render.alreadyInLibraryTag": "已在資料庫中",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} 已在資料庫中",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} 已在資料庫中",
   "askUserQuestion.checkStatus": "檢查提交狀態",
   "askUserQuestion.checking": "正在檢查提交狀態…",
   "askUserQuestion.customOption.placeholder": "或者寫下自己的選項…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio 連接器只能在桌面應用程式中同步。請打開 LobeHub 桌面版以同步此連接器。",
   "connector.kind.agent": "Agent 連接器",
   "connector.kind.builtin": "內建工具",
-  "connector.kind.community": "社群工具",
+  "connector.kind.community": "市場工具",
   "connector.kind.custom": "自訂連接器",
   "connector.kind.oauth": "OAuth 連接器",
   "connector.manageOnlyCreator": "只有創建者或工作區擁有者可以管理此連接器",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "新增一項",
   "updateArgs.form.key": "欄位鍵",
   "updateArgs.form.value": "欄位值",
-  "updateArgs.formValidationFailed": "表單驗證失敗，請檢查參數格式",
   "updateArgs.keyRequired": "欄位鍵不可為空",
   "updateArgs.stringifyError": "無法序列化參數，請檢查參數格式"
 }

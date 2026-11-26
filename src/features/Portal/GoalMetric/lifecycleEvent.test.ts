@@ -70,7 +70,11 @@ describe('presentLifecycleEvent', () => {
     ).toEqual({ action: 'paused' });
     expect(
       presentLifecycleEvent(
-        { entityType: 'goal', eventType: 'updated', reason: 'Goal or main Agent turn budget exhausted' },
+        {
+          entityType: 'goal',
+          eventType: 'updated',
+          reason: 'Goal or main Agent turn budget exhausted',
+        },
         ctx(),
       ),
     ).toEqual({ action: 'paused', note: { key: 'budgetExhausted' } });
@@ -91,9 +95,119 @@ describe('presentLifecycleEvent', () => {
     ).toEqual({ note: { key: 'recoveredAbandoned' } });
   });
 
+  it.each([
+    'Started by the goal agent',
+    'Started by the owner',
+    'automatic recovery started a run',
+    'decision "Ship it?" resolved: approve',
+    'decomposition claimed',
+    'dispatched T-12',
+    'nodes retired by user',
+    'reclaimed an abandoned Task',
+    'status planning → running',
+  ])('drops the internal reason %s but keeps its row', (reason) => {
+    expect(
+      presentLifecycleEvent({ entityType: 'goal', eventType: 'activated', reason }, ctx()),
+    ).toEqual({});
+  });
+
+  it.each([
+    [
+      'A planning run that started after the Goal was closed could not be stopped; close the Goal again to stop it',
+      'lateRunUnstoppable',
+    ],
+    ['Budget exhausted before graph exploration', 'explorationBudget'],
+    ['Deadline passed (2026-12-01); no new Task will be dispatched', 'deadlinePassed'],
+    ['Exploration planning failed; resume to retry.', 'explorationFailed'],
+    ['Folded into the batch before start', 'foldedIntoBatch'],
+    ['Goal renamed', 'goalRenamed'],
+    ['Goal report submitted', 'reportSubmitted'],
+    ['Plan sent back to the main Agent', 'planSentBack'],
+    ['Planner refined the description', 'descriptionRefined'],
+    ['Release approved', 'releaseApproved'],
+    ['Responsible task is missing', 'taskMissing'],
+    ['Stopping Goal before closing', 'stoppingBeforeClose'],
+    ['Stopping Goal before deletion', 'stoppingBeforeDelete'],
+    [
+      'The main Agent could not take the plan revision; resume the goal once it can, and the correction goes to it again',
+      'planRevisionFailed',
+    ],
+    ['Writing the Goal report (completed)', 'reportWriting'],
+    ['a decision gate is open', 'decisionPending'],
+    ['a measurement cleared the acceptance gate', 'measurementCleared'],
+    ['no eligible task to advance', 'noEligibleTask'],
+    ['superseded by a new recipe revision', 'recipeSuperseded'],
+  ])('translates the coordinator reason %s', (reason, key) => {
+    expect(presentLifecycleEvent(node(reason), ctx())).toEqual({ note: { key } });
+  });
+
+  it.each([
+    [
+      'Measured acceptance not met: revenue >= 100 (no observation)',
+      { detail: 'revenue >= 100 (no observation)', key: 'measuredNotMet' },
+    ],
+    [
+      'Batch pattern break needs a decision: 2 units failed',
+      { detail: '2 units failed', key: 'patternBreak' },
+    ],
+    [
+      'Batch release needs approval: wave 1 passed',
+      { detail: 'wave 1 passed', key: 'releaseReview' },
+    ],
+    [
+      'Experiment limit reached (3/3); goal is not yet accepted. No branch left to try',
+      { detail: 'No branch left to try', key: 'experimentLimit', max: '3', used: '3' },
+    ],
+    [
+      'Experiment node_1 already ran 2 corrected protocols; the planner asked for another. Resume to replan.',
+      { count: 2, key: 'revisionLimit' },
+    ],
+    [
+      'Retired with its prerequisite "Collect the data"',
+      { key: 'retiredWithPrerequisite', title: 'Collect the data' },
+    ],
+  ])('keeps the generated detail of %s', (reason, note) => {
+    expect(presentLifecycleEvent(node(reason), ctx())).toEqual({ note });
+  });
+
+  it.each([
+    ['bound to topic tpc_new', { hidden: true }],
+    ['bound to topic tpc_new (moved from agent agt_old)', { hidden: true }],
+    ['bound to topic tpc_new; goal agent none → agt_new', { hidden: true }],
+    ['bound to topic tpc_new (moved from topic tpc_old)', { note: { key: 'topicMoved' } }],
+    ['bound to topic tpc_new; goal agent agt_old → agt_new', { note: { key: 'agentChanged' } }],
+  ])('reads the conversation binding %s without its ids', (reason, presentation) => {
+    expect(
+      presentLifecycleEvent({ entityType: 'goal', eventType: 'updated', reason }, ctx()),
+    ).toEqual(presentation);
+  });
+
+  it('strips the CLI resume hint from a pause reason', () => {
+    expect(
+      presentLifecycleEvent(
+        {
+          entityType: 'goal',
+          eventType: 'updated',
+          reason: 'Goal or main Agent turn budget exhausted. Resume with: lh goal resume goal_1',
+        },
+        ctx(),
+      ),
+    ).toEqual({ action: 'paused', note: { key: 'budgetExhausted' } });
+    expect(
+      presentLifecycleEvent(
+        {
+          entityType: 'goal',
+          eventType: 'updated',
+          reason: 'Main Agent device stayed offline. Resume with: lh goal resume goal_1',
+        },
+        ctx(),
+      ),
+    ).toEqual({ note: { text: 'Main Agent device stayed offline' } });
+  });
+
   it('keeps an unrecognised reason as written', () => {
-    expect(presentLifecycleEvent(node('Planner refined the description'), ctx())).toEqual({
-      note: { text: 'Planner refined the description' },
+    expect(presentLifecycleEvent(node('Narrowed the scope to paid users'), ctx())).toEqual({
+      note: { text: 'Narrowed the scope to paid users' },
     });
   });
 });

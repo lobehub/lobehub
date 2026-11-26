@@ -137,6 +137,16 @@ export const removeTaskFilterField = (
 };
 
 /**
+ * The conditions the chip bar under the header renders. With the header's find
+ * box up, the `content` condition lives there instead of in a second chip.
+ */
+export const taskFilterBarConditions = (
+  filter: TaskListFilter | undefined,
+  hideContent: boolean,
+): TaskListFilter | undefined =>
+  hideContent ? removeTaskFilterField(filter, 'content') : normalizeTaskListFilter(filter);
+
+/**
  * The part of a stored filter this page can show and edit. A condition on a
  * field the page does not offer (a member field once the page has no member
  * directory) would narrow the list with no chip to clear it, so it is ignored.

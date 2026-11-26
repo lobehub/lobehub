@@ -5,6 +5,8 @@ import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+import { scrollShadowButtonMarker } from './markers.stylex';
+
 const styles = stylex.create({
   button: {
     position: 'absolute',
@@ -12,7 +14,7 @@ const styles = stylex.create({
     insetBlockStart: '50%',
     transform: 'translateY(-50%)',
     color: cssVar.colorTextSecondary,
-    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    opacity: { default: 0, [stylex.when.ancestor(':hover', scrollShadowButtonMarker)]: 1 },
     transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
     borderColor: { 'default': null, ':hover': cssVar.colorBorder },
     boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
@@ -70,7 +72,7 @@ const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
   return (
     <Flexbox
       horizontal
-      className={stylex.props(styles.container, stylex.defaultMarker()).className}
+      className={stylex.props(styles.container, scrollShadowButtonMarker).className}
       width={'100%'}
       {...rest}
     >

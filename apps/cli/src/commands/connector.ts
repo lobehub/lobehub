@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import type { Command } from 'commander';
 import pc from 'picocolors';
@@ -119,7 +121,9 @@ export function buildCreateInput(options: ConnectorAddOptions): {
     throw new Error('--token is only valid with --auth bearer.');
   }
   if (options.stdioCmd && authType !== 'none') {
-    throw new Error('stdio connectors do not support --auth; pass secrets via the command.');
+    throw new Error(
+      'stdio connectors do not support --auth. Their command, args and env are stored in plain text, so do not put secrets in them.',
+    );
   }
   if (options.stdioCmd && options.header?.length) {
     throw new Error('--header is only valid for HTTP connectors (--url).');
@@ -353,6 +357,7 @@ function fail(error: unknown, note?: string): never {
 export function registerConnectorCommand(program: Command) {
   const connector = program
     .command('connector')
+    .alias('mcp')
     .description('Manage MCP connectors (user connectors and their synced tools)');
 
   // ── list ──────────────────────────────────────────────
@@ -387,9 +392,10 @@ export function registerConnectorCommand(program: Command) {
         c.sourceType || '',
         c.status === 'connected' ? pc.green(c.status) : c.status || '',
         String(c.toolCount),
+        String(c.links?.length ?? 0),
       ]);
 
-      printTable(rows, ['ID', 'IDENTIFIER', 'NAME', 'SOURCE', 'STATUS', 'TOOLS']);
+      printTable(rows, ['ID', 'IDENTIFIER', 'NAME', 'SOURCE', 'STATUS', 'TOOLS', 'ACCOUNTS']);
     });
 
   // ── add ───────────────────────────────────────────────
@@ -467,7 +473,7 @@ export function registerConnectorCommand(program: Command) {
         console.log(authorizationUrl);
         console.log(
           pc.dim(
-            `After authorizing, run: lh connector refresh ${input.identifier} to fetch tools.`,
+            `Tools sync automatically after authorization. Then check lh connector list: if ${input.identifier} is not connected or has 0 tools, run: lh connector refresh ${input.identifier}`,
           ),
         );
         return;
@@ -493,6 +499,61 @@ export function registerConnectorCommand(program: Command) {
         `${pc.green('✓')} ${isNew ? 'Added' : 'Updated'} connector ${pc.bold(input.identifier)} ${pc.dim(`(${id})`)} with ${toolCount} tool(s)${local ? pc.dim(' (synced from this machine)') : ''}`,
       );
     });
+
+  // ── request ───────────────────────────────────────────
+
+  connector
+    .command('request <identifier>')
+    .description(
+      'Inside a Channel run: post a card in the current conversation that the person connects with one click',
+    )
+    .option('--url <url>', 'https MCP endpoint, for a server outside the connector catalog')
+    .option('--name <name>', 'Display name, with --url')
+    .option('--auth <none|oauth>', 'How the --url server authorizes (default oauth)')
+    .option('--reason <text>', 'One short sentence on what you will do with it, shown on the card')
+    .option('--request-key <key>', 'Reuse to retry without posting twice')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        identifier: string,
+        options: {
+          auth?: string;
+          json?: string | boolean;
+          name?: string;
+          reason?: string;
+          requestKey?: string;
+          url?: string;
+        },
+      ) => {
+        if (options.auth !== undefined && options.auth !== 'none' && options.auth !== 'oauth')
+          fail(new Error('--auth must be none or oauth'));
+        if ((options.name || options.auth) && !options.url)
+          fail(new Error('--name and --auth only apply with --url'));
+        const client = await getTrpcClient();
+        let result: { messageId: string; name: string; source: string };
+        try {
+          result = await client.channel.requestConnector.mutate({
+            auth: options.auth as 'none' | 'oauth' | undefined,
+            identifier,
+            name: options.name,
+            reason: options.reason,
+            requestKey: options.requestKey ?? randomUUID(),
+            url: options.url,
+          });
+        } catch (error) {
+          fail(error);
+        }
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(result, fields);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Posted a card asking to connect ${pc.bold(result.name)}. It is usable from your next turn once connected.`,
+        );
+      },
+    );
 
   // ── refresh ───────────────────────────────────────────
 

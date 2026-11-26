@@ -14,5 +14,6 @@ export const createApiKeyModal = (props: ApiKeyModalContentProps): ModalInstance
       content: { paddingBlock: 16, paddingInline: 24 },
     },
     title: t('apikey.form.title', { ns: 'auth' }),
-    width: 'min(90vw, 560px)',
+    // Wide enough to show a 64-character key on one line.
+    width: 'min(90vw, 600px)',
   });

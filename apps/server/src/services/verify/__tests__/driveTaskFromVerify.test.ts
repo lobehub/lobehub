@@ -116,6 +116,11 @@ vi.mock('@/server/services/taskResultBridge', () => ({
   }),
 }));
 
+const { postToChannel } = vi.hoisted(() => ({ postToChannel: vi.fn() }));
+vi.mock('@/server/services/task/channelDelivery', () => ({
+  postTaskRunToChannel: postToChannel,
+}));
+
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
@@ -276,6 +281,35 @@ describe('driveTaskFromVerify', () => {
         '- Each chapter has at least 2500 characters: Chapters 1-5 are 2030-2353 characters, all below 2500.',
       ].join('\n'),
     );
+  });
+
+  it('leaves a check waived by an upheld dispute out of the failure summary', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Exports a PDF',
+        metadata: { dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' } },
+        required: true,
+        status: 'failed',
+        suggestion: 'Export a PDF.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+      {
+        checkItemTitle: 'Shows totals',
+        required: true,
+        status: 'failed',
+        suggestion: 'Add a total row.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    const message = deliverMock.mock.calls[0][0].errorMessage;
+    expect(message).toContain('- Shows totals: Add a total row.');
+    expect(message).not.toContain('Exports a PDF');
   });
 
   it('explains a failure from stored evidence when the verifier gave no reasoning', async () => {
@@ -489,7 +523,9 @@ describe('driveTaskFromVerify', () => {
       serviceUpdateStatus,
       statusRecompute,
       deliverMock,
+      postToChannel,
     ].forEach((m) => m.mockReset());
+    postToChannel.mockResolvedValue('posted');
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
@@ -510,6 +546,7 @@ describe('driveTaskFromVerify', () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(briefCreate).not.toHaveBeenCalled();
     // Deferred creator callback fires here (not in onTopicComplete), reason 'done'.
     expect(deliverMock).toHaveBeenCalledTimes(1);
     expect(deliverMock.mock.calls[0][0]).toMatchObject({
@@ -519,6 +556,28 @@ describe('driveTaskFromVerify', () => {
       topicId: 'topic-done',
     });
     expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
+  });
+
+  it('passed → posts the accepted run to the task Channel; a failed post does not block', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+    postToChannel.mockRejectedValueOnce(new Error('boom'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1', 'ws-1');
+
+    expect(postToChannel).toHaveBeenCalledWith(db, {
+      operationId: 'op-1',
+      scope: { userId: 'u1', workspaceId: 'ws-1' },
+      task: expect.objectContaining({ id: 'task-1' }),
+    });
+    expect(deliverMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('failed → posts nothing to the task Channel', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(postToChannel).not.toHaveBeenCalled();
   });
 
   it('passed → keeps a recurring task scheduled', async () => {
@@ -821,15 +880,6 @@ describe('driveTaskFromVerify', () => {
     taskFindById.mockResolvedValue({ id: 'task-1', status: 'completed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
-  });
-
-  it('completes the task on a passing verify', async () => {
-    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
-
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-
-    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
-    expect(briefCreate).not.toHaveBeenCalled();
   });
 });
 

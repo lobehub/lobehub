@@ -1,4 +1,5 @@
 import {
+  getDisabledPluginIds,
   GetStreamableMcpServerManifestInputSchema,
   StreamableHTTPAuthSchema,
 } from '@lobechat/types';
@@ -9,6 +10,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -137,24 +139,52 @@ export const mcpRouter = router({
         args: z.any(), // Arguments for the tool call
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
+        agentId: z.string().optional(),
         meta: metaSchema, // Optional metadata for reporting
         params: mcpClientParamsSchema, // Use the unified schema for client params
         toolName: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.fromEntrypoint && input.agentId) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const config = await agentModel.getAgentConfigById(input.agentId);
+        if (
+          !config ||
+          getDisabledPluginIds(config.plugins ?? undefined).includes(input.params.name)
+        )
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'This app is unavailable for the agent',
+          });
+      }
       // ── Connector tool permission gate ────────────────────────────────────
       // If the connector identifier matches a user_connectors entry, check whether
       // this specific tool has been disabled by the user. Disabled tools are still
       // present in the AI manifest (so the AI knows they exist) but are hard-blocked
       // here at execution time so the MCP server is never actually called.
+      //
+      // The row is the one the conversation runs the identifier on, ranked as
+      // its runs rank them: a plugin call keeps the bare identifier, and the
+      // owner's private row shadows the shared one in their private agent's own
+      // topic. Only an agent the caller can see names the run.
       const connectorId = input.params.name;
       if (connectorId && ctx.userId) {
         const wsId = ctx.workspaceId ?? undefined;
         const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
-        const [connector] = await connectorModel.queryByIdentifiers([connectorId]);
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, wsId);
+        const agentId =
+          input.agentId && (await agentModel.existsById(input.agentId)) ? input.agentId : undefined;
+        const [connector] = await connectorModel.resolveByIdentifiers([connectorId], {
+          agentId,
+          topicId: agentId ? input.meta?.sessionId : undefined,
+        });
         if (connector) {
-          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
+          // A personal row's tools live in the personal scope
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, {
+            agentRun: true,
+          });
           const tools = await connectorToolModel.queryByConnector(connector.id);
           const tool = tools.find((t) => t.toolName === input.toolName);
           if (tool?.permission === ConnectorToolPermission.disabled) {
@@ -199,6 +229,7 @@ export const mcpRouter = router({
           argsStr: input.args,
           clientParams: input.params,
           fromApp: input.fromApp,
+          fromEntrypoint: input.fromEntrypoint,
           mcpApps: await isMcpAppsEnabled(ctx.userId),
           processContentBlocks: boundProcessContentBlocks,
           toolName: input.toolName,

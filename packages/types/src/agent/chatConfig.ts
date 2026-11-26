@@ -30,10 +30,6 @@ export interface AgentSelfIterationChatConfig {
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  /**
-   * Model ID to use for generating compression summaries
-   */
-  compressionModelId?: string;
   deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
   deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
@@ -193,6 +189,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  thinkingLevel5?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Tool-resolution mode. When set it overrides the `enableAgentMode` derivation:
    * - `agent`  full default toolset + plugins + always-on tools
@@ -249,7 +246,6 @@ export const AgentChatConfigSchema = z
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
-    compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -311,6 +307,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
+    thinkingLevel5: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     toolResultMaxLength: z.number().default(25000),
     topicGroupMode: z
       .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])

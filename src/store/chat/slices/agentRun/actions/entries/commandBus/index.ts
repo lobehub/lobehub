@@ -11,6 +11,7 @@ export {
   hasNonActionContent,
   mergeLocalFileReferences,
   parseCommandsFromEditorData,
+  parseGatewaySkillIdsFromEditorData,
   parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,

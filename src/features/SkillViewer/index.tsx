@@ -17,9 +17,10 @@ import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import FileTree from '@/features/FileTree';
 import SkillFrontmatterCard from '@/features/Portal/Document/SkillFrontmatterCard';
+import { densityTokens } from '@/styles/density.stylex';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
-import { skillFileTree } from './skillFileTree';
+import { shownSkillFile, skillFileTree } from './skillFileTree';
 
 const SKILL_INDEX = 'SKILL.md';
 
@@ -59,7 +60,7 @@ const styles = stylex.create({
     paddingInlineStart: 8,
   },
   index: {
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 
@@ -108,6 +109,9 @@ const SkillViewer = ({
     [files],
   );
 
+  // A file picked in another version may not be in this one.
+  const shown = shownSkillFile(selectedFile, files ?? [], SKILL_INDEX);
+
   const { body, frontmatter } = parseSkillMarkdownFrontmatter(content);
 
   const atStart = filesPosition === 'start';
@@ -149,7 +153,7 @@ const SkillViewer = ({
           </Flexbox>
           <FileTree
             resourceTree={resourceTree}
-            selectedFile={selectedFile}
+            selectedFile={shown}
             onSelectFile={setSelectedFile}
           />
         </>
@@ -171,7 +175,7 @@ const SkillViewer = ({
         {atStart && fileTree}
         <div {...stylex.props(styles.body)}>
           {atStart && intro}
-          {selectedFile === SKILL_INDEX ? (
+          {shown === SKILL_INDEX ? (
             <div {...stylex.props(styles.index)}>
               <EditorCanvas
                 editable={false}
@@ -182,7 +186,7 @@ const SkillViewer = ({
               />
             </div>
           ) : (
-            <ContentViewer contentMap={contentMap} key={selectedFile} selectedFile={selectedFile} />
+            <ContentViewer contentMap={contentMap} key={shown} selectedFile={shown} />
           )}
         </div>
         {!atStart && fileTree}

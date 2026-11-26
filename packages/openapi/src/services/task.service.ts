@@ -8,12 +8,17 @@ import { EditLockService } from '@/server/services/editLock';
 import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
-import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
+import {
+  assertPreciseScheduleAllowed,
+  assertResultingScheduleValid,
+} from '@/server/services/task/scheduleValidation';
 import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { BaseService } from '../common/base.service';
+import { resolvePagination } from '../helpers/pagination';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateTaskRequest,
   RunTaskRequest,
@@ -22,6 +27,9 @@ import type {
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from '../types/task.type';
+
+/** The model's own default page size, kept so omitting `limit` still returns 50 rows. */
+export const TASK_LIST_DEFAULT_LIMIT = 50;
 
 const DEFAULT_RUN_LIMIT = 20;
 
@@ -69,11 +77,12 @@ export class TaskRestService extends BaseService {
     this.taskTopicModel = new TaskTopicModel(db, userId ?? '', workspaceId);
   }
 
-  async listTasks(query: TaskListQuery): ServiceResult<unknown> {
+  async listTasks(query: TaskListQuery) {
+    const { limit, offset } = resolvePagination(query, TASK_LIST_DEFAULT_LIMIT);
     return this.taskModel.list({
       assigneeAgentId: query.assigneeAgentId,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       projectId: query.projectId,
       statuses: query.statuses,
     });
@@ -93,6 +102,11 @@ export class TaskRestService extends BaseService {
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
     // here instead of being stored and silently never firing.
     assertResultingScheduleValid(null, input);
+    await assertPreciseScheduleAllowed(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      null,
+      input.schedulePattern,
+    );
     const task = await this.taskService.createTask({
       ...input,
       config: await normalizeTaskConfig(this.taskModel, input.config),
@@ -178,11 +192,13 @@ export class TaskRestService extends BaseService {
     return rows.map(toPublicRun);
   }
 
-  async deleteTask(id: string): ServiceResult<unknown> {
+  async deleteTask(id: string): ServiceResult<DeletedResource> {
     // Same scope as the tRPC delete: the route's `agent:update` gate plus the
     // model's visibility-aware `resolve`, whoever created the task.
     const task = await this.taskModel.resolve(id);
     if (!task) throw this.createNotFoundError('Task not found');
-    return this.taskService.deleteTask(task.id);
+    await this.taskService.deleteTask(task.id);
+    // The path may carry the display identifier (`T-12`); answer with the row id.
+    return { deleted: true, id: task.id };
   }
 }

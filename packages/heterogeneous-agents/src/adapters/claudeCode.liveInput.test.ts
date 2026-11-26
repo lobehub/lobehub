@@ -60,7 +60,12 @@ describe('ClaudeCodeAdapter live input', () => {
         type: 'user',
         uuid: 'u-2',
       }),
-    ).toEqual([]);
+    ).toEqual([
+      expect.objectContaining({
+        data: { phase: 'user_message', uuid: 'u-2' },
+        type: 'step_complete',
+      }),
+    ]);
     const reply = newStepOf(adapter.adapt(messageStart('msg_03')));
 
     expect(reply).toBeDefined();
@@ -150,5 +155,49 @@ describe('ClaudeCodeAdapter live input', () => {
     const callback = newStepOf(adapter.adapt(messageStart('msg_03')));
 
     expect(callback.data.externalSignal).toMatchObject({ sourceToolCallId: 'toolu_mon' });
+  });
+  // The host matches the uuid against the messages it delivered: the
+  // initial prompt is replayed too and must not be mistaken for a steer.
+  it('reports every replayed user message with the uuid it was delivered under', () => {
+    const adapter = new ClaudeCodeAdapter();
+    adapter.adapt(init);
+
+    const events = adapter.adapt({
+      isReplay: true,
+      message: { content: [{ text: 'use pnpm instead', type: 'text' }], role: 'user' },
+      type: 'user',
+      uuid: 'msg_steer_1',
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        data: { phase: 'user_message', uuid: 'msg_steer_1' },
+        type: 'step_complete',
+      }),
+    ]);
+  });
+
+  it('does not report a replay without a uuid or one inside a sub-agent', () => {
+    const adapter = new ClaudeCodeAdapter();
+    adapter.adapt(init);
+
+    expect(
+      adapter.adapt({
+        isReplay: true,
+        message: { content: [{ text: 'hi', type: 'text' }], role: 'user' },
+        type: 'user',
+      }),
+    ).toEqual([]);
+    expect(
+      adapter.adapt({
+        isReplay: true,
+        message: { content: [{ text: 'inner', type: 'text' }], role: 'user' },
+        parent_tool_use_id: 'toolu_agent',
+        type: 'user',
+        uuid: 'u-sub',
+      }),
+    ).not.toContainEqual(
+      expect.objectContaining({ data: expect.objectContaining({ phase: 'user_message' }) }),
+    );
   });
 });

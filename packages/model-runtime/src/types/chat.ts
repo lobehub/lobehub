@@ -3,6 +3,8 @@ import type {
   ModelReasoning,
   ModelTokensUsage,
   ModelUsage,
+  ResolveToolActivationContext,
+  ToolActivationPlan,
 } from '@lobechat/types';
 import type OpenAI from 'openai';
 
@@ -83,6 +85,17 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  toolActivationPlan?: ToolActivationPlan;
+  /**
+   * Function names that first became callable at this message, e.g. the result of a
+   * mid-conversation tool activation. Their definitions stay in `ChatStreamPayload.tools`.
+   *
+   * A transport that can declare tools inside the conversation moves these definitions
+   * out of the top-level tool list and anchors them here, so activating a tool does not
+   * rewrite the request prefix (and the prompt cache with it). Every other transport
+   * ignores the field and sends the full top-level list.
+   */
+  toolsAdded?: string[];
 }
 
 /**
@@ -196,7 +209,7 @@ export interface ChatStreamPayload {
   /**
    * Thinking level for Gemini models (e.g., gemini-3.0-pro)
    */
-  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   tool_choice?: string;
   tools?: ChatCompletionTool[];
   /**
@@ -221,6 +234,8 @@ export interface ChatMethodOptions {
    * after the provider returns, while diagnostics can contain a large payload.
    */
   diagnostics?: ModelRuntimeDiagnostics;
+  /** Evaluated only by a route supporting transcript-anchored tool definitions. */
+  getToolActivationContext?: ResolveToolActivationContext;
   /**
    * response headers
    */
@@ -234,6 +249,8 @@ export interface ChatMethodOptions {
    */
   requestHeaders?: Record<string, any>;
   signal?: AbortSignal;
+  /** Context edits for a Responses transport that supports inline tool declarations. */
+  toolActivationPlan?: ToolActivationPlan;
   /**
    * userId for the chat completion
    */

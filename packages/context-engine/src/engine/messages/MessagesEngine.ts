@@ -21,20 +21,24 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  RevokedDocumentResultFilter,
   StaleToolResultTrimProcessor,
   SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
+  ToolActivationAnchorProcessor,
   ToolCallProcessor,
   ToolMessageReorder,
   VerifyMessageProcessor,
 } from '../../processors';
 import {
   ActiveTopicDocumentContextInjector,
+  AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -67,6 +71,7 @@ import {
   SelectedSkillInjector,
   selectToolPromptManifests,
   SKILL_STORE_TOOL_ID,
+  SkillChangesInjector,
   SkillContextProvider,
   SkillImportRouteInjector,
   SystemDateProvider,
@@ -89,6 +94,7 @@ const log = debug('context-engine:MessagesEngine');
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
 const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
+const SKILLS_TOOL_ID = 'lobe-skills';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -166,6 +172,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       agentIdentity,
+      agentAccountContext,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -197,6 +204,9 @@ export class MessagesEngine {
       additionalContexts,
       agentGroup,
       agentDocuments,
+      agentDocumentChanges,
+      skillChanges,
+      revokedDocumentReads,
       planTodo,
       userMemory,
       initialContext,
@@ -236,12 +246,13 @@ export class MessagesEngine {
           : undefined;
     const isTodoEnabled = effectiveTodos !== undefined;
 
-    // System date is redundant when web-browsing or memory tools are enabled,
-    // as they already include current date in their system prompts
     const toolIds = toolsConfig?.tools || [];
-    const hasDateAwareTools =
-      toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
-    const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // Keep SystemDateProvider independent of dynamically activated tools:
+    // toggling it off when web-browsing or user-memory is activated mid-run
+    // mutates the leading system message and invalidates the prompt-cache prefix.
+    const isSystemDateEnabled = enableSystemDate !== false;
+    // An eval attempt renders "today" from its case clock, never the wall clock.
+    const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
@@ -259,6 +270,16 @@ export class MessagesEngine {
     // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
     const canReadDocuments =
       toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for filesystem skills: only require `activateSkill` when it is sent. A Custom-mode
+    // agent or a goal turn that did not pin Skills still reaches them through readFile, and a run
+    // that deferred the skill APIs has Skills enabled with its sandbox shell only.
+    const skillsManifest = toolsConfig?.manifests?.find(
+      (manifest) => manifest.identifier === SKILLS_TOOL_ID,
+    );
+    const canActivateSkill =
+      toolIds.includes(SKILLS_TOOL_ID) &&
+      (!skillsManifest || skillsManifest.api.some((api) => api.name === 'activateSkill')) &&
+      !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -325,6 +346,13 @@ export class MessagesEngine {
         enabled: !isGroupContextEnabled,
         identity: agentIdentity,
       }),
+      // The agent's own accounts + inbox, as first-class state. Injected right
+      // after the person's identity because it refines "who am I" with "and I
+      // can be reached here". Skipped entirely when the agent owns nothing.
+      new AgentAccountContextInjector({
+        context: agentAccountContext,
+        enabled: isAgentMode,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
@@ -333,7 +361,7 @@ export class MessagesEngine {
         enabled: !!botPlatformContext,
       }),
       // System date
-      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, now: evalClock, timezone }),
       // Model info (name / id / knowledge cutoff)
       new ModelInfoProvider({
         displayName: modelDisplayName,
@@ -356,6 +384,7 @@ export class MessagesEngine {
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
       // sees neither the manifests nor the discovery prompt.
       new SkillContextProvider({
+        canActivateSkill,
         enabled:
           isAgentMode && !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
         enabledSkills: skillsConfig?.enabledSkills,
@@ -444,6 +473,24 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Agent-document change notes → the user message each belongs to (the
+      // index renders a snapshot; these say what changed since). Not gated on
+      // `hasAgentDocuments`: a snapshot taken before the first document has no
+      // rows, and the notes are then the only place new documents appear.
+      new AgentDocumentChangesInjector({
+        changes: agentDocumentChanges,
+        enabled: isAgentMode && !!agentDocumentChanges,
+      }),
+      // Skill-index change notes → the user message each belongs to (the
+      // `<available_skills>` block renders a snapshot; these say what changed
+      // since). Not gated on `skillsConfig.enabledSkills`: a snapshot taken
+      // before the first skill has no rows, and the notes are then the only
+      // place newly installed or enabled skills appear.
+      new SkillChangesInjector({
+        canActivateSkill,
+        changes: skillChanges,
+        enabled: isAgentMode && !!skillChanges,
+      }),
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({
         activeTopicDocument: initialContext?.activeTopicDocument,
@@ -457,7 +504,10 @@ export class MessagesEngine {
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Generic user-attached selections from chat/code/text contexts.
-      new ContextSelectionsInjector({ enabled: true }),
+      new ContextSelectionsInjector({
+        enabled: true,
+        mcpAppsEnabled: this.params.enableMcpAppContext,
+      }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Project context (members, linked knowledge, open tasks) for a run inside a project
@@ -542,6 +592,13 @@ export class MessagesEngine {
       // Task-callback cards: surface a finished task's handoff as a user turn
       // so the creator agent reads it and continues
       new TaskCallbackMessageProcessor(),
+      // Revoked document reads — withholds historical readKnowledge /
+      // readDocument bodies of documents deleted or disabled since they were
+      // read, so a removed standing rule stops steering the agent. MUST run
+      // AFTER the flatten steps (nested tool results become `role: 'tool'`
+      // rows there) and BEFORE the group role transforms below, which fold
+      // other members' results into user text and drop `plugin`.
+      new RevokedDocumentResultFilter({ revokedDocumentReads }),
       // Supervisor role restore
       new SupervisorRoleRestoreProcessor(),
       // Compressed group role transform
@@ -647,6 +704,15 @@ export class MessagesEngine {
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
+      // Only paired activation results still present in the outgoing conversation can own tools.
+      ...(toolsConfig?.anchorActivatedTools
+        ? [
+            new ToolActivationAnchorProcessor({
+              manifests: injectedToolManifests,
+              variableGenerators,
+            }),
+          ]
+        : []),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
     ];

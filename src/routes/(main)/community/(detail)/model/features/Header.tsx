@@ -77,10 +77,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               {...abilities}
             />
             <Icon icon={DotIcon} />
-            <PublishedTime
-              className={stylex.props(styles.time).className}
-              date={releasedAt as string}
-            />
+            <PublishedTime date={releasedAt as string} xstyle={styles.time} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

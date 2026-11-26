@@ -3,14 +3,16 @@
  * running mark, and the topic usage rollup.
  */
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
-import { type AgentOperationStatus, isAgentOperationInFlight } from '@lobechat/types';
+import { type AgentOperationStatus, isAgentOperationInFlight, ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import type { ChildUsageRollup } from '@/database/models/agentOperation';
+import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 
+import { formatErrorForMetadata } from '../AgentRuntimeService/utils';
 import type { CompletionLifecycleDeps } from './types';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -66,10 +68,88 @@ export function statusForReason(
   }
 }
 
+const addUsage = (earlier?: number, run?: number): number | undefined =>
+  earlier === undefined ? run : earlier + (run ?? 0);
+
+const threadStatusForReason = (reason: string): ThreadStatus => {
+  if (reason === 'error') return ThreadStatus.Failed;
+  if (reason === 'interrupted') return ThreadStatus.Cancel;
+  return ThreadStatus.Completed;
+};
+
+/**
+ * Close the isolation thread of a run that reached its end.
+ *
+ * The in-memory thread hooks never run in queue mode, so without this write the
+ * thread stays `processing` and its task card spins forever. A run parked for
+ * approval is not over and keeps its thread open. Best-effort: a failed write
+ * must not cost the run its completion hooks.
+ */
+export async function settleRunThread(
+  deps: CompletionLifecycleDeps,
+  operationId: string,
+  state: any,
+  reason: string,
+): Promise<void> {
+  const threadId = state?.origin?.threadId;
+  if (!threadId || reason === 'waiting_for_human') return;
+
+  try {
+    const threadModel = new ThreadModel(
+      deps.serverDB,
+      state.origin.userId || deps.userId,
+      deps.workspaceId,
+    );
+    const thread = await threadModel.findById(threadId);
+    if (!thread) return;
+
+    const metadata = thread.metadata ?? {};
+    const startedAt = metadata.startedAt;
+
+    // A claim clears the operation id until the new run has one. An empty id
+    // only belongs to this run if the run began after the thread was claimed.
+    const ownsThread = metadata.operationId
+      ? metadata.operationId === operationId
+      : !!startedAt && !!state.createdAt && new Date(state.createdAt) >= new Date(startedAt);
+    if (!ownsThread) return;
+
+    const baseline = metadata.runUsageBaseline ?? {};
+    const llmCalls = getLlmCallCount(state);
+
+    await threadModel.settleRun(threadId, operationId, {
+      metadata: {
+        ...metadata,
+        completedAt: new Date().toISOString(),
+        duration: startedAt ? Date.now() - new Date(startedAt).getTime() : undefined,
+        error: formatErrorForMetadata(state.error),
+        operationId,
+        totalCost: addUsage(baseline.totalCost, state.cost?.total),
+        totalLlmCalls: addUsage(baseline.totalLlmCalls, llmCalls),
+        totalMessages: state.messages?.length ?? metadata.totalMessages,
+        totalSteps: addUsage(baseline.totalLlmCalls, llmCalls),
+        totalTokens: addUsage(baseline.totalTokens, state.usage?.llm?.tokens?.total),
+        totalToolCalls: addUsage(baseline.totalToolCalls, state.usage?.tools?.totalCalls),
+      },
+      status: threadStatusForReason(reason),
+    });
+  } catch (error) {
+    console.error('[CompletionLifecycle] settleRunThread failed', { error, operationId, threadId });
+  }
+}
+
+/**
+ * The row this completion moved out of an in-flight status, read from the write itself. Absent
+ * for a replay of a status the row already held, and when the write did not land.
+ */
+export interface CompletionTransition {
+  parentOperationId: string | null;
+  trigger: string | null;
+}
+
 /**
  * Persist terminal state to `agent_operations`. Fire-and-forget: a DB
  * outage must never block hook dispatch or the executor's terminal
- * cleanup path.
+ * cleanup path. `false` when a conflicting terminal owner holds the row.
  */
 export async function persistCompletion(
   deps: CompletionLifecycleDeps,
@@ -77,7 +157,8 @@ export async function persistCompletion(
   state: any,
   reason: string,
   settledAsAbandoned?: boolean,
-): Promise<boolean> {
+  terminalClaimed?: boolean,
+): Promise<false | { transition?: CompletionTransition }> {
   const completionReason: any = settledAsAbandoned
     ? 'lease_expired'
     : reason === 'max_steps' ||
@@ -132,6 +213,7 @@ export async function persistCompletion(
   // but NOT when a terminal owner got there first with a different one — see
   // the fallback below.
   let durableStatus: AgentOperationStatus = status;
+  let transition: CompletionTransition | undefined;
   try {
     const accepted = await deps.agentOperationModel.recordCompletion(operationId, {
       completedAt,
@@ -166,6 +248,10 @@ export async function persistCompletion(
     });
     if (accepted) {
       completionDurable = true;
+      // An abandonment pre-claims the row with its own compare-and-set, which runs once; this
+      // write lands on the claimed status, so it still is the run's end.
+      if (accepted.previousStatus !== status || terminalClaimed)
+        transition = { parentOperationId: accepted.parentOperationId, trigger: accepted.trigger };
     } else {
       const operation = await deps.agentOperationModel.findById(operationId);
       // Preserve the historical best-effort behavior when no durable start
@@ -214,7 +300,7 @@ export async function persistCompletion(
     }
   }
 
-  return true;
+  return { transition };
 }
 
 /**

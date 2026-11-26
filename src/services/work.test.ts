@@ -20,6 +20,9 @@ vi.mock('@/libs/trpc/client', () => ({
 }));
 
 /** A transcript sync key of `topicId` (the replica's default `replica:sync` shape). */
+const topicPullRequestsSync = (topicId: string) =>
+  replicaKeys.sync('topicPullRequests', 1, cacheScope.get(), topicId, { topicId });
+
 const transcriptSync = (topicId: string) =>
   replicaKeys.sync('conversationMessages', 1, cacheScope.get(), `p:${topicId}`, {
     agentId: 'a1',
@@ -109,7 +112,7 @@ describe('workService.refreshConversation', () => {
   it('refreshes messages, history, and mounted version timelines once per operation', async () => {
     await workService.refreshConversation('t1', 'th1');
 
-    expect(mutate).toHaveBeenCalledTimes(3);
+    expect(mutate).toHaveBeenCalledTimes(4);
     expect(mutate).toHaveBeenCalledWith(workKeys.conversation('t1', 'th1'));
 
     const matchers = mutate.mock.calls
@@ -125,7 +128,7 @@ describe('workService.refreshConversationViews', () => {
   it('refreshes the conversation history key and the mounted version timelines', async () => {
     await workService.refreshConversationViews('t1', 'th1');
 
-    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate).toHaveBeenCalledTimes(3);
     // History list: exact conversation key.
     expect(mutate).toHaveBeenCalledWith(workKeys.conversation('t1', 'th1'));
     // Expanded version timelines: a matcher over the `work:versions` root.
@@ -133,6 +136,10 @@ describe('workService.refreshConversationViews', () => {
     expect(typeof versionMatcher).toBe('function');
     expect(versionMatcher(workKeys.versions('w1'))).toBe(true);
     expect(versionMatcher(workKeys.conversation('t1', 'th1'))).toBe(false);
+    // The topic's linked pull requests ride the same scan.
+    const prMatcher = mutate.mock.calls[2][0] as (key: unknown) => boolean;
+    expect(prMatcher(topicPullRequestsSync('t1'))).toBe(true);
+    expect(prMatcher(topicPullRequestsSync('t2'))).toBe(false);
   });
 
   it('normalizes a missing threadId to null in the conversation key', async () => {

@@ -192,5 +192,226 @@ describe('WebBrowsingExecutionRuntime', () => {
 
       expect(result.content).toMatch(/Lines \d+-5000 were left out\./);
     });
+
+    it('returns an oversized crawl result without saving it as a document', async () => {
+      // A 13 MB JS bundle served from a CDN was snapshotted into a document on the
+      // main thread and kept the event loop busy until the liveness probe killed the pod.
+      const hugeBody = 'const a = 1;\n'.repeat(100_000);
+      const createDocument = vi.fn().mockResolvedValue({ id: 'docs-1' });
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument,
+        },
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                data: { content: hugeBody, title: 'Bundle', url: 'https://example.com/index.js' },
+                originalUrl: 'https://example.com/index.js',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        } as any,
+      });
+
+      try {
+        const result = await runtime.crawlMultiPages({ urls: ['https://example.com/index.js'] });
+
+        expect(createDocument).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('const a = 1;');
+        expect(result.content).toMatch(/Lines \d+-\d+ were left out\./);
+        expect(result.content).not.toContain('readDocument');
+      } finally {
+        consoleWarn.mockRestore();
+      }
+    });
+
+    it('logs a save failure by its driver cause instead of the query parameters', async () => {
+      // Drizzle's "Failed query" wrapper embeds every bound parameter, here the whole
+      // page and its editor JSON; logging it whole wrote about 30 MB to stderr per failure.
+      const queryError = new Error(
+        `Failed query: insert into "documents" ...\nparams: ${'page body '.repeat(10_000)}`,
+        {
+          cause: Object.assign(new Error('unsupported Unicode escape sequence'), { code: '22P05' }),
+        },
+      );
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const runtime = new WebBrowsingExecutionRuntime({
+        documentService: {
+          associateDocument: vi.fn(),
+          createDocument: vi.fn().mockRejectedValue(queryError),
+        },
+        searchService: createSearchService() as any,
+      });
+
+      try {
+        const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+        expect(result.success).toBe(true);
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        const logged = consoleError.mock.calls[0].map(String).join(' ');
+        expect(logged).toContain('22P05 unsupported Unicode escape sequence');
+        expect(logged).toContain('https://example.com/long');
+        expect(logged).not.toContain('page body');
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('appends browser escalation guidance once for multiple retryable failures without mutating state', async () => {
+      const response = {
+        results: [
+          {
+            crawler: 'browserless',
+            data: {
+              content: 'Fail to crawl the page. Error type: TimeoutError, error message: timed out',
+              errorMessage: 'timed out',
+              errorType: 'TimeoutError',
+            },
+            originalUrl: 'https://blocked1.example.com',
+          },
+          {
+            crawler: 'browserless',
+            data: {
+              content: 'Fail to crawl the page. Error type: CrawlError, error message: 403',
+              errorMessage: '403',
+              errorType: 'CrawlError',
+            },
+            originalUrl: 'https://blocked2.example.com',
+          },
+        ],
+      };
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        searchService: { crawlPages: vi.fn().mockResolvedValue(response), webSearch: vi.fn() },
+      });
+
+      const result = await runtime.crawlMultiPages({
+        urls: ['https://blocked1.example.com', 'https://blocked2.example.com'],
+      });
+
+      expect(result.content.match(/<guidance>/g)).toHaveLength(1);
+      expect(result.content).toContain('activate the `agent-browser` skill');
+      // Portal UI reads raw `state.results[i].data.content` and must never see model guidance.
+      expect(response.results[0].data.content).not.toContain('agent-browser');
+      expect(response.results[1].data.content).not.toContain('agent-browser');
+    });
+
+    it('appends browser escalation guidance for a page blocked by anti-bot verification and saves nothing', async () => {
+      const documentService = { associateDocument: vi.fn(), createDocument: vi.fn() };
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        documentService,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'jina',
+                data: {
+                  content:
+                    'Blocked by anti-bot verification: the site answered with a challenge page instead of its content, so nothing was read. Crawling this URL again will meet the same wall.',
+                  errorMessage: 'The site served an anti-bot verification page',
+                  errorType: 'BlockedPageError',
+                  retryable: false,
+                },
+                originalUrl: 'https://blocked.example.com',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://blocked.example.com'] });
+
+      expect(result.content).toContain('Blocked by anti-bot verification');
+      expect(result.content).toContain('activate the `agent-browser` skill');
+      expect(documentService.createDocument).not.toHaveBeenCalled();
+    });
+
+    it('omits agent-browser guidance when canUseBrowserSkill is false', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: false,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'browserless',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: TimeoutError, error message: timeout',
+                  errorMessage: 'timeout',
+                  errorType: 'TimeoutError',
+                },
+                originalUrl: 'https://blocked.example.com',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://blocked.example.com'] });
+
+      expect(result.content).toContain('<guidance>');
+      expect(result.content).not.toContain('agent-browser');
+      expect(result.content).toContain('no browser fallback is available');
+    });
+
+    it('does not append escalation guidance for non-retryable 404 or non-existent domain DNS errors', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'naive',
+                data: {
+                  content: 'Dead link (HTTP 404)',
+                  errorMessage: 'Not Found',
+                  errorType: 'PageNotFoundError',
+                  retryable: false,
+                },
+                originalUrl: 'https://example.com/missing',
+              },
+              {
+                crawler: 'naive',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: NetworkConnectionError, error message: getaddrinfo ENOTFOUND nope.invalid',
+                  errorMessage: 'getaddrinfo ENOTFOUND nope.invalid',
+                  errorType: 'NetworkConnectionError',
+                },
+                originalUrl: 'https://nope.invalid/',
+              },
+              {
+                crawler: 'search1api',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: HTTPStatusError, error message: Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorMessage:
+                    'Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorType: 'HTTPStatusError',
+                },
+                originalUrl: 'https://www.nope.invalid/',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({
+        urls: ['https://example.com/missing', 'https://nope.invalid/'],
+      });
+
+      expect(result.content).not.toContain('<guidance>');
+      expect(result.content).not.toContain('agent-browser');
+    });
   });
 });

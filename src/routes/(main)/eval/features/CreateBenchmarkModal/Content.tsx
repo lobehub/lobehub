@@ -1,10 +1,12 @@
 'use client';
 
-import { cssVar, Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui';
+import { cssVar, Input, TextArea, toast, useModalContext } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
@@ -28,22 +30,26 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
 
+  /** Submit failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
+
   const handleFinish = async (values: any) => {
+    setError(null);
     onLoadingChange?.(true);
     try {
       const result = await createBenchmark({
         description: values.description?.trim() || undefined,
         identifier: values.identifier.trim(),
         name: values.name.trim(),
-        tags: values.tags?.length > 0 ? values.tags : undefined,
       });
       toast.success(t('benchmark.create.success'));
       close();
       if (result?.id) {
         navigate(`/eval/bench/${result.id}`);
       }
-    } catch {
-      toast.error(t('benchmark.create.error'));
+    } catch (cause) {
+      console.error('Failed to create eval benchmark:', cause);
+      setError(toInlineError(t('benchmark.create.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -51,6 +57,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
 
   const form = useForm({
     onSubmit: handleFinish,
+    onValuesChange: () => setError(null),
   });
   const nameValue = useWatch(form, 'name');
 
@@ -85,16 +92,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
       </Form.Field>
-
-      <Form.Field label={t('benchmark.create.tags.label')} name="tags">
-        <Select
-          mode="tags"
-          open={false}
-          placeholder={t('benchmark.create.tags.placeholder')}
-          style={{ width: '100%' }}
-          tokenSeparators={[',', '，', ' ']}
-        />
-      </Form.Field>
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

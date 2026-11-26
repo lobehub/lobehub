@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { agentEvalRuns, agentEvalRunTopics, threads, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { evaluateAndFinalizeRun } from '@/server/services/agentEvalRun/aggregate';
@@ -195,7 +196,7 @@ export class EvalLifecycleService extends BaseService {
           throw this.createConflictError('Cannot complete a run with outstanding or failed cases');
       } else {
         if (['failed', 'aborted'].includes(input.status))
-          await ctx.runTopicModel.batchMarkAborted(id);
+          await new AgentEvalExecutionRepo(tx, this.userId, this.workspaceId).batchMarkAborted(id);
         await ctx.runModel.update(id, { status: input.status });
       }
       return projectRun((await ctx.runModel.findById(id))!);

@@ -40,6 +40,23 @@ vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
 }));
 
+const previousGithubMetadata = () => ({
+  git: {
+    branch: 'canary',
+    github: {
+      pullRequest: {
+        number: 1,
+        state: 'OPEN',
+        title: 'old',
+        url: 'https://github.com/lobehub/lobehub/pull/1',
+      },
+      pullRequestStatus: 'ok',
+    },
+  },
+  path: '/repo',
+  repoType: 'github',
+});
+
 describe('parseWorktreeAddPath', () => {
   it('resolves a relative path against the source cwd', () => {
     expect(parseWorktreeAddPath('git worktree add ../wt', '/repo')).toBe('/wt');
@@ -341,22 +358,7 @@ describe('recordGitCommandEffects', () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };
@@ -402,22 +404,7 @@ describe('recordGitCommandEffects', () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };
@@ -427,46 +414,6 @@ describe('recordGitCommandEffects', () => {
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
         git: { detached: true },
-        path: '/repo',
-        repoType: 'github',
-      },
-    });
-  });
-
-  it('binds a created GitHub PR from gh pr create output', async () => {
-    chatMocks.topics = {
-      t1: {
-        metadata: {
-          workingDirectoryConfig: {
-            git: { branch: 'fix/topic' },
-            path: '/repo',
-            repoType: 'github',
-          },
-        },
-      },
-    };
-
-    await recordGitCommandEffects({
-      command: 'gh pr create --title "Fix topic" --draft',
-      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
-      topicId: 't1',
-    });
-
-    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
-      workingDirectoryConfig: {
-        git: {
-          branch: 'fix/topic',
-          github: {
-            pullRequest: {
-              isDraft: true,
-              number: 456,
-              state: 'OPEN',
-              title: 'Fix topic',
-              url: 'https://github.com/lobehub/lobehub/pull/456',
-            },
-            pullRequestStatus: 'ok',
-          },
-        },
         path: '/repo',
         repoType: 'github',
       },
@@ -487,6 +434,7 @@ describe('recordGitCommandEffects', () => {
           activeWorktree: '/Users/me/wt',
           branch: 'feat/agent-testing-s3rver',
           isWorktree: true,
+          ownBranch: 'feat/agent-testing-s3rver',
         },
         path: '/repo',
         repoType: 'github',
@@ -505,34 +453,6 @@ describe('recordGitCommandEffects', () => {
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
         git: { branch: 'fix/topic' },
-        path: '/repo',
-        repoType: 'github',
-      },
-    });
-  });
-
-  it('binds a created PR from a wrapped gh pr create', async () => {
-    chatMocks.topics = { t1: PR_TOPIC };
-
-    await recordGitCommandEffects({
-      command: `/bin/zsh -lc "gh pr create --title 'Fix topic'"`,
-      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
-      topicId: 't1',
-    });
-
-    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
-      workingDirectoryConfig: {
-        git: {
-          github: {
-            pullRequest: {
-              number: 456,
-              state: 'OPEN',
-              title: 'Fix topic',
-              url: 'https://github.com/lobehub/lobehub/pull/456',
-            },
-            pullRequestStatus: 'ok',
-          },
-        },
         path: '/repo',
         repoType: 'github',
       },
@@ -610,7 +530,12 @@ describe('recordGitCommandEffects', () => {
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
-        git: { activeWorktree: '/repo-feat-y', branch: 'feat/y', isWorktree: true },
+        git: {
+          activeWorktree: '/repo-feat-y',
+          branch: 'feat/y',
+          isWorktree: true,
+          ownBranch: 'feat/y',
+        },
         path: '/repo',
         repoType: 'github',
       },
@@ -644,35 +569,6 @@ describe('recordGitCommandEffects', () => {
     await recordGitCommandEffects({ command: 'git worktree add "$WT" feat/x', topicId: 't1' });
 
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
-  });
-
-  it('uses gh pr create --head as the topic branch when present', async () => {
-    chatMocks.topics = { t1: PR_TOPIC };
-
-    await recordGitCommandEffects({
-      command: 'gh pr create --head arvinxx:fix/head-branch --title "Head branch"',
-      resultContent: 'Created pull request: https://github.com/lobehub/lobehub/pull/789',
-      topicId: 't1',
-    });
-
-    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
-      workingDirectoryConfig: {
-        git: {
-          branch: 'fix/head-branch',
-          github: {
-            pullRequest: {
-              number: 789,
-              state: 'OPEN',
-              title: 'Head branch',
-              url: 'https://github.com/lobehub/lobehub/pull/789',
-            },
-            pullRequestStatus: 'ok',
-          },
-        },
-        path: '/repo',
-        repoType: 'github',
-      },
-    });
   });
 });
 
@@ -760,7 +656,12 @@ describe('recordWorktreeEnter', () => {
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
-        git: { activeWorktree: '/repo/wt', branch: 'worktree-a', isWorktree: true },
+        git: {
+          activeWorktree: '/repo/wt',
+          branch: 'worktree-a',
+          isWorktree: true,
+          ownBranch: 'worktree-a',
+        },
         path: '/repo',
         repoType: 'github',
       },
@@ -1074,8 +975,8 @@ describe('recordGitCommandEffects — git push', () => {
     });
   });
 
-  // `gh pr create` then `git push` in one run must not erase the PR it just recorded.
-  it('keeps a freshly created PR on the first push to that ref', async () => {
+  // A first push must not erase a PR snapshot an older client recorded.
+  it('keeps a recorded PR on the first push to that ref', async () => {
     const pullRequest = {
       number: 17_101,
       state: 'OPEN',

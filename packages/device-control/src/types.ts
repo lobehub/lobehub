@@ -6,19 +6,24 @@
  * desktop wiring can pass its own IPC-typed implementations directly.
  */
 
-import type { DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
+import type {
+  CheckAgentCredentialResult,
+  DeviceClient,
+  DeviceCliRestartParams,
+  DeviceCliUpdateState,
+  InstallAgentCredentialResult,
+  RemoveAgentCredentialResult,
+} from '@lobechat/types';
 
 // ─── Workspace scan ───
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
-  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
-  fileCount: number;
-  /** Relative paths (within `skillDir`) of all regular files, sorted, capped. */
-  files: string[];
+  /** SKILL.md declares that the model must not invoke this skill automatically. */
+  disableModelInvocation?: boolean;
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
@@ -33,18 +38,21 @@ export interface ProjectSkillItem {
 }
 
 export interface InitWorkspaceParams {
-  /** Working directory used to resolve the project root. */
-  scope: string;
+  /** Working directory; omitted to discover only device-level skills. */
+  scope?: string;
 }
 
 export interface WorkspaceInstructionsItem {
   content: string;
+  /** Absolute path of the file; the working directory or one of its parents. */
+  path: string;
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 
 export interface InitWorkspaceResult {
   instructions: WorkspaceInstructionsItem[];
-  root: string;
+  /** Absent for a device-only scan; no working directory is selected implicitly. */
+  root?: string;
   skills: ProjectSkillItem[];
 }
 
@@ -351,6 +359,14 @@ export interface TrashLocalFilesResult {
 
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
+   * Prove the installed agent credential works without spending model quota.
+   * Optional like the other agent-credential handlers: a host provides them
+   * only when its agent runs apply installed credentials (the desktop app and
+   * `lh connect` both do, from the same store), so any other client refuses
+   * with a stable reason instead of storing a credential nothing would use.
+   */
+  checkAgentCredential?: (params: unknown) => Promise<CheckAgentCredentialResult>;
+  /**
    * Start an app update check on this client; an available update downloads
    * automatically. Returns right away with the updated state — callers poll
    * {@link DeviceControlDeps.getAppUpdateState} for progress. Optional: only
@@ -389,6 +405,11 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
   /**
+   * Store a provider credential so heterogeneous agent runs on this device use
+   * it. Takes the raw RPC params: the handler validates them itself.
+   */
+  installAgentCredential?: (params: unknown) => Promise<InstallAgentCredentialResult>;
+  /**
    * Restart into a downloaded update. Resolves before the app quits so the
    * response still reaches the caller; rejects when nothing is downloaded.
    */
@@ -397,11 +418,20 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
   ) => Promise<HeterogeneousAgentModelCatalog>;
+  /**
+   * List the tools of an MCP server only this machine reaches (stdio, or an
+   * HTTP endpoint on its network), for a server that must not connect to it
+   * itself. Optional: a client that runs no MCP servers omits it, and the
+   * dispatcher fails the RPC with {@link MCP_UNSUPPORTED_MESSAGE}.
+   */
+  listMcpTools?: (params: ListMcpToolsParams) => Promise<ListedMcpServerTool[]>;
   /** Read raw bytes after the user explicitly approved an external publish closure. */
   readExternalAssetForPublish?: (
     params: ExternalAssetForPublishParams,
   ) => Promise<ExternalAssetForPublishResult>;
   readTerminal?: (params: ReadTerminalParams) => Promise<ReadTerminalResult>;
+  /** Delete an installed agent credential and its managed config. Idempotent. */
+  removeAgentCredential?: (params: unknown) => Promise<RemoveAgentCredentialResult>;
   resizeTerminal?: (params: ResizeTerminalParams) => Promise<void>;
   restartCli?: (params: DeviceCliRestartParams) => Promise<DeviceCliUpdateState>;
   /** Search project files without shipping the whole index to the caller. */
@@ -428,12 +458,51 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
+/**
+ * An MCP server's connection, as the server forwards it for `listMcpTools`
+ * (the shape tunneled MCP tool calls forward). Credentials travel decrypted and
+ * narrowed to the token fields; the device stores nothing.
+ */
+export type ListMcpToolsConnection =
+  | {
+      auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+      headers?: Record<string, string>;
+      name: string;
+      type: 'http';
+      url: string;
+    }
+  | {
+      args: string[];
+      command: string;
+      env?: Record<string, string>;
+      name: string;
+      type: 'stdio';
+    };
+
+export interface ListMcpToolsParams {
+  /** List on a session that announces MCP Apps, so view-only tools are listed too. */
+  mcpApps?: boolean;
+  params: ListMcpToolsConnection;
+}
+
+/**
+ * A tool as the MCP server's `tools/list` returns it. Returned as listed, so
+ * the server maps it exactly as it maps a listing it ran itself.
+ */
+export interface ListedMcpServerTool {
+  _meta?: Record<string, unknown>;
+  description?: string;
+  inputSchema: object;
+  name: string;
+}
+
 export interface ListHeterogeneousAgentModelsParams {
   args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
   type:
+    | 'antigravity'
     | 'codebuddy'
     | 'codex'
     | 'copilot'
@@ -459,6 +528,7 @@ export type HeterogeneousAgentModelCatalog =
   | {
       error: {
         code:
+          | 'auth_required'
           | 'cli_not_found'
           | 'command_failed'
           | 'device_unavailable'
@@ -551,6 +621,8 @@ export interface CreateTerminalSessionParams {
 }
 
 export interface CreateTerminalSessionResult {
+  /** The client hosting the session, so callers can keep its later calls there. */
+  client: DeviceClient;
   /** Directory the shell actually started in (the request's `cwd` may not exist). */
   cwd: string;
   id: string;

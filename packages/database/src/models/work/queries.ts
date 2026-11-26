@@ -54,7 +54,8 @@ const MAX_SUMMARY_ROW_LIMIT = 1000;
 export const listByRootOperation = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
@@ -63,6 +64,7 @@ export const listByRootOperation = async (
   if (!params.rootOperationId) return [];
 
   const map = await listByRootOperations(ctx, {
+    includeArtboardWorks: params.includeArtboardWorks,
     includeFileWorks: params.includeFileWorks,
     limit: params.limit,
     rootOperationIds: [params.rootOperationId],
@@ -75,7 +77,8 @@ export const listByRootOperation = async (
 export const listByRootOperations = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
@@ -97,7 +100,7 @@ export const listByRootOperations = async (
   const filters = [inArray(workVersions.rootOperationId, rootOperationIds)];
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
   const itemsByType = await Promise.all(
-    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
+    resolveWorkTypeAdapters(params).map((adapter) =>
       adapter.listVersionEvents(ctx, filters, rowLimit),
     ),
   );
@@ -120,13 +123,67 @@ export const listByRootOperations = async (
   return result;
 };
 
+/** Summary cards of these Works, newest first; Works the caller cannot see drop out. */
+const summariesOf = async (ctx: WorkContext, workIds: string[]): Promise<WorkSummaryItem[]> => {
+  const rows = await ctx.db
+    .select({
+      event: currentVersionEventSelection,
+      ...currentTaskSummaryFields,
+      resourceDeleted: resourceDeletedField,
+      version: {
+        createdAt: currentVersions.createdAt,
+        id: currentVersions.id,
+        version: currentVersions.version,
+      },
+      work: currentWorkListFields,
+    })
+    .from(works)
+    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+    .leftJoin(tasks, taskSummaryJoin(ctx))
+    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
+    // hard-deleted outside the tool path) must still surface, so the UI can
+    // render it as "document deleted" and offer removal instead of showing a
+    // live-looking card that 404s on click.
+    .leftJoin(documents, documentSummaryJoin)
+    .where(and(workOwnership(ctx), inArray(works.id, workIds)))
+    .orderBy(desc(works.updatedAt), desc(works.id));
+
+  const costByWorkId = await getTotalCostByWorkIds(
+    ctx,
+    rows.map((row) => row.work.id),
+  );
+
+  return rows.map((row) =>
+    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
+  );
+};
+
+/** Summary cards of the given Works, as the conversation shows them; unknown or hidden ids drop out. */
+export const listSummariesByIds = async (
+  ctx: WorkContext,
+  workIds: string[],
+): Promise<WorkSummaryItem[]> => {
+  const ids = [...new Set(workIds.filter(Boolean))];
+  return ids.length ? summariesOf(ctx, ids) : [];
+};
+
 export const listSummariesByRootOperations = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
+    /**
+     * Narrows the type set to the ones the caller actually draws, on top of the
+     * opt-in gates. A caller that drops a type from the result afterwards (a
+     * Channel card keeps `external` + `canvas`) would otherwise have that type
+     * take a summary slot: opting into canvases also enables `file` and
+     * `collection`, and 20 files saved after the link would push it past `limit`
+     * before the caller filters them out.
+     */
+    types?: WorkType[];
   },
 ): Promise<WorkSummaryMap> => {
   const rootOperationIds = Array.from(
@@ -136,6 +193,13 @@ export const listSummariesByRootOperations = async (
     rootOperationIds.map((rootOperationId) => [rootOperationId, []]),
   );
   if (rootOperationIds.length === 0) return result;
+
+  // Intersect the caller's own types with the opt-in gates: an un-opted-in
+  // request cannot widen its read set by naming a gated type.
+  const allowedTypes = resolveAllowedWorkTypes(params).filter(
+    (type) => !params.types || params.types.includes(type),
+  );
+  if (allowedTypes.length === 0) return result;
 
   const limit = params.limit ?? 20;
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
@@ -157,7 +221,7 @@ export const listSummariesByRootOperations = async (
     .where(
       and(
         inArray(workVersions.rootOperationId, rootOperationIds),
-        inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+        inArray(works.type, allowedTypes),
       ),
     )
     .orderBy(desc(workVersions.createdAt))
@@ -171,37 +235,7 @@ export const listSummariesByRootOperations = async (
   }
   if (anchorByWorkId.size === 0) return result;
 
-  const rows = await ctx.db
-    .select({
-      event: currentVersionEventSelection,
-      ...currentTaskSummaryFields,
-      resourceDeleted: resourceDeletedField,
-      version: {
-        createdAt: currentVersions.createdAt,
-        id: currentVersions.id,
-        version: currentVersions.version,
-      },
-      work: currentWorkListFields,
-    })
-    .from(works)
-    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-    .leftJoin(tasks, taskSummaryJoin(ctx))
-    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
-    // hard-deleted outside the tool path) must still surface, so the UI can
-    // render it as "document deleted" and offer removal instead of showing a
-    // live-looking card that 404s on click.
-    .leftJoin(documents, documentSummaryJoin)
-    .where(and(workOwnership(ctx), inArray(works.id, Array.from(anchorByWorkId.keys()))))
-    .orderBy(desc(works.updatedAt), desc(works.id));
-
-  const costByWorkId = await getTotalCostByWorkIds(
-    ctx,
-    rows.map((row) => row.work.id),
-  );
-
-  const summaries = rows.map((row) =>
-    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
-  );
+  const summaries = await summariesOf(ctx, Array.from(anchorByWorkId.keys()));
 
   for (const summary of summaries) {
     const rootOperationId = anchorByWorkId.get(summary.id);
@@ -217,7 +251,8 @@ export const listSummariesByRootOperations = async (
 export const listByConversation = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;
@@ -232,7 +267,7 @@ export const listByConversation = async (
     : isNull(workVersions.threadId);
 
   const rowsByType = await Promise.all(
-    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
+    resolveWorkTypeAdapters(params).map((adapter) =>
       adapter.listConversationRows(ctx, {
         rowLimit: limit * WORK_TYPE_COUNT,
         threadFilter,
@@ -276,7 +311,8 @@ const WORKSPACE_WORK_LIMIT = 30;
 
 export interface ListByWorkspaceParams {
   cursor?: string | null;
-  /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+  /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+  includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
   limit?: number;
   /** Narrow results to Works first produced by one agent. */
@@ -336,7 +372,7 @@ export const listByWorkspace = async (
     workOwnership(ctx),
     // Row-level gate: un-opted-in requests never see `file` works, even in the
     // combined (no `type`) view (see resolveAllowedWorkTypes).
-    inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+    inArray(works.type, resolveAllowedWorkTypes(params)),
     // Orphaned Works (backing resource deleted or trashed) are hidden here
     // rather than shown as dead cards; see resourceLiveFilter.
     resourceLiveFilter,

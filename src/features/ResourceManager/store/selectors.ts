@@ -1,8 +1,12 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { compareResourceItems } from '@/store/file/slices/resource/utils';
 import { type FileListItem, FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
+import type { ResourceSorter } from '@/types/resource';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
 import { DEFAULT_SEARCH_PAGE_SIZE, type ExplorerSearchParams } from './projection';
+
+export { compareResourceItems } from '@/store/file/slices/resource/utils';
 
 /**
  * The Private / Workspace switch scopes the resource home only. Once the user
@@ -74,54 +78,30 @@ export const getExplorerSearchParams = (s: State): ExplorerSearchParams | null =
     libraryId: s.libraryId,
     pageSize: DEFAULT_SEARCH_PAGE_SIZE,
     q: s.searchQuery,
+    sorter: s.sorter,
+    sortType: s.sortType,
     sourceFilter: getResourceSourceFilter(s),
     visibility: getResourceQueryVisibility(s.libraryId, s.listVisibility),
   };
 };
 
 /**
- * Sort a file list based on sort settings
- * This is a pure function that can be used with any file list
+ * Default order for the current resource surface.
  */
-export const sortFileList = (
-  fileList: FileListItem[] | undefined,
-  sorter: 'name' | 'createdAt' | 'size',
+export const getDefaultLibrarySort = (
+  libraryId?: string,
+): { sorter: 'custom' | 'createdAt'; sortType: SortType } =>
+  libraryId
+    ? { sorter: 'custom', sortType: SortType.Asc }
+    : { sorter: 'createdAt', sortType: SortType.Desc };
+
+export const sortFileList = <T extends Parameters<typeof compareResourceItems>[0]>(
+  fileList: T[] | undefined,
+  sorter: ResourceSorter,
   sortType: SortType,
-): FileListItem[] | undefined => {
-  if (!fileList || fileList.length === 0) return fileList;
-
-  const sorted = [...fileList];
-
-  sorted.sort((a, b) => {
-    let aValue: any;
-    let bValue: any;
-
-    switch (sorter) {
-      case 'name': {
-        aValue = a.name?.toLowerCase() || '';
-        bValue = b.name?.toLowerCase() || '';
-        break;
-      }
-      case 'size': {
-        aValue = a.size || 0;
-        bValue = b.size || 0;
-        break;
-      }
-      default: {
-        aValue = new Date(a.createdAt).getTime();
-        bValue = new Date(b.createdAt).getTime();
-        break;
-      }
-    }
-
-    if (sortType === SortType.Asc) {
-      return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-    }
-    return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
-  });
-
-  return sorted;
-};
+  options?: { groupFolders?: boolean },
+): T[] | undefined =>
+  fileList?.toSorted((a, b) => compareResourceItems(a, b, sorter, sortType, options));
 
 /**
  * Get sorted file list based on current sort settings
@@ -130,7 +110,7 @@ export const sortFileList = (
  */
 const getSortedFileList = (s: State): FileListItem[] | undefined => {
   const fileList = useFileStore.getState().fileList;
-  return sortFileList(fileList, s.sorter, s.sortType);
+  return sortFileList(fileList, s.sorter, s.sortType, { groupFolders: Boolean(s.libraryId) });
 };
 
 /**

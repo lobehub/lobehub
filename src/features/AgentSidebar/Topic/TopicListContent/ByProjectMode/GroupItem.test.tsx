@@ -170,6 +170,7 @@ vi.mock('@/store/user', () => ({
 }));
 vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: { topicSortBy: () => 'updatedAt' },
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-1' },
 }));
 
@@ -183,6 +184,23 @@ vi.mock('@/store/chat', () => {
   });
   return { useChatStore };
 });
+
+const pullRequestsByTopicMock = vi.hoisted(() => ({ value: {} as Record<string, unknown[]> }));
+const listTopicsPullRequestsMock = vi.hoisted(() =>
+  vi.fn(async (ids: string[]) =>
+    Object.fromEntries(
+      ids.flatMap((id) =>
+        pullRequestsByTopicMock.value[id] ? [[id, pullRequestsByTopicMock.value[id]]] : [],
+      ),
+    ),
+  ),
+);
+vi.mock('@/services/work', () => ({
+  workService: { listTopicsPullRequests: listTopicsPullRequestsMock },
+}));
+vi.mock('@/store/device/gitReview/store', () => ({
+  useGitReviewStore: { getState: () => ({ gitPullRequestDetailMap: {} }) },
+}));
 
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
@@ -330,6 +348,32 @@ describe('Project topic group item', () => {
     expect(document.body.textContent).not.toContain('groupTitle.byDevice.unknown');
   });
 
+  /** @example a single directory lives on one device; device sections would nest the device under its own folder. */
+  it('offers no device grouping for a single project-directory group', async () => {
+    render(
+      <AccordionRoot defaultValue={['project-directory:dir-1']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              {
+                id: 't1',
+                metadata: { boundDeviceId: 'device-2' },
+                projectWorkingDirectoryId: 'dir-1',
+                title: 'Directory topic',
+              },
+            ] as any,
+            id: 'project-directory:dir-1',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'topics.subGroup.title' }));
+    expect(await screen.findByText('topics.subGroup.byTime')).toBeTruthy();
+    expect(screen.queryByText('topics.subGroup.byDevice')).toBeNull();
+  });
+
   it("sections a folder by device once it merges this machine's two device identities", () => {
     subGroupModeMock.value = 'byDevice';
     const folder = (id: string, boundDeviceId: string) => ({
@@ -390,23 +434,42 @@ describe('Project topic group item', () => {
   });
 
   it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {
-    const merged = { github: { pullRequest: { mergedAt: '2026-10-01', state: 'closed' } } };
+    const pullRequest = (number: number, status: string) => ({
+      identifier: `lobehub/lobehub#${number}`,
+      linkedAt: new Date('2026-11-20T00:00:00Z'),
+      number,
+      repoFullName: 'lobehub/lobehub',
+      scm: null,
+      source: 'created',
+      status,
+      title: null,
+      url: null,
+      vouched: true,
+      workId: `work-${number}`,
+    });
+    // The PRs come from the topics' Work rows, not a branch snapshot.
+    pullRequestsByTopicMock.value = {
+      't-done': [pullRequest(2, 'merged')],
+      't-merged': [pullRequest(1, 'merged')],
+      't-still-open': [pullRequest(4, 'open'), pullRequest(3, 'merged')],
+    };
     render(
       <AccordionRoot>
         <GroupItem
           expanded
           group={{
             children: [
-              {
-                id: 't-merged',
-                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
-                title: 'Merged',
-              },
+              { id: 't-merged', metadata: { workingDirectory: '/tmp/x' }, title: 'Merged' },
               {
                 id: 't-done',
-                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
+                metadata: { workingDirectory: '/tmp/x' },
                 status: 'completed',
                 title: 'Already done',
+              },
+              {
+                id: 't-still-open',
+                metadata: { workingDirectory: '/tmp/x' },
+                title: 'One PR still open',
               },
               { id: 't-open', metadata: { workingDirectory: '/tmp/x' }, title: 'Open' },
             ] as any,
@@ -421,6 +484,8 @@ describe('Project topic group item', () => {
     fireEvent.click(await screen.findByText('actions.archiveMergedPullRequests'));
 
     await waitFor(() => expect(refreshTopicMock).toHaveBeenCalled());
+    // Completed topics are not even asked about.
+    expect(listTopicsPullRequestsMock).toHaveBeenCalledWith(['t-merged', 't-still-open', 't-open']);
     expect(updateTopicStatusMock).toHaveBeenCalledTimes(1);
     expect(updateTopicStatusMock).toHaveBeenCalledWith({
       status: 'completed',

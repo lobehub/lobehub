@@ -5,10 +5,12 @@ import { RotateCcwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   loopBack: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
   `,

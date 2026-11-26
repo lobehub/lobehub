@@ -4,11 +4,10 @@ import type { ItemType } from '@lobehub/ui';
 import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { SendIcon, Settings2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
+import { MARKETPLACE_APPS_PATH, marketplaceAppPath } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import {
@@ -32,10 +31,11 @@ interface UseSendToMessengerMenuItemParams {
  * "Send to Messenger" entry for the resource row menu: a hover submenu with
  * one entry per available platform. A linked platform opens the push modal
  * (one entry per platform × Slack workspace); an unlinked one deep-links to
- * that platform's messenger settings page for setup.
+ * that platform's Marketplace app for setup.
  *
- * SWR dedupes the fetches across every row that renders this hook, so a long
- * file list still issues a single request each.
+ * The messenger store dedupes the reads across every row that renders this
+ * hook, so a long file list still issues a single request each, and a reload
+ * paints the submenu from the local copy.
  */
 export const useSendToMessengerMenuItem = ({
   enabled,
@@ -48,36 +48,33 @@ export const useSendToMessengerMenuItem = ({
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const active = enabled && enableBusinessFeatures;
 
-  const platformsSWR = useSWR(
-    active ? messengerKeys.availablePlatforms() : null,
-    () => messengerService.availablePlatforms(),
-    { revalidateOnFocus: false },
+  messengerActions.useFetchPlatforms({ enabled: active, revalidateOnFocus: false });
+  messengerActions.useFetchLinks({ enabled: active, revalidateOnFocus: false });
+  const platforms = useMessengerStore(messengerSelectors.platforms);
+  const links = useMessengerStore(messengerSelectors.links);
+  // An empty restored list may predate a new link: it is still loading, so the
+  // submenu does not offer "Set Up" for a platform that is already linked.
+  const isSettled = useMessengerStore(
+    (s) => messengerSelectors.isPlatformsSettled(s) && messengerSelectors.isLinksSettled(s),
   );
-  const linksSWR = useSWR(
-    active ? messengerKeys.listMyLinks() : null,
-    () => messengerService.listMyLinks(),
-    { revalidateOnFocus: false },
-  );
-  const platforms = platformsSWR.data;
-  const links = linksSWR.data;
 
   // Slack links carry a workspace tenant; resolve its display name from the
   // caller's installations. Only fetched when a Slack link actually exists.
   const hasSlackLink = !!links?.some((link) => link.platform === 'slack');
-  const installationsSWR = useSWR(
-    hasSlackLink ? messengerKeys.listMyInstallations() : null,
-    () => messengerService.listMyInstallations(),
-    { revalidateOnFocus: false },
-  );
+  messengerActions.useFetchInstallations({
+    enabled: active && hasSlackLink,
+    revalidateOnFocus: false,
+  });
+  const installations = useMessengerStore(messengerSelectors.installations);
   const tenantNameByTenantId = new Map(
-    (installationsSWR.data ?? []).map((i) => [i.tenantId, i.tenantName]),
+    (installations ?? []).map((i) => [i.tenantId, i.tenantName]),
   );
 
   if (!active) return null;
 
   let children: ItemType[];
 
-  if (platforms === undefined || links === undefined) {
+  if (!isSettled || platforms === undefined || links === undefined) {
     children = [
       {
         disabled: true,
@@ -112,7 +109,7 @@ export const useSendToMessengerMenuItem = ({
             ),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
-              navigate(`/settings/messenger/${platform}`);
+              navigate(marketplaceAppPath(platform));
             },
           },
         ];
@@ -150,7 +147,7 @@ export const useSendToMessengerMenuItem = ({
     });
 
     // Deployment has no messenger platform configured at all: fall back to a
-    // single entry pointing at the messenger settings overview.
+    // single entry pointing at Marketplace Apps.
     if (children.length === 0) {
       children = [
         {
@@ -159,21 +156,21 @@ export const useSendToMessengerMenuItem = ({
           label: t('FileManager.actions.sendToMessengerSetup'),
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
-            navigate('/settings/messenger');
+            navigate(MARKETPLACE_APPS_PATH);
           },
         },
       ];
     } else {
-      // Trailing shortcut to the messenger settings overview.
+      // Trailing shortcut to Marketplace Apps.
       children.push(
         { type: 'divider' },
         {
           icon: <Icon icon={Settings2Icon} />,
           key: 'send-to-messenger-settings',
-          label: t('FileManager.actions.sendToMessengerSettings'),
+          label: t('FileManager.actions.manageChatApps'),
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
-            navigate('/settings/messenger');
+            navigate(MARKETPLACE_APPS_PATH);
           },
         },
       );

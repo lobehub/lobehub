@@ -4,9 +4,13 @@ import debug from 'debug';
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
-import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
-import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
+import { resolveChannelKeys } from '@/server/services/bot/wake/platformFacts';
+import { createWakeClassify } from '@/server/services/conversationWake/classify';
+import { parseBotWakeSettings } from '@/server/services/conversationWake/config';
+import { createWakeDutyJudge } from '@/server/services/conversationWake/dutyJudge';
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+import { createWakeIdentityLoader } from '@/server/services/conversationWake/identity';
+import type { WakeInitiation } from '@/server/services/conversationWake/initiation';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
@@ -30,11 +34,14 @@ import {
   resolveReplyStyle,
   type UserAllowlist,
 } from '../platforms';
-import { extractDeviceAllowlist } from '../platforms/deviceAccess';
+import {
+  extractDeviceAllowlist,
+  extractDeviceChannelAllowlist,
+  extractDeviceChannelGrantlist,
+  isDeviceChannelGranted,
+  isDeviceChannelRestricted,
+} from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
-import { createWakeClassify } from '../wake/classify';
-import { createWakeDutyJudge } from '../wake/dutyJudge';
-import { createWakeIdentityLoader } from '../wake/identity';
 import { createReplyOpener } from '../wake/opener';
 import { resolveWakeScheduler } from '../wake/scheduler';
 import type { WakeMessageLike } from '../wake/signal';
@@ -54,7 +61,6 @@ import {
 } from './utils';
 import {
   type BotWakeEntryPoint,
-  type BotWakeInitiation,
   botWakeKindFor,
   type BotWakeObservation,
   type BotWakeReason,
@@ -168,6 +174,33 @@ export function registerHandlers(
       : undefined;
   /** Who besides the owner may use the owner's devices; read once per bot. */
   const deviceAllowlist = extractDeviceAllowlist(info.settings);
+  /** Channels the owner limited device use to; `undefined` when unrestricted. */
+  const deviceChannelAllowlist = extractDeviceChannelAllowlist(info.settings);
+  /**
+   * Whether a thread sits outside those channels. Matches the same raw IDs as
+   * the group policy (`passesGroupPolicy`), so pasted channel IDs line up.
+   */
+  const isDeviceChannelRestrictedFor = (thread: { id: string; isDM?: boolean }): boolean =>
+    isDeviceChannelRestricted({
+      candidateChannelIds: [
+        client.extractChatId(thread.id),
+        ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
+      ],
+      channelAllowlist: deviceChannelAllowlist,
+      isDM: thread.isDM === true,
+    });
+  /** Channels whose members may all use the devices (`devicePolicy: 'channel'`). */
+  const deviceChannelGrantlist = extractDeviceChannelGrantlist(info.settings);
+  /** Whether a thread sits in one of those channels; same candidate IDs as above. */
+  const isDeviceChannelGrantedFor = (thread: { id: string; isDM?: boolean }): boolean =>
+    isDeviceChannelGranted({
+      candidateChannelIds: [
+        client.extractChatId(thread.id),
+        ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
+      ],
+      channelGrantlist: deviceChannelGrantlist,
+      isDM: thread.isDM === true,
+    });
   const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
   /**
@@ -389,7 +422,7 @@ export function registerHandlers(
     message: WakeMessageLike,
     thread: { id: string },
     threadSubscribed = false,
-  ): Promise<BotWakeInitiation | undefined> =>
+  ): Promise<WakeInitiation | undefined> =>
     wakeRecorder.initiate(
       observationOf(entryPoint, message, thread, 'skip', 'not-addressed', threadSubscribed),
     );
@@ -557,6 +590,8 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelGranted: isDeviceChannelGrantedFor(thread),
+          deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -840,6 +875,8 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelGranted: isDeviceChannelGrantedFor(thread),
+          deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -895,6 +932,8 @@ export function registerHandlers(
 
   registerCatchAllHandler(bot, {
     deviceAllowlist,
+    isDeviceChannelGrantedFor,
+    isDeviceChannelRestrictedFor,
     agentId,
     applicationId,
     replyVoiceFor,

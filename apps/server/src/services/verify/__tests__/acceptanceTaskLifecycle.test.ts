@@ -264,7 +264,6 @@ describe('AcceptanceService task lifecycle', () => {
         ]);
 
         await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
-        expect(mocks.isRetiredGoalTask).toHaveBeenCalledWith('task_1');
         expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'closed');
         expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
       });

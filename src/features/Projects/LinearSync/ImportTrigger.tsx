@@ -6,8 +6,8 @@ import { DownloadIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import LinearIcon from '@/features/Integrations/Linear/LinearIcon';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { openLinearIssueImportModal } from './openImportModal';
 
@@ -27,6 +27,7 @@ interface ImportTriggerProps {
 const ImportTrigger = memo<ImportTriggerProps>(
   ({ connections, disabled, onSynced, projectId, variant }) => {
     const { t } = useTranslation('integration');
+    const headerActionSmallSize = useHeaderActionSize(true);
     const open = (connection: LinearConnectionView) =>
       openLinearIssueImportModal({ connection, onSynced, projectId });
 
@@ -38,7 +39,7 @@ const ImportTrigger = memo<ImportTriggerProps>(
           aria-label={t('linear.sync.project.entry')}
           disabled={disabled}
           icon={LinearIcon}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSmallSize}
           title={t('linear.sync.project.entry')}
           onClick={onClick}
         />

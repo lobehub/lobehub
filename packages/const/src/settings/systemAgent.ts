@@ -1,3 +1,4 @@
+import * as businessDefaults from '@lobechat/business-const';
 import {
   DEFAULT_ASR_MODEL,
   DEFAULT_ASR_PROVIDER,
@@ -7,7 +8,6 @@ import {
   DEFAULT_VERIFY_MODEL,
   DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
-import * as businessDefaults from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
   ServiceModelTier,
@@ -16,6 +16,7 @@ import type {
   UserServiceModelConfigKey,
 } from '@lobechat/types';
 
+import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from './knowledge';
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MINI_MODEL, DEFAULT_MODEL } from './llm';
 
 export const DEFAULT_SYSTEM_AGENT_ITEM: SystemAgentItem = {
@@ -93,10 +94,11 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
     provider: typeof channelRoutingProvider === 'string' ? channelRoutingProvider : 'typesafe',
   },
   expertise: DEFAULT_SYSTEM_AGENT_ITEM,
+  // The deployment default comes from `DEFAULT_FILES_CONFIG`, not `SYSTEM_AGENT`.
+  fileEmbedding: DEFAULT_FILE_EMBEDDING_MODEL_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   goal: DEFAULT_SYSTEM_AGENT_ITEM,
-  historyCompress: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
@@ -116,7 +118,9 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
  * above is its tier's default, so a slot that follows an unset tier runs the
  * same system-recommended model the tier shows. The first slot of a tier
  * stands for the tier's own recommendation. Slots left out (`asr`,
- * `channelRouting`, onboarding) keep their own system default and ignore tier changes.
+ * `channelRouting`, `fileEmbedding`, onboarding) keep their own system default and
+ * ignore tier changes. `fileEmbedding` must stay out: following a tier would move
+ * file indexing to a new model and strand the vectors of files already embedded.
  */
 export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModelConfigKey[]> = {
   embedding: ['userMemoryEmbedding'],
@@ -125,7 +129,6 @@ export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModel
     'thread',
     'generationTopic',
     'translation',
-    'historyCompress',
     'promptRewrite',
     'memoryAnalysisAgentConfig',
     'userMemoryPersonaWriter',

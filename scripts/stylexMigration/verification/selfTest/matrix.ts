@@ -1,7 +1,10 @@
 import type { Browser } from '@playwright/test';
 
+import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { compareWithProbes, discoverProbes } from '../browser/probes';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 import { boundaries, boundaryHtml } from './boundaries';
 
 export const runBoundaryMatrix = async (

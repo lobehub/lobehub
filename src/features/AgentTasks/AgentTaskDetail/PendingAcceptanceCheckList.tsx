@@ -5,11 +5,12 @@ import { CircleDashed } from 'lucide-react';
 import { memo } from 'react';
 
 import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Acceptance';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`
-    padding-block: 9px;
-    padding-inline: 12px;
+    padding-block: 8px;
+    padding-inline: ${densityVars.contentGap};
   `,
 }));
 

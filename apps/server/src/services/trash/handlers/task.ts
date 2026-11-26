@@ -4,12 +4,19 @@ import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
+import { createFileServiceArtboardBlobStore } from '@/server/services/artboard/files';
+import {
+  collectTaskArtboards,
+  deleteTaskArtboardRecords,
+  releaseTaskArtboards,
+} from '@/server/services/artboard/taskCleanup';
 
-import { topicEntry } from './topic';
+import { hasWaitingWorktreeCleanup, topicEntry, WORKTREE_CLEANUP_WAITING_MESSAGE } from './topic';
 import {
   type TrashCascade,
   type TrashHandler,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './types';
 
@@ -76,12 +83,33 @@ export const taskHandler: TrashHandler = {
    * a restore that won the race (nothing left stamped) keeps both.
    */
   purge: async (ctx, root, children) => {
+    // Its topics go with it: hold while any still has a worktree cleanup
+    // waiting on its device (see `./topic`).
+    const childTopicIds = children
+      .filter((child) => child.resourceType === 'topic')
+      .map((child) => child.resourceId);
+    const childTopics = await new TopicModel(
+      ctx.db,
+      ctx.userId,
+      ctx.workspaceId,
+    ).findOwnedWorktreeTopics(childTopicIds);
+    if (hasWaitingWorktreeCleanup(childTopics))
+      throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
+
+    // Read before the purge: the task delete sets `artboards.task_id` to NULL.
+    const artboards = await collectTaskArtboards(ctx, [root.resourceId]);
+    let taskPurged = false;
     await ctx.db.transaction(async (tx) => {
       const db = tx as unknown as typeof ctx.db;
       // FK cascades take dependencies, comments, documents and `task_topics`;
       // subtasks get `parent_task_id = NULL`, as the hard delete always did.
       const purged = await new TaskModel(db, ctx.userId, ctx.workspaceId).purge([root.resourceId]);
       if (purged.length === 0) return;
+      taskPurged = true;
+      await deleteTaskArtboardRecords(
+        { db, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        artboards,
+      );
 
       const topicIds = children
         .filter((child) => child.resourceType === 'topic')
@@ -90,6 +118,12 @@ export const taskHandler: TrashHandler = {
         await new TopicModel(db, ctx.userId, ctx.workspaceId).batchDeleteIncludingTrashed(topicIds);
       }
     });
+    if (taskPurged)
+      await releaseTaskArtboards(
+        ctx,
+        artboards,
+        createFileServiceArtboardBlobStore(() => ctx.fileService),
+      );
   },
   restore: async (ctx, root, children) => {
     const taskModel = new TaskModel(ctx.db, ctx.userId, ctx.workspaceId);

@@ -5,6 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Checker from './Checker';
 
 const fetchPresetTaskResult = vi.fn();
+const checkProviderConnectivity = vi.fn();
+
+vi.mock('@/services/aiProvider', () => ({
+  aiProviderService: {
+    checkProviderConnectivity: (...args: any[]) => checkProviderConnectivity(...args),
+  },
+}));
 
 vi.mock('@/services/chat', () => ({
   chatService: { fetchPresetTaskResult: (...args: any[]) => fetchPresetTaskResult(...args) },
@@ -28,6 +35,7 @@ vi.mock('@/store/aiInfra', () => ({
 describe('Checker', () => {
   beforeEach(() => {
     fetchPresetTaskResult.mockReset();
+    checkProviderConnectivity.mockReset();
   });
 
   // A provider error that arrives inside a 200 stream (a relayed device call, or
@@ -66,5 +74,79 @@ describe('Checker', () => {
 
     expect(await screen.findByText('render:OllamaBizError')).toBeInTheDocument();
     expect(screen.queryByText('render:ConnectionCheckFailed')).not.toBeInTheDocument();
+  });
+
+  describe('credentials check mode', () => {
+    const renderCredentialsChecker = (onBeforeCheck = async () => true) => {
+      const checkErrorRender = vi.fn(({ error }) => (
+        <div>{`render:${error?.type}:${error?.message}`}</div>
+      ));
+      render(
+        <Checker
+          checkErrorRender={checkErrorRender}
+          checkMode="credentials"
+          model=""
+          provider="fal"
+          onAfterCheck={async () => {}}
+          onBeforeCheck={onBeforeCheck}
+        />,
+      );
+    };
+
+    it('hides the check-model picker and verifies the key on the server', async () => {
+      checkProviderConnectivity.mockResolvedValue({ balance: 100, ok: true });
+      renderCredentialsChecker();
+
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button'));
+      });
+
+      expect(checkProviderConnectivity).toHaveBeenCalledWith('fal');
+      expect(fetchPresetTaskResult).not.toHaveBeenCalled();
+      expect(await screen.findByText('llm.checker.pass')).toBeInTheDocument();
+    });
+
+    it('shows the rejected-key error type and gateway message', async () => {
+      checkProviderConnectivity.mockResolvedValue({
+        error: 'InvalidProviderAPIKey: Unauthorized',
+        errorType: 'InvalidProviderAPIKey',
+        ok: false,
+      });
+      renderCredentialsChecker();
+
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button'));
+      });
+
+      expect(
+        await screen.findByText('render:InvalidProviderAPIKey:InvalidProviderAPIKey: Unauthorized'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('llm.checker.pass')).not.toBeInTheDocument();
+    });
+
+    it('falls back to ConnectionCheckFailed when the request itself fails', async () => {
+      checkProviderConnectivity.mockRejectedValue(new Error('network down'));
+      renderCredentialsChecker();
+
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button'));
+      });
+
+      expect(
+        await screen.findByText('render:ConnectionCheckFailed:network down'),
+      ).toBeInTheDocument();
+    });
+
+    it('does not check when the form is invalid', async () => {
+      renderCredentialsChecker(async () => false);
+
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button'));
+      });
+
+      expect(checkProviderConnectivity).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,8 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  BlockedPageError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import { firecrawl } from '../firecrawl';
+
+const pageMetadata = () => ({
+  title: 'Test',
+  description: 'Test',
+  sourceURL: 'https://example.com',
+  statusCode: 200,
+  language: 'en',
+  keywords: 'test',
+  robots: 'index',
+});
 
 // Mock dependencies
 vi.mock('../../utils/withTimeout', () => ({
@@ -62,15 +77,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         markdown: 'Test content with sufficient length. '.repeat(5),
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 
@@ -82,6 +89,25 @@ describe('firecrawl crawler', () => {
     expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    process.env.FIRECRAWL_API_KEY = 'test-api-key';
+
+    const mockResponse = createMockResponse({
+      success: true,
+      data: {
+        markdown: 'Enable JavaScript and cookies to continue',
+        metadata: { ...pageMetadata(), title: 'Just a moment...' },
+      },
+    });
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
+
+    await expect(firecrawl('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
+  });
+
   it('should return undefined for short content', async () => {
     process.env.FIRECRAWL_API_KEY = 'test-api-key';
 
@@ -89,15 +115,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         markdown: 'Short', // Content too short
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 
@@ -116,15 +134,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         // markdown is missing
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 

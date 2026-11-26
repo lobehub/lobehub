@@ -225,12 +225,10 @@ describe('doc command', () => {
 
     it('should report truncation when --all reaches its page cap', async () => {
       mockTrpcClient.document.queryDocuments.query.mockReset();
-      mockTrpcClient.document.queryDocuments.query.mockImplementation(
-        async ({ current }: any) => ({
-          items: [{ id: `doc${current}`, title: 'A' }],
-          total: 5000,
-        }),
-      );
+      mockTrpcClient.document.queryDocuments.query.mockImplementation(async ({ current }: any) => ({
+        items: [{ id: `doc${current}`, title: 'A' }],
+        total: 5000,
+      }));
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
       try {
@@ -260,12 +258,10 @@ describe('doc command', () => {
 
     it('should not report a complete total when --all is capped in table mode', async () => {
       mockTrpcClient.document.queryDocuments.query.mockReset();
-      mockTrpcClient.document.queryDocuments.query.mockImplementation(
-        async ({ current }: any) => ({
-          items: [{ id: `doc${current}`, title: 'A' }],
-          total: 1200,
-        }),
-      );
+      mockTrpcClient.document.queryDocuments.query.mockImplementation(async ({ current }: any) => ({
+        items: [{ id: `doc${current}`, title: 'A' }],
+        total: 1200,
+      }));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '1', '--all']);

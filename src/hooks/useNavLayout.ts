@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
+import { getMarketplaceEntryPath, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import {
@@ -15,6 +16,9 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface NavItem {
+  /** First path segment that marks this item active, when it differs from `key`. */
+  activeTab?: string;
+  additionalActiveTabs?: string[];
   hidden?: boolean;
   icon: any;
   isNew?: boolean;
@@ -40,12 +44,12 @@ export interface NavLayout {
 }
 
 export const useNavLayout = (): NavLayout => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'chat']);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
+  const enableProjects = useUserStore(labPreferSelectors.enableProjects);
 
   const topNavItems = useMemo(
     () =>
@@ -64,17 +68,19 @@ export const useNavLayout = (): NavLayout => {
         },
         {
           icon: getRouteById('tasks')!.icon,
+          additionalActiveTabs: ['goals', 'goal', 'task'],
           key: SidebarTabKey.Tasks,
-          title: t('tab.tasks'),
+          title: t('tab.goalsAndTasks', { ns: 'chat' }),
           url: '/tasks',
         },
         {
-          // Behind the same lab toggle as the agent-scoped goal pages.
-          hidden: !enableGoals,
-          icon: getRouteById('goals')!.icon,
-          key: SidebarTabKey.Goals,
-          title: t('tab.goals'),
-          url: '/goals',
+          // Keyed `project` to match the sidebar layout id; the page is `/projects`.
+          activeTab: 'projects',
+          hidden: !enableProjects,
+          icon: getRouteById('project')!.icon,
+          key: 'project',
+          title: t('tab.projects'),
+          url: '/projects',
         },
         {
           // Personal boards only for now — workspace-level boards have no UI
@@ -92,7 +98,7 @@ export const useNavLayout = (): NavLayout => {
           url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableProjects],
   );
 
   const bottomMenuItems = useMemo(
@@ -104,13 +110,17 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.generation'),
           url: '/image',
         },
+        // Always shown: installed skills and connectors live in the Marketplace,
+        // so with the market off the entry opens straight on the installed skills.
         {
-          hidden: !showMarket,
+          activeTab: MARKETPLACE_SEGMENT,
           icon: getRouteById('community')!.icon,
           key: SidebarTabKey.Community,
-          title: t('tab.community'),
-          url: '/community',
+          title: t('tab.marketplace'),
+          url: getMarketplaceEntryPath(showMarket),
         },
+        // Not a desktop sidebar section (it lives under Settings there): this
+        // entry feeds the mobile home shortcuts.
         {
           hidden: !!activeWorkspaceSlug,
           icon: getRouteById('memory')!.icon,
@@ -135,8 +145,8 @@ export const useNavLayout = (): NavLayout => {
   const userPanel = useMemo(
     () => ({
       showDataImporter: false,
-      // Memory now appears in the sidebar by default; drop the duplicate entry
-      // from the user dropdown to keep that menu focused on account / settings.
+      // Memory is reached through Settings; keep the user dropdown focused on
+      // account / settings.
       showMemory: false,
     }),
     [],

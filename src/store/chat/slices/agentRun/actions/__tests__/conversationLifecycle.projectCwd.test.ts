@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { deviceService } from '@/services/device';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
@@ -51,6 +52,17 @@ const directoryRow = {
   projectId: 'prj-1',
 } as ProjectDirectory;
 
+const deviceAgent = () =>
+  setupMockSelectors({
+    agentConfig: {
+      agencyConfig: {
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+      },
+    },
+  });
+
 beforeEach(() => {
   resetTestEnvironment();
   spyOnMessageService();
@@ -77,21 +89,59 @@ afterEach(() => {
 });
 
 describe('sendMessage in a project directory', () => {
+  it('submits a self-mention first send with its worktree and staged project directory', async () => {
+    deviceAgent();
+    const agentId = TEST_IDS.SESSION_ID;
+    const worktree = {
+      deviceId: DEVICE_ID,
+      path: PROJECT_PATH,
+      repoType: 'git' as const,
+      sourcePath: PROJECT_PATH,
+    };
+    const submit = vi
+      .spyOn(aiAgentService, 'submitWorktreeTurn')
+      .mockRejectedValue(new Error('offline'));
+    useChatStore.setState({
+      activeAgentId: agentId,
+      activeTopicId: undefined,
+      isGatewayModeEnabled: () => true,
+      pendingNewTopicDirectory: { agentId, projectWorkingDirectoryId: 'dir-85' },
+    });
+
+    await act(async () => {
+      await useChatStore.getState().sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        editorData: {
+          root: {
+            children: [
+              {
+                children: [
+                  { label: 'Agent', metadata: { id: agentId, type: 'agent' }, type: 'mention' },
+                  { text: ' work in isolation', type: 'text' },
+                ],
+                type: 'paragraph',
+              },
+            ],
+          },
+        },
+        firstSendWorktree: worktree,
+        message: '@Agent work in isolation',
+      });
+    });
+
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId, projectWorkingDirectoryId: 'dir-85', worktree }),
+      null,
+    );
+  });
+
   // Regression: the new topic's optimistic metadata took the agent's own
   // per-device directory, and the send-time git snapshot wrote that config back
   // over the server's project binding — the composer then showed another repo's
   // branch, and the next turn was refused for a mismatched directory.
   it('seeds the new topic with the project directory, not the agent default', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
     const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
     const agentId = TEST_IDS.SESSION_ID;
 
@@ -211,15 +261,7 @@ describe('sendMessage in a project directory', () => {
   // must not inherit the directory it was sent from.
   it('keeps a /newTopic sent from a project topic on the agent default', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
     const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
     const agentId = TEST_IDS.SESSION_ID;
 
@@ -384,15 +426,7 @@ describe('sendMessage continuing a source topic', () => {
   // agent's default directory instead of the one the source topic ran in.
   it('starts a forwarded topic in the source project directory', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
 
     const params = await sendForward({
       metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
@@ -408,15 +442,7 @@ describe('sendMessage continuing a source topic', () => {
 
   it('carries the source bare directory to the server on the same machine', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
 
     const params = await sendForward({
       metadata: {
@@ -443,15 +469,7 @@ describe('sendMessage continuing a source topic', () => {
     ['on an unknown machine', { workingDirectory: SOURCE_PATH }],
   ])('keeps the agent default when the source directory is %s', async (_, metadata) => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
 
     const params = await sendForward({ metadata });
 
@@ -486,15 +504,7 @@ describe('sendMessage continuing a source topic', () => {
   // off) must not fail the handoff: it continues in the source's bare cwd.
   it('falls back to the source cwd when its project directory cannot be resolved', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
     useProjectDirectoryStore.setState({ directoriesMap: {} });
     vi.spyOn(projectWorkingDirectoryService, 'resolve').mockRejectedValue(
       new Error('Directory not found'),
@@ -513,17 +523,6 @@ describe('sendMessage continuing a source topic', () => {
   // The source directory may have been deleted since it ran; the receiving
   // agent then takes the handoff in its own default instead of a run that can
   // only fail with "working directory not found".
-  const deviceAgent = () =>
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
-
   it('falls back to the agent default when the source cwd no longer exists', async () => {
     mockConstEnv.isDesktop = true;
     deviceAgent();

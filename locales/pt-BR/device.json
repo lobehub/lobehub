@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Atualizar pastas",
   "workingDirectory.refreshGitStatus": "Atualizar status do branch e PR",
   "workingDirectory.removeRecent": "Remover dos recentes",
+  "workingDirectory.removeRecentFailed": "Não foi possível remover esta pasta. Por favor, tente novamente.",
   "workingDirectory.removeWorktreeAction": "Excluir worktree",
   "workingDirectory.removeWorktreeConfirm": "Excluir worktree “{{name}}”? Isso remove o diretório do worktree, mas mantém seu branch. O Git recusará se houver alterações não confirmadas.",
   "workingDirectory.removeWorktreeFailed": "Falha ao excluir o worktree",

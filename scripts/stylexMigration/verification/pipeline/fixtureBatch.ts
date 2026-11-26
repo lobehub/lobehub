@@ -4,7 +4,6 @@ import path from 'node:path';
 import { type StyleFixture, styleFixtureSchema } from '../fixtures/fixtureRegistry';
 import { summarizeComponentRun } from '../reporting/componentSummary';
 import { writeArtifactManifest, writeHtmlReport, writeJson } from '../reporting/report';
-import type { GateInput } from '../types';
 import { runComponentFixture } from './componentRunner';
 
 /** One frozen B/M pair and dependency capsule; isolated build namespace per
@@ -16,11 +15,9 @@ export const runFixtureBatch = async (options: {
   fixtures: StyleFixture[];
   output: string;
   sourceDirectory: string;
+  screenshots?: boolean;
 }) => {
   const started = performance.now();
-  const errors: string[] = [];
-  const findings: GateInput['findings'] = [];
-  const fixtureResults: GateInput['fixtures'] = [];
   const artifactFiles: string[] = [];
   const entries: Array<{
     fixtureId: string;
@@ -41,12 +38,6 @@ export const runFixtureBatch = async (options: {
       // Reserve the two 60s sandbox build deadlines before starting new work.
       if (performance.now() - started >= 13 * 60_000) {
         const reason = 'FIXTURE_BATCH_TIME_BUDGET_EXCEEDED';
-        findings.push({
-          confirmed: false,
-          id: `${fixture.id}:batch-budget`,
-          reasonCode: reason,
-          severity: 'review',
-        });
         entries.push({
           fixtureId: fixture.id,
           outcome: 'NOT_RUN',
@@ -55,22 +46,13 @@ export const runFixtureBatch = async (options: {
         });
         await writeJson(directory, 'not-run.json', {
           fixtureId: fixture.id,
-          gateEligible: false,
           reason,
         });
-        await writeHtmlReport(directory, { fixtureId: fixture.id, gateEligible: false, reason });
+        await writeHtmlReport(directory, { fixtureId: fixture.id, reason });
       } else {
         console.log(JSON.stringify({ phase: 'component-start', fixture: fixture.id }));
         const run = await runComponentFixture({ ...options, fixture, output: directory });
         const summary = summarizeComponentRun(run.result);
-        errors.push(...run.result.errors.map((error) => `${fixture.id}:${error}`));
-        findings.push(
-          ...run.result.findings.map((finding) => ({
-            ...finding,
-            id: `${fixture.id}:${finding.id}`,
-          })),
-        );
-        fixtureResults.push(...run.result.fixtureResults);
         entries.push({
           fixtureId: fixture.id,
           outcome: 'COMPLETED',
@@ -80,12 +62,10 @@ export const runFixtureBatch = async (options: {
         await writeJson(directory, 'component-summary.json', {
           ...summary,
           fixtureId: fixture.id,
-          gateEligible: false,
         });
         await writeHtmlReport(directory, {
           ...summary,
           fixtureId: fixture.id,
-          gateEligible: false,
           componentRunRef: 'component-run.json',
         });
         console.log(
@@ -95,7 +75,6 @@ export const runFixtureBatch = async (options: {
     } catch (error) {
       console.error(error);
       const reason = error instanceof Error ? error.message : String(error);
-      errors.push(`${fixture.id}:${reason}`);
       entries.push({
         fixtureId: fixture.id,
         outcome: 'ERROR',
@@ -104,10 +83,9 @@ export const runFixtureBatch = async (options: {
       });
       await writeJson(directory, 'fixture-error.json', {
         fixtureId: fixture.id,
-        gateEligible: false,
         reason,
       });
-      await writeHtmlReport(directory, { fixtureId: fixture.id, gateEligible: false, reason });
+      await writeHtmlReport(directory, { fixtureId: fixture.id, reason });
     }
     const files = await readdir(directory, { withFileTypes: true });
     if (files.some((file) => !file.isFile())) throw new Error('UNEXPECTED_FIXTURE_REPORT_ENTRY');
@@ -137,10 +115,9 @@ export const runFixtureBatch = async (options: {
   await writeJson(options.output, 'fixture-batch.json', {
     durationMs: performance.now() - started,
     entries,
-    gateEligible: false,
     plannedFixtureIds: ids,
     summary,
   });
   artifactFiles.push('fixture-batch.json');
-  return { artifactFiles, errors, findings, fixtureResults, summary };
+  return { artifactFiles, entries, summary };
 };

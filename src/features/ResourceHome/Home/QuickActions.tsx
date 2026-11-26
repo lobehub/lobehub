@@ -12,6 +12,7 @@ import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLe
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { pageActions } from '@/store/page';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { docsPagePath } from '../paths';
 
@@ -19,10 +20,10 @@ const styles = stylex.create({
   action: {
     cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     paddingBlock: '14px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
@@ -41,7 +42,7 @@ const styles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   icon: {
     display: 'flex',
@@ -55,7 +56,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorPrimaryBg,
   },
   title: {
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     color: cssVar.colorText,
   },

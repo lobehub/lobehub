@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -14,12 +15,14 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { getAntigravityQuota } from '../antigravityQuota';
 import {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,
   deviceRpcClients,
   executeDeviceRpc,
+  MCP_UNSUPPORTED_MESSAGE,
   TERMINAL_UNSUPPORTED_MESSAGE,
   TRASH_UNSUPPORTED_MESSAGE,
 } from '../dispatch';
@@ -71,7 +74,21 @@ const makeDeps = (): DeviceControlDeps => ({
   })),
 });
 
+vi.mock('../antigravityQuota', () => ({
+  getAntigravityQuota: vi.fn(async () => ({ status: 'ok', groups: [] })),
+}));
+
 describe('executeDeviceRpc', () => {
+  it('routes Antigravity quota RPCs through the shared host sampler', async () => {
+    const params = { command: '/custom/agy', env: { AGY_PROFILE: 'fixture' }, force: true };
+    expect(DEVICE_RPC_METHODS).toContain('getAntigravityQuota');
+    await expect(executeDeviceRpc('getAntigravityQuota', params, makeDeps())).resolves.toEqual({
+      status: 'ok',
+      groups: [],
+    });
+    expect(getAntigravityQuota).toHaveBeenCalledWith(params);
+  });
+
   it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
     'rejects missing CLI handler %s with a stable reason',
     async (method) => {
@@ -106,6 +123,112 @@ describe('executeDeviceRpc', () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',
     );
+  });
+
+  describe('session worktree files', () => {
+    let repo: string;
+    let first: string;
+    let second: string;
+
+    beforeAll(async () => {
+      const base = await realpath(root);
+      repo = path.join(base, 'repo');
+      first = path.join(base, 'first-worktree');
+      second = path.join(base, 'second-worktree');
+      await mkdir(repo);
+      const git = (...args: string[]) =>
+        execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
+      git('init', '-q');
+      await writeFile(path.join(repo, 'notes.txt'), 'original');
+      git('add', 'notes.txt');
+      git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed');
+      git('worktree', 'add', '-b', 'first', first);
+      git('worktree', 'add', '-b', 'second', second);
+    });
+
+    const run = (
+      worktreePath: string,
+      method: string,
+      params: Record<string, unknown>,
+      sourcePath = repo,
+    ) =>
+      executeDeviceRpc(
+        'runWorktreeFileOperation',
+        { approvedRoot: repo, rpc: { method, params }, sourcePath, worktreePath },
+        makeDeps(),
+      );
+
+    it('reads and writes two sibling Git worktrees without registering their paths', async () => {
+      for (const checkout of [first, second]) {
+        const filePath = path.join(checkout, 'notes.txt');
+        const content = path.basename(checkout);
+        await expect(
+          run(checkout, 'writeLocalFile', { content, path: filePath, workspaceRoot: checkout }),
+        ).resolves.toEqual({ success: true });
+        await expect(
+          run(checkout, 'getLocalFilePreview', { path: filePath, workingDirectory: checkout }),
+        ).resolves.toMatchObject({ preview: { content, type: 'text' }, success: true });
+      }
+      expect(await readFile(path.join(repo, 'notes.txt'), 'utf8')).toBe('original');
+    });
+
+    it('refuses an unrelated directory and a source symlink that escapes the registered root', async () => {
+      const unrelated = path.join(root, 'unrelated');
+      const escapedSource = path.join(repo, 'escape');
+      await mkdir(unrelated);
+      await symlink(first, escapedSource, 'dir');
+      await expect(
+        run(unrelated, 'writeLocalFile', {
+          content: 'must not write',
+          path: path.join(unrelated, 'notes.txt'),
+          workspaceRoot: unrelated,
+        }),
+      ).rejects.toThrow('not a registered worktree');
+      await expect(
+        run(
+          second,
+          'getLocalFilePreview',
+          {
+            path: path.join(second, 'notes.txt'),
+            workingDirectory: second,
+          },
+          escapedSource,
+        ),
+      ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+      expect(await readdir(unrelated)).toEqual([]);
+    });
+
+    it('refuses to inherit access to worktrees from a registered subdirectory of the source', async () => {
+      const approvedRoot = path.join(repo, 'registered-subdirectory');
+      await mkdir(approvedRoot);
+
+      await expect(
+        executeDeviceRpc(
+          'runWorktreeFileOperation',
+          {
+            approvedRoot,
+            rpc: {
+              method: 'getLocalFilePreview',
+              params: { path: path.join(first, 'notes.txt'), workingDirectory: first },
+            },
+            sourcePath: approvedRoot,
+            worktreePath: first,
+          },
+          makeDeps(),
+        ),
+      ).rejects.toThrow('The source repository is outside the approved workspace');
+    });
+
+    it('refuses preview and write through a symlink to a sibling worktree', async () => {
+      const link = path.join(first, 'linked.txt');
+      await symlink(path.join(second, 'notes.txt'), link, 'file');
+      await expect(
+        run(first, 'getLocalFilePreview', { path: link, workingDirectory: first }),
+      ).resolves.toMatchObject({ code: 'forbidden', success: false });
+      await expect(
+        run(first, 'writeLocalFile', { content: 'blocked', path: link, workspaceRoot: first }),
+      ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+    });
   });
 
   describe('app update', () => {
@@ -146,7 +269,9 @@ describe('executeDeviceRpc', () => {
     };
 
     expect(result.skills.map((s) => s.name)).toEqual(['spa-routes']);
-    expect(result.instructions).toEqual([{ content: '# Agents', source: 'AGENTS.md' }]);
+    expect(result.instructions).toEqual([
+      { content: '# Agents', path: path.join(root, 'AGENTS.md'), source: 'AGENTS.md' },
+    ]);
     expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
   });
 
@@ -290,6 +415,34 @@ describe('executeDeviceRpc', () => {
     ).rejects.toThrow('does not support heterogeneous agent model discovery');
   });
 
+  it('routes MCP tool listing to the host MCP client', async () => {
+    const deps = makeDeps();
+    const tools = [{ inputSchema: { type: 'object' }, name: 'search' }];
+    deps.listMcpTools = vi.fn(async () => tools);
+    const params = {
+      mcpApps: true,
+      params: {
+        headers: { 'X-Team': 'a' },
+        name: 'nas',
+        type: 'http' as const,
+        url: 'https://nas.tail1234.ts.net/mcp',
+      },
+    };
+
+    await expect(executeDeviceRpc('listMcpTools', params, deps)).resolves.toEqual(tools);
+    expect(deps.listMcpTools).toHaveBeenCalledWith(params);
+  });
+
+  it('rejects MCP tool listing on a client that runs no MCP servers', async () => {
+    await expect(
+      executeDeviceRpc(
+        'listMcpTools',
+        { params: { name: 'x', type: 'http', url: 'http://x' } },
+        makeDeps(),
+      ),
+    ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
+  });
+
   it('delegates project file and preview methods to injected deps', async () => {
     const deps = makeDeps();
     await executeDeviceRpc('getProjectFileIndex', { scope: root }, deps);
@@ -318,6 +471,14 @@ describe('executeDeviceRpc', () => {
     // Not a git repo → the shared local-file-shell impl returns an empty list.
     const result = await executeDeviceRpc('listGitBranches', { path: root }, makeDeps());
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('rejects a failed git status instead of reporting a clean working tree', async () => {
+    // Not a git repo → `git status` fails. The client persists this overlay, so
+    // an empty result would wipe every cached dirty marker as "clean".
+    await expect(
+      executeDeviceRpc('getGitWorkingTreeFiles', { path: root }, makeDeps()),
+    ).rejects.toThrow();
   });
 
   it('routes moveLocalFiles to the shared local-file-shell impl', async () => {
@@ -646,6 +807,31 @@ describe('executeDeviceRpc', () => {
     expect(result.success).toBe(false);
   });
 
+  it('publishes the owned-worktree RPCs on the device surface', () => {
+    expect(DEVICE_RPC_METHODS).toEqual(
+      expect.arrayContaining(['cleanupOwnedWorktree', 'restoreOwnedWorktree']),
+    );
+  });
+
+  it('never lets a request widen the owned-worktree guard root', async () => {
+    // `rootDir` is a test-only knob of the shell function; arriving over RPC it
+    // is dropped, so a folder outside `~/.lobehub/worktrees` stays refused.
+    const target = path.join(root, 'wt');
+    const cleanup = (await executeDeviceRpc(
+      'cleanupOwnedWorktree',
+      { discard: true, rootDir: root, sourcePath: root, worktreePath: target },
+      makeDeps(),
+    )) as { outcome: string };
+    expect(cleanup.outcome).toBe('refused');
+
+    const restore = (await executeDeviceRpc(
+      'restoreOwnedWorktree',
+      { branch: 'lobehub/x', rootDir: root, sourcePath: root, worktreePath: target },
+      makeDeps(),
+    )) as { outcome: string };
+    expect(restore.outcome).toBe('refused');
+  });
+
   describe('interactive terminal', () => {
     /** The PTY handlers a host opts into; absent they all refuse. */
     const terminalDeps = () => ({
@@ -727,6 +913,11 @@ describe('deviceRpcClients', () => {
 
   it.each(cliOnly)('routes %s, which the desktop rejects, to the CLI', (method) => {
     expect(deviceRpcClients(method)).toEqual(['cli']);
+  });
+
+  // Both clients run MCP servers; the server pins the one it picked per device
+  it('leaves MCP tool listing to the client the server pins', () => {
+    expect(deviceRpcClients('listMcpTools')).toBeUndefined();
   });
 
   it('lets any client serve the other methods', () => {

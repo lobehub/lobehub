@@ -10,7 +10,9 @@ export interface UserTurnMetadataInput {
   /** What the composer authored for this message (attached content, …). */
   composerMetadata?: ComposerUserMessageMetadata;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
+  hasMentionedAgents?: boolean;
   selectedSkillIds?: string[];
+  selectedToolIds?: string[];
   steer?: boolean;
   trigger?: string;
 }
@@ -26,34 +28,49 @@ export const buildUserTurnMetadata = ({
   botSender,
   composerMetadata,
   externalOrigin,
+  hasMentionedAgents,
   selectedSkillIds,
+  selectedToolIds,
   steer,
   trigger,
-}: UserTurnMetadataInput) => ({
-  // The composer's own part of the message, validated by
-  // `ComposerUserMessageMetadataSchema`. Spread first so every server-derived
-  // field below wins over anything a client sent.
-  ...composerMetadata,
-  ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
-    ? { trigger: trigger as RequestTrigger }
-    : undefined),
-  ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
-    ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
-    : undefined),
-  // An agent → agent turn (a sibling agent calling `lh agent run`). The row is
-  // persisted in THIS topic under the human owner, so keep the sending agent
-  // alongside — the UI shows it as the author and links back to its topic.
-  ...(agentSender ? { agentSender } : undefined),
-  // Bot-channel turns are inserted under the OWNER's userId; keep the real
-  // platform author alongside so the UI can attribute the bubble correctly.
-  ...(botSender ? { botSender } : undefined),
-  // A provider event that injected this turn keeps its source on the row.
-  ...(externalOrigin ? { externalOrigin } : undefined),
-  // A message that steered the running turn directly renders as that turn's
-  // continuation; the client's optimistic row is replaced by this one. A
-  // follow-up that waited in queue starts its own turn and is not marked.
-  ...(steer ? { steer: true as const } : undefined),
-  // Later turns read the selection back from history, so the skills stay
-  // injected for the rest of the topic (see `collectSelectedSkillIds`).
-  ...(selectedSkillIds?.length ? { selectedSkillIds: [...new Set(selectedSkillIds)] } : undefined),
-});
+}: UserTurnMetadataInput) => {
+  const effectiveSelectedToolIds = [
+    ...(selectedToolIds ?? []),
+    ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+  ];
+
+  return {
+    // The composer's own part of the message, validated by
+    // `ComposerUserMessageMetadataSchema`. Spread first so every server-derived
+    // field below wins over anything a client sent.
+    ...composerMetadata,
+    ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+      ? { trigger: trigger as RequestTrigger }
+      : undefined),
+    ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
+      ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
+      : undefined),
+    // An agent → agent turn (a sibling agent calling `lh agent run`). The row is
+    // persisted in THIS topic under the human owner, so keep the sending agent
+    // alongside — the UI shows it as the author and links back to its topic.
+    ...(agentSender ? { agentSender } : undefined),
+    // Bot-channel turns are inserted under the OWNER's userId; keep the real
+    // platform author alongside so the UI can attribute the bubble correctly.
+    ...(botSender ? { botSender } : undefined),
+    // A provider event that injected this turn keeps its source on the row.
+    ...(externalOrigin ? { externalOrigin } : undefined),
+    // A message that steered the running turn directly renders as that turn's
+    // continuation; the client's optimistic row is replaced by this one. A
+    // follow-up that waited in queue starts its own turn and is not marked.
+    ...(steer ? { steer: true as const } : undefined),
+    // Later turns read the selections back from history, so the skills and
+    // tools stay injected for the rest of the topic (see
+    // `collectSelectedSkillIds` and `collectSelectedToolIds`).
+    ...(selectedSkillIds?.length
+      ? { selectedSkillIds: [...new Set(selectedSkillIds)] }
+      : undefined),
+    ...(effectiveSelectedToolIds.length
+      ? { selectedToolIds: [...new Set(effectiveSelectedToolIds)] }
+      : undefined),
+  };
+};

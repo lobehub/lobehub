@@ -15,7 +15,7 @@ export class HomeService {
    * Get sidebar agent list with pinned, grouped, and ungrouped items
    */
   getSidebarAgentList = (): Promise<SidebarAgentListResponse> => {
-    return lambdaClient.home.getSidebarAgentList.query();
+    return lambdaClient.home.getSidebarAgentList.query({ includeInbox: true });
   };
 
   /**
@@ -30,7 +30,22 @@ export class HomeService {
    * Search agents by keyword
    */
   searchAgents = (keyword: string): Promise<SidebarAgentItem[]> => {
-    return lambdaClient.home.searchAgents.query({ keyword });
+    return lambdaClient.home.searchAgents.query({ includeInbox: true, keyword });
+  };
+
+  /**
+   * Save the drag-and-drop order of the sidebar's pinned rows (the team pins
+   * in a workspace, the user's own pins in personal mode).
+   */
+  updatePinnedOrder = async (ids: string[]): Promise<void> => {
+    await lambdaClient.home.updatePinnedOrder.mutate({ ids });
+  };
+
+  /**
+   * Replace the workspace's recommended Agents / chat groups (owner/admin only).
+   */
+  updateRecommendedAgents = async (ids: string[]): Promise<void> => {
+    await lambdaClient.home.updateRecommendedAgents.mutate({ ids });
   };
 
   /**

@@ -17,12 +17,13 @@ import type { DeviceListResult } from '@/store/device/useDeviceList';
 import { useDeviceList } from '@/store/device/useDeviceList';
 
 import { canInviteMembers } from './channelAccess';
+import { confirmInvite } from './confirmInvite';
 import type { ChannelAgentDraft, ChannelAgentIssue } from './CreateChannel/agentEnvironment';
 import { channelAgentIssueKey, toChannelAgentSelection } from './CreateChannel/agentEnvironment';
 import { getChannelSaveErrorKey } from './CreateChannel/saveError';
 import { useChannelAgentDraft } from './CreateChannel/useChannelAgentDraft';
 import { useChannelAgentOptions } from './CreateChannel/useChannelAgentOptions';
-import { matchInviteAgents, MENTION_INVITE_LIMIT } from './mentionGroups';
+import { matchInviteAgents, MENTION_INVITE_LIMIT, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 
 /** Like a chosen Agent in the invite dialog: it keeps its own device and directory. */
@@ -39,6 +40,9 @@ class AgentIssueError extends Error {
     super(issue);
   }
 }
+
+/** The user chose not to bring someone in; their mention stays plain text. */
+class InviteDeclinedError extends Error {}
 
 const inviteKey = ({ actorType, id }: Pick<ChannelMentionInvite, 'actorType' | 'id'>) =>
   `${actorType}:${id}`;
@@ -104,6 +108,8 @@ export const useMentionInvites = (
   // The editor keeps the mention callbacks it was first given, so they read the latest render.
   const latest = useLatest({ agentOptions, channel, enabled, members });
   const running = useSingleton(() => new Map<string, Promise<string | undefined>>());
+  // Sending does not ask again about someone the user already answered for from the menu.
+  const answers = useSingleton(() => new Map<string, Promise<boolean>>());
   const people = useSingleton(() => new Map<string, Promise<ChannelPersonOption[]>>());
   const latestQuery = useRef('');
   const agentWaiters = useSingleton(
@@ -175,7 +181,13 @@ export const useMentionInvites = (
     const { agentOptions, channel, enabled, members } = latest.current;
     const search = query.trim();
     if (!enabled || !channel || !search) return [];
-    const agents = matchInviteAgents(agentOptions.agents ?? [], {
+    // Without the right to add Agents to the project, only its own Agents can be brought in.
+    const project = agentOptions.project;
+    const candidates =
+      project && !project.canAddAgents
+        ? (agentOptions.agents ?? []).filter((agent) => project.memberIds.includes(agent.id))
+        : (agentOptions.agents ?? []);
+    const agents = matchInviteAgents(candidates, {
       exclude: members.flatMap((member) => (member.agentId ? [member.agentId] : [])),
       nameOf: (agent) => agentDisplayName(agent, t('unnamedAgent')),
       priorityIds: agentOptions.projectAgentIds,
@@ -193,7 +205,14 @@ export const useMentionInvites = (
       ...persons.map((person) => {
         const name = person.fullName || person.username || t('person');
         return {
-          icon: <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={24} title={name} />,
+          icon: (
+            <Avatar
+              avatar={person.avatar || DEFAULT_USER_AVATAR}
+              shape={'circle'}
+              size={24}
+              title={name}
+            />
+          ),
           key: `invite:${inviteKey({ actorType: 'user', id: person.userId })}`,
           label: name,
           metadata: {
@@ -207,6 +226,7 @@ export const useMentionInvites = (
       ...agents.map((agent) => {
         const name = agentDisplayName(agent, t('unnamedAgent'));
         return {
+          description: mentionDescription(name, agent.title, agent.description),
           icon: (
             <AgentAvatar
               agentId={agent.id}
@@ -231,6 +251,32 @@ export const useMentionInvites = (
   };
 
   /**
+   * Confirms bringing `target` in. An Agent from outside a project Channel's project joins the
+   * project first, and the question says so.
+   */
+  const ask = (target: ChannelMentionInvite) => {
+    const key = inviteKey(target);
+    const asked = answers.get(key);
+    if (asked) return asked;
+    const { agentOptions } = latest.current;
+    const project = agentOptions.project;
+    const content =
+      target.actorType === 'user'
+        ? t('mentionInvite.confirmPerson')
+        : project && !project.memberIds.includes(target.id)
+          ? t('mentionInvite.confirmAgentProject', { project: project.name ?? '' })
+          : t('mentionInvite.confirmAgent');
+    const answer = confirmInvite({
+      cancelText: t('cancel'),
+      content,
+      okText: t('mentionInvite.confirmOk'),
+      title: t('mentionInvite.confirmTitle', { name: target.name }),
+    });
+    answers.set(key, answer);
+    return answer;
+  };
+
+  /**
    * The member `target` already is, or adds them once however often they are mentioned.
    * Undefined where no one can be invited, such as a chip pasted into a direct conversation:
    * like any other chip for a non-member, it then stays plain text.
@@ -248,17 +294,22 @@ export const useMentionInvites = (
     const pending = running.get(key);
     if (pending) return pending;
     setError('');
-    const added = (
-      target.actorType === 'user'
-        ? channelActions.addMember(channel.id, { userId: target.id })
-        : resolveAgent(target.id).then((agent) => channelActions.addMember(channel.id, { agent }))
-    )
+    const added = ask(target)
+      .then((confirmed) => {
+        if (!confirmed) throw new InviteDeclinedError();
+        return target.actorType === 'user'
+          ? channelActions.addMember(channel.id, { userId: target.id })
+          : resolveAgent(target.id).then((agent) =>
+              channelActions.addMember(channel.id, { agent }),
+            );
+      })
       .then((memberId) => {
         // Searches cached before the invite would still list them as outside.
         people.clear();
         return memberId;
       })
       .catch((cause: unknown) => {
+        if (cause instanceof InviteDeclinedError) throw cause;
         console.error('Failed to invite a mentioned member', cause);
         const reasonKey =
           cause instanceof AgentIssueError
@@ -278,12 +329,15 @@ export const useMentionInvites = (
 
   /**
    * Member ids for the outsiders a message mentions, waiting for invites still in flight and
-   * retrying failed ones. Undefined when someone could not join; the error says who.
+   * retrying failed ones; someone the user declined to invite is left out. Undefined when
+   * someone could not join; the error says who.
    */
   const resolve = async (targets: ChannelMentionInvite[]) => {
     const results = await Promise.allSettled(targets.map(invite));
     const ids: string[] = [];
     for (const result of results) {
+      // Someone the user chose not to invite is mentioned by name only.
+      if (result.status === 'rejected' && result.reason instanceof InviteDeclinedError) continue;
       if (result.status === 'rejected') return;
       if (result.value) ids.push(result.value);
     }
@@ -298,7 +352,11 @@ export const useMentionInvites = (
     clearError: () => setError(''),
     enabled,
     error,
-    invite: (target: ChannelMentionInvite) => void invite(target).catch(() => {}),
+    /** Choosing someone from the menu again is a new question, even after a no. */
+    invite: (target: ChannelMentionInvite) => {
+      answers.delete(inviteKey(target));
+      void invite(target).catch(() => {});
+    },
     options,
     resolve,
   };

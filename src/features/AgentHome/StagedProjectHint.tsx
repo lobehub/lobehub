@@ -9,6 +9,7 @@ import { projectDirectoryDeviceName } from '@/features/ChatInput/ControlBar/proj
 import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { useDeviceList } from '@/store/device';
+import { densityVars } from '@/styles/densityVars';
 
 import { useStagedNewTopicDirectory } from './useStagedNewTopicDirectory';
 
@@ -17,8 +18,8 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -54,7 +55,12 @@ const StagedProjectHint = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
-      <ProjectAvatar avatar={directory.projectAvatar} name={directory.projectName} size={32} />
+      <ProjectAvatar
+        avatar={directory.projectAvatar}
+        id={directory.projectId}
+        name={directory.projectName}
+        size={32}
+      />
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text fontSize={14}>
           <Trans

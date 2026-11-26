@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHANNEL_DELETED_AGENT_NAME, CHANNEL_DELETED_USER_NAME } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -67,9 +68,115 @@ describe('direct Channel identity', () => {
     await repository.send(channel.id, { ...sendInput, content: 'First', requestKey: 'first' });
     await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
     expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
-      lastMessage: { content: 'Second' },
-      unreadCount: 2,
+      lastMessage: {
+        attachments: null,
+        author: { id: fixture.ownerId, type: 'user' },
+        content: 'Second',
+        thread: null,
+      },
+      // The caller's own messages are never unread for them.
+      unreadCount: 0,
     });
+  });
+
+  // A list row could not tell "Me: …" from the other side's message.
+  it('previews the newest message with its sender, an Agent reply by the Agent name', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const request = await repository.send(channel.id, sendInput);
+    await publish(channel.id, request.id);
+
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: {
+        author: { id: agent.id, name: 'Assistant', type: 'agent' },
+        content: 'Answer',
+      },
+    });
+  });
+
+  // The inbox is stored without a name; the Channel showed its replies as from a departed member.
+  it('labels a nameless inbox Agent with the default name and avatar', async () => {
+    const [inbox] = await db
+      .insert(agents)
+      .values({ slug: INBOX_SESSION_ID, userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: inbox.id, title: 'Direct' });
+    const request = await repository.send(channel.id, sendInput);
+    const { replyId } = await publish(channel.id, request.id);
+
+    const author = { avatar: DEFAULT_INBOX_AVATAR, id: inbox.id, name: DEFAULT_INBOX_TITLE };
+    const { members, messages } = await repository.detail(channel.id);
+    expect(messages.find((message) => message.id === replyId)?.author).toMatchObject(author);
+    expect(members.find((member) => member.agentId === inbox.id)).toMatchObject({
+      avatar: DEFAULT_INBOX_AVATAR,
+      name: DEFAULT_INBOX_TITLE,
+    });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: { author: { id: inbox.id, name: DEFAULT_INBOX_TITLE } },
+    });
+  });
+
+  // The preview stopped at the main conversation, so a newer Thread reply looked like no news.
+  it('previews a newer Thread reply with its Thread, until the Thread is trashed', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const root = await repository.send(channel.id, {
+      ...sendInput,
+      content: '  Root line\nmore',
+      requestKey: 'root',
+    });
+    const reply = await repository.send(channel.id, {
+      ...sendInput,
+      content: 'In the thread',
+      requestKey: 'thread-reply',
+      rootMessageId: root.id,
+    });
+    const listed = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+
+    expect(await listed()).toMatchObject({
+      content: 'In the thread',
+      thread: { id: reply.threadId, title: 'Root line' },
+    });
+
+    await repository.removeThread(channel.id, reply.threadId!);
+    expect(await listed()).toMatchObject({ content: '  Root line\nmore', thread: null });
+  });
+
+  // A list row only knew a reply was in progress once its conversation was opened.
+  it('lists the main-conversation replies still pending', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const replyJobs = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.replyJobs;
+    expect(await replyJobs()).toEqual([]);
+
+    const message = await repository.send(channel.id, sendInput);
+    const [job] = await jobsOf(db, message.id);
+    expect(await replyJobs()).toEqual([
+      {
+        blockedCode: null,
+        id: job.id,
+        memberId: job.memberId,
+        publicationRevoked: false,
+        status: 'queued',
+        threadId: null,
+        writerHeld: false,
+      },
+    ]);
+
+    await execution.claim(channel.id, job.id, lease);
+    expect(await replyJobs()).toMatchObject([{ id: job.id, status: 'running', writerHeld: true }]);
+
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'Answer');
+    await execution.publish(channel.id, job.id);
+    await execution.releaseWriter(channel.id, job.id);
+    expect(await replyJobs()).toEqual([]);
   });
 
   it.each([null, fixture.workspaceId])(

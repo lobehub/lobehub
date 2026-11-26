@@ -712,6 +712,12 @@ export interface VerifyRunMetadata {
    * and never absorbs another flow, even while it holds no results yet.
    */
   replayOfRunId?: string;
+  /**
+   * When the stuck-run sweep re-drove this round's judging after its first
+   * attempt died before any verifier started. A round is re-driven at most
+   * once; a second stall is closed as `errored`.
+   */
+  verifierRedrivenAt?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;
@@ -818,9 +824,51 @@ export interface VerifyVisualizationManifest {
   views: VerifyVisualizationView[];
 }
 
+/**
+ * Why a builder disputes a check instead of satisfying it.
+ * - `missed_evidence`: the evidence is already there; the previous review missed
+ *   or misread it. The next review reads the builder's note next to the evidence.
+ * - `invalid_criterion`: the check itself is wrong — outside the requirement,
+ *   contradicting it or another check, or impossible for any delivery to meet.
+ *   A panel of review models arbitrates; an upheld dispute waives the check.
+ */
+export type VerifyCheckDisputeKind = 'invalid_criterion' | 'missed_evidence';
+
+/** One panel member's ruling on an `invalid_criterion` dispute. */
+export interface VerifyDisputeVote {
+  model: string;
+  provider: string;
+  reason?: string;
+  /** `errored` when the member could not rule; it then casts no vote. */
+  status: 'errored' | 'judged';
+  /** Whether the member upholds the dispute (waives the check). Unset when errored. */
+  upheld?: boolean;
+}
+
+export interface VerifyDisputeArbitration {
+  decidedAt: string;
+  /** `undecided` means no side reached a majority, so the check stands. */
+  outcome: 'overruled' | 'undecided' | 'upheld';
+  votes: VerifyDisputeVote[];
+}
+
+/** A builder's dispute of one check, filed on the round's check result. */
+export interface VerifyCheckDispute {
+  /** Set while a panel is ruling; it is the claim that keeps a second panel out. */
+  arbitratingSince?: string;
+  /** Only `invalid_criterion` disputes are arbitrated. */
+  arbitration?: VerifyDisputeArbitration;
+  /** Evidence rows on this check the builder points at. */
+  evidenceIds?: string[];
+  filedAt: string;
+  kind: VerifyCheckDisputeKind;
+  reason: string;
+}
+
 /** Known check-result metadata. Remains open for verifier-specific extensions. */
 export interface VerifyCheckResultMetadata {
   [key: string]: unknown;
+  dispute?: VerifyCheckDispute;
   visualization?: VerifyVisualizationManifest;
 }
 

@@ -6,7 +6,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { DesktopHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
 import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -43,33 +43,30 @@ const HotkeySetting = memo(() => {
 
   const [loading, setLoading] = useState(false);
 
-  if (!isHotkeysInit)
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          {
-            // Hotkey recorder inputs settle at 335x36.
-            control: { height: 36, width: 335 },
-            rows: DESKTOP_HOTKEYS_REGISTRATION.length,
-            titleWidth: 96,
-            withDesc: false,
-          },
-        ]}
-      />
-    );
+  if (!isHotkeysInit) return <DesktopHotkeysSkeleton />;
 
   const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
     setLoading(true);
+    // Hotkeys save as soon as they are recorded, so the failure belongs on the hotkey input the
+    // user just changed (conflict, bad format) rather than a corner toast away from it.
     try {
       const result = await updateDesktopHotkey(id, value);
       if (result.success) {
+        form.setErrors({ [id]: undefined });
         toast.success(t('hotkey.updateSuccess', { ns: 'setting' }));
       } else {
-        // Show the appropriate error message based on error type
-        toast.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
+        form.setErrors({
+          [id]: t(
+            result.errorType && result.errorType !== 'UNKNOWN'
+              ? (`hotkey.errors.${result.errorType}` as any)
+              : 'hotkey.updateErrorRetry',
+            { ns: 'setting' },
+          ),
+        });
       }
-    } catch {
-      toast.error(t('hotkey.updateError', { ns: 'setting' }));
+    } catch (error) {
+      console.error('[Hotkey] Failed to update desktop hotkey:', error);
+      form.setErrors({ [id]: t('hotkey.updateErrorRetry', { ns: 'setting' }) });
     } finally {
       setLoading(false);
     }

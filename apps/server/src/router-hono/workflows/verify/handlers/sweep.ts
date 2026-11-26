@@ -21,9 +21,10 @@ export async function sweep(c: Context) {
     const outcome = await sweepStuckVerifyRuns(db);
 
     log(
-      'Verify sweep: settled=%d abandoned=%d released=%d skipped=%d',
+      'Verify sweep: settled=%d abandoned=%d redriven=%d released=%d skipped=%d',
       outcome.settled.length,
       outcome.abandoned.length,
+      outcome.redriven.length,
       outcome.released.length,
       outcome.skipped,
     );

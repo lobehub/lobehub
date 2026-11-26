@@ -1,6 +1,11 @@
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
-import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
-import type { VerifyAgentPlanConfig, VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
+import { DEFAULT_MAX_REPAIR_ROUNDS, isCheckWaivedByDispute } from '@lobechat/const/verify';
+import {
+  RequestTrigger,
+  type VerifyAgentPlanConfig,
+  type VerifyCheckItem,
+  type VerifyRunMetadata,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -210,6 +215,10 @@ export const createRepairRunner = (params: {
         ...(provider ? { provider } : {}),
         suppressUserMessage: true,
         ...(taskId ? { taskId } : {}),
+        // LobeHub-routed model calls must name a trigger. Not inherited from the
+        // repaired run: a recallable one (e.g. `chat`) would make the completion
+        // gate treat this internal round as a top-level run and push the user.
+        trigger: RequestTrigger.Verify,
         userInterventionConfig: { approvalMode: 'headless' },
       })
       .catch((error) => {
@@ -347,9 +356,11 @@ const isDeliveredRound = (round: {
 
 // `errored` = the verifier couldn't run (infra), so there's no delivery fault to
 // repair — exclude it even though it carries no verdict.
+// A check waived by an upheld dispute is not a fault either: nothing to repair.
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
   !!r &&
   r.status !== 'errored' &&
+  !isCheckWaivedByDispute(r.metadata) &&
   (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 
 /** A check the Acceptance review sent back, by the reviewed round's plan item id. */

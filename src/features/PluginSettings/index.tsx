@@ -1,5 +1,9 @@
 import { type ToolManifestSettings } from '@lobechat/types';
-import { createStaticStyles, Markdown } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown paragraphs get no className
+  createStaticStyles,
+  Markdown,
+} from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -30,7 +34,7 @@ interface PluginSettingsConfigProps {
   schema: ToolManifestSettings;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const fallback = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
       color: ${cssVar.colorTextDescription};
@@ -70,7 +74,7 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
           />
         ),
         desc: item.desc && (
-          <Markdown className={styles.markdown} variant={'chat'}>
+          <Markdown className={fallback.markdown} variant={'chat'}>
             {item.desc as string}
           </Markdown>
         ),

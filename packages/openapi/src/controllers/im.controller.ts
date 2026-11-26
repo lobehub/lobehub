@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { ImRestService } from '../services/im.service';
+import type { DeletedResource } from '../types/common.type';
 import type {
   ImReadRequest,
   ImSendRequest,
@@ -72,7 +73,13 @@ export class ImController extends BaseController {
       const { expoToken } = this.getQuery<PushTokenUnregisterQuery>(c);
       const service = await this.service(c);
       await service.unregisterPushToken(deviceId, expoToken);
-      return this.success(c, undefined, 'Device unregistered');
+      // Idempotent sign-out: answers the device id either way. With a stale
+      // `expoToken` nothing is removed and the rotated registration stays.
+      return this.success<DeletedResource>(
+        c,
+        { deleted: true, id: deviceId },
+        'Device unregistered',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

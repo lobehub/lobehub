@@ -12,6 +12,13 @@ import {
   resetGatewayServiceMocks,
 } from './testUtils';
 
+const createConnectedDiscordConnection = () => ({
+  connectionId: 'prov-1',
+  platform: 'discord',
+  state: { status: 'connected' },
+  userId: 'u1',
+});
+
 vi.mock('@/envs/gateway', () => import('./testUtils').then((m) => m.envsGatewayModule()));
 vi.mock('./MessageGatewayClient', () =>
   import('./testUtils').then((m) => m.messageGatewayClientModule()),
@@ -71,12 +78,7 @@ describe('GatewayService', () => {
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
         connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
+          createConnectedDiscordConnection(),
           {
             connectionId: 'stale-1',
             platform: 'wechat',
@@ -129,6 +131,19 @@ describe('GatewayService', () => {
       await service.ensureRunning();
 
       expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('dormant-stale');
+    });
+
+    it('cleans a leftover connection of a platform the gateway cannot host', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-ding'] });
+      mockFindByIds.mockResolvedValue([
+        { applicationId: 'ding-app', enabled: true, id: 'prov-ding', platform: 'dingtalk' },
+      ]);
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('prov-ding');
     });
 
     it('marks still-existing (disabled) providers as disconnected when stale-cleaned', async () => {
@@ -317,14 +332,7 @@ describe('GatewayService', () => {
       );
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
-        connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
+        connections: [createConnectedDiscordConnection()],
         total: 1,
       });
 
@@ -361,14 +369,7 @@ describe('GatewayService', () => {
       );
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
-        connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
+        connections: [createConnectedDiscordConnection()],
         total: 1,
       });
 

@@ -4,13 +4,16 @@ import {
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
 } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { SkillsApiName, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
@@ -187,6 +190,30 @@ describe('isShareBlockedBuiltinDispatch', () => {
     expect(isShareBlockedBuiltinDispatch({}, CalculatorIdentifier, 'evalExpression')).toBe(true);
   });
 
+  it('decides device builtins by the share device grant alone, not toolGrants', () => {
+    for (const identifier of [BrowserIdentifier, LocalSystemIdentifier]) {
+      expect(
+        isShareBlockedBuiltinDispatch({ toolGrants: [{ identifier }] }, identifier, 'anyApi'),
+      ).toBe(true);
+      expect(isShareBlockedBuiltinDispatch({ canUseDevice: true }, identifier, 'anyApi')).toBe(
+        false,
+      );
+      expect(isShareBlockedDataToolCall({ canUseDevice: true }, identifier, 'anyApi')).toBe(false);
+      expect(isShareBlockedDataToolCall({}, identifier, 'anyApi')).toBe(true);
+    }
+  });
+
+  // The visitor runs on the device the Agent's execution environment routes
+  // to; the picker would let the visitor's model switch to the creator's
+  // other machines.
+  it('blocks the remote-device picker even under the share device grant', () => {
+    for (const apiName of ['listOnlineDevices', 'activateDevice']) {
+      expect(
+        isShareBlockedBuiltinDispatch({ canUseDevice: true }, RemoteDeviceIdentifier, apiName),
+      ).toBe(true);
+    }
+  });
+
   it('passes an enabled builtin with no intervention semantics', () => {
     expect(
       isShareBlockedBuiltinDispatch(
@@ -219,6 +246,13 @@ describe('isShareBlockedBuiltinDispatch', () => {
         { toolGrants: [{ identifier: LobeAgentIdentifier }] },
         LobeAgentIdentifier,
         LobeAgentApiName.callSubAgent,
+      ),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: LobeAgentIdentifier }] },
+        LobeAgentIdentifier,
+        LobeAgentApiName.cancelSubAgent,
       ),
     ).toBe(true);
   });

@@ -1,13 +1,16 @@
 import type { Browser } from '@playwright/test';
 
 import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
+import {
   collectRuleWitnessesInPage,
   planRuleWitnesses,
   readRuntimeBindings,
 } from '../analysis/ruleWitnesses';
 import type { StyleBindingPlan } from '../analysis/styleBindings';
 import { collectRulesInPage } from '../browser/ruleInventory';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 import { sha256 } from '../reporting/report';
 
 /** Real browser tests of marker isolation and branch activation, not React substitutes. */

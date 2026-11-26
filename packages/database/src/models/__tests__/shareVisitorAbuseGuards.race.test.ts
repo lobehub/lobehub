@@ -1,4 +1,5 @@
-import { and, count, eq } from 'drizzle-orm';
+import { ChatErrorType } from '@lobechat/types';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -11,21 +12,20 @@ import { agents, agentShares, messages, topics, users, workspaces } from '../../
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
-// Real-Postgres reproduction of the agent-share visitor abuse-cap race.
+// Real-Postgres reproduction of the agent-share visitor message-cap race.
 //
-// `shareChat.execAgent` counts a visitor's existing topics (or turns) and
-// compares against the cap BEFORE dispatching to `AiAgentService.execAgent`,
+// `shareChat.execAgent` counts a visitor's user messages and compares against
+// `maxMessagesPerVisitor` BEFORE dispatching to `AiAgentService.execAgent`,
 // which performs the real INSERT much later — two unrelated, unlocked
-// statements with nothing serializing them. A burst of concurrent requests
-// from the same visitor could all read the same pre-insert count and all
-// insert, exceeding `maxTopicsPerVisitor` / `maxTurnsPerTopic` by an arbitrary
-// amount.
+// statements with nothing serializing them. A burst of concurrent requests from
+// the same visitor could all read the same pre-insert count and all insert,
+// exceeding the cap by an arbitrary amount.
 //
-// `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
-// (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) close this by
+// `reserveShareVisitorTurnOrThrow`
+// (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) closes this by
 // taking the SAME `agents.id FOR UPDATE` row lock every share-mutation path
-// takes and re-checking the exact same counter INSIDE the same transaction as
-// the INSERT, immediately before it runs.
+// takes and re-counting INSIDE the same transaction as the INSERT, immediately
+// before it runs.
 //
 // Under the client-db PGlite engine, concurrent transactions serialize on the
 // single session, so the cap assertions pass trivially there; against a REAL
@@ -46,7 +46,7 @@ const cleanup = async () => {
   await serverDB.delete(users).where(eq(users.id, ownerId));
 };
 
-describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postgres)', () => {
+describe('reserveShareVisitorTurnOrThrow — visitor message cap (real Postgres)', () => {
   beforeEach(async () => {
     await cleanup();
     await serverDB.insert(users).values([{ id: ownerId }]);
@@ -54,108 +54,72 @@ describe('reserveShareVisitorTopicOrThrow — visitor topic cap race (real Postg
 
   afterAll(cleanup);
 
-  it('never lets concurrent new-topic requests exceed maxTopicsPerVisitor', async () => {
+  it('never lets concurrent sends across topics exceed maxMessagesPerVisitor', async () => {
     const TRIALS = 5;
     const CONCURRENCY = 6;
-    const CAP = 3;
+    const CAP = 4;
     let overCapTrials = 0;
 
     for (let i = 0; i < TRIALS; i++) {
-      const agentId = `share-topic-race-agent-${i}`;
+      const agentId = `share-message-race-agent-${i}`;
+      const topicIds = [`share-message-race-topic-${i}-a`, `share-message-race-topic-${i}-b`];
       await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId: ownerId });
       // The cap is read fresh from the real `agentShares.shareConfig` inside
       // the guard's own locked transaction (`AgentShareModel
       // .readCurrentVisitorCaps`) — never a caller-supplied parameter.
       const share = await new AgentShareModel(serverDB, ownerId).create(agentId, 'link');
       await new AgentShareModel(serverDB, ownerId).updateConfig(agentId, {
-        maxTopicsPerVisitor: CAP,
+        maxMessagesPerVisitor: CAP,
       });
+      await serverDB
+        .insert(topics)
+        .values(topicIds.map((id) => ({ agentId, id, senderId: visitorUserId, userId: ownerId })));
+      // One earlier message and the Agent's reply: only the user message counts.
+      await serverDB.insert(messages).values([
+        {
+          content: 'earlier',
+          id: `earlier-${i}`,
+          role: 'user',
+          topicId: topicIds[0],
+          userId: ownerId,
+        },
+        {
+          content: 'reply',
+          id: `reply-${i}`,
+          role: 'assistant',
+          topicId: topicIds[0],
+          userId: ownerId,
+        },
+      ]);
 
-      // Simulate CONCURRENCY visitor tabs/scripts all sending a first message
-      // to a brand-new topic at the same time.
+      // Simulate CONCURRENCY sends from the same visitor, spread over two topics.
       const results = await Promise.allSettled(
-        Array.from({ length: CONCURRENCY }, (_, n) =>
-          reserveShareVisitorTopic(
-            {
-              agentId,
-              db: serverDB,
-              expectedShareId: share.id,
-              ownerId,
-              visitorUserId,
-            },
-            { agentId, senderId: visitorUserId, title: `visitor topic ${n}`, trigger: 'chat' },
-          ),
-        ),
+        Array.from({ length: CONCURRENCY }, (_, n) => {
+          const topicId = topicIds[n % 2];
+          return reserveShareVisitorTurn(
+            { agentId, db: serverDB, expectedShareId: share.id, ownerId, visitorUserId },
+            { content: `message ${n}`, role: 'user', topicId },
+          );
+        }),
       );
 
       const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
-      const rejected = results.filter((r) => r.status === 'rejected').length;
-      expect(fulfilled + rejected).toBe(CONCURRENCY);
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(fulfilled + rejected.length).toBe(CONCURRENCY);
+      for (const r of rejected) {
+        expect((r as PromiseRejectedResult).reason).toMatchObject({
+          code: 'TOO_MANY_REQUESTS',
+          message: ChatErrorType.ShareMessageLimitExceeded,
+        });
+      }
 
-      const [{ value: actualTopicCount }] = await serverDB
-        .select({ value: count(topics.id) })
-        .from(topics)
-        .where(and(eq(topics.agentId, agentId), eq(topics.senderId, visitorUserId)));
-
-      // The reservation's own return value and the real row count must agree —
-      // a lost race would show up as more rows than reservations reported, or
-      // vice versa.
-      if (fulfilled !== CAP || actualTopicCount !== CAP) overCapTrials++;
-    }
-
-    expect(overCapTrials).toBe(0);
-  });
-});
-
-describe('reserveShareVisitorTurnOrThrow — visitor turn cap race (real Postgres)', () => {
-  beforeEach(async () => {
-    await cleanup();
-    await serverDB.insert(users).values([{ id: ownerId }]);
-  });
-
-  afterAll(cleanup);
-
-  it('never lets concurrent sends to the same topic exceed maxTurnsPerTopic', async () => {
-    const TRIALS = 5;
-    const CONCURRENCY = 6;
-    const CAP = 3;
-    let overCapTrials = 0;
-
-    for (let i = 0; i < TRIALS; i++) {
-      const agentId = `share-turn-race-agent-${i}`;
-      const topicId = `share-turn-race-topic-${i}`;
-      await serverDB.insert(agents).values({ id: agentId, model: 'gpt-4o', userId: ownerId });
-      const share = await new AgentShareModel(serverDB, ownerId).create(agentId, 'link');
-      await new AgentShareModel(serverDB, ownerId).updateConfig(agentId, {
-        maxTurnsPerTopic: CAP,
-      });
-      await serverDB.insert(topics).values({
-        agentId,
-        id: topicId,
-        senderId: visitorUserId,
-        userId: ownerId,
-      });
-
-      // Simulate CONCURRENCY sends to the SAME existing topic at the same time.
-      const results = await Promise.allSettled(
-        Array.from({ length: CONCURRENCY }, (_, n) =>
-          reserveShareVisitorTurn(
-            { agentId, db: serverDB, expectedShareId: share.id, ownerId, topicId },
-            { content: `turn ${n}`, role: 'user', topicId },
-          ),
-        ),
-      );
-
-      const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
-      const rejected = results.filter((r) => r.status === 'rejected').length;
-      expect(fulfilled + rejected).toBe(CONCURRENCY);
-
-      const [{ value: actualTurnCount }] = await serverDB
+      const [{ value: actualUserMessages }] = await serverDB
         .select({ value: count(messages.id) })
         .from(messages)
-        .where(and(eq(messages.topicId, topicId), eq(messages.role, 'user')));
+        .where(and(inArray(messages.topicId, topicIds), eq(messages.role, 'user')));
 
-      if (fulfilled !== CAP || actualTurnCount !== CAP) overCapTrials++;
+      // The earlier message uses one slot, so CAP - 1 sends fit.
+      if (fulfilled !== CAP - 1 || actualUserMessages !== CAP) overCapTrials++;
     }
 
     expect(overCapTrials).toBe(0);
@@ -203,7 +167,6 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
           db: serverDB,
           expectedShareId: share.id,
           ownerId,
-          visitorUserId,
           workspaceId,
         },
         { agentId, senderId: visitorUserId, title: 'workspace-scoped topic' },
@@ -217,7 +180,6 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
           db: serverDB,
           expectedShareId: share.id,
           ownerId,
-          visitorUserId,
           workspaceId: otherWorkspaceId,
         },
         { agentId, senderId: visitorUserId, title: 'wrong-workspace topic' },
@@ -242,7 +204,7 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
 
     await expect(
       reserveShareVisitorTopic(
-        { agentId, db: serverDB, expectedShareId: share.id, ownerId, visitorUserId },
+        { agentId, db: serverDB, expectedShareId: share.id, ownerId },
         { agentId, senderId: visitorUserId, title: 'stale-topic' },
       ),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -270,7 +232,7 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
 
     await expect(
       reserveShareVisitorTopic(
-        { agentId, db: serverDB, expectedShareId: staleShare.id, ownerId, visitorUserId },
+        { agentId, db: serverDB, expectedShareId: staleShare.id, ownerId },
         { agentId, senderId: visitorUserId, title: 'stale-instance-topic' },
       ),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -297,7 +259,7 @@ describe('shareVisitorAbuseGuards — revoked share authorization', () => {
 
     await expect(
       reserveShareVisitorTurn(
-        { agentId, db: serverDB, expectedShareId: share.id, ownerId, topicId: topic.id },
+        { agentId, db: serverDB, expectedShareId: share.id, ownerId, visitorUserId },
         { content: 'stale-turn', role: 'user', topicId: topic.id },
       ),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });

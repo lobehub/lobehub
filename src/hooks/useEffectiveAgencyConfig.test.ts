@@ -47,6 +47,8 @@ vi.mock('@/store/agent/selectors', () => ({
         agentMap: Record<string, { visibility?: 'private' | 'public'; workspaceId?: string }>;
       }) =>
         s.agentMap[id],
+    getAgentModelById: (id: string) => (s: { agentMap: Record<string, { model?: string }> }) =>
+      s.agentMap[id]?.model ?? 'gpt-4o',
   },
 }));
 vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));

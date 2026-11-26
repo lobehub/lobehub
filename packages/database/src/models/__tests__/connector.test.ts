@@ -3,9 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { ConnectorCredentials } from '../../schemas';
-import { agents, userConnectors, users, workspaces } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agents,
+  userConnectors,
+  userConnectorTools,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { ConnectorModel } from '../connector';
+import { ConnectorIdentifierHeldError, ConnectorModel } from '../connector';
+import { EvalConnectorUpdateError } from '../connectorEval';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -24,10 +32,36 @@ const gateKeeper = {
 
 const apikeyCredentials: ConnectorCredentials = { apiKey: 'secret-key', type: 'apikey' };
 
+const createBuiltinConnectorInput = (
+  identifier: string,
+  name: string,
+): Parameters<ConnectorModel['create']>[0] => ({
+  identifier,
+  name,
+  sourceType: 'builtin',
+  status: 'connected',
+});
+
+const createGitHubConnectorInput = (): Parameters<ConnectorModel['create']>[0] => ({
+  credentials: JSON.stringify(apikeyCredentials),
+  identifier: 'github',
+  name: 'GitHub',
+  sourceType: 'builtin',
+  status: 'connected',
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(agentEvalDatasets).values(
+    ['private-dataset', 'ds-test', 'wrong-dataset'].map((id) => ({
+      id,
+      identifier: id,
+      name: id,
+      userId,
+    })),
+  );
   await serverDB
     .insert(workspaces)
     .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: 'ws' });
@@ -38,16 +72,233 @@ afterEach(async () => {
 });
 
 describe('ConnectorModel', () => {
+  describe('imported evaluation connection edits', () => {
+    const marker = { datasetId: 'private-dataset', packageSha256: 'private-package' };
+    const createEval = async () => {
+      const model = ConnectorModel.forEvaluation(
+        serverDB,
+        userId,
+        marker.datasetId,
+        undefined,
+        gateKeeper,
+      );
+      const row = await model.create({
+        credentials: JSON.stringify({ type: 'bearer', token: 'old-token' }),
+        identifier: `eval-${crypto.randomUUID()}`,
+        name: 'Private mock',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mock.example/mcp',
+        metadata: { agentEval: marker },
+        sourceType: 'custom',
+        status: 'connected',
+        tokenExpiresAt: new Date(123),
+      });
+      return { model, row };
+    };
+
+    it('hides evaluation connections from ordinary inventories and exact identifier calls', async () => {
+      const { model: evaluation, row } = await createEval();
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      expect(await model.query()).toEqual([]);
+      expect(await model.queryPublic()).toEqual([]);
+      expect(await model.queryByIdentifiers([row.identifier])).toEqual([]);
+      expect(await model.resolveByIdentifiers([row.identifier])).toEqual([]);
+      expect(await model.findScopedByIdentifier(row.identifier)).toBeNull();
+      expect(await model.queryReferencesByIdentifiers([row.identifier])).toEqual([]);
+      expect((await evaluation.queryPublic()).map((c) => c.id)).toContain(row.id);
+      await expect(
+        evaluation.update(row.id, { metadata: { mountedByAgentId: 'ordinary-agent' } }),
+      ).rejects.toThrow('cannot');
+      const normal = await model.create({
+        identifier: row.identifier,
+        name: 'My real connection',
+        sourceType: 'custom',
+        status: 'disconnected',
+      });
+      expect((await model.queryPublic()).map((c) => c.id)).toEqual([normal.id]);
+      expect((await model.findScopedByIdentifier(row.identifier))?.id).toBe(normal.id);
+    });
+
+    it('retains the server-owned marker through metadata replacement and keeps omitted credentials', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        metadata: { description: 'Updated', agentEval: { datasetId: 'spoofed' } },
+      });
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored.metadata).toEqual({ agentEval: marker, description: 'Updated' });
+      expect(stored.credentials).toBe(row.credentials);
+      expect(
+        await new ConnectorModel(serverDB, userId).resolveByIdentifiers([row.identifier]),
+      ).toEqual([]);
+      await model.update(row.id, { metadata: null });
+      expect((await model.findById(row.id))?.metadata).toEqual({ agentEval: marker });
+    });
+
+    it('encrypts the header-only editor payload instead of persisting metadata headers', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        credentials: null,
+        metadata: { customHeaders: { 'X-Mock-Token': 'new-header-token' }, description: 'Renamed' },
+      });
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored.credentials).toBe(
+        `enc:${JSON.stringify({ headers: { 'X-Mock-Token': 'new-header-token' }, type: 'header' })}`,
+      );
+      expect(stored.metadata).toEqual({ agentEval: marker, description: 'Renamed' });
+      expect(stored.tokenExpiresAt).toBeNull();
+      expect(stored.status).toBe('disconnected');
+      expect((await model.findById(row.id))?.credentials).toEqual({
+        headers: { 'X-Mock-Token': 'new-header-token' },
+        type: 'header',
+      });
+    });
+
+    it('combines bearer authentication and additional headers inside the encrypted column', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        credentials: JSON.stringify({ type: 'bearer', token: 'replacement-token' }),
+        metadata: {
+          customHeaders: { 'X-Tenant': 'private-tenant', 'authorization': 'old-header' },
+        },
+      });
+      const stored = await model.findById(row.id);
+      expect(stored?.credentials).toEqual({
+        headers: { 'Authorization': 'Bearer replacement-token', 'X-Tenant': 'private-tenant' },
+        type: 'header',
+      });
+      expect(stored?.metadata).toEqual({ agentEval: marker });
+    });
+
+    it('honors explicit clears on the same URL and clears resubmitted headers when changing URL', async () => {
+      for (const changeUrl of [false, true]) {
+        const { model, row } = await createEval();
+        await model.update(row.id, {
+          credentials: null,
+          ...(changeUrl
+            ? {
+                mcpServerUrl: 'https://other-mock.example/mcp',
+                metadata: { customHeaders: { Authorization: 'Bearer old-token' } },
+              }
+            : {}),
+        });
+        const stored = await model.findById(row.id);
+        expect(stored?.credentials).toBeNull();
+        expect(stored?.metadata?.customHeaders).toBeUndefined();
+        expect(stored?.metadata?.agentEval).toEqual(marker);
+        expect(stored?.status).toBe('disconnected');
+        expect(stored?.tokenExpiresAt).toBeNull();
+      }
+    });
+
+    it('allows changing the address with replacement credentials but rejects implicit reuse', async () => {
+      const { model, row } = await createEval();
+      const mcpServerUrl = 'https://other-mock.example/mcp';
+      await expect(
+        model.update(row.id, {
+          mcpServerUrl: 'https://secret-token@other-mock.example/mcp',
+          credentials: null,
+        }),
+      ).rejects.toThrow('without embedded credentials');
+      await expect(model.update(row.id, { mcpServerUrl })).rejects.toBeInstanceOf(
+        EvalConnectorUpdateError,
+      );
+      expect((await model.findById(row.id))?.mcpServerUrl).toBe(row.mcpServerUrl);
+      await model.update(row.id, {
+        mcpServerUrl,
+        credentials: JSON.stringify({ type: 'bearer', token: 'new-server-token' }),
+      });
+      expect(await model.findById(row.id)).toMatchObject({
+        mcpServerUrl,
+        credentials: { type: 'bearer', token: 'new-server-token' },
+      });
+    });
+
+    it('never writes imported credentials without encryption or echoes invalid header values', async () => {
+      const { model, row } = await createEval();
+      const withoutKey = ConnectorModel.forEvaluation(serverDB, userId, marker.datasetId);
+      await expect(
+        withoutKey.update(row.id, { credentials: JSON.stringify(apikeyCredentials) }),
+      ).rejects.toThrow('Secure connection storage');
+      await expect(
+        model.update(row.id, { metadata: { customHeaders: { Bad: 'secret\r\ninjection' } } }),
+      ).rejects.toThrow('Invalid mock connection headers');
+      expect((await model.findById(row.id))?.credentials).toEqual({
+        type: 'bearer',
+        token: 'old-token',
+      });
+    });
+
+    it('does not change ordinary header storage or let an ordinary update spoof import provenance', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const row = await model.create({
+        identifier: 'ordinary',
+        name: 'Ordinary',
+        sourceType: 'custom',
+        status: 'connected',
+      });
+      await model.update(row.id, {
+        credentials: null,
+        metadata: { agentEval: marker, customHeaders: { 'X-Token': 'ordinary-header' } },
+      });
+      expect(await model.findById(row.id)).toMatchObject({
+        credentials: null,
+        metadata: { customHeaders: { 'X-Token': 'ordinary-header' } },
+        status: 'connected',
+      });
+      expect((await model.findById(row.id))?.metadata?.agentEval).toBeUndefined();
+    });
+  });
+
+  it('keeps imported Dataset mocks out of ordinary runtime resolution while allowing exact binding', async () => {
+    const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+    const evaluation = ConnectorModel.forEvaluation(
+      serverDB,
+      userId,
+      'ds-test',
+      undefined,
+      gateKeeper,
+    );
+    const imported = await evaluation.create({
+      credentials: JSON.stringify(apikeyCredentials),
+      identifier: 'private-dataset-mock',
+      metadata: { agentEval: { datasetId: 'ds-test', packageSha256: 'private-hash' } },
+      name: 'Dataset mock',
+      sourceType: 'custom',
+      status: 'connected',
+    });
+    gateKeeper.decrypt.mockClear();
+    expect(await model.resolveByIdentifiers(['private-dataset-mock'])).toEqual([]);
+    expect(await model.resolveAll()).toEqual([]);
+    expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    expect(await model.findPublicById(imported.id)).toBeNull();
+    expect(await model.findById(imported.id)).toBeNull();
+    await model.update(imported.id, { name: 'Unauthorized ordinary edit' });
+    await model.delete(imported.id);
+    expect((await evaluation.findById(imported.id))?.credentials).toEqual(apikeyCredentials);
+    expect((await evaluation.findPublicById(imported.id))?.name).toBe('Dataset mock');
+    expect(
+      await ConnectorModel.forEvaluation(serverDB, userId, 'wrong-dataset').findPublicById(
+        imported.id,
+      ),
+    ).toBeNull();
+    expect(
+      await ConnectorModel.forEvaluation(serverDB, otherUserId, 'ds-test').findPublicById(
+        imported.id,
+      ),
+    ).toBeNull();
+  });
+
   describe('create', () => {
     it('creates a connector without credentials', async () => {
       const model = new ConnectorModel(serverDB, userId);
 
-      const result = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       expect(result.id).toBeDefined();
       expect(result.userId).toBe(userId);
@@ -59,13 +310,7 @@ describe('ConnectorModel', () => {
     it('encrypts credentials with the constructor gateKeeper', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
 
-      const result = await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createGitHubConnectorInput());
 
       expect(gateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`enc:${JSON.stringify(apikeyCredentials)}`);
@@ -88,12 +333,7 @@ describe('ConnectorModel', () => {
     it('persists workspaceId when the model is workspace-scoped', async () => {
       const model = new ConnectorModel(serverDB, userId, workspaceId);
 
-      const result = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       expect(result.workspaceId).toBe(workspaceId);
     });
@@ -105,19 +345,242 @@ describe('ConnectorModel', () => {
         encrypt: vi.fn(async (plaintext: string) => `call:${plaintext}`),
       };
 
-      const result = await model.create(
-        {
-          credentials: JSON.stringify(apikeyCredentials),
-          identifier: 'github',
-          name: 'GitHub',
-          sourceType: 'builtin',
-          status: 'connected',
-        },
-        callGateKeeper,
-      );
+      const result = await model.create(createGitHubConnectorInput(), callGateKeeper);
 
       expect(callGateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`call:${JSON.stringify(apikeyCredentials)}`);
+    });
+
+    it('creates a base row once while another writer claims its identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const input = createBuiltinConnectorInput('fetch-mcp', 'Fetch');
+      const fetchRows = () =>
+        serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+      // An OpenAPI create racing an Agent Builder install's claim
+      const [created, claimed] = await Promise.allSettled([
+        model.create(input),
+        model.createUnlessIdentifierHeld(input),
+      ]);
+
+      expect(await fetchRows()).toHaveLength(1);
+      if (created.status === 'rejected')
+        expect(created.reason).toBeInstanceOf(ConnectorIdentifierHeldError);
+      else expect(claimed).toEqual({ status: 'fulfilled', value: { holder: created.value } });
+      await expect(model.create(input)).rejects.toThrow(ConnectorIdentifierHeldError);
+      // An agent's own row does not take the base identifier
+      await serverDB.insert(agents).values({ id: 'fetch-agent', userId });
+      await model.create({ ...input, agentId: 'fetch-agent' });
+      expect(await fetchRows()).toHaveLength(2);
+    });
+  });
+
+  describe('createUnlessIdentifierHeld', () => {
+    const marketplaceInput = {
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    };
+    const fetchRows = () =>
+      serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+    it('creates a base connector when no base row of the scope holds the identifier', async () => {
+      // Another scope's row and an agent's own row do not hold the base identifier
+      await new ConnectorModel(serverDB, userId).create(marketplaceInput);
+      await serverDB.insert(agents).values({ id: 'held-agent', userId, workspaceId });
+      await new ConnectorModel(serverDB, userId, workspaceId).create({
+        ...marketplaceInput,
+        agentId: 'held-agent',
+      });
+
+      const result = await new ConnectorModel(
+        serverDB,
+        userId,
+        workspaceId,
+      ).createUnlessIdentifierHeld(marketplaceInput);
+
+      expect(result).toEqual({
+        created: expect.objectContaining({ agentId: null, identifier: 'fetch-mcp', workspaceId }),
+      });
+      expect(await fetchRows()).toHaveLength(3);
+    });
+
+    it('returns the holding row and writes nothing when it may not be replaced', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      const canReplace = vi.fn(() => false);
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Other' },
+          { canReplace },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: holder.id, name: 'Fetch' }) });
+      expect(canReplace).toHaveBeenCalledWith(expect.objectContaining({ id: holder.id }));
+      expect(await fetchRows()).toEqual([expect.objectContaining({ id: holder.id })]);
+    });
+
+    it('replaces a holding row it may replace, with its tools', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      await serverDB.insert(userConnectorTools).values({
+        crudType: 'read',
+        permission: 'auto',
+        toolName: 'stale',
+        userConnectorId: holder.id,
+        userId,
+      });
+
+      const result = await model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: () => true },
+      );
+
+      expect(result).toEqual({ created: expect.objectContaining({ name: 'Fetch again' }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: 'created' in result ? result.created.id : undefined }),
+      ]);
+      expect(await serverDB.select().from(userConnectorTools)).toEqual([]);
+    });
+
+    it('replaces nothing while any of duplicate base holders may not go', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      // Rows a writer from before the identifier lock could leave side by side
+      const [stale, live] = await serverDB
+        .insert(userConnectors)
+        .values(
+          [true, false].map((stale) => ({ ...marketplaceInput, metadata: { stale }, userId })),
+        )
+        .returning();
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Fetch again' },
+          { canReplace: (row) => row.metadata?.stale === true },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: live.id }) });
+      expect((await fetchRows()).map((row) => row.id).sort()).toEqual([live.id, stale.id].sort());
+    });
+
+    it('judges a holder a re-add is rewriting only once the re-add has landed', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...marketplaceInput, metadata: { stale: true } });
+
+      // A re-add (the web install's `update`) holds the row while it rewrites it
+      let land!: () => void;
+      const landing = new Promise<void>((resolve) => (land = resolve));
+      let locked!: () => void;
+      const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+      const reAdd = serverDB.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(userConnectors)
+          .where(eq(userConnectors.id, holder.id))
+          .for('update');
+        locked();
+        await landing;
+        await tx
+          .update(userConnectors)
+          .set({ metadata: { readded: true } })
+          .where(eq(userConnectors.id, holder.id));
+      });
+      await rowLocked;
+
+      // Only the stale row may be replaced, not the one the re-add rewrote
+      const claim = model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: (row) => row.metadata?.stale === true },
+      );
+      // The claim reaches the row before the re-add lands
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      land();
+      await reAdd;
+
+      expect(await claim).toEqual({ holder: expect.objectContaining({ id: holder.id }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: holder.id, metadata: { readded: true } }),
+      ]);
+    });
+
+    it('creates the connector once for concurrent calls', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+
+      const results = await Promise.all([
+        model.createUnlessIdentifierHeld(marketplaceInput),
+        model.createUnlessIdentifierHeld(marketplaceInput),
+      ]);
+
+      expect(results.filter((result) => 'created' in result)).toHaveLength(1);
+      expect(await fetchRows()).toHaveLength(1);
+    });
+  });
+
+  describe('moveToBaseUnlessIdentifierHeld', () => {
+    const agentInput = {
+      agentId: 'move-agent',
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'connected',
+    } as const;
+    const baseRows = async () =>
+      (await serverDB.select().from(userConnectors)).filter((row) => row.agentId === null);
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: 'move-agent', userId });
+    });
+
+    it('moves an agent connector into the base scope when no base row holds the identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
+    it('reports a connector another unbind already moved as moved, not as a holder', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      // Both calls read the row as the agent's before either moved it (a retry,
+      // or two unbinds at once): the second finds the row itself in the base scope
+      const results = await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+      ]);
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+
+      expect(results).toEqual([{ moved: true }, { moved: true }]);
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
+    it('returns the holding base row and leaves the agent connector bound', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...agentInput, agentId: null });
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        holder: expect.objectContaining({ id: holder.id }),
+      });
+      expect(await model.findById(agentRow.id)).toMatchObject({ agentId: 'move-agent' });
+    });
+
+    it('never leaves two base rows when a create of the identifier runs at the same time', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+      const { agentId: _agentId, ...baseInput } = agentInput;
+
+      await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.createUnlessIdentifierHeld(baseInput),
+      ]);
+
+      expect(await baseRows()).toHaveLength(1);
     });
   });
 
@@ -125,21 +588,10 @@ describe('ConnectorModel', () => {
     it('returns only the current user / workspace connectors with decrypted credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
 
-      await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createGitHubConnectorInput());
       // other user's connector must not leak
       const otherModel = new ConnectorModel(serverDB, otherUserId, undefined, gateKeeper);
-      await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const rows = await model.query();
 
@@ -150,12 +602,7 @@ describe('ConnectorModel', () => {
 
     it('returns null credentials for rows without credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const rows = await model.query();
 
@@ -207,6 +654,7 @@ describe('ConnectorModel', () => {
         metadata: {
           customHeaders: { 'X-Private': 'secret' },
           description: 'Public description',
+          mountedByAgentId: 'mounted-agent',
         },
         name: 'Public MCP',
         oidcConfig: { clientSecret: 'secret', scheme: 'pre_registration' },
@@ -226,6 +674,7 @@ describe('ConnectorModel', () => {
         description: 'Public description',
         hasCredentials: true,
         id: created.id,
+        mountedByAgentId: 'mounted-agent',
       });
       expect(found).not.toHaveProperty('credentials');
       expect(found).not.toHaveProperty('metadata');
@@ -242,24 +691,9 @@ describe('ConnectorModel', () => {
 
     it('returns only connectors matching the given identifiers', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
-      await model.create({
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
-      await model.create({
-        identifier: 'slack',
-        name: 'Slack',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createBuiltinConnectorInput('linear', 'Linear'));
+      await model.create(createBuiltinConnectorInput('github', 'GitHub'));
+      await model.create(createBuiltinConnectorInput('slack', 'Slack'));
 
       const rows = await model.queryByIdentifiers(['linear', 'slack']);
 
@@ -270,12 +704,7 @@ describe('ConnectorModel', () => {
   describe('stable identifier order', () => {
     const createConnectors = async (model: ConnectorModel, identifiers: string[]) => {
       for (const identifier of identifiers) {
-        await model.create({
-          identifier,
-          name: identifier,
-          sourceType: 'builtin',
-          status: 'connected',
-        });
+        await model.create(createBuiltinConnectorInput(identifier, identifier));
       }
     };
 
@@ -344,12 +773,9 @@ describe('ConnectorModel', () => {
         sourceType: 'builtin',
         status: 'connected',
       });
-      await new ConnectorModel(serverDB, otherUserId).create({
-        identifier: 'github',
-        name: 'Other GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await new ConnectorModel(serverDB, otherUserId).create(
+        createBuiltinConnectorInput('github', 'Other GitHub'),
+      );
       await serverDB.insert(agents).values({ id: 'github-agent', userId });
       await model.create({
         agentId: 'github-agent',
@@ -482,13 +908,7 @@ describe('ConnectorModel', () => {
   describe('findById', () => {
     it('returns the decrypted connector by id', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createGitHubConnectorInput());
 
       const found = await model.findById(created.id);
 
@@ -503,12 +923,7 @@ describe('ConnectorModel', () => {
 
     it('returns null when the connector belongs to another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
       expect(await model.findById(created.id)).toBeNull();
@@ -518,12 +933,7 @@ describe('ConnectorModel', () => {
   describe('update', () => {
     it('updates non-credential fields without touching credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.update(created.id, { name: 'Linear Renamed' });
 
@@ -537,12 +947,7 @@ describe('ConnectorModel', () => {
 
     it('encrypts credentials when provided in the patch', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('github', 'GitHub'));
 
       const newCredentials = JSON.stringify({ token: 'bearer-token', type: 'bearer' });
       await model.update(created.id, { credentials: newCredentials });
@@ -554,15 +959,10 @@ describe('ConnectorModel', () => {
 
     it('does not update connectors owned by another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
-      await model.update(created.id, { name: 'Hacked' });
+      await expect(model.update(created.id, { name: 'Hacked' })).resolves.toBe(false);
 
       const [row] = await serverDB
         .select()
@@ -570,17 +970,25 @@ describe('ConnectorModel', () => {
         .where(eq(userConnectors.id, created.id));
       expect(row.name).toBe('Linear');
     });
+
+    it('reports a row a claim replaced after it was read as not updated', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const read = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
+      const claim = await model.createUnlessIdentifierHeld(
+        createBuiltinConnectorInput('linear', 'Linear'),
+        { canReplace: () => true },
+      );
+      if (!('created' in claim)) throw new Error('the claim should replace the row it read');
+
+      await expect(model.update(read.id, { name: 'Re-added' })).resolves.toBe(false);
+      await expect(model.update(claim.created.id, { name: 'Re-added' })).resolves.toBe(true);
+    });
   });
 
   describe('updateStatus', () => {
     it('updates the connector status', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.updateStatus(created.id, 'error');
 
@@ -672,12 +1080,7 @@ describe('ConnectorModel', () => {
   describe('delete', () => {
     it('deletes a connector owned by the user', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.delete(created.id);
 
@@ -686,16 +1089,97 @@ describe('ConnectorModel', () => {
 
     it('does not delete connectors owned by another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
       await model.delete(created.id);
 
+      expect(await otherModel.findById(created.id)).not.toBeNull();
+    });
+  });
+
+  describe('updateMetadataIfContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('replaces the metadata while it still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        true,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'done.png' });
+    });
+
+    it('keeps metadata rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        false,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'readded.png' });
+    });
+
+    it("does not update another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).updateMetadataIfContains(created.id, tag, {}),
+      ).toBe(false);
+      expect((await otherModel.findById(created.id))?.metadata).toEqual(tag);
+    });
+  });
+
+  describe('deleteIfMetadataContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('deletes the row while its metadata still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(true);
+      expect(await model.findById(created.id)).toBeNull();
+    });
+
+    it('keeps a row whose metadata was rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(false);
+      expect(await model.findById(created.id)).toMatchObject({
+        metadata: { avatar: 'readded.png' },
+      });
+    });
+
+    it("does not delete another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).deleteIfMetadataContains(created.id, tag),
+      ).toBe(false);
       expect(await otherModel.findById(created.id)).not.toBeNull();
     });
   });

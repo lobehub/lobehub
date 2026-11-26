@@ -330,10 +330,10 @@ export const extractActivatedSkillsFromMessages = (
  * turns. A new operation uses these identifiers to restore its step-level tool
  * state, keeping discovered tools callable after the operation boundary.
  */
-export const extractActivatedToolIdsFromMessages = (
+export const extractToolActivationsFromMessages = (
   messages: UIChatMessage[],
-): string[] | undefined => {
-  const toolIds = new Set<string>();
+): { id: string; afterToolCallId?: string }[] | undefined => {
+  const activations = new Map<string, { id: string; afterToolCallId?: string }>();
 
   for (const msg of messages) {
     for (const invocation of collectToolInvocations(msg)) {
@@ -345,10 +345,93 @@ export const extractActivatedToolIdsFromMessages = (
         continue;
 
       for (const tool of invocation.state.activatedTools as Array<{ identifier?: string }>) {
-        if (tool.identifier) toolIds.add(tool.identifier);
+        if (tool.identifier && !activations.has(tool.identifier)) {
+          activations.set(tool.identifier, {
+            id: tool.identifier,
+            ...(invocation.toolCallId && { afterToolCallId: invocation.toolCallId }),
+          });
+        }
       }
     }
   }
 
-  return toolIds.size > 0 ? [...toolIds] : undefined;
+  return activations.size > 0 ? [...activations.values()] : undefined;
+};
+
+export const extractActivatedToolIdsFromMessages = (
+  messages: UIChatMessage[],
+): string[] | undefined => extractToolActivationsFromMessages(messages)?.map(({ id }) => id);
+
+const TOOL_NAME_SEPARATOR = '____';
+
+const messageHasToolInvocation = (
+  msg: UIChatMessage,
+  identifier: string,
+  prefix: string,
+  apiNames?: ReadonlySet<string>,
+): boolean => {
+  // A call whose API name was not recorded counts: it cannot be ruled out.
+  const matchesApi = (apiName: string | undefined) =>
+    !apiNames || !apiName || apiNames.has(apiName);
+
+  if (
+    collectToolInvocations(msg).some(
+      (invocation) => invocation.identifier === identifier && matchesApi(invocation.apiName),
+    )
+  ) {
+    return true;
+  }
+
+  if (msg.role === 'assistant') {
+    if (
+      Array.isArray(msg.tools) &&
+      msg.tools.some((tool) => tool?.identifier === identifier && matchesApi(tool?.apiName))
+    ) {
+      return true;
+    }
+
+    const toolCalls = (msg as { tool_calls?: Array<{ function?: { name?: string } }> }).tool_calls;
+    if (
+      Array.isArray(toolCalls) &&
+      toolCalls.some((call) => {
+        const name = call?.function?.name;
+        if (name === identifier) return true;
+        return (
+          typeof name === 'string' &&
+          name.startsWith(prefix) &&
+          matchesApi(name.slice(prefix.length))
+        );
+      })
+    ) {
+      return true;
+    }
+  }
+
+  if (Array.isArray(msg.compressedMessages)) {
+    return msg.compressedMessages.some((compressed) =>
+      messageHasToolInvocation(compressed, identifier, prefix, apiNames),
+    );
+  }
+
+  return false;
+};
+
+/**
+ * Whether the conversation history contains a tool invocation for `identifier`,
+ * optionally limited to the given API names.
+ *
+ * Covers flat DB rows (`role='tool'` and `role='assistant'` with `tools` /
+ * `tool_calls`), grouped `assistantGroup` / `supervisor` nodes, and nested
+ * `compressedGroup` entries. Used to keep the APIs of a deferred tool (such as
+ * the skill APIs of `lobe-skills`) declared when earlier turns already called
+ * them: a provider rejects a history that calls a function the request no
+ * longer declares.
+ */
+export const hasHistoricalToolInvocation = (
+  messages: UIChatMessage[],
+  identifier: string,
+  apiNames?: ReadonlySet<string>,
+): boolean => {
+  const prefix = `${identifier}${TOOL_NAME_SEPARATOR}`;
+  return messages.some((msg) => messageHasToolInvocation(msg, identifier, prefix, apiNames));
 };

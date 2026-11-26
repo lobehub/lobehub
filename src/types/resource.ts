@@ -76,6 +76,8 @@ export interface ResourceItem {
 /**
  * Query parameters for fetching resources
  */
+export type ResourceSorter = 'custom' | 'name' | 'createdAt' | 'size';
+
 export interface ResourceQueryParams {
   category?: FilesTabs;
   /** Drive listing: uploaded files and the folders that hold them, no pages. */
@@ -87,7 +89,7 @@ export interface ResourceQueryParams {
   parentId?: string | null;
   q?: string;
   showFilesInKnowledgeBase?: boolean;
-  sorter?: 'name' | 'createdAt' | 'size';
+  sorter?: ResourceSorter;
   sortType?: SortType;
   /**
    * Origin narrowing driven by the explorer's source filter chips

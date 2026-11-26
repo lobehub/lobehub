@@ -24,6 +24,7 @@ import {
 } from '../utils';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
+import { resetUnresolvedToolFeedback } from './resolveTools';
 import {
   createToolMessage,
   isBlockedBeforeExecution,
@@ -414,6 +415,28 @@ const pauseForTools = async ({
   };
 };
 
+const SKILLS_IDENTIFIER = 'lobe-skills';
+const SKILL_STORE_IDENTIFIER = 'lobe-skill-store';
+const ACTIVATOR_IDENTIFIER = 'lobe-activator';
+const SKILL_STORE_IMPORT_APIS = new Set(['importFromMarket', 'importSkill']);
+
+const shouldAutoActivateSkillsTool = (result: ToolResultEntry): boolean => {
+  if (!result.isSuccess) return false;
+  if (
+    result.toolCall.identifier === SKILL_STORE_IDENTIFIER &&
+    SKILL_STORE_IMPORT_APIS.has(result.toolCall.apiName)
+  ) {
+    return true;
+  }
+
+  return (
+    result.toolCall.identifier === ACTIVATOR_IDENTIFIER &&
+    result.toolCall.apiName === 'activateTools' &&
+    Array.isArray(result.data.state?.activatedSkills) &&
+    result.data.state.activatedSkills.length > 0
+  );
+};
+
 const persistActivatedTools = ({
   effectiveManifestMap,
   newState,
@@ -426,25 +449,38 @@ const persistActivatedTools = ({
   stepCount: number;
 }) => {
   const existingIds = new Set((newState.activatedStepTools ?? []).map((tool) => tool.id));
+  const deferredManifestMap = newState.operationToolSet?.deferredManifestMap ?? {};
 
   for (const result of results) {
-    const discoveredTools = result.data.state?.activatedTools as
-      Array<{ identifier: string }> | undefined;
-    if (!discoveredTools?.length) continue;
+    const discoveredTools = (
+      (result.data.state?.activatedTools as Array<{ identifier: string }> | undefined) ?? []
+    ).map((tool) => tool.identifier);
+
+    // A run that starts without skills defers the skill APIs of `lobe-skills`
+    // (`operationToolSet.deferredManifestMap`). Once this operation installs a
+    // skill, or activates one through the activator's skill fallback, promote
+    // the tool so the next LLM call can invoke `activateSkill` /
+    // `readReference` / `execScript`.
+    if (shouldAutoActivateSkillsTool(result) && deferredManifestMap[SKILLS_IDENTIFIER]) {
+      discoveredTools.push(SKILLS_IDENTIFIER);
+    }
+
+    if (discoveredTools.length === 0) continue;
 
     // The set is updated inside the filter, not after mapping the batch: two
     // results in the same step (or one result listing the same tool twice)
     // would otherwise both pass and be appended twice.
     const newActivations = discoveredTools
-      .filter((tool) => {
-        if (existingIds.has(tool.identifier)) return false;
-        existingIds.add(tool.identifier);
+      .filter((identifier) => {
+        if (existingIds.has(identifier)) return false;
+        existingIds.add(identifier);
         return true;
       })
-      .map((tool) => ({
+      .map((identifier) => ({
         activatedAtStep: stepCount,
-        id: tool.identifier,
-        manifest: effectiveManifestMap[tool.identifier],
+        afterToolCallId: result.toolCallId,
+        id: identifier,
+        manifest: effectiveManifestMap[identifier],
         source: 'discovery' as const,
       }));
 
@@ -456,7 +492,8 @@ const persistActivatedTools = ({
 
 export const callTool =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
@@ -573,6 +610,7 @@ export const callTool =
         if (!execution.resultPersisted) {
           await updateExistingToolMessage({
             host,
+            ownedByTransport: true,
             result: executionResult,
             toolMessageId,
             resultBlocked: execution.resultBlocked,
@@ -758,7 +796,8 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
@@ -963,6 +1002,7 @@ export const callToolsBatch =
           if (!execution.resultPersisted) {
             await updateExistingToolMessage({
               host,
+              ownedByTransport: true,
               result: executionResult,
               toolMessageId,
               resultBlocked: execution.resultBlocked,

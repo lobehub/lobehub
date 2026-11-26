@@ -9,7 +9,21 @@ import type {
   TrashRootFilter,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, count, desc, eq, inArray, isNull, lt, lte, not, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  not,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { NewTrashItemRow, TrashItemRow } from '../schemas';
@@ -363,29 +377,65 @@ export class TrashModel {
   };
 
   /**
+   * Children registered under an agent root that its FK cascade will not reach:
+   * rows an earlier cascade stamped through a legacy session shell. The bin
+   * already promised to delete them, so the purge has to remove them itself.
+   */
+  findChildrenOutsideAgents = async (rootId: string, agentIds: string[]) => {
+    const childIds = (resourceType: 'message' | 'topic') =>
+      this.db
+        .select({ id: trashItems.resourceId })
+        .from(trashItems)
+        .where(
+          and(
+            this.ownership(),
+            eq(trashItems.rootId, rootId),
+            eq(trashItems.resourceType, resourceType),
+          ),
+        );
+    const topicRows = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(
+        and(
+          inArray(topics.id, childIds('topic')),
+          or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+        ),
+      );
+    const messageRows = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.id, childIds('message')),
+          or(isNull(messages.agentId), notInArray(messages.agentId, agentIds)),
+        ),
+      );
+    return {
+      messageIds: messageRows.map((row) => row.id),
+      topicIds: topicRows.map((row) => row.id),
+    };
+  };
+
+  /**
    * Drop the roots of topics / messages that were trashed on their own before
-   * the agent they belong to (directly or through its legacy session shells),
-   * and so kept separate registry rows. Called while that agent is being
-   * purged: the FK cascade deletes those resources, so their rows would
-   * otherwise linger in the bin pointing at nothing.
+   * the agent they belong to, and so kept separate registry rows. `topicIds`
+   * adds the topics the purge removes by id ({@link findChildrenOutsideAgents}).
+   * Called while that agent is being purged: those resources are deleted, so
+   * their rows would otherwise linger in the bin pointing at nothing.
    */
   removeRootsUnderAgents = async (
-    parents: { agentIds: string[]; sessionIds: string[] },
+    parents: { agentIds: string[]; topicIds?: string[] },
     trx?: Transaction,
   ) => {
     if (parents.agentIds.length === 0) return;
     const db = trx ?? this.db;
-    const topicOwner =
-      parents.sessionIds.length > 0
-        ? or(
-            inArray(topics.agentId, parents.agentIds),
-            inArray(topics.sessionId, parents.sessionIds),
-          )
-        : inArray(topics.agentId, parents.agentIds);
+    const topicOwner = parents.topicIds?.length
+      ? or(inArray(topics.agentId, parents.agentIds), inArray(topics.id, parents.topicIds))
+      : inArray(topics.agentId, parents.agentIds);
     const ownedTopicIds = db.select({ id: topics.id }).from(topics).where(topicOwner);
     const messageOwner = or(
       inArray(messages.agentId, parents.agentIds),
-      parents.sessionIds.length > 0 ? inArray(messages.sessionId, parents.sessionIds) : undefined,
       inArray(messages.topicId, ownedTopicIds),
     );
 

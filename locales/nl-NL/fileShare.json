@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "Link kopiëren",
+  "popover.copyLinkSuccess": "Link gekopieerd",
+  "popover.linkHint": "Iedereen met de link kan dit bestand bekijken en downloaden",
+  "popover.permissionLink": "Iedereen met de link",
+  "popover.permissionPrivate": "Privé",
+  "popover.privateHint": "Alleen jij kunt dit bestand openen",
+  "popover.sectionViews_one": "{{count}} weergave",
+  "popover.sectionViews_other": "{{count}} weergaven",
+  "popover.title": "Bestand delen",
+  "popover.updateError": "Deelinstellingen bijwerken mislukt",
+  "popover.visibility": "Zichtbaarheid",
+  "popover.visibilityUpdated": "Zichtbaarheid bijgewerkt",
+  "shareButton.label": "Delen"
+}

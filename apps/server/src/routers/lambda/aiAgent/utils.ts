@@ -25,3 +25,6 @@ export const acceptsMemberRuntimeEndOf = (streamFeatures: string[] | undefined):
  */
 export const acceptsFileWorksOf = (streamFeatures: string[] | undefined): boolean =>
   streamFeatures?.includes('file_works') ?? false;
+
+export const acceptsArtboardWorksOf = (streamFeatures: string[] | undefined): boolean =>
+  streamFeatures?.includes('artboard_works') ?? false;

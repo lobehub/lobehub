@@ -1,26 +1,49 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Form.Group renders its body without a slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ComponentType, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
-import moduleStyles from './Sections.module.css';
+
+/** A static copy key: `[namespace, key]`. */
+export type SettingsSkeletonTextKey = readonly [namespace: string, key: string];
 
 /** Shared head options of every section rendered as a filled `Form.Group`. */
 interface GroupHeadOptions {
   /** The real group shows a description line under its title. */
   desc?: boolean;
-  /** The real group shows an action button on the right of its head. */
-  extra?: boolean;
+  /** The real description is static copy: render it instead of a bar. */
+  descKey?: SettingsSkeletonTextKey;
+  /**
+   * The real group shows an action on the right of its head; `true` is a
+   * 120×32 button, or pass the action's size.
+   */
+  extra?: boolean | { height: number; width: number };
+  /** The real title is static copy: render it instead of a bar. */
+  heading?: SettingsSkeletonTextKey;
   titleWidth?: number;
+}
+
+/** One captioned quota block: a two-column row of cells of `cellHeight`. */
+interface QuotaBlockShape {
+  caption?: SettingsSkeletonTextKey;
+  cellHeight: number;
+  /** Static label of each cell; the figures under it stay placeholders. */
+  labels?: SettingsSkeletonTextKey[];
 }
 
 /**
@@ -30,15 +53,26 @@ interface GroupHeadOptions {
  */
 export type SettingsSectionSkeleton =
   | (GroupHeadOptions & {
-      /** One full-width input with a trailing button instead of labelled rows. */
-      field?: boolean;
+      /**
+       * One full-width control instead of labelled rows: `true` is a 38px input
+       * with a trailing button, `input` a 32px input, `snippet` a 38px copyable
+       * snippet (its copy button sits inside).
+       */
+      field?: boolean | 'input' | 'snippet';
       /** Label + description on the left, control on the right. */
       rows?: number;
       variant: 'form';
     })
   | (GroupHeadOptions & {
+      /** Number of table columns (default 5). */
+      columns?: number;
       /** Table rows below the header row. */
       rows?: number;
+      /**
+       * A row of this many compact label + figure columns above the table,
+       * split from it by a divider.
+       */
+      stats?: number;
       /** A filter / search bar above the table. */
       toolbar?: boolean;
       /** A tab strip above the table. */
@@ -47,6 +81,11 @@ export type SettingsSectionSkeleton =
     })
   | (GroupHeadOptions & {
       columns?: number;
+      /**
+       * Borderless tiles 8px apart inside the padded group body, instead of
+       * bordered tiles edge to edge.
+       */
+      inset?: boolean;
       /** Height of one tile; defaults to a two-line tile. */
       tileHeight?: number;
       /** Compact label + value tiles laid out edge to edge. */
@@ -58,13 +97,34 @@ export type SettingsSectionSkeleton =
       aside?: { height: number; width: number };
       /** A second label/value pair plus a divider and a link row below the figure. */
       secondary?: boolean;
+      /** A second column (label + link) right of a vertical rule. */
+      split?: boolean;
       /** Label, one large figure and a caption line. */
       variant: 'summary';
     })
   | (GroupHeadOptions & {
+      /** Checklist columns (default 1); `lines` are split across them. */
+      columns?: number;
+      /** The header starts with an icon tile (default true). */
+      icon?: boolean;
       /** Icon + title header followed by a checklist. */
       lines?: number;
       variant: 'detail';
+    })
+  | (GroupHeadOptions & {
+      /**
+       * Captioned quota blocks edge to edge, each a two-column row of cells
+       * of `cellHeight`.
+       */
+      blocks: QuotaBlockShape[];
+      /** Setting rows (label + description, control) under the blocks. */
+      rows?: number;
+      variant: 'quota';
+    })
+  | (GroupHeadOptions & {
+      /** A numbered list of rule lines. */
+      lines: number;
+      variant: 'rules';
     })
   | (GroupHeadOptions & {
       cards?: number;
@@ -81,7 +141,10 @@ export type SettingsSectionSkeleton =
       variant: 'cards';
     })
   | {
-      /** An outlined block with an avatar and two text lines. */
+      /**
+       * A filled lead block above the groups: a large title, a description, a
+       * full-width input with a trailing button, and a short line under it.
+       */
       variant: 'banner';
     };
 
@@ -89,6 +152,8 @@ export interface SettingsSectionsShape {
   /** Vertical gap between sections, as set by the real page's stack. */
   gap?: number;
   sections: SettingsSectionSkeleton[];
+  /** Number of tabs in a strip above the sections, 16px above the first one. */
+  tabs?: number;
   /** The page draws its own large title + divider above the sections. */
   title?: boolean;
 }
@@ -106,9 +171,7 @@ export type SettingsSectionsFrame = 'container' | 'header' | 'none';
 
 const styles = stylex.create({
   banner: {
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadiusLG,
   },
   card: {
@@ -125,6 +188,18 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   grid: { display: 'grid' },
+  quotaBlock: {
+    borderBlockStartWidth: { 'default': '1px', ':first-child': '0' },
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  rule: {
+    flexShrink: 0,
+    width: '1px',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'dashed',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
   tile: {
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
@@ -134,6 +209,16 @@ const styles = stylex.create({
     borderInlineEndColor: cssVar.colorBorderSecondary,
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  flush: css`
+    overflow: hidden;
+
+    [data-form-group-body] {
+      padding: 0;
+    }
+  `,
+}));
 
 const widthAt = (index: number, widths: number[]) => widths[index % widths.length];
 
@@ -151,24 +236,39 @@ const GroupDesc = () => (
   </Flexbox>
 );
 
+/** Static copy as text once its namespace has loaded; `undefined` until then. */
+const useStaticText = (key?: SettingsSkeletonTextKey) => {
+  // Keys come from shape data, so they are untyped against the i18n resources.
+  const { t, ready } = useTranslation((key?.[0] ?? 'common') as any);
+  return key && ready ? (t(key[1] as any, { ns: key[0] as any }) as string) : undefined;
+};
+
 const Group = ({
   children,
   desc,
+  descKey,
   extra,
   flush,
+  heading,
   titleWidth,
-}: GroupHeadOptions & { children: ReactNode; flush?: boolean }) => (
-  <Form.Group
-    className={flush ? moduleStyles.flush : undefined}
-    collapsible={false}
-    desc={desc ? <GroupDesc /> : undefined}
-    extra={extra ? <SkeletonBar height={32} width={120} /> : undefined}
-    title={<GroupTitle width={titleWidth} />}
-    variant={'filled'}
-  >
-    {children}
-  </Form.Group>
-);
+}: GroupHeadOptions & { children: ReactNode; flush?: boolean }) => {
+  const title = useStaticText(heading);
+  const description = useStaticText(descKey);
+  const extraSize = extra === true ? { height: 32, width: 120 } : extra || undefined;
+
+  return (
+    <Form.Group
+      className={flush ? fallback.flush : undefined}
+      collapsible={false}
+      desc={description ?? (desc || descKey ? <GroupDesc /> : undefined)}
+      extra={extraSize ? <SkeletonBar {...extraSize} /> : undefined}
+      title={title ?? <GroupTitle width={titleWidth} />}
+      variant={'filled'}
+    >
+      {children}
+    </Form.Group>
+  );
+};
 
 const FormRows = ({ rows }: { rows: number }) => (
   <Flexbox>
@@ -195,66 +295,102 @@ const FormRows = ({ rows }: { rows: number }) => (
 
 const TABLE_COLUMNS = [18, 12, 14, 16, 12];
 
+const tableColumns = (count = TABLE_COLUMNS.length) =>
+  Array.from({ length: count }, (_, index) => TABLE_COLUMNS[index % TABLE_COLUMNS.length]);
+
 const TableBody = ({
+  columns,
   rows,
   tabs,
   toolbar,
 }: {
+  columns?: number;
   rows: number;
   tabs?: boolean;
   toolbar?: boolean;
-}) => (
-  <Flexbox>
-    {tabs && (
-      <Flexbox horizontal align={'center'} gap={24} height={48} paddingInline={16}>
-        <SkeletonBar height={14} width={64} />
-        <SkeletonBar height={14} width={72} />
-        <SkeletonBar height={14} width={64} />
+}) => {
+  const flexes = tableColumns(columns);
+
+  return (
+    <Flexbox>
+      {tabs && (
+        <Flexbox horizontal align={'center'} gap={24} height={48} paddingInline={16}>
+          <SkeletonBar height={14} width={64} />
+          <SkeletonBar height={14} width={72} />
+          <SkeletonBar height={14} width={64} />
+        </Flexbox>
+      )}
+      {toolbar && (
+        <Flexbox horizontal align={'center'} gap={8} height={61} paddingInline={16}>
+          <Flexbox flex={2}>
+            <SkeletonBar height={32} />
+          </Flexbox>
+          <Flexbox flex={1}>
+            <SkeletonBar height={32} />
+          </Flexbox>
+          <Flexbox flex={1.5}>
+            <SkeletonBar height={32} />
+          </Flexbox>
+          <SkeletonBar height={32} width={72} />
+        </Flexbox>
+      )}
+      <Flexbox horizontal align={'center'} gap={24} height={40} paddingInline={16}>
+        {flexes.map((flex, index) => (
+          <Flexbox flex={flex} key={index}>
+            <SkeletonBar height={12} width={'48%'} />
+          </Flexbox>
+        ))}
       </Flexbox>
-    )}
-    {toolbar && (
-      <Flexbox horizontal align={'center'} gap={8} height={61} paddingInline={16}>
-        <Flexbox flex={2}>
-          <SkeletonBar height={32} />
-        </Flexbox>
-        <Flexbox flex={1}>
-          <SkeletonBar height={32} />
-        </Flexbox>
-        <Flexbox flex={1.5}>
-          <SkeletonBar height={32} />
-        </Flexbox>
-        <SkeletonBar height={32} width={72} />
-      </Flexbox>
-    )}
-    <Flexbox horizontal align={'center'} gap={24} height={40} paddingInline={16}>
-      {TABLE_COLUMNS.map((flex, index) => (
-        <Flexbox flex={flex} key={index}>
-          <SkeletonBar height={12} width={'48%'} />
+      {Array.from({ length: rows }).map((_, row) => (
+        <Flexbox key={row}>
+          <div {...stylex.props(styles.divider)} />
+          <Flexbox horizontal align={'center'} gap={24} height={52} paddingInline={16}>
+            {flexes.map((flex, index) => (
+              <Flexbox flex={flex} key={index}>
+                <SkeletonBar height={14} width={`${56 + ((row + index) % 3) * 14}%`} />
+              </Flexbox>
+            ))}
+          </Flexbox>
         </Flexbox>
       ))}
     </Flexbox>
-    {Array.from({ length: rows }).map((_, row) => (
-      <Flexbox key={row}>
-        <div {...stylex.props(styles.divider)} />
-        <Flexbox horizontal align={'center'} gap={24} height={52} paddingInline={16}>
-          {TABLE_COLUMNS.map((flex, index) => (
-            <Flexbox flex={flex} key={index}>
-              <SkeletonBar height={14} width={`${56 + ((row + index) % 3) * 14}%`} />
-            </Flexbox>
-          ))}
-        </Flexbox>
+  );
+};
+
+const Field = ({ kind }: { kind: true | 'input' | 'snippet' }) =>
+  kind === true ? (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <Flexbox flex={1}>
+        <SkeletonBar height={38} />
+      </Flexbox>
+      <SkeletonBar height={38} width={88} />
+    </Flexbox>
+  ) : (
+    <SkeletonBar height={kind === 'input' ? 32 : 38} />
+  );
+
+const InsetTiles = ({
+  columns,
+  tileHeight,
+  tiles,
+}: {
+  columns: number;
+  tileHeight: number;
+  tiles: number;
+}) => (
+  <div
+    {...sx(styles.grid, {
+      gap: 8,
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    })}
+  >
+    {Array.from({ length: tiles }).map((_, index) => (
+      <Flexbox gap={12} height={tileHeight} justify={'center'} key={index}>
+        <SkeletonBar height={14} width={widthAt(index, [56, 72, 64])} />
+        <SkeletonBar height={24} width={widthAt(index, [32, 40, 72])} />
       </Flexbox>
     ))}
-  </Flexbox>
-);
-
-const Field = () => (
-  <Flexbox horizontal align={'center'} gap={8}>
-    <Flexbox flex={1}>
-      <SkeletonBar height={38} />
-    </Flexbox>
-    <SkeletonBar height={38} width={88} />
-  </Flexbox>
+  </div>
 );
 
 const Tiles = ({
@@ -266,9 +402,7 @@ const Tiles = ({
   tileHeight: number;
   tiles: number;
 }) => (
-  <div
-    {...sx([styles.grid], undefined, { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` })}
-  >
+  <div {...sx(styles.grid, { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` })}>
     {Array.from({ length: tiles }).map((_, index) => (
       <Flexbox
         horizontal
@@ -293,9 +427,11 @@ const Tiles = ({
 const Summary = ({
   aside,
   secondary,
+  split,
 }: {
   aside?: { height: number; width: number };
   secondary?: boolean;
+  split?: boolean;
 }) => {
   const figures = secondary ? (
     <Flexbox flex={1} gap={16}>
@@ -314,6 +450,17 @@ const Summary = ({
     </Flexbox>
   );
 
+  if (split)
+    return (
+      <Flexbox horizontal gap={16}>
+        {figures}
+        <div {...stylex.props(styles.rule)} />
+        <Flexbox flex={1} gap={19}>
+          <SkeletonBar height={16} width={64} />
+          <SkeletonBar height={14} width={72} />
+        </Flexbox>
+      </Flexbox>
+    );
   if (!aside) return figures;
   return (
     <Flexbox horizontal gap={16}>
@@ -334,17 +481,88 @@ const Checklist = ({ lines }: { lines: number }) => (
   </Flexbox>
 );
 
-const Detail = ({ lines }: { lines: number }) => (
+const Detail = ({
+  columns = 1,
+  icon = true,
+  lines,
+}: {
+  columns?: number;
+  icon?: boolean;
+  lines: number;
+}) => (
   <Flexbox gap={19}>
     <Flexbox horizontal align={'center'} gap={12}>
-      <SkeletonBar height={40} radius={cssVar.borderRadiusLG} width={40} />
+      {icon && <SkeletonBar height={40} radius={cssVar.borderRadiusLG} width={40} />}
       <Flexbox gap={6}>
         <SkeletonBar height={16} width={96} />
-        <SkeletonBar height={12} width={200} />
+        <SkeletonBar height={12} width={icon ? 200 : 96} />
       </Flexbox>
     </Flexbox>
     <div {...stylex.props(styles.divider)} />
-    <Checklist lines={lines} />
+    <div
+      {...sx(styles.grid, {
+        columnGap: 24,
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      })}
+    >
+      {Array.from({ length: columns }).map((_, column) => (
+        <Checklist key={column} lines={Math.ceil(lines / columns)} />
+      ))}
+    </div>
+  </Flexbox>
+);
+
+const QuotaCaption = ({ caption }: { caption?: SettingsSkeletonTextKey }) => {
+  const text = useStaticText(caption);
+  return (
+    <Flexbox
+      height={31}
+      justify={'flex-end'}
+      paddingInline={16}
+      style={{ color: cssVar.colorTextSecondary, fontSize: 12, fontWeight: 500 }}
+    >
+      {text ?? (caption && <SkeletonBar height={12} width={48} />)}
+    </Flexbox>
+  );
+};
+
+const QuotaCellLabel = ({ index, label }: { index: number; label?: SettingsSkeletonTextKey }) => {
+  const text = useStaticText(label);
+  return text ? (
+    <Flexbox height={22} justify={'center'}>
+      {text}
+    </Flexbox>
+  ) : (
+    <SkeletonBar height={14} width={widthAt(index, [48, 72])} />
+  );
+};
+
+const Quota = ({ blocks }: { blocks: QuotaBlockShape[] }) => (
+  <Flexbox>
+    {blocks.map(({ caption, cellHeight, labels }, index) => (
+      <div key={index} {...stylex.props(styles.quotaBlock)}>
+        <QuotaCaption caption={caption} />
+        <div {...sx(styles.grid, { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' })}>
+          {[0, 1].map((cell) => (
+            <Flexbox gap={10} height={cellHeight} justify={'center'} key={cell} paddingInline={16}>
+              <QuotaCellLabel index={cell} label={labels?.[cell]} />
+              <SkeletonBar height={18} width={widthAt(cell + index, [120, 96])} />
+            </Flexbox>
+          ))}
+        </div>
+      </div>
+    ))}
+  </Flexbox>
+);
+
+const Rules = ({ lines }: { lines: number }) => (
+  <Flexbox gap={14}>
+    {Array.from({ length: lines }).map((_, index) => (
+      <Flexbox horizontal align={'center'} gap={12} height={22} key={index}>
+        <SkeletonBar height={20} radius={'50%'} width={20} />
+        <SkeletonBar height={14} width={`${52 + (index % 4) * 11}%`} />
+      </Flexbox>
+    ))}
   </Flexbox>
 );
 
@@ -407,7 +625,7 @@ const CardGrid = ({
   size: 'large' | 'small';
 }) => (
   <div
-    {...sx([styles.grid], undefined, {
+    {...sx(styles.grid, {
       gap,
       gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     })}
@@ -422,17 +640,19 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.banner).className}
-          gap={16}
-          padding={18}
-        >
-          <SkeletonBar height={48} radius={'50%'} width={48} />
-          <Flexbox gap={10}>
-            <SkeletonBar height={18} width={240} />
-            <SkeletonBar height={12} width={360} />
+        <Flexbox className={stylex.props(styles.banner).className} gap={20} padding={24}>
+          <Flexbox gap={16}>
+            <SkeletonBar height={24} width={320} />
+            <SkeletonBar height={14} width={440} />
+          </Flexbox>
+          <Flexbox gap={12}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Flexbox flex={1}>
+                <SkeletonBar height={40} />
+              </Flexbox>
+              <SkeletonBar height={40} width={136} />
+            </Flexbox>
+            <SkeletonBar height={22} width={176} />
           </Flexbox>
         </Flexbox>
       );
@@ -475,32 +695,75 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'detail': {
       return (
         <Group {...section}>
-          <Detail lines={section.lines ?? 8} />
+          <Detail columns={section.columns} icon={section.icon} lines={section.lines ?? 8} />
+        </Group>
+      );
+    }
+    case 'quota': {
+      return (
+        <Group {...section} flush>
+          <Quota blocks={section.blocks} />
+          {section.rows && (
+            <Flexbox paddingInline={16}>
+              <div {...stylex.props(styles.divider)} />
+              <FormRows rows={section.rows} />
+            </Flexbox>
+          )}
+        </Group>
+      );
+    }
+    case 'rules': {
+      return (
+        <Group {...section}>
+          <Rules lines={section.lines} />
         </Group>
       );
     }
     case 'form': {
       return (
         <Group {...section}>
-          {section.field ? <Field /> : <FormRows rows={section.rows ?? 2} />}
+          {section.field ? <Field kind={section.field} /> : <FormRows rows={section.rows ?? 2} />}
         </Group>
       );
     }
     case 'summary': {
       return (
         <Group {...section}>
-          <Summary aside={section.aside} secondary={section.secondary} />
+          <Summary aside={section.aside} secondary={section.secondary} split={section.split} />
         </Group>
       );
     }
     case 'table': {
       return (
         <Group {...section} flush>
-          <TableBody rows={section.rows ?? 3} tabs={section.tabs} toolbar={section.toolbar} />
+          {section.stats && (
+            <>
+              <Flexbox padding={16}>
+                <InsetTiles columns={section.stats} tileHeight={50} tiles={section.stats} />
+              </Flexbox>
+              <div {...stylex.props(styles.divider)} />
+            </>
+          )}
+          <TableBody
+            columns={section.columns}
+            rows={section.rows ?? 3}
+            tabs={section.tabs}
+            toolbar={section.toolbar}
+          />
         </Group>
       );
     }
     case 'tiles': {
+      if (section.inset)
+        return (
+          <Group {...section}>
+            <InsetTiles
+              columns={section.columns ?? 2}
+              tileHeight={section.tileHeight ?? 61}
+              tiles={section.tiles ?? 4}
+            />
+          </Group>
+        );
       return (
         <Group {...section} flush>
           <Tiles
@@ -514,28 +777,59 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   }
 };
 
-/** Large page title + divider, matching a settings page that renders its own heading. */
-const PageTitle = () => (
-  <Flexbox gap={24} style={{ paddingTop: 12 }}>
-    <Flexbox height={38} justify={'center'}>
-      <SkeletonBar height={28} width={96} />
-    </Flexbox>
-    <div {...stylex.props(styles.divider)} />
+/** A page-level tab strip above the sections. */
+const PageTabs = ({ count }: { count: number }) => (
+  <Flexbox horizontal align={'center'} gap={32} height={44}>
+    {Array.from({ length: count }, (_, index) => (
+      <SkeletonBar height={14} key={index} width={widthAt(index, [40, 56, 64])} />
+    ))}
   </Flexbox>
 );
+
+/**
+ * Large page title + divider, matching `SettingHeader`: a 24px title (38px line,
+ * compact 20px / 31px) 24px (compact 16px) above the divider.
+ */
+const PageTitle = () => {
+  const { compact, tokens } = useDensity();
+
+  return (
+    <Flexbox gap={compact ? 16 : 24} style={{ paddingTop: 12 }}>
+      <Flexbox height={compact ? 31 : 38} justify={'center'}>
+        <SkeletonBar height={tokens.iconBox} width={96} />
+      </Flexbox>
+      <div {...stylex.props(styles.divider)} />
+    </Flexbox>
+  );
+};
 
 /**
  * The sections of a settings page without any surrounding chrome. Use it
  * directly where a layout already draws the header and padded container.
  */
-export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => (
-  <Flexbox aria-busy data-testid={'settings-sections-skeleton'} gap={shape.gap ?? 36}>
-    {shape.title && <PageTitle />}
-    {shape.sections.map((section, index) => (
-      <Section key={index} section={section} />
-    ))}
-  </Flexbox>
-);
+export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => {
+  const { compact } = useDensity();
+  const sections = (
+    <Flexbox
+      aria-busy
+      data-testid={'settings-sections-skeleton'}
+      gap={shape.gap ?? (compact ? 24 : 36)}
+    >
+      {shape.title && <PageTitle />}
+      {shape.sections.map((section, index) => (
+        <Section key={index} section={section} />
+      ))}
+    </Flexbox>
+  );
+  if (!shape.tabs) return sections;
+
+  return (
+    <Flexbox gap={16}>
+      <PageTabs count={shape.tabs} />
+      {sections}
+    </Flexbox>
+  );
+};
 
 /**
  * Route skeleton for a settings-style page made of stacked filled groups.

@@ -92,20 +92,13 @@ describe('resolveAgentTopicGroupMode', () => {
     },
   );
 
-  /** @example byDevice picked in a project sidebar must not leak into a single agent's own sidebar. */
-  it.each([{ agentTopicGroupMode: undefined }, { agentTopicGroupMode: 'byDevice' as const }])(
-    'normalizes byDevice to byTime for unscoped agent sidebars (config %o)',
-    ({ agentTopicGroupMode }) => {
-      // Same leak as byAgent: device attribution only exists on project feeds,
-      // so an unscoped sidebar would bucket every topic under `no-device`.
-      expect(
-        resolveAgentTopicGroupMode({
-          agentTopicGroupMode,
-          globalMode: 'byDevice',
-        }),
-      ).toBe('byTime');
-    },
-  );
+  /** @example an agent's own sidebar groups by device too: its topics place by bound device or project directory. */
+  it.each([
+    { agentTopicGroupMode: undefined, globalMode: 'byDevice' as const },
+    { agentTopicGroupMode: 'byDevice' as const, globalMode: 'byTime' as const },
+  ])('keeps byDevice for unscoped agent sidebars (%o)', ({ agentTopicGroupMode, globalMode }) => {
+    expect(resolveAgentTopicGroupMode({ agentTopicGroupMode, globalMode })).toBe('byDevice');
+  });
 });
 
 describe('resolveProjectTopicGroupMode', () => {

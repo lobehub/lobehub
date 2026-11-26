@@ -25,7 +25,7 @@ const ConversationSkeletonContainer = ({
   return (
     <Flexbox aria-busy flex={flex} height={height} style={{ minHeight: 0 }} width={'100%'}>
       <Flexbox
-        {...sx([styles.container], className)}
+        {...sx(styles.container, className)}
         flex={flex}
         height={height}
         paddingInline={16}

@@ -6,13 +6,14 @@ import { HelpCircleIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   container: { overflow: 'hidden', minWidth: '64px' },
   number: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     lineHeight: 1.4,
     textAlign: 'center',

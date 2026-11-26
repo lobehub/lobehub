@@ -194,6 +194,23 @@ describe('ExperimentAction replica wiring', () => {
       await expect(useEvalStore.getState().deleteExperiment('e1')).rejects.toThrow('boom');
       expect(useEvalStore.getState().experimentList).toEqual([{ id: 'e1', name: 'Sweep' }]);
     });
+
+    it('treats a refused delete ({ success: false }) like a rejection and keeps the row', async () => {
+      const { agentEvalService } = await import('@/services/agentEval');
+      vi.mocked(agentEvalService.deleteExperiment).mockResolvedValue({
+        error: 'Experiment not found',
+        success: false,
+      } as any);
+      useEvalStore.setState({
+        experimentList: [{ id: 'e1', name: 'Sweep' } as any],
+        experimentListInit: true,
+      });
+
+      await expect(useEvalStore.getState().deleteExperiment('e1')).rejects.toThrow(
+        'Experiment not found',
+      );
+      expect(useEvalStore.getState().experimentList).toEqual([{ id: 'e1', name: 'Sweep' }]);
+    });
   });
 
   describe('updateExperiment', () => {

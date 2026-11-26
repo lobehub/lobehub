@@ -1,15 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { skillVersionContent } from './skillVersions';
+import { unreadableVersions } from './skillVersions';
 
-describe('skillVersionContent', () => {
-  it('reads a kept version whole, frontmatter included', () => {
-    const versions = [{ content: '---\nname: plan\n---\nv2 body', version: 2 }];
-    expect(skillVersionContent(versions, 2)).toBe('---\nname: plan\n---\nv2 body');
-    expect(skillVersionContent(versions, 3)).toBeUndefined();
+vi.mock('@/store/verify', () => ({ useVerifyStore: vi.fn(), verifySelectors: {} }));
+
+describe('unreadableVersions', () => {
+  const error = new Error('storage down');
+
+  // A failed read has to surface: it must not read as still loading.
+  it('names a version that failed with nothing to show', () => {
+    const failed = { error };
+    expect(unreadableVersions([{ body: '# v1' }, failed])).toEqual([failed]);
   });
 
-  it('has nothing to offer when the payload carries no versions', () => {
-    expect(skillVersionContent(undefined, 1)).toBeUndefined();
+  it('leaves out one still loading', () => {
+    expect(unreadableVersions([{}])).toEqual([]);
+  });
+
+  it('leaves out one whose text survived a failed refresh', () => {
+    expect(unreadableVersions([{ body: '', error }])).toEqual([]);
   });
 });

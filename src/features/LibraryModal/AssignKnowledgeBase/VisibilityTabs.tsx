@@ -5,6 +5,8 @@ import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 export type PickerVisibility = 'private' | 'public';
 
 interface VisibilityTabsProps {
@@ -22,7 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: center;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: none;
     border-radius: ${cssVar.borderRadius};
 

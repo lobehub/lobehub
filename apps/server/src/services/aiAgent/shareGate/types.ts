@@ -14,6 +14,13 @@ import type { AgentShareConfig } from '@/database/schemas';
  */
 export interface AgentShareGate {
   agentId: string;
+  /**
+   * Whether THIS visitor may run on the agent's configured execution
+   * environment — `shareConfig.deviceAccess` resolved against the visitor
+   * (see `resolveShareVisitorDeviceAccess`). Computed wherever the gate is
+   * built, never read from client input.
+   */
+  canUseDevice: boolean;
   shareConfig: AgentShareConfig;
   /**
    * The `agentShares.id` this run was authorized against — read together with
@@ -48,6 +55,8 @@ export interface AgentShareGate {
  */
 export interface ShareDataToolPermissions {
   allowReadMemory?: boolean;
+  /** {@link AgentShareGate.canUseDevice}, carried to the dispatch-time gates. */
+  canUseDevice?: boolean;
   /**
    * Agent's own persisted, `enabled` knowledge-base ids (never
    * visitor-supplied). Currently always empty for a share run — see

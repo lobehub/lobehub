@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Mappen vernieuwen",
   "workingDirectory.refreshGitStatus": "Branch- en PR-status vernieuwen",
   "workingDirectory.removeRecent": "Verwijderen uit recent",
+  "workingDirectory.removeRecentFailed": "Kon deze map niet verwijderen. Probeer het opnieuw.",
   "workingDirectory.removeWorktreeAction": "Verwijder werkboom",
   "workingDirectory.removeWorktreeConfirm": "Werkboom “{{name}}” verwijderen? Dit verwijdert de werkboommap maar behoudt de branch. Git weigert als er niet-gecommitteerde wijzigingen zijn.",
   "workingDirectory.removeWorktreeFailed": "Verwijderen van werkboom mislukt",

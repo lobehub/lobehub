@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { explorerSearchResource } from '@/features/ResourceManager/store/projection';
-import { getExplorerSearchParams } from '@/features/ResourceManager/store/selectors';
+import { getExplorerSearchParams, sortFileList } from '@/features/ResourceManager/store/selectors';
 import type { AsyncTaskStatus } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 
@@ -29,21 +29,25 @@ export const useExplorerSearchResults = () => {
     searchKey ? s.explorerSearchEntries[searchKey] : undefined,
   );
 
+  const [libraryId, sorter, sortType] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.sorter,
+    s.sortType,
+  ]);
   const rawData = current?.items;
-  const data: FileListItem[] = useMemo(
-    () =>
-      rawData?.map((item) => ({
-        ...item,
-        chunkCount: item.chunkCount ?? null,
-        chunkingError: item.chunkingError ?? null,
-        chunkingStatus: (item.chunkingStatus ?? null) as AsyncTaskStatus | null,
-        embeddingError: item.embeddingError ?? null,
-        embeddingStatus: (item.embeddingStatus ?? null) as AsyncTaskStatus | null,
-        finishEmbedding: item.finishEmbedding ?? false,
-        url: item.url ?? '',
-      })) ?? [],
-    [rawData],
-  );
+  const data: FileListItem[] = useMemo(() => {
+    const mapped = rawData?.map((item) => ({
+      ...item,
+      chunkCount: item.chunkCount ?? null,
+      chunkingError: item.chunkingError ?? null,
+      chunkingStatus: (item.chunkingStatus ?? null) as AsyncTaskStatus | null,
+      embeddingError: item.embeddingError ?? null,
+      embeddingStatus: (item.embeddingStatus ?? null) as AsyncTaskStatus | null,
+      finishEmbedding: item.finishEmbedding ?? false,
+      url: item.url ?? '',
+    }));
+    return sortFileList(mapped, sorter, sortType, { groupFolders: Boolean(libraryId) }) ?? [];
+  }, [libraryId, rawData, sorter, sortType]);
 
   // Hits beyond the first page used to be unreachable: the overlay never asked
   // for the next page, so a keyword matching hundreds of files showed 50.

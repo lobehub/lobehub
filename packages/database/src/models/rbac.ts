@@ -55,21 +55,19 @@ export class RbacModel {
     this.db = db;
   }
 
-  /** Resolve several users' effective workspace grants in two batched queries. */
-  static getWorkspaceUsersPermissions = async ({
+  /**
+   * Load several users' workspace memberships and global grants in two batched
+   * queries, then resolve any one of those users' effective workspace grants.
+   */
+  private static loadWorkspacePermissions = async ({
     db,
-    requireMembership = false,
     userIds,
     workspaceId,
   }: {
     db: LobeChatDatabase;
-    requireMembership?: boolean;
     userIds: string[];
     workspaceId: string;
-  }): Promise<Map<string, string[]>> => {
-    const uniqueUserIds = [...new Set(userIds)];
-    if (uniqueUserIds.length === 0) return new Map();
-
+  }) => {
     const [memberships, globalPermissions] = await Promise.all([
       db
         .select({
@@ -82,7 +80,7 @@ export class RbacModel {
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
-            inArray(workspaceMembers.userId, uniqueUserIds),
+            inArray(workspaceMembers.userId, userIds),
             isNull(workspaceMembers.deletedAt),
           ),
         ),
@@ -94,7 +92,7 @@ export class RbacModel {
         .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
         .where(
           and(
-            inArray(userRoles.userId, uniqueUserIds),
+            inArray(userRoles.userId, userIds),
             isNull(userRoles.workspaceId),
             eq(roles.isActive, true),
             eq(permissions.isActive, true),
@@ -113,21 +111,48 @@ export class RbacModel {
       globalPermissionsByUserId.set(userId, codes);
     }
 
-    const permissionsByUserId = new Map<string, string[]>();
-    for (const userId of uniqueUserIds) {
+    return (userId: string) => {
       const membership = membershipByUserId.get(userId);
-      if (requireMembership && !membership) continue;
-
       const role =
         membership?.role === 'owner' && membership.primaryOwnerId !== userId
           ? 'admin'
           : membership?.role;
-      permissionsByUserId.set(userId, [
+      const codes = [
         ...new Set([
           ...(role ? getWorkspaceRolePermissionCodes(role) : []),
           ...(globalPermissionsByUserId.get(userId) ?? []),
         ]),
-      ]);
+      ];
+      return { codes, isMember: !!membership };
+    };
+  };
+
+  /** Resolve several users' effective workspace grants in two batched queries. */
+  static getWorkspaceUsersPermissions = async ({
+    db,
+    requireMembership = false,
+    userIds,
+    workspaceId,
+  }: {
+    db: LobeChatDatabase;
+    requireMembership?: boolean;
+    userIds: string[];
+    workspaceId: string;
+  }): Promise<Map<string, string[]>> => {
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length === 0) return new Map();
+
+    const resolve = await RbacModel.loadWorkspacePermissions({
+      db,
+      userIds: uniqueUserIds,
+      workspaceId,
+    });
+
+    const permissionsByUserId = new Map<string, string[]>();
+    for (const userId of uniqueUserIds) {
+      const { codes, isMember } = resolve(userId);
+      if (requireMembership && !isMember) continue;
+      permissionsByUserId.set(userId, codes);
     }
 
     return permissionsByUserId;
@@ -169,7 +194,7 @@ export class RbacModel {
    */
   private getGlobalPermissionCodes = async (
     userId: string,
-    permissionCodes?: string[],
+    permissionCodes: string[],
   ): Promise<string[]> => {
     const result = await this.db
       .select({ permissionCode: permissions.code })
@@ -181,9 +206,7 @@ export class RbacModel {
         and(
           eq(userRoles.userId, userId),
           isNull(userRoles.workspaceId),
-          permissionCodes
-            ? inArray(permissions.code, permissionCodes)
-            : /* v8 ignore next -- unreachable: the only caller (`hasAnyPermission`) always passes a code array */ undefined,
+          inArray(permissions.code, permissionCodes),
           eq(roles.isActive, true),
           eq(permissions.isActive, true),
           // Check if role assignment is not expired
@@ -208,13 +231,12 @@ export class RbacModel {
     const targetUserId = opts.userId || this.userId;
 
     if (opts.workspaceId) {
-      const permissionsByUserId = await RbacModel.getWorkspaceUsersPermissions({
+      const resolve = await RbacModel.loadWorkspacePermissions({
         db: this.db,
         userIds: [targetUserId],
         workspaceId: opts.workspaceId,
       });
-      /* v8 ignore next -- unreachable: without `requireMembership` every requested user id gets an entry, so `?? []` never runs */
-      return permissionsByUserId.get(targetUserId) ?? [];
+      return resolve(targetUserId).codes;
     }
 
     const result = await this.db

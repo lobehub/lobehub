@@ -35,7 +35,38 @@ describe('Copilot ACP helpers', () => {
         'high',
         '--allow-all-tools',
       ]),
-    ).toEqual(['--acp', '--stdio', '--allow-all-tools']);
+    ).toEqual(['--acp', '--stdio', '--allow-all-tools', '--allow-all']);
+  });
+
+  it.each(['--allow-all', '--yolo'])('does not duplicate an explicit %s flag', (flag) => {
+    expect(buildCopilotAcpArgs([flag])).toEqual(['--acp', '--stdio', flag]);
+  });
+
+  it('spawns the ACP process with full access to match the other local agents', async () => {
+    spawnMock.mockImplementation(() => {
+      throw new Error('spawn captured');
+    });
+
+    const session = new CopilotAcpSession({
+      commandPath: 'copilot',
+      cwd: '/tmp',
+      onEvents: async () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-full-access',
+      prompt: 'hello',
+      sessionId: 'session-full-access',
+    });
+
+    await session.run().catch(() => {});
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'copilot',
+      ['--acp', '--stdio', '--allow-all'],
+      expect.anything(),
+    );
   });
 
   it('parses models from ACP session/new response', () => {

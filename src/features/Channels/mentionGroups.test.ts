@@ -1,7 +1,12 @@
 import type { ChannelPublicMember } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getMentionGroups, matchInviteAgents, MENTION_INVITE_LIMIT } from './mentionGroups';
+import {
+  getMentionGroups,
+  matchInviteAgents,
+  MENTION_INVITE_LIMIT,
+  mentionDescription,
+} from './mentionGroups';
 
 const member = (
   id: string,
@@ -127,5 +132,20 @@ describe('Agents an @mention can invite', () => {
         query: 'helper',
       }),
     ).toHaveLength(MENTION_INVITE_LIMIT);
+  });
+});
+
+describe('mention option description', () => {
+  it('shows the Agent role before what it does', () => {
+    expect(mentionDescription('设计助手', '界面设计', '审查界面稿')).toBe('界面设计 · 审查界面稿');
+  });
+
+  it('skips blank details and one that repeats the name', () => {
+    expect(mentionDescription('数据分析师', null, '  ', '分析指标')).toBe('分析指标');
+    expect(mentionDescription('Coder', 'Coder', 'Writes code')).toBe('Writes code');
+  });
+
+  it('gives a plain person no second line', () => {
+    expect(mentionDescription('Alice', undefined, '')).toBeUndefined();
   });
 });

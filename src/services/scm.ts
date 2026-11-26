@@ -15,6 +15,12 @@ class ScmService {
     lambdaClient.scm.listChangeRequests.query(params);
 
   listInstallations = async () => lambdaClient.scm.listInstallations.query();
+
+  listRepositories = async () => lambdaClient.scm.listRepositories.query();
+
+  /** Turn a tracked pull request's Auto-fix on or off; back on starts the wake count over. */
+  setChangeRequestAutoFix = async (params: { changeRequestId: string; enabled: boolean }) =>
+    lambdaClient.scm.setChangeRequestAutoFix.mutate(params);
 }
 
 export const scmService = new ScmService();

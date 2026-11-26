@@ -92,17 +92,16 @@ Configuration details:
 
 Available system agents and their functions:
 
-| System Agent            | Key Name          | Function Description                                                                   |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
-| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content                |
-| Translation             | `translation`     | Handles text translation between multiple languages                                    |
-| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
-| History Compression     | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
-| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                                 |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
-| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text)               |
-| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                                     |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+| System Agent            | Key Name          | Function Description                                                     |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------ |
+| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content  |
+| Translation             | `translation`     | Handles text translation between multiple languages                      |
+| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants            |
+| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                   |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                          |
+| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text) |
+| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                       |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                          |
 
 ### `FEATURE_FLAGS`
 
@@ -207,6 +206,10 @@ LobeHub performs SSRF security checks in the following scenarios:
 2. **Web Crawler**: When using web crawling features to fetch external content.
 
 3. **Proxy Requests**: When proxying external API requests.
+
+4. **HTTP MCP Servers and Connectors**: When the server connects to a Streamable HTTP MCP server or connector, including its OAuth discovery and token requests. The check uses the IP address the host actually resolves to, on every request and redirect. A self-hosted deployment without a device gateway that runs MCP servers on its own network must allow them with `SSRF_ALLOW_PRIVATE_IP_ADDRESS` or `SSRF_ALLOW_IP_ADDRESS_LIST`; MCP servers that run through the desktop app on the user's machine are not affected.
+
+5. **AI Provider Endpoints**: When the server calls an AI provider `baseURL` that a user supplied (provider settings / keyVaults), the endpoint host is checked on every request and redirect. On LobeHub Cloud, user-supplied endpoints can never reach private addresses. Self-hosted deployments allow private provider endpoints by default — a container reaching `http://ollama:11434` on its own docker network is a common, legitimate setup — and can opt in to blocking with `SSRF_ALLOW_PRIVATE_IP_ADDRESS=0` (note the inverted meaning for this surface), or allow only specific addresses with `SSRF_ALLOW_IP_ADDRESS_LIST`. Link-local addresses (`169.254.0.0/16`, `fe80::/10`, and their NAT64 translations) stay blocked on self-hosted deployments even when private endpoints are allowed, so an open-registration instance cannot reach cloud metadata services; `SSRF_ALLOW_IP_ADDRESS_LIST` can still allow a specific link-local address if truly needed. Endpoints configured by the operator (`*_PROXY_URL` env, built-in provider URLs) are trusted and not checked.
 
 **Configuration Examples**:
 

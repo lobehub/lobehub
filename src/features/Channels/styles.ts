@@ -1,6 +1,9 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+import { mentionTokens } from '@/styles/mention.stylex';
+
 const HOVER = '@media (hover: hover)';
 
 export const styles = stylex.create({
@@ -40,6 +43,28 @@ export const styles = stylex.create({
     height: '100%',
     minHeight: 0,
   },
+  // The Channel half of a thread page's `# Channel › thread` title, leading back to the Channel.
+  crumb: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: 8,
+    alignItems: 'center',
+    maxWidth: 200,
+    minWidth: 0,
+    marginBlock: 0,
+    marginInline: 0,
+    paddingBlock: 2,
+    paddingInline: 4,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: 6,
+    font: 'inherit',
+    backgroundColor: {
+      default: 'transparent',
+      [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    },
+    cursor: 'pointer',
+  },
   threadHeader: {
     borderBlockEndWidth: 1,
     borderBlockEndStyle: 'solid',
@@ -52,18 +77,23 @@ export const styles = stylex.create({
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
   },
-  /** One message row; hovering highlights it and reveals its toolbar, like a chat app. */
+  /**
+   * One message row; hovering highlights it and reveals its toolbar, like a chat app.
+   * The wash spans the feed edge to edge (cancelling the feed's 16px padding), square,
+   * so it reads as a list row rather than a floating card.
+   */
   messageRow: {
     position: 'relative',
-    marginInline: -12,
-    paddingInline: 12,
-    borderRadius: cssVar.borderRadiusLG,
+    marginInline: -16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     backgroundColor: {
       default: 'transparent',
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
@@ -71,20 +101,21 @@ export const styles = stylex.create({
   },
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
-    paddingInlineEnd: 84,
+    paddingInlineEnd: 88,
   },
   messageTime: {
     flexShrink: 0,
     fontSize: cssVar.fontSizeSM,
     fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    // One step below the author name, which is one step below the message.
+    color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
     opacity: 1,
   },
   continuationTime: {
     position: 'absolute',
     insetBlockStart: 4,
-    insetInlineStart: 0,
+    insetInlineStart: 4,
     width: 54,
     textAlign: 'center',
     opacity: {
@@ -96,24 +127,32 @@ export const styles = stylex.create({
       },
     },
   },
+  /** A plain centered date; a rule on each side read heavier than the messages it separates. */
   dateDivider: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
-    paddingBlock: 12,
+    justifyContent: 'center',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     fontSize: cssVar.fontSizeSM,
     color: cssVar.colorTextSecondary,
   },
-  dateLine: {
-    flex: '1',
-    height: 1,
-    backgroundColor: cssVar.colorBorderSecondary,
-  },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
+  /** A member row's "more" button: shown on row hover or focus where hover exists. */
+  memberActions: {
+    flex: 'none',
+    opacity: {
+      default: 1,
+      [HOVER]: {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+        [stylex.when.ancestor(':focus-within')]: 1,
+      },
+    },
+  },
   messageToolbar: {
     position: 'absolute',
     insetBlockStart: 6,
-    insetInlineEnd: 12,
+    insetInlineEnd: 16,
     zIndex: 1,
     display: 'flex',
     alignItems: 'center',
@@ -157,31 +196,54 @@ export const styles = stylex.create({
     marginInline: 2,
     verticalAlign: 'baseline',
   },
+  eventMemberAgent: {
+    cursor: 'pointer',
+  },
   eventMemberName: {
     // Let the name supply the inline flex baseline instead of the avatar.
     alignSelf: 'baseline',
     minWidth: 0,
     overflowWrap: 'anywhere',
   },
-  /** A mentioned member inside message text. */
+  /** A mentioned member inside message text; blue-violet so it never reads as a link. */
   mention: {
     paddingBlock: 1,
     paddingInline: 4,
     borderRadius: 4,
     fontWeight: 500,
-    color: cssVar.colorInfo,
-    backgroundColor: cssVar.colorInfoBg,
+    color: mentionTokens.color,
+    backgroundColor: mentionTokens.bg,
+  },
+  /** A mention inside the composer: highlighted text, no tag; tinted like selected text while selected. */
+  composerMention: {
+    userSelect: 'none',
+    fontWeight: 500,
+    color: mentionTokens.color,
+    // `.selected` is added by the editor's selection observer, not by React.
+    borderRadius: { 'default': null, ':is(.selected)': cssVar.borderRadiusXS },
+    backgroundColor: { 'default': null, ':is(.selected)': mentionTokens.bg },
   },
   composer: {
-    flexShrink: 0,
-    paddingBlockEnd: 12,
+    'position': 'relative',
+    'flexShrink': 0,
+    'paddingBlockEnd': 12,
+    // The feed fades out into the composer instead of being cut at its top edge.
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      insetBlockEnd: '100%',
+      insetInline: 0,
+      height: 24,
+      backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
+    },
   },
-  /** Typing activity above the input; keeps its height when empty. */
+  /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     minWidth: 0,
     minHeight: 24,
     paddingInline: 4,
@@ -191,8 +253,9 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'flex-end',
     gap: 8,
-    minHeight: 44,
-    paddingBlock: 8,
+    // 10px around the 28px buttons centers a single line in the 50px card.
+    minHeight: 48,
+    paddingBlock: 10,
     paddingInline: 8,
   },
   composerEditor: {
@@ -200,17 +263,19 @@ export const styles = stylex.create({
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 2,
+    // Buttons sit on the last line; glyphs ride high in the line box, so drop the
+    // text 1px to center it on the 28px icons beside it.
+    marginBlockEnd: -1,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     marginBlockEnd: 12,
     paddingBlock: 8,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -247,20 +312,6 @@ export const statusStyles = stylex.create({
     borderRadius: '50%',
     backgroundColor: 'currentcolor',
   },
-  /** A bare red dot beside a message whose reply failed. */
-  failureMark: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 18,
-    height: 18,
-    padding: 0,
-    borderWidth: 0,
-    borderRadius: '50%',
-    color: cssVar.colorError,
-    cursor: 'pointer',
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorErrorBg },
-  },
   failureButton: {
     flex: 'none',
     gap: 4,
@@ -281,9 +332,28 @@ export const statusStyles = stylex.create({
   memberButton: {
     flex: 'none',
     gap: 4,
-    height: 32,
+    height: 28,
     paddingBlock: 4,
     paddingInline: 4,
+  },
+  memberStack: {
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  memberStackItem: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+    marginInlineStart: { 'default': -6, ':first-child': 0 },
+    borderRadius: '50%',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorBgContainer,
+    // Emoji avatars are transparent; without a fill the neighbour shows through.
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  memberWorking: {
+    color: cssVar.colorWarning,
   },
   memberAvatar: {
     position: 'relative',

@@ -18,9 +18,13 @@ const conversationWorks = (params: ConversationWorksParams | null) => (s: WorkSt
 
 const workVersions = (workId: string) => (s: WorkState) => s.workVersionsMap[workId];
 
+const topicPullRequests = (topicId: string | null | undefined) => (s: WorkState) =>
+  topicId ? s.topicPullRequestsMap[topicId] : undefined;
+
 export const workSelectors = {
   agentWorks,
   conversationWorks,
+  topicPullRequests,
   workspaceWorks,
   workVersions,
 };

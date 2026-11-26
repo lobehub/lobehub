@@ -50,7 +50,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
         ]);
         const toolRow = [...h.messages.values()].find((m) => m.tool_call_id === 'child-question')!;
         expect(toolRow.threadId).toBeTruthy();
-        h.messageModel.listMessagePluginsByTopic.mockImplementation(
+        h.messageModel.listToolCallIndexByTopic.mockImplementation(
           async () =>
             [...h.messages.values()]
               .filter((m) => m.role === 'tool')
@@ -154,7 +154,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
             intervention: { status: 'pending', operationId: 'other-op' },
           },
         });
-        h.messageModel.listMessagePluginsByTopic.mockImplementation(
+        h.messageModel.listToolCallIndexByTopic.mockImplementation(
           async () =>
             [...h.messages.values()]
               .filter((m) => m.role === 'tool')

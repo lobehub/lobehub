@@ -10,14 +10,19 @@ import type {
 } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
+import { isHeterogeneousAgentAuthRequired } from '../config';
 import { getHeterogeneousTypeLabel } from '../labels';
 import { AcpRpcResponseError } from '../spawn/acpStdioClient';
+import { getAntigravitySpawnEnv } from '../spawn/antigravity';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
+import { detectDshCommand, DSH_COMMAND, listDshAcpModels } from '../spawn/dshAcpSession';
+import type { ResolvedHeteroCommand } from '../spawn/resolveCliCommand';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
+import { parseAntigravityModelCatalog } from './antigravity';
 import { listCodexModels } from './codex';
 
 const execFilePromise = promisify(execFile);
@@ -311,10 +316,36 @@ const getCatalogErrorMessage = (
   type: ListHeterogeneousAgentModelsParams['type'],
 ): string => {
   const name = getHeterogeneousTypeLabel(type) ?? type;
+  if (code === 'auth_required') return `Sign in to the ${name} CLI on the execution device`;
   if (code === 'cli_not_found') return `${name} CLI was not found`;
   if (code === 'timeout') return `${name} model discovery timed out`;
 
   return `${name} model discovery failed`;
+};
+
+/**
+ * Resolve the runtime to launch for catalog discovery. DeepSeek Harness is a
+ * protocol runtime with no local-CLI descriptor, so it is not covered by
+ * {@link resolveHeteroSpawnCommand}; its own detector validates the version and
+ * resolves the executable the same way.
+ */
+const resolveCatalogCommand = async (
+  params: ListHeterogeneousAgentModelsParams,
+  env: NodeJS.ProcessEnv | Record<string, string>,
+): Promise<ResolvedHeteroCommand> => {
+  if (params.type !== 'deepseek-harness') {
+    return resolveHeteroSpawnCommand(params.type, params.command);
+  }
+
+  const requested = params.command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env as NodeJS.ProcessEnv).catch(
+    () => undefined,
+  );
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv }
+    : { command: DSH_COMMAND };
 };
 
 /**
@@ -329,8 +360,8 @@ export const listHeterogeneousAgentModels = async (
   params: ListHeterogeneousAgentModelsParams,
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
-  const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
   const callerEnv = params.env ?? process.env;
+  const resolved = await resolveCatalogCommand(params, callerEnv);
   const mergedPath = [
     ...new Set(
       [callerEnv.PATH, resolved.pathEnv].filter(Boolean).join(path.delimiter).split(path.delimiter),
@@ -338,10 +369,11 @@ export const listHeterogeneousAgentModels = async (
   ]
     .filter(Boolean)
     .join(path.delimiter);
-  const env = {
+  const mergedEnv = {
     ...callerEnv,
     ...(mergedPath ? { PATH: mergedPath } : {}),
   };
+  const env = params.type === 'antigravity' ? getAntigravitySpawnEnv(mergedEnv) : mergedEnv;
 
   try {
     if (params.type === 'codex') {
@@ -358,6 +390,19 @@ export const listHeterogeneousAgentModels = async (
     // Catalog discovery must work even when a saved project path no longer exists.
     // Keep valid project directories so project-specific provider configuration still applies.
     const cwd = resolveHeteroSpawnCwd(params.cwd ?? process.cwd());
+
+    if (params.type === 'deepseek-harness') {
+      const models = await listDshAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        // Keep the interactive catalog budget instead of the runtime's 60s turn
+        // budget: a cold boot should surface a retryable timeout, not a hang.
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
 
     if (params.type === 'copilot') {
       const models = await listCopilotAcpModels({
@@ -397,18 +442,20 @@ export const listHeterogeneousAgentModels = async (
         ? ['--help']
         : params.type === 'devin'
           ? ['models', 'list', '--format', 'json']
-          : params.type === 'grok-build' || params.type === 'opencode'
+          : params.type === 'antigravity' ||
+              params.type === 'grok-build' ||
+              params.type === 'opencode'
             ? ['models']
             : params.type === 'kimi-code'
               ? ['provider', 'list', '--json']
               : params.type === 'pi'
                 ? buildPiCatalogArgs(params.args)
                 : ['--list-models'];
-    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args, env as NodeJS.ProcessEnv);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd,
       encoding: 'utf8',
-      env: env as NodeJS.ProcessEnv,
+      env: spawnPlan.env ?? (env as NodeJS.ProcessEnv),
       maxBuffer: MODEL_CATALOG_MAX_BUFFER,
       timeout: MODEL_CATALOG_TIMEOUT_MS,
       windowsHide: true,
@@ -434,24 +481,31 @@ export const listHeterogeneousAgentModels = async (
 
     return {
       models:
-        params.type === 'cursor'
-          ? parseCursorModelCatalog(String(stdout))
-          : params.type === 'devin'
-            ? parseDevinModelCatalog(String(stdout))
-            : params.type === 'grok-build'
-              ? parseGrokBuildModelCatalog(String(stdout))
-              : params.type === 'kimi-code'
-                ? parseKimiCodeModelCatalog(String(stdout))
-                : params.type === 'pi'
-                  ? parsePiModelCatalog(String(stdout))
-                  : params.type === 'qoder'
-                    ? parseQoderModelCatalog(String(stdout))
-                    : parseOpenCodeModelCatalog(String(stdout)),
+        params.type === 'antigravity'
+          ? parseAntigravityModelCatalog(String(stdout))
+          : params.type === 'cursor'
+            ? parseCursorModelCatalog(String(stdout))
+            : params.type === 'devin'
+              ? parseDevinModelCatalog(String(stdout))
+              : params.type === 'grok-build'
+                ? parseGrokBuildModelCatalog(String(stdout))
+                : params.type === 'kimi-code'
+                  ? parseKimiCodeModelCatalog(String(stdout))
+                  : params.type === 'pi'
+                    ? parsePiModelCatalog(String(stdout))
+                    : params.type === 'qoder'
+                      ? parseQoderModelCatalog(String(stdout))
+                      : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };
   } catch (error) {
-    const code = classifyCatalogError(error);
+    const { stderr } = getErrorRecord(error);
+    const code =
+      params.type === 'antigravity' &&
+      isHeterogeneousAgentAuthRequired(params.type, String(stderr ?? ''))
+        ? 'auth_required'
+        : classifyCatalogError(error);
     return {
       error: { code, message: getCatalogErrorMessage(code, params.type) },
       status: 'error',

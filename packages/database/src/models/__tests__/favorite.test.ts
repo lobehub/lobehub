@@ -3,7 +3,7 @@ import { FAVORITE_LIMIT } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { userFavorites, users, workspaces } from '../../schemas';
+import { tasks, userFavorites, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { FavoriteLimitError, FavoriteModel } from '../favorite';
 
@@ -34,12 +34,13 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(userFavorites);
+  await serverDB.delete(tasks);
   await serverDB.delete(users);
   await serverDB.delete(workspaces);
 });
 
 describe('FavoriteModel', () => {
-  it('appends new favorites in the order they were added', async () => {
+  it('puts each new favorite at the top', async () => {
     await personalModel.add(topic('tpc_1'));
     await personalModel.add(topic('tpc_2'));
     await personalModel.add({
@@ -50,8 +51,23 @@ describe('FavoriteModel', () => {
     });
 
     const items = await personalModel.query();
-    expect(items.map((item) => item.targetId)).toEqual(['tpc_1', 'tpc_2', '/projects']);
-    expect(items[0]).toMatchObject({ icon: null, path: '/agent/agt_a/tpc_1', type: 'topic' });
+    expect(items.map((item) => item.targetId)).toEqual(['/projects', 'tpc_2', 'tpc_1']);
+    expect(items[2]).toMatchObject({ icon: null, path: '/agent/agt_a/tpc_1', type: 'topic' });
+  });
+
+  it('keeps a dragged order and still puts the next favorite on top', async () => {
+    const a = await personalModel.add(topic('tpc_a'));
+    const b = await personalModel.add(topic('tpc_b'));
+    const c = await personalModel.add(topic('tpc_c'));
+
+    await personalModel.reorder([a.id, c.id, b.id]);
+    await personalModel.add(topic('tpc_d'));
+    // Refreshing an existing favorite does not move it to the top.
+    await personalModel.add(topic('tpc_b', 'Renamed'));
+
+    const items = await personalModel.query();
+    expect(items.map((item) => item.targetId)).toEqual(['tpc_d', 'tpc_a', 'tpc_c', 'tpc_b']);
+    expect(items[3].title).toBe('Renamed');
   });
 
   it('refreshes an existing favorite in place instead of duplicating it', async () => {
@@ -61,12 +77,85 @@ describe('FavoriteModel', () => {
 
     const items = await personalModel.query();
     expect(items).toHaveLength(2);
-    expect(items[0]).toMatchObject({
+    expect(items[1]).toMatchObject({
       icon: '🚀',
       path: '/group/cg_a/tpc_1',
       targetId: 'tpc_1',
       title: 'New',
     });
+  });
+
+  it('carries the current status of a favorited task', async () => {
+    await serverDB.insert(tasks).values([
+      {
+        createdByUserId: userId,
+        id: 'task_personal',
+        identifier: 'T-1',
+        instruction: 'x',
+        seq: 1,
+        status: 'running',
+      },
+      {
+        createdByUserId: userId,
+        id: 'task_ws',
+        identifier: 'T-2',
+        instruction: 'x',
+        seq: 2,
+        status: 'paused',
+        workspaceId,
+      },
+      {
+        createdByUserId: otherUserId,
+        id: 'task_private',
+        identifier: 'T-3',
+        instruction: 'x',
+        seq: 3,
+        status: 'failed',
+        visibility: 'private',
+        workspaceId,
+      },
+      {
+        createdByUserId: userId,
+        id: 'task_trashed',
+        identifier: 'T-4',
+        instruction: 'x',
+        isDeleted: true,
+        seq: 4,
+        status: 'running',
+      },
+    ]);
+    const task = (id: string) => ({
+      path: `/task/${id}`,
+      targetId: id,
+      title: id,
+      type: 'task' as const,
+    });
+
+    expect(await personalModel.add(task('task_personal'))).toMatchObject({ status: 'running' });
+    await personalModel.add(topic('tpc_1'));
+    // A task from another scope, or one that no longer exists, has no status to show.
+    await personalModel.add(task('task_ws'));
+    await personalModel.add(task('task_gone'));
+    // A task in the recycle bin is not a live task either.
+    await personalModel.add(task('task_trashed'));
+    await workspaceModel.add(task('task_ws'));
+    // Another member's private task stays hidden, status included.
+    expect(await workspaceModel.add(task('task_private'))).not.toHaveProperty('status');
+
+    const items = await personalModel.query();
+    expect(items.map((item) => [item.targetId, item.status])).toEqual([
+      ['task_trashed', undefined],
+      ['task_gone', undefined],
+      ['task_ws', undefined],
+      ['tpc_1', undefined],
+      ['task_personal', 'running'],
+    ]);
+
+    await serverDB.update(tasks).set({ status: 'completed' });
+    const statusOf = (rows: Awaited<ReturnType<FavoriteModel['query']>>, targetId: string) =>
+      rows.find((row) => row.targetId === targetId)?.status;
+    expect(statusOf(await personalModel.query(), 'task_personal')).toBe('completed');
+    expect(statusOf(await workspaceModel.query(), 'task_ws')).toBe('completed');
   });
 
   it('keeps personal, workspace and other members’ favorites apart', async () => {
@@ -78,8 +167,8 @@ describe('FavoriteModel', () => {
 
     expect((await personalModel.query()).map((item) => item.targetId)).toEqual(['tpc_personal']);
     expect((await workspaceModel.query()).map((item) => item.targetId)).toEqual([
-      'tpc_ws',
       'tpc_personal',
+      'tpc_ws',
     ]);
   });
 
@@ -151,7 +240,7 @@ describe('FavoriteModel', () => {
     expect((await personalModel.query()).map((item) => item.targetId)).toEqual(['tpc_2']);
   });
 
-  it('reorders, keeping unlisted favorites after the listed ones', async () => {
+  it('reorders, keeping favorites added since the caller read the list on top', async () => {
     const a = await personalModel.add(topic('tpc_a'));
     const b = await personalModel.add(topic('tpc_b'));
     const c = await personalModel.add(topic('tpc_c'));
@@ -159,7 +248,7 @@ describe('FavoriteModel', () => {
 
     await personalModel.reorder([c.id, foreign.id, a.id]);
 
-    expect((await personalModel.query()).map((item) => item.id)).toEqual([c.id, a.id, b.id]);
+    expect((await personalModel.query()).map((item) => item.id)).toEqual([b.id, c.id, a.id]);
     expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
   });
 

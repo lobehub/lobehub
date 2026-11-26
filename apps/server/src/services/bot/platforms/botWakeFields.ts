@@ -7,7 +7,7 @@ import {
   MAX_DUTIES_LENGTH,
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
-} from '@/server/services/agentSignal/scenarios/botWake/config';
+} from '@/server/services/conversationWake/config';
 
 import type { FieldSchema } from './types';
 

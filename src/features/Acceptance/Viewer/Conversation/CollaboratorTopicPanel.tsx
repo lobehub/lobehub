@@ -1,13 +1,14 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar, Button, Flexbox, Text, TextArea, toast } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, TextArea, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PanelRightClose } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import {
   type ConversationContext,
   ConversationProvider,
@@ -40,7 +41,7 @@ const styles = stylex.create({
   },
   empty: {
     color: cssVar.colorTextTertiary,
-    fontSize: 13,
+    fontSize: 14,
     paddingBlock: 24,
     paddingInline: 16,
   },
@@ -194,7 +195,7 @@ const CollaboratorTopicPanel = ({ onCollapse }: { onCollapse: () => void }) => {
           background={collaboration.agent.backgroundColor ?? undefined}
           size={20}
         />
-        <Text ellipsis strong style={{ flex: 1, fontSize: 13, minWidth: 0 }}>
+        <Text ellipsis strong style={{ flex: 1, fontSize: 14, minWidth: 0 }}>
           {collaboration.topicTitle ?? agentName}
         </Text>
         <ActionIcon

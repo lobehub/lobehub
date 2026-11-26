@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "Ältere Version aktiv",
   "artifacts.deploy.publish": "Veröffentlichen",
   "artifacts.deploy.publishNewVersion": "Diese Version veröffentlichen",
+  "artifacts.deploy.quotaUnavailable": "Die Prüfung des Bereitstellungslimits ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut.",
   "artifacts.deploy.serviceOverloaded": "Das Hosting von Artefakten ist vorübergehend überlastet. Versuchen Sie, in Kürze erneut zu veröffentlichen.",
   "artifacts.deploy.success": "Veröffentlicht",
   "artifacts.deploy.writeInProgress": "Eine andere Bereitstellungsänderung ist gerade in Bearbeitung. Versuchen Sie es in Kürze erneut.",

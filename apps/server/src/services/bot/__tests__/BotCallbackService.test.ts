@@ -235,6 +235,28 @@ vi.mock('../deferredReplay', async (importOriginal) => ({
   scheduleDeferredReplay: mockScheduleDeferredReplay,
 }));
 
+const completedLongEvent = (longContent: string): Partial<BotCallbackBody> => ({
+  lastAssistantContent: longContent,
+  reason: 'completed',
+  type: 'completion',
+});
+
+const llmStepEvent = (): Partial<BotCallbackBody> => ({
+  shouldContinue: true,
+  stepType: 'call_llm',
+  type: 'step',
+});
+
+const completedThreadEvent = (): Partial<BotCallbackBody> => ({
+  lastAssistantContent: 'Answer.',
+  platformThreadId: 'discord:guild:channel-id:thread-id',
+  reason: 'completed',
+  topicId: 'topic-1',
+  type: 'completion',
+  userId: 'user-1',
+  userPrompt: 'Question?',
+});
+
 describe('BotCallbackService', () => {
   let service: BotCallbackService;
 
@@ -293,11 +315,7 @@ describe('BotCallbackService', () => {
 
   describe('platform detection from platformThreadId', () => {
     it('should detect discord platform from platformThreadId prefix', async () => {
-      const body = makeBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeBody(llmStepEvent());
 
       await service.handleCallback(body);
 
@@ -305,11 +323,7 @@ describe('BotCallbackService', () => {
     });
 
     it('should detect telegram platform from platformThreadId prefix', async () => {
-      const body = makeTelegramBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeTelegramBody(llmStepEvent());
 
       await service.handleCallback(body);
 
@@ -430,11 +444,7 @@ describe('BotCallbackService', () => {
         decrypt: vi.fn().mockRejectedValue(new Error('decrypt failed')),
       });
 
-      const body = makeBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeBody(llmStepEvent());
 
       // Should not throw because it falls back to raw JSON parse
       await service.handleCallback(body);
@@ -792,11 +802,7 @@ describe('BotCallbackService', () => {
         new Error('Telegram API sendMessage failed: 429 Too Many Requests'),
       );
 
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
@@ -809,11 +815,7 @@ describe('BotCallbackService', () => {
     it('should resume strict delivery after the last checkpointed chunk', async () => {
       const onChunkDelivered = vi.fn().mockResolvedValue(undefined);
       const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body, {
         deliveredChunkCount: 1,
@@ -1010,11 +1012,7 @@ describe('BotCallbackService', () => {
     it('should split long messages into multiple chunks', async () => {
       const longContent = 'A'.repeat(3000);
 
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
@@ -1046,11 +1044,7 @@ describe('BotCallbackService', () => {
       setupCredentials(FAKE_CREDENTIALS, { settings: { charLimit: 4000 } });
       const longContent = 'C'.repeat(6000);
 
-      const body = makeTelegramBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeTelegramBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
@@ -1330,15 +1324,7 @@ describe('BotCallbackService', () => {
       mockGenerateTopicTitle.mockResolvedValue('New Title');
       mockTopicUpdate.mockResolvedValue(undefined);
 
-      const body = makeBody({
-        lastAssistantContent: 'Answer.',
-        platformThreadId: 'discord:guild:channel-id:thread-id',
-        reason: 'completed',
-        topicId: 'topic-1',
-        type: 'completion',
-        userId: 'user-1',
-        userPrompt: 'Question?',
-      });
+      const body = makeBody(completedThreadEvent());
 
       await service.handleCallback(body);
 
@@ -1352,15 +1338,7 @@ describe('BotCallbackService', () => {
       mockGenerateTopicTitle.mockResolvedValue('');
       mockTopicUpdate.mockResolvedValue(undefined);
 
-      const body = makeBody({
-        lastAssistantContent: 'Answer.',
-        platformThreadId: 'discord:guild:channel-id:thread-id',
-        reason: 'completed',
-        topicId: 'topic-1',
-        type: 'completion',
-        userId: 'user-1',
-        userPrompt: 'Question?',
-      });
+      const body = makeBody(completedThreadEvent());
 
       await service.handleCallback(body);
 

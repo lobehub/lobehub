@@ -5,7 +5,11 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../TopicListScope';
-import { useNavigateToAgentTopics, useTopicNavigation } from './useTopicNavigation';
+import {
+  useNavigateToAgentTopics,
+  useOpenActiveAgentTopics,
+  useTopicNavigation,
+} from './useTopicNavigation';
 
 const switchTopicMock = vi.hoisted(() => vi.fn());
 const toggleMobileTopicMock = vi.hoisted(() => vi.fn());
@@ -229,5 +233,36 @@ describe('useTopicNavigation', () => {
     });
 
     expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topics');
+  });
+
+  it('opens the agent topics page on one source when given a trigger', () => {
+    const { result } = renderHook(() => useNavigateToAgentTopics());
+
+    act(() => {
+      result.current('agent-1', 'share');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topics', {
+      query: { trigger: 'share' },
+    });
+  });
+
+  it('leaves the current topic and opens the active agent topics page', () => {
+    const { result } = renderHook(() => useOpenActiveAgentTopics());
+
+    act(() => {
+      result.current?.();
+    });
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topics');
+  });
+
+  it('offers no topics-page entry before an agent is active', () => {
+    chatStoreStateMock.activeAgentId = undefined;
+
+    const { result } = renderHook(() => useOpenActiveAgentTopics());
+
+    expect(result.current).toBeUndefined();
   });
 });

@@ -10,8 +10,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: vi.fn() }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.allowed }) }));
-vi.mock('@/libs/swr', () => ({ mutate: vi.fn() }));
-vi.mock('@/services/verify', () => ({ verifyService: { updateRunTitle: vi.fn() } }));
+vi.mock('@/store/verify', () => ({
+  useVerifyStore: (selector: (s: unknown) => unknown) =>
+    selector({ refreshVerifyReportBundle: vi.fn(), renameVerifyReportRun: vi.fn() }),
+}));
 vi.mock('./useReportUrl', () => ({
   useVerifyReportUrl: () => ({
     reportUrl: 'https://app.lobehub.com/acceptance/acc_1?r=2',

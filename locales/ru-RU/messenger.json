@@ -220,7 +220,6 @@
   "verify.error.generic": "Что-то пошло не так. Пожалуйста, попробуйте снова.",
   "verify.error.missingToken": "Недействительная привязка. Откройте эту страницу через бота.",
   "verify.error.title": "Не удалось подтвердить привязку",
-  "verify.error.unlinkBeforeRelink": "Этот аккаунт LobeHub уже связан с другим аккаунтом Telegram. Отключите его в Настройки → Мессенджер перед привязкой нового.",
   "verify.signInCta": "Войдите, чтобы продолжить",
   "verify.signInRequired": "Пожалуйста, войдите в LobeHub, чтобы подтвердить привязку.",
   "verify.success.backToLobeHub": "Вернуться в LobeHub",

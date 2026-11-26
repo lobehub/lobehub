@@ -166,6 +166,29 @@ describe('batch tool executors', () => {
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'assistant-msg-1' });
   });
 
+  it('merges a batch result into a row the tool created, keeping the state it wrote', async () => {
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Started in the background.', executionTime: 5, success: true },
+      toolMessageId: 'background-placeholder',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall('background-call', 'lobe-agent')],
+      },
+      type: 'call_tools_batch',
+    };
+
+    await callToolsBatch(host)(instruction, createState());
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
+      'background-placeholder',
+      expect.objectContaining({ pluginState: {}, replacePluginState: false }),
+    );
+  });
+
   it('publishes and rethrows tool-message persist errors', async () => {
     const error = new Error('database failed');
     createToolMessage.mockRejectedValueOnce(error);

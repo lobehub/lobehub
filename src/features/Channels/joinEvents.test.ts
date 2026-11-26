@@ -7,6 +7,7 @@ const member = (id: string, joinedAt: number, patch: Partial<ChannelPublicMember
   ({
     actorType: 'agent',
     id,
+    invitedBy: null,
     joinedAt: new Date(joinedAt),
     role: null,
     ...patch,
@@ -16,12 +17,12 @@ const message = (id: string, at: number) =>
   ({ createdAt: new Date(at), id }) as ChannelPublicMessage;
 
 describe('channelJoinEvents', () => {
-  it('groups members added together and credits the owner', () => {
+  it('groups members one person added together and names that person', () => {
     const events = channelJoinEvents([
       owner,
-      member('a', 10),
-      member('b', 20),
-      member('c', 60_000),
+      member('a', 10, { invitedBy: 'owner' }),
+      member('b', 20, { invitedBy: 'owner' }),
+      member('c', 60_000, { invitedBy: 'owner' }),
     ]);
     expect(events.map((event) => event.members.map((entry) => entry.id))).toEqual([
       ['a', 'b'],
@@ -30,13 +31,28 @@ describe('channelJoinEvents', () => {
     expect(events.every((event) => event.inviter === owner)).toBe(true);
   });
 
-  it('does not guess the inviter when an admin could have added members', () => {
-    const [event] = channelJoinEvents([
+  it('names the admin who added a member, not the owner', () => {
+    const admin = member('admin', 0, { actorType: 'user', invitedBy: 'owner', role: 'admin' });
+    const [, event] = channelJoinEvents([
       owner,
-      member('admin', 0, { actorType: 'user', role: 'admin' }),
-      member('a', 60_000),
+      admin,
+      member('a', 60_000, { invitedBy: 'admin' }),
     ]);
+    expect(event.inviter).toBe(admin);
+  });
+
+  it('names no inviter for someone who joined on their own', () => {
+    const [event] = channelJoinEvents([owner, member('a', 60_000, { actorType: 'user' })]);
     expect(event.inviter).toBeUndefined();
+  });
+
+  it('splits members joining together when different people added them', () => {
+    const events = channelJoinEvents([
+      owner,
+      member('a', 10, { invitedBy: 'owner' }),
+      member('b', 20, { actorType: 'user' }),
+    ]);
+    expect(events.map((event) => event.members.map((entry) => entry.id))).toEqual([['a'], ['b']]);
   });
 });
 

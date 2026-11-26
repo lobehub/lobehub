@@ -636,6 +636,16 @@ export class VerifyRunModel {
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
+  /** Stamp the sweep's one re-drive of this round without clobbering the rest of `metadata`. */
+  recordVerifierRedrive = async (runId: string, at: Date): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('verifierRedrivenAt', ${at.toISOString()}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
     await this.db
       .update(verifyRuns)

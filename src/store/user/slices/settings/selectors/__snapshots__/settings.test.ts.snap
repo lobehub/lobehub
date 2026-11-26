@@ -64,6 +64,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
   },
+  "fileEmbedding": {
+    "model": "text-embedding-3-small",
+    "provider": "openai",
+  },
   "followUpAction": {
     "enabled": false,
     "model": "gpt-5.6-luna",
@@ -76,10 +80,6 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   "goal": {
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
-  },
-  "historyCompress": {
-    "model": "gpt-5.6-luna",
-    "provider": "openai",
   },
   "inputCompletion": {
     "enabled": false,

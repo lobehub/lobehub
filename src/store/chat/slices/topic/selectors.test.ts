@@ -8,6 +8,19 @@ import { merge } from '@/utils/merge';
 
 import { topicSelectors } from './selectors';
 
+const topicState = <T>(key: string, topics: T[], total: number) => ({
+  topicDataMap: {
+    [key]: {
+      items: topics,
+      total,
+      currentPage: 0,
+      hasMore: false,
+      pageSize: 20,
+    },
+  },
+  activeAgentId: 'test',
+});
+
 // Mock i18next
 vi.mock('i18next', () => ({
   t: vi.fn().mockImplementation((key) => key),
@@ -231,6 +244,44 @@ describe('topicSelectors', () => {
 
       expect(topicSelectors.hasMoreTopics(state)).toBe(false);
       expect(topicSelectors.hasMoreTopicsForSidebar(state)).toBe(false);
+    });
+  });
+
+  describe('currentTopicDeviceId', () => {
+    const stateWithTopicMetadata = (topicMeta: Record<string, unknown> | undefined) =>
+      merge(initialStore, {
+        ...topicState(
+          topicMapKey({ agentId: 'test' }),
+          [{ id: 'topic-device', metadata: topicMeta }],
+          1,
+        ),
+        activeTopicId: 'topic-device',
+      }) as ChatStore;
+
+    it('prefers the running operation device over the bound device', () => {
+      const state = stateWithTopicMetadata({
+        boundDeviceId: 'device-bound',
+        runningOperation: { deviceId: 'device-running', operationId: 'op-1' },
+      });
+
+      expect(topicSelectors.currentTopicDeviceId(state)).toBe('device-running');
+    });
+
+    it('falls back to the bound device when no run is in flight', () => {
+      const state = stateWithTopicMetadata({
+        boundDeviceId: 'device-bound',
+        runningOperation: null,
+      });
+
+      expect(topicSelectors.currentTopicDeviceId(state)).toBe('device-bound');
+    });
+
+    it('returns undefined when the topic has neither', () => {
+      expect(topicSelectors.currentTopicDeviceId(stateWithTopicMetadata({}))).toBeUndefined();
+      expect(
+        topicSelectors.currentTopicDeviceId(stateWithTopicMetadata(undefined)),
+      ).toBeUndefined();
+      expect(topicSelectors.currentTopicDeviceId(initialStore)).toBeUndefined();
     });
   });
 
@@ -467,18 +518,10 @@ describe('topicSelectors', () => {
         { id: 'topic2', name: 'Topic 2', favorite: false, createAt: '2023-01-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toHaveLength(1); // One time-based group
@@ -492,18 +535,10 @@ describe('topicSelectors', () => {
         { id: 'topic3', name: 'Topic 3', favorite: true, createAt: '2023-01-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
 
@@ -526,18 +561,10 @@ describe('topicSelectors', () => {
         { id: 'topic2', name: 'Topic 2', favorite: false, createAt: '2023-02-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
 
@@ -831,18 +858,7 @@ describe('topicSelectors', () => {
     ];
 
     const createStateWithTopics = (topics: any[]) =>
-      merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      merge(initialStore, topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
 
     it('should group by createdAt when sortBy is createdAt', () => {
       const state = createStateWithTopics(topicsWithDifferentTimes);

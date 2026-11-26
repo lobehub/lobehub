@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   btn: css`
@@ -58,7 +59,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:last-child {

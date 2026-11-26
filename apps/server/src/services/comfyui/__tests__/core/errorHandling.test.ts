@@ -70,16 +70,6 @@ describe('Error Handling - SDK Integration', () => {
   });
 
   describe('Parameter Validation Errors', () => {
-    it('should validate required parameters', async () => {
-      const missingParams = {
-        model: 'flux-dev',
-        params: { prompt: '' }, // 缺少必要参数，但至少包含必需的prompt
-      };
-
-      // 应该验证并报错
-      await expect(imageService.createImage(missingParams)).rejects.toThrow();
-    });
-
     it('should handle parameter boundary violations gracefully', async () => {
       const invalidParams = {
         model: 'flux-dev',

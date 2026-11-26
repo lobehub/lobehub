@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { ImportFromMarketParams, ImportFromMarketState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const ImportFromMarketInspector = memo<
   BuiltinInspectorProps<ImportFromMarketParams, ImportFromMarketState>
@@ -47,9 +44,17 @@ export const ImportFromMarketInspector = memo<
       {!isLoading &&
         hasResult &&
         (isSuccess ? (
-          <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+          <Check
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorSuccess}
+            size={14}
+          />
         ) : (
-          <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+          <X
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorError}
+            size={14}
+          />
         ))}
     </div>
   );

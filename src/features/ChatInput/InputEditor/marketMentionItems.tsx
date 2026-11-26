@@ -1,7 +1,8 @@
 import type { ISlashMenuOption } from '@lobehub/editor';
-import { Avatar, cssVar, Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
+import Avatar from '@/components/Avatar';
 import { discoverService } from '@/services/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import type { DiscoverAssistantItem, DiscoverSkillItem } from '@/types/discover';

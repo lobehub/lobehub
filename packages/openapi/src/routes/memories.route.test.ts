@@ -24,10 +24,10 @@ vi.mock('../controllers/memory.controller', () => ({
       return c.json({ data: [], success: true });
     }
     deleteAll(c: any) {
-      return c.json({ data: { success: true }, success: true });
+      return c.json({ data: { count: 2, deleted: true }, success: true });
     }
     deleteEntry(c: any) {
-      return c.json({ data: { success: true }, success: true });
+      return c.json({ data: { deleted: true, id: c.req.param('id') }, success: true });
     }
     listCategory(c: any) {
       return c.json({ data: [], success: true });
@@ -36,6 +36,7 @@ vi.mock('../controllers/memory.controller', () => ({
 }));
 
 const { default: MemoryRoutes } = await import('./memories.route');
+const { DeletedResourceSchema, DeletedResourcesSchema } = await import('../types/common.type');
 
 /** A request authenticated as an API key holding exactly `scopes`. */
 const requestAs = (scopes: string[], path: string, init?: { method?: string }) => {
@@ -89,6 +90,8 @@ describe('destructive memory routes', () => {
     const res = await requestAs(['user:write'], '/', { method: 'DELETE' });
 
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(() => DeletedResourcesSchema.parse(body.data)).not.toThrow();
   });
 
   it('refuses a chat-only key on DELETE /memories/:category/:id', async () => {
@@ -101,5 +104,7 @@ describe('destructive memory routes', () => {
     const res = await requestAs(['user:write'], '/identities/mem-1', { method: 'DELETE' });
 
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(DeletedResourceSchema.parse(body.data)).toEqual({ deleted: true, id: 'mem-1' });
   });
 });

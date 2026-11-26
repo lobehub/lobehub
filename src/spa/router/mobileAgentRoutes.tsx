@@ -45,6 +45,8 @@ const agentSubPages = overlayRoutes(agentPageChildren, {
       mobileShellHeader: true,
     },
   }),
+  // With no visitor topic to open there is no page header; the shell adds back + the sidebar drawer.
+  'visitor': (route) => ({ ...route, handle: { ...route.handle, mobileShellHeader: true } }),
   // Served from the task workspace (`mobileWorkspaceRoutes.tsx`) on mobile.
   'task/:taskId/:slug?': dropRoute,
 });

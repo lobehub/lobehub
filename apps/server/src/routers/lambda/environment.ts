@@ -1,4 +1,3 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -7,7 +6,11 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { EnvironmentModel } from '@/database/models/environment';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { ConnectorDataService } from '@/server/services/connectorData';
+import {
+  listScopeGitHubRepositories,
+  listScopeGitHubRepositoryBranches,
+  ScmRepositoriesUnavailableError,
+} from '@/server/services/scm/repositories';
 
 import { configurationSchema, newConfigurationSchema } from './_schema/environment';
 import {
@@ -27,14 +30,6 @@ import { idSchema, nameSchema, visibilitySchema } from './sandboxStorage/schemas
  * drive and is managed through `sandboxStorage`, which does ask.
  */
 
-/**
- * "You have not connected GitHub" travels as an error from the connector layer,
- * but for the picker it is an answer, not a failure — the one it is there to
- * help the user fix.
- */
-const isGithubUnavailable = (error: unknown): boolean =>
-  error instanceof ConnectorDataError && error.provider === 'github' && !error.retryable;
-
 const environmentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -49,17 +44,18 @@ const environmentProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
   });
 });
 
+/**
+ * GitHub reads go through the scope's GitHub App installations — the same
+ * grant `resolveScmCloneCredential` clones with — so the picker offers exactly
+ * what a build from the pick can check out. Not the person's own OAuth
+ * connection: that sees more than any build can clone, and depends on a proxy
+ * the clone never uses.
+ */
 const githubProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
-    ctx: {
-      connectorDataService: new ConnectorDataService(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      ),
-    },
+    ctx: { scope: { userId: ctx.userId, workspaceId: ctx.workspaceId ?? null } },
   });
 });
 
@@ -88,49 +84,71 @@ export const environmentProcedures = {
 
   /**
    * The branches of one repository, so the environment's checkout target is
-   * picked from what exists rather than typed. No connection is not an error,
-   * it is `connected: false`.
+   * picked from what exists rather than typed. No installation granting the
+   * repository is not an error, it is `connected: false`.
    */
   listGithubBranches: githubProcedure
     .input(z.object({ owner: z.string().min(1).max(255), repository: z.string().min(1).max(255) }))
     .query(async ({ ctx, input }) => {
-      try {
-        const client = await ctx.connectorDataService.getGitHubClient();
-        const branches = await client.listRepositoryBranches(input.owner, input.repository);
+      const branches = await listScopeGitHubRepositoryBranches(ctx.serverDB, ctx.scope, {
+        limit: MAX_REPOSITORY_BRANCHES,
+        repoFullName: `${input.owner}/${input.repository}`,
+      });
+      if (!branches) return { branches: [], connected: false, truncated: false };
 
-        return {
-          branches,
-          connected: true,
-          // At the ceiling the list may be missing branches, and a picker
-          // that only offers what it was given would make those unselectable.
-          truncated: branches.length >= MAX_REPOSITORY_BRANCHES,
-        };
-      } catch (error) {
-        if (isGithubUnavailable(error)) return { branches: [], connected: false, truncated: false };
-
-        throw error;
-      }
+      return {
+        branches,
+        connected: true,
+        // At the ceiling the list may be missing branches, and a picker
+        // that only offers what it was given would make those unselectable.
+        truncated: branches.length >= MAX_REPOSITORY_BRANCHES,
+      };
     }),
 
   /**
-   * Every repository this account can build an environment from, newest
-   * activity first, each carrying the owner it belongs to so the caller can
-   * group them without a second request per organization.
+   * Every repository this scope's GitHub App installations can read, newest
+   * push first, each carrying the owner it belongs to so the caller can group
+   * them without a second request per organization.
    *
-   * A missing GitHub connection is NOT an error here: it is the state the
-   * picker exists to resolve, so it answers `connected: false` and lets the
-   * UI offer the connection instead of a failure.
+   * No installation is NOT an error here: it is the state the picker exists
+   * to resolve, so it answers `connected: false` and lets the UI offer the
+   * GitHub integration instead of a failure. `configured: false` says that
+   * offer would lead nowhere: this server has no GitHub App to install.
+   * `truncated` says an installation held more than the listing reads, so a
+   * repository may be missing from the choices.
    */
   listGithubRepositories: githubProcedure.query(async ({ ctx }) => {
+    let listed: Awaited<ReturnType<typeof listScopeGitHubRepositories>>;
     try {
-      const client = await ctx.connectorDataService.getGitHubClient();
-
-      return { connected: true, repositories: await client.listAccessibleRepositories() };
+      listed = await listScopeGitHubRepositories(ctx.serverDB, ctx.scope);
     } catch (error) {
-      if (isGithubUnavailable(error)) return { connected: false, repositories: [] };
+      if (!(error instanceof ScmRepositoriesUnavailableError)) throw error;
 
-      throw error;
+      throw new TRPCError({ cause: error.cause, code: 'BAD_GATEWAY', message: error.message });
     }
+    if (!listed.configured || listed.installations === 0) {
+      return {
+        configured: listed.configured,
+        connected: false,
+        repositories: [],
+        truncated: false,
+      };
+    }
+
+    return {
+      configured: true,
+      connected: true,
+      truncated: listed.truncated,
+      repositories: listed.repositories.map((item) => {
+        const [owner, name] = item.fullName.split('/');
+        return {
+          defaultBranch: item.defaultBranch,
+          isPrivate: item.private,
+          name,
+          owner,
+        };
+      }),
+    };
   }),
 
   /**

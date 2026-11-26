@@ -1,10 +1,9 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Form } from '@lobehub/ui/form';
 import { useTranslation } from 'react-i18next';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import StorageSkeleton from '@/components/Skeleton/Settings/tabs/Storage';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -26,14 +25,15 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('tab.storage')} />}
-      <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
-        <Form.Group collapsible={false} title={t('storage.actions.title')} variant="filled">
-          <ArticleSkeleton rows={4} />
-        </Form.Group>
-      </Flexbox>
-      <Flexbox style={{ display: isLoading ? 'none' : 'flex' }}>
-        <Advanced />
-      </Flexbox>
+      {/* Same groups the route and chunk fallbacks draw. The wrapper keeps the
+          actions form and account deletion out of the container's 36px gap. */}
+      {isLoading ? (
+        <StorageSkeleton.Body />
+      ) : (
+        <Flexbox>
+          <Advanced />
+        </Flexbox>
+      )}
     </>
   );
 };

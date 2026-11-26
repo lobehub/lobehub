@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FavoriteItem as FavoriteItemType } from '@lobechat/types';
-import { toast } from '@lobehub/ui';
+import { Flexbox, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
@@ -26,7 +26,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { FavoriteIcon } from '@/features/Favorites';
 import { toFavoritePath } from '@/features/Favorites/path';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -41,6 +40,8 @@ import {
   suppressNextClick,
 } from '../sortableRow';
 import FavoriteItem from './FavoriteItem';
+import FavoriteItemIcon from './FavoriteItemIcon';
+import { useTaskFavoritesRefresh } from './useTaskFavoritesRefresh';
 
 const styles = stylex.create({
   overlay: {
@@ -86,6 +87,7 @@ SortableFavoriteItem.displayName = 'SortableFavoriteItem';
 const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => {
   const { t } = useTranslation('common');
   const reorderFavorites = useHomeStore((s) => s.reorderFavorites);
+  useTaskFavoritesRefresh();
   const { pathname } = useActiveLocation();
   const currentPath = toFavoritePath(pathname, useActiveWorkspaceSlug());
 
@@ -127,16 +129,18 @@ const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => 
       onDragStart={handleDragStart}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {items.map((item) => (
-          <SortableFavoriteItem active={item.path === currentPath} item={item} key={item.id} />
-        ))}
+        <Flexbox gap={1}>
+          {items.map((item) => (
+            <SortableFavoriteItem active={item.path === currentPath} item={item} key={item.id} />
+          ))}
+        </Flexbox>
       </SortableContext>
       {createPortal(
         <DragOverlay dropAnimation={sortableRowDropAnimation}>
           {activeItem ? (
             <div {...stylex.props(styles.overlay)}>
               <NavItem
-                icon={<FavoriteIcon icon={activeItem.icon} type={activeItem.type} />}
+                icon={<FavoriteItemIcon item={activeItem} />}
                 // The card itself is the surface: no hover tint on top of the white.
                 style={{ backgroundColor: 'transparent' }}
                 title={activeItem.title}

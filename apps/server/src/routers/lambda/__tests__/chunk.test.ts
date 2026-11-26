@@ -13,6 +13,13 @@ import { DocumentService } from '@/server/services/document';
 import { chunkRouter } from '../chunk';
 
 vi.mock('@/database/models/asyncTask', () => ({ AsyncTaskModel: vi.fn() }));
+// readKnowledge checks whether a docs_* document was deleted from every agent; these
+// documents never were.
+vi.mock('@/database/models/agentDocuments', () => ({
+  AgentDocumentModel: vi.fn(function () {
+    return { listRevokedFromAllAgents: async () => [] };
+  }),
+}));
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/embedding', () => ({ EmbeddingModel: vi.fn() }));

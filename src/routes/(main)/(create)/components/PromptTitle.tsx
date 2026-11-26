@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import GenerationMediaModeSegment from '@/routes/(main)/(create)/features/GenerationInput/GenerationMediaModeSegment';
 
 interface PromptTitleProps {
-  mode: 'image' | 'video';
+  mode: 'image' | 'music' | 'video';
 }
 
 const PromptTitle = memo<PromptTitleProps>(({ mode }) => {

@@ -2,19 +2,20 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- leftContent is an arbitrary ReactNode
 import { Center, createStaticStyles, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, use, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
-import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -27,52 +28,40 @@ import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import { useDocumentDrop } from '../InputEditor/ReferDocument/useDocumentDrop';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
+import { composerHoverMarker } from '../markers.stylex';
+import { McpAppContextChips } from '../McpAppContextChips';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    .show-on-hover {
-      opacity: 0;
-    }
+const styles = stylex.create({
+  footnote: { fontSize: '10px' },
+  fullscreen: {
+    position: 'absolute',
+    zIndex: 100,
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    marginBlockStart: '0',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  inputFullscreen: {
+    borderStyle: 'none',
+    borderStartStartRadius: '0 !important',
+    borderStartEndRadius: '0 !important',
+    borderEndStartRadius: '0 !important',
+    borderEndEndRadius: '0 !important',
+  },
+  leftActions: { flex: 'none', minWidth: '0' },
+  leftSlot: { overflow: 'hidden', flex: '1', minWidth: '0' },
+});
 
-    &:hover {
-      .show-on-hover {
-        opacity: 1;
-      }
-    }
-  `,
-  footnote: css`
-    font-size: 10px;
-  `,
-  fullscreen: css`
-    position: absolute;
-    z-index: 100;
-    inset: 0;
-
-    width: 100%;
-    height: 100%;
-    margin-block-start: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  inputFullscreen: css`
-    border: none;
-    border-radius: 0 !important;
-  `,
+const fallback = createStaticStyles(({ css }) => ({
   leftActions: css`
-    flex: none;
-    min-width: 0;
-
     > * {
       flex: none !important;
     }
-  `,
-  leftSlot: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
   `,
 }));
 
@@ -136,18 +125,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       systemStatusSelectors.chatInputHeight(s),
       s.updateSystemStatus,
     ]);
-    const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
-    const hasContextSelections = useFileStore(
-      fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
-    );
-    const uploadContextKey = useChatInputUploadKey();
-    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem(uploadContextKey));
-    const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
+    const [slashMenuRef, expand, showTypoBar, editor] = useChatInputStore((s) => [
       s.slashMenuRef,
       s.expand,
       s.showTypoBar,
       s.editor,
-      s.leftActions,
     ]);
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
@@ -182,9 +164,15 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       setExpand(false);
     }, [chatKey, editor, setExpand]);
 
-    const shouldShowContextContainer =
-      leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;
-    const contextContainerNode = shouldShowContextContainer && <ContextContainer />;
+    // Always mounted, at zero height while empty: mounting it with the first attachment
+    // would skip its height transition (its first measurement never animates), and
+    // unmounting it with the last would cut the card's exit and the collapse.
+    const contextContainerNode = (
+      <>
+        <McpAppContextChips />
+        <ContextContainer />
+      </>
+    );
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>
@@ -205,7 +193,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-        <Flexbox horizontal align={'center'} className={styles.leftActions}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={cx(stylex.props(styles.leftActions).className, fallback.leftActions)}
+        >
           {leftContent ?? (
             <ActionBar
               disableCollapse
@@ -220,7 +212,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       </Flexbox>
     );
     const leftSlot = noticeNode ? (
-      <Flexbox horizontal align={'center'} className={styles.leftSlot}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.leftSlot).className}>
         {leftSlotContent}
       </Flexbox>
     ) : (
@@ -229,7 +221,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const content = (
       <Flexbox
-        className={cx(styles.container, expand && styles.fullscreen)}
+        className={stylex.props(composerHoverMarker, expand && styles.fullscreen).className}
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
@@ -251,15 +243,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                 style={actionBarStyle ?? { paddingRight: 8 }}
                 right={
                   loadingRightSlot ??
-                  rightContent ??
-                  (sendAreaPrefix ? (
-                    <Flexbox horizontal align={'center'} gap={6}>
-                      {sendAreaPrefix}
-                      <SendArea hideContextWindow={hasControlBar} />
-                    </Flexbox>
-                  ) : (
-                    <SendArea hideContextWindow={hasControlBar} />
-                  ))
+                  rightContent ?? (
+                    <SendArea hideContextWindow={hasControlBar} prefix={sendAreaPrefix} />
+                  )
                 }
               />
             )
@@ -275,7 +261,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             updateSystemStatus({ chatInputHeight: height });
           }}
           {...inputContainerProps}
-          className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
+          className={cx(
+            stylex.props(expand && styles.inputFullscreen).className,
+            inputContainerProps?.className,
+          )}
         >
           <InputEditor
             initialContent={initialContent}
@@ -286,7 +275,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
-            <Text className={styles.footnote} type={'secondary'}>
+            <Text className={stylex.props(styles.footnote).className} type={'secondary'}>
               {t('input.disclaimer')}
             </Text>
           </Center>

@@ -61,7 +61,7 @@ Three passes — precedent, outward, inward:
 
 1. Identify the pipeline and list the candidate layers where this fix could live.
 2. Ask: is the root cause specific to one variant (one provider, one platform, one client) or common to the whole class?
-3. Variant-specific → the fix belongs in the variant's own layer: a DeepSeek parameter quirk goes in `packages/model-runtime/src/providers/deepseek/`, not in the shared `core/openaiCompatibleFactory/` where it would branch for every provider. Class-wide → the fix belongs in the shared layer, not replicated at one call site.
+3. Variant-specific → the fix belongs in the variant's own layer: a DeepSeek parameter quirk goes in `packages/model-runtime/src/providers/deepseek/`, not in the shared `core/openaiCompatible/` where it would branch for every provider. Class-wide → the fix belongs in the shared layer, not replicated at one call site.
 4. Check the shared layer's existing extension points first (factory options, hooks, per-variant config) — the repo usually already provides a seam for variant behavior; adding an `if (variant === ...)` branch to shared code when a seam exists is the violation.
 
 Large-repo fallback: if a single `rg` exceeds \~30s, restrict to the changed files' top-level directories plus the default reuse sources.

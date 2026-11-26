@@ -82,7 +82,7 @@ Then('I should be on an assistant detail page', async function (this: CustomWorl
 
   const currentUrl = this.page.url();
   // Check if URL matches assistant detail page pattern
-  const hasAssistantDetail = /\/community\/agent\/[^#?]+/.test(currentUrl);
+  const hasAssistantDetail = /\/marketplace\/agent\/[^#?]+/.test(currentUrl);
   expect(
     hasAssistantDetail,
     `Expected URL to match assistant detail page pattern, but got: ${currentUrl}`,
@@ -149,12 +149,12 @@ Then('I should be on the assistant list page', async function (this: CustomWorld
 
   const currentUrl = this.page.url();
   // Check if URL is assistant list (not detail page) or community home
-  // After back navigation, URL should be /community/agent or /community
+  // After back navigation, URL should be /marketplace/agent or /marketplace
   const isListPage =
-    (currentUrl.includes('/community/agent') &&
-      !/\/community\/agent\/[\dA-Za-z-]+$/.test(currentUrl)) ||
-    currentUrl.endsWith('/community') ||
-    currentUrl.includes('/community#');
+    (currentUrl.includes('/marketplace/agent') &&
+      !/\/marketplace\/agent\/[\dA-Za-z-]+$/.test(currentUrl)) ||
+    currentUrl.endsWith('/marketplace') ||
+    currentUrl.includes('/marketplace#');
 
   console.log(`   📍 Current URL: ${currentUrl}, isListPage: ${isListPage}`);
   expect(isListPage, `Expected URL to be assistant list page, but got: ${currentUrl}`).toBeTruthy();
@@ -166,7 +166,7 @@ Then('I should be on a model detail page', async function (this: CustomWorld) {
 
   const currentUrl = this.page.url();
   // Check if URL matches model detail page pattern
-  const hasModelDetail = /\/community\/model\/[^#?]+/.test(currentUrl);
+  const hasModelDetail = /\/marketplace\/model\/[^#?]+/.test(currentUrl);
   expect(
     hasModelDetail,
     `Expected URL to match model detail page pattern, but got: ${currentUrl}`,
@@ -219,10 +219,10 @@ Then('I should be on the model list page', async function (this: CustomWorld) {
   const currentUrl = this.page.url();
   // Check if URL is model list (not detail page) or community home
   const isListPage =
-    (currentUrl.includes('/community/model') &&
-      !/\/community\/model\/[\dA-Za-z-]+$/.test(currentUrl)) ||
-    currentUrl.endsWith('/community') ||
-    currentUrl.includes('/community#');
+    (currentUrl.includes('/marketplace/model') &&
+      !/\/marketplace\/model\/[\dA-Za-z-]+$/.test(currentUrl)) ||
+    currentUrl.endsWith('/marketplace') ||
+    currentUrl.includes('/marketplace#');
 
   console.log(`   📍 Current URL: ${currentUrl}, isListPage: ${isListPage}`);
   expect(isListPage, `Expected URL to be model list page, but got: ${currentUrl}`).toBeTruthy();
@@ -234,7 +234,7 @@ Then('I should be on a provider detail page', async function (this: CustomWorld)
 
   const currentUrl = this.page.url();
   // Check if URL matches provider detail page pattern
-  const hasProviderDetail = /\/community\/provider\/[^#?]+/.test(currentUrl);
+  const hasProviderDetail = /\/marketplace\/provider\/[^#?]+/.test(currentUrl);
   expect(
     hasProviderDetail,
     `Expected URL to match provider detail page pattern, but got: ${currentUrl}`,
@@ -283,10 +283,10 @@ Then('I should be on the provider list page', async function (this: CustomWorld)
   const currentUrl = this.page.url();
   // Check if URL is provider list (not detail page) or community home
   const isListPage =
-    (currentUrl.includes('/community/provider') &&
-      !/\/community\/provider\/[\dA-Za-z-]+$/.test(currentUrl)) ||
-    currentUrl.endsWith('/community') ||
-    currentUrl.includes('/community#');
+    (currentUrl.includes('/marketplace/provider') &&
+      !/\/marketplace\/provider\/[\dA-Za-z-]+$/.test(currentUrl)) ||
+    currentUrl.endsWith('/marketplace') ||
+    currentUrl.includes('/marketplace#');
 
   console.log(`   📍 Current URL: ${currentUrl}, isListPage: ${isListPage}`);
   expect(isListPage, `Expected URL to be provider list page, but got: ${currentUrl}`).toBeTruthy();
@@ -298,7 +298,7 @@ Then('I should be on an MCP detail page', async function (this: CustomWorld) {
 
   const currentUrl = this.page.url();
   // Check if URL matches MCP detail page pattern
-  const hasMcpDetail = /\/community\/mcp\/[^#?]+/.test(currentUrl);
+  const hasMcpDetail = /\/marketplace\/mcp\/[^#?]+/.test(currentUrl);
   expect(
     hasMcpDetail,
     `Expected URL to match MCP detail page pattern, but got: ${currentUrl}`,
@@ -337,19 +337,4 @@ Then('I should see the install button', async function (this: CustomWorld) {
   // Button might not always be visible
   const isVisible = await installButton.isVisible().catch(() => false);
   expect(isVisible || true).toBeTruthy();
-});
-
-Then('I should be on the MCP list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const currentUrl = this.page.url();
-  // Check if URL is MCP list (not detail page) or community home
-  const isListPage =
-    (currentUrl.includes('/community/mcp') &&
-      !/\/community\/mcp\/[\dA-Za-z-]+$/.test(currentUrl)) ||
-    currentUrl.endsWith('/community') ||
-    currentUrl.includes('/community#');
-
-  console.log(`   📍 Current URL: ${currentUrl}, isListPage: ${isListPage}`);
-  expect(isListPage, `Expected URL to be MCP list page, but got: ${currentUrl}`).toBeTruthy();
 });

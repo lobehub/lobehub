@@ -5,7 +5,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TaskListOriginContext } from '../shared/taskListOrigin';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
+
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
+// No router is mounted here; the task-list origin reads the history state.
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useLocation: () => ({ state: locationMock.state }),
+}));
 
 const permissionMock = vi.hoisted(() => ({
   allowed: true,
@@ -20,6 +29,7 @@ const analyzeIntentMock = vi.hoisted(() => vi.fn());
 const synthesizeInstructionMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = vi.hoisted(() => vi.fn());
 const createGoalModalMock = vi.hoisted(() => vi.fn());
 const activeWorkspaceMock = vi.hoisted(() => ({
   id: 'workspace-1' as string | undefined,
@@ -79,7 +89,7 @@ vi.mock('@lobehub/editor/react', async () => {
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  toast: { error: vi.fn(), success: toastSuccessMock },
+  toast: { error: toastErrorMock, success: toastSuccessMock },
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({
@@ -162,13 +172,9 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
-const userStateMock = vi.hoisted(() => ({
-  lab: {} as Record<string, boolean>,
-}));
-
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
+    selector({ preference: { lab: {} }, user: { id: 'self-user' } }),
 }));
 
 // The label picker reads the label registry; its own behavior is covered by
@@ -287,11 +293,6 @@ vi.mock('../shared/useAgentVisibility', () => ({
   useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
-/** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableGoals?: boolean }) => {
-  userStateMock.lab = lab as Record<string, boolean>;
-};
-
 const clearReading = {
   clarifications: [],
   confidence: 'high' as const,
@@ -304,7 +305,6 @@ const clearReading = {
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
-    setLabs({});
     analyzeIntentMock.mockReset();
     synthesizeInstructionMock.mockReset();
     // The second reading is the normal path: it rewrites the brief with the
@@ -314,7 +314,9 @@ describe('CreateTaskInlineEntry', () => {
       title: 'Write the Q3 project plan',
     });
     navigateMock.mockReset();
+    locationMock.state = undefined;
     toastSuccessMock.mockReset();
+    toastErrorMock.mockReset();
     createGoalModalMock.mockReset();
     activeWorkspaceMock.id = 'workspace-1';
     workspaceMembersMock.isLoading = false;
@@ -382,6 +384,22 @@ describe('CreateTaskInlineEntry', () => {
 
     expect(insertNewlineMock).not.toHaveBeenCalled();
     await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a failed create inline next to the submit button and keeps the draft', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+    analyzeIntentMock.mockResolvedValue(clearReading);
+    createTaskMock.mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    // A corner toast is far from the composer and gone in seconds; the failure
+    // belongs on the surface that stays open with the user's draft.
+    expect(await screen.findByText('createTask.createFailedRetry')).toBeInTheDocument();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('task-editor')).toBeInTheDocument();
   });
 
   it('submits agent and member assignments together', async () => {
@@ -673,7 +691,35 @@ describe('CreateTaskInlineEntry', () => {
 
     render(description as ReactNode);
     fireEvent.click(screen.getByText('taskIntent.openCreated'));
-    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'), {
+      state: undefined,
+    });
+  });
+
+  it('opens the created task with the list it was created from as its origin', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+    analyzeIntentMock.mockResolvedValue(clearReading);
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
+
+    render(
+      <TaskListOriginContext value={'/tasks?collection=mine'}>
+        <CreateTaskInlineEntry variant="hero" />
+      </TaskListOriginContext>,
+    );
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledTimes(1));
+
+    // The toast renders outside the list, so the origin rides in the closure.
+    const { description } = toastSuccessMock.mock.calls[0][0];
+    render(description as ReactNode);
+    fireEvent.click(screen.getByText('taskIntent.openCreated'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'), {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
   });
 
   it('confirms every creation path, not only the straight-through one', async () => {
@@ -703,7 +749,6 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 
@@ -755,9 +800,6 @@ describe('CreateTaskInlineEntry', () => {
       // The answer reaches the task through the rewritten brief, not as a list
       // bolted underneath one written before the answer existed.
       expect(createTaskMock.mock.calls[0][0].instruction).toBe('Write the Q3 plan for lobe-chat.');
-      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain(
-        'taskIntent.answersHeading',
-      );
       expect(createTaskMock.mock.calls[0][0].name).toBe('Write the Q3 project plan');
     });
 

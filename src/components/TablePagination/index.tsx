@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useInterfaceDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -28,6 +29,9 @@ const styles = stylex.create({
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  rootCompact: {
+    paddingBlock: '6px',
   },
   total: {
     fontSize: '13px',
@@ -84,6 +88,7 @@ const TablePagination = memo<TablePaginationProps>(
     total,
   }) => {
     const { t } = useTranslation('spend');
+    const compact = useInterfaceDensity() === 'compact';
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(current, totalPages);
@@ -101,7 +106,7 @@ const TablePagination = memo<TablePaginationProps>(
         align={'center'}
         gap={12}
         justify={'space-between'}
-        {...sx([styles.root], className)}
+        {...sx(styles.root, compact && styles.rootCompact, className)}
       >
         <span {...stylex.props(styles.total)}>
           {t('table.pagination.range', {

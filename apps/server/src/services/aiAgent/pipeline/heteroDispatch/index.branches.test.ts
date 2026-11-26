@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   publishAgentRuntimeInit: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
+  waitForVerifyPlan: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
   scheduleTimedOutDispatchConfirmation: vi.fn(),
@@ -32,7 +33,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
   CompletionLifecycle: vi.fn().mockImplementation(function () {
-    return { completeOperation: mocks.completeOperation, recordStart: mocks.recordStart };
+    return {
+      completeOperation: mocks.completeOperation,
+      recordStart: mocks.recordStart,
+      waitForVerifyPlan: mocks.waitForVerifyPlan,
+    };
   }),
 }));
 
@@ -47,7 +52,10 @@ vi.mock('@/server/services/agentRuntime/hooks', () => ({
 
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
-    return { getHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined) };
+    return {
+      getHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
+      getThreadResumeSessionId: vi.fn().mockResolvedValue(undefined),
+    };
   }),
 }));
 
@@ -117,6 +125,7 @@ const createDeps = (overrides: Partial<HeteroDispatchDeps> = {}) => {
     findById: vi.fn().mockResolvedValue({ metadata: {} }),
     patchRunningOperation: vi.fn().mockResolvedValue(true),
     updateMetadata: vi.fn().mockResolvedValue(undefined),
+    settleRunningOperation: vi.fn().mockResolvedValue({ status: 'settled' }),
   };
   const deps = {
     bindTopicWorkingDirectory: vi.fn().mockResolvedValue(undefined),
@@ -191,6 +200,7 @@ const finalizeParams = (fields: Record<string, unknown>) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.recordStart.mockResolvedValue(true);
+  mocks.waitForVerifyPlan.mockResolvedValue(undefined);
   mocks.signHeteroOperationJWT.mockResolvedValue('op-jwt');
   mocks.signUserJWT.mockResolvedValue('user-jwt');
   mocks.finalizeHeteroDispatchError.mockResolvedValue(true);
@@ -229,6 +239,54 @@ describe('Channel history context', () => {
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },
   );
+});
+
+describe('goal management capability', () => {
+  it.each([
+    // The user typed this turn, so "run a goal" works without the `/goal` prefix.
+    ['a chat turn the user sent', { trigger: 'chat' }, true],
+    ['a run the user scheduled', { trigger: 'scheduled', userMessageId: undefined }, true],
+    // A server-started `chat` delivery (background results) writes no user row.
+    ['a chat delivery with no user turn', { trigger: 'chat', userMessageId: undefined }, false],
+    // Goal planning and supervision turns carry no trigger: no goal spawns goals.
+    ['a goal planning turn', { trigger: undefined }, false],
+    ['a bot message', { trigger: 'bot' }, false],
+    ['an inbox wakeup', { trigger: 'inbox' }, false],
+  ])('for %s: %s', async (_, overrides, granted) => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'run a goal to polish the mailbox', ...overrides },
+      ),
+      createInput('claude-code'),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities.includes('goal:manage')).toBe(granted);
+  });
+
+  it('keeps it out of a Task run the user did not type', async () => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'Implement this step of the goal', trigger: 'chat' },
+      ),
+      createInput('claude-code', { operationTaskId: 'task_1' }),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities).not.toContain('goal:manage');
+  });
 });
 
 describe('dispatchHeteroAgent — preparation failures', () => {
@@ -306,6 +364,27 @@ describe('dispatchHeteroAgent — remote platform agents', () => {
       }),
     );
     expect(mocks.executeToolCall).not.toHaveBeenCalled();
+  });
+
+  it('names the channel when the device is limited to other channels', async () => {
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' }), {
+        canUseDevice: false,
+        deviceAccessReason: 'bot-channel-restricted',
+      }),
+      createInput('openclaw'),
+    );
+
+    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+      deps,
+      finalizeParams({
+        detail: 'Running agents on a bound device is not allowed in this channel.',
+        message: 'Device access denied',
+      }),
+    );
   });
 
   it('fails when no device is available', async () => {
@@ -538,6 +617,35 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
   });
 
+  // Regression: the plan was started without being waited for, so a dispatch that
+  // returned first lost it and the builder's `plan state` read null all run.
+  it('holds the dispatch until the verify plan has settled', async () => {
+    const { deps } = createDeps();
+    let settlePlan = () => {};
+    mocks.waitForVerifyPlan.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settlePlan = resolve;
+      }),
+    );
+
+    const dispatch = dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+    await vi.waitFor(() => expect(mocks.waitForVerifyPlan).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
+
+    settlePlan();
+    await dispatch;
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+  });
+
   it('sends the Claude Code account the agent is routed to', async () => {
     // Without it the device always spawned on its default login, so picking an
     // account in Manage accounts changed nothing for a device-bound agent.
@@ -622,6 +730,38 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     expect(deps.bindTopicWorkingDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ config: workingDirectoryConfig }),
     );
+  });
+
+  it('spawns in a worktree the app created on the first send, without describing it', async () => {
+    // Fixed before the first turn, so the CLI session starts — and stays — there.
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/wt/quiet-hill', autoCreated: true, branch: 'lobehub/quiet-hill' },
+      path: '/repo',
+      repoType: 'github' as const,
+      sessionPath: '/wt/quiet-hill',
+    };
+    const { deps, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({
+      metadata: {
+        boundDeviceId: 'dev-1',
+        workingDirectory: '/wt/quiet-hill',
+        workingDirectoryConfig,
+      },
+    });
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(dispatched.cwd).toBe('/wt/quiet-hill');
+    expect(dispatched.systemContext ?? '').not.toContain('<active_worktree>');
   });
 
   it('keeps a timed-out dispatch alive and settles it later as a device timeout', async () => {
@@ -834,5 +974,85 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
 
       expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
     });
+  });
+});
+
+describe('explicit topic-status opt-in', () => {
+  const remoteConfig = (extra: Record<string, unknown> = {}) => ({
+    executionTarget: 'device',
+    heterogeneousProvider: { platformAgentId: 'platform-agent', type: 'openclaw' },
+    ...extra,
+  });
+  it('installs running with its marker before dispatch for an opted-in root event run', async () => {
+    const { deps, topicModel } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+      createInput('openclaw', { markTopicRunning: true }),
+    );
+    expect(topicModel.updateMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        runningOperation: expect.objectContaining({ operationId: expect.any(String) }),
+      }),
+      { status: 'running' },
+    );
+    expect(topicModel.updateMetadata.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.executeToolCall.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('cleans up an opted-in dispatch error through operation ownership', async () => {
+    const { deps, topicModel } = createDeps();
+    mocks.executeToolCall.mockResolvedValueOnce({
+      success: false,
+      error: 'device refused dispatch',
+    });
+    const result = await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+      createInput('openclaw', { markTopicRunning: true }),
+    );
+    expect(result.error).toBeTruthy();
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      result.operationId,
+      'active',
+    );
+  });
+
+  it('settles an opted-in network exception before rethrowing it', async () => {
+    const { deps, topicModel } = createDeps();
+    mocks.executeToolCall.mockRejectedValueOnce(new Error('device connection failed'));
+    await expect(
+      dispatchHeteroAgent(
+        deps,
+        createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+        createInput('openclaw', { markTopicRunning: true }),
+      ),
+    ).rejects.toThrow('device connection failed');
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^op_/),
+      'active',
+    );
+  });
+
+  it('settles an opted-in marker write failure before propagating it', async () => {
+    const { deps, topicModel } = createDeps();
+    topicModel.updateMetadata.mockRejectedValueOnce(new Error('marker persistence failed'));
+    await expect(
+      dispatchHeteroAgent(
+        deps,
+        createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+        createInput('openclaw', { markTopicRunning: true }),
+      ),
+    ).rejects.toThrow('marker persistence failed');
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^op_/),
+      'active',
+    );
+    expect(mocks.executeToolCall).not.toHaveBeenCalled();
   });
 });

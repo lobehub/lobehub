@@ -24,12 +24,24 @@ const otherUserId = 'scm-router-user-2';
 const scmEnv = vi.hoisted(() => ({ ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' }));
 vi.mock('@/envs/scm', () => ({ scmEnv }));
 
-const mocks = vi.hoisted(() => ({ consumeClaim: vi.fn(), fetchInstallation: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  consumeClaim: vi.fn(),
+  fetchInstallation: vi.fn(),
+  listRepositories: vi.fn(),
+  onAutoFixChanged: vi.fn(),
+}));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
   consumeScmInstallClaim: mocks.consumeClaim,
 }));
 vi.mock('@/server/services/scm/github/app', () => ({
   fetchGitHubInstallation: mocks.fetchInstallation,
+  listGitHubInstallationRepositoryDetails: mocks.listRepositories,
+}));
+// The comment it rewrites is covered with the service; here only that it is asked to.
+vi.mock('@/server/services/scm/ScmControlService', () => ({
+  ScmControlService: vi.fn().mockImplementation(function () {
+    return { onAutoFixChanged: mocks.onAutoFixChanged };
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -298,5 +310,171 @@ describe('scmRouter', () => {
     await expect(
       caller({ userId, workspaceId: workspace.id }).connectInstallation({ claim: 'c6' }),
     ).resolves.toMatchObject({ userId, workspaceId: workspace.id });
+  });
+
+  describe('setChangeRequestAutoFix', () => {
+    const pullRequest = (scope: { userId: string; workspaceId?: string }) =>
+      ScmChangeRequestModel.upsert(serverDB, {
+        number: 8,
+        provider: 'github',
+        repoFullName: 'a/autofix',
+        state: 'open',
+        url: 'https://github.com/a/autofix/pull/8',
+        ...scope,
+      });
+
+    it('switches Auto-fix off and back on, starting the wake count over', async () => {
+      const row = await pullRequest({ userId });
+      await ScmChangeRequestModel.reserveWake(serverDB, row.id, 3, 'ci_failed');
+
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: false }),
+      ).resolves.toEqual({ autoFix: false, maxWakes: 3, wakeCount: 1 });
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: true }),
+      ).resolves.toEqual({ autoFix: true, maxWakes: 3, wakeCount: 0 });
+    });
+
+    it('refuses a pull request another tenant owns', async () => {
+      const row = await pullRequest({ userId });
+
+      await expect(
+        caller({ userId: otherUserId }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.autoFix).toBe(
+        undefined,
+      );
+    });
+
+    it('requires the member role in a workspace', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'ws', primaryOwnerId: userId, slug: 'scm-ws-autofix' })
+        .returning();
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'viewer', userId: otherUserId, workspaceId: workspace.id },
+        { role: 'member', userId, workspaceId: workspace.id },
+      ]);
+      const row = await pullRequest({ userId, workspaceId: workspace.id });
+
+      await expect(
+        caller({ userId: otherUserId, workspaceId: workspace.id }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller({ userId, workspaceId: workspace.id }).setChangeRequestAutoFix({
+          changeRequestId: row.id,
+          enabled: false,
+        }),
+      ).resolves.toMatchObject({ autoFix: false });
+    });
+
+    it('rewrites the tracking comment, and keeps the switch when that fails', async () => {
+      const row = await pullRequest({ userId });
+
+      await caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: false });
+      expect(mocks.onAutoFixChanged).toHaveBeenCalledWith(row.id);
+
+      mocks.onAutoFixChanged.mockRejectedValueOnce(new Error('rate limited'));
+      await expect(
+        caller({ userId }).setChangeRequestAutoFix({ changeRequestId: row.id, enabled: true }),
+      ).resolves.toMatchObject({ autoFix: true });
+      expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.autoFix).toBe(true);
+    });
+  });
+
+  describe('listRepositories', () => {
+    const repo = (fullName: string, pushedAt: string | null) => ({
+      defaultBranch: 'main',
+      description: null,
+      fullName,
+      htmlUrl: `https://github.com/${fullName}`,
+      ownerAvatarUrl: null,
+      private: false,
+      pushedAt,
+    });
+
+    afterEach(() => {
+      mocks.listRepositories.mockReset();
+      scmEnv.ENABLED_GITHUB_APP = true;
+    });
+
+    it('reports an unconfigured deployment without calling GitHub', async () => {
+      scmEnv.ENABLED_GITHUB_APP = false;
+      expect(await caller({ userId }).listRepositories()).toEqual({
+        configured: false,
+        installations: 0,
+        repositories: [],
+        truncated: false,
+      });
+      expect(mocks.listRepositories).not.toHaveBeenCalled();
+    });
+
+    it('reports no installations so the picker can ask to connect GitHub', async () => {
+      expect(await caller({ userId }).listRepositories()).toEqual({
+        configured: true,
+        installations: 0,
+        repositories: [],
+        truncated: false,
+      });
+    });
+
+    it('merges live installations, newest push first, skipping suspended ones', async () => {
+      await bind('201', { userId });
+      await bind('202', { userId });
+      const suspended = await bind('203', { userId });
+      await ScmInstallationModel.setSuspended(serverDB, suspended.id, true);
+      await bind('204', { userId: otherUserId });
+      mocks.listRepositories.mockImplementation(async (installationId: string) =>
+        installationId === '201'
+          ? {
+              repositories: [
+                repo('a/old', '2026-01-01T00:00:00Z'),
+                repo('a/shared', '2026-03-01T00:00:00Z'),
+              ],
+              truncated: false,
+            }
+          : {
+              repositories: [
+                repo('b/new', '2026-05-01T00:00:00Z'),
+                repo('A/Shared', '2026-03-01T00:00:00Z'),
+              ],
+              truncated: true,
+            },
+      );
+
+      const result = await caller({ userId }).listRepositories();
+
+      expect(mocks.listRepositories.mock.calls.map(([id]) => id).sort()).toEqual(['201', '202']);
+      expect(result.installations).toBe(2);
+      expect(result.truncated).toBe(true);
+      expect(result.repositories.map((item) => item.fullName.toLowerCase())).toEqual([
+        'b/new',
+        'a/shared',
+        'a/old',
+      ]);
+    });
+
+    it('lists what it can when one installation fails, and errors only when all do', async () => {
+      await bind('301', { userId });
+      await bind('302', { userId });
+      mocks.listRepositories.mockImplementation(async (installationId: string) => {
+        if (installationId === '301') throw new Error('rate limited');
+        return { repositories: [repo('c/ok', null)], truncated: false };
+      });
+      expect(
+        (await caller({ userId }).listRepositories()).repositories.map((item) => item.fullName),
+      ).toEqual(['c/ok']);
+
+      mocks.listRepositories.mockRejectedValue(new Error('down'));
+      await expect(caller({ userId }).listRepositories()).rejects.toMatchObject({
+        code: 'BAD_GATEWAY',
+      });
+    });
   });
 });

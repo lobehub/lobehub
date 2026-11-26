@@ -9,9 +9,10 @@ import { z } from 'zod';
 
 import type { CanvasStorageService } from './storage';
 
-export const resolveCanvasPublicRuntimeUrl = async (
+export const resolvePublicRuntimeUrl = async (
   major: number,
-  baseUrl?: string,
+  baseUrl: string | undefined,
+  fileName: string,
 ): Promise<string | undefined> => {
   if (!baseUrl || !/^https?:\/\//.test(baseUrl)) return;
   const base = `${baseUrl.replace(/\/+$/, '')}/v${major}`;
@@ -19,12 +20,15 @@ export const resolveCanvasPublicRuntimeUrl = async (
     cache: 'no-store',
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`Canvas runtime v${major} has not been published`);
+  if (!response.ok) throw new Error(`${fileName} v${major} has not been published`);
   const manifest = z
     .object({ major: z.literal(major), revision: z.string().regex(/^[\da-f]{64}$/) })
     .parse(await response.json());
-  return `${base}/${manifest.revision}/canvas-runtime.js`;
+  return `${base}/${manifest.revision}/${fileName}`;
 };
+
+export const resolveCanvasPublicRuntimeUrl = (major: number, baseUrl?: string) =>
+  resolvePublicRuntimeUrl(major, baseUrl, 'canvas-runtime.js');
 
 const injectCanvasRuntime = (html: string, runtimeUrl: string) => {
   const injection = `<script defer src="${runtimeUrl}"></script>`;

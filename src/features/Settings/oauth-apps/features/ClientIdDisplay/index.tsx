@@ -1,20 +1,21 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
+import { ActionIcon, Flexbox, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Copy } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  id: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  id: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface ClientIdDisplayProps {
   clientId: string;
@@ -34,7 +35,7 @@ const ClientIdDisplay: FC<ClientIdDisplayProps> = ({ clientId }) => {
 
   return (
     <Flexbox horizontal align={'center'} gap={4}>
-      <span className={styles.id}>{clientId}</span>
+      <span {...stylex.props(styles.id)}>{clientId}</span>
       <ActionIcon
         icon={Copy}
         size="small"

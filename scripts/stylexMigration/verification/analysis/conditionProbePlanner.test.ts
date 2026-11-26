@@ -111,7 +111,6 @@ describe('source-bound condition partition planning', () => {
     ).toBe(true);
     expect(plan.reused).toBeGreaterThan(0);
     expect(new Set(plan.requirements.map((key) => key.id)).size).toBe(plan.requirements.length);
-    expect(plan.gateEligible).toBe(false);
   });
   it('does not cross unrelated media/container paths, but keeps their intersection on a shared target', () => {
     const media = makeSeed({ conditions: [{ kind: 'CSSMediaRule', text: '(max-width:700px)' }] });

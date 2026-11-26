@@ -3,6 +3,7 @@
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
+import { contactRouter } from '@/business/server/lambda-routers/contact';
 import { fileShareRouter } from '@/business/server/lambda-routers/fileShare';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
@@ -25,6 +26,8 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
+import { agentAccountRouter } from './agentAccount';
+import { agentAvailabilityRouter } from './agentAvailability';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
@@ -34,6 +37,7 @@ import { agentGroupRouter } from './agentGroup';
 import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
+import { agentRunBoardRouter } from './agentRunBoard';
 import { agentShareRouter } from './agentShare';
 import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
@@ -44,6 +48,7 @@ import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { artboardRouter } from './artboard';
 import { asrRouter } from './asr';
 import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
@@ -72,18 +77,22 @@ import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
 import { goalRouter } from './goal';
+import { goalShareRouter } from './goalShare';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
+import { inboundWebhookRouter } from './inboundWebhook';
 import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
+import { musicRouter } from './music';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
@@ -128,6 +137,7 @@ export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
+  agentAccount: agentAccountRouter,
   agentBotProvider: agentBotProviderRouter,
   agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
@@ -142,15 +152,19 @@ export const lambdaRouter = router({
   sandboxStorage: sandboxStorageRouter,
   agentTrace: agentTraceRouter,
   expertise: expertiseRouter,
+  agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
   agentSteerQueue: agentSteerQueueRouter,
+  artboard: artboardRouter,
   canvas: canvasRouter,
   changelog: changelogRouter,
   channel: channelRouter,
+  contact: contactRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
+  agentAvailability: agentAvailabilityRouter,
   agentQuota: agentQuotaRouter,
   agentShare: agentShareRouter,
   aiProvider: aiProviderRouter,
@@ -175,10 +189,12 @@ export const lambdaRouter = router({
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
   goal: goalRouter,
+  goalShare: goalShareRouter,
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
   image: imageRouter,
+  inboundWebhook: inboundWebhookRouter,
   importer: importerRouter,
   composio: composioRouter,
 
@@ -188,9 +204,11 @@ export const lambdaRouter = router({
   linear: linearRouter,
   llmGenerationTracing: llmGenerationTracingRouter,
   market: marketRouter,
+  meeting: meetingRouter,
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,
+  music: musicRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
   oauthApp: oauthAppRouter,

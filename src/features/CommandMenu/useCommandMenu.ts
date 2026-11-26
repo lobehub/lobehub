@@ -76,6 +76,9 @@ export const useCommandMenu = () => {
         // through the permanent typed-search entries instead of gating every
         // keystroke on three remote marketplace round-trips.
         includeMarketplace: false,
+        // Goals are not in the full-text index; the server looks them up by
+        // title/requirement only when asked, and the menu renders them.
+        includeGoals: true,
         limitPerType: typeFilter ? 50 : 5, // Show more results when filtering by type
         locale,
         query: searchQuery,

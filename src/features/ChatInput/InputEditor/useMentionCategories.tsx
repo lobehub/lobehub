@@ -1,11 +1,12 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import type { SidebarAgentItem } from '@/database/repositories/home';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -33,7 +34,6 @@ import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
 import { AGENT_CATEGORY_IDS, mergeIntoCategory, SKILL_PRECEDING_IDS } from './mentionMenuSections';
 
-const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
 type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
 
@@ -212,13 +212,10 @@ export const useMentionCategories = (): MentionSource => {
         installedAgentSources.add(currentAgent.forkedFromIdentifier);
       }
 
-      // Quota stays at MAX_AGENT_ITEMS total. When the user has private agents
-      // we reserve up to half for them so they don't get drowned out by a long
-      // workspace list.
-      const privateBudget = isCurrentContextPrivate ? Math.min(privateCandidates.length, 10) : 0;
-      const workspaceBudget = MAX_AGENT_ITEMS - privateBudget;
-      const privateItems = privateCandidates.slice(0, privateBudget).map(toItem);
-      const workspaceItems = workspaceCandidates.slice(0, workspaceBudget).map(toItem);
+      // Every candidate stays searchable; the menu caps what it renders
+      // (`limitMentionGroups`), private sections first.
+      const privateItems = isCurrentContextPrivate ? privateCandidates.map(toItem) : [];
+      const workspaceItems = workspaceCandidates.map(toItem);
 
       if (privateItems.length > 0) {
         categories.push({

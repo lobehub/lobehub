@@ -8,9 +8,19 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * `goal:manage` lets the CLI create a goal the agent supervises from this
  * conversation (`lh goal create --conversation`), or bind an existing one to it
  * (`lh goal bind-topic`, which the `/goal` instructions route a named goal to). The token is exposed to the
- * always-installed CLI, so it is granted only when the user asked for a goal
- * with `/goal`: an ordinary coding run that meets instructions telling it to
- * run that command must not be able to launch persistent follow-on work.
+ * always-installed CLI, so it follows who started the run, not what it says:
+ * a turn the user sent (a chat message, or one they scheduled) gets it however
+ * they word the ask, since users say "run a goal" as often as they type `/goal`.
+ * Runs the server starts on its own — Task runs, goal planning and supervision
+ * turns, background-result deliveries, cron, inbox and SCM wakeups — and
+ * Channel or bot messages, whose sender may not be the owner, get it only from
+ * an explicit `/goal`. That keeps a goal from spawning goals of its own. A goal
+ * a user-sent run creates binds to that user's topic, where its tray shows it.
+ *
+ * `channel:read` and `channel:message` let a Channel dispatch read its own conversation
+ * (`lh channel history|message`) and ask Agents in the requester's other Channels
+ * (`lh channel list|send`), as the requester, never as the device owner. Only a Channel run gets
+ * them: asking another Agent needs a Channel to bring what it concludes back to.
  *
  * `acceptance:evidence` lets a Task run file evidence into its own verification
  * round (`lh acceptance run result submit|ingest --operation`). That round is
@@ -18,16 +28,45 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * the token is the only identity that can reach it. Only a Task run has a
  * round to file into.
  *
- * Renewal copies the minted claims, so a run never gains either later.
+ * `work:write` lets every run register the files and links it produced as Work
+ * cards under its reply (`lh work create|update`). The Work lands in the run's
+ * own topic; a share visitor's run included, whose Works stay fenced to that
+ * visitor topic exactly like the ones its completion scan registers.
+ *
+ * `caller:act` lets the agent's own `lh` commands use ordinary user endpoints
+ * as the user who started the run, in the run's workspace, while the run lasts.
+ * Without it they were refused, and on a shared device the only other identity
+ * at hand is the login of whoever enrolled it. A share visitor's run never gets
+ * it: the visitor is not a member who may act in the workspace.
+ *
+ * Renewal copies the minted claims, so a run never gains any of them later.
  */
 export const heteroOperationCapabilities = (
   prompt: unknown,
-  options: { channel?: boolean; taskId?: string } = {},
-): HeteroOperationCapability[] => [
-  'hetero:ingest',
-  ...(options.channel ? (['channel:read'] as const) : []),
-  'hetero:finish',
-  'hetero:intervention:read',
-  ...(isGoalPrompt(prompt) ? (['goal:manage'] as const) : []),
-  ...(options.taskId ? (['acceptance:evidence'] as const) : []),
-];
+  options: {
+    channel?: boolean;
+    /**
+     * A share visitor drives the run. It gets only the run's own callbacks:
+     * a goal or acceptance round it created would belong to the creator.
+     */
+    shareVisitor?: boolean;
+    taskId?: string;
+    /** The run answers a message the user sent: a chat turn or one they scheduled. */
+    userTurn?: boolean;
+  } = {},
+): HeteroOperationCapability[] => {
+  if (options.shareVisitor)
+    return ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write'];
+
+  const directUserTurn = !!options.userTurn && !options.channel && !options.taskId;
+  return [
+    'caller:act',
+    'hetero:ingest',
+    ...(options.channel ? (['channel:read', 'channel:message'] as const) : []),
+    'hetero:finish',
+    'hetero:intervention:read',
+    ...(isGoalPrompt(prompt) || directUserTurn ? (['goal:manage'] as const) : []),
+    ...(options.taskId ? (['acceptance:evidence'] as const) : []),
+    'work:write',
+  ];
+};

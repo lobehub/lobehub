@@ -12,7 +12,7 @@ const styles = stylex.create({
 });
 
 const SkeletonLoading = memo<{ className?: string }>(({ className }) => (
-  <ArticleSkeleton className={sx([styles.root], className).className} rows={8} />
+  <ArticleSkeleton className={sx(styles.root, className).className} rows={8} />
 ));
 
 export default SkeletonLoading;

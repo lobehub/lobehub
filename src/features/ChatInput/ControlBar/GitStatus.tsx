@@ -2,30 +2,31 @@ import type { WorkingDirGitState } from '@lobechat/types';
 import { Icon, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import { gitService } from '@/services/git';
+import { gitService, isDeviceGitOutdated } from '@/services/git';
 import {
   deviceSelectors,
   useDeviceStore,
   useFetchGitAheadBehind,
   useFetchGitBranch,
   useFetchGitDiffStats,
-  useFetchGitLinkedPR,
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import BranchSwitcher from './BranchSwitcher';
+import { describeGitFailure } from './DraftGit/gitErrors';
+import { useDraftBranch } from './DraftGit/useDraftBranch';
+import { WorktreeToggle } from './DraftGit/WorktreeToggle';
 import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
-import WorktreeSwitcher from './WorktreeSwitcher';
+import TopicPullRequestChip from './TopicPullRequestChip';
 
 const styles = stylex.create({
   aheadBehindStat: {
@@ -45,6 +46,13 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  // An existing topic's branch: a label, not a control.
+  branchStatic: {
+    cursor: 'default',
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  outdatedStat: { cursor: 'default', color: cssVar.colorWarning },
   diffStat: {
     display: 'inline-flex',
     flexShrink: 0,
@@ -87,10 +95,10 @@ interface GitStatusProps {
   /**
    * Git context persisted on the topic. Stands in for the live probe in two
    * cases: while the probe is still pending (no cached branch yet), it paints a
-   * read-only branch / PR chip so the cluster doesn't pop in once the read lands;
+   * read-only branch chip so the cluster doesn't pop in once the read lands;
    * and when the probe finds no branch at `path` — which happens whenever the
    * recorded worktree directory has since been deleted — it keeps the branch /
-   * worktree / PR chips visible (read-only) instead of collapsing the whole
+   * worktree chips visible (read-only) instead of collapsing the whole
    * cluster, so the bar agrees with the topic's meta hover card, which reads
    * this same snapshot and never probes.
    */
@@ -107,8 +115,6 @@ const GitStatus = memo<GitStatusProps>(
     const { t } = useTranslation('device');
     // Transport (Electron IPC vs device RPC) is decided inside the service; the
     // component just reads, identically for local and remote.
-    // Branch (cheap, refreshes promptly on dir switch) and the linked-PR lookup
-    // (expensive `gh` call, throttled) are deliberately separate cache entries.
     const {
       data: branchData,
       error: branchError,
@@ -161,12 +167,25 @@ const GitStatus = memo<GitStatusProps>(
       !sourceWorktrees.some((worktree) => worktree.path === path && !worktree.prunable);
     const isStale =
       probeFoundNothing && (!!fallbackGit?.branch || (!!recordedWorktree && recordedWorktreeGone));
-    const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
+    // Before a topic's first send the branch is only picked (the send switches
+    // or forks a worktree); an existing topic's branch is shown but not
+    // switched from here.
+    const isDraft = !topicId;
+    const draft = useDraftBranch({
+      agentId,
+      currentBranch: detached ? undefined : branch,
       deviceId,
-      path,
-      branch,
+      enabled: isDraft && !isStale,
       isGithub,
-    );
+      path,
+      sourcePath: sourcePath ?? path,
+    });
+    // The picked branch when it is not HEAD's: counts, pull and push follow it.
+    // When it is HEAD's they read HEAD.
+    const syncBranch =
+      isDraft && draft.selectedBranch && draft.selectedBranch !== branch
+        ? draft.selectedBranch
+        : undefined;
     // The remaining reads are all disabled once the directory is gone: nothing
     // below renders from them in that state, and the diff poll alone would keep
     // shelling out to git every 10s — one RPC round-trip per tick on a remote
@@ -185,9 +204,11 @@ const GitStatus = memo<GitStatusProps>(
     const livePath = isStale ? undefined : path;
     const {
       data: aheadBehind,
+      error: aheadBehindError,
       isConfirmed: aheadBehindConfirmed,
       mutate: mutateAheadBehind,
-    } = useFetchGitAheadBehind(deviceId, livePath);
+    } = useFetchGitAheadBehind(deviceId, livePath, syncBranch);
+    const deviceOutdated = !!syncBranch && isDeviceGitOutdated(aheadBehindError);
     const {
       data: worktrees = [],
       isConfirmed: worktreesConfirmed,
@@ -201,23 +222,6 @@ const GitStatus = memo<GitStatusProps>(
     const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
     const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
-    // Until the linked-PR lookup answers for this branch, reuse the PR the topic
-    // recorded for the same branch so the PR chip doesn't pop in late.
-    const pullRequest =
-      prData !== undefined
-        ? prData.pullRequest
-        : isGithub &&
-            (!branch || branch === fallbackGit?.branch) &&
-            fallbackGit?.github?.pullRequest
-          ? fallbackGit.github.pullRequest
-          : undefined;
-
-    const handleOpenPr = useCallback(() => {
-      if (pullRequest?.url) {
-        openTrustedExternalUrl(pullRequest.url);
-      }
-    }, [pullRequest?.url]);
-
     const handleToggleReview = useCallback(() => {
       if (showRightPanel && workingSidebarTab === 'review') {
         toggleRightPanel(false);
@@ -229,23 +233,11 @@ const GitStatus = memo<GitStatusProps>(
     const refreshAfterSync = useCallback(async () => {
       await Promise.all([
         mutateBranch(),
-        mutatePR(),
         mutateReviewPatches(),
         mutateAheadBehind(),
         mutateWorktrees(),
       ]);
-    }, [mutateBranch, mutatePR, mutateReviewPatches, mutateAheadBehind, mutateWorktrees]);
-
-    // Flip the displayed branch instantly on checkout. No revalidate here — the
-    // switcher's onAfterCheckout reconciles once the checkout lands. The linked-PR
-    // hook is keyed by branch, so it re-keys to the new branch on its own (its
-    // cache starts empty there, hiding the stale PR until the lookup resolves).
-    const handleOptimisticCheckout = useCallback(
-      (nextBranch: string) => {
-        void mutateBranch({ branch: nextBranch, detached: false }, { revalidate: false });
-      },
-      [mutateBranch],
-    );
+    }, [mutateBranch, mutateReviewPatches, mutateAheadBehind, mutateWorktrees]);
 
     const syncBusy = pulling || pushing;
     // Stale-first paints the last branch and its counts immediately, but
@@ -265,7 +257,11 @@ const GitStatus = memo<GitStatusProps>(
       if (pulling || pushing) return;
       setPulling(true);
       try {
-        const result = await gitService.pullGitBranch({ deviceId, path });
+        const result = await gitService.pullGitBranch({
+          deviceId,
+          path,
+          ...(syncBranch ? { branch: syncBranch } : {}),
+        });
         if (result.success) {
           if (result.noop) {
             toast.info(t('workingDirectory.pullNoop'));
@@ -274,18 +270,22 @@ const GitStatus = memo<GitStatusProps>(
           }
           await refreshAfterSync();
         } else {
-          toast.error(result.error || t('workingDirectory.pullFailed'));
+          toast.error(describeGitFailure(result, t, t('workingDirectory.pullFailed')));
         }
       } finally {
         setPulling(false);
       }
-    }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
+    }, [deviceId, path, pulling, pushing, refreshAfterSync, syncBranch, t]);
 
     const handlePush = useCallback(async () => {
       if (pulling || pushing) return;
       setPushing(true);
       try {
-        const result = await gitService.pushGitBranch({ deviceId, path });
+        const result = await gitService.pushGitBranch({
+          deviceId,
+          path,
+          ...(syncBranch ? { branch: syncBranch } : {}),
+        });
         if (result.success) {
           if (result.noop) {
             toast.info(t('workingDirectory.pushNoop'));
@@ -294,12 +294,12 @@ const GitStatus = memo<GitStatusProps>(
           }
           await refreshAfterSync();
         } else {
-          toast.error(result.error || t('workingDirectory.pushFailed'));
+          toast.error(describeGitFailure(result, t, t('workingDirectory.pushFailed')));
         }
       } finally {
         setPushing(false);
       }
-    }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
+    }, [deviceId, path, pulling, pushing, refreshAfterSync, syncBranch, t]);
 
     const liveDiffStats = useMemo(() => {
       const patches = [
@@ -325,24 +325,34 @@ const GitStatus = memo<GitStatusProps>(
       reviewPatches !== undefined ? liveDiffStats : (cachedDiffStats ?? liveDiffStats);
     const hasChanges = diffStats.files > 0;
 
+    // The topic's linked PRs are server records, so they stay in the bar (with
+    // their last known state) even when the working directory cannot be read —
+    // an offline device, a deleted worktree.
+    const topicPullRequestChip = topicId ? (
+      <TopicPullRequestChip deviceId={deviceId} path={path} topicId={topicId} />
+    ) : null;
+
     // Dead directory: the whole live cluster is unreachable, so hand off to the
     // snapshot renderer — it shows what the topic recorded and offers the one
     // action that can still work (drop the worktree override).
     if (isStale) {
       return (
-        <StaleGitSnapshot
-          agentId={agentId}
-          git={fallbackGit!}
-          isGithub={isGithub}
-          path={path}
-          sourcePath={sourcePath}
-          topicId={topicId}
-        />
+        <>
+          <StaleGitSnapshot
+            agentId={agentId}
+            git={fallbackGit!}
+            isGithub={isGithub}
+            path={path}
+            sourcePath={sourcePath}
+            topicId={topicId}
+          />
+          {topicPullRequestChip}
+        </>
       );
     }
 
     if (!branch) {
-      // Probe still pending: paint the topic's recorded branch / PR read-only
+      // Probe still pending: paint the topic's recorded branch read-only
       // (not the dead-directory snapshot — nothing is known to be gone yet).
       if (!probeSettled && fallbackGit?.branch) {
         return (
@@ -353,39 +363,14 @@ const GitStatus = memo<GitStatusProps>(
                 <span {...stylex.props(styles.branchLabel)}>{fallbackGit.branch}</span>
               </div>
             </div>
-            {pullRequest && (
-              <>
-                <div {...stylex.props(gitChipStyles.separator)} />
-                <Tooltip title={pullRequest.title}>
-                  <div
-                    {...stylex.props(gitChipStyles.prTrigger)}
-                    role="button"
-                    onClick={handleOpenPr}
-                  >
-                    <Icon icon={GitPullRequest} size={12} />
-                    <span>#{pullRequest.number}</span>
-                  </div>
-                </Tooltip>
-              </>
-            )}
+            {topicPullRequestChip}
           </>
         );
       }
-      return null;
+      return topicPullRequestChip;
     }
 
     const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
-
-    const prTooltip = pullRequest
-      ? prData?.extraCount
-        ? t('workingDirectory.prTooltipWithExtra', {
-            count: prData.extraCount,
-            title: pullRequest.title,
-          })
-        : pullRequest.title
-      : prData?.ghMissing
-        ? t('workingDirectory.ghMissing')
-        : undefined;
 
     const diffStatTooltip = hasChanges
       ? t('workingDirectory.diffLineStatTooltip', {
@@ -402,31 +387,17 @@ const GitStatus = memo<GitStatusProps>(
     const pushTargetExists = !!aheadBehind?.pushTargetExists;
 
     const branchTrigger = (
-      <div {...stylex.props(gitChipStyles.trigger)}>
-        <span {...stylex.props(styles.branchLabel)}>{branch}</span>
+      <div {...stylex.props(gitChipStyles.trigger, !isDraft && styles.branchStatic)}>
+        <span {...stylex.props(styles.branchLabel)}>
+          {(isDraft && draft.selectedBranch) || branch}
+        </span>
       </div>
     );
 
-    const hasWorktreeMenu = worktrees.length > 0;
-
-    const worktreeNode = hasWorktreeMenu ? (
-      <WorktreeSwitcher
-        agentId={agentId}
-        currentBranch={branch}
-        detached={detached}
-        deviceId={deviceId}
-        disabled={!pickersReady}
-        isGithub={isGithub}
-        path={path}
-        sourcePath={sourcePath ?? path}
-        topicId={topicId}
-        worktrees={worktrees}
-        onWorktreesChange={mutateWorktrees}
-      />
-    ) : null;
-
-    const branchNode = detached ? (
-      // Detached HEAD → plain branch label (nothing to switch to).
+    // No worktree menu: a new topic forks its worktree on send instead (the
+    // toggle below), and an existing one keeps its own.
+    const branchNode = !isDraft ? (
+      // An existing topic stays on its branch; start a new topic to move.
       <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
     ) : !pickersReady ? (
       // Hydrated from the last session: hold the checkout entry until this
@@ -442,21 +413,14 @@ const GitStatus = memo<GitStatusProps>(
         isGithub={isGithub}
         open={switcherOpen}
         path={path}
+        selection={{ branch: draft.selectedBranch, onSelect: draft.select }}
         sourcePath={sourcePath ?? path}
         topicId={topicId}
         worktrees={worktrees}
         onExternalRefresh={refreshAfterSync}
         onOpenChange={setSwitcherOpen}
-        onOptimisticCheckout={handleOptimisticCheckout}
-        onAfterCheckout={() => {
-          void mutateBranch();
-          void mutatePR();
-          void mutateReviewPatches();
-          void mutateAheadBehind();
-          void mutateWorktrees();
-        }}
       >
-        <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+        <Tooltip title={draft.selectedBranch || branchTooltip}>{branchTrigger}</Tooltip>
       </BranchSwitcher>
     );
 
@@ -516,6 +480,22 @@ const GitStatus = memo<GitStatusProps>(
       </Tooltip>
     );
 
+    const outdatedNode = deviceOutdated && (
+      <Tooltip title={t('workingDirectory.deviceOutdated')}>
+        <div {...stylex.props(styles.syncTrigger, styles.outdatedStat)}>
+          <Icon icon={TriangleAlertIcon} size={11} />
+        </div>
+      </Tooltip>
+    );
+
+    const worktreeToggleNode = isDraft && (
+      <WorktreeToggle
+        baseBranch={draft.selectedBranch}
+        keyDeviceId={draft.keyDeviceId}
+        path={path}
+      />
+    );
+
     const diffNode = (() => {
       if (!hasChanges) return null;
       const diffButton = (
@@ -539,26 +519,13 @@ const GitStatus = memo<GitStatusProps>(
     return (
       <>
         <div {...stylex.props(gitChipStyles.separator)} />
-        {/* The worktree icon and the branch name name one thing — which checkout
-         * you're on — so they sit closer to each other than to their neighbours. */}
-        <div {...stylex.props(styles.branchGroup)}>
-          {worktreeNode}
-          {branchNode}
-        </div>
+        <div {...stylex.props(styles.branchGroup)}>{branchNode}</div>
         {pullNode}
         {pushNode}
+        {outdatedNode}
+        {worktreeToggleNode}
         {diffNode}
-        {pullRequest && (
-          <>
-            <div {...stylex.props(gitChipStyles.separator)} />
-            <Tooltip title={prTooltip}>
-              <div {...stylex.props(gitChipStyles.prTrigger)} role="button" onClick={handleOpenPr}>
-                <Icon icon={GitPullRequest} size={12} />
-                <span>#{pullRequest.number}</span>
-              </div>
-            </Tooltip>
-          </>
-        )}
+        {topicPullRequestChip}
       </>
     );
   },

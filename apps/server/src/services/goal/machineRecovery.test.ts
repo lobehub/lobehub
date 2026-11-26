@@ -1,7 +1,7 @@
 import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
-import { lastAnsweredGateAt, planMachineRecovery } from './machineRecovery';
+import { lastAnsweredGateAt, lastGateAnsweredToWait, planMachineRecovery } from './machineRecovery';
 import { QUOTA_RESET_MARGIN_MS } from './recoveryPolicy';
 
 const MINUTE = 60 * 1000;
@@ -73,6 +73,49 @@ describe('planMachineRecovery', () => {
       });
       expect(plan.action).toBe('gate');
       expect(plan.action === 'gate' && plan.reason).toContain('Retried 6 time(s) over 18h');
+    });
+
+    it('holds past the one-day bound when a person chose to wait for the reset', () => {
+      const plan = planMachineRecovery({
+        error: "You've hit your weekly limit · resets Oct 9, 5pm (America/New_York)",
+        holdUntilReset: true,
+        now: new Date(FAILED_AT.getTime() + MINUTE),
+        runs: [run(QUOTA_LIMITED_RUN_STATUS, FAILED_AT)],
+        taskUpdatedAt: FAILED_AT,
+      });
+      expect(plan.action).toBe('wait');
+    });
+
+    it('keeps holding when the retries were spent before a person chose to wait', () => {
+      // Six retries were spent on the streak a person then answered with "wait
+      // for the reset". That bound belongs to the automatic loop they overrode,
+      // so the wait has to survive it instead of reopening the gate at once.
+      const runs = Array.from({ length: 7 }, (_, i) =>
+        run(QUOTA_LIMITED_RUN_STATUS, new Date(FAILED_AT.getTime() - i * 3 * HOUR)),
+      );
+      const plan = planMachineRecovery({
+        error: SESSION_LIMIT,
+        holdUntilReset: true,
+        now: new Date(FAILED_AT.getTime() + MINUTE),
+        runs,
+        taskUpdatedAt: FAILED_AT,
+      });
+      expect(plan).toMatchObject({ action: 'wait', failedAt: FAILED_AT, failureClass: 'quota' });
+    });
+
+    it('restarts the authorized wait once its reset has passed', () => {
+      const runs = Array.from({ length: 7 }, (_, i) =>
+        run(QUOTA_LIMITED_RUN_STATUS, new Date(FAILED_AT.getTime() - i * 3 * HOUR)),
+      );
+      expect(
+        planMachineRecovery({
+          error: SESSION_LIMIT,
+          holdUntilReset: true,
+          now: new Date(RESET_AT.getTime() + 3 * MINUTE),
+          runs,
+          taskUpdatedAt: FAILED_AT,
+        }),
+      ).toEqual({ action: 'retry', failureClass: 'quota' });
     });
 
     it('asks at once when the limit resets more than a day away', () => {
@@ -174,5 +217,30 @@ describe('lastAnsweredGateAt', () => {
     } as any;
     expect(lastAnsweredGateAt(graph, 'task')).toEqual(new Date('2026-10-03T00:00:00Z'));
     expect(lastAnsweredGateAt(graph, 'none')).toBeUndefined();
+  });
+});
+
+describe('lastGateAnsweredToWait', () => {
+  const graph = (resolvedOptionId: string) =>
+    ({
+      decisions: [
+        {
+          nodeId: 'gate',
+          options: [
+            { effect: 'retry', id: 'switch', label: 'Switch account' },
+            { effect: 'retry_after_reset', id: 'wait', label: 'Wait' },
+          ],
+          resolvedAt: new Date('2026-10-03T00:00:00Z'),
+          resolvedOptionId,
+          status: 'resolved',
+        },
+      ],
+      edges: [{ kind: 'leads_to', sourceNodeId: 'task', targetNodeId: 'gate' }],
+    }) as any;
+
+  it('reads the effect of the option the person chose', () => {
+    expect(lastGateAnsweredToWait(graph('wait'), 'task')).toBe(true);
+    expect(lastGateAnsweredToWait(graph('switch'), 'task')).toBe(false);
+    expect(lastGateAnsweredToWait(graph('wait'), 'none')).toBe(false);
   });
 });

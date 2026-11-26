@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "在预览页上评论这张验收单，并通过或打回",
   "consent.scope.acceptance-review-site": "在站点上直接评论该站点的验收，有效期 8 小时",
   "consent.scope.email": "访问你的电子邮件地址",
+  "consent.scope.generation-read": "查看你生成的图片、视频和音频",
+  "consent.scope.generation-write": "生成图片、视频和音频并删除生成结果，消耗你的额度",
   "consent.scope.offline_access": "允许客户端访问你的数据",
   "consent.scope.openid": "使用你的 LobeHub 账户进行身份验证",
   "consent.scope.profile": "访问你的基本资料信息（名称、头像等）",

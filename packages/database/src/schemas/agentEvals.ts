@@ -43,6 +43,7 @@ const evalModes = [
   'javascript',
   'python',
   'llm-rubric',
+  'rule-checklist',
   'factuality',
   'answer-relevance',
   'similar',
@@ -387,7 +388,20 @@ export const agentEvalRunTopics = pgTable(
       .notNull(),
 
     status: text('status', {
-      enum: ['pending', 'running', 'passed', 'failed', 'error', 'timeout', 'external', 'completed'],
+      // `judge_error`: the attempt ran, but grading it failed (judge model,
+      // config or parse error). Its answer, memory and cost are kept; it is
+      // re-judged, never re-executed, and counted apart from `failed`.
+      enum: [
+        'pending',
+        'running',
+        'passed',
+        'failed',
+        'error',
+        'timeout',
+        'external',
+        'completed',
+        'judge_error',
+      ],
     }),
 
     score: real('score'),

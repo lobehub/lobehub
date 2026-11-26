@@ -2,6 +2,7 @@ import { createStaticStyles, Flexbox, Icon, stopPropagation } from '@lobehub/ui'
 import { AudioLinesIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
 import { formatSize } from '@/utils/format';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -25,7 +26,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       ${cssVar.colorFillQuaternary};
   `,
   info: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   meta: css`
     font-size: 12px;

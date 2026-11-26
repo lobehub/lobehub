@@ -1,15 +1,29 @@
-import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import {
+  agentDisplayName,
+  CHANNEL_DELETED_AGENT_NAME,
+  CHANNEL_DELETED_USER_NAME,
+  channelMessageReplyError,
+} from '@lobechat/types';
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
 import {
   agents,
   channelAudit,
+  channelJobs,
   channelMembers,
   channelMessages,
+  users,
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-import { findThread } from './delivery';
+import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
+import { findThread, memberNotMuted } from './delivery';
+import { replyErrorNote } from './manifest';
+import { channelUserNameSql } from './nickname';
+import { notReplyError } from './replyError';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
 
@@ -131,10 +145,13 @@ export class ChannelRoutingRepository {
       const candidateQuery = tx
         .select({
           agentId: agents.id,
+          agentTitle: agentTitleSql(),
           model: agents.model,
+          ownerId: agents.userId,
           provider: agents.provider,
           description: channelMembers.description,
           agentDescription: agents.description,
+          config: channelMembers.config,
           memberId: channelMembers.id,
           name: channelMembers.name,
         })
@@ -145,6 +162,7 @@ export class ChannelRoutingRepository {
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.actorType, 'agent'),
             eq(channelMembers.status, 'active'),
+            memberNotMuted(),
             thread ? inArray(channelMembers.id, thread.followerMemberIds) : undefined,
             buildWorkspaceWhere(
               { userId: message.userId, workspaceId: channel.workspaceId ?? undefined },
@@ -160,33 +178,110 @@ export class ChannelRoutingRepository {
 
       // Main-channel history never contains sibling Threads. A Thread sees its root prefix
       // and its own branch, never later main-channel messages or future messages.
+      const branch = thread
+        ? or(
+            eq(channelMessages.threadId, thread.id),
+            and(
+              isNull(channelMessages.threadId),
+              lte(channelMessages.sequence, thread.rootSequence),
+            ),
+          )
+        : isNull(channelMessages.threadId);
       const history = await tx
         .select({
-          author: sql<string>`coalesce(${channelMessages.agentId}, ${channelMessages.userId}, 'deleted')`,
-          content: sql<string>`left(${channelMessages.content}, 1500)`,
+          agentId: channelMessages.agentId,
+          agentName: agents.name,
+          agentTitle: agentTitleSql(),
+          content: channelMessages.content,
+          createdAt: channelMessages.createdAt,
+          fullName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
+          id: channelMessages.id,
+          metadata: channelMessages.metadata,
+          routingStatus: channelMessages.routingStatus,
+          userId: channelMessages.userId,
+          username: users.username,
         })
         .from(channelMessages)
+        .leftJoin(users, eq(users.id, channelMessages.userId))
+        .leftJoin(agents, eq(agents.id, channelMessages.agentId))
         .where(
           and(
             eq(channelMessages.channelId, channelId),
             lt(channelMessages.sequence, message.sequence),
-            thread
-              ? or(
-                  eq(channelMessages.threadId, thread.id),
-                  and(
-                    isNull(channelMessages.threadId),
-                    lte(channelMessages.sequence, thread.rootSequence),
-                  ),
-                )
-              : isNull(channelMessages.threadId),
+            branch,
           ),
         )
         .orderBy(desc(channelMessages.sequence))
         .limit(20);
+      const [author] = await tx
+        .select({
+          fullName: channelUserNameSql(sql`${channelId}`, users.id),
+          username: users.username,
+        })
+        .from(users)
+        .where(eq(users.id, message.userId));
+      const attachments = await fileIdsByMessage(tx, [messageId]);
+
+      // What each candidate's own wake rules read: when it last answered here, whom, and how
+      // often it has stayed silent since. Scoped like the history: the branch, then the request.
+      // Fallback routing runs no rules. One transaction connection serializes the reads anyway,
+      // so they run one candidate at a time (at most 21).
+      const wakeState = new Map<
+        string,
+        { lastReplyAt?: number; lastReplyToUserId?: string; silentWakes: number }
+      >();
+      for (const candidate of message.routingSource === 'fallback' ? [] : candidates) {
+        const [lastReply] = await tx
+          .select({
+            at: channelMessages.createdAt,
+            requesterUserId: channelMembers.userId,
+          })
+          .from(channelMessages)
+          .leftJoin(channelJobs, eq(channelJobs.publishedMessageId, channelMessages.id))
+          .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.requesterMemberId))
+          .where(
+            and(
+              eq(channelMessages.channelId, channelId),
+              eq(channelMessages.agentId, candidate.agentId),
+              eq(channelMessages.routingStatus, 'reply'),
+              // A failed reply's card is not the Agent speaking here.
+              notReplyError(),
+              lt(channelMessages.sequence, message.sequence),
+              branch,
+            ),
+          )
+          .orderBy(desc(channelMessages.sequence))
+          .limit(1);
+        const [silent] = await tx
+          .select({ value: count() })
+          .from(channelJobs)
+          .where(
+            and(
+              eq(channelJobs.channelId, channelId),
+              eq(channelJobs.memberId, candidate.memberId),
+              eq(channelJobs.status, 'silent'),
+              message.threadId
+                ? eq(channelJobs.threadId, message.threadId)
+                : isNull(channelJobs.threadId),
+              // Settled, not enqueued: a job queued while this member was still answering can
+              // settle as silent after that reply is published, and it still spent the budget.
+              lastReply ? gt(channelJobs.updatedAt, lastReply.at) : undefined,
+            ),
+          );
+        wakeState.set(candidate.memberId, {
+          lastReplyAt: lastReply?.at.getTime(),
+          lastReplyToUserId: lastReply?.requesterUserId ?? undefined,
+          silentWakes: silent?.value ?? 0,
+        });
+      }
 
       await audit(tx, channelId, 'routing_started', messageId, { attempt });
       return {
         attempt,
+        author: {
+          id: message.userId,
+          name: author?.fullName || author?.username || CHANNEL_DELETED_USER_NAME,
+        },
         fallback: message.routingSource === 'fallback',
         candidates: candidates.map((member) => ({
           agentId: member.agentId,
@@ -195,10 +290,36 @@ export class ChannelRoutingRepository {
           description: member.description || member.agentDescription || '',
           memberId: member.memberId,
           name: member.name || 'Agent',
+          ownerId: member.ownerId,
+          title: member.agentTitle ?? undefined,
+          wake: member.config?.wake,
+          silentWakes: 0,
+          ...wakeState.get(member.memberId),
         })),
-        history: history.reverse(),
+        channelWake: channel.config?.wake,
+        hasAttachments: attachments.has(messageId),
+        history: history.reverse().map((line) => {
+          const isAgent = isAgentAuthored(line);
+          const author = isAgent
+            ? line.agentId
+              ? agentDisplayName({ name: line.agentName, title: line.agentTitle }, 'Agent')
+              : CHANNEL_DELETED_AGENT_NAME
+            : line.fullName || line.username || CHANNEL_DELETED_USER_NAME;
+          return {
+            at: line.createdAt.getTime(),
+            author,
+            authorId: (isAgent ? line.agentId : line.userId) ?? undefined,
+            content:
+              isAgent && channelMessageReplyError(line.metadata)
+                ? replyErrorNote(author)
+                : line.content.slice(0, 1500),
+            id: line.id,
+            isAgent,
+          };
+        }),
         message: message.content,
         messageId,
+        threadId: message.threadId,
         userId: message.userId,
         workspaceId: channel.workspaceId,
       };

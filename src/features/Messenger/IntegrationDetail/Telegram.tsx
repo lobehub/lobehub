@@ -23,7 +23,7 @@ interface TelegramDetailProps {
   appId?: string;
   botUsername?: string;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 // Telegram is the only remaining global-token bot with no install audit list,
@@ -36,15 +36,14 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
 
   const data = useMessengerData('telegram');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'telegram',
   });
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'telegram'} />;
 
   const { links } = data;
   const hasLinks = links.length > 0;

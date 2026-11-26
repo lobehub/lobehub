@@ -1,26 +1,23 @@
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
 import { useGlobalStore } from '@/store/global';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    cursor: pointer;
-
-    height: 100%;
-    padding: 8px;
-
-    font-size: 12px;
-    color: initial;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    height: '100%',
+    padding: '8px',
+    fontSize: '12px',
+    color: 'initial',
+  },
+});
 
 const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
   ({ url, title, style }) => {
@@ -49,7 +46,7 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
       >
         <Block
           clickable
-          className={styles.container}
+          className={stylex.props(styles.container).className}
           gap={2}
           justify={'space-between'}
           style={style}

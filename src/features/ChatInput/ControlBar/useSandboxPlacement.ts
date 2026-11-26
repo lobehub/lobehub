@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { useCallback, useSyncExternalStore } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -7,6 +8,8 @@ import {
   subscribePendingSandboxSelection,
 } from '@/store/chat/pendingSandboxSelection';
 import { topicSelectors } from '@/store/chat/selectors';
+
+const log = debug('lobe-client:sandbox:placement');
 
 /**
  * Where a conversation's cloud sandbox works, and what it starts from. Nothing
@@ -53,6 +56,28 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
   const topicMetadata = useChatStore((s) =>
     topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata : undefined,
   );
+  // The project the conversation belongs to: the topic's, or — before a topic
+  // exists — the blank draft a project sidebar "+" staged for this agent. A
+  // first send mints the topic and drops the draft before this pane moves to
+  // it, so for that moment the topic being created names the project: the
+  // composer would otherwise read as outside it and re-seed its default just
+  // as the send reads it.
+  const projectId = useChatStore((s) => {
+    if (topicId) return topicSelectors.getTopicById(topicId)(s)?.projectId ?? undefined;
+    if (s.pendingNewTopicDirectory?.agentId === agentId)
+      return s.pendingNewTopicDirectory.projectId;
+    for (const creatingId of s.creatingTopicIds) {
+      const creating = topicSelectors.getTopicById(creatingId)(s);
+      if (creating?.sessionId === agentId && creating.projectId) return creating.projectId;
+    }
+    return undefined;
+  });
+  // A conversation no loaded list holds — a project conversation opened right
+  // after the project home created it — is read by id, or the chip would show
+  // a temporary sandbox while the topic works in a repository.
+  const isUnlisted = useChatStore((s) => !!topicId && !topicSelectors.getTopicById(topicId)(s));
+  useChatStore((s) => s.useFetchTopicDetail)(isUnlisted ? topicId : undefined);
+  const refreshTopicDetail = useChatStore((s) => s.refreshTopicDetail);
   const topicInstanceId = topicMetadata?.sandboxInstanceId;
   const topicWorkingDirectory = topicMetadata?.sandboxWorkingDirectory;
   const topicDrive = topicMetadata?.sandboxDrive;
@@ -90,9 +115,20 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
         sandboxInstanceId: next.instanceId,
         sandboxWorkingDirectory: next.instanceId ? undefined : next.workingDirectory,
       });
+      // Written straight to the server when no list holds the topic; read it
+      // back so the pick shows rather than looking ignored until a reload.
+      // The save itself has landed by now; a failed read-back only delays
+      // the chip showing it, and must not make the pick look failed.
+      if (isUnlisted) {
+        try {
+          await refreshTopicDetail(topicId, true);
+        } catch (error) {
+          log('Failed to read back topic %s after a sandbox pick: %O', topicId, error);
+        }
+      }
     },
-    [agentId, topicId, updateTopicMetadata],
+    [agentId, isUnlisted, refreshTopicDetail, topicId, updateTopicMetadata],
   );
 
-  return { selection, setSelection, topicId: topicId ?? undefined };
+  return { projectId, selection, setSelection, topicId: topicId ?? undefined };
 };

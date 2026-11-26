@@ -45,6 +45,78 @@ const invalidates = (name: string, entryKey: string) =>
     );
 
 describe('projectWorkingDirectory store', () => {
+  describe('relocateDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('relocates through the service and refreshes the project listings', async () => {
+      const relocate = vi
+        .spyOn(projectWorkingDirectoryService, 'relocate')
+        .mockResolvedValue({ data: { id: 'directory-2' }, success: true } as never);
+      const input = { deviceId: 'device-2', id: 'directory-1', path: '/work', projectId: 'p-1' };
+
+      await useProjectDirectoryStore.getState().relocateDirectory(input);
+
+      expect(relocate).toHaveBeenCalledWith(input);
+      expect(invalidates('projectTopics', 'p-1')).toBe(true);
+    });
+  });
+
+  describe('removeDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('removes through the service and refreshes the project listings', async () => {
+      const remove = vi
+        .spyOn(projectWorkingDirectoryService, 'remove')
+        .mockResolvedValue({ data: {}, success: true } as never);
+
+      await useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1');
+
+      expect(remove).toHaveBeenCalledWith({ id: 'directory-1', projectId: 'project-1' });
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+    });
+
+    it('rejects so the caller can report a refused removal', async () => {
+      vi.spyOn(projectWorkingDirectoryService, 'remove').mockRejectedValue(new Error('conflict'));
+
+      await expect(
+        useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1'),
+      ).rejects.toThrow('conflict');
+    });
+  });
+
+  describe('updateProjectEnvironment', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("saves through the service and refreshes only that project's environment and folders", async () => {
+      vi.mocked(mutate).mockClear();
+      const update = vi
+        .spyOn(projectWorkingDirectoryService, 'updateEnvironment')
+        .mockResolvedValue({ data: { id: 'env-1' }, success: true } as never);
+      const configuration = { sources: [{ kind: 'git' as const, url: 'https://github.com/a/b' }] };
+
+      await useProjectDirectoryStore
+        .getState()
+        .updateProjectEnvironment({ configuration, projectId: 'project-1' });
+
+      expect(update).toHaveBeenCalledWith({ configuration, projectId: 'project-1' });
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+      // Standalone environments are untouched.
+      expect(invalidates('projectEnvironments', 'all')).toBe(false);
+    });
+  });
+
+  describe('refreshEnvironments', () => {
+    it('refreshes every environment and directory projection', async () => {
+      vi.mocked(mutate).mockClear();
+
+      await useProjectDirectoryStore.getState().refreshEnvironments();
+
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();

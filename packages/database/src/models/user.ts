@@ -1,4 +1,7 @@
+import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   NotificationSettings,
   SSOProvider,
   SystemAgentItem,
@@ -8,6 +11,11 @@ import type {
   UserPreference,
   UserSettings,
   WidgetDryRunGrant,
+} from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
 } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
@@ -36,6 +44,7 @@ import type { LobeChatDatabase } from '../type';
 import { notTrashed } from '../utils/softDelete';
 import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
+import { releaseProjectEnvironments } from './utils/projectEnvironmentCleanup';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -78,6 +87,9 @@ export type ListUsersForMemoryExtractorOptions = {
 export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
+  /** Only a saved user choice may become a chat instruction. */
+  preferredReplyLanguage?: string;
+  /** Resolved locale for generators that require a concrete output language. */
   responseLanguage: string;
   userName: string;
 }
@@ -510,26 +522,107 @@ export class UserModel {
     return notification;
   };
 
-  updatePreference = async (value: Partial<UserPreference>) => {
-    const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
-    if (!user) return;
+  /**
+   * Read, change and write back `users.preference` while the row is locked.
+   * Every preference writer goes through here: one that read the old JSON
+   * without the lock would write it back over a concurrent change, such as an
+   * island dismissal another client just added. Returns undefined when the
+   * user does not exist.
+   */
+  private mutatePreference = async <T>(
+    change: (prev: UserPreference) => { next: UserPreference; result: T },
+  ): Promise<T | undefined> =>
+    this.db.transaction(async (trx) => {
+      const [user] = await trx
+        .select({ preference: users.preference })
+        .from(users)
+        .where(eq(users.id, this.userId))
+        .for('update');
+      if (!user) return undefined;
 
-    return this.db
-      .update(users)
-      .set({ preference: merge(user.preference, value) })
-      .where(eq(users.id, this.userId));
+      const prev = (user.preference || {}) as UserPreference;
+      const { next, result } = change(prev);
+      if (next !== prev) {
+        await trx.update(users).set({ preference: next }).where(eq(users.id, this.userId));
+      }
+      return result;
+    });
+
+  updatePreference = async (value: Partial<UserPreference>) => {
+    await this.mutatePreference((prev) => ({
+      next: merge(prev, value) as UserPreference,
+      result: undefined,
+    }));
   };
 
   updateGuide = async (value: Partial<UserGuide>) => {
-    const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
-    if (!user) return;
-
-    const prevPreference = (user.preference || {}) as UserPreference;
-    return this.db
-      .update(users)
-      .set({ preference: { ...prevPreference, guide: merge(prevPreference.guide || {}, value) } })
-      .where(eq(users.id, this.userId));
+    await this.mutatePreference((prev) => ({
+      next: { ...prev, guide: merge(prev.guide || {}, value) },
+      result: undefined,
+    }));
   };
+
+  /** Keys of the goal asks this user dismissed from the approval island. */
+  getIslandDismissals = async (): Promise<string[]> => {
+    const user = await this.db.query.users.findFirst({
+      columns: { preference: true },
+      where: eq(users.id, this.userId),
+    });
+    return (user?.preference as UserPreference | null)?.islandDismissals ?? [];
+  };
+
+  /**
+   * Add keys to `preference.islandDismissals` and return the stored list. Done
+   * under the same row lock as every other preference writer, so neither two
+   * clients dismissing at once nor a concurrent preference save can drop a key.
+   */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const current = prev.islandDismissals ?? [];
+      const next = mergeIslandDismissals(current, keys);
+      return {
+        next: next === current ? prev : { ...prev, islandDismissals: next },
+        result: next,
+      };
+    })) ?? [];
+
+  /**
+   * Personal-mode "New worktree" switch for one directory; returns the stored
+   * list. Same row lock as every other preference writer, and the cap is
+   * applied here (see `applyWorktreeModeDir`).
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const worktreeModeDirs = applyWorktreeModeDir(prev.worktreeModeDirs, key, enabled);
+      return { next: { ...prev, worktreeModeDirs }, result: worktreeModeDirs };
+    })) ?? [];
+
+  /**
+   * Personal-mode Codex Plan switch remembered for one directory; returns the
+   * stored list, capped here like the worktree switch.
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPlanModeDirs = applyHeteroPlanModeDir(prev.heteroPlanModeDirs, key, enabled);
+      return { next: { ...prev, heteroPlanModeDirs }, result: heteroPlanModeDirs };
+    })) ?? [];
+
+  /**
+   * Personal-mode Claude Code permission mode remembered for one directory;
+   * returns the stored list. The cap is applied here (`applyHeteroPermissionModeDir`).
+   */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPermissionModeDirs = applyHeteroPermissionModeDir(
+        prev.heteroPermissionModeDirs,
+        key,
+        mode,
+      );
+      return { next: { ...prev, heteroPermissionModeDirs }, result: heteroPermissionModeDirs };
+    })) ?? [];
 
   /**
    * Normalize unique user fields so empty strings become null, keeping unique constraints safe.
@@ -650,6 +743,10 @@ export class UserModel {
       await tx
         .delete(taskLabels)
         .where(and(eq(taskLabels.userId, id), isNull(taskLabels.workspaceId)));
+      await applyRemainingTimeout();
+      // The projects cascade away with the account; their environments would
+      // otherwise hold it back through `environments.user_id`.
+      await releaseProjectEnvironments(tx as unknown as LobeChatDatabase, { userId: id });
       await applyRemainingTimeout();
       const result = await tx.delete(users).where(eq(users.id, id));
       if (deadline !== undefined && Date.now() >= deadline)
@@ -934,6 +1031,7 @@ export class UserModel {
 
     // User memory defaults to enabled=true when user settings are missing.
     const memoryEnabledCondition = sql`COALESCE((${userSettings.memory} ->> 'enabled')::boolean, true) = true`;
+    const notBannedCondition = sql`COALESCE(${users.banned}, false) = false`;
     // Eligible users must have at least one topic with at least one user message.
     const hasChattedTopicCondition = sql`
       EXISTS (
@@ -955,11 +1053,27 @@ export class UserModel {
       .from(users)
       .leftJoin(userSettings, eq(users.id, userSettings.id))
       .where(
-        and(cursorCondition, whitelistCondition, memoryEnabledCondition, hasChattedTopicCondition),
+        and(
+          cursorCondition,
+          whitelistCondition,
+          notBannedCondition,
+          memoryEnabledCondition,
+          hasChattedTopicCondition,
+        ),
       )
       .orderBy(asc(users.createdAt), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;
+  };
+
+  /** Whether the account is banned; background model work must stop for these users. */
+  static isBanned = async (db: LobeChatDatabase, userId: string): Promise<boolean> => {
+    const [row] = await db
+      .select({ banned: users.banned })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row?.banned === true;
   };
 
   /**
@@ -984,6 +1098,7 @@ export class UserModel {
     const general = user?.general as UserGeneralConfig | undefined;
 
     return {
+      preferredReplyLanguage: general?.responseLanguage || undefined,
       responseLanguage: general?.responseLanguage || 'en-US',
       userName: user?.fullName || user?.firstName || 'User',
     };

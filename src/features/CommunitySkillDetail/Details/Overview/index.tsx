@@ -4,6 +4,8 @@ import {
   Accordion,
   Block,
   Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown paragraphs get no className
+  createStaticStyles,
   Flexbox,
   Icon,
   Markdown,
@@ -23,17 +25,17 @@ import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
-import moduleStyles from './Overview.module.css';
 import RelatedSkillCard from './RelatedSkillCard';
 
 const styles = stylex.create({
   relatedGrid: {
     display: 'grid',
     gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.sm]: '1fr' },
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   sectionLabel: {
     margin: '0',
@@ -53,6 +55,14 @@ const styles = stylex.create({
     borderRadius: '8px',
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  summary: css`
+    p {
+      margin-block: 0 0.8em;
+    }
+  `,
+}));
 
 const SectionLabel = memo<{ children: string }>(({ children }) => (
   <Text as={'h2'} className={stylex.props(styles.sectionLabel).className}>
@@ -85,7 +95,7 @@ const Overview = memo(() => {
     versions.find((v) => v.version === version) || versions.find((v) => v.isLatest) || versions[0];
 
   const handleMoreRelated = useCallback(() => {
-    navigate(qs.stringifyUrl({ query: { category }, url: '/community/skill' }));
+    navigate(qs.stringifyUrl({ query: { category }, url: '/marketplace/skill' }));
     // In the modal, leave the detail open no longer than the navigation
     close?.();
   }, [category, close, navigate]);
@@ -95,7 +105,7 @@ const Overview = memo(() => {
       {/* ABOUT */}
       <Flexbox gap={12}>
         <SectionLabel>{t('skills.details.overview.about')}</SectionLabel>
-        <div {...sx(styles.summary, moduleStyles.summary)}>
+        <div {...sx(styles.summary, fallback.summary)}>
           <Markdown variant={'chat'}>{overview?.summary || description || ''}</Markdown>
         </div>
       </Flexbox>

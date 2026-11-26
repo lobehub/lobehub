@@ -13,7 +13,8 @@ export type CloudErrorCode =
   | typeof ChatErrorType.FreePlanLimit
   | typeof ChatErrorType.InsufficientBudgetForModel
   | typeof ChatErrorType.LobeHubModelDeprecated
-  | typeof ChatErrorType.SubscriptionPlanLimit;
+  | typeof ChatErrorType.SubscriptionPlanLimit
+  | typeof ChatErrorType.WorkspaceModelRestricted;
 
 /** Every code the spec table can classify. */
 export type SpecErrorCode = CloudErrorCode | ILobeAgentRuntimeErrorType;
@@ -137,6 +138,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Provider denied access (project blocked, model gated, etc.).',
   },
+
   [AgentRuntimeErrorType.AccountDeactivated]: {
     code: AgentRuntimeErrorType.AccountDeactivated,
     numericId: 1007,
@@ -158,6 +160,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Provider unavailable from the caller geographic region.',
+  },
+  // —— Cloud-only (tier 9) ——
+  [ChatErrorType.WorkspaceModelRestricted]: {
+    code: ChatErrorType.WorkspaceModelRestricted,
+    numericId: 1901,
+    category: 'auth',
+    severity: 'info',
+    attribution: 'user',
+    httpStatus: 403,
+    retryable: false,
+    countAsFailure: false,
+    description: 'A workspace admin restricted the requested LobeHub Cloud model for this member.',
   },
 
   // ─── 2xxx Quota / Billing ─────────────────────────────────────────────
@@ -420,6 +434,21 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description:
       'A relayed model request on the user device missed its first-output or total deadline.',
+  },
+  [AgentRuntimeErrorType.ProviderStreamInterrupted]: {
+    code: AgentRuntimeErrorType.ProviderStreamInterrupted,
+    numericId: 6005,
+    category: 'network',
+    severity: 'warning',
+    // The provider ended the response without a terminal event. Nothing on our
+    // side failed to parse, so this is not a harness stream error.
+    attribution: 'provider',
+    httpStatus: 502,
+    retryable: true,
+    routeFallback: true,
+    countAsFailure: false,
+    description:
+      'Provider closed the stream before sending a terminal event (stop / usage / error).',
   },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
@@ -762,6 +791,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Provider connection check failed during setup.',
+  },
+  [AgentRuntimeErrorType.ProviderBaseURLBlocked]: {
+    code: AgentRuntimeErrorType.ProviderBaseURLBlocked,
+    numericId: 9006,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'User-supplied provider base URL resolves to a private / reserved address the server may not reach (SSRF protection).',
   },
   [AgentRuntimeErrorType.ClientLlmExecutorUnavailable]: {
     code: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,

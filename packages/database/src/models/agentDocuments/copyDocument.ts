@@ -22,11 +22,8 @@ export const isEmptyParseShell = (doc: {
   content: string | null;
   editorData: Record<string, any> | null;
 }): boolean => {
-  const hasRootChildren =
-    Array.isArray(doc.editorData?.root?.children) &&
-    /* v8 ignore start -- unreachable `?? 0`: Array.isArray above guarantees a numeric length */
-    (doc.editorData!.root.children.length ?? 0) > 0;
-  /* v8 ignore stop */
+  const rootChildren = doc.editorData?.root?.children;
+  const hasRootChildren = Array.isArray(rootChildren) && rootChildren.length > 0;
   return Boolean(doc.editorData) && !hasRootChildren && !doc.content;
 };
 

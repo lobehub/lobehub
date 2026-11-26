@@ -4,6 +4,8 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { ConnectorSourceType } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
@@ -84,6 +86,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
   const [clientSecret, setClientSecret] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   // Pre-fill form when opening in edit mode
   useEffect(() => {
@@ -125,6 +128,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     setClientSecret('');
     setShowAdvanced(false);
     setSubmitting(false);
+    setSubmitError(null);
   };
 
   const handleAdd = async () => {
@@ -133,10 +137,13 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     // Open the popup synchronously within the click handler, otherwise the
     // browser blocks it once we cross the first `await` below. It's navigated to
     // the real authorize URL after the connector + OAuth-start mutations resolve.
+    setSubmitError(null);
     const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
     if (!popup) {
-      toast.error(
-        t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+      setSubmitError(
+        toInlineError(
+          t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+        ),
       );
       return;
     }
@@ -209,6 +216,20 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
 
       reset();
       onClose();
+    } catch (error) {
+      console.error('[AddConnector] Failed to add connector:', error);
+      // The blank OAuth popup was opened before any await; close it so it
+      // does not linger beside the inline error.
+      if (!popup.closed) popup.close();
+      setSubmitError(
+        toInlineError(
+          t(
+            'connector.add.failedRetry',
+            "Couldn't save the connector. Check the server URL and your network, then try again.",
+          ),
+          error,
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -224,12 +245,15 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     // Re-run OAuth if the URL changed or new credentials were supplied
     const needsReAuth = urlChanged || hasNewCredentials;
 
+    setSubmitError(null);
     let popup: Window | null = null;
     if (needsReAuth) {
       popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
       if (!popup) {
-        toast.error(
-          t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+        setSubmitError(
+          toInlineError(
+            t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+          ),
         );
         return;
       }
@@ -299,6 +323,18 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
 
       reset();
       onClose();
+    } catch (error) {
+      console.error('[AddConnector] Failed to update connector:', error);
+      if (popup && !popup.closed) popup.close();
+      setSubmitError(
+        toInlineError(
+          t(
+            'connector.add.failedRetry',
+            "Couldn't save the connector. Check the server URL and your network, then try again.",
+          ),
+          error,
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -332,7 +368,10 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           <Input
             placeholder={t('connector.add.namePlaceholder', 'My connector')}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSubmitError(null);
+            }}
           />
         </div>
         <div>
@@ -342,7 +381,10 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           <Input
             placeholder="https://mcp.example.com"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setSubmitError(null);
+            }}
           />
         </div>
 
@@ -369,13 +411,19 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
               <Input
                 placeholder={t('connector.add.clientId', 'OAuth Client ID (optional)')}
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
+                onChange={(e) => {
+                  setClientId(e.target.value);
+                  setSubmitError(null);
+                }}
               />
               <InputPassword
                 autoComplete="new-password"
                 placeholder={t('connector.add.clientSecret', 'OAuth Client Secret (optional)')}
                 value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
+                onChange={(e) => {
+                  setClientSecret(e.target.value);
+                  setSubmitError(null);
+                }}
               />
               <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12 }}>
                 {t('connector.add.redirectHint', 'Redirect URI to register with your OAuth app:')}
@@ -385,6 +433,9 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
             </div>
           )}
         </div>
+        {submitError && (
+          <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+        )}
       </div>
     </ImperativeModal>
   );

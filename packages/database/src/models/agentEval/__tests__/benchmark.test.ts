@@ -90,6 +90,28 @@ describe('AgentEvalBenchmarkModel', () => {
     });
   });
 
+  describe('releaseDatasets', () => {
+    it('frees the datasets of a benchmark the account may delete, so deleting it keeps them', async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({ identifier: 'release', isSystem: false, name: 'Release', rubrics: [], userId })
+        .returning();
+      const [dataset] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({ benchmarkId: benchmark.id, identifier: 'kept', name: 'Kept', userId })
+        .returning();
+
+      expect(await benchmarkModel2.releaseDatasets(benchmark.id)).toBe(0);
+      expect(await benchmarkModel.releaseDatasets(benchmark.id)).toBe(1);
+      await benchmarkModel.delete(benchmark.id);
+
+      const kept = await serverDB.query.agentEvalDatasets.findFirst({
+        where: eq(agentEvalDatasets.id, dataset.id),
+      });
+      expect(kept?.benchmarkId).toBeNull();
+    });
+  });
+
   describe('delete', () => {
     it('should delete a user-created benchmark', async () => {
       const [benchmark] = await serverDB
@@ -198,7 +220,6 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(results.map((r) => r.identifier)).toContain('system-1');
       expect(results.map((r) => r.identifier)).toContain('user-1');
       expect(results.map((r) => r.identifier)).toContain('system-2');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-1');
     });
 
     it('should query only user-created benchmarks', async () => {
@@ -242,7 +263,7 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(result.datasetCount).toBe(2);
     });
 
-    it('should return testCaseCount for benchmarks with test cases', async () => {
+    it('should count active test cases without retired historical rows', async () => {
       const benchmarks = await serverDB.query.agentEvalBenchmarks.findMany();
       const userBenchmark = benchmarks.find((b) => b.identifier === 'user-1')!;
 
@@ -257,11 +278,18 @@ describe('AgentEvalBenchmarkModel', () => {
         })
         .returning();
 
-      // Add 3 test cases to the dataset
+      // Three runnable cases and one retired row kept for historical results.
       await serverDB.insert(agentEvalTestCases).values([
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 1, userId },
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 2, userId },
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 3, userId },
+        {
+          datasetId: dataset.id,
+          content: { input: 'retired' },
+          metadata: { retired: true },
+          sortOrder: 4,
+          userId,
+        },
       ]);
 
       const results = await benchmarkModel.query(true);

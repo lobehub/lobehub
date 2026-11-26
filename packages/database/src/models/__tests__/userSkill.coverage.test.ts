@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   documents,
+  files,
   SKILL_BUNDLE_FILE_TYPE,
   SKILL_SCRIPT_FILE_TYPE,
   SKILL_VERSION_FILE_TYPE,
@@ -38,6 +39,13 @@ const insertRow = async (values: Partial<typeof documents.$inferInsert> & { file
     .returning();
   return row;
 };
+
+/** The package a caller publishes alongside every create / revise. */
+const archiveFor = (name: string) => ({
+  fileHash: `hash-${name}`,
+  size: 1,
+  url: `skills/${name}.zip`,
+});
 
 beforeEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
@@ -140,12 +148,14 @@ describe('UserSkillModel coverage', () => {
   describe('findAll', () => {
     it('loads every skill in the library with its body, ordered by name', async () => {
       const zeta = await model.create({
+        archive: archiveFor('zeta'),
         content: 'zeta body',
         description: 'z',
         name: 'zeta',
         title: 'Zeta',
       });
       const alpha = await model.create({
+        archive: archiveFor('alpha'),
         content: 'alpha body',
         description: 'a',
         files: [{ content: 'echo hi', path: 'scripts/run.sh' }],
@@ -171,7 +181,13 @@ describe('UserSkillModel coverage', () => {
 
   describe('findByNames', () => {
     it('returns an empty list for no names without reading the library', async () => {
-      await model.create({ content: 'body', description: 'd', name: 'present', title: 'Present' });
+      await model.create({
+        archive: archiveFor('present'),
+        content: 'body',
+        description: 'd',
+        name: 'present',
+        title: 'Present',
+      });
 
       expect(await model.findByNames([])).toEqual([]);
     });
@@ -185,20 +201,82 @@ describe('UserSkillModel coverage', () => {
         metadata: null,
       });
 
-      expect(await model.revise(bundle.id, { content: 'v2 body' })).toBe(2);
+      expect(
+        await model.revise(bundle.id, {
+          archive: archiveFor('legacy-v2'),
+          baseVersion: 1,
+          content: 'v2 body',
+        }),
+      ).toBe(2);
       expect(await model.findById(bundle.id)).toMatchObject({ version: 2 });
       expect((await model.listVersions(bundle.id)).map((v) => v.version)).toEqual([2]);
+    });
+
+    it('names the published package after an unnamed bundle', async () => {
+      const bundle = await insertRow({
+        fileType: SKILL_BUNDLE_FILE_TYPE,
+        filename: null,
+        metadata: { userSkill: { version: 1 } },
+      });
+
+      expect(
+        await model.revise(bundle.id, {
+          archive: archiveFor('unnamed'),
+          baseVersion: 1,
+          content: 'v2 body',
+        }),
+      ).toBe(2);
+
+      const [published] = await serverDB.select().from(files).where(eq(files.parentId, bundle.id));
+      expect(published.name).toBe('@2.zip');
+    });
+
+    it('reads an archive published before file hashes were stored', async () => {
+      const bundle = await insertRow({ fileType: SKILL_BUNDLE_FILE_TYPE, filename: 'hashless' });
+      await model.revise(bundle.id, {
+        archive: archiveFor('hashless-v2'),
+        baseVersion: 1,
+        content: 'v2 body',
+      });
+      // Older rows predate the hash column being filled in by the publisher.
+      await serverDB.update(files).set({ fileHash: null }).where(eq(files.parentId, bundle.id));
+
+      const skill = await model.findById(bundle.id);
+
+      expect(skill?.archive).toMatchObject({ fileHash: '' });
+    });
+
+    it('tolerates an archive row that lost its metadata', async () => {
+      const scoped = new UserSkillModel(serverDB, userId);
+      const createdAt = new Date('2026-10-01T00:00:00.000Z');
+      // `archiveRows` only selects rows whose metadata carries `skillVersion`, so a
+      // metadata-less row is a defensive case the query cannot surface on its own.
+      (scoped as any).archiveRows = async () => [
+        { createdAt, fileHash: 'h', id: 'archive-1', metadata: null, size: 1, url: 'skills/a.zip' },
+      ];
+
+      const [version] = await scoped.listVersions('skill-1');
+
+      expect(version).toMatchObject({ archive: { fileHash: 'h', fileId: 'archive-1' } });
+      expect(version.note).toBeUndefined();
+      expect(Number.isNaN(version.version)).toBe(true);
     });
   });
 
   describe('listVersions', () => {
     it('reads a version row with no content or version number as empty / 0', async () => {
       const bundle = await insertRow({ fileType: SKILL_BUNDLE_FILE_TYPE, filename: 'versions' });
-      await model.revise(bundle.id, { content: 'v2 body' });
       const bare = await insertRow({
         content: null,
         fileType: SKILL_VERSION_FILE_TYPE,
         metadata: null,
+        parentId: bundle.id,
+      });
+      // A version written before archives: its SKILL.md lives on the row itself.
+      await insertRow({
+        content: 'v2 body',
+        fileType: SKILL_VERSION_FILE_TYPE,
+        metadata: { version: 2 },
         parentId: bundle.id,
       });
 

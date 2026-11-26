@@ -3,6 +3,7 @@ import type {
   ContextBuildInput,
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
+import { tryCountRequestPayloadTokens } from '@lobechat/context-engine';
 
 import type { RuntimeExecutorContext } from '../context';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
@@ -27,7 +28,13 @@ export class ServerContextBuilder implements ContextBuilder {
     });
 
     return {
+      // The attempt ships these messages and `resolved.tools` as-is.
+      contextAccounting: tryCountRequestPayloadTokens({
+        messages: result.processedMessages,
+        tools: tooling.resolved.tools,
+      }),
       messages: result.processedMessages,
+      getToolActivationContext: result.getToolActivationContext,
       modelParameters: {
         ...result.resolvedExtendParams,
         ...(typeof result.stream === 'boolean' && { stream: result.stream }),

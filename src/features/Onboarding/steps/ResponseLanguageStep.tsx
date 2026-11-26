@@ -3,12 +3,10 @@
 import { SendButton } from '@lobehub/editor/react';
 import { Button, cssVar, Flexbox, Select, Text } from '@lobehub/ui';
 import { Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Locales } from '@/locales/resources';
-import { localeOptions, normalizeLocale } from '@/locales/resources';
-import { useGlobalStore } from '@/store/global';
+import { localeOptions } from '@/locales/resources';
 import { useUserStore } from '@/store/user';
 
 import LobeMessage from '../components/LobeMessage';
@@ -19,16 +17,11 @@ interface ResponseLanguageStepProps {
 }
 
 const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }) => {
-  const { i18n, t } = useTranslation(['onboarding', 'common']);
-  const switchLocale = useGlobalStore((s) => s.switchLocale);
+  const { t } = useTranslation(['onboarding', 'common', 'setting']);
   const setSettings = useUserStore((s) => s.setSettings);
 
-  // Mirror i18n's current locale rather than navigator.language. The user may
-  // have already switched language in the previous step (TelemetryStep), so
-  // navigator.language can disagree with what is being rendered. Deriving
-  // straight from i18n keeps the Select in lock-step with the visible UI.
-  const value: Locales = normalizeLocale(
-    i18n.resolvedLanguage || i18n.language || navigator.language,
+  const [value, setValue] = useState(
+    () => useUserStore.getState().settings?.general?.responseLanguage || 'auto',
   );
   const [isNavigating, setIsNavigating] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -45,7 +38,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       // to fail: on error reset the navigating lock so the user can retry
       // instead of being stuck with both buttons permanently disabled
       //
-      await setSettings({ general: { responseLanguage: value } });
+      await setSettings({ general: { responseLanguage: value === 'auto' ? '' : value } });
       await onNext();
     } catch {
       setHasError(true);
@@ -61,45 +54,39 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
     onBack();
   }, [onBack]);
 
-  const Message = useCallback(
-    // eslint-disable-next-line @eslint-react/no-nested-component-definitions
-    () => (
-      <LobeMessage
-        sentences={[
-          t('responseLanguage.title'),
-          t('responseLanguage.title2'),
-          t('responseLanguage.title3'),
-        ]}
-      />
-    ),
+  const sentences = useMemo(
+    () => [t('responseLanguage.title'), t('responseLanguage.title2'), t('responseLanguage.title3')],
     [t],
   );
 
   return (
     <Flexbox gap={16}>
-      <Message />
+      <LobeMessage sentences={sentences} />
       <Flexbox horizontal align={'center'} gap={12}>
         <Select
           showSearch
-          options={localeOptions}
           size="large"
           value={value}
           optionRender={(item) => (
             <Flexbox key={item.value}>
               <Text>{item.label}</Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t(`lang.${item.value}` as any, { ns: 'common' })}
-              </Text>
+              {item.value !== 'auto' && (
+                <Text fontSize={12} type={'secondary'}>
+                  {t(`lang.${item.value}` as any, { ns: 'common' })}
+                </Text>
+              )}
             </Flexbox>
           )}
+          options={[
+            { label: t('settingCommon.responseLanguage.auto', { ns: 'setting' }), value: 'auto' },
+            ...localeOptions,
+          ]}
           style={{
             fontSize: 20,
             fontWeight: 'bold',
             width: '100%',
           }}
-          onChange={(v) => {
-            if (v) switchLocale(v);
-          }}
+          onChange={setValue}
         />
         <SendButton
           disabled={isNavigating}

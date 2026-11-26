@@ -10,11 +10,9 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { type TopicRankItem } from '@/types/topic';
 
 import StatsFormGroup from '../components/StatsFormGroup';
@@ -24,9 +22,11 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.rankTopics(), async () =>
-    topicService.rankTopics(),
-  );
+  const { error, revalidate } = statsActions.useFetchRank('topics');
+  // A restored empty ranking stays unsettled until the server confirms it, so
+  // a failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledRank('topics'));
+  const loading = !data;
 
   const showExtra = Boolean(data && data?.length > 5);
 
@@ -62,12 +62,17 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
           )
         }
       >
-        <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+        <AsyncBoundary
+          data={data}
+          error={error}
+          errorVariant={'block'}
+          onRetry={() => revalidate()}
+        >
           <BarList
             data={data?.slice(0, 5).map((item) => mapData(item)) || []}
             height={220}
             leftLabel={t('stats.topicsRank.left')}
-            loading={isLoading || !data}
+            loading={loading}
             rightLabel={t('stats.topicsRank.right')}
             noDataText={{
               desc: t('stats.empty.desc'),
@@ -80,7 +85,7 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
       {showExtra && (
         <ImperativeModal
           footer={null}
-          loading={isLoading || !data}
+          loading={loading}
           open={open}
           title={t('stats.topicsRank.title')}
           onCancel={() => setOpen(false)}
@@ -89,7 +94,7 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
             data={data?.map((item) => mapData(item)) || []}
             height={340}
             leftLabel={t('stats.topicsRank.left')}
-            loading={isLoading || !data}
+            loading={loading}
             rightLabel={t('stats.topicsRank.right')}
             onValueChange={(item) => navigate(item.link)}
           />

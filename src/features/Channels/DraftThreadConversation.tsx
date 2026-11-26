@@ -36,7 +36,7 @@ export function DraftThreadConversation({
     >
       <Flexbox {...stylex.props(styles.body)}>
         <Flexbox aria-label={t('thread')} {...stylex.props(styles.feed)}>
-          <WideScreenContainer fullWidth paddingInline={24}>
+          <WideScreenContainer fullWidth paddingInline={16}>
             <ThreadRootMessage
               detail={{ ...detail, attachments: draft.attachments }}
               root={draft.root}

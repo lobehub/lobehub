@@ -8,9 +8,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import ChannelList from '@/features/Channels/ChannelList';
 import Recents from '@/features/Home/Recents';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
@@ -19,24 +19,22 @@ import { useNavLayout } from '@/hooks/useNavLayout';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
+import { setSidebarSectionHidden, SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { isModifierClick } from '@/utils/navigation';
 
 import Agent from './Agent';
+import Channels from './Channels';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
 import Favorites from './Favorites';
-import Private from './Private';
-import Project from './Project';
 import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPreference';
 
 export enum GroupKey {
   Agent = 'agent',
+  Channels = 'channels',
   Community = 'community',
   Favorites = 'favorites',
   Pages = 'pages',
-  Private = 'private',
   Project = 'project',
   Recents = 'recents',
   Resource = 'resource',
@@ -44,22 +42,18 @@ export enum GroupKey {
 
 const ACCORDION_KEYS = new Set<string>([
   GroupKey.Favorites,
-  GroupKey.Project,
   GroupKey.Recents,
   GroupKey.Agent,
-  GroupKey.Private,
+  GroupKey.Channels,
 ]);
 
 /** Keys rendered in the header — must be excluded from the body to avoid duplicates
  * when migrating users whose persisted sidebarItems still include them. */
 const HEADER_KEYS = new Set<string>(['home', 'search']);
-const SECTION_GAP = 8;
 
 const accordionComponents: Record<string, (key: string) => ReactElement> = {
   [GroupKey.Agent]: (key) => <Agent itemKey={key} key={key} />,
   [GroupKey.Favorites]: (key) => <Favorites itemKey={key} key={key} />,
-  [GroupKey.Private]: (key) => <Private itemKey={key} key={key} />,
-  [GroupKey.Project]: (key) => <Project itemKey={key} key={key} />,
   [GroupKey.Recents]: (key) => <Recents itemKey={key} key={key} />,
 };
 
@@ -81,18 +75,15 @@ const mergeSidebarExpandedKeys = (
 
 const Body = memo(() => {
   const { t } = useTranslation('common');
+  const { panelPaddingInline, sectionGap } = useNavItemMetrics();
   const tab = useActiveTabKey();
   const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
-  // Personal mode has no notion of "private vs workspace-public" — every row
-  // is implicitly the owner's. Hide the Private section entirely there so the
-  // sidebar doesn't sprout an empty accordion users can't populate.
   const activeWorkspaceId = useActiveWorkspaceId();
-  // The Agent/Private sections subtract the caller's sidebar-hidden items,
+  // The Agents section subtracts the caller's sidebar-hidden items,
   // and the section layout syncs per-member — both live in the workspace
   // user preference, so load it alongside the sidebar.
   const useFetchWorkspaceUserPreference = useUserStore((s) => s.useFetchWorkspaceUserPreference);
-  const enableProjects = useUserStore(labPreferSelectors.enableProjects);
   useFetchWorkspaceUserPreference();
   useSyncWorkspaceSidebarPreference(activeWorkspaceId);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
@@ -106,7 +97,9 @@ const Body = memo(() => {
 
   const hideSection = useCallback(
     (key: string) => {
-      updateSystemStatus({ hiddenSidebarSections: [...hiddenSections, key] });
+      updateSystemStatus({
+        hiddenSidebarSections: setSidebarSectionHidden(hiddenSections, key, true),
+      });
     },
     [hiddenSections, updateSystemStatus],
   );
@@ -146,18 +139,15 @@ const Body = memo(() => {
   // Items that must always be visible regardless of hiddenSections
   const isVisible = useCallback(
     (k: string) => {
-      // Private accordion is workspace-only. In personal mode every row is
-      // implicitly owner-private, so a dedicated bucket would be a noisy
-      // empty section.
-      if (k === GroupKey.Private && !activeWorkspaceId) return false;
-      if (k === GroupKey.Project && !enableProjects) return false;
-      return k === GroupKey.Agent || k === SIDEBAR_SPACER_ID || !hiddenSections.includes(k);
+      return k === GroupKey.Agent || !hiddenSections.includes(k);
     },
-    [hiddenSections, activeWorkspaceId, enableProjects],
+    [hiddenSections],
   );
 
   const visibleKeys = useMemo(
-    () => sidebarItems.filter((k) => !HEADER_KEYS.has(k) && isVisible(k)),
+    // The saved order may still hold the retired bottom spacer; the list is continuous now.
+    () =>
+      sidebarItems.filter((k) => !HEADER_KEYS.has(k) && k !== SIDEBAR_SPACER_ID && isVisible(k)),
     [sidebarItems, isVisible],
   );
 
@@ -176,7 +166,6 @@ const Body = memo(() => {
           }}
         >
           <NavItem
-            active={tab === key}
             contextMenuItems={getContextMenuItems(key)}
             icon={navItem.icon}
             title={navItem.title}
@@ -184,6 +173,9 @@ const Body = memo(() => {
               <DropdownMenu items={getContextMenuItems(key)}>
                 <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
               </DropdownMenu>
+            }
+            active={
+              tab === (navItem.activeTab ?? key) || navItem.additionalActiveTabs?.includes(tab)
             }
           />
         </WorkspaceLink>
@@ -206,7 +198,7 @@ const Body = memo(() => {
   );
 
   // Consecutive sections share one spacing group, including Channels' independent
-  // accordion. Nav links and the spacer keep their positions and compact spacing.
+  // accordion. Nav links keep their positions and compact spacing.
   const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: { element: ReactElement; key: string }[] = [];
@@ -220,7 +212,7 @@ const Body = memo(() => {
           <AccordionRoot
             indicatorPlacement="inline"
             key={`acc-${sectionGroup.length}`}
-            style={{ gap: SECTION_GAP }}
+            style={{ gap: sectionGap }}
             value={sidebarExpandedKeys}
             onValueChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys as string[])}
           >
@@ -235,7 +227,7 @@ const Body = memo(() => {
       flushAccordion();
       if (sectionGroup.length > 0) {
         elements.push(
-          <Flexbox gap={SECTION_GAP} key={`sections-${elements.length}`}>
+          <Flexbox gap={sectionGap} key={`sections-${elements.length}`}>
             {sectionGroup}
           </Flexbox>,
         );
@@ -244,24 +236,14 @@ const Body = memo(() => {
     };
 
     for (const key of visibleKeys) {
-      if (key === SIDEBAR_SPACER_ID) {
-        flushSections();
-        elements.push(
-          <div
-            aria-hidden
-            data-sidebar-bottom-spacer
-            key={`spacer-${elements.length}`}
-            style={{ flex: '1 1 0', minHeight: 0 }}
-          />,
-        );
+      if (key === GroupKey.Channels) {
+        // Channels keep their own accordion (and its unsaved expanded state)
+        // but take their place in the section order like the others.
+        flushAccordion();
+        sectionGroup.push(<Channels itemKey={key} key={key} />);
       } else if (ACCORDION_KEYS.has(key)) {
         const comp = accordionComponents[key]?.(key);
         if (comp) accGroup.push({ element: comp, key });
-        // Channels sit right below Agents, in their own accordion.
-        if (key === GroupKey.Agent) {
-          flushAccordion();
-          sectionGroup.push(<ChannelList key="channels" />);
-        }
       } else {
         const link = renderNavLink(key);
         if (link) {
@@ -273,10 +255,10 @@ const Body = memo(() => {
     flushSections();
 
     return elements;
-  }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange]);
+  }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange, sectionGap]);
 
   return (
-    <Flexbox flex={1} gap={1} paddingInline={4} style={{ minHeight: '100%' }}>
+    <Flexbox gap={1} paddingInline={panelPaddingInline}>
       {content}
     </Flexbox>
   );

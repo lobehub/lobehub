@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Voeg de huidige invoer toe als een gebruikersbericht zonder generatie te starten",
-  "addUserMessage.title": "Gebruikersbericht Toevoegen",
   "commandPalette.desc": "Open de globale opdrachtpalet voor snelle toegang tot functies",
   "commandPalette.title": "Opdrachtpalet",
   "deleteAndRegenerateMessage.desc": "Verwijder het laatste bericht en genereer opnieuw",
@@ -27,6 +25,8 @@
   "openChatSettings.title": "Chatinstellingen Openen",
   "openHotkeyHelper.desc": "Bekijk instructies voor alle sneltoetsen",
   "openHotkeyHelper.title": "Sneltoetsen Hulp Openen",
+  "openTaskFilter.desc": "Open het filtermenu op de pagina Taken",
+  "openTaskFilter.title": "Taken filteren",
   "prevTab.desc": "Ga naar het vorige tabblad in de Desktop-app; keert terug naar het laatste tabblad aan het begin",
   "prevTab.title": "Vorige Tabblad",
   "regenerateMessage.desc": "Genereer het laatste bericht opnieuw",

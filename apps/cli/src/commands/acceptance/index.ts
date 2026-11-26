@@ -18,6 +18,7 @@ import { log } from '../../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { collectCommentFeedback } from './commentFeedback';
 import { attachCriterionCommands } from './criterion';
+import { attachDeleteCommand } from './delete';
 import { attachAcceptanceFlowCommands } from './flow';
 import {
   assertReportLanguage,
@@ -779,6 +780,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
   // trees hang off the first-class command only; the legacy `lh verify acceptance`
   // alias stays a thin decision surface (the rest keep their `lh verify …` aliases).
   if (options?.deprecated) return;
+  attachDeleteCommand(acceptance, resolveAcceptanceId);
   attachAcceptanceRunCommands(acceptance);
   attachPlanCommands(acceptance);
   attachCriterionCommands(acceptance);

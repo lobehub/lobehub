@@ -61,6 +61,7 @@ export const resolveOperationInitSlots = async ({
     searchDecision: discovery.searchDecision,
     toolSet: {
       activatableToolIds: prep.activatableToolIds,
+      deferredManifestMap: prep.deferredManifestMap,
       enabledToolIds: discovery.toolsResult.enabledToolIds,
       executorMap: discovery.toolExecutorMap,
       manifestMap: discovery.toolManifestMap,
@@ -70,3 +71,27 @@ export const resolveOperationInitSlots = async ({
     userMemory: prep.userMemory,
   };
 };
+
+/**
+ * The slots of an operation created without its init: nothing the init
+ * produces, and the context step 0 is queued with until the worker has
+ * assembled the real one.
+ */
+export const buildPendingInitSlots = ({
+  assistantMessageId,
+  operationId,
+  parentMessageId,
+}: {
+  assistantMessageId: string;
+  operationId: string;
+  parentMessageId: string;
+}): OperationInitSlots =>
+  ({
+    initialContext: {
+      payload: { assistantMessageId, isFirstMessage: true, message: [], parentMessageId },
+      phase: 'user_input',
+      session: { messageCount: 0, sessionId: operationId, status: 'idle', stepCount: 0 },
+    },
+    modelCapabilities: {},
+    toolSet: { enabledToolIds: [], manifestMap: {}, sourceMap: {}, tools: [] },
+  }) as OperationInitSlots;

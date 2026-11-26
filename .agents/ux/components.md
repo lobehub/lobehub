@@ -1,4 +1,4 @@
-<!-- lobe-design-init: version=5.8.0 fingerprint=29ef977ba7e7 -->
+<!-- lobe-design-init: version=6.3.1 fingerprint=29ef977ba7e7 -->
 
 # 组件盘点（lobe-design・Round 2）
 
@@ -53,6 +53,8 @@
 | `components/Skeleton`、`ListSkeleton` | 路由级骨架和列表占位                         | 骨架形状要贴近真实布局；路由骨架登记方式见 `spa-routes` skill  |
 | `features/CommandMenu`                | 全局命令面板                                 | 新的全局动作登记进来，不另做搜索弹窗                           |
 
+市场中的应用和 MCP 共用 `SkillListRow` 目录行。用户已安装的 MCP 和技能分别在各自目录顶部展示，复用 `CatalogSection` 的预览和「查看全部」。未连接项的行尾用 `RowAddAction` 显示加号，已连接项用 `RowMoreMenu` 打开管理菜单。
+
 #### mobile 外壳（桌面页面在 mobile 全屏打开）
 
 mobile 与 web 是同一套 DOM 组件；分类同 web（薄包装 / 重复 / 业务组件），没有单独的 RN 原子层。
@@ -101,7 +103,7 @@ mobile 与 web 是同一套 DOM 组件；分类同 web（薄包装 / 重复 / �
 | `StatisticCard`、`Statistic`                           | 用量卡片、行内「数值 + 标签」                    | `Statistic` 是行内小字，卡片指标用 `StatisticCard` |
 | `LiteTable`                                            | 窄屏会切换为列表的轻量表格                       | 需要在 mobile 可读的表格用它                       |
 | `PublishedTime`                                        | 发布 / 更新时间                                  | 列表和详情里的发布时间用它                         |
-| `LobeIcons`、`LibIcon`、`SkillAvatar`、`KnowledgeIcon` | 模型厂商、库、技能、知识库图标                   | 厂商徽标走 `@lobehub/icons`（E-03）                |
+| `LobeIcons`、`LibIcon`、`SkillAvatar`、`KnowledgeIcon` | 模型厂商、库、技能、知识库图标                   | 厂商徽标走 `@lobehub/icons`（E-04）                |
 | `Branding`、`BrandWatermark`、`Loading`                | 品牌标识、水印、启动加载                         | 品牌元素只用这些，不直接放 logo 图片               |
 | `features/ShareModal`、`SharePopover`                  | 分享 Agent / 话题 / 页面                         | 分享入口统一                                       |
 | `features/Electron`、`Desktop*Bridge`                  | 仅 desktop 的窗口与系统集成                      | 只在 desktop 渲染；web 与 mobile 不得依赖          |

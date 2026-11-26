@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { sx } from '@/styles/sx';
 
 import CopyableLabel from '../CopyableLabel';
+import { copyableRevealMarker } from '../CopyableLabel/markers.stylex';
 
 const styles = stylex.create({
   bordered: {
@@ -61,6 +62,8 @@ interface DescriptionsProps extends Omit<GridProps, 'children' | 'wrap'> {
   };
   items: DescriptionItem[];
   labelWidth?: number | string;
+  /** Show each copyable value's copy button only while its row is hovered or focused. */
+  revealCopyOnHover?: boolean;
   styles?: {
     item?: CSSProperties;
     label?: CSSProperties;
@@ -77,6 +80,7 @@ const Descriptions = memo<DescriptionsProps>(
     className,
     items,
     classNames,
+    revealCopyOnHover,
     styles: customStyles,
     wrap,
     ...rest
@@ -84,19 +88,18 @@ const Descriptions = memo<DescriptionsProps>(
     return (
       <>
         {title && <h3 style={{ marginTop: 12 }}>{title}</h3>}
-        <Grid
-          gap={0}
-          maxItemWidth={450}
-          {...sx([bordered && styles.bordered], className)}
-          {...rest}
-        >
+        <Grid gap={0} maxItemWidth={450} {...sx(bordered && styles.bordered, className)} {...rest}>
           {items.map((item) => (
             <Flexbox
               horizontal
               align={wrap ? 'flex-start' : 'center'}
               flex={1}
               key={item.key}
-              {...sx([bordered && styles.cell], cx(item.className, classNames?.item))}
+              {...sx(
+                bordered && styles.cell,
+                revealCopyOnHover && copyableRevealMarker,
+                cx(item.className, classNames?.item),
+              )}
               style={{
                 overflow: wrap ? undefined : 'hidden',
                 position: 'relative',
@@ -109,7 +112,7 @@ const Descriptions = memo<DescriptionsProps>(
                 align={'center'}
                 flex={'none'}
                 gap={6}
-                {...sx([bordered && styles.label])}
+                {...sx(bordered && styles.label)}
                 paddingBlock={bordered ? 12 : 4}
                 paddingInline={bordered ? 16 : 0}
                 style={{ height: '100%', position: 'relative' }}
@@ -144,6 +147,7 @@ const Descriptions = memo<DescriptionsProps>(
                 {item.copyable ? (
                   <CopyableLabel
                     className={cx(classNames?.value, item.classNames?.value)}
+                    revealCopyOnHover={revealCopyOnHover}
                     style={{ ...customStyles?.value, ...item.styles?.value }}
                     value={item.value ? String(item.value) : '--'}
                     wrap={wrap}

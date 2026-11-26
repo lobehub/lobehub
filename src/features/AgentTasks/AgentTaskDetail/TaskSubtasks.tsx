@@ -40,6 +40,7 @@ import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskListOriginState } from '../shared/taskListOrigin';
 import RunSubtasksPreview from './RunSubtasksPreview';
 import TopicStatusIcon from './TopicStatusIcon';
 
@@ -178,6 +179,7 @@ const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
 
   const navigate = useWorkspaceAwareNavigate();
+  const taskListOriginState = useTaskListOriginState();
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   // Subtask composers inherit the parent's visibility as their default — a
@@ -212,9 +214,10 @@ const TaskSubtasks = memo(() => {
       if (!subtask?.id) return;
       navigate(
         taskDetailPath(subtask.identifier, subtask?.assignee?.id ?? undefined, subtask?.name),
+        { state: taskListOriginState },
       );
     },
-    [navigate, subtaskMap],
+    [navigate, subtaskMap, taskListOriginState],
   );
 
   const treeData = useMemo(() => {
@@ -333,7 +336,7 @@ const TaskSubtasks = memo(() => {
                 gap={8}
                 paddingBlock={4}
                 paddingInline={8}
-                style={{ cursor: 'pointer', width: 'fit-content' }}
+                style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
                 variant="borderless"
                 onClick={() => setIsExpanded((prev) => !prev)}
               >
@@ -407,7 +410,7 @@ const TaskSubtasks = memo(() => {
             gap={8}
             paddingBlock={4}
             paddingInline={8}
-            style={{ width: 'fit-content' }}
+            style={{ marginInlineStart: -8, width: 'fit-content' }}
             title={canEditTask ? undefined : reason}
             variant="borderless"
             onClick={toggleCreating}

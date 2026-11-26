@@ -2,11 +2,13 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  ChannelListSort,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
   ProjectListSortBy,
+  ProjectListViewMode,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
@@ -197,6 +199,19 @@ export const WORKSPACE_DEFAULT_HIDDEN_SECTIONS: string[] = ['recents'];
 export const getDefaultHiddenSections = (isWorkspaceMode: boolean): string[] =>
   isWorkspaceMode ? [...WORKSPACE_DEFAULT_HIDDEN_SECTIONS] : DEFAULT_HIDDEN_SECTIONS;
 
+/** Tasks and Goals share one sidebar entry, so one control hides both. */
+export const setSidebarSectionHidden = (hidden: string[], key: string, hide: boolean): string[] => {
+  const keys = key === 'tasks' ? ['tasks', 'goals'] : [key];
+  const remaining = hidden.filter((item) => !keys.includes(item));
+  return hide ? [...remaining, ...keys] : remaining;
+};
+
+// Keep the combined entry reachable if either destination was visible before the merge.
+const keepCombinedTasksEntry = (hidden: string[]): string[] =>
+  hidden.includes('tasks') && !hidden.includes('goals')
+    ? hidden.filter((key) => key !== 'tasks')
+    : hidden;
+
 const hiddenSidebarSections =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] => {
@@ -204,24 +219,29 @@ const hiddenSidebarSections =
       const overlay = s.status.workspace?.hiddenSidebarSections;
       // Once the user touches sidebar visibility in this workspace the overlay
       // owns the list — including an explicit empty array meaning "show all".
-      if (overlay !== undefined) return overlay;
+      if (overlay !== undefined)
+        return keepCombinedTasksEntry(normalizeLegacyHiddenSections(overlay));
       // Untouched workspace: inherit any personal-mode hides and layer the
       // workspace defaults on top so `recents` starts collapsed.
       const personal = s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
-      const merged = [...personal];
+      const merged = [...normalizeLegacyHiddenSections(personal)];
       for (const k of WORKSPACE_DEFAULT_HIDDEN_SECTIONS) {
         if (!merged.includes(k)) merged.push(k);
       }
-      return merged;
+      return keepCombinedTasksEntry(merged);
     }
-    return s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+    return keepCombinedTasksEntry(
+      normalizeLegacyHiddenSections(s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS),
+    );
   };
 
 const sidebarExpandedKeys =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] =>
-    readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
-    DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
+    normalizeLegacyExpandedKeys(
+      readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
+        DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+    );
 
 /** Sentinel id representing the flex spacer slot. Its position in `sidebarItems`
  * determines where the sidebar pushes items to the bottom. */
@@ -230,33 +250,73 @@ export const SIDEBAR_SPACER_ID = '__spacer__';
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'goals',
+  'project',
   'dashboard',
   'resource',
-  'favorites',
-  'recents',
-  'project',
-  'private',
-  'agent',
-  SIDEBAR_SPACER_ID,
   'image',
   'community',
-  'memory',
-];
-
-/** Items that must stay contiguous in the sidebar list (accordion block).
- * `private` sits above `agent` so workspace users see their personal items
- * first, with the workspace-shared agents right below. */
-export const SIDEBAR_ACCORDION_KEYS = new Set([
   'favorites',
   'recents',
-  'project',
-  'private',
   'agent',
-]);
+  'channels',
+  SIDEBAR_SPACER_ID,
+];
 
-const DEFAULT_BOTTOM_KEYS = new Set(
-  DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
-);
+/** Items that must stay contiguous in the sidebar list (accordion block). */
+export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'agent', 'channels']);
+
+/**
+ * Section key of the former workspace "Private" accordion. It was merged into
+ * the single "Agents" (`agent`) section; saved layouts may still carry it.
+ */
+export const LEGACY_PRIVATE_SECTION_KEY = 'private';
+const AGENT_SECTION_KEY = 'agent';
+
+/**
+ * Map a saved section order onto the merged Agents section: `private` is
+ * dropped, and when the order has no `agent` yet, `agent` takes the slot
+ * `private` held. Returns the input reference when nothing changes.
+ */
+export const normalizeLegacyAgentItems = (items: string[]): string[] => {
+  const privateIndex = items.indexOf(LEGACY_PRIVATE_SECTION_KEY);
+  if (privateIndex === -1) return items;
+
+  if (items.includes(AGENT_SECTION_KEY)) {
+    return items.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+  }
+  const next = [...items];
+  next[privateIndex] = AGENT_SECTION_KEY;
+  return next.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+};
+
+/**
+ * Hidden sections: `private` no longer exists and the Agents section is always
+ * shown, so the key is simply dropped.
+ */
+export const normalizeLegacyHiddenSections = (hidden: string[]): string[] =>
+  hidden.includes(LEGACY_PRIVATE_SECTION_KEY)
+    ? hidden.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY)
+    : hidden;
+
+/**
+ * Expanded sections: the merged Agents section stays expanded when either of
+ * the two former sections was.
+ */
+export const normalizeLegacyExpandedKeys = (keys: string[]): string[] => {
+  if (!keys.includes(LEGACY_PRIVATE_SECTION_KEY)) return keys;
+
+  const withoutPrivate = keys.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+  return withoutPrivate.includes(AGENT_SECTION_KEY)
+    ? withoutPrivate
+    : [...withoutPrivate, AGENT_SECTION_KEY];
+};
+
+/** Links that used to sit below the spacer by default. */
+const FORMER_BOTTOM_LINKS = new Set(['image', 'community']);
+/** Memory left the sidebar for Settings; only layouts saved before that still list it. */
+const RETIRED_MEMORY_KEY = 'memory';
+/** Everything earlier defaults kept below the spacer, besides Memory. `pages` is retired. */
+const FORMER_DEFAULT_BOTTOM_KEYS = new Set(['community', 'image', 'pages', 'resource']);
 
 const arraysEqual = (a: string[], b: string[]): boolean => {
   if (a === b) return true;
@@ -280,38 +340,78 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
     }
   }
   if (insertAt === -1) {
-    const bottomIdx = withoutSpacer.findIndex((k) => DEFAULT_BOTTOM_KEYS.has(k));
+    const bottomIdx = withoutSpacer.findIndex((k) => FORMER_BOTTOM_LINKS.has(k));
     insertAt = bottomIdx === -1 ? withoutSpacer.length : bottomIdx;
   }
 
   return [...withoutSpacer.slice(0, insertAt), SIDEBAR_SPACER_ID, ...withoutSpacer.slice(insertAt)];
 };
 
-// Backfill missing default keys into their canonical group — top-group defaults
-// slot in just before the accordion (keeping accordion flush with the spacer),
-// bottom-group defaults go after the spacer. Without this split a new top-group
-// default added in a future version would silently appear in the bottom group
-// for existing users.
+// Generation, Plugins and Docs moved above the accordion. A layout saved before
+// that still lists `memory`, which no saved layout contains afterwards, so the
+// move runs once per layout and never undoes a later choice to keep them below.
+// A bottom group holding anything else was arranged by hand and stays. The links
+// are only dropped here: the backfill puts them back in their default order.
+const dropFormerDefaultBottom = (order: string[]): string[] => {
+  if (!order.includes(RETIRED_MEMORY_KEY)) return order;
+
+  const without = order.filter((k) => k !== RETIRED_MEMORY_KEY);
+  const spacerIndex = without.indexOf(SIDEBAR_SPACER_ID);
+  const bottom = without.slice(spacerIndex + 1);
+  return bottom.length > 0 && bottom.every((k) => FORMER_DEFAULT_BOTTOM_KEYS.has(k))
+    ? without.slice(0, spacerIndex + 1)
+    : without;
+};
+
+// Projects used to be an accordion listing every project; it is now a single
+// link to the project list. Saved orders still hold `project` inside the
+// accordion block, where a link would split the block in two, so move it up to
+// sit after Goals (or Tasks) like the other top links, or just above the block
+// when neither is up there. A spot the user picked outside the block is kept.
+const liftProjectOutOfAccordion = (order: string[]): string[] => {
+  const projectIndex = order.indexOf('project');
+  if (projectIndex === -1) return order;
+
+  const firstAccordionIndex = order.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  if (firstAccordionIndex === -1 || projectIndex < firstAccordionIndex) return order;
+  // The block runs up to the spacer, or to its last section in orders saved
+  // without one.
+  const spacerIndex = order.indexOf(SIDEBAR_SPACER_ID);
+  const blockEnd =
+    spacerIndex === -1
+      ? order.findLastIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k)) + 1
+      : spacerIndex;
+  if (projectIndex > blockEnd) return order;
+
+  const without = order.filter((k) => k !== 'project');
+  const blockStart = without.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  // Goals, else Tasks, may have been dragged below the spacer; then stay above the block.
+  const anchor = ['goals', 'tasks']
+    .map((k) => without.indexOf(k))
+    .find((i) => i !== -1 && i < blockStart);
+  const insertAt = anchor === undefined ? blockStart : anchor + 1;
+  return [...without.slice(0, insertAt), 'project', ...without.slice(insertAt)];
+};
+
+// Backfill missing default keys just before the accordion, keeping the accordion
+// flush with the spacer.
+// Channels used to render right below Agents outside the saved order; a saved
+// order without them keeps them in that spot instead of the top of the block.
+const CHANNELS_SECTION_KEY = 'channels';
+const withChannelsAfterAgent = (order: string[]): string[] => {
+  if (order.includes(CHANNELS_SECTION_KEY)) return order;
+  const agentIndex = order.indexOf(AGENT_SECTION_KEY);
+  if (agentIndex === -1) return order;
+  return [...order.slice(0, agentIndex + 1), CHANNELS_SECTION_KEY, ...order.slice(agentIndex + 1)];
+};
+
 const withAllKnownKeys = (order: string[]): string[] => {
-  let nextOrder = order;
-  if (!order.includes('project')) {
-    const recentsIndex = order.indexOf('recents');
-    const firstAgentIndex = order.findIndex((key) => key === 'private' || key === 'agent');
-    const insertAt =
-      recentsIndex >= 0 ? recentsIndex + 1 : firstAgentIndex >= 0 ? firstAgentIndex : 0;
-    nextOrder = [...order.slice(0, insertAt), 'project', ...order.slice(insertAt)];
-  }
+  const nextOrder = withChannelsAfterAgent(liftProjectOutOfAccordion(order));
+  const withSpacer = dropFormerDefaultBottom(normalizeSpacerPosition(nextOrder));
+  const present = new Set(withSpacer);
+  const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => k !== SIDEBAR_SPACER_ID && !present.has(k));
 
-  const present = new Set(nextOrder);
-  const missingTop: string[] = [];
-  const missingBottom: string[] = [];
-  for (const k of DEFAULT_SIDEBAR_ITEMS) {
-    if (k === SIDEBAR_SPACER_ID || present.has(k)) continue;
-    (DEFAULT_BOTTOM_KEYS.has(k) ? missingBottom : missingTop).push(k);
-  }
-
-  const withSpacer = normalizeSpacerPosition(nextOrder);
-  if (missingTop.length === 0 && missingBottom.length === 0) return withSpacer;
+  if (missing.length === 0) return withSpacer;
 
   const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);
   let accordionStartIdx = spacerIdx;
@@ -324,10 +424,8 @@ const withAllKnownKeys = (order: string[]): string[] => {
 
   return [
     ...withSpacer.slice(0, accordionStartIdx),
-    ...missingTop,
-    ...withSpacer.slice(accordionStartIdx, spacerIdx + 1),
-    ...missingBottom,
-    ...withSpacer.slice(spacerIdx + 1),
+    ...missing,
+    ...withSpacer.slice(accordionStartIdx),
   ];
 };
 
@@ -406,12 +504,13 @@ const sidebarItems =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] => {
     const items = readOverridableField(s.status, 'sidebarItems', workspaceId);
-    if (items && items.length > 0) return withAllKnownKeys(items);
+    if (items && items.length > 0) return withAllKnownKeys(normalizeLegacyAgentItems(items));
 
     // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
     // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
     // slot inside the default list so users keep their custom accordion arrangement.
-    const legacy = s.status.sidebarSectionOrder;
+    const legacy =
+      s.status.sidebarSectionOrder && normalizeLegacyAgentItems(s.status.sidebarSectionOrder);
     if (legacy && legacy.length > 0) {
       const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
       if (legacyAcc.length > 0) {
@@ -444,6 +543,8 @@ const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? false;
 const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
 const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
 const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
+const teamBoardAttentionCollapsed = (s: GlobalState): boolean =>
+  s.status.teamBoardAttentionCollapsed ?? false;
 const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
 const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
@@ -487,16 +588,25 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+// The server lists Channels newest first; keep that as the default view.
+const DEFAULT_CHANNEL_LIST_SORT: ChannelListSort = { by: 'createdAt', order: 'desc' };
+const channelListSort = (s: GlobalState): ChannelListSort =>
+  s.status.channelListSort ?? DEFAULT_CHANNEL_LIST_SORT;
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
+const projectListViewMode = (s: GlobalState): ProjectListViewMode =>
+  s.status.projectListViewMode ?? 'folder';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
 const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListRecommendedSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListRecommendedSectionCollapsed ?? false;
 const agentListSidebarSectionCollapsed = (s: GlobalState) =>
-  s.status.agentListSidebarSectionCollapsed ?? false;
+  !s.status.agentListSidebarSectionExpanded;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const musicTopicViewMode = (s: GlobalState) => s.status.musicTopicViewMode || 'list';
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
@@ -535,13 +645,20 @@ const isBannerDismissed =
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
-const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
+/** The home AgentSelect choice made in `scope` (a cache scope), if any. */
+const homeSelectedAgentId =
+  (scope: string) =>
+  (s: GlobalState): string | undefined =>
+    s.status.homeSelectedAgentIdByScope?.[scope];
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  channelListSort,
   projectListSortBy,
+  projectListViewMode,
   agentListExpandedGroupKeys,
+  agentListRecommendedSectionCollapsed,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
   agentListViewOptions,
@@ -588,6 +705,7 @@ export const systemStatusSelectors = {
   taskListFilter,
   taskListFilters,
   taskListViewOptions,
+  teamBoardAttentionCollapsed,
   sidebarExpandedKeys,
   agentSidebarSections,
   projectOnboardingDismissed,
@@ -619,6 +737,7 @@ export const systemStatusSelectors = {
   topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
+  musicTopicViewMode,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,

@@ -185,9 +185,7 @@ export function registerDocCommand(program: Command) {
         const range = `${from}-${to}${total === undefined ? '' : ` of ${total}`}`;
         const pager =
           pageCount === undefined ? `page ${page + 1}` : `page ${page + 1}/${pageCount}`;
-        log.info(
-          `${range} · ${pager}${hasNext ? ` · next: --page ${page + 1}` : ' · last page'}`,
-        );
+        log.info(`${range} · ${pager}${hasNext ? ` · next: --page ${page + 1}` : ' · last page'}`);
       },
     );
 

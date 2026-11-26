@@ -294,6 +294,7 @@ describe('connector command', () => {
           name: 'DeepWiki',
           sourceType: 'custom',
           status: 'connected',
+          links: [{ id: 'a' }, { id: 'b' }],
           tools: [{}, {}, {}],
         },
       ]);
@@ -302,8 +303,9 @@ describe('connector command', () => {
 
       const output = consoleSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
       expect(output).toContain('TOOLS');
+      expect(output).toContain('ACCOUNTS');
       expect(output).toContain('deepwiki');
-      expect(output).toMatch(/custom\s+\S*connected\S*\s+3/);
+      expect(output).toMatch(/custom\s+\S*connected\S*\s+3\s+2/);
     });
 
     it('outputs JSON with toolCount and field selection', async () => {
@@ -322,6 +324,25 @@ describe('connector command', () => {
       mockTrpcClient.connector.list.query.mockResolvedValue([]);
       await run('list');
       expect(consoleSpy).toHaveBeenCalledWith('No connectors found.');
+    });
+  });
+
+  describe('mcp alias', () => {
+    it('routes `mcp` to the connector command', async () => {
+      const program = createProgram();
+      const connector = program.commands.find((c) => c.name() === 'connector');
+
+      expect(connector?.aliases()).toContain('mcp');
+
+      mockTrpcClient.connector.list.query.mockResolvedValue([
+        { id: ID, identifier: 'deepwiki', tools: [{}] },
+      ]);
+      await program.parseAsync(['node', 'test', 'mcp', 'list', '--json', 'identifier,toolCount']);
+
+      expect(mockTrpcClient.connector.list.query).toHaveBeenCalledTimes(1);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify([{ identifier: 'deepwiki', toolCount: 1 }], null, 2),
+      );
     });
   });
 
@@ -545,6 +566,12 @@ describe('connector command', () => {
       expect(mockTrpcClient.connector.startOAuth.mutate).toHaveBeenCalledWith({ id: ID });
       expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('https://auth.example.com/authorize?state=s');
+      // The OAuth callback syncs tools itself; refresh is only the fallback.
+      const output = consoleSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain(
+        'Tools sync automatically after authorization. Then check lh connector list',
+      );
+      expect(output).not.toContain('After authorizing, run');
     });
 
     it('refuses to overwrite an existing identifier without --force', async () => {

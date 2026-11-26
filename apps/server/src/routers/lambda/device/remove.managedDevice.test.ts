@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   findWorkspaceDeviceById: vi.fn(),
   hasFixedAgentBinding: vi.fn(),
   onManagedDeviceRemoved: vi.fn(),
+  queryDeviceList: vi.fn(),
+  unenrollWorkspace: vi.fn(),
 }));
 
 vi.mock('@/business/server/managedDevice', () => ({
@@ -38,8 +40,8 @@ vi.mock('@/database/models/device', () => ({
 }));
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
-    queryDeviceList: vi.fn().mockResolvedValue([]),
-    unenrollWorkspace: vi.fn().mockResolvedValue({ success: true }),
+    queryDeviceList: mocks.queryDeviceList,
+    unenrollWorkspace: mocks.unenrollWorkspace,
   },
 }));
 
@@ -64,6 +66,8 @@ describe('removing a managed cloud device', () => {
     mocks.onManagedDeviceRemoved.mockResolvedValue(undefined);
     mocks.findWorkspaceDeviceById.mockResolvedValue(row('machine-id', 'workspace-1'));
     mocks.hasFixedAgentBinding.mockResolvedValue(false);
+    mocks.queryDeviceList.mockResolvedValue([]);
+    mocks.unenrollWorkspace.mockResolvedValue({ success: true });
   });
 
   it('reports a removed personal managed device after deleting it', async () => {
@@ -154,5 +158,50 @@ describe('removing a managed cloud device', () => {
     ).resolves.toEqual({ success: true });
     expect(consoleError).toHaveBeenCalledOnce();
     consoleError.mockRestore();
+  });
+
+  describe('while the device is still connected', () => {
+    beforeEach(() => {
+      mocks.unenrollWorkspace.mockResolvedValue({ error: 'no handler', success: false });
+      mocks.queryDeviceList.mockResolvedValue([{ deviceId: 'device-1' }]);
+    });
+
+    it('removes an online workspace managed device without an unenroll acknowledgement', async () => {
+      const managed = row(MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE, 'workspace-1');
+      mocks.findWorkspaceDeviceById.mockResolvedValue(managed);
+      mocks.deleteWorkspaceDevice.mockResolvedValue([managed]);
+
+      await expect(
+        workspaceCaller().removeWorkspaceDevice({ deviceId: 'device-1' }),
+      ).resolves.toEqual({ success: true });
+
+      expect(mocks.deleteWorkspaceDevice).toHaveBeenCalledWith('device-1');
+      expect(mocks.onManagedDeviceRemoved).toHaveBeenCalledExactlyOnceWith({
+        deviceId: 'device-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+    });
+
+    it('refuses to remove an online ordinary device that did not acknowledge the unenroll', async () => {
+      await expect(
+        workspaceCaller().removeWorkspaceDevice({ deviceId: 'device-1' }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+      expect(mocks.unenrollWorkspace).toHaveBeenCalledOnce();
+      expect(mocks.deleteWorkspaceDevice).not.toHaveBeenCalled();
+      expect(mocks.onManagedDeviceRemoved).not.toHaveBeenCalled();
+    });
+
+    it('removes an ordinary device once it is offline', async () => {
+      mocks.queryDeviceList.mockResolvedValue([]);
+      mocks.deleteWorkspaceDevice.mockResolvedValue([row('machine-id', 'workspace-1')]);
+
+      await expect(
+        workspaceCaller().removeWorkspaceDevice({ deviceId: 'device-1' }),
+      ).resolves.toEqual({ success: true });
+
+      expect(mocks.deleteWorkspaceDevice).toHaveBeenCalledWith('device-1');
+    });
   });
 });

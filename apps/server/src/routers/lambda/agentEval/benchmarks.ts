@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
 
+import { assertNewBenchmarkStandard, keepBenchmarkStandard } from './benchmarkStandard';
+import { prepareBenchmarkDeletion } from './lobeBenchMembership';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 
 export const benchmarkRouter = router({
@@ -22,6 +24,7 @@ export const benchmarkRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      assertNewBenchmarkStandard(input.metadata);
       try {
         const result = await ctx.benchmarkModel.create(input);
         if (!result) {
@@ -72,6 +75,10 @@ export const benchmarkRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+      if (data.metadata) {
+        const current = await ctx.benchmarkModel.findById(id);
+        data.metadata = keepBenchmarkStandard(data.metadata, current?.metadata) ?? undefined;
+      }
       const result = await ctx.benchmarkModel.update(id, data);
       if (!result) {
         throw new TRPCError({
@@ -84,6 +91,7 @@ export const benchmarkRouter = router({
   deleteBenchmark: agentEvalProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await prepareBenchmarkDeletion(ctx, input.id);
       try {
         const result = await ctx.benchmarkModel.delete(input.id);
         // Check if any rows were affected

@@ -4,6 +4,7 @@ import { Block, createStaticStyles, Flexbox, Tag, Text, useTheme } from '@lobehu
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
 import { type ChannelPlatformDefinition, getPlatformIcon } from './const';
@@ -16,8 +17,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: stretch;
 
     min-height: 104px;
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
 
     transition:
       transform 0.18s,
@@ -70,6 +71,9 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
 
   const getPlatformDescription = (id: string, name: string) => {
     switch (id) {
+      case 'dingtalk': {
+        return t('channel.platform.dingtalk.description');
+      }
       case 'discord': {
         return t('channel.platform.discord.description');
       }
@@ -96,6 +100,9 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
       }
       case 'wechat': {
         return t('channel.platform.wechat.description');
+      }
+      case 'wecom': {
+        return t('channel.platform.wecom.description');
       }
       case 'whatsapp': {
         return t('channel.platform.whatsapp.description');

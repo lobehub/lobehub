@@ -13,10 +13,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 import { isModifierClick } from '@/utils/navigation';
 
 interface DatasetListProps {
@@ -30,20 +31,21 @@ interface DatasetListProps {
  * this a captured dataset could be created but never found.
  */
 const DatasetList = memo<DatasetListProps>(({ activeKey, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const useFetchAllDatasets = useEvalStore((s) => s.useFetchAllDatasets);
-  const { data, isLoading } = useFetchAllDatasets();
-  const datasets: Array<{ id: string; name: string }> = data ?? [];
+  const { isLoading } = useFetchAllDatasets();
+  const datasets: Array<{ id: string; name: string }> = useEvalStore(
+    datasetSelectors.agentDatasets,
+  );
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-        <AccordionTrigger>
+      <AccordionHeader>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={4}>
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('sidebar.datasets')}
-            </Text>
+            <SectionTitle>{t('sidebar.datasets')}</SectionTitle>
             {datasets.length > 0 && (
               <Text fontSize={12} type="secondary">
                 {datasets.length}
