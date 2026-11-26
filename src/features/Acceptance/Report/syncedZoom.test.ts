@@ -7,7 +7,7 @@ import {
   fullFrame,
   MAX_SCALE,
   panView,
-  unionFrame,
+  sharedFrame,
   zoomViewAt,
 } from './syncedZoom';
 
@@ -60,9 +60,26 @@ describe('syncedZoom', () => {
     expect(view.y).toBe((800 - 675) / 2 - 175 * 1.5);
   });
 
-  it('bounds by whichever picture reaches further', () => {
+  it('keeps both pictures in view when their aspect ratios differ', () => {
     const wide = containedFrame(800, 800, 1600, 900);
     const tall = containedFrame(800, 800, 900, 1600);
-    expect(unionFrame(wide, tall).content).toEqual({ height: 800, width: 800, x: 0, y: 0 });
+    const frame = sharedFrame(wide, tall);
+    expect(frame.content).toEqual({ height: 450, width: 450, x: 175, y: 175 });
+
+    // Every corner a 600% pan can reach still has both pictures under the whole pane.
+    for (const [dx, dy] of [
+      [1e5, 1e5],
+      [-1e5, -1e5],
+      [1e5, -1e5],
+      [-1e5, 1e5],
+    ]) {
+      const view = panView({ scale: 6, x: -2000, y: -2000 }, dx, dy, frame);
+      for (const { content } of [wide, tall]) {
+        expect(view.x + content.x * 6).toBeLessThanOrEqual(0);
+        expect(view.x + (content.x + content.width) * 6).toBeGreaterThanOrEqual(800);
+        expect(view.y + content.y * 6).toBeLessThanOrEqual(0);
+        expect(view.y + (content.y + content.height) * 6).toBeGreaterThanOrEqual(800);
+      }
+    }
   });
 });

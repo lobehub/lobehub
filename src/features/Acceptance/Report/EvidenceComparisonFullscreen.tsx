@@ -24,7 +24,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   panView,
-  unionFrame,
+  sharedFrame,
   type ZoomFrame,
   type ZoomView,
   zoomViewAt,
@@ -173,7 +173,7 @@ const useSyncedZoom = () => {
   }, [view]);
 
   // Both panes are equal cells of one grid, so the first one's box serves both;
-  // the bounds cover whichever picture reaches further, so neither pans blank.
+  // the bounds keep to the area both pictures cover, so neither pans blank.
   const paneFrame = (): ZoomFrame => {
     const rect = panes.current[0]?.getBoundingClientRect();
     const w = rect ? rect.width - PAD * 2 : 1;
@@ -186,7 +186,7 @@ const useSyncedZoom = () => {
         images.current[i]?.naturalHeight ?? 0,
       ),
     );
-    return unionFrame(a, b);
+    return sharedFrame(a, b);
   };
 
   const zoomCenter = useCallback((factor: number) => {

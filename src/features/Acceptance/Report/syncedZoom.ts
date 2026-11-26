@@ -59,12 +59,17 @@ export const containedFrame = (
   };
 };
 
-/** The smallest frame holding both pictures, so neither pane can pan fully blank. */
-export const unionFrame = (a: ZoomFrame, b: ZoomFrame): ZoomFrame => {
-  const x = Math.min(a.content.x, b.content.x);
-  const y = Math.min(a.content.y, b.content.y);
-  const right = Math.max(a.content.x + a.content.width, b.content.x + b.content.width);
-  const bottom = Math.max(a.content.y + a.content.height, b.content.y + b.content.height);
+/**
+ * The area both pictures cover, so the one shared pan keeps each pane on
+ * picture. Bounding by their union instead lets two captures of different
+ * aspect ratios (one wide, one tall) both pan out of view at the corners.
+ * When they differ, the larger one's outer edges are reachable only at fit.
+ */
+export const sharedFrame = (a: ZoomFrame, b: ZoomFrame): ZoomFrame => {
+  const x = Math.max(a.content.x, b.content.x);
+  const y = Math.max(a.content.y, b.content.y);
+  const right = Math.min(a.content.x + a.content.width, b.content.x + b.content.width);
+  const bottom = Math.min(a.content.y + a.content.height, b.content.y + b.content.height);
   return {
     content: { height: bottom - y, width: right - x, x, y },
     height: a.height,
