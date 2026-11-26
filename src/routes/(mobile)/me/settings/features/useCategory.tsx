@@ -39,6 +39,7 @@ export enum SettingsGroupKey {
   Agent = 'agent',
   Connection = 'connection',
   General = 'general',
+  Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
 }

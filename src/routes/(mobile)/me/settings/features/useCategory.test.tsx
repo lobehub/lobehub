@@ -121,6 +121,8 @@ describe('mobile settings useCategory', () => {
 
     mocks.codingPlans = true;
     const order = groups().map((group) => group.key);
+    // A real key: a missing enum member would make both sides `undefined`.
+    expect(order).toContain('resource');
     expect(order.indexOf(SettingsGroupKey.Resource)).toBe(
       order.indexOf(SettingsGroupKey.Agent) + 1,
     );
