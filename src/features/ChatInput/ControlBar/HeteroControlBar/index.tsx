@@ -9,7 +9,13 @@ import {
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'lucide-react';
+import {
+  ActivityIcon,
+  CircleAlertIcon,
+  type LucideIcon,
+  RadioTowerIcon,
+  TimerResetIcon,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -131,6 +137,23 @@ const visibleSdkRuntimeStates = new Set<HeterogeneousAgentRuntimeState>([
   'closing',
   'error',
 ]);
+
+// States without an entry keep the base `sdkRuntime` (info) styling.
+const sdkRuntimeStateStyles: Partial<Record<HeterogeneousAgentRuntimeState, stylex.StyleXStyles>> =
+  {
+    closing: styles.sdkRuntimeClosing,
+    error: styles.sdkRuntimeError,
+    idle: styles.sdkRuntimeIdle,
+    monitoring: styles.sdkRuntimeMonitoring,
+    stale: styles.sdkRuntimeStale,
+  };
+
+// States without an entry fall back to `ActivityIcon`.
+const sdkRuntimeStateIcons: Partial<Record<HeterogeneousAgentRuntimeState, LucideIcon>> = {
+  closing: TimerResetIcon,
+  idle: TimerResetIcon,
+  monitoring: RadioTowerIcon,
+};
 
 /**
  * Same 28px row as the loaded bar: the workspace / device chip on the left and,
@@ -317,24 +340,9 @@ const HeteroControlBar = memo(() => {
     isLocalHeteroExecution &&
     runtimeStatus?.transport === 'claude-sdk' &&
     visibleSdkRuntimeStates.has(runtimeStatus.state);
-  const sdkRuntimeClassName =
-    runtimeStatus?.state === 'monitoring'
-      ? styles.sdkRuntimeMonitoring
-      : runtimeStatus?.state === 'idle'
-        ? styles.sdkRuntimeIdle
-        : runtimeStatus?.state === 'stale'
-          ? styles.sdkRuntimeStale
-          : runtimeStatus?.state === 'closing'
-            ? styles.sdkRuntimeClosing
-            : runtimeStatus?.state === 'error'
-              ? styles.sdkRuntimeError
-              : undefined;
-  const sdkRuntimeIcon =
-    runtimeStatus?.state === 'monitoring'
-      ? RadioTowerIcon
-      : runtimeStatus?.state === 'idle' || runtimeStatus?.state === 'closing'
-        ? TimerResetIcon
-        : ActivityIcon;
+  const sdkRuntimeState = runtimeStatus?.state;
+  const sdkRuntimeClassName = sdkRuntimeState ? sdkRuntimeStateStyles[sdkRuntimeState] : undefined;
+  const sdkRuntimeIcon = (sdkRuntimeState && sdkRuntimeStateIcons[sdkRuntimeState]) ?? ActivityIcon;
   const sdkRuntimeBadge = shouldShowSdkRuntime ? (
     <Tooltip
       title={tChat('heteroAgent.claudeSdkRuntime.tooltip', {
