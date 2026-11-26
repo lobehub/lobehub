@@ -41,6 +41,7 @@ import { appEnv } from '@/envs/app';
 import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters/composioConnectedIds';
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
+import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
@@ -447,7 +448,18 @@ export const createServerContextFactProviders = ({
           });
         }
         providerMap.get(userModel.providerId)!.models.push({
-          abilities: userModel.abilities || modelInfo?.abilities,
+          // Same resolution as the run itself, so the list can't promise media
+          // the run would drop: an empty row falls back to the card, a non-empty
+          // one replaces it.
+          abilities: {
+            ...userModel.abilities,
+            ...resolveModelMediaCapabilities({
+              builtinModels,
+              model: userModel.id,
+              provider: userModel.providerId,
+              userAbilities: userModel.abilities,
+            }),
+          },
           description: modelInfo?.description,
           id: userModel.id,
           name: userModel.displayName || modelInfo?.displayName || userModel.id,
