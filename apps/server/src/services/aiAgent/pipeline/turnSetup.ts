@@ -50,7 +50,7 @@ import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
 import { pickTopicModelPin } from './topicModelPin';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
-import { userTurnConversationMode } from './userTurnConversationMode';
+import { withUserTurnConversationMode } from './userTurnConversationMode';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -948,6 +948,7 @@ export const setupTurn = async (
     steer,
     trigger,
   });
+  let persistedTurnMetadata = requestTriggerMetadata;
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
@@ -997,6 +998,12 @@ export const setupTurn = async (
         return anchor.resolveParentId();
       };
       const userMessageParentId = await resolveParentId();
+      persistedTurnMetadata = await withUserTurnConversationMode(requestTriggerMetadata, {
+        ...deps,
+        topicId,
+        threadId: appContext?.threadId,
+        chatConfig: agentConfig.chatConfig,
+      });
       const userMessageParams = {
         agentId: conversationAgentId,
         content: prompt,
@@ -1007,15 +1014,7 @@ export const setupTurn = async (
         // branch), so a group turn must stamp groupId or the message never
         // shows when the topic is reopened (group topic sidebar + ownership fix).
         groupId: appContext?.groupId ?? undefined,
-        metadata: {
-          ...requestTriggerMetadata,
-          conversationMode: await userTurnConversationMode({
-            ...deps,
-            topicId,
-            threadId: appContext?.threadId,
-            chatConfig: agentConfig.chatConfig,
-          }),
-        },
+        metadata: persistedTurnMetadata,
         parentId: userMessageParentId,
         role: 'user' as const,
         threadId: appContext?.threadId ?? undefined,
@@ -1189,7 +1188,7 @@ export const setupTurn = async (
     projectId: turnProjectId,
     provider,
     requestedDeviceId: resolvedRequestedDeviceId,
-    requestTriggerMetadata,
+    requestTriggerMetadata: persistedTurnMetadata,
     runAttachments,
     selfMessageIds,
     topicBoundDeviceId,

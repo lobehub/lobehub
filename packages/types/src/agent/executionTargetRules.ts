@@ -8,10 +8,11 @@ import type { LobeAgentChatConfig } from './chatConfig';
 export const withConversationMode = (
   config: LobeAgentChatConfig,
   mode?: ConversationMode,
-): LobeAgentChatConfig =>
-  !mode || config.toolMode === 'custom'
-    ? config
-    : { ...config, enableAgentMode: mode === 'agent', toolMode: mode };
+): LobeAgentChatConfig => {
+  if (!mode) return config;
+  if (mode === 'agent' && config.toolMode === 'custom') return { ...config, enableAgentMode: true };
+  return { ...config, enableAgentMode: mode === 'agent', toolMode: mode };
+};
 
 /**
  * Tool-resolution mode: an explicit `toolMode` wins; otherwise derive from

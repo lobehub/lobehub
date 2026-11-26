@@ -1,4 +1,4 @@
-import { memoryPersonaRevision } from '@lobechat/context-engine';
+import { isWithholdableContextSource, memoryPersonaRevision } from '@lobechat/context-engine';
 import type { AgentShareVisitorContext, ContextReplaySnapshot } from '@lobechat/types';
 import {
   agentShareDocumentAccessScope,
@@ -6,6 +6,7 @@ import {
   ordinaryDocumentAccessScope,
   ordinaryFileAccessScope,
 } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 
 import { AgentDocumentModel, canReadDocument } from '@/database/models/agentDocuments';
@@ -177,8 +178,9 @@ export const revokedContextSources = async (ctx: ReplayAccessContext, sourceIds:
             return false;
           }
         }
-      } catch {
-        return false;
+      } catch (error) {
+        if (error instanceof TRPCError) return false;
+        throw error;
       }
     },
     { concurrency: 8 },
@@ -192,12 +194,24 @@ export const redactRevokedSnapshots = (
 ) => {
   const denied = new Set(revoked);
   return Object.fromEntries(
-    Object.entries(snapshots).map(([id, snapshot]) => [
-      id,
-      snapshot.sourceIds.some((source) => denied.has(source))
-        ? { ...snapshot, changes: [], system: undefined, sourceIds: [], invalidated: true }
-        : snapshot,
-    ]),
+    Object.entries(snapshots).map(([id, snapshot]) => {
+      const blocking = snapshot.sourceIds.filter((source) => denied.has(source));
+      if (blocking.some((source) => !isWithholdableContextSource(source)))
+        return [
+          id,
+          { ...snapshot, changes: [], system: undefined, sourceIds: [], invalidated: true },
+        ];
+      if (!blocking.length) return [id, snapshot];
+      return [
+        id,
+        {
+          ...snapshot,
+          changes: snapshot.changes.filter(
+            (change) => !change.sourceIds.some((source) => denied.has(source)),
+          ),
+        },
+      ];
+    }),
   );
 };
 

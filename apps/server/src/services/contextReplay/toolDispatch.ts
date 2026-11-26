@@ -1,11 +1,16 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { assertToolDispatchPolicy, isDeviceToolIdentifier } from '@lobechat/mecha';
+import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertCanUseConversationTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import {
+  loadWorkspaceMemberOverrides,
+  resolveCanManage,
+} from '@/server/services/aiAgent/pipeline/resolveRunAgentConfig';
 
 interface ToolPolicyContext {
   agentId: string;
@@ -27,7 +32,17 @@ const loadPolicy = async (input: ToolPolicyContext) => {
       : undefined,
   ]);
   if (!policy || (input.topicId && !topic)) throw new Error('Conversation is no longer available');
-  return { policy, topic };
+  const workspaceId = policy.workspaceId ?? input.workspaceId;
+  const [overrides, canManage] = await Promise.all([
+    loadWorkspaceMemberOverrides(input, input.agentId),
+    resolveCanManage(input, policy, workspaceId, !!workspaceId && policy.visibility !== 'private'),
+  ]);
+  const agencyConfig = resolveAgentAgencyConfig(policy.agencyConfig, overrides.device, {
+    canManage,
+    visibility: policy.visibility,
+    workspaceId,
+  });
+  return { policy: { ...policy, agencyConfig }, topic };
 };
 const bindingOf = ({ policy, topic }: Awaited<ReturnType<typeof loadPolicy>>) => ({
   topicDeviceId: topic?.metadata?.boundDeviceId ?? null,
@@ -49,11 +64,16 @@ export const assertCurrentToolDispatch = async (
   const model = new MessageModel(input.db, input.userId, input.workspaceId, undefined, {
     includeShareVisitor: input.includeShareVisitor,
   });
-  const snapshot = input.assistantMessageId
-    ? (await model.getContextReplays([input.assistantMessageId]))[input.assistantMessageId]
+  const source = input.assistantMessageId
+    ? await model.findById(input.assistantMessageId)
+    : undefined;
+  const assistantId =
+    source?.role === 'tool' && source.parentId ? source.parentId : input.assistantMessageId;
+  const snapshot = assistantId
+    ? (await model.getContextReplays([assistantId]))[assistantId]
     : undefined;
   if (snapshot) {
-    const assistant = await model.findById(input.assistantMessageId!);
+    const assistant = assistantId === source?.id ? source : await model.findById(assistantId!);
     if (
       !assistant ||
       assistant.role !== 'assistant' ||

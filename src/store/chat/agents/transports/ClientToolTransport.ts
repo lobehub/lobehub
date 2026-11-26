@@ -136,7 +136,9 @@ export class ClientToolTransport implements ToolTransport {
             : context.stepContext,
           {
             expectedDeviceId: context.state.binding?.device?.id,
-            assistantMessageId: context.parentMessageId,
+            assistantMessageId: context.reuseExistingMessage
+              ? (assistantMessage?.id ?? context.parentMessageId)
+              : context.parentMessageId,
           },
         );
       } finally {

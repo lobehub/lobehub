@@ -42,3 +42,8 @@ export const userTurnConversationMode = async (input: {
     preferredConversationMode({ chatConfig: host ? host.chatConfig : undefined }),
   );
 };
+
+export const withUserTurnConversationMode = async <T extends object>(
+  metadata: T,
+  input: Parameters<typeof userTurnConversationMode>[0],
+) => ({ ...metadata, conversationMode: await userTurnConversationMode(input) });

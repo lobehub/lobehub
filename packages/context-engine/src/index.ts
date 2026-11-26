@@ -49,6 +49,7 @@ export {
   tryCountRequestPayloadTokens,
 } from './tokenAccounting/requestPayload';
 // Processors
+export { isWithholdableContextSource } from './engine/messages/contextReplay/access';
 export type {
   DocumentRead,
   PlaceholderValue,

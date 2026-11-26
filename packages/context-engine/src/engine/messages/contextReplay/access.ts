@@ -7,6 +7,17 @@ import {
 import { filterMemorySources, memorySourceIds } from '../../../utils/memorySources';
 import type { MessagesEngineParams } from '../types';
 
+// Losing these changes what the next call may say, not who may read the conversation.
+const withholdableSourceTypes = new Set([
+  'memory',
+  'memory-persona',
+  'unverified-memory',
+  'skill',
+  'tool',
+]);
+export const isWithholdableContextSource = (source: string) =>
+  withholdableSourceTypes.has(source.split(':')[0]);
+
 /** Coarse dependencies deliberately include the entire visible input ancestry. */
 export const prepareContextReplay = async (
   params: MessagesEngineParams,
@@ -74,7 +85,7 @@ export const prepareContextReplay = async (
   const localSources = new Set(Object.values(sources).flat());
   const localTypes = new Set(['unverified-memory', 'skill', 'tool']);
   const remoteSources = sourceIds.filter((source) => !localTypes.has(source.split(':')[0]));
-  const revoked = new Set([
+  const denied = new Set([
     ...(replay.revokedSourceIds ?? []),
     ...sourceIds.filter(
       (source) =>
@@ -84,9 +95,7 @@ export const prepareContextReplay = async (
     ...sourceIds.filter(
       (source) => localTypes.has(source.split(':')[0]) && !localSources.has(source),
     ),
-    ...(replay.validateSources
-      ? await replay.validateSources(remoteSources).catch(() => remoteSources)
-      : []),
+    ...(replay.validateSources ? await replay.validateSources(remoteSources) : []),
     ...(params.revokedDocumentReads ?? []).flatMap((read) =>
       [
         ...read.documentIds,
@@ -95,9 +104,10 @@ export const prepareContextReplay = async (
       ].flatMap((id) => [`document:${id}`, `document-read:${id}`]),
     ),
   ]);
+  const revoked = new Set([...denied].filter((source) => !isWithholdableContextSource(source)));
   if (
     replay.committedSnapshot?.invalidated ||
-    replay.committedSnapshot?.sourceIds.some((source) => revoked.has(source))
+    replay.committedSnapshot?.sourceIds.some((source) => denied.has(source))
   ) {
     throw new Error(
       'Context source access changed; start a new invocation instead of retrying revoked input',
@@ -139,14 +149,14 @@ export const prepareContextReplay = async (
           );
       }
     }
-  const allowed = (source: string) => !revoked.has(source);
+  const allowed = (source: string) => !denied.has(source);
   // Shared answers retain their provenance even when the next actor has its own private baseline.
   sources.InheritedInputSources = reset
     ? []
     : historical.flatMap((snapshot) => snapshot.sourceIds).filter(allowed);
   const updated: MessagesEngineParams = {
     ...params,
-    userMemory: await filterMemorySources(params.userMemory, revoked),
+    userMemory: await filterMemorySources(params.userMemory, denied),
     historySummary: undefined,
     messages,
     ...(reset && {
@@ -190,6 +200,7 @@ export const prepareContextReplay = async (
     contextReplay: {
       ...replay,
       historyStartId: reset ? latestUser?.id : boundary,
+      withheldSourceIds: [...denied].filter(isWithholdableContextSource),
       sourceIdsByProvider: Object.fromEntries(
         Object.entries(sources).map(([key, ids]) => [key, ids.filter(allowed)]),
       ),

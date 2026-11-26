@@ -45,6 +45,7 @@ export interface ContextReplayInput {
   sourceIdsByProvider?: Record<string, string[]>;
   /** Host authorization; a failed lookup is treated as revoked, never as allowed. */
   validateSources?: (sourceIds: string[]) => Promise<string[]>;
+  withheldSourceIds?: string[];
 }
 
 const ReplayMessageSchema = z.object({
@@ -64,7 +65,7 @@ const ReplayMessageSchema = z.object({
     .optional(),
 });
 
-export const ContextReplaySnapshotSchema: z.ZodType<ContextReplaySnapshot> = z.object({
+export const ContextReplaySnapshotSchema = z.object({
   executionBinding: z
     .object({ agentDeviceId: z.string().nullable(), topicDeviceId: z.string().nullable() })
     .optional(),
@@ -85,4 +86,4 @@ export const ContextReplaySnapshotSchema: z.ZodType<ContextReplaySnapshot> = z.o
   system: z.array(ReplayMessageSchema).optional(),
   toolDefinitions: z.record(z.string(), z.string()).optional(),
   version: z.literal(1),
-});
+}) as z.ZodType<ContextReplaySnapshot>;

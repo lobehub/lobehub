@@ -40,6 +40,13 @@ const sessionProviders = new Set([
   'OnboardingActionHintInjector',
   'TodoInjector',
   'RuntimeAdditionalContextProvider',
+  'PlanInjector',
+  'AgentBuilderContextInjector',
+  'AgentManagementContextInjector',
+  'GroupAgentBuilderContextInjector',
+  'GroupContextInjector',
+  'ExpertiseContextInjector',
+  'DiscordContextProvider',
 ]);
 const messageProviders = new Set([
   'SelectedSkillInjector',
@@ -48,6 +55,59 @@ const messageProviders = new Set([
   'TopicReferenceContextInjector',
   'SkillImportRouteInjector',
 ]);
+// The stable baseline keeps their first rendering; later edits replay as one appended update.
+const systemProviders = new Set([
+  'AgentDocumentBeforeSystemInjector',
+  'SystemRoleInjector',
+  'ConnectorOwnershipInjector',
+  'ProjectInstructionsInjector',
+  'AgentIdentityInjector',
+  'EvalContextSystemInjector',
+  'BotPlatformContextInjector',
+  'ModelInfoProvider',
+  'HistorySummaryProvider',
+  'AgentDocumentSystemAppendInjector',
+  'AgentDocumentSystemReplaceInjector',
+]);
+const structuralProcessors = new Set([
+  'PlaceholderMessageFilterProcessor',
+  'HistoryTruncateProcessor',
+  'ContextSelectionsInjector',
+  'LocalSystemToolSnapshotInjector',
+  'SubAgentResultMessageProcessor',
+  'InputTemplateProcessor',
+  'AgentCouncilFlattenProcessor',
+  'GroupMessageFlattenProcessor',
+  'TasksFlattenProcessor',
+  'TaskMessageProcessor',
+  'VerifyMessageProcessor',
+  'TaskCallbackMessageProcessor',
+  'RevokedDocumentResultFilter',
+  'SupervisorRoleRestoreProcessor',
+  'CompressedGroupRoleTransformProcessor',
+  'GroupOrchestrationFilterProcessor',
+  'GroupRoleTransformProcessor',
+  'ActivationResultTrimProcessor',
+  'StaleToolResultTrimProcessor',
+  'PlaceholderVariablesProcessor',
+  'ReactionFeedbackProcessor',
+  'AgentSenderMessageProcessor',
+  'MessageContentProcessor',
+  'ToolCallProcessor',
+  'ToolMessageReorder',
+  'DisabledToolCallFilter',
+  'ForceFinishSummaryInjector',
+  'ToolActivationAnchorProcessor',
+  'MessageCleanupProcessor',
+]);
+const SYSTEM_UPDATE_KEY = 'SystemInstructions';
+
+export const contextReplayProcessorScope = (name: string) => {
+  if (sessionProviders.has(name)) return 'session' as const;
+  if (messageProviders.has(name)) return 'message' as const;
+  if (systemProviders.has(name)) return 'system' as const;
+  if (structuralProcessors.has(name)) return 'structural' as const;
+};
 
 const text = (content: Message['content']): string =>
   typeof content === 'string'
@@ -57,7 +117,7 @@ const text = (content: Message['content']): string =>
         .map((part) => part.text)
         .join('\n');
 
-const comparable = (messages: ContextReplaySegment['messages']) =>
+const comparable = (messages: OpenAIChatMessage[]) =>
   JSON.stringify(
     messages.map((message) => ({
       content: message.content,
@@ -100,12 +160,8 @@ export class ContextReplayCoordinator {
   }
 
   wrap(processor: ContextProcessor): ContextProcessor {
-    const scope = sessionProviders.has(processor.name)
-      ? 'session'
-      : messageProviders.has(processor.name)
-        ? 'message'
-        : undefined;
-    if (!scope) return processor;
+    const scope = contextReplayProcessorScope(processor.name);
+    if (scope !== 'session' && scope !== 'message') return processor;
     return {
       name: processor.name,
       process: async (context) => {
@@ -180,11 +236,33 @@ export class ContextReplayCoordinator {
         .filter((message) => message.role === 'system')
         .map(wireMessage);
       const system = baseline ?? currentSystem;
+      const withheld = new Set(this.input.withheldSourceIds ?? []);
+      const visibleChanges = (snapshot: ContextReplaySnapshot) =>
+        snapshot.changes.filter(
+          (change) => !change.sourceIds.some((source) => withheld.has(source)),
+        );
       const latest = new Map<string, ContextReplaySegment>();
       for (const entry of history)
-        for (const change of entry.snapshot.changes) latest.set(change.key, change);
+        for (const change of visibleChanges(entry.snapshot)) latest.set(change.key, change);
+      const systemUpdate: ContextReplaySegment[] =
+        baseline &&
+        (latest.has(SYSTEM_UPDATE_KEY) || comparable(currentSystem) !== comparable(baseline))
+          ? [
+              {
+                key: SYSTEM_UPDATE_KEY,
+                sourceIds: this.input.sourceIdsByProvider?.SystemDocumentSources ?? [],
+                messages: [
+                  {
+                    id: `${SYSTEM_UPDATE_KEY}:0`,
+                    role: 'user',
+                    content: currentSystem.map((message) => text(message.content)).join('\n\n'),
+                  },
+                ],
+              },
+            ]
+          : [];
       const candidates = await Promise.all(
-        [...this.candidates.values()].map(async (candidate) => {
+        [...this.candidates.values(), ...systemUpdate].map(async (candidate) => {
           const resolved = await new PlaceholderVariablesProcessor({
             variableGenerators: this.variables,
           }).process({ ...context, messages: candidate.messages });
@@ -223,7 +301,9 @@ export class ContextReplayCoordinator {
         ...(!baseline && { system }),
         version: 1,
       };
-      const events = new Map(history.map((entry) => [entry.messageId, entry.snapshot.changes]));
+      const events = new Map(
+        history.map((entry) => [entry.messageId, visibleChanges(entry.snapshot)]),
+      );
       const messages: Message[] = system.map((message) => ({ ...message }));
       for (const message of context.messages) {
         if (message.role === 'system') continue;
