@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Сийд",
   "config.seed.random": "Случаен сийд",
+  "config.size.autoByOpenAI": "Автоматично (определя се от OpenAI)",
   "config.size.label": "Размер",
   "config.steps.label": "Стъпки",
   "config.title": "Конфигурация",

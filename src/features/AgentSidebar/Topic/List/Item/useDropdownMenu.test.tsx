@@ -2,8 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TopicListScopeContext } from '../../TopicListScope';
 import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
@@ -25,6 +27,12 @@ const scopeFixture = vi.hoisted(() => ({
 const refreshProjectMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const autoRenameMock = vi.hoisted(() => vi.fn());
+const refreshProjectTopicsMock = vi.hoisted(() => vi.fn());
+vi.mock('@/store/projectWorkingDirectory', () => ({
+  useProjectDirectoryStore: {
+    getState: () => ({ refreshProjectTopics: refreshProjectTopicsMock }),
+  },
+}));
 const favoriteMock = vi.hoisted(() => vi.fn());
 const completeMock = vi.hoisted(() => vi.fn());
 const cloneMock = vi.hoisted(() => vi.fn());
@@ -345,14 +353,23 @@ describe('useTopicItemDropdownMenu', () => {
 
   it('auto-renames using messages from the row Agent', async () => {
     scopeFixture.enabled = true;
-    const { result } = renderHook(() =>
-      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    // Auto-rename shares the inline editor's path, which refreshes every
+    // project projection through the store rather than the scoped SWR hook.
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(
+        TopicListScopeContext.Provider,
+        { value: { projectId: 'project-1' } as never },
+        children,
+      );
+    const { result } = renderHook(
+      () => useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+      { wrapper },
     );
     const item = getMenuItem(result.current.dropdownMenu(), 'autoRename');
     if (!item || !('onClick' in item)) throw new Error('Missing auto rename');
     await item.onClick?.({} as never);
     expect(autoRenameMock).toHaveBeenCalledWith('topic-1', 'agent-other');
-    expect(refreshProjectMock).toHaveBeenCalledOnce();
+    expect(refreshProjectTopicsMock).toHaveBeenCalledWith('project-1');
   });
 
   it('duplicates a Project topic without requiring an Agent sidebar cache', async () => {

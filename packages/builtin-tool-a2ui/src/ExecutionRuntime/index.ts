@@ -1,29 +1,21 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
-import { surfaceToText, validateSurface } from '@lobehub/a2ui';
 
-import type { RenderUIParams, RenderUIState } from '../types';
+import type { ReadCardDocsParams, RenderUIParams } from '../types';
+
+/** The processor (schemas, examples, validator) loads on first use, so the tool registry stays light. */
+const processor = async () => (await import('@lobehub/a2ui/processor')).getA2uiProcessor();
 
 /**
- * Validates and stores a card. Runs wherever the tool runs; nothing here renders. The state carries
- * the surface for the Render and for a Channel reply; the content tells the model what it drew, or
- * what to fix.
+ * Validates and stores a card, and reads component docs, through the `@lobehub/a2ui` processor.
+ * Runs wherever the tool runs; nothing here renders. The state carries the surface for the Render
+ * and for a Channel reply; the content tells the model what it drew, or what to fix.
  */
 export class A2uiExecutionRuntime {
   async renderUI(params: RenderUIParams): Promise<BuiltinServerRuntimeOutput> {
-    const result = validateSurface(params?.operations);
-    if (!result.ok) {
-      const message = `The card was not drawn. Fix these and call renderUI again:\n- ${result.errors.join('\n- ')}`;
-      return {
-        content: message,
-        error: { body: { errors: result.errors }, message, type: 'InvalidSurface' },
-        success: false,
-      };
-    }
-    const state: RenderUIState = { surface: result.record };
-    return {
-      content: `Card drawn and shown to the user: ${surfaceToText(result.record, { max: 300 }) || result.record.surfaceId}. Do not repeat its content in text.`,
-      state,
-      success: true,
-    };
+    return (await processor()).execute(params) as BuiltinServerRuntimeOutput;
+  }
+
+  async readCardDocs(params: ReadCardDocsParams): Promise<BuiltinServerRuntimeOutput> {
+    return { content: (await processor()).docs(params), success: true };
   }
 }

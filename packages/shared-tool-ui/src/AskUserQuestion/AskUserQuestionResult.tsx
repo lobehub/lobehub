@@ -10,8 +10,9 @@ import type { AskUserQuestionItem } from './types';
 const styles = stylex.create({
   answer: {
     fontSize: '14px',
+    fontWeight: 500,
     lineHeight: 1.5,
-    color: cssVar.colorTextTertiary,
+    color: cssVar.colorText,
     overflowWrap: 'anywhere',
   },
   container: { paddingBlockStart: '8px', paddingBlockEnd: '4px' },
@@ -24,6 +25,7 @@ const styles = stylex.create({
   },
   header: {
     flexShrink: 0,
+    alignSelf: 'flex-start',
     paddingInline: '8px',
     borderRadius: '4px',
     fontSize: '12px',
@@ -50,13 +52,14 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   question: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 400,
     lineHeight: 1.5,
-    color: cssVar.colorText,
+    color: cssVar.colorTextTertiary,
     overflowWrap: 'anywhere',
   },
   questionContent: { minWidth: '0' },
+  supplementIndented: { marginInlineStart: '36px' },
   recommendedBadge: {
     flexShrink: 0,
     paddingBlock: '1px',
@@ -186,7 +189,10 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
           />
         ))}
         {supplementText && (
-          <Flexbox gap={4}>
+          <Flexbox
+            className={stylex.props(multiple && styles.supplementIndented).className}
+            gap={4}
+          >
             <span {...stylex.props(styles.header)}>{labels.supplement}</span>
             <span {...stylex.props(styles.answer)}>{supplementText}</span>
           </Flexbox>

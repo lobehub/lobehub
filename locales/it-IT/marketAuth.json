@@ -27,6 +27,7 @@
   "claimResources.claim": "Richiedi Selezionati",
   "claimResources.description": "Abbiamo trovato risorse collegate al tuo account che puoi richiedere:",
   "claimResources.error": "Impossibile richiedere le risorse. Per favore, riprova.",
+  "claimResources.failedRetry": "Impossibile richiedere queste risorse. Controlla la connessione e riprova.",
   "claimResources.mcpSection": "Server MCP",
   "claimResources.selectedCount": "{{count}} elemento/i selezionato/i",
   "claimResources.skillSection": "Competenze",

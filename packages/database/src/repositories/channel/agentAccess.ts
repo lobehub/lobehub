@@ -372,7 +372,7 @@ export const pendingAgentAccessRequests = (db: LobeChatDatabase, channelId: stri
  * reads as nothing.
  */
 export const agentAccessCards = async (
-  tx: Transaction,
+  tx: LobeChatDatabase | Transaction,
   rows: Pick<ChannelMessageItem, 'agentId' | 'id' | 'metadata' | 'routingStatus'>[],
   viewerUserId: string | undefined,
 ) => {
