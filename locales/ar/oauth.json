@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "علق على هذا القبول وقم بقبوله أو إعادته من صفحة المعاينة الخاصة به",
   "consent.scope.acceptance-review-site": "علق على مراجعة هذا الموقع من الموقع نفسه، لمدة 8 ساعات",
   "consent.scope.email": "الوصول إلى عنوان بريدك الإلكتروني",
+  "consent.scope.generation-read": "عرض الصور ومقاطع الفيديو والصوت التي أنشأتها",
+  "consent.scope.generation-write": "إنشاء الصور ومقاطع الفيديو والصوت وحذف النتائج، باستخدام حصتك",
   "consent.scope.offline_access": "السماح للتطبيق بالوصول إلى بياناتك",
   "consent.scope.openid": "تسجيل الدخول باستخدام حساب LobeHub الخاص بك",
   "consent.scope.profile": "الوصول إلى معلومات ملفك الشخصي الأساسية (الاسم، الصورة الرمزية، إلخ)",

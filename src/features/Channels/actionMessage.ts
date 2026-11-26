@@ -1,5 +1,6 @@
 import type { ChannelMessageSurface } from '@lobechat/types';
-import { type A2uiActionPayload, parseActionMessage } from '@lobehub/a2ui';
+import { parseActionMessage } from '@lobehub/a2ui/action';
+import type { A2uiActionPayload } from '@lobehub/a2ui/types';
 
 type Component = Record<string, unknown>;
 

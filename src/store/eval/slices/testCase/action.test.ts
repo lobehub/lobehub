@@ -22,11 +22,7 @@ import { useEvalStore } from '@/store/eval';
 import { testCaseSelectors } from '@/store/eval/slices/testCase/selectors';
 
 import { testCaseInitialState } from './initialState';
-import {
-  testCaseDetailResource,
-  type TestCaseListQuery,
-  testCaseListResource,
-} from './projection';
+import { testCaseDetailResource, type TestCaseListQuery, testCaseListResource } from './projection';
 
 vi.mock('@/services/agentEval', () => ({
   agentEvalService: {
@@ -194,6 +190,9 @@ describe('eval testCase slice replicas', () => {
     expect(state().testCaseListMap[LIST_KEY]?.items?.[0]?.id).toBe('page-1');
     expect(testCaseSelectors.testCases(PAGE_2)(state())).toEqual([]);
     expect(testCaseSelectors.isLoadingTestCases(PAGE_2)(state())).toBe(true);
+    // `useSync` subscribes to `error` only once it is read, as a component reading
+    // it in render would; read it before the failure lands.
+    expect(sync.result.current.error).toBeUndefined();
 
     await act(async () => reject(new Error('network')));
     await waitFor(() => expect(sync.result.current.error).toBeTruthy());
@@ -314,9 +313,7 @@ describe('eval testCase slice replicas', () => {
       okList([testCase(CASE, { content: { input: 'After' } })]),
     );
 
-    await act(() =>
-      useEvalStore.getState().updateTestCase(CASE, { content: { input: 'After' } }),
-    );
+    await act(() => useEvalStore.getState().updateTestCase(CASE, { content: { input: 'After' } }));
 
     expect(agentEvalService.updateTestCase).toHaveBeenCalledWith({
       content: { input: 'After' },

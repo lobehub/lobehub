@@ -7,6 +7,7 @@ import { CircleDollarSignIcon, CoinsIcon, GitBranchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import WorkCardActions from '@/business/client/features/WorkCardActions';
 import { openArtboard } from '@/features/Artboard/openArtboard';
 import { openCollectionModal } from '@/features/CollectionModal/loader';
 import { useChatStore } from '@/store/chat';
@@ -303,6 +304,12 @@ interface WorkSummaryCardProps {
    */
   onOpen?: (item: WorkSummaryItem) => void;
   /**
+   * Show business actions in the title row of the `card` variant. Only the conversation's own
+   * message cards pass it; other surfaces (galleries, sidebars, share visitors)
+   * keep the card action-free.
+   */
+  showActions?: boolean;
+  /**
    * `card` (default) renders the elevated 36×36 icon-box layout used across the
    * chat portal and the works gallery. `inline` renders a flat row (17px icon,
    * 6px hover fill) for the WorkingSidebar Overview, so a shared card doesn't
@@ -313,7 +320,7 @@ interface WorkSummaryCardProps {
 }
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
-  ({ className, item, onOpen, variant = 'card' }) => {
+  ({ className, item, onOpen, showActions, variant = 'card' }) => {
     const { t } = useTranslation('chat');
     const { t: tTopic } = useTranslation('topic');
     const density = useDensityTokens();
@@ -530,6 +537,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
                 {usage.value}
               </Center>
             )}
+            {showActions && <WorkCardActions item={item} />}
           </Flexbox>
           <WorkMetaLine
             branch={branch}

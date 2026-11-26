@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Le service Ollama est indisponible. Veuillez vérifier si Ollama fonctionne correctement ou si la configuration de l'origine croisée d'Ollama est correctement définie.",
   "OperationInactivityTimeout": "L'opération de l'agent est restée inactive trop longtemps et a été terminée. Veuillez réessayer la requête.",
   "PermissionDenied": "Désolé, vous n'avez pas la permission d'accéder à ce service. Veuillez vérifier si votre clé dispose des droits d'accès nécessaires.",
+  "ProviderBaseURLBlocked": "Le point de terminaison {{provider}} pointe vers une adresse réseau privée ou locale, que le serveur n'est pas autorisé à joindre pour des raisons de sécurité. Cette adresse ne fonctionne que depuis votre propre appareil — utilisez plutôt un point de terminaison accessible publiquement.",
   "ProviderBizError": "Erreur lors de la demande au service {{provider}}, veuillez résoudre le problème ou réessayer en fonction des informations suivantes.",
   "ProviderContentPolicyViolation": "Le fournisseur a bloqué cette demande ou son résultat en raison de la politique de contenu. Veuillez réviser votre requête et réessayer.",
   "ProviderNetworkError": "La connexion au fournisseur a expiré ou a été interrompue. Veuillez vérifier votre réseau et réessayer.",
   "ProviderNoImageGenerated": "Le fournisseur n'a généré aucune image pour cette demande. Essayez de reformuler la demande ou choisissez un modèle qui prend en charge la génération d'images.",
   "ProviderServiceUnavailable": "Le fournisseur est temporairement surchargé ou indisponible. Veuillez réessayer sous peu.",
+  "ProviderStreamInterrupted": "Le fournisseur a fermé la connexion avant de terminer la réponse. C'est généralement temporaire, veuillez réessayer.",
   "QuotaLimitReached": "Désolé, l'utilisation des jetons ou le nombre de requêtes a atteint la limite de quota pour cette clé. Veuillez augmenter le quota de la clé ou réessayer plus tard.",
   "RateLimitExceeded": "Désolé, l'utilisation des jetons ou le nombre de requêtes a atteint la limite de débit pour cette clé. Veuillez réessayer plus tard ou augmenter le quota de la clé.",
   "RemoteMediaDownloadTimeout": "Le fournisseur a dépassé le délai lors du téléchargement d'une image ou d'un fichier joint. Veuillez réessayer.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "La passerelle ou le proxy en amont a renvoyé une erreur. Veuillez réessayer sous peu ; si le problème persiste, vérifiez la configuration de votre proxy / point de terminaison.",
   "UpstreamHttpError": "Le fournisseur a renvoyé une erreur HTTP sans plus de détails. Veuillez réessayer ou vérifier votre requête et la configuration du modèle.",
   "UpstreamMalformedResponse": "Le fournisseur a renvoyé une réponse mal formée qui n'a pas pu être analysée. Veuillez réessayer ; si le problème persiste, essayez un autre modèle ou fournisseur.",
-  "UserConfigError": "La configuration du fournisseur est invalide (URL de base incorrecte, variable d'environnement manquante, restriction de clé virtuelle, etc.). Veuillez vérifier les paramètres du fournisseur."
+  "UserConfigError": "La configuration du fournisseur est invalide (URL de base incorrecte, variable d'environnement manquante, restriction de clé virtuelle, etc.). Veuillez vérifier les paramètres du fournisseur.",
+  "WorkspaceModelRestricted": "Ce modèle dépasse le niveau le plus élevé autorisé par l'administrateur de votre espace de travail. Choisissez un modèle de niveau inférieur ou demandez à un administrateur de l'espace de travail d'augmenter votre niveau."
 }

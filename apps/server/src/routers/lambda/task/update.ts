@@ -10,7 +10,10 @@ import { router } from '@/libs/trpc/lambda';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
-import { checkTaskDeliveryConfig } from '@/server/services/task/channelDelivery';
+import {
+  checkTaskDeliveryConfig,
+  checkTaskDeliveryInput,
+} from '@/server/services/task/channelDelivery';
 import {
   assertProjectReadable,
   projectMoveRefused,
@@ -118,11 +121,32 @@ export const updateRouter = router({
           },
           { data, id, parentTaskId },
         );
-        const configPatch = await normalizeTaskConfig(model, rawConfigPatch, resolved.config);
+        // A Channel delivery in `config` or `configPatch` is checked like `updateConfig` does,
+        // against the Agent the task has once this update lands.
+        const deliveryScope = { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined };
+        const deliveryAgentId =
+          normalizedUpdateData.assigneeAgentId === undefined
+            ? resolved.assigneeAgentId
+            : normalizedUpdateData.assigneeAgentId;
+        const configPatch = await normalizeTaskConfig(
+          model,
+          await checkTaskDeliveryConfig(
+            ctx.serverDB,
+            deliveryScope,
+            deliveryAgentId,
+            rawConfigPatch,
+          ),
+          resolved.config,
+        );
         if (normalizedUpdateData.config) {
           normalizedUpdateData.config = await normalizeTaskConfig(
             model,
-            normalizedUpdateData.config,
+            await checkTaskDeliveryConfig(
+              ctx.serverDB,
+              deliveryScope,
+              deliveryAgentId,
+              normalizedUpdateData.config,
+            ),
             resolved.config,
           );
         }
@@ -337,6 +361,32 @@ export const updateRouter = router({
           message: 'Failed to update task visibility',
         });
       }
+    }),
+  /**
+   * Resolves and checks a Channel delivery without storing it, so `lobe-task.setTaskSchedule` on
+   * the client can refuse it before writing anything. `{}` is where the asking run answers: the
+   * Channel job of `operationId`, a run of the caller's own.
+   */
+  checkChannelDelivery: taskProcedureWrite
+    .input(
+      idInput.merge(
+        z.object({
+          delivery: z
+            .object({ channelId: z.string().optional(), threadId: z.string().optional() })
+            .nullable(),
+          operationId: z.string().optional(),
+        }),
+      ),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
+      return checkTaskDeliveryInput(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        resolved.assigneeAgentId,
+        input.operationId,
+        input.delivery,
+      );
     }),
   updateConfig: taskProcedureWrite
     .input(idInput.merge(z.object({ config: z.record(z.string(), z.unknown()) })))

@@ -45,6 +45,17 @@ export default {
   'billingRecovery.planLocked':
     'Pay the outstanding invoice or cancel this subscription before changing plans.',
   'billingRecovery.title': 'Renewal payment failed',
+  'blackFriday.badge': 'Black Friday deal',
+  'blackFriday.claim': 'Claim offer',
+  'blackFriday.countdown.days': 'Days',
+  'blackFriday.countdown.hours': 'Hrs',
+  'blackFriday.countdown.minutes': 'Min',
+  'blackFriday.countdown.seconds': 'Sec',
+  'blackFriday.notStackable':
+    'Black Friday does not stack with your current discount. This change includes 1 year.',
+  'blackFriday.payOnceTwoYears': '2 years (1 free)',
+  'blackFriday.title': 'Black Friday: Pay for 1 year, get 1 free',
+  'blackFriday.twoYears': '{{total}} / 2 years, then {{total}} yearly',
   'crossPlatform.desc':
     'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
   'crossPlatform.manageOnMobile': 'Manage on mobile device',

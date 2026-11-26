@@ -1,8 +1,9 @@
-import { actionToMessage } from '@lobehub/a2ui';
+import { actionToMessage } from '@lobehub/a2ui/action';
 import { type A2uiHost, A2uiHostProvider } from '@lobehub/a2ui/react';
 import { memo, type ReactNode, useMemo } from 'react';
 
-import { useA2uiStatusLabels } from '@/features/A2uiCards/useStatusLabels';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 
 import { useConversationStore, useConversationStoreApi } from './store';
 
@@ -14,11 +15,11 @@ export const A2uiConversationHost = memo<{ children: ReactNode }>(({ children })
   const api = useConversationStoreApi();
   const canAct = useConversationStore((s) => s.composerTarget.writable);
 
-  const statusLabels = useA2uiStatusLabels();
+  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const host = useMemo<A2uiHost>(
     () => ({
       canAct,
-      statusLabels,
+      locale,
       sendAction: (action, surface) =>
         new Promise<boolean>((resolve, reject) => {
           const current = api.getState();
@@ -32,7 +33,7 @@ export const A2uiConversationHost = memo<{ children: ReactNode }>(({ children })
             .then(() => resolve(false), reject);
         }),
     }),
-    [api, canAct, statusLabels],
+    [api, canAct, locale],
   );
 
   return <A2uiHostProvider value={host}>{children}</A2uiHostProvider>;

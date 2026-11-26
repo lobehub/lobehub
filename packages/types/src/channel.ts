@@ -747,6 +747,11 @@ export interface ChannelAvatarMember {
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
   /**
+   * An Agent's access request card with its request's current status, for the Agent's owner, so
+   * a list can read "Allowed …" once it was answered; null for any other message or reader.
+   */
+  agentAccess?: ChannelAgentAccessCard | null;
+  /**
    * The first attachment's MIME type and how many there are, so a message of only an image
    * still has a preview line; null without attachments.
    */
@@ -807,6 +812,11 @@ export interface ChannelListItem {
   /** The newest message, Threads included, cut for a preview; set by the Channel list. */
   lastMessage?: ChannelLastMessage | null;
   /**
+   * The caller's read position, which `unreadCount` and `mentionCount` count from; set by the
+   * Channel list. Opening the main conversation moves it past every Thread message too.
+   */
+  lastReadSequence?: number;
+  /**
    * The first members besides the caller, oldest first, for a group Channel's list avatar;
    * set by the Channel list.
    */
@@ -865,7 +875,11 @@ export interface ChannelListItem {
    */
   threadMentions?: ChannelThreadMention[];
   title: string;
-  /** Main-channel messages the caller has not read; set by the Channel list. */
+  /**
+   * Messages after `lastReadSequence` that are news to the caller: the main conversation, Threads
+   * they follow, started, or wrote in, and any message that @mentions them. Replies in other
+   * Threads are left out. Set by the Channel list.
+   */
   unreadCount?: number;
   /** Bumped by every new message, so it orders conversations by latest activity. */
   updatedAt?: Date;

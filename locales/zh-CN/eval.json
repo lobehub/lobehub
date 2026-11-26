@@ -560,7 +560,7 @@
   "lobeBench.dashboard.filter.all": "全部",
   "lobeBench.dashboard.filter.allFail": "全都没过",
   "lobeBench.dashboard.filter.category": "类别：{{category}}",
-  "lobeBench.dashboard.filter.clear": "清除",
+  "lobeBench.dashboard.filter.clear": "清空筛选",
   "lobeBench.dashboard.filter.diff": "有分歧的题",
   "lobeBench.dashboard.filter.errors": "有报错",
   "lobeBench.dashboard.filter.level": "难度：{{level}}",

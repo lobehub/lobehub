@@ -877,6 +877,29 @@ describe('human assignee formatting', () => {
     expect(out).not.toContain('Agent:');
   });
 
+  it('formatTaskDetail shows where results post, and why the latest post was refused', () => {
+    const base = { identifier: 'T-1', instruction: 'do it', status: 'scheduled' };
+    expect(
+      formatTaskDetail({ ...base, channelDelivery: { channelId: 'chn_1', threadId: null } }),
+    ).toContain('Channel delivery: chn_1 (main timeline)');
+    const refused = formatTaskDetail({
+      ...base,
+      channelDelivery: {
+        channelId: 'chn_1',
+        lastError: {
+          at: '2026-11-25T08:00:00.000Z',
+          code: 'channel_unavailable',
+          message: 'The Agent is muted in this Channel',
+        },
+        threadId: 'cht_1',
+      },
+    });
+    expect(refused).toContain('Channel delivery: chn_1 (Thread cht_1)');
+    expect(refused).toContain(
+      'the latest post was refused (channel_unavailable: The Agent is muted in this Channel',
+    );
+  });
+
   it('formatWorkspaceMembers renders one line per member with the id to pass back', () => {
     const out = formatWorkspaceMembers([
       { id: 'usr_1', isSelf: true, name: 'Me', role: 'owner', username: 'me' },

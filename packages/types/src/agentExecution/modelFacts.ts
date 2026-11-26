@@ -9,6 +9,8 @@ export interface ModelCardFacts {
   extendParams?: string[] | null;
   id: string;
   knowledgeCutoff?: string | null;
+  /** Largest output the card declares; the server runtime caps a step's default `max_tokens` from it. */
+  maxOutput?: number | null;
   providerId: string;
 }
 
