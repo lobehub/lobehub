@@ -5,6 +5,7 @@ import { ChannelError } from '@/database/repositories/channel';
 import { heteroAuthedProcedure } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
+import { ChannelCardService } from '@/server/services/channel/ChannelCardService';
 import { ChannelHistoryService } from '@/server/services/channel/ChannelHistoryService';
 import { ChannelMessagingService } from '@/server/services/channel/ChannelMessagingService';
 import {
@@ -38,6 +39,7 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       ] as const;
       const result = await next({
         ctx: {
+          channelCards: new ChannelCardService(...args),
           channelHistory: new ChannelHistoryService(...args),
           channelMessaging: new ChannelMessagingService(...args),
         },
@@ -64,6 +66,20 @@ const historyProcedure = operationProcedure('channel:read');
 const messagingProcedure = operationProcedure('channel:message');
 
 export const channelHistoryProcedures = {
+  /**
+   * The card-drawing guide (`lh card guide`): the component index, or with `components` their full
+   * schemas and examples, so an external runtime learns the catalog on demand.
+   */
+  cardGuide: historyProcedure
+    .input(z.object({ components: z.array(z.string().min(1)).max(8).optional() }).optional())
+    .query(({ ctx, input }) => ctx.channelCards.guide(input?.components)),
+  /**
+   * Validates a card like the builtin `renderUI` and records it under the run, so its reply posts
+   * it. An invalid card returns its errors; the same `surfaceId` again replaces the card.
+   */
+  renderCard: historyProcedure
+    .input(z.object({ operations: z.unknown() }).strict())
+    .mutation(({ ctx, input }) => ctx.channelCards.render(input.operations)),
   readMessages: historyProcedure
     .input(
       z

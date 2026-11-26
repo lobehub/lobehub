@@ -1,4 +1,6 @@
 export interface DeviceItem {
+  /** A managed cloud device: always online, started on demand. */
+  cloud?: boolean;
   /** Raw machine hostname; rendered alongside `name` when an alias differs. */
   hostname?: string;
   id: string;
@@ -18,6 +20,7 @@ export const devicePrompt = (device: DeviceItem) => {
   }
   attrs.push(`os="${device.os}"`);
   if (device.scope) attrs.push(`scope="${device.scope}"`);
+  if (device.cloud) attrs.push('kind="cloud"');
   if (device.lastSeen) attrs.push(`last-seen="${device.lastSeen}"`);
   return `  <device ${attrs.join(' ')} />`;
 };

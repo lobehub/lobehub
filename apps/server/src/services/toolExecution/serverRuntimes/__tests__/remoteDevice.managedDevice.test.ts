@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ToolExecutionContext } from '../../types';
 
 const mocks = vi.hoisted(() => ({
-  awaitManagedDeviceForToolCall: vi.fn(),
+  startManagedDeviceForActivation: vi.fn(),
   getScopedOnlineDevices: vi.fn(),
 }));
 
@@ -16,7 +16,7 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 vi.mock('@/server/services/deviceGateway/managedDeviceWake', () => ({
-  awaitManagedDeviceForToolCall: mocks.awaitManagedDeviceForToolCall,
+  startManagedDeviceForActivation: mocks.startManagedDeviceForActivation,
 }));
 
 const { remoteDeviceRuntime } = await import('../remoteDevice');
@@ -40,38 +40,55 @@ beforeEach(() => {
   mocks.getScopedOnlineDevices.mockResolvedValue([]);
 });
 
+const managedAsleep = { ...managedOnline, managed: true, online: false };
+
 describe('remoteDeviceRuntime — managed cloud devices', () => {
-  it('wakes an offline managed device on activateDevice and reports DEVICE_WAKING', async () => {
-    const waking = {
-      content: 'starting',
-      error: {
-        code: 'DEVICE_WAKING',
-        deviceId: 'managed-a',
-        message: 'starting',
-        retryAfterSeconds: 15,
-      },
-      success: false,
-    };
-    mocks.awaitManagedDeviceForToolCall.mockResolvedValue(waking);
+  it('lists a sleeping managed device as online', async () => {
+    mocks.getScopedOnlineDevices.mockResolvedValue([managedAsleep]);
+
+    const runtime = remoteDeviceRuntime.factory(context) as any;
+    const result = await runtime.listOnlineDevices();
+
+    expect(result.state.devices).toEqual([{ ...managedAsleep, online: true }]);
+  });
+
+  it('activates a sleeping managed device at once and starts it', async () => {
+    mocks.getScopedOnlineDevices.mockResolvedValue([managedAsleep]);
+    mocks.startManagedDeviceForActivation.mockResolvedValue('starting');
 
     const runtime = remoteDeviceRuntime.factory(context) as any;
     const result = await runtime.activateDevice({ deviceId: 'managed-a' });
 
-    expect(mocks.awaitManagedDeviceForToolCall).toHaveBeenCalledWith(
+    expect(mocks.startManagedDeviceForActivation).toHaveBeenCalledWith(
       { db: context.serverDB, userId: 'user-1', workspaceId: undefined },
       'managed-a',
     );
-    expect(result).toEqual(waking);
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      activatedDevice: { deviceId: 'managed-a', online: true },
+      metadata: { activeDeviceId: 'managed-a' },
+    });
   });
 
-  it('activates the managed device when it comes online during the wait', async () => {
+  it('activates the managed device when it is online already', async () => {
     mocks.getScopedOnlineDevices.mockResolvedValueOnce([]).mockResolvedValue([managedOnline]);
-    mocks.awaitManagedDeviceForToolCall.mockResolvedValue('online');
+    mocks.startManagedDeviceForActivation.mockResolvedValue('online');
 
     const runtime = remoteDeviceRuntime.factory(context) as any;
     const result = await runtime.activateDevice({ deviceId: 'managed-a' });
 
     expect(result.success).toBe(true);
     expect(result.state).toMatchObject({ metadata: { activeDeviceId: 'managed-a' } });
+  });
+
+  it('reports the device offline when it cannot be started', async () => {
+    mocks.getScopedOnlineDevices.mockResolvedValue([managedAsleep]);
+    mocks.startManagedDeviceForActivation.mockResolvedValue(undefined);
+
+    const runtime = remoteDeviceRuntime.factory(context) as any;
+    const result = await runtime.activateDevice({ deviceId: 'managed-a' });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('listOnlineDevices');
   });
 });

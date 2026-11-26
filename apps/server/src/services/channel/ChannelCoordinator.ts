@@ -48,7 +48,7 @@ import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { reportChannelReplyFailure } from './replyError';
 import { openChannelReply } from './replyOpening';
 import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
-import { runSurfaces } from './runSurfaces';
+import { unpostedRunSurfaces } from './runSurfaces';
 import {
   importShareAttachments,
   readVisitorFiles,
@@ -633,9 +633,12 @@ export class ChannelCoordinator {
               job.executionConfig?.share ? { includeShareVisitor: true } : undefined,
             )
           : undefined;
-      // Cards the run drew. Read on every attempt, so a publish retried after a crash keeps them.
+      // Cards the run drew, less those it already posted elsewhere (postMessage). Read on every
+      // attempt, so a publish retried after a crash keeps them.
       const surfaces =
-        messages && job.topicId ? await runSurfaces(messages, operationId, job.topicId) : [];
+        messages && job.topicId
+          ? await unpostedRunSurfaces(messages, operationId, job.topicId)
+          : [];
       if (job.draft === null) {
         if (!messages || !job.topicId) return;
         const final = await messages.findLatestAssistantByOperationId({

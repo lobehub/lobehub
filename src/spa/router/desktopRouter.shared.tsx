@@ -343,8 +343,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
     children: [
+      // Settings lead with the personal space's own set (its first tab);
+      // account settings sit behind the sidebar's bottom card.
       {
-        element: redirectElement('/settings/profile'),
+        element: dynamicElement(
+          () => import('@/routes/(main)/settings/_index'),
+          'Desktop > Settings > Index',
+        ),
         index: true,
       },
       // Provider routes with nested structure

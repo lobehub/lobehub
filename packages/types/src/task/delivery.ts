@@ -34,3 +34,26 @@ export const readTaskChannelDelivery = (
   if (!isId(channelId)) return undefined;
   return { channelId, ...(isId(threadId) && { threadId }) };
 };
+
+/**
+ * `tasks.context.delivery`: how the task's Channel delivery last went. `lastError` is set when the
+ * Channel refused a run's post (the Agent removed or muted, the Channel archived, the requester no
+ * longer a member) and cleared by the next post that lands, like an inbound webhook's `lastError`.
+ */
+export interface TaskDeliveryContext {
+  lastError?: {
+    at: string;
+    code: 'channel_unavailable';
+    /** Why the Channel refused, as it said. */
+    message?: string;
+  } | null;
+}
+
+/** The delivery state of a free-form task context; undefined when it records none. */
+export const readTaskDeliveryContext = (context: unknown): TaskDeliveryContext | undefined => {
+  if (!context || typeof context !== 'object') return undefined;
+  const raw = (context as Record<string, unknown>).delivery;
+  return raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as TaskDeliveryContext)
+    : undefined;
+};

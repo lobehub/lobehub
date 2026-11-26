@@ -50,9 +50,12 @@ import TaskStatusIcon from '../../features/TaskStatusIcon';
 import { UnassignedAssigneeIcon } from '../../features/UnassignedAssigneeIcon';
 import { hasWorkspaceMemberDirectory } from '../../shared/memberAssigneeMode';
 import { toAgentFilterOption } from './agentFilterOption';
+import { buildMemberFilterOptions } from './memberFilterOptions';
 import type { TaskFilterValue } from './taskFilterState';
 
 export interface TaskFilterOption {
+  /** Menu section title; the submenu groups consecutive options that share it. */
+  group?: string;
   icon?: ReactNode;
   label: string;
   value: TaskFilterValue;
@@ -190,15 +193,21 @@ export const useTaskFilterFields = ({
       options: agentOptions,
     };
 
+    // Same order as the Assign picker: the viewer first, then the directory.
     const memberOptions: TaskFilterOption[] = hasMembers
-      ? members.map((member) => {
-          const name = getWorkspaceMemberName(member);
-          return {
-            icon: <UserAvatar avatar={member.user?.avatar} name={name} size={OPTION_ICON_SIZE} />,
-            label: name,
-            value: member.userId,
-          };
-        })
+      ? buildMemberFilterOptions(
+          members,
+          selfUserId,
+          t('taskList.assigneeSelector.workspaceMemberGroup'),
+          (member) => {
+            const name = getWorkspaceMemberName(member);
+            return {
+              icon: <UserAvatar avatar={member.user?.avatar} name={name} size={OPTION_ICON_SIZE} />,
+              label: name,
+              value: member.userId,
+            };
+          },
+        )
       : selfUserId
         ? [
             {
@@ -234,6 +243,8 @@ export const useTaskFilterFields = ({
           .filter((option) => option.value !== TASK_LIST_FILTER_NONE)
           .map((option) => ({
             ...option,
+            // Titled so the agents do not read as more rows of the member section.
+            group: hasMembers ? t('taskList.assigneeSelector.agentGroup') : undefined,
             value: toTaskListFilterAgentCreator(String(option.value)),
           })),
       ],

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { xSync } from 'tinyexec';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLI_CONFIG_DIR_NAME, resolveCliDirName } from '../constants/identity';
 import {
   appendLog,
   getLogPath,
@@ -24,7 +25,8 @@ import {
 } from './manager';
 
 const tmpDir = path.join(os.tmpdir(), 'daemon-test-' + process.pid);
-const mockDir = path.join(tmpDir, '.lobehub');
+// `tests/setup.ts` points LOBEHUB_CLI_HOME at a per-run directory name.
+const mockDir = path.join(tmpDir, resolveCliDirName());
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
@@ -542,6 +544,57 @@ describe('daemon manager', () => {
       expect(readPid()).toBeNull();
 
       killSpy.mockRestore();
+    });
+  });
+
+  describe('LOBEHUB_CLI_HOME isolation', () => {
+    const defaultDir = path.join(tmpDir, CLI_CONFIG_DIR_NAME);
+    const isolatedDir = path.join(tmpDir, '.lobehub-isolated');
+
+    beforeEach(() => {
+      vi.stubEnv('LOBEHUB_CLI_HOME', '.lobehub-isolated');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('does not read or signal the default home daemon', () => {
+      // The default home's daemon is alive and owns ~/.lobehub/daemon.pid.
+      fs.mkdirSync(defaultDir, { recursive: true });
+      fs.writeFileSync(path.join(defaultDir, 'daemon.pid'), String(process.pid));
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      expect(readPid()).toBeNull();
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(stopDaemon()).toBe(false);
+
+      expect(killSpy).not.toHaveBeenCalled();
+      expect(fs.readFileSync(path.join(defaultDir, 'daemon.pid'), 'utf8')).toBe(
+        String(process.pid),
+      );
+
+      killSpy.mockRestore();
+    });
+
+    it('keeps pid, status and log in the isolated home', () => {
+      writePid(4242);
+      writeStatus({
+        connectionStatus: 'connected',
+        gatewayUrl: 'http://localhost:8790',
+        pid: 4242,
+        startedAt: '',
+      });
+      appendLog('isolated daemon started');
+
+      expect(fs.readFileSync(path.join(isolatedDir, 'daemon.pid'), 'utf8')).toBe('4242');
+      expect(fs.existsSync(path.join(isolatedDir, 'daemon.status.json'))).toBe(true);
+      expect(getLogPath()).toBe(path.join(isolatedDir, 'daemon.log'));
+      expect(fs.readFileSync(getLogPath(), 'utf8')).toContain('isolated daemon started');
+
+      expect(fs.existsSync(path.join(defaultDir, 'daemon.pid'))).toBe(false);
+      expect(fs.existsSync(path.join(defaultDir, 'daemon.status.json'))).toBe(false);
+      expect(fs.existsSync(path.join(defaultDir, 'daemon.log'))).toBe(false);
     });
   });
 });

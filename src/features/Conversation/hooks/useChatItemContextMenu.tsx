@@ -204,7 +204,9 @@ export const useChatItemContextMenu = ({
 
   const handleShare = useCallback(() => {
     const item = getMessage();
-    if (!item || item.role !== 'assistant') return;
+    // The menu offers Share on single replies and on multi-step replies
+    // (`assistantGroup`); both open the same modal as the hover action bar.
+    if (!item || (item.role !== 'assistant' && item.role !== 'assistantGroup')) return;
 
     openShareMessageModal(item, () => {
       const state = storeApi.getState();

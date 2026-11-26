@@ -27,6 +27,8 @@ export interface BrowserControlClickParams extends BrowserControlParams {
 export interface BrowserControlClickResult extends BrowserControlResult, BrowserControlPageInfo {}
 
 export interface BrowserControlFillParams extends BrowserControlParams {
+  /** Code editors only: replace this exact passage instead of the whole text. */
+  oldText?: string;
   ref: string;
   /** Press Enter after filling (submit forms / search boxes). */
   submit?: boolean;

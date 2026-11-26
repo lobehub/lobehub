@@ -284,6 +284,15 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   if (t.labels?.length) lines.push(`Labels: ${t.labels.map((label) => label.name).join(', ')}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
+  if (t.channelDelivery) {
+    const { channelId, lastError, threadId } = t.channelDelivery;
+    const refused = lastError
+      ? ` — the latest post was refused (${lastError.code}${lastError.message ? `: ${lastError.message}` : ''}, ${lastError.at}); results reach the Channel again once the Agent can post there`
+      : '';
+    lines.push(
+      `Channel delivery: ${channelId}${threadId ? ` (Thread ${threadId})` : ' (main timeline)'}${refused}`,
+    );
+  }
 
   if (t.dependencies && t.dependencies.length > 0) {
     lines.push(

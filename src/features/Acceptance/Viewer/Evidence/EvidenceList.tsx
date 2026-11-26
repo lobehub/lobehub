@@ -163,6 +163,7 @@ export const EvidenceList = memo<{
         commentAction(item),
         item.type === 'video' ? videoContent(item) : undefined,
       ),
+      imageSrc: item.fileUrl && IMAGE_EVIDENCE.has(item.type) ? item.fileUrl : undefined,
     });
 
     const consumedScreenshotIds = new Set<string>();
