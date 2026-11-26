@@ -21,6 +21,10 @@ import {
   projectOnboardingGenerationProgress,
   subscribeToOnboardingGenerationProgress,
 } from '@/server/services/onboardingProgress';
+import {
+  createOnboardingProgressStallGuard,
+  ONBOARDING_PROGRESS_RECONCILE_INTERVAL_MS,
+} from '@/server/services/onboardingProgress/stallGuard';
 import { TaskRecommendationNotFoundError } from '@/server/services/taskRecommendation/service';
 import { understandingProviders } from '@/server/services/understanding/providers';
 
@@ -153,6 +157,44 @@ const waitForProgressRecovery = (delay: number, signal: AbortSignal | undefined)
 const isIdleOnboardingGenerationProgress = (progress: OnboardingGenerationProgressEvent) =>
   progress.phase === 'collecting-sources' && progress.steps.collectSources === 'pending';
 
+const shouldEndOnboardingProgressStream = (progress: OnboardingGenerationProgressEvent) =>
+  progress.phase === 'completed' ||
+  progress.phase === 'failed' ||
+  progress.phase === 'partial' ||
+  isIdleOnboardingGenerationProgress(progress);
+
+type OnboardingProgressSubscription = NonNullable<
+  Awaited<ReturnType<typeof subscribeToOnboardingGenerationProgress>>
+>;
+
+/**
+ * Waits up to `delay` for a Redis notification, or just sleeps when Redis is unavailable.
+ *
+ * Returns:
+ * - The notification, or `undefined` when the wait ended without one and the caller should read
+ *   persisted state. A message arriving after the timeout stays queued for the next wait.
+ */
+const waitForProgressChange = async (
+  subscription: OnboardingProgressSubscription | undefined,
+  delay: number,
+  signal: AbortSignal | undefined,
+) => {
+  if (!subscription) {
+    await waitForProgressRecovery(delay, signal);
+    return undefined;
+  }
+
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), delay);
+  try {
+    return await subscription.next(
+      signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 export const onboardingUnderstandingRouter = router({
   confirmOnboardingUnderstanding: understandingServiceProcedure
     .input(confirmOnboardingUnderstandingInputSchema)
@@ -184,6 +226,8 @@ export const onboardingUnderstandingRouter = router({
   watchOnboardingGenerationProgress: onboardingGenerationProgressProcedure
     .input(onboardingGenerationProgressInputSchema)
     .subscription(async function* ({ ctx, input, signal }) {
+      // The platform clock starts with the request, so the budget must include the first read.
+      const guard = createOnboardingProgressStallGuard(Date.now());
       let lastEventId = input.lastEventId;
       const readPersistedProgress = async () => {
         const understanding = await ctx.understandingService.get(input.topicId);
@@ -203,59 +247,62 @@ export const onboardingUnderstandingRouter = router({
         lastEventId = initial.eventId;
         yield tracked(initial.eventId, initial.progress);
       }
-      if (
-        initial.progress.phase === 'completed' ||
-        initial.progress.phase === 'failed' ||
-        initial.progress.phase === 'partial' ||
-        isIdleOnboardingGenerationProgress(initial.progress)
-      ) {
-        return;
-      }
+      if (shouldEndOnboardingProgressStream(initial.progress)) return;
 
       const subscription = await subscribeToOnboardingGenerationProgress(input.topicId);
-      if (subscription) {
-        try {
-          while (!signal?.aborted) {
-            const notification = await subscription.next(signal);
-            if (!notification) return;
+      let current = initial;
+      // A write landing between the initial read and the subscribe publishes to nobody, so a
+      // Redis-backed stream reconciles against the database as soon as it is listening.
+      let readDelay = subscription ? 0 : INITIAL_PROGRESS_RECOVERY_DELAY;
+      try {
+        while (!signal?.aborted) {
+          const delay = Math.min(readDelay, guard.remainingMs(current.progress.phase, Date.now()));
+          const notification = await waitForProgressChange(subscription, delay, signal);
+          if (signal?.aborted) return;
 
-            if (notification.eventId !== lastEventId) {
-              lastEventId = notification.eventId;
-              yield tracked(notification.eventId, notification.progress);
-            }
-            if (
-              notification.progress.phase === 'completed' ||
-              notification.progress.phase === 'failed' ||
-              notification.progress.phase === 'partial'
-            ) {
-              return;
-            }
+          // With Redis, a failed read is not fatal: notifications still flow and the guard still
+          // bounds the stream. Without Redis the read is the only signal, so its error surfaces.
+          const next =
+            notification ??
+            (subscription
+              ? await readPersistedProgress().catch((error: unknown) => {
+                  console.error('[onboardingProgress] Failed to reconcile progress', error);
+                  return undefined;
+                })
+              : await readPersistedProgress());
+          if (next) current = next;
+
+          if (current.eventId !== lastEventId) {
+            lastEventId = current.eventId;
+            guard.recordProgress(Date.now());
+            yield tracked(current.eventId, current.progress);
           }
-        } finally {
-          await subscription.unsubscribe();
-        }
-        return;
-      }
+          if (shouldEndOnboardingProgressStream(current.progress)) return;
 
-      let recoveryDelay = INITIAL_PROGRESS_RECOVERY_DELAY;
-      while (!signal?.aborted) {
-        await waitForProgressRecovery(recoveryDelay, signal);
-        if (signal?.aborted) return;
+          const stalledReason = guard.expiredReason(current.progress.phase, Date.now());
+          if (stalledReason) {
+            console.warn('[onboardingProgress] Ending progress stream before a terminal state', {
+              phase: current.progress.phase,
+              reason: stalledReason,
+              sessionId: current.progress.sessionId,
+            });
+            const stalled: OnboardingGenerationProgressEvent = {
+              ...current.progress,
+              phase: 'stalled',
+              stalledReason,
+            };
+            yield tracked(`${current.eventId}|stalled`, stalled);
+            return;
+          }
 
-        const { eventId, progress } = await readPersistedProgress();
-        if (eventId !== lastEventId) {
-          lastEventId = eventId;
-          yield tracked(eventId, progress);
+          if (!notification) {
+            readDelay = subscription
+              ? ONBOARDING_PROGRESS_RECONCILE_INTERVAL_MS
+              : Math.min(readDelay * 2, MAX_PROGRESS_RECOVERY_DELAY);
+          }
         }
-
-        if (
-          progress.phase === 'completed' ||
-          progress.phase === 'failed' ||
-          progress.phase === 'partial'
-        ) {
-          return;
-        }
-        recoveryDelay = Math.min(recoveryDelay * 2, MAX_PROGRESS_RECOVERY_DELAY);
+      } finally {
+        await subscription?.unsubscribe();
       }
     }),
   getSupportedUnderstandingProviders: understandingServiceProcedure.query(

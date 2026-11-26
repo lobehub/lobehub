@@ -233,15 +233,17 @@ export const subscribeToOnboardingGenerationProgress = async (
       if (signal?.aborted) return Promise.resolve(undefined);
 
       return new Promise((resolve) => {
-        const onAbort = () => {
-          signal?.removeEventListener('abort', onAbort);
-          if (resolveNext === resolve) resolveNext = undefined;
-          resolve(undefined);
-        };
-        resolveNext = (event) => {
+        const deliver = (event: ProgressEnvelope | undefined) => {
           signal?.removeEventListener('abort', onAbort);
           resolve(event);
         };
+        const onAbort = () => {
+          signal?.removeEventListener('abort', onAbort);
+          // Clear the abandoned waiter so a later message is queued instead of lost.
+          if (resolveNext === deliver) resolveNext = undefined;
+          resolve(undefined);
+        };
+        resolveNext = deliver;
         signal?.addEventListener('abort', onAbort, { once: true });
       });
     },
