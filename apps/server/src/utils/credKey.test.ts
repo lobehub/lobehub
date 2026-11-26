@@ -46,3 +46,5 @@ describe('resolveCredKey', () => {
     expect(resolveCredKey({ key: '  ', name: 'GitHub Token' })).toMatch(/^github-token-/);
   });
 });
+
+// CI scope probe (temporary, not for merge)

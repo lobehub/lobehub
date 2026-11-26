@@ -93,3 +93,5 @@ describe('Bedrock auth mode helpers', () => {
     });
   });
 });
+
+// CI scope probe (temporary, not for merge)

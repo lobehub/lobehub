@@ -160,3 +160,5 @@ describe('apiKey', () => {
     });
   });
 });
+
+// CI scope probe (temporary, not for merge)
