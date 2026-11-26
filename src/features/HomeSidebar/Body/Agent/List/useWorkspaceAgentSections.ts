@@ -17,7 +17,7 @@ import {
 
 /**
  * The merged workspace Agents section as the member's sidebar shows it, with
- * their explicit hides applied (the team section stays fixed). The rest is not
+ * their explicit hides applied to every section. The rest is not
  * truncated to the page size. Shared by the sidebar and the Agents page, so
  * "is this in my sidebar" has a single answer.
  */
@@ -29,6 +29,8 @@ export const useWorkspaceAgentSections = (): WorkspaceAgentSections => {
   const ungrouped = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
   const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
   const myPinnedIds = useUserStore(workspaceUserSettingsSelectors.sidebarPinnedItemIds, isEqual);
+  const setupPreview = useUserStore(workspaceUserSettingsSelectors.sidebarSetupPreview);
+  const recommendedIds = useHomeStore(homeAgentListSelectors.recommendedAgentIds, isEqual);
   const visibilityOverrides = useUserStore(
     workspaceUserSettingsSelectors.sidebarAgentVisibilityOverrides,
     isEqual,
@@ -47,20 +49,19 @@ export const useWorkspaceAgentSections = (): WorkspaceAgentSections => {
       privateGroups,
       privatePinned,
       privateUngrouped,
+      recommendedIds,
+      setupPreview,
       ungrouped,
       visibilityOverrides,
     });
 
-    // The team section is fixed: a member's own "remove from sidebar" does
-    // not apply to it. Every other section honors the member's hides.
     return {
       folders: keepGroups(resolved.folders).map((group) => ({
         ...group,
         items: keep(group.items),
       })),
-      myPinned: keep(resolved.myPinned),
+      pinned: keep(resolved.pinned),
       rest: keep(resolved.rest),
-      teamPinned: resolved.teamPinned,
     };
   }, [
     currentUserId,
@@ -72,14 +73,14 @@ export const useWorkspaceAgentSections = (): WorkspaceAgentSections => {
     privateGroups,
     privatePinned,
     privateUngrouped,
+    recommendedIds,
+    setupPreview,
     ungrouped,
     visibilityOverrides,
   ]);
 };
 
 export interface WorkspaceSidebarItemIds {
-  /** Rows under "Pinned for team": fixed for every member, no personal hide. */
-  fixed: ReadonlySet<string>;
   /** Every row the member's sidebar lists. */
   listed: ReadonlySet<string>;
 }
@@ -95,15 +96,12 @@ export const useWorkspaceSidebarItemIds = (): WorkspaceSidebarItemIds | null => 
   return useMemo(() => {
     if (!isWorkspace) return null;
 
-    const fixed = new Set(sections.teamPinned.map((item) => item.id));
-
     const ids = new Set<string>();
     const add = (list: { id: string }[]) => list.forEach((item) => ids.add(item.id));
-    add(sections.teamPinned);
-    add(sections.myPinned);
+    add(sections.pinned);
     add(sections.rest);
     for (const folder of sections.folders) add(folder.items);
 
-    return { fixed, listed: ids };
+    return { listed: ids };
   }, [isWorkspace, sections]);
 };

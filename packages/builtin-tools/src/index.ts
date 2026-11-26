@@ -1,3 +1,4 @@
+import { A2uiManifest } from '@lobechat/builtin-tool-a2ui';
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
@@ -42,6 +43,7 @@ import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ProjectManifest } from '@lobechat/builtin-tool-project';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
@@ -93,7 +95,9 @@ export const defaultToolIds = [
 
 /**
  * Builtins enabled by default in Agent mode. The activator loads other tools
- * on demand, and Skills loads skill instructions.
+ * on demand, and Skills loads skill instructions and carries the sandbox
+ * shell. A run with no skill to offer keeps only that shell until a skill
+ * arrives (`planSkillsToolDeferral` in `@lobechat/mecha`).
  */
 export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
@@ -108,13 +112,6 @@ export const getUserDisabledToolIds = (
     ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
     : disabled;
 };
-
-/**
- * Tool IDs to exclude from defaults when in manual skill-activate mode.
- * These are the tool/skill discovery tools that should be disabled when user wants precise control.
- * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
- */
-export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -552,6 +549,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    identifier: A2uiManifest.identifier,
+    manifest: A2uiManifest,
+    type: 'builtin',
+  },
+  {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
     type: 'builtin',
@@ -631,6 +633,14 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: ArtboardManifest.identifier,
     manifest: ArtboardManifest,
+    type: 'builtin',
+  },
+  {
+    // Project conversations only: server-side discovery injects it there.
+    discoverable: false,
+    hidden: true,
+    identifier: ProjectManifest.identifier,
+    manifest: ProjectManifest,
     type: 'builtin',
   },
   {

@@ -11,6 +11,8 @@ import {
   ReactLiteXmlPlugin,
   ReactMathPlugin,
   ReactMentionPlugin,
+  ReactSlashOption,
+  ReactSlashPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
   ReactVideoPlugin,
@@ -273,6 +275,36 @@ const InternalEditor = memo<InternalEditorProps>(
       [allowContentBleed, disabled],
     );
 
+    // The `/` and `@` menus. `<Editor>` only mounts its slash plugin once a
+    // menu has items, but the kernel instantiates a plugin only if it
+    // registered before the editor initialised — so `@` members that load
+    // after mount (the usual case for a comment box) would never open a menu.
+    // Own the plugin here instead: it registers at mount whenever either menu
+    // is configured, and later items reach it as an options update.
+    const slashPlugin = useMemo(() => {
+      if (!slashItems && !mentionOption) return;
+
+      // The member chip's markdown writer is pinned on the mention plugin in
+      // STATIC_PLUGINS; the menu only takes the search and select options.
+      const { markdownWriter: _markdownWriter, ...mentionMenu } = mentionOption ?? {};
+
+      return Editor.withProps(ReactSlashPlugin, {
+        children: [
+          slashItems && <ReactSlashOption items={slashItems} key="/" maxLength={8} trigger="/" />,
+          mentionOption && (
+            <ReactSlashOption
+              key="@"
+              maxLength={8}
+              trigger="@"
+              {...mentionMenu}
+              items={mentionMenu.items ?? []}
+            />
+          ),
+        ],
+        getPopupContainer,
+      });
+    }, [getPopupContainer, mentionOption, slashItems]);
+
     // Build plugins array
     const plugins = useMemo(() => {
       // If custom plugins provided, use them directly
@@ -299,10 +331,18 @@ const InternalEditor = memo<InternalEditorProps>(
 
       const mathPlugin = Editor.withProps(ReactMathPlugin, { enableInlineMath });
 
-      // Build base plugins with optional extra plugins prepended
-      const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin]
-        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin];
+      // Build base plugins with optional extra plugins prepended. The slash
+      // plugin leads so its element keeps a stable position (plugins are
+      // keyed by index) when `extraPlugins` grows, e.g. once collab attaches.
+      const basePlugins = [
+        ...(slashPlugin ? [slashPlugin] : []),
+        ...(extraPlugins ?? []),
+        ...STATIC_PLUGINS,
+        mathPlugin,
+        imagePlugin,
+        videoPlugin,
+        filePlugin,
+      ];
 
       if (!floatingToolbar || disabled) return basePlugins;
 
@@ -360,6 +400,7 @@ const InternalEditor = memo<InternalEditorProps>(
       handlePickImage,
       handlePickVideo,
       readonlySelectionItems,
+      slashPlugin,
       toolbarExtraItems,
     ]);
 
@@ -503,10 +544,12 @@ const InternalEditor = memo<InternalEditorProps>(
             editable={editable && !disabled}
             editor={editor}
             getPopupContainer={getPopupContainer}
-            mentionOption={mentionOption}
+            // Custom plugins replace the built-in set, slash plugin included,
+            // so those callers keep `<Editor>`'s own menus.
+            mentionOption={customPlugins ? mentionOption : undefined}
             placeholder={finalPlaceholder}
             plugins={plugins}
-            slashOption={slashItems ? { items: slashItems } : undefined}
+            slashOption={customPlugins && slashItems ? { items: slashItems } : undefined}
             type={'text'}
             style={{
               paddingBottom: 32,

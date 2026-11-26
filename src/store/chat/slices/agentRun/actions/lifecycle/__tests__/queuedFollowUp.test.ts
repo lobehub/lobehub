@@ -5,7 +5,7 @@ import type { ChatStore } from '@/store/chat/store';
 
 import { drainQueuedTurn, findOrphanedQueueKey, scheduleQueuedFollowUp } from '../queuedFollowUp';
 
-const mode = vi.hoisted(() => ({ value: 'legacy' as 'legacy' | 'queue' | 'steer' }));
+const mode = vi.hoisted(() => ({ value: 'steer' as 'queue' | 'steer' }));
 vi.mock('../followUpMode', () => ({ getFollowUpMode: () => mode.value }));
 
 const queued = (
@@ -65,8 +65,8 @@ describe('scheduleQueuedFollowUp', () => {
 
   const context = { agentId: 'agent-1', topicId: 'topic-1' };
 
-  it('merges everything queued into one send on the legacy behavior', () => {
-    mode.value = 'legacy';
+  it('merges everything queued into one send in Steer mode', () => {
+    mode.value = 'steer';
     const { get, store } = createStore([queued('q1', 'first'), queued('q2', 'second')]);
 
     scheduleQueuedFollowUp(get, context, 'op-1');

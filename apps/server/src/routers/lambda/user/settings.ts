@@ -70,6 +70,12 @@ export const settingsRouter = router({
   setWorktreeModeDir: userProcedure
     .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
     .mutation(async ({ ctx, input }) => ctx.userModel.setWorktreeModeDir(input.key, input.enabled)),
+  /** Personal-mode Codex Plan switch remembered for one directory. */
+  setHeteroPlanModeDir: userProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.userModel.setHeteroPlanModeDir(input.key, input.enabled),
+    ),
   /** Personal-mode Claude Code permission mode remembered for one directory. */
   setHeteroPermissionModeDir: userProcedure
     .input(z.object({ key: z.string().min(1).max(4096), mode: z.enum(HETERO_PERMISSION_MODES) }))

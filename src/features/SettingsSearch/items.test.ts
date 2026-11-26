@@ -20,6 +20,7 @@ const webContext: SettingsSearchContext = {
   hideDocs: false,
   isDesktop: false,
   isLogin: true,
+  isMobile: false,
   isWindows: false,
   showAiImage: true,
 };
@@ -32,6 +33,31 @@ describe('settings search index', () => {
 
     expect(item.visible?.({ ...webContext, enableChannels: false }) ?? true).toBe(false);
     expect(item.visible?.({ ...webContext, enableChannels: true }) ?? true).toBe(true);
+  });
+
+  it('indexes the conversation settings under the Conversation tab only', () => {
+    const conversationLabels = [
+      'settingCommon.responseLanguage.title',
+      'hotkey.sendMessage.title',
+      'settingConversation.voiceMessage.title',
+      'settingChatAppearance.fontSize.title',
+      'systemAgent.followUpAction.title',
+      'systemAgent.inputCompletion.title',
+    ];
+
+    for (const labelKey of conversationLabels) {
+      const tabs = SETTINGS_SEARCH_ITEMS.filter((item) => item.labelKey === labelKey).map(
+        (item) => item.tab,
+      );
+      expect(tabs, labelKey).toEqual([SettingsTabs.Conversation]);
+    }
+  });
+
+  it('hides the send-key choice on the mobile surface', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find((entry) => entry.anchor === 'conversation-send-key')!;
+
+    expect(item.visible?.(webContext) ?? true).toBe(true);
+    expect(item.visible?.({ ...webContext, isMobile: true }) ?? true).toBe(false);
   });
 
   it('derives one search item per lab feature in catalog order', () => {
@@ -94,9 +120,6 @@ describe('settings search index', () => {
   it('covers the high-volume zero-result phrases as tab keywords', () => {
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Provider]).toEqual(
       expect.arrayContaining(['api', 'model provider', 'language model', 'custom provider']),
-    );
-    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Messenger]).toEqual(
-      expect.arrayContaining(['telegram', 'slack', 'discord', 'wechat']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).toEqual(
       expect.arrayContaining(['search', 'model assignment']),

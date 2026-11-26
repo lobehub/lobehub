@@ -163,6 +163,7 @@ export type ToolInterventionPresentation = {
 };
 
 const ASK_USER_QUESTION_IDENTIFIERS = new Set([
+  'antigravity',
   'claude-code',
   'codex',
   'copilot',

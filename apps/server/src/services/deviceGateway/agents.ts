@@ -19,6 +19,7 @@ import type {
   KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  CodexCollaborationMode,
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
@@ -180,6 +181,8 @@ export async function dispatchAgentRun(
     claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch, forwarded into the `lh hetero exec` envelope. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded to the device as fetchable (signed) URLs. */

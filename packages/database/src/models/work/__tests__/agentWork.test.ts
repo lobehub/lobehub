@@ -83,7 +83,7 @@ describe('WorkModel · agent-created Works', () => {
     for (const url of [
       'https://github.com/owner/repo/pull/1',
       'https://gist.github.com/owner/abc',
-      'https://linear.app/team/issue/LOBE-1',
+      'https://linear.app/team/issue/ENG-1',
       'javascript:alert(1)',
     ]) {
       await expectAgentWorkError(

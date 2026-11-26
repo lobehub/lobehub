@@ -186,7 +186,6 @@ export default {
   'rules.distill.truncated': 'The material is long; only its beginning was read.',
   'rules.distill.untitled': 'Untitled',
   'rules.distill.upload': 'Upload a file',
-  'rules.distill.uploadFailed': 'Could not upload the file.',
   'rules.distill.uploadHint': 'Markdown, PDF, Word, PowerPoint or plain text',
   'rules.enforcement.block': 'Block',
   'rules.enforcement.blockDesc':
@@ -374,6 +373,7 @@ export default {
   'tab.contexts': 'Contexts',
   'tab.home': 'Home',
   'tab.identities': 'Identities',
+  'tab.overview': 'Overview',
   'tab.preferences': 'Preferences',
   'tab.rules': 'Self-evolving',
   'tab.search': 'Search',
@@ -446,4 +446,8 @@ export default {
   'entity.timeline.undated': 'TBD',
   'entity.timeline.upcoming': 'Up next',
   'entity.untitled': 'Untitled context',
+  'rules.distill.uploadFailedRetry':
+    "Couldn't upload the file. Try again or choose a different file.",
+  'rules.saveFailedRetry':
+    "Couldn't save. Your input is kept, check your connection and try again.",
 };

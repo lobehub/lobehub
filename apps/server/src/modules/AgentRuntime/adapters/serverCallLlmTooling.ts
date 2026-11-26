@@ -1,4 +1,5 @@
 import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   buildStepSkillDelta,
   buildStepToolDelta,
@@ -78,7 +79,14 @@ export const resolveServerCallLlmTooling = (
   );
 
   const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
-  const toolDiscoveryConfig = buildToolDiscoveryConfig(operationToolSet, resolved.enabledToolIds);
+  // Keep <available_tools> anchored to the operation's starting enabledToolIds
+  // as long as the activator remains active this step (e.g. not stripped by
+  // forceFinish). Dropping newly activated tools mid-operation mutates the
+  // before-first-user context message and invalidates the prompt-cache prefix;
+  // the next operation starts with them already in `operationToolSet.enabledToolIds`.
+  const toolDiscoveryConfig = resolved.enabledToolIds.includes(LobeActivatorIdentifier)
+    ? buildToolDiscoveryConfig(operationToolSet, operationToolSet.enabledToolIds)
+    : undefined;
 
   if (stepDelta.activatedTools.length > 0) {
     log(

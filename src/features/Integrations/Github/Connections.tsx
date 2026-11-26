@@ -105,9 +105,14 @@ const Connections = memo<ConnectionsProps>(
     return (
       <Flexbox gap={10}>
         <Flexbox horizontal align="center" gap={16} justify="space-between">
-          <Text strong style={{ fontSize: 16 }}>
-            {t('github.connections.title')}
-          </Text>
+          <Flexbox gap={2} style={{ minWidth: 0 }}>
+            <Text strong style={{ fontSize: 16 }}>
+              {t('github.repositoryAccess.title')}
+            </Text>
+            <Text style={{ fontSize: 13 }} type="secondary">
+              {t('github.repositoryAccess.description')}
+            </Text>
+          </Flexbox>
           <Tooltip title={blockedReason}>
             <span>
               <Button

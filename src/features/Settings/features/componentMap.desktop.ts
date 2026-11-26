@@ -1,4 +1,5 @@
 import Billing from '@/business/client/BusinessSettingPages/Billing';
+import CodingPlans from '@/business/client/BusinessSettingPages/CodingPlans';
 import Credits from '@/business/client/BusinessSettingPages/Credits';
 import Plans from '@/business/client/BusinessSettingPages/Plans';
 import Referral from '@/business/client/BusinessSettingPages/Referral';
@@ -10,15 +11,14 @@ import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Automations from '../automations';
+import Conversation from '../conversation';
 import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
 import Hotkey from '../hotkey';
-import Integrations from '../integrations';
 import Labels from '../labels';
 import Labs from '../labs';
 import Memory from '../memory';
-import Messenger from '../messenger';
 import { DesktopNotificationSettings } from '../notification';
 import OAuthApps from '../oauth-apps';
 import Profile from '../profile';
@@ -38,11 +38,10 @@ export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
   [SettingsTabs.Labs]: Labs,
   [SettingsTabs.Appearance]: Appearance,
+  [SettingsTabs.Conversation]: Conversation,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
   [SettingsTabs.Memory]: Memory,
-  [SettingsTabs.Messenger]: Messenger,
-  [SettingsTabs.Integrations]: Integrations,
   [SettingsTabs.Notification]: DesktopNotificationSettings,
   [SettingsTabs.About]: About,
   [SettingsTabs.Hotkey]: Hotkey,
@@ -67,6 +66,7 @@ export const componentMap = {
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,
+  [SettingsTabs.CodingPlans]: CodingPlans,
   [SettingsTabs.Credits]: Credits,
   [SettingsTabs.Billing]: Billing,
   [SettingsTabs.Referral]: Referral,

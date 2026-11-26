@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "Comenta sobre esta aceptación y acéptala o devuélvela desde su página de vista previa",
   "consent.scope.acceptance-review-site": "Comenta sobre la revisión de este sitio desde el propio sitio, durante 8 horas",
   "consent.scope.email": "Acceder a tu dirección de correo electrónico",
+  "consent.scope.generation-read": "Ver tus imágenes, vídeos y audios generados",
+  "consent.scope.generation-write": "Generar imágenes, vídeos y audios y eliminar los resultados, consumiendo tu cuota",
   "consent.scope.offline_access": "Permitir que el cliente acceda a tus datos",
   "consent.scope.openid": "Autenticarse con tu cuenta de LobeHub",
   "consent.scope.profile": "Acceder a tu información básica de perfil (nombre, avatar, etc.)",

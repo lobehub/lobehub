@@ -23,7 +23,11 @@ export {
 } from './draft';
 export { normalizeAskUserQuestions } from './normalize';
 export { default as QuestionPanel } from './QuestionPanel';
-export { type AskUserQuestionResultState, resolveAskUserAnswers } from './result';
+export {
+  type AskUserQuestionResultState,
+  resolveAskUserAnswers,
+  summarizeAskUserAnswers,
+} from './result';
 export type {
   AskUserDraft,
   AskUserQuestionArgs,

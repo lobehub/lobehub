@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const CHANNEL_REPLY_OPENER_PROMPT_VERSION = 'v1';
+export const CHANNEL_REPLY_OPENER_PROMPT_VERSION = 'v3';
 
 /**
  * Where a Channel reply continues: in place, in a new Thread under it, or in one of the Threads
@@ -37,10 +37,11 @@ Fields:
 - "acknowledge": true when answering takes real work first (looking things up, reading history or files, running tools, writing something long, several steps), or when the reply continues in an existing thread. False when you can answer right away: a greeting, "are you there", a short question, a quick yes or no, small talk.
 - "ack": when "acknowledge" is true, one short sentence posted right away, in the language of the message and in your own voice. Never the answer itself, no time estimates, no greeting, no emoji. Empty string when "acknowledge" is false.
 - "placement": where the conversation continues.
-  - "channel": a reply that fits in a message or two and needs no back-and-forth. Prefer it whenever the answer is short, even when the subject has a thread.
-  - "existing_thread": the message continues the subject of one of the open threads listed below (a follow-up, a correction, more detail on the same problem), and the reply is longer than a message or two. Pick it only when the subject is clearly the same, not merely the same broad area.
-  - "thread": a new subject whose reply is long, has several steps, or will likely need follow-up questions.
+  - "channel": the default. Any request answered by one delivery that needs no back-and-forth: a question, a lookup, a chart, a summary, a translation, a short write-up, a quick check. Choose it even when getting the answer takes tools, searching, data or several steps of work, and even when the subject has a thread. How much work you do does not decide the placement; how much conversation follows does. For example "我想看一下金价走势图", "查下明天北京天气", "帮我画个这周的销量图", "总结一下这篇文章" are all "channel".
+  - "thread": a new task that will clearly need a conversation of its own: several rounds of discussion, review and revision, or progress updates over time, such as building a feature, making a code change, fixing a bug, or an investigation the person will steer. Such a task is new even when it touches the same product area, files or feature as an open thread. When unsure between "channel" and "thread", choose "channel".
+  - "existing_thread": only when the message cannot be understood without one of the open threads listed below: it reacts to that thread's last result ("still broken", "try again", "that's not it", "also do it there"), corrects it, or names that thread. The reply must also be longer than a message or two. Sharing words or a product area with a thread is not enough; when unsure, do not choose "existing_thread" and pick "channel" or "thread" by the rules above.
   When the message says where to answer, follow it.
+  When the message quotes another message, "this" and "that" refer to the quoted message, not to an open thread. When it has attachments you cannot see, "this" refers to them.
 - "title": when "placement" is "thread", a short title for the new thread in the language of the message, naming the subject (not "Request" or "Question"). Empty string otherwise.
 - "thread": when "placement" is "existing_thread", the label of the chosen thread exactly as listed (for example "T2"). Empty string otherwise.
 
@@ -92,6 +93,8 @@ export interface ChannelReplyOpenerThread {
 export interface ChannelReplyOpenerInput {
   /** The agent behind the assistant: what it is named and its title (identity or role). */
   agent?: { name?: string; title?: string };
+  /** Images or files sent with the message, which the opener cannot see. */
+  attachmentCount?: number;
   /** Names people call the assistant by in this Channel. */
   botNames?: string[];
   /** Whether the reply can move into a Thread; false when the request is already in one. */
@@ -101,6 +104,8 @@ export interface ChannelReplyOpenerInput {
   message: string;
   /** Acknowledge only a clear request for work: woken without being addressed. */
   notAddressed?: boolean;
+  /** The message this one replies to, as "Author: text". */
+  quoted?: string;
   /** Short transcript of the messages just before this one, oldest first. */
   recentMessages?: string[];
   /** Open Threads started before the request, nearest first. */
@@ -145,9 +150,15 @@ const buildState = (input: ChannelReplyOpenerInput): string => {
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);
   }
+  if (input.quoted) sections.push(`The message quotes:\n"""\n${input.quoted.trim()}\n"""`);
   sections.push(
     `${input.notAddressed ? 'Message' : 'Message to you'}:\n"""\n${input.message.trim()}\n"""`,
   );
+  if (input.attachmentCount) {
+    sections.push(
+      `The message comes with ${input.attachmentCount} attachment(s), such as screenshots, that you cannot see.`,
+    );
+  }
 
   return sections.join('\n\n');
 };

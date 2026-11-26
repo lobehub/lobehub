@@ -151,6 +151,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 - [ ] Dependent-fetch gates release on settled data, absence, or error; error/not-found branches remain reachable.
 - [ ] Failed awaited writes release busy controls; autosave exposes saving, saved, and failed states with retry.
 - [ ] Write localized, human-readable errors; keep internal IDs in structured inspection fields and lead with the remedy for deterministic failures.
+- [ ] Show submit failures of a form or dialog that stays open beside the field or submit button with the next step, not as a toast.
 - [ ] Capability warnings are reactive and wait for resolved configuration; distinguish model choices from platform limitations.
 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))

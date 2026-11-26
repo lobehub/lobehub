@@ -8,6 +8,8 @@ const MOBILE_NAV_ROUTES = new Set([
   '/marketplace',
   '/marketplace/agent',
   '/marketplace/connector',
+  '/marketplace/app',
+  '/marketplace/mcp',
   '/marketplace/model',
   '/marketplace/provider',
   '/marketplace/skill',

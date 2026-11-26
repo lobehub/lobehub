@@ -8,6 +8,7 @@ import {
   BrainCircuit,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   ContainerIcon,
   CreditCard,
   Database,
@@ -20,10 +21,9 @@ import {
   KeyboardIcon,
   KeyIcon,
   Map,
-  MessageCircleIcon,
+  MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   Sparkles,
   TagIcon,
   TerminalSquare,
@@ -35,6 +35,8 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
+import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -46,12 +48,12 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Account = 'account',
   Agent = 'agent',
   Connection = 'connection',
+  Data = 'data',
   Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
@@ -68,6 +70,8 @@ export interface CategoryItem {
 export interface CategoryGroup {
   items: CategoryItem[];
   key: SettingsGroupKey;
+  /** Account settings follow the user; space settings belong to the personal space. */
+  scope: SettingsScope;
   title: string;
 }
 
@@ -83,9 +87,12 @@ export const useCategory = () => {
     userProfileSelectors.nickName(s),
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
+  // Advanced holds gateway mode and desktop diagnostics; on the web without
+  // gateway mode it would be an empty page.
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const showAdvanced = isDesktop || enableGatewayMode;
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -95,10 +102,12 @@ export const useCategory = () => {
     return avatar;
   }, [avatar, remoteServerUrl]);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const codingPlansTab = useCodingPlansTab();
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
-    // Account group — who the user is and how the app behaves for them.
+    // ── Account settings: who the user is and how the app behaves for them,
+    // the same in every space.
     const accountItems: CategoryItem[] = [
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
@@ -109,6 +118,11 @@ export const useCategory = () => {
         icon: PaletteIcon,
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
+      },
+      {
+        icon: MessagesSquareIcon,
+        key: SettingsTabs.Conversation,
+        label: t('tab.conversation'),
       },
       !mobile && {
         icon: KeyboardIcon,
@@ -121,22 +135,68 @@ export const useCategory = () => {
         label: t('tab.notification'),
       },
       {
-        icon: ChartColumnBigIcon,
-        key: SettingsTabs.Stats,
-        label: tAuth('tab.stats'),
+        icon: BrainCircuit,
+        key: SettingsTabs.Memory,
+        label: t('tab.memory'),
+      },
+      enableBusinessFeatures && {
+        icon: Gift,
+        key: SettingsTabs.Referral,
+        label: tSubscription('tab.referral'),
       },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
       items: accountItems,
       key: SettingsGroupKey.Account,
+      scope: 'account',
       title: t('group.profile'),
     });
 
-    // Personal subscription / billing items sit right under the account they
-    // belong to. Always shown when business features are enabled — workspace
-    // settings live under a separate `/:workspaceSlug/settings/*` surface and
-    // never share this sidebar.
+    // Machine and app preferences — low-frequency, so the sidebar starts it
+    // collapsed.
+    const systemItems: CategoryItem[] = [
+      isDesktop && {
+        icon: EthernetPort,
+        key: SettingsTabs.Proxy,
+        label: t('tab.proxy'),
+      },
+      isDesktop && {
+        icon: TerminalSquare,
+        key: SettingsTabs.SystemTools,
+        label: t('tab.systemTools'),
+      },
+      showAdvanced && {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
+      },
+      enableOAuthApps && {
+        icon: AppWindowIcon,
+        key: SettingsTabs.OAuthApps,
+        label: tAuth('tab.oauthApps'),
+      },
+      {
+        icon: FlaskConical,
+        key: SettingsTabs.Labs,
+        label: tLabs('title'),
+      },
+      !hideDocs && {
+        icon: Info,
+        key: SettingsTabs.About,
+        label: t('tab.about'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: systemItems,
+      key: SettingsGroupKey.System,
+      scope: 'account',
+      title: t('group.systemDeveloper'),
+    });
+
+    // ── Personal space settings: what the personal space owns and spends.
+    // Workspaces keep their own copy under `/:workspaceSlug/settings/*`.
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
@@ -146,13 +206,18 @@ export const useCategory = () => {
           key: SettingsTabs.Usage,
           label: tSubscription('tab.usage'),
         },
+        codingPlansTab && {
+          icon: CodeXmlIcon,
+          key: SettingsTabs.CodingPlans,
+          label: codingPlansTab.label,
+        },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
-        { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
-      ];
+      ].filter(Boolean) as CategoryItem[];
 
       groups.push({
         items: subscriptionItems,
         key: SettingsGroupKey.Subscription,
+        scope: 'space',
         title: t('group.subscription'),
       });
     }
@@ -177,11 +242,6 @@ export const useCategory = () => {
         label: t('tab.tools'),
       },
       {
-        icon: BrainCircuit,
-        key: SettingsTabs.Memory,
-        label: t('tab.memory'),
-      },
-      {
         icon: TagIcon,
         key: SettingsTabs.Labels,
         label: t('tab.labels'),
@@ -191,24 +251,12 @@ export const useCategory = () => {
     groups.push({
       items: agentItems,
       key: SettingsGroupKey.Agent,
+      scope: 'space',
       title: t('group.aiConfig'),
     });
 
-    // Connection group — the outside services agents can reach, whoever owns
-    // the binding. Every entry here is already the user's own.
+    // Connection group — the outside services the space's agents can reach.
     const connectionItems: CategoryItem[] = [
-      // The bots are LobeHub-operated: their credentials are only ever written
-      // by the cloud admin, so a self-hosted deployment has nothing to bind to.
-      enableBusinessFeatures && {
-        icon: MessageCircleIcon,
-        key: SettingsTabs.Messenger,
-        label: t('tab.messenger'),
-      },
-      {
-        icon: PlugIcon,
-        key: SettingsTabs.Integrations,
-        label: t('tab.integrations'),
-      },
       // What connectors fire on their own: the event subscriptions agents made
       // through them. Connectors themselves are managed in the Marketplace.
       enableWebhook && {
@@ -224,11 +272,14 @@ export const useCategory = () => {
       },
     ].filter(Boolean) as CategoryItem[];
 
-    groups.push({
-      items: connectionItems,
-      key: SettingsGroupKey.Connection,
-      title: t('group.connection'),
-    });
+    // Every entry is conditional, so a self-hosted deployment may have none.
+    if (connectionItems.length > 0)
+      groups.push({
+        items: connectionItems,
+        key: SettingsGroupKey.Connection,
+        scope: 'space',
+        title: t('group.connection'),
+      });
 
     // Resource group — where agents run.
     const resourceItems: CategoryItem[] = [
@@ -252,27 +303,23 @@ export const useCategory = () => {
         key: SettingsTabs.Environments,
         label: t('tab.environmentsAndCreds'),
       },
-      isDesktop && {
-        icon: EthernetPort,
-        key: SettingsTabs.Proxy,
-        label: t('tab.proxy'),
-      },
-      isDesktop && {
-        icon: TerminalSquare,
-        key: SettingsTabs.SystemTools,
-        label: t('tab.systemTools'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
       items: resourceItems,
       key: SettingsGroupKey.Resource,
+      scope: 'space',
       title: t('group.resource'),
     });
 
-    // System & developer group — low-frequency, so the sidebar starts it
-    // collapsed. API Key has a single home whichever flag turned it on.
-    const systemItems: CategoryItem[] = [
+    // Data & developer group — what the space stores and spent, and the keys
+    // that act on it. API Key has a single home whichever flag turned it on.
+    const dataItems: CategoryItem[] = [
+      {
+        icon: ChartColumnBigIcon,
+        key: SettingsTabs.Stats,
+        label: tAuth('tab.stats'),
+      },
       {
         icon: Database,
         key: SettingsTabs.Storage,
@@ -283,37 +330,18 @@ export const useCategory = () => {
         key: SettingsTabs.Trash,
         label: t('tab.trash'),
       },
-      {
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('tab.advanced'),
-      },
-      (showApiKeyManage || isDevMode) && {
+      showApiKeyManage && {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
-      enableOAuthApps && {
-        icon: AppWindowIcon,
-        key: SettingsTabs.OAuthApps,
-        label: tAuth('tab.oauthApps'),
-      },
-      {
-        icon: FlaskConical,
-        key: SettingsTabs.Labs,
-        label: tLabs('title'),
-      },
-      !hideDocs && {
-        icon: Info,
-        key: SettingsTabs.About,
-        label: t('tab.about'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
-      items: systemItems,
-      key: SettingsGroupKey.System,
-      title: t('group.systemDeveloper'),
+      items: dataItems,
+      key: SettingsGroupKey.Data,
+      scope: 'space',
+      title: t('group.data'),
     });
 
     return groups;
@@ -323,13 +351,14 @@ export const useCategory = () => {
     tLabs,
     tSubscription,
     enableBusinessFeatures,
+    codingPlansTab,
     hideDocs,
     mobile,
     showApiKeyManage,
     showProvider,
-    isDevMode,
     enableOAuthApps,
     enableWebhook,
+    showAdvanced,
     avatarUrl,
     username,
   ]);

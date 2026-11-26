@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router';
 
+import { buildLegacyIntegrationPath } from '@/features/Integrations/connectorPage';
 import { LEGACY_COMMUNITY_SEGMENT, MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 
 interface RedirectTargetOptions {
@@ -51,6 +52,36 @@ export const LegacyPathRedirect = memo<{ to: string }>(({ to }) => {
 });
 
 LegacyPathRedirect.displayName = 'LegacyPathRedirect';
+
+/**
+ * The standalone `/memory` pages moved under personal Settings. Memory has no
+ * workspace scope, so a `/:workspaceSlug/memory` link drops the prefix.
+ */
+export const LegacyMemoryRedirect = memo<{ to: string }>(({ to }) => {
+  const { hash, search } = useLocation();
+
+  return <Navigate replace to={buildLegacyRedirectPath(to, { hash, search })} />;
+});
+
+LegacyMemoryRedirect.displayName = 'LegacyMemoryRedirect';
+
+/**
+ * The retired Integrations settings. GitHub and Linear moved onto their
+ * Marketplace connectors; their install callbacks still return to these paths.
+ */
+export const LegacyIntegrationRedirect = memo(() => {
+  const { hash, search } = useLocation();
+  const { sub, workspaceSlug } = useParams();
+
+  return (
+    <Navigate
+      replace
+      to={buildLegacyRedirectPath(buildLegacyIntegrationPath(sub, search), { hash, workspaceSlug })}
+    />
+  );
+});
+
+LegacyIntegrationRedirect.displayName = 'LegacyIntegrationRedirect';
 
 /** Mounted on the old `community/…` routes: forwards them to the Marketplace. */
 export const LegacyCommunityRedirect = memo(() => {

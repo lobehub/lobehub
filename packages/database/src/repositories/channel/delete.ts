@@ -19,8 +19,14 @@ import { OPEN_JOB_STATUSES } from './writer';
  *
  * Returns the jobs whose writer is still held: the caller must stop them physically.
  */
+/** A shared card and an Agent's drawn cards are the message's payload: they go with the text. */
 const omitCard = (metadata: ChannelMessageMetadata | null) => {
-  const { card: _card, ...rest } = metadata ?? {};
+  const {
+    card: _card,
+    surfaces: _surfaces,
+    surfacesBodyLength: _surfacesBodyLength,
+    ...rest
+  } = metadata ?? {};
   return rest;
 };
 
@@ -53,14 +59,60 @@ export const deleteMessage = async (
       ),
     );
   const writers: ChannelJobItem[] = [];
-  for (const job of open) writers.push(...(await stopScope(tx, channelId, { jobId: job.id })));
+  const stopped = new Set<string>();
+  const stop = async (jobId: string) => {
+    if (stopped.has(jobId)) return;
+    stopped.add(jobId);
+    writers.push(...(await stopScope(tx, channelId, { jobId })));
+  };
+
+  // An earlier run may already answer this request as part of a batch (`requestMessageIds`), in
+  // which case no job row points at it any more. That owner has to stop too, or it publishes an
+  // answer over a withdrawn request; the requests it absorbed go back to the queue so their
+  // senders still get one. Read the open batches before any job is cancelled below.
+  const batches = await tx
+    .select({
+      id: channelJobs.id,
+      manifest: channelJobs.manifest,
+      memberId: channelJobs.memberId,
+      messageId: channelJobs.messageId,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        inArray(channelJobs.status, OPEN_JOB_STATUSES),
+        sql`${channelJobs.manifest} IS NOT NULL`,
+      ),
+    );
+
+  for (const job of open) await stop(job.id);
+
+  for (const batch of batches) {
+    const requested = batch.manifest?.requestMessageIds;
+    if (!requested?.includes(messageId)) continue;
+    const absorbed = requested.filter((id) => id !== messageId && id !== batch.messageId);
+    if (absorbed.length)
+      await tx
+        .update(channelJobs)
+        .set({ status: 'queued' })
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.memberId, batch.memberId),
+            inArray(channelJobs.messageId, absorbed),
+            eq(channelJobs.status, 'merged'),
+          ),
+        );
+    await stop(batch.id);
+  }
 
   await tx
     .update(channelMessages)
     .set({
       content: '',
       mentions: [],
-      // A shared card is the message's payload, so it goes with the text.
+      // Cards are the message's payload, so they go with the text.
       metadata: { ...omitCard(message.metadata), deletedAt: new Date().toISOString() },
       // A late decision model answer must not route a deleted message.
       ...(message.routingStatus === 'pending' && {

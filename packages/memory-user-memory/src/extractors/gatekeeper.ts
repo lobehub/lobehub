@@ -1,4 +1,3 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 
 import { gatekeeperPrompt } from '../prompts';
@@ -52,12 +51,11 @@ export class UserMemoryGateKeeper extends BaseMemoryExtractor<GatekeeperResult, 
     };
   }
 
-  buildUserPrompt(options: GatekeeperOptions): string {
-    if (!this.promptTemplate) {
-      throw new Error('Prompt template not loaded');
-    }
-
-    return renderPlaceholderTemplate(this.promptTemplate!, this.getTemplateProps(options));
+  buildUserPrompt(): string {
+    return this.buildTaskPrompt(
+      'memory layers worth extracting',
+      'Set every layer to `shouldExtract: false` when nothing should be extracted.',
+    );
   }
 
   async check(options: GatekeeperOptions = {}) {

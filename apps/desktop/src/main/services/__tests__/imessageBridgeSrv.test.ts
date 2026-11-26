@@ -1,4 +1,4 @@
-import { request } from 'node:http';
+import { createServer, request } from 'node:http';
 
 import { BOT_CREDENTIAL_MASK } from '@lobechat/const/bot';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,7 +28,7 @@ const { MockBlueBubblesApiClient, getPortMock } = vi.hoisted(() => {
 
   return {
     MockBlueBubblesApiClient: _MockBlueBubblesApiClient,
-    getPortMock: vi.fn().mockResolvedValue(43_210),
+    getPortMock: vi.fn(),
   };
 });
 
@@ -39,6 +39,19 @@ vi.mock('@lobechat/chat-adapter-imessage', () => ({
 vi.mock('get-port-please', () => ({
   getPort: getPortMock,
 }));
+
+/** A port nothing listens on right now, so the loopback server never collides with another job. */
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as { port: number };
+      server.close(() => resolve(port));
+    });
+  });
+
+let port = 0;
 
 const config = {
   applicationId: 'home-mac-mini',
@@ -78,7 +91,7 @@ function postLocal(path: string, body: unknown): Promise<{ body: string; status:
         hostname: '127.0.0.1',
         method: 'POST',
         path,
-        port: 43_210,
+        port,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -100,8 +113,10 @@ function postLocal(path: string, body: unknown): Promise<{ body: string; status:
 describe('ImessageBridgeService', () => {
   let fetchSpy: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    port = await freePort();
+    getPortMock.mockResolvedValue(port);
     MockBlueBubblesApiClient.instances = [];
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }));
   });
@@ -123,7 +138,7 @@ describe('ImessageBridgeService', () => {
     });
     expect(store.get('imessageBridgeConfigs')).toEqual([config]);
     expect(MockBlueBubblesApiClient.instances.at(-1)?.registerWebhook).toHaveBeenCalledWith(
-      'http://127.0.0.1:43210/webhooks/bluebubbles/home-mac-mini?secret=shared-secret',
+      `http://127.0.0.1:${port}/webhooks/bluebubbles/home-mac-mini?secret=shared-secret`,
       ['new-message'],
     );
 
@@ -178,7 +193,7 @@ describe('ImessageBridgeService', () => {
     // The registered loopback webhook keeps using the real shared secret, so
     // forwarding to the cloud stays authenticated.
     expect(MockBlueBubblesApiClient.instances.at(-1)?.registerWebhook).toHaveBeenCalledWith(
-      'http://127.0.0.1:43210/webhooks/bluebubbles/home-mac-mini?secret=shared-secret',
+      `http://127.0.0.1:${port}/webhooks/bluebubbles/home-mac-mini?secret=shared-secret`,
       ['new-message'],
     );
 

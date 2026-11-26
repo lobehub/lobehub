@@ -20,11 +20,13 @@ export const useMarketSkillInstall = (identifier?: string, name?: string) => {
   const [installing, setInstalling] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
 
-  const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier || ''));
+  const installedSkillId = useToolStore(
+    (s) => agentSkillsSelectors.getAgentSkillByIdentifier(identifier || '')(s)?.id,
+  );
   const refreshAgentSkills = useToolStore((s) => s.refreshAgentSkills);
 
   const install = useCallback(async () => {
-    if (!identifier || !canCreate || installing || installed) return;
+    if (!identifier || !canCreate || installing || installedSkillId) return;
     setInstalling(true);
     try {
       await agentSkillService.importFromMarket(identifier);
@@ -35,7 +37,7 @@ export const useMarketSkillInstall = (identifier?: string, name?: string) => {
     } finally {
       setInstalling(false);
     }
-  }, [canCreate, identifier, installing, installed, name, refreshAgentSkills, t]);
+  }, [canCreate, identifier, installing, installedSkillId, name, refreshAgentSkills, t]);
 
-  return { canCreate, install, installed, installing };
+  return { canCreate, install, installedSkillId, installing };
 };

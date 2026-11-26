@@ -3,6 +3,8 @@ import { access, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import path from 'node:path';
 
+import { buildWslSpawnPlan, getWslPathEnv, parseWslCommand } from './wsl';
+
 const WINDOWS_EXE_EXT_PATTERN = /\.exe$/i;
 // `CreateProcess` limit, which is what this plan is spawned through: the plan
 // always names a real executable (an `.exe`, or `node.exe` plus the script a
@@ -17,6 +19,12 @@ const WINDOWS_NODE_EXE_PATTERN = /(?:^|[\\/])node(?:\.exe)?$/i;
 export interface CliSpawnPlan {
   args: string[];
   command: string;
+  /**
+   * The environment to spawn with, when the plan needs a different one from the
+   * env it was given (a WSL launch forwards the agent's variables via `WSLENV`).
+   * Spawn sites pass `plan.env ?? env`.
+   */
+  env?: NodeJS.ProcessEnv;
 }
 
 interface WindowsShimTarget {
@@ -238,6 +246,48 @@ const inferWindowsExecutableFromShim = async (
   }
 };
 
+/**
+ * A `.cmd` that only hands off to a PowerShell script (Cursor's Windows
+ * `agent.cmd` runs `powershell … -File "%~dp0….ps1" %*`). Run the script with
+ * `powershell.exe -File` directly: still no cmd.exe, and `-File` binds every
+ * following argument as a literal string, never as PowerShell code.
+ */
+const inferWindowsPowerShellShimTarget = async (
+  shimPath: string,
+  source: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<WindowsShimTarget | undefined> => {
+  const match = source.match(
+    /\b(powershell|pwsh)(?:\.exe)?\b[^\r\n]*?-File\s+"?(%(?:~dp0|dp0%))?\\?([^"\r\n]+?\.ps1)"?/i,
+  );
+  if (!match) return;
+
+  const [, host, relativeToShim, scriptToken] = match;
+  const script = relativeToShim
+    ? joinShimRelativePath(shimPath, scriptToken!)
+    : scriptToken!.replaceAll('/', '\\');
+  if (!path.win32.isAbsolute(script) || !(await fileExists(script))) return;
+
+  const systemRoot = env?.SystemRoot || process.env.SystemRoot || 'C:\\Windows';
+  const command =
+    host!.toLowerCase() === 'pwsh'
+      ? 'pwsh.exe'
+      : path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
+  return {
+    argsPrefix: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script,
+    ],
+    command,
+  };
+};
+
 const inferWindowsNpmShimTarget = async (
   shimPath: string,
   env?: NodeJS.ProcessEnv,
@@ -249,7 +299,8 @@ const inferWindowsNpmShimTarget = async (
     const source = await readFile(shimPath, 'utf8');
     return (
       (await inferWindowsNodeScriptFromShim(shimPath, source, env)) ??
-      (await inferWindowsExecutableFromShim(shimPath, source))
+      (await inferWindowsExecutableFromShim(shimPath, source)) ??
+      (await inferWindowsPowerShellShimTarget(shimPath, source, env))
     );
   } catch {
     return;
@@ -294,6 +345,20 @@ export const resolveCliSpawnPlan = async (
   env?: NodeJS.ProcessEnv,
 ): Promise<CliSpawnPlan> => {
   const trimmedCommand = command.trim();
+
+  const wslCommand = parseWslCommand(trimmedCommand);
+  if (wslCommand) {
+    if (!isWindows()) throw new Error(`A WSL command only runs on Windows: ${trimmedCommand}`);
+    const wslPlan = buildWslSpawnPlan(
+      wslCommand,
+      args,
+      env,
+      await getWslPathEnv(wslCommand.distro),
+    );
+    assertWindowsCommandLineFits(wslPlan);
+    return wslPlan;
+  }
+
   if (!isWindows() || !trimmedCommand) return { args, command };
 
   const target = isPathLikeCommand(trimmedCommand)

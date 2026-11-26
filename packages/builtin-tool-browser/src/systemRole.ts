@@ -10,6 +10,7 @@ Core workflow:
 Notes:
 - \`fill\` sets an input's value directly; pass \`submit: true\` to press Enter afterwards (search boxes, login forms).
 - \`press\` takes combinations such as \`Shift+Tab\` or \`ControlOrMeta+a\` (Cmd on macOS, Ctrl elsewhere). An unknown key fails instead of doing nothing.
+- Code editors (Monaco, \`[code-editor=monaco]\` in the snapshot): read the code with \`readPage\` and change it only with \`fill\` on the editor ref, using \`oldText\` for a targeted replacement. Do not type code with \`press\`: a printable key with focus in the editor is refused because it would land in the code.
 - \`setViewport\` fixes the page's layout size, e.g. 1440×900 for a desktop layout; in the desktop app's narrow panel the page is shown scaled down to fit. Call it without a size to go back to the default.
 - \`screenshot\` stores the capture as a file and returns it to you, and also renders it in the USER's chat. Use \`snapshot\` / \`readPage\` when the page structure or text is all you need.
 - Prefer refs over coordinates. Coordinates are a fallback for canvas-like surfaces only.

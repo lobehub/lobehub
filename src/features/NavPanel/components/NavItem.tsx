@@ -367,6 +367,7 @@ const NavItem = memo<NavItemProps>(
             horizontal
             align={'center'}
             className={ACTION_CLASS_NAME}
+            data-nav-item-actions=""
             gap={2}
             justify={'flex-end'}
             onClick={(e) => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Crawler } from '../crawler';
-import { HTTPStatusError, PageNotFoundError } from '../utils/errorType';
+import { BlockedPageError, HTTPStatusError, PageNotFoundError } from '../utils/errorType';
 
 // Move mocks outside of test cases to avoid hoisting issues
 vi.mock('../crawImpl', () => ({
@@ -400,6 +400,86 @@ describe('Crawler', () => {
       const result = await crawler.crawl({ url: 'https://example.com' });
 
       expect(result.data).toMatchObject({ errorType: 'HTTPStatusError', retryable: false });
+    });
+  });
+
+  describe('anti-bot challenge pages', () => {
+    // What Jina Reader really answers (HTTP 200, code 200) for a Cloudflare-protected page
+    const challengePage = {
+      content:
+        '![Image 1: Icon for blocked.example.com](https://blocked.example.com/favicon.ico)\n\n## blocked.example.com\n\n## Performing security verification\n\nThis website uses a security service to protect against malicious bots. This page is displayed while the website verifies you are not a bot.',
+      contentType: 'text' as const,
+      title: 'Just a moment...',
+      url: 'https://example.com',
+    };
+
+    it('should not accept a challenge page as content and should try the next impl', async () => {
+      const realPage = {
+        content: 'real page content'.padEnd(101, ' '),
+        contentType: 'text' as const,
+        url: 'https://example.com',
+      };
+
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockResolvedValue(challengePage);
+      vi.mocked(crawlImpls.naive).mockResolvedValue(realPage);
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(result).toMatchObject({ crawler: 'naive', data: realPage });
+    });
+
+    it('should report a blocked page instead of a later unrelated failure', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockResolvedValue(challengePage);
+      vi.mocked(crawlImpls.naive).mockResolvedValue(undefined);
+      vi.mocked(crawlImpls.search1api).mockRejectedValue(new HTTPStatusError('401', 401));
+      vi.mocked(crawlImpls.browserless).mockRejectedValue(new Error('BROWSERLESS_URL missing'));
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(result.crawler).toBe('jina');
+      expect(result.data).toMatchObject({ errorType: 'BlockedPageError', retryable: false });
+      expect(result.data.content).toContain('anti-bot');
+      expect(result.data.content).not.toContain('Performing security verification');
+    });
+
+    it('should treat a BlockedPageError thrown by an impl the same way', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockRejectedValue(new BlockedPageError());
+      vi.mocked(crawlImpls.naive).mockRejectedValue(new Error('timeout'));
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(result.crawler).toBe('jina');
+      expect(result.data).toMatchObject({ errorType: 'BlockedPageError' });
+    });
+
+    it('should let a confirmed dead link outrank an earlier challenge page', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockResolvedValue(challengePage);
+      vi.mocked(crawlImpls.naive).mockRejectedValue(new PageNotFoundError('Not Found'));
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(result.crawler).toBe('naive');
+      expect(result.data).toMatchObject({ errorType: 'PageNotFoundError' });
+    });
+
+    it('should keep a long page that only mentions a challenge phrase', async () => {
+      const article = {
+        content: `Why you see "Performing security verification" on some sites.\n\n${'Explanation. '.repeat(300)}`,
+        contentType: 'text' as const,
+        title: 'How Cloudflare challenges work',
+        url: 'https://example.com',
+      };
+
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockResolvedValue(article);
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(result).toMatchObject({ crawler: 'jina', data: article });
     });
   });
 });

@@ -1,11 +1,12 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { sortDevicesByActivity } from '@lobechat/types';
+import { isManagedCloudDevice, sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+import { recordDevicesSeen } from './lastSeen';
 import { filterAuthorizedDevicePresence } from './scopedDevicePresence';
 
 const log = debug('lobe-server:device-scope');
@@ -27,8 +28,9 @@ const log = debug('lobe-server:device-scope');
  *   `VM-6-209-ubuntu` and the user can't recognise which machine it is.
  *
  * Rows include offline DB devices (`online: false`); callers that only want live
- * devices filter on `online` (both `listOnlineDevices` and the systemRole
- * snapshot already do).
+ * devices filter on `online`. Managed cloud devices carry `managed: true`: the
+ * model-facing device tool treats them as always online (`toAvailableDevices`),
+ * while `online` stays the live gateway presence that routing reads.
  *
  * The **gateway is authoritative** for liveness, while the database is
  * authoritative for workspace enrollment and visibility. Personal lookups may
@@ -71,6 +73,7 @@ export const getScopedOnlineDevices = async (
   const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
   const authorizedOnline = filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
   const liveById = new Map(authorizedOnline.map((d) => [d.deviceId, d]));
+  await recordDevicesSeen(deviceModel, rows, new Set(liveById.keys()));
   const seen = new Set<string>();
   const fromDb = rows.map((row): DeviceAttachment => {
     seen.add(row.deviceId);
@@ -81,6 +84,7 @@ export const getScopedOnlineDevices = async (
       friendlyName: row.friendlyName ?? null,
       hostname: live?.hostname ?? row.hostname ?? '',
       lastSeen: live?.lastSeen ?? row.lastSeenAt.toISOString(),
+      ...(isManagedCloudDevice(row) && { managed: true }),
       online: !!live,
       platform: live?.platform ?? row.platform ?? '',
       scope,

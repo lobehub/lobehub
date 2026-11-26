@@ -10,16 +10,13 @@ export const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'ima
 
 // JPEG quality for canvas re-encoding (0.85 balances size and quality)
 const JPEG_QUALITY = 0.85;
+// Lossy WebP at this quality keeps screenshot text crisp at a fraction of the PNG size.
+const WEBP_QUALITY = 0.9;
+/** Below this, re-encoding as WebP costs more time than the bytes it saves. */
+export const WEBP_MIN_BYTES = 200 * 1024;
 
-const compressImage = ({
-  img,
-  type,
-  maxSize = MAX_IMAGE_SIZE,
-}: {
-  img: HTMLImageElement;
-  maxSize?: number;
-  type?: string;
-}) => {
+/** Draws the image scaled down to fit `maxSize` on its longer side. */
+const drawResized = (img: HTMLImageElement, maxSize: number) => {
   let width = img.width;
   let height = img.height;
 
@@ -41,13 +38,26 @@ const compressImage = ({
 
   ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, width, height);
 
-  // Preserve JPEG format with lossy compression to avoid inflating small JPEGs;
-  // fall back to PNG for other formats (lossless and universally supported).
-  if (type === 'image/jpeg') {
-    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-  }
-  return canvas.toDataURL('image/png');
+  return canvas;
 };
+
+// Preserve JPEG format with lossy compression to avoid inflating small JPEGs;
+// fall back to PNG for other formats (lossless and universally supported).
+const encoding = (type?: string): [string, number?] => {
+  if (type === 'image/jpeg') return ['image/jpeg', JPEG_QUALITY];
+  if (type === 'image/webp') return ['image/webp', WEBP_QUALITY];
+  return ['image/png'];
+};
+
+const compressImage = ({
+  img,
+  type,
+  maxSize = MAX_IMAGE_SIZE,
+}: {
+  img: HTMLImageElement;
+  maxSize?: number;
+  type?: string;
+}) => drawResized(img, maxSize).toDataURL(...encoding(type === 'image/webp' ? undefined : type));
 
 export default compressImage;
 
@@ -58,6 +68,23 @@ const dataUrlToFile = (dataUrl: string, name: string): File => {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new File([bytes], name, { type: mimeType });
+};
+
+/**
+ * Encodes off the main thread where the browser can: a large PNG through `toDataURL` plus
+ * `atob` freezes the page for seconds, which reads as a stuck upload.
+ */
+const encodeFile = async (canvas: HTMLCanvasElement, type: string | undefined, name: string) => {
+  const [mimeType, quality] = encoding(type);
+  const blob = await new Promise<Blob | null>((resolve) => {
+    try {
+      canvas.toBlob(resolve, mimeType, quality);
+    } catch {
+      resolve(null);
+    }
+  });
+  if (blob) return new File([blob], name, { type: blob.type || mimeType });
+  return dataUrlToFile(canvas.toDataURL(mimeType, quality), name);
 };
 
 const correctImageFileType = async (file: File): Promise<File> => {
@@ -71,7 +98,28 @@ const correctImageFileType = async (file: File): Promise<File> => {
   });
 };
 
-export const compressImageFile = (file: File): Promise<File> =>
+/** Draws at shrinking sizes until the encoding fits {@link MAX_IMAGE_BYTES}. */
+const encodeWithinLimit = async (img: HTMLImageElement, type: string, name: string) => {
+  let maxSize = MAX_IMAGE_SIZE;
+  let result: File;
+  do {
+    result = await encodeFile(drawResized(img, maxSize), type, name);
+    maxSize = Math.round(maxSize * 0.8);
+  } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
+  return result;
+};
+
+const webpName = (name: string) => `${name.replace(/\.[^./]+$/, '') || name}.webp`;
+
+export interface CompressImageOptions {
+  /**
+   * Re-encode as lossy WebP, which keeps transparency and is far smaller than PNG for
+   * screenshots. Kept only when the browser can encode WebP and the result is smaller.
+   */
+  webp?: boolean;
+}
+
+export const compressImageFile = (file: File, options: CompressImageOptions = {}): Promise<File> =>
   new Promise((resolve) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
@@ -82,27 +130,41 @@ export const compressImageFile = (file: File): Promise<File> =>
       try {
         const normalizedFile = await correctImageFileType(file);
         const outputType = normalizedFile.type;
-
-        // skip if image is small enough in both dimensions and file size
-        if (
+        const fits =
           img.width <= MAX_IMAGE_SIZE &&
           img.height <= MAX_IMAGE_SIZE &&
-          normalizedFile.size <= MAX_IMAGE_BYTES
+          normalizedFile.size <= MAX_IMAGE_BYTES;
+
+        if (
+          options.webp &&
+          !(fits && (outputType === 'image/webp' || normalizedFile.size <= WEBP_MIN_BYTES))
         ) {
+          const webp = await encodeWithinLimit(img, 'image/webp', webpName(normalizedFile.name));
+          // A browser without a WebP encoder hands back PNG; fall through to the usual path.
+          if (
+            webp.type === 'image/webp' &&
+            webp.size <= MAX_IMAGE_BYTES &&
+            (!fits || webp.size < normalizedFile.size)
+          ) {
+            resolve(webp);
+            return;
+          }
+        }
+
+        // skip if image is small enough in both dimensions and file size
+        if (fits) {
           resolve(normalizedFile);
           return;
         }
 
-        // progressively shrink until under 5MB
-        let maxSize = MAX_IMAGE_SIZE;
-        let result: File;
-        do {
-          const dataUrl = compressImage({ img, maxSize, type: outputType });
-          result = dataUrlToFile(dataUrl, normalizedFile.name);
-          maxSize = Math.round(maxSize * 0.8);
-        } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
-
-        resolve(result);
+        resolve(
+          await encodeWithinLimit(
+            img,
+            // WebP isn't encodable everywhere, so the default path keeps PNG for it.
+            outputType === 'image/jpeg' ? outputType : 'image/png',
+            normalizedFile.name,
+          ),
+        );
       } catch {
         resolve(file);
       }

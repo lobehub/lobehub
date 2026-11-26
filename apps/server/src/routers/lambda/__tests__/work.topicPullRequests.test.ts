@@ -35,7 +35,6 @@ vi.mock('@/database/models/work', () => ({
 vi.mock('@/database/models/topic', () => ({ TopicModel: Model }));
 vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  isBetterCodingExperienceEnabled: vi.fn(async () => true),
   linkTopicPullRequest: mocks.linkTopicPullRequest,
   setTopicPullRequestDismissed: mocks.setTopicPullRequestDismissed,
 }));

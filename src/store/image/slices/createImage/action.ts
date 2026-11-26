@@ -5,6 +5,7 @@ import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeH
 import { isGenerationPromptModerationError } from '@/business/client/isGenerationPromptModerationError';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
+import { normalizeImageGenerationParams } from '@/utils/normalizeImageGenerationParams';
 
 import { type ImageStore } from '../../store';
 import { generationBatchSelectors } from '../generationBatch/selectors';
@@ -85,7 +86,7 @@ export class CreateImageActionImpl {
         provider,
         model,
         imageNum,
-        params: parameters as any,
+        params: normalizeImageGenerationParams(parameters, model),
       });
 
       // 6. Only refresh generation batches if it's not a new topic
@@ -142,6 +143,8 @@ export class CreateImageActionImpl {
     const imageNum = batch.generations.length;
 
     try {
+      if (!batch.config) throw new TypeError('Generation batch configuration is missing');
+
       // 1. Create the replacement first: the server can reject the stored config (e.g. a param
       // the model no longer declares), and the original batch must survive that rejection.
       await imageService.createImage({
@@ -149,7 +152,7 @@ export class CreateImageActionImpl {
         provider: batch.provider,
         model: batch.model,
         imageNum,
-        params: batch.config as any,
+        params: normalizeImageGenerationParams({ ...batch.config }, batch.model),
       });
 
       // 2. Delete the batch being replaced. The replacement is already queued, so a failed

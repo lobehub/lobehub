@@ -13,7 +13,7 @@ import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getAgentStoreState } from '@/store/agent';
 import { getChatStoreState } from '@/store/chat';
-import { parseSelectedSkillsFromEditorData } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
+import { collectSelectedSkillIds } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getToolStoreState } from '@/store/tool';
 
@@ -44,15 +44,7 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
       ] ?? [])
     : [];
   const userTurns = messages.filter((message) => message.role === 'user');
-  const selected = new Set(
-    userTurns.flatMap(
-      (message) =>
-        message.metadata?.selectedSkillIds ??
-        parseSelectedSkillsFromEditorData(message.editorData ?? undefined).map(
-          (skill) => skill.identifier,
-        ),
-    ),
-  );
+  const selected = new Set(collectSelectedSkillIds(userTurns));
   if (mentionsTopic(userTurns)) selected.add(LobeHubIdentifier);
   const disabled = new Set([
     ...getDisabledPluginIds(plugins),

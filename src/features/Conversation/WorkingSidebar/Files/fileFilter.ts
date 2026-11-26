@@ -6,9 +6,6 @@ export interface ProjectFileDisplayFilter {
   hideIgnored: boolean;
 }
 
-const isPathInsideDirectory = (filePath: string, directoryPath: string) =>
-  filePath.startsWith(directoryPath);
-
 const getDirectoryPaths = (relativePath: string): string[] => {
   const segments = relativePath.split('/');
   return segments.slice(0, -1).map((_, index) => `${segments.slice(0, index + 1).join('/')}/`);
@@ -66,14 +63,29 @@ export const filterProjectFileEntries = (
     return !filter.changedOnly || dirtyFilePaths.has(entry.relativePath);
   });
 
-  const visibleFilePaths = new Set(matchingFiles.map((entry) => entry.relativePath));
+  const visibleFilePaths = new Set<string>();
+  // Every directory above a visible file, collected in one pass. Asking each
+  // directory to scan every file instead is quadratic and stalls a large
+  // project for most of a second per filter change.
+  const visibleDirectoryPaths = new Set<string>();
+  for (const { relativePath } of matchingFiles) {
+    visibleFilePaths.add(relativePath);
+    let end = relativePath.lastIndexOf('/');
+    while (end > 0) {
+      const directoryPath = relativePath.slice(0, end + 1);
+      // An ancestor already recorded has had its own ancestors recorded too.
+      if (visibleDirectoryPaths.has(directoryPath)) break;
+      visibleDirectoryPaths.add(directoryPath);
+      end = relativePath.lastIndexOf('/', end - 1);
+    }
+  }
 
   return entries.filter((entry) => {
     if (!entry.isDirectory) return visibleFilePaths.has(entry.relativePath);
     if (filter.hideIgnored && entry.gitIgnored) return false;
 
-    return matchingFiles.some((file) =>
-      isPathInsideDirectory(file.relativePath, entry.relativePath),
+    return visibleDirectoryPaths.has(
+      entry.relativePath.endsWith('/') ? entry.relativePath : `${entry.relativePath}/`,
     );
   });
 };

@@ -1,10 +1,11 @@
 'use client';
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { Avatar, Block, Button, Flexbox, Tag, Text, toast } from '@lobehub/ui';
+import { Block, Button, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { formatNotificationRelativeTime } from '@/features/HomeSidebar/Header/components/InboxModal/formatNotificationRelativeTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type {

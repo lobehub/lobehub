@@ -23,6 +23,9 @@ export const SkillStoreContent = () => {
   const [activeTab, setActiveTab] = useState<SkillStoreTab>(SkillStoreTab.LobeHub);
   const [lobehubKeywords, setLobehubKeywords] = useState('');
   const [skillKeywords, setSkillKeywords] = useState('');
+  // A tab's list mounts (and fetches) on first open, then stays to keep its scroll and pages.
+  const [visited, setVisited] = useState<Set<SkillStoreTab>>(() => new Set([activeTab]));
+  if (!visited.has(activeTab)) setVisited(new Set(visited).add(activeTab));
 
   // Refresh builtin-tool install state for the active workspace whenever the
   // modal mounts, so entries opened from contexts that don't host the chat
@@ -64,13 +67,13 @@ export const SkillStoreContent = () => {
       </Flexbox>
       <Flexbox height={496} style={{ marginBlockEnd: -12, marginInline: -16 }}>
         <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>
-          <LobeHubList keywords={lobehubKeywords} />
+          {visited.has(SkillStoreTab.LobeHub) && <LobeHubList keywords={lobehubKeywords} />}
         </Flexbox>
         <Flexbox flex={1} style={{ display: isSkills ? 'flex' : 'none', overflow: 'auto' }}>
-          <MarketSkillList keywords={skillKeywords} />
+          {visited.has(SkillStoreTab.Skills) && <MarketSkillList keywords={skillKeywords} />}
         </Flexbox>
         <Flexbox flex={1} style={{ display: isMCP ? 'flex' : 'none', overflow: 'auto' }}>
-          <MCPList />
+          {visited.has(SkillStoreTab.MCP) && <MCPList />}
         </Flexbox>
       </Flexbox>
     </Flexbox>

@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type DiscoveryPoolRequest,
+  initialToolSelection,
   resolveClientExecutors,
   resolveDiscoveryPool,
   resolveInvocationToolIds,
@@ -64,6 +65,37 @@ describe('resolveInvocationToolIds', () => {
     expect(resolveInvocationToolIds({ agentPlugins: [], disableLocalSystem: true })).toEqual([
       RemoteDeviceManifest.identifier,
     ]);
+  });
+});
+
+describe('initialToolSelection', () => {
+  it('keeps lobe-web-browsing preloaded while deferring other runtime capabilities in agent mode', () => {
+    const selection = initialToolSelection(
+      ['lobe-web-browsing', 'lobe-user-memory', CloudSandboxManifest.identifier, 'my-plugin'],
+      { enableAgentMode: true },
+    );
+
+    expect(selection.excludeDefaultToolIds).not.toContain('lobe-web-browsing');
+    expect(selection.excludeDefaultToolIds).toContain('lobe-user-memory');
+    expect(selection.excludeDefaultToolIds).toContain(CloudSandboxManifest.identifier);
+    expect(selection.toolIds).toEqual(['lobe-web-browsing', 'my-plugin']);
+  });
+
+  it('does not defer capabilities in chat mode or when skipDefaultTools is true', () => {
+    const chatSelection = initialToolSelection(['lobe-web-browsing', 'lobe-user-memory'], {
+      enableAgentMode: false,
+    });
+    expect(chatSelection.excludeDefaultToolIds).toBeUndefined();
+    expect(chatSelection.toolIds).toEqual(['lobe-web-browsing', 'lobe-user-memory']);
+
+    const exclusiveSelection = initialToolSelection(
+      ['lobe-web-browsing', 'lobe-user-memory'],
+      { enableAgentMode: true },
+      true,
+    );
+    expect(exclusiveSelection.excludeDefaultToolIds).toBeUndefined();
+    expect(exclusiveSelection.skipDefaultTools).toBe(true);
+    expect(exclusiveSelection.toolIds).toEqual(['lobe-web-browsing', 'lobe-user-memory']);
   });
 });
 

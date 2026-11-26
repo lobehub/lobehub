@@ -18,7 +18,6 @@ import {
   type SubagentRunSnapshot,
   usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
-import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import type {
   ChatMessageError,
   ChatToolPayload,
@@ -63,11 +62,8 @@ import {
 import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjectedTools';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
-import {
-  applyPermissionModeReport,
-  registerLocalPermissionModeSwitcher,
-  resolveRunPermissionMode,
-} from '@/store/chat/heteroPermissionMode';
+import { resolveRunPermissionMode } from '@/store/chat/heteroPermissionMode';
+import { resolveRunCollaborationMode } from '@/store/chat/heteroPlanMode';
 import { topicSelectors } from '@/store/chat/selectors';
 import { type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
@@ -84,7 +80,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
-import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
+import { writeBackgroundTaskSnapshot } from './backgroundTasks';
 import { markUnfinishedToolsCancelled } from './cancelledTools';
 import {
   shouldSuppressTerminalErrorEcho,
@@ -92,6 +88,7 @@ import {
 } from './heteroMessageError';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
+import { applyLocalModeReport, registerLocalRunControls } from './localRunControls';
 import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
 import { type LocalSteer, startLocalSteer } from './localSteer';
 import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
@@ -1952,10 +1949,9 @@ export const executeHeterogeneousAgent = async (
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
-      if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
-        void applyPermissionModeReport(get, context.topicId, event.data, { persist: true });
+      // Claude Code's permission mode, Codex's collaboration mode.
+      if (event.type === 'step_complete' && applyLocalModeReport(get, context.topicId, event.data))
         return;
-      }
 
       // ─── stream_start with newStep: new LLM turn ───
       // The reducer flushes the prior turn's content/reasoning/model and opens
@@ -2376,32 +2372,24 @@ export const executeHeterogeneousAgent = async (
         set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
       },
     });
-    // Claude Code keeps its input (SDK stream or CLI stdin) open in every Follow-up mode.
-    if (adapterType === 'claude-code') {
-      const unregisterStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
-        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
-      );
-      // The mode chip switches this run's permission mode mid-run.
-      const unregisterSwitcher = registerLocalPermissionModeSwitcher(context.topicId, (mode) =>
-        heterogeneousAgentService.setPermissionMode(sidForCancel, mode),
-      );
-      unregisterTaskStopper = () => {
-        unregisterStopper();
-        unregisterSwitcher();
-      };
-    }
+    unregisterTaskStopper = registerLocalRunControls({
+      adapterType,
+      operationId,
+      sessionId: sidForCancel,
+      topicId: context.topicId,
+    });
+    const runTopicMetadata = getTopicMetadataById(get(), context.topicId ?? undefined);
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
       assistantMessageId,
+      // The Codex Plan switch.
+      collaborationMode: resolveRunCollaborationMode(adapterType, runTopicMetadata),
       imageList,
       userId: userProfileSelectors.userId(getUserStoreState()),
       workspaceId: workspaceId ?? undefined,
       operationId,
-      permissionMode: resolveRunPermissionMode(
-        adapterType,
-        getTopicMetadataById(get(), context.topicId ?? undefined),
-      ),
+      permissionMode: resolveRunPermissionMode(adapterType, runTopicMetadata),
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: appendAttachedFilesToPrompt(stripGoalCommand(message), attachedFiles),

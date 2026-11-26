@@ -1,60 +1,62 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
-import { openAgentSettingsModal } from '@/routes/(main)/agent/profile/features/AgentSettings';
 import { useAgentStore } from '@/store/agent';
-import { ChatSettingsTabs } from '@/store/global/initialState';
 
 import { useOpenChatSettings } from './useInterceptingRoutes';
 
 const mockNavigate = vi.fn();
-const mockUseNavigate = vi.fn(() => mockNavigate);
-const mockUseLocation = vi.fn(() => ({ pathname: '/' }));
 vi.mock('react-router', () => ({
-  useNavigate: () => mockUseNavigate(),
-  useLocation: () => mockUseLocation(),
-}));
-vi.mock('@/hooks/useIsMobile', () => ({
-  useIsMobile: vi.fn(),
+  useLocation: () => ({ pathname: '/' }),
+  useNavigate: () => mockNavigate,
 }));
 vi.mock('@/store/global', () => ({
   useGlobalStore: {
     setState: vi.fn(),
   },
 }));
-vi.mock('@/routes/(main)/agent/profile/features/AgentSettings', () => ({
-  openAgentSettingsModal: vi.fn(),
-}));
+
 describe('useOpenChatSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAgentStore.setState({ activeAgentId: undefined });
   });
 
-  it('navigates to mobile agent settings route for the active agent', () => {
-    useAgentStore.setState({ activeAgentId: '123' });
-    vi.mocked(useIsMobile).mockReturnValue(true);
-    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
-
-    act(() => {
-      result.current();
-    });
-
-    expect(mockNavigate).toHaveBeenCalledWith(`/agent/123/settings?showMobileWorkspace=true`);
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it('opens desktop agent settings overlay when not on mobile', async () => {
-    useAgentStore.setState({ activeAgentId: '456' });
-    vi.mocked(useIsMobile).mockReturnValue(false);
-
-    const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
+  it('navigates to the mobile settings screen in the mobile bundle', () => {
+    vi.stubGlobal('__MOBILE__', true);
+    useAgentStore.setState({ activeAgentId: '123' });
+    const { result } = renderHook(() => useOpenChatSettings());
 
     act(() => {
       result.current();
     });
 
-    await vi.waitFor(() => expect(openAgentSettingsModal).toHaveBeenCalled());
+    expect(mockNavigate).toHaveBeenCalledWith('/agent/123/settings?showMobileWorkspace=true');
+  });
+
+  it('navigates to the opening settings page on desktop and web', () => {
+    vi.stubGlobal('__MOBILE__', false);
+    useAgentStore.setState({ activeAgentId: '456' });
+    const { result } = renderHook(() => useOpenChatSettings());
+
+    act(() => {
+      result.current();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('/agent/456/opening');
+  });
+
+  it('does nothing without an active agent', () => {
+    const { result } = renderHook(() => useOpenChatSettings());
+
+    act(() => {
+      result.current();
+    });
+
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
 
     return new WebBrowsingExecutionRuntime({
       canReadSavedDocuments: !!context.enabledToolIds?.includes(AgentDocumentsIdentifier),
+      canUseBrowserSkill: Boolean(context.deviceCapable),
       documentService: canSaveDocuments
         ? {
             associateDocument: async (documentId) => {

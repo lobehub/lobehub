@@ -36,7 +36,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
 
   it('awaits the start-time verify-plan instantiation before running the completion gate', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
@@ -152,7 +152,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
   it('persists the parked status but does NOT fire onComplete or unregister hooks', async () => {
     const lifecycle = buildLifecycle();
-    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -163,6 +163,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
       parkedState,
       'waiting_for_async_tool',
       undefined,
+      undefined,
     );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
@@ -170,21 +171,27 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
   it('treats a waiting_for_client park the same way: persisted, no onComplete, hooks kept', async () => {
     const lifecycle = buildLifecycle();
-    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const clientPark = { ...parkedState, status: 'waiting_for_client' };
 
     await lifecycle.dispatchHooks('op-1', clientPark, 'waiting_for_client');
 
-    expect(persistSpy).toHaveBeenCalledWith('op-1', clientPark, 'waiting_for_client', undefined);
+    expect(persistSpy).toHaveBeenCalledWith(
+      'op-1',
+      clientPark,
+      'waiting_for_client',
+      undefined,
+      undefined,
+    );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
   });
 
   it('fires onComplete and unregisters on a terminal completion', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -203,7 +210,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
   });
 
   const stubSideEffects = (lifecycle: CompletionLifecycle) => {
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});

@@ -22,6 +22,10 @@ export class ResponsesController extends BaseController {
       const service = new ResponsesService(db, userId, this.getWorkspaceId(c));
 
       if (body.stream) {
+        // `streamSSE` answers 200 the moment it opens, so authorization must
+        // settle here; inside the generator a refusal could only surface as an
+        // SSE event on a response that already read as accepted.
+        await service.assertRunAuthorized(body);
         return this.handleStreamingResponse(c, service, body);
       }
 

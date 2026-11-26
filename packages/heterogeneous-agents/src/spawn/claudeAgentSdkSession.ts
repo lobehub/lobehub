@@ -26,6 +26,7 @@ import {
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
+import { buildWslSpawnPlan, getSettledWslPathEnv, getWslPathEnv, parseWslCommand } from './wsl';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -51,6 +52,14 @@ export const resolveClaudeSdkExecutablePath = async (
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform,
 ): Promise<string> => {
+  // A WSL command reaches the SDK verbatim (it has no `.js` extension, so the SDK
+  // hands it to `spawnClaudeCodeCliProcess` as the command). Learn the distro's
+  // PATH now, while still async, for that synchronous spawn hook.
+  const wslCommand = parseWslCommand(commandPath);
+  if (wslCommand) {
+    await getWslPathEnv(wslCommand.distro);
+    return commandPath;
+  }
   if (platform !== 'win32' || !/\.(?:bat|cmd)$/i.test(commandPath)) return commandPath;
 
   // The Agent SDK spawns native paths directly and runs JavaScript paths with
@@ -167,6 +176,7 @@ export interface HeterogeneousAgentRuntimeStatus {
   state: HeterogeneousAgentRuntimeState;
   transport:
     | 'acp-stdio'
+    | 'antigravity-acp'
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
@@ -200,9 +210,9 @@ export interface ClaudeAgentSdkSessionOptions {
   onStderr: (data: string) => Promise<void> | void;
   operationId: string;
   /**
-   * Better Coding Experience permission mode. With `askUserBridge`, Claude
-   * Code asks through `canUseTool` and each request raises a card; absent,
-   * every action is allowed as before the lab.
+   * Claude Code permission mode. With `askUserBridge`, Claude Code asks
+   * through `canUseTool` and each request raises a card; absent, every action
+   * is allowed.
    */
   permissionMode?: HeteroPermissionMode;
   /**
@@ -235,12 +245,17 @@ export const spawnClaudeCodeCliProcess = (
   },
   platform: NodeJS.Platform = process.platform,
 ): SdkSpawnedProcess => {
-  const child: ChildProcess = spawnManaged(options.command, options.args, {
+  // The SDK types env as a plain string map; this repo augments ProcessEnv
+  // with required keys, which no spawn caller carries.
+  const sdkEnv = options.env as NodeJS.ProcessEnv;
+  const wslCommand = parseWslCommand(options.command);
+  const plan = wslCommand
+    ? buildWslSpawnPlan(wslCommand, options.args, sdkEnv, getSettledWslPathEnv(wslCommand.distro))
+    : { args: options.args, command: options.command, env: sdkEnv };
+  const child: ChildProcess = spawnManaged(plan.command, plan.args, {
     cwd: options.cwd,
     detached: platform !== 'win32',
-    // The SDK types env as a plain string map; this repo augments ProcessEnv
-    // with required keys, which no spawn caller carries.
-    env: options.env as NodeJS.ProcessEnv,
+    env: plan.env ?? sdkEnv,
     signal: options.signal,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -251,8 +266,8 @@ export const spawnClaudeCodeCliProcess = (
   child.stderr?.on('data', (chunk: Buffer | string) => hooks.onStderr(chunk.toString()));
 
   hooks.onProcessSpawn?.({
-    args: [options.command, ...options.args],
-    command: options.command,
+    args: [plan.command, ...plan.args],
+    command: plan.command,
     pid: child.pid,
   });
 

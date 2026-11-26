@@ -4,6 +4,8 @@ import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { densityVars } from '@/styles/densityVars';
 
 import ExportLayout from '../components/ExportLayout';
@@ -66,17 +68,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
+  const [downloadError, setDownloadError] = useState<InlineErrorState | null>(null);
   const { t } = useTranslation(['chat', 'common']);
 
   const { downloadPdf, error, isEmpty, loading, messageCount, pdfData, regenerate } =
     useSharePdfExport(fieldValue, message);
 
   const handleDownload = async () => {
+    setDownloadError(null);
     try {
       await downloadPdf();
       toast.success(t('shareModal.downloadSuccess'));
-    } catch {
-      toast.error(t('shareModal.downloadError'));
+    } catch (cause) {
+      setDownloadError(toInlineError(t('shareModal.downloadFailedRetry'), cause));
     }
   };
 
@@ -84,8 +88,6 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
 
   return (
     <ExportLayout
-      meta={[t('shareModal.meta.messages', { count: messageCount }), '.pdf'].join(' · ')}
-      toolbar={<TextOptions value={fieldValue} onChange={setFieldValue} />}
       actions={
         <Button
           disabled={!pdfData || loading || !!error}
@@ -96,6 +98,13 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
           {t('shareModal.actions.download')}
         </Button>
       }
+      meta={
+        downloadError ? (
+          <InlineErrorText detail={downloadError.detail}>{downloadError.summary}</InlineErrorText>
+        ) : (
+          [t('shareModal.meta.messages', { count: messageCount }), '.pdf'].join(' · ')
+        )
+      }
       overlay={
         loading &&
         pdfData && (
@@ -104,6 +113,15 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
             {t('shareModal.pdfUpdating')}
           </div>
         )
+      }
+      toolbar={
+        <TextOptions
+          value={fieldValue}
+          onChange={(value) => {
+            setDownloadError(null);
+            setFieldValue(value);
+          }}
+        />
       }
     >
       {isEmpty ? (

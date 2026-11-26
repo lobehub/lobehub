@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon, type ActionIconSize } from '@lobehub/ui';
 import { LucideSettings } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
-const Settings = memo<{ id: string }>(({ id }) => {
+const Settings = memo<{ id: string; size: ActionIconSize }>(({ id, size }) => {
   const item = useToolStore(pluginSelectors.getToolManifestById(id));
 
   const { t } = useTranslation('plugin');
@@ -17,7 +17,7 @@ const Settings = memo<{ id: string }>(({ id }) => {
   return (
     <ActionIcon
       icon={LucideSettings}
-      size={'small'}
+      size={size}
       title={t('setting')}
       onClick={() => {
         createPluginDetailModal({

@@ -91,50 +91,6 @@ export const pickDirectoryForPath = <T extends BoundDirectoryLike>(
 };
 
 /**
- * Resolve a launch to a bound directory, tolerating a cold start.
- *
- * A launch replays as soon as the navigation bridge mounts, which can beat both
- * the session's first data fetch and the local device identity — and a missing
- * device id or an empty list is indistinguishable from "nothing is bound" at a
- * single point in time. This keeps asking until the device is known and the
- * list has an answer, then stops at the deadline so a genuinely unbound
- * directory still reaches the project list.
- */
-export const resolveDirectoryMatch = async <T extends BoundDirectoryLike>({
-  getDeviceId,
-  list,
-  pollMs = 500,
-  targetPath,
-  timeoutMs = 10_000,
-}: {
-  /** Polled until it answers: device identity arrives after the renderer boots. */
-  getDeviceId: () => string | undefined;
-  list: () => Promise<T[] | null | undefined>;
-  pollMs?: number;
-  targetPath: string;
-  timeoutMs?: number;
-}): Promise<undefined | { directory: T; matchedParent: boolean }> => {
-  const deadline = Date.now() + timeoutMs;
-
-  for (;;) {
-    const deviceId = getDeviceId();
-
-    if (deviceId) {
-      try {
-        const directories = await list();
-        const match = pickDirectoryForPath(directories ?? [], targetPath, { deviceId });
-        if (match) return match;
-      } catch (error) {
-        console.warn('[openDirectory] Failed to list project directories', error);
-      }
-    }
-
-    if (Date.now() >= deadline) return undefined;
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
-  }
-};
-
-/**
  * The conversation to reveal for a directory: the most recently updated one.
  * `listTopics` returns ascending `updatedAt`, but sorting here keeps the rule
  * independent of that query detail.

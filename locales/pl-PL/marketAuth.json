@@ -27,6 +27,7 @@
   "claimResources.claim": "Zgłoś wybrane",
   "claimResources.description": "Znaleźliśmy zasoby powiązane z Twoim kontem, które możesz zgłosić:",
   "claimResources.error": "Nie udało się zgłosić zasobów. Spróbuj ponownie.",
+  "claimResources.failedRetry": "Nie udało się zgłosić tych zasobów. Sprawdź połączenie sieciowe i spróbuj ponownie.",
   "claimResources.mcpSection": "Serwery MCP",
   "claimResources.selectedCount": "Wybrano {{count}} element(ów)",
   "claimResources.skillSection": "Umiejętności",

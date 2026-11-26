@@ -254,7 +254,6 @@ describe('AgentGroupRepository.transferOwnership', () => {
       agentIds: [],
       groupIds: [group.id],
       residualAgentIds: [],
-      sessionIds: [],
       source: { userId: ownerId, workspaceId: wsId },
       target: { userId: teammateId, workspaceId: null },
       topics: [],

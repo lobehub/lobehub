@@ -136,17 +136,13 @@ ActionsDropdown.displayName = 'ActionsDropdown';
 const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
   const { t } = useTranslation('common');
   const { openCreateGroupModal } = useAgentModal();
-  const { avatar, backgroundColor, id, pinned, slug, userId, visibility } = item;
-
-  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+  const { id, pinned, slug, userId, visibility } = item;
 
   const handleOpenCreateGroupModal = useCallback(() => {
     openCreateGroupModal(id, visibility);
   }, [id, openCreateGroupModal, visibility]);
 
   const getAgentMenu = useAgentDropdownMenu({
-    avatar: customAvatar,
-    backgroundColor: backgroundColor || undefined,
     group: undefined,
     id,
     labels: item.labels,
@@ -167,7 +163,7 @@ AgentItemActions.displayName = 'AgentItemActions';
 
 const GroupItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
   const { t } = useTranslation('common');
-  const { avatar, backgroundColor, description, id, pinned, title, userId, visibility } = item;
+  const { avatar, backgroundColor, id, pinned, title, userId, visibility } = item;
 
   const customAvatar = typeof avatar === 'string' ? avatar : undefined;
   const memberAvatars = Array.isArray(avatar) ? avatar : [];
@@ -176,7 +172,6 @@ const GroupItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
     anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
-    description,
     id,
     memberAvatars,
     pinned: pinned ?? false,

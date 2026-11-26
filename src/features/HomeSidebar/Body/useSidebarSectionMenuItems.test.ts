@@ -120,12 +120,37 @@ describe('useSidebarSectionMenuItems', () => {
     expect(find(itemsFor('tasks'), 'moveUp').disabled).toBe(true);
     expect(find(itemsFor('tasks'), 'moveDown').disabled).toBe(false);
 
-    // The spacer stays flush below the section block, so its last section cannot move down.
+    mocks.status.sidebarItems = [
+      'tasks',
+      'favorites',
+      'recents',
+      'agent',
+      'channels',
+      '__spacer__',
+    ];
     expect(find(itemsFor('channels'), 'moveDown').disabled).toBe(true);
     expect(find(itemsFor('agent'), 'moveDown').disabled).toBe(false);
 
     mocks.channelsEnabled = false;
     expect(find(itemsFor('agent'), 'moveDown').disabled).toBe(true);
+  });
+
+  it('moves the section block below a link saved under it', () => {
+    const moveDown = find(itemsFor('channels'), 'moveDown');
+    expect(moveDown.disabled).toBe(false);
+    act(() => moveDown.onClick!());
+
+    const { sidebarItems } = mocks.updateSystemStatus.mock.calls[0][0] as {
+      sidebarItems: string[];
+    };
+    const imageIndex = sidebarItems.indexOf('image');
+    expect(sidebarItems.slice(imageIndex, imageIndex + 5)).toEqual([
+      'image',
+      'favorites',
+      'recents',
+      'agent',
+      'channels',
+    ]);
   });
 
   it('steps over hidden sections and Channels while they are off', () => {
@@ -155,6 +180,7 @@ describe('useSidebarSectionMenuItems', () => {
       'favorites',
       'agent',
       '__spacer__',
+      'image',
     ];
 
     const moveUp = find(itemsFor('channels'), 'moveUp');

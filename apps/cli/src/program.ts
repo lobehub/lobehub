@@ -10,6 +10,7 @@ import { registerArtboardCommand } from './commands/artboard';
 import { registerArtifactCommand } from './commands/artifact';
 import { registerAutomationCommand } from './commands/automation';
 import { registerBotCommand } from './commands/bot';
+import { registerCardCommand } from './commands/card';
 import { registerChannelCommand } from './commands/channel';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
@@ -111,6 +112,7 @@ export function createProgram() {
   registerBotCommand(program);
   registerArtboardCommand(program);
   registerChannelCommand(program);
+  registerCardCommand(program);
   registerGenerateCommand(program);
   registerGoalCommand(program);
   registerFileCommand(program);

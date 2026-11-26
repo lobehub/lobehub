@@ -37,6 +37,7 @@ import {
 } from '@/types/asyncTask';
 import { type ProviderConfig } from '@/types/user/settings';
 import { resolveImageModelSelection } from '@/utils/defaultImageModel';
+import { normalizeImageGenerationParams } from '@/utils/normalizeImageGenerationParams';
 import { generateUniqueSeeds } from '@/utils/number';
 
 import { buildEnabledImageProviderModels } from './defaultModel';
@@ -117,7 +118,8 @@ export const imageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, imageNum, params } = input;
+      const { generationTopicId, imageNum } = input;
+      let params = input.params;
 
       log('Starting image creation process, input: %O', input);
 
@@ -190,6 +192,10 @@ export const imageRouter = router({
           });
         }
       }
+
+      // Old clients and API callers may still send a static size with GIF output. Keep the
+      // stored batch and queued request consistent with the runtime's automatic GIF sizing.
+      params = normalizeImageGenerationParams(params, resolvedModelId);
 
       // Normalize reference image addresses, store S3 keys uniformly (avoid storing expiring presigned URLs in database)
       let configForDatabase = { ...params };

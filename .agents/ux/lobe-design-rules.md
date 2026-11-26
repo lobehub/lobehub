@@ -232,6 +232,20 @@ Source: user correction comparing the Marketplace desktop layout with Open Bot (
 
 ## LOBE-UX-032 — Show installed skill rows in the main pane
 
-Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list and its manager entry visible in the sidebar across Marketplace sections. The section label already identifies installed connectors, so omit the connected check mark from those rows.
+Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list visible across Marketplace sections. Make its section title a link to the installed connector manager so workspace users can reach their private connectors even when the shared list is empty. The section label already identifies installed connectors, so omit the connected check mark from those rows.
 
 Source: user correction comparing the Skills sidebar and main pane with Open Bot (2026-11-20).
+
+## LOBE-UX-033 — Use one icon action per Marketplace connector row
+
+Use the settings list’s trailing controls in both Verified and Public. Show a plus to connect, an ellipsis to manage an existing connection, and a rotating-arrow icon to reauthorize. Give each icon a localized accessible name and tooltip. Show a loading indicator while authorization is underway.
+
+Source: user correction on the Marketplace connector list (2026-11-21).
+
+## LOBE-UX-034 — Preserve app brand colors in Marketplace navigation
+
+Within each theme, show the same brand colors for an app in its sidebar link, catalog row, and detail header. Let the shared `AppIcon` select the brand mark and its light or dark appearance independently of the surrounding link color.
+
+## LOBE-UX-035 — Start Marketplace connections at the appropriate step
+
+A chat channel opens its setup page from the catalog. A tool-only app starts its connector authorization from the catalog’s plus button. Use the capabilities available on the current deployment to choose the action, including for apps such as Slack that support both.

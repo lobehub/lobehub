@@ -57,7 +57,9 @@ export default defineConfig({
     },
     environment: 'node',
     isolate: false,
-    maxWorkers: 1,
+    // One shared database means one worker; CI sets DATABASE_TEST_WORKERS to
+    // give each worker its own database (see getTestDB).
+    maxWorkers: Math.max(1, Number(process.env.DATABASE_TEST_WORKERS) || 1),
     setupFiles: './tests/setup-db.ts',
   },
 });

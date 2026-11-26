@@ -3,18 +3,16 @@ import { createElement } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
-import {
-  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-  MARKETPLACE_INSTALLED_SKILLS_PATH,
-} from '@/features/Marketplace/paths';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 
+import { buildLegacyCommunityRedirectPath, buildLegacyRedirectPath } from './legacyPathRedirect';
 import {
-  buildLegacyCommunityRedirectPath,
-  buildLegacyRedirectPath,
-  LegacyPathRedirect,
-} from './legacyPathRedirect';
-import { legacyCommunityRoutes, marketplaceIndexRoute } from './marketplaceRoutes';
+  legacyCommunityRoutes,
+  legacyConnectorCatalogRoute,
+  legacySettingsMarketplaceRedirects,
+  marketplaceIndexRoute,
+} from './marketplaceRoutes';
+import { legacyMemoryRedirects, settingsMemoryChildren } from './memoryRoutes';
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -23,24 +21,19 @@ const CurrentUrl = () => {
 
 const currentUrl = createElement(CurrentUrl);
 const agentPage = createElement('div', { 'data-testid': 'url' }, 'agent page');
-const redirectTo = (to: string) => createElement(LegacyPathRedirect, { to });
 
 /** A route table shaped like the real one: personal and `/:workspaceSlug` mirrors. */
 const renderAt = (url: string, serverConfigInit = true) => {
   const store = initServerConfigStore({ serverConfigInit });
-  const legacy = [
-    { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill/:sub' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector/:sub' },
-  ];
+  const legacy = legacySettingsMarketplaceRedirects;
   // The real legacy table, beside a workspace agent route that competes for
   // `/community/agent/:id` (a lone `community/*` splat lost to it).
   const shared = [
     ...legacyCommunityRoutes,
     // The real tree has static `marketplace/<section>` routes that outrank the workspace ones.
-    { children: [marketplaceIndexRoute], path: 'marketplace' },
+    { children: [marketplaceIndexRoute, legacyConnectorCatalogRoute], path: 'marketplace' },
     { element: currentUrl, path: 'marketplace/*' },
+    { element: currentUrl, path: 'marketplace/app' },
     { element: currentUrl, path: 'marketplace/agent' },
     { element: currentUrl, path: 'marketplace/agent/:slug' },
     {
@@ -101,8 +94,8 @@ describe('buildLegacyRedirectPath', () => {
 
 describe('legacy URL redirects', () => {
   it.each([
-    [true, '/acme/marketplace/agent?q=developer#results'],
-    [false, '/acme/marketplace/skill/installed?q=developer#results'],
+    [true, '/acme/marketplace/app?q=developer#results'],
+    [false, '/acme/marketplace/connector/installed?q=developer#results'],
   ] as const)(
     'opens the original bookmark directly after loading showMarket=%s',
     async (showMarket, destination) => {
@@ -129,19 +122,35 @@ describe('legacy URL redirects', () => {
       '/marketplace/connector/installed?open=agent-connector%3Arow-own',
     ],
     ['/settings/connector/legacy#section', '/marketplace/connector/installed#section'],
+    ['/settings/integrations', '/marketplace/app'],
+    ['/settings/integrations/github?pending=claim', '/marketplace/app/github?pending=claim'],
+    [
+      '/acme/settings/integrations/linear?installed=ok#done',
+      '/acme/marketplace/app/linear?installed=ok#done',
+    ],
+    ['/settings/messenger', '/marketplace/app'],
+    ['/settings/messenger/unknown', '/marketplace/app'],
+    ['/settings/messenger/slack?installed=ok#link', '/marketplace/app/slack?installed=ok#link'],
+    ['/acme/settings/messenger/telegram', '/acme/marketplace/app/telegram'],
     // Workspace scope keeps its slug.
     ['/acme/settings/skill', '/acme/marketplace/skill/installed'],
     [
       '/acme/settings/connector?open=mcp-connector%3Amwe',
       '/acme/marketplace/connector/installed?open=mcp-connector%3Amwe',
     ],
+    ['/marketplace/connector?q=slack', '/marketplace/app?q=slack'],
+    [
+      '/acme/marketplace/connector?source=public&q=git#list',
+      '/acme/marketplace/mcp?source=public&q=git#list',
+    ],
+    ['/marketplace/connector?category=search', '/marketplace/mcp?category=search'],
     // `/community` became `/marketplace`.
-    ['/marketplace', '/marketplace/agent'],
-    ['/community', '/marketplace/agent'],
+    ['/marketplace', '/marketplace/app'],
+    ['/community', '/marketplace/app'],
     ['/community/skill?category=dev&page=2', '/marketplace/skill?category=dev&page=2'],
     ['/community/mcp/notion', '/marketplace/mcp/notion'],
-    ['/acme/community', '/acme/marketplace/agent'],
-    ['/acme/marketplace?q=developer#results', '/acme/marketplace/agent?q=developer#results'],
+    ['/acme/community', '/acme/marketplace/app'],
+    ['/acme/marketplace?q=developer#results', '/acme/marketplace/app?q=developer#results'],
     ['/acme/community/agent/some-agent#top', '/acme/marketplace/agent/some-agent#top'],
     ['/community/agent', '/marketplace/agent'],
     ['/community/agent/some-agent', '/marketplace/agent/some-agent'],
@@ -149,6 +158,45 @@ describe('legacy URL redirects', () => {
     ['/community/whatever/deep/path', '/marketplace/whatever/deep/path'],
   ])('%s → %s', (from, to) => {
     renderAt(from);
+    expect(screen.getByTestId('url').textContent).toBe(to);
+  });
+});
+
+describe('legacyMemoryRedirects', () => {
+  const renderMemoryAt = (url: string) => {
+    const memory = { children: legacyMemoryRedirects, path: 'memory' };
+    const router = createMemoryRouter(
+      [
+        {
+          children: [
+            memory,
+            {
+              // Static like the real sections, so they outrank `:workspaceSlug/memory/*`.
+              children: settingsMemoryChildren.map(({ path }) => ({ element: currentUrl, path })),
+              path: 'settings/memory',
+            },
+            { children: [memory], path: ':workspaceSlug' },
+          ],
+          path: '/',
+        },
+      ],
+      { initialEntries: [url] },
+    );
+    render(createElement(RouterProvider, { router }));
+  };
+
+  it.each([
+    ['/memory', '/settings/memory/overview'],
+    ['/memory/identities', '/settings/memory/identities'],
+    ['/memory/contexts', '/settings/memory/contexts'],
+    ['/memory/activities', '/settings/memory/activities'],
+    ['/memory/rules', '/settings/memory/rules'],
+    // A deep link keeps the detail it opens.
+    ['/memory/preferences?preferenceId=p1#top', '/settings/memory/preferences?preferenceId=p1#top'],
+    // Memory is personal, so a workspace-prefixed link drops the prefix.
+    ['/acme/memory/identities', '/settings/memory/identities'],
+  ])('%s → %s', (from, to) => {
+    renderMemoryAt(from);
     expect(screen.getByTestId('url').textContent).toBe(to);
   });
 });

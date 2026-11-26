@@ -75,6 +75,46 @@ describe('steerAgentSession', () => {
     );
   });
 
+  it('steers a running Antigravity ACP session with text and image blocks', async () => {
+    const steer = vi.fn(() => true);
+    const agy = session({
+      agentType: 'antigravity',
+      antigravityAcpSession: { steer } as unknown as AgentSession['antigravityAcpSession'],
+      command: 'agy',
+    });
+    const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
+
+    await expect(
+      steerAgentSession(
+        agy,
+        { ...params, imageList: [{ id: 'img-1', url: `data:image/png;base64,${image}` }] },
+        '/tmp',
+      ),
+    ).resolves.toEqual({ status: 'accepted' });
+
+    expect(steer).toHaveBeenCalledWith(
+      [
+        { text: expect.stringContaining('also run the tests'), type: 'text' },
+        { data: image, mimeType: 'image/png', type: 'image' },
+      ],
+      'steer-1',
+    );
+  });
+
+  it('refuses an Antigravity steer the session cannot take, so it runs as the next turn', async () => {
+    const steer = vi.fn(() => false);
+    const running = session({
+      agentType: 'antigravity',
+      antigravityAcpSession: { steer } as unknown as AgentSession['antigravityAcpSession'],
+    });
+    await expect(steerAgentSession(running, params, '/tmp')).resolves.toEqual({
+      status: 'rejected',
+    });
+    await expect(
+      steerAgentSession(session({ agentType: 'antigravity' }), params, '/tmp'),
+    ).resolves.toEqual({ status: 'rejected' });
+  });
+
   it('steers a Pi run', async () => {
     const steer = vi.fn(async () => {});
     const pi = session({ agentType: 'pi', piRpcSession: { steer } as any });

@@ -186,8 +186,8 @@ describe('chat input tool picker', () => {
     render(createElement(Row));
     fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
 
-    expect(await screen.findByRole('button', { name: 'tools.loading.onDemand' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'tools.loading.never' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'tools.status.enabled' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.status.disabled' })).toBeTruthy();
     expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
   });
 
@@ -227,25 +227,36 @@ describe('chat input tool picker', () => {
   });
 
   it.each(['lobe-image-generation', 'lobe-video-generation'])(
-    're-enables %s as a pin in either mode, so a later switch to Chat keeps it callable',
+    're-enables %s as mode auto with builtinOverride in either mode',
     async (id) => {
       mocks.plugins = [{ identifier: id, mode: 'disabled' }];
       const { result } = renderHook(() => useControls());
 
-      // Agent mode: Chat requires a pin, and switching modes does not rewrite plugins.
       mocks.chatMode = false;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ builtinOverride: true, identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'auto' }],
       });
 
       mocks.chatMode = true;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ builtinOverride: true, identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'auto' }],
       });
     },
   );
+
+  it('writes an explicit auto entry when re-enabling a connector in agent mode', async () => {
+    mocks.composioEnabled = true;
+    mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
+    mocks.plugins = [{ identifier: 'gmail', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls());
+
+    await act(() => result.current.setPolicy('gmail', 'auto'));
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith({
+      plugins: [{ identifier: 'gmail', mode: 'auto' }],
+    });
+  });
 
   it('only shows connectors with connection records and keeps rows needing authorization', () => {
     mocks.composioEnabled = true;
@@ -350,7 +361,6 @@ describe('chat input tool picker', () => {
   it('derives the profile summary from the same unfiltered options as chat', () => {
     const { result } = renderHook(() => useControls());
     const active = leafKeys(result.current.marketItems);
-    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
     act(() => result.current.marketHeader.props.onFilterChange('disabled'));
     const disabled = leafKeys(result.current.marketItems);
     expect(disabled).toContain('lobe-web-browsing');
@@ -362,7 +372,9 @@ describe('chat input tool picker', () => {
     );
     expect(result.current.totalCount).toBe(active.length + disabled.length);
     act(() => result.current.marketHeader.props.onSearchChange('no such tool'));
-    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
+    expect(
+      result.current.toolOptions.filter((tool) => tool.enabled).map((tool) => tool.id),
+    ).toEqual(active);
   });
 
   it('offers only tool management in the footer, without an add-tools action', () => {
@@ -422,4 +434,27 @@ describe('chat input tool picker', () => {
       expect(leafKeys(result.current.marketItems)).toEqual([]);
     },
   );
+
+  it('hides the status filter, row controls, and extra tags and groups enabled tools by category when enabledOnly is true', () => {
+    mocks.plugins = [{ identifier: 'alpha', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls({ enabledOnly: true }));
+
+    expect(result.current.marketHeader.props.showFilter).toBe(false);
+    expect(leafKeys(result.current.marketItems)).not.toContain('alpha');
+    expect(leafKeys(result.current.marketItems)).not.toContain('lobe-web-browsing');
+    expect(result.current.enabledSections.map((section) => section.key)).toEqual([
+      'builtin',
+      'community',
+      'custom',
+    ]);
+    const firstRow = result.current.enabledSections[0].items[0] as {
+      label?: { props?: Record<string, unknown> };
+    };
+    expect(firstRow.label?.props?.trailing).toBeUndefined();
+    expect(firstRow.label?.props?.onContextMenu).toBeUndefined();
+
+    act(() => result.current.marketHeader.props.onSearchChange('alpha'));
+    expect(result.current.marketItems).toEqual([]);
+    expect(result.current.enabledSections).toEqual([]);
+  });
 });

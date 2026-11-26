@@ -22,7 +22,7 @@ const buttonStyle = (size: number) => ({
 
 /**
  * Stops the running turn. A plain square, still: the run itself is indicated once,
- * by `RunningIndicator` beside the model selector.
+ * by the host's status or `RunningIndicator`.
  */
 export const StopButton = memo<StateButtonProps & { onStop: () => void }>(
   ({ onStop, shape, size = 32 }) => {

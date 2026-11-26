@@ -1,41 +1,31 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
-import { SquarePenIcon } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useHeaderActionSize } from '@/styles/density';
 
 import { resolveHeaderItems } from '../headerItems';
 
+// Home is not a chat surface, so its header carries no "New chat" action: with
+// only the workspace identity beside it, the button would not say what it
+// creates. Starting a conversation lives where the context is — the Home
+// composer, and the agent sidebar's "Start New Topic" once an agent is open.
 const HeaderActions = () => {
   const headerActionSize = useHeaderActionSize(true);
-  const { t } = useTranslation('common');
-  const navigate = useWorkspaceAwareNavigate();
   const { topNavItems } = useNavLayout();
   const { search } = resolveHeaderItems(topNavItems);
 
+  if (!search) return null;
+
   return (
-    <>
-      {search && (
-        <ActionIcon
-          aria-label={search.title}
-          icon={search.icon}
-          size={headerActionSize}
-          title={search.title}
-          onClick={search.onClick}
-        />
-      )}
-      <ActionIcon
-        aria-label={t('navPanel.newChat')}
-        icon={SquarePenIcon}
-        size={headerActionSize}
-        title={t('navPanel.newChat')}
-        onClick={() => navigate('/')}
-      />
-    </>
+    <ActionIcon
+      aria-label={search.title}
+      icon={search.icon}
+      size={headerActionSize}
+      title={search.title}
+      onClick={search.onClick}
+    />
   );
 };
 
