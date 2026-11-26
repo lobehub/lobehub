@@ -15,6 +15,10 @@ import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import {
+  getWorkspaceMemberName,
+  getWorkspaceMemberSearchLabels,
+} from '@/utils/workspaceMemberName';
 
 import { hasWorkspaceMemberDirectory } from '../shared/memberAssigneeMode';
 import { partitionSelfMember } from './assigneeMemberOptions';
@@ -63,17 +67,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const memberName = (member: WorkspaceMemberRow) =>
-  member.user?.fullName?.trim() ||
-  member.user?.username?.trim() ||
-  member.user?.email?.trim() ||
-  member.userId;
+const memberName = (member: WorkspaceMemberRow) => getWorkspaceMemberName(member);
 
 const toMemberOption = (member: WorkspaceMemberRow) =>
   ({ key: `member:${member.userId}`, kind: 'member', member }) as const;
 
 const matchesSearch = (member: WorkspaceMemberRow, query: string) =>
-  [member.user?.fullName, member.user?.username, member.user?.email].some((label) =>
+  getWorkspaceMemberSearchLabels(member).some((label) =>
     (label ?? '').toLowerCase().includes(query),
   );
 
@@ -184,7 +184,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
                 ? {
                     avatar: member.user?.avatar ?? null,
                     id: member.userId,
-                    name: member.user?.fullName ?? null,
+                    name: memberName(member),
                     type: 'user',
                   }
                 : undefined,

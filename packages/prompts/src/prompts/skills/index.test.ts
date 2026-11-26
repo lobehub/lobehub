@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type SkillItem, skillPrompt, skillsPrompts } from './index';
+import { resourcesTreePrompt, type SkillItem, skillPrompt, skillsPrompts } from './index';
 
 describe('skillPrompt', () => {
   it('should generate skill tag with location', () => {
@@ -81,7 +81,7 @@ Use the activateSkill tool to load a skill when the user's task matches its desc
     expect(skillsPrompts(skills)).toBe(expected);
   });
 
-  it('should include filesystem skill loading and relative-path resolution instructions for project/device skills', () => {
+  it('should direct project/device skills through activateSkill with relative-path guidance', () => {
     const skills: SkillItem[] = [
       {
         description: 'Device writing guidance',
@@ -95,7 +95,7 @@ Use the activateSkill tool to load a skill when the user's task matches its desc
     expect(skillsPrompts(skills)).toBe(
       `The following skills provide specialized instructions for specific tasks.
 Use the activateSkill tool to load a skill when the user's task matches its description.
-For a skill with source="project" or source="device", load it by calling the readFile tool on its \`location\` path and resolve relative paths against its parent directory (parent of SKILL.md).
+For a skill with source="project" or source="device", load it with activateSkill by name (do not bypass activation with readFile) and resolve relative paths against the parent directory of its \`location\` (parent of SKILL.md).
 
 <available_skills>
   <skill name="writing" source="device" location="/Users/dev/.agents/skills/writing/SKILL.md">Device writing guidance</skill>
@@ -103,7 +103,38 @@ For a skill with source="project" or source="device", load it by calling the rea
     );
   });
 
+  it('should keep the readFile route for project/device skills when activateSkill was not sent', () => {
+    const skills: SkillItem[] = [
+      {
+        description: 'Device writing guidance',
+        identifier: 'device:writing',
+        location: '/Users/dev/.agents/skills/writing/SKILL.md',
+        name: 'writing',
+        source: 'device',
+      },
+    ];
+
+    const prompt = skillsPrompts(skills, { canActivateSkill: false });
+
+    expect(prompt).toContain(
+      'For a skill with source="project" or source="device", load it by calling the readFile tool on its `location` path and resolve relative paths against its parent directory (parent of SKILL.md).',
+    );
+    expect(prompt).not.toContain('do not bypass activation with readFile');
+  });
+
   it('should return empty string for empty skills array', () => {
     expect(skillsPrompts([])).toBe('');
+  });
+});
+
+describe('resourcesTreePrompt', () => {
+  it('instructs readReference with the manifest parameter name `id` rather than `skillName`', () => {
+    const prompt = resourcesTreePrompt('pdf-tools', {
+      'references/guide.md': { fileHash: 'h1', size: 120 },
+    });
+
+    expect(prompt).toContain('Use `readReference` with id="pdf-tools"');
+    expect(prompt).not.toContain('skillName=');
+    expect(prompt).toContain('guide.md');
   });
 });

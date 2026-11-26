@@ -103,7 +103,7 @@ export interface PermissionModeState {
 }
 
 /**
- * The composer's Claude Code permission mode (Better Coding Experience lab).
+ * The composer's Claude Code permission mode.
  *
  * - An existing topic shows its own mode, which Claude Code's reports keep
  *   current (leaving plan mode). Picking one writes it to the topic and, while

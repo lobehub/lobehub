@@ -11,13 +11,7 @@ const HomeSidebarContent = () => {
         body={<Body />}
         header={<Header />}
         // Let ScrollArea observe accordion height changes and update its overflow fade.
-        // The minimum height and flex layout keep the bottom spacer working.
-        contentStyle={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: 'auto',
-          minHeight: '100%',
-        }}
+        contentStyle={{ height: 'auto' }}
       />
     </AgentModalProvider>
   );

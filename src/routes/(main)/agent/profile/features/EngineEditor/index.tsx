@@ -83,6 +83,19 @@ const EngineEditor = memo(() => {
     </Flexbox>
   );
 
+  const environmentHint = (
+    <Flexbox horizontal align={'center'} gap={4}>
+      <Text type={'secondary'}>{t('settingAgent.engine.heteroHint', { name: driverName })}</Text>
+      <Button
+        size={'small'}
+        type={'text'}
+        onClick={() => navigate(buildAgentProfileTabPath(agentId, 'environment'))}
+      >
+        {t('tab.environment', { ns: 'chat' })}
+      </Button>
+    </Flexbox>
+  );
+
   const configHeading = (
     <Text fontSize={16} style={{ marginBlockStart: 8 }} weight={600}>
       {configTitle}
@@ -171,21 +184,7 @@ const EngineEditor = memo(() => {
         <Text type={'secondary'}>{t('settingAgent.engine.desc')}</Text>
       </Flexbox>
       {!isWorkspaceAgent ? driverForm : null}
-      {isHeterogeneous ? (
-        // Where it runs lives on its own page, so say so rather than leave this one bare.
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Text type={'secondary'}>
-            {t('settingAgent.engine.heteroHint', { name: driverName })}
-          </Text>
-          <Button
-            size={'small'}
-            type={'text'}
-            onClick={() => navigate(buildAgentProfileTabPath(agentId, 'environment'))}
-          >
-            {t('tab.environment', { ns: 'chat' })}
-          </Button>
-        </Flexbox>
-      ) : isWorkspaceAgent ? (
+      {isHeterogeneous ? null : isWorkspaceAgent ? (
         <>
           {configHeading}
           <Flexbox horizontal gap={8} wrap={'wrap'}>
@@ -196,6 +195,8 @@ const EngineEditor = memo(() => {
       ) : (
         modelForm
       )}
+      {/* Where it runs lives on its own page for every driver, so say so here. */}
+      {environmentHint}
     </Flexbox>
   );
 });

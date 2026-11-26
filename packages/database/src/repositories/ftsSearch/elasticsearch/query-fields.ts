@@ -22,6 +22,7 @@ export const ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS = {
 } as const;
 
 export const ELASTICSEARCH_FTS_SEARCH_DOCUMENT_QUERY_FIELDS = {
+  fileContent: ['content'],
   folder: ['title^4', 'slug^3', 'description^2'],
   knowledgeBaseDocument: ['title^4', 'slug^3', 'content'],
   page: ['title^4', 'slug^3', 'content'],

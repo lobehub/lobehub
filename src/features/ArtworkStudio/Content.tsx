@@ -11,7 +11,6 @@ import {
   AccordionTrigger,
   ActionIcon,
   Alert,
-  Avatar,
   Button,
   Center,
   createStaticStyles,
@@ -36,6 +35,7 @@ import {
 import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { avatarRemountKey, openFilePicker } from '@/features/AgentProfileArtwork/utils';
 import { CHIEF_AGENT_ARTWORKS, DEFAULT_CHIEF_AGENT_ARTWORK } from '@/features/ChiefAgent/artwork';
 import { HOME_PORTRAIT_VISIBLE_RATIO } from '@/features/Home/portraitFraming';

@@ -7,8 +7,10 @@ import { memo, useEffect, useState } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useDensity } from '@/styles/density';
 import { type ChatCitationItem } from '@/types/index';
 
+import { STEP_TRIGGER_STYLES } from '../stepTriggerStyles';
 import Title from './Title';
 
 const styles = stylex.create({
@@ -45,6 +47,7 @@ interface ThinkingProps {
 const Thinking = memo<ThinkingProps>((props) => {
   const { content, duration, thinking, citations, thinkingAnimated } = props;
   const [showDetail, setShowDetail] = useState(false);
+  const { density } = useDensity();
 
   const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
     deps: [content, showDetail],
@@ -60,7 +63,7 @@ const Thinking = memo<ThinkingProps>((props) => {
     <Accordion
       gap={8}
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      styles={STEP_TRIGGER_STYLES[density]}
       value={showDetail ? ['thinking'] : []}
       items={[
         {

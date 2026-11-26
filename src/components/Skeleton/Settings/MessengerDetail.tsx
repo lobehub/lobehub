@@ -24,21 +24,6 @@ const styles = stylex.create({
     borderColor: cssVar.colorBorder,
     borderRadius: cssVar.borderRadius,
   },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: {
-      '@media (width <= 720px)': '1fr',
-      'default': 'repeat(2, 1fr)',
-    },
-    gap: '12px',
-  },
-  listCard: {
-    padding: '16px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadiusLG,
-  },
 });
 
 const isPlatform = (value: string | undefined): value is MessengerPlatform =>
@@ -50,44 +35,6 @@ const Line = ({ bar, height, width }: { bar: number; height: number; width: numb
     <SkeletonBar height={bar} width={width} />
   </Flexbox>
 );
-
-/**
- * The platform cards of `IntegrationList`: a two-column grid (one column under
- * 720px) of outlined cards with a 48px avatar, a name + description stack and a
- * chevron. Which platforms the server offers is data, so the cards are bars.
- */
-export const MessengerListGridSkeleton = ({ cards = 4 }: { cards?: number }) => (
-  <div aria-busy data-testid={'messenger-list-skeleton'} {...stylex.props(styles.grid)}>
-    {Array.from({ length: cards }, (_, index) => (
-      <div key={index} {...stylex.props(styles.listCard)}>
-        <Flexbox horizontal align={'center'} gap={16}>
-          <SkeletonBar height={48} radius={'50%'} width={48} />
-          <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-            <Line bar={15} height={24} width={88 + (index % 2) * 24} />
-            <Line bar={12} height={22} width={'80%'} />
-          </Flexbox>
-          <SkeletonBar height={16} width={16} />
-        </Flexbox>
-      </div>
-    ))}
-  </div>
-);
-
-/** `/settings/messenger`: the subtitle (static copy) above the platform grid. */
-export const MessengerListSkeleton = () => {
-  const { t, ready } = useTranslation('messenger');
-
-  return (
-    <Flexbox gap={20}>
-      {ready ? (
-        <Text type={'secondary'}>{t('messenger.subtitle')}</Text>
-      ) : (
-        <Line bar={14} height={22} width={360} />
-      )}
-      <MessengerListGridSkeleton />
-    </Flexbox>
-  );
-};
 
 const ConnectionSkeleton = memo<{ withNestedContent?: boolean }>(({ withNestedContent }) => (
   <Block className={stylex.props(styles.card).className}>
@@ -187,7 +134,3 @@ export const IntegrationDetailSkeleton = memo<IntegrationDetailSkeletonProps>(
   },
 );
 IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
-
-export const MessengerPlatformDetailSkeleton = ({ platform }: { platform: string }) => (
-  <IntegrationDetailSkeleton platform={platform} withNestedContent={platform !== 'slack'} />
-);

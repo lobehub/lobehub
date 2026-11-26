@@ -185,6 +185,23 @@ vi.mock('@/store/chat', () => {
   return { useChatStore };
 });
 
+const pullRequestsByTopicMock = vi.hoisted(() => ({ value: {} as Record<string, unknown[]> }));
+const listTopicsPullRequestsMock = vi.hoisted(() =>
+  vi.fn(async (ids: string[]) =>
+    Object.fromEntries(
+      ids.flatMap((id) =>
+        pullRequestsByTopicMock.value[id] ? [[id, pullRequestsByTopicMock.value[id]]] : [],
+      ),
+    ),
+  ),
+);
+vi.mock('@/services/work', () => ({
+  workService: { listTopicsPullRequests: listTopicsPullRequestsMock },
+}));
+vi.mock('@/store/device/gitReview/store', () => ({
+  useGitReviewStore: { getState: () => ({ gitPullRequestDetailMap: {} }) },
+}));
+
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     unreadCompletedCountForTopics: () => () => 0,
@@ -417,23 +434,42 @@ describe('Project topic group item', () => {
   });
 
   it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {
-    const merged = { github: { pullRequest: { mergedAt: '2026-10-01', state: 'closed' } } };
+    const pullRequest = (number: number, status: string) => ({
+      identifier: `lobehub/lobehub#${number}`,
+      linkedAt: new Date('2026-11-20T00:00:00Z'),
+      number,
+      repoFullName: 'lobehub/lobehub',
+      scm: null,
+      source: 'created',
+      status,
+      title: null,
+      url: null,
+      vouched: true,
+      workId: `work-${number}`,
+    });
+    // The PRs come from the topics' Work rows, not a branch snapshot.
+    pullRequestsByTopicMock.value = {
+      't-done': [pullRequest(2, 'merged')],
+      't-merged': [pullRequest(1, 'merged')],
+      't-still-open': [pullRequest(4, 'open'), pullRequest(3, 'merged')],
+    };
     render(
       <AccordionRoot>
         <GroupItem
           expanded
           group={{
             children: [
-              {
-                id: 't-merged',
-                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
-                title: 'Merged',
-              },
+              { id: 't-merged', metadata: { workingDirectory: '/tmp/x' }, title: 'Merged' },
               {
                 id: 't-done',
-                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
+                metadata: { workingDirectory: '/tmp/x' },
                 status: 'completed',
                 title: 'Already done',
+              },
+              {
+                id: 't-still-open',
+                metadata: { workingDirectory: '/tmp/x' },
+                title: 'One PR still open',
               },
               { id: 't-open', metadata: { workingDirectory: '/tmp/x' }, title: 'Open' },
             ] as any,
@@ -448,6 +484,8 @@ describe('Project topic group item', () => {
     fireEvent.click(await screen.findByText('actions.archiveMergedPullRequests'));
 
     await waitFor(() => expect(refreshTopicMock).toHaveBeenCalled());
+    // Completed topics are not even asked about.
+    expect(listTopicsPullRequestsMock).toHaveBeenCalledWith(['t-merged', 't-still-open', 't-open']);
     expect(updateTopicStatusMock).toHaveBeenCalledTimes(1);
     expect(updateTopicStatusMock).toHaveBeenCalledWith({
       status: 'completed',

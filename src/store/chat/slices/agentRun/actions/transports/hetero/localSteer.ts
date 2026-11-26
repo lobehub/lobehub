@@ -25,6 +25,7 @@ export const supportsLocalSteer = (
   agentType: HeterogeneousAgentType | string,
   options: { codexAppServer?: boolean },
 ): boolean =>
+  agentType === 'antigravity' ||
   agentType === 'claude-code' ||
   agentType === 'pi' ||
   (agentType === 'codex' && !!options.codexAppServer);
@@ -309,7 +310,6 @@ export const startLocalSteer = (
   },
 ): LocalSteer | undefined => {
   const mode = getFollowUpMode();
-  if (mode === 'legacy') return;
 
   const { contextKey, get, operationId } = options;
   if (!supportsLocalSteer(options.agentType, { codexAppServer: options.codexAppServer })) {

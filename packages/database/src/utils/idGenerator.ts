@@ -21,7 +21,9 @@ const prefixes = {
   channelThreads: 'cht',
   channels: 'chn',
   chatGroups: 'cg',
+  customEmojis: 'emj',
   documents: 'docs',
+  emojiPacks: 'epk',
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',
   evalExperiments: 'exp',
@@ -63,6 +65,17 @@ export const idGenerator = (namespace: keyof typeof prefixes, size = 12) => {
 
   return `${prefix}_${hash()}`;
 };
+/**
+ * Share-link ids act as bearer tokens in public URLs, so unlike internal ids
+ * they must come from the platform CSPRNG and carry enough entropy to resist
+ * enumeration. 16 random bytes encode to 22 base64url chars (128 bits).
+ *
+ * Stored ids are looked up verbatim, so links issued before this change with
+ * shorter non-secure ids keep working — this only hardens newly issued shares.
+ */
+export const generateShareToken = () =>
+  Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('base64url');
+
 export const randomSlug = (count = 2) => (generate(count) as string[]).join('-');
 
 export const inboxSessionId = (userId: string) => `ssn_inbox_${userId}`;

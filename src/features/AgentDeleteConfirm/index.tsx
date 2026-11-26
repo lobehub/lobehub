@@ -146,6 +146,44 @@ const LoadedConfirm = ({ impact, onConfirm }: LoadedConfirmProps) => {
 };
 
 /**
+ * How long the dialog waits for the impact lookup before it gives up and shows
+ * the impact-unknown copy. The lookup scans the agent's topics and messages and
+ * can run into the function timeout on large agents; without a bound the
+ * dialog would sit on its placeholder with Delete disabled for good.
+ */
+export const AGENT_DELETE_IMPACT_TIMEOUT_MS = 8000;
+
+/**
+ * Look up what deleting `agentId` would take down, settling as `null` when the
+ * lookup fails, throws synchronously, or outlives `timeoutMs`. `null` is the
+ * "can't tell" state: the dialog warns that every topic goes and acknowledges
+ * nothing, so the server guard still decides for non-owners.
+ */
+export const lookupAgentDeleteImpact = (
+  agentId: string,
+  timeoutMs: number = AGENT_DELETE_IMPACT_TIMEOUT_MS,
+): Promise<AgentDeleteImpact | null> =>
+  new Promise<AgentDeleteImpact | null>((resolve) => {
+    const timer = setTimeout(() => {
+      console.error('[confirmRemoveAgent] impact lookup timed out', { agentId, timeoutMs });
+      resolve(null);
+    }, timeoutMs);
+    const settle = (value: AgentDeleteImpact | null) => {
+      clearTimeout(timer);
+      resolve(value);
+    };
+
+    // Built inside a promise executor so a lookup that throws synchronously
+    // still settles as "failed".
+    new Promise<AgentDeleteImpact>((resolveLookup) =>
+      resolveLookup(agentService.getAgentDeleteImpact(agentId)),
+    ).then(settle, (error) => {
+      console.error('[confirmRemoveAgent]', error);
+      settle(null);
+    });
+  });
+
+/**
  * Open the shared agent deletion confirmation. Every delete entry point (the
  * sidebar, the mobile list, the agent profile) goes through here so authors
  * and workspace owners read the same warning about other members' topics.
@@ -153,17 +191,11 @@ const LoadedConfirm = ({ impact, onConfirm }: LoadedConfirmProps) => {
  * The dialog opens right away, bound to `agentId`: its mask keeps the user on
  * the agent they started from instead of a late dialog surfacing over another
  * one. It shows a placeholder with Delete disabled until the impact lookup
- * settles (see `getRemoveAgentConfirmState`).
+ * settles (see `getRemoveAgentConfirmState`), which takes at most
+ * `AGENT_DELETE_IMPACT_TIMEOUT_MS`.
  */
 export const confirmRemoveAgent = ({ agentId, onConfirm }: ConfirmRemoveAgentOptions): void => {
-  // Built inside a promise executor so a lookup that throws synchronously
-  // still settles as "failed" and the dialog opens with the impact-unknown copy.
-  const impact = new Promise<AgentDeleteImpact>((resolve) =>
-    resolve(agentService.getAgentDeleteImpact(agentId)),
-  ).catch((error) => {
-    console.error('[confirmRemoveAgent]', error);
-    return null;
-  });
+  const impact = lookupAgentDeleteImpact(agentId);
 
   createModal({
     content: (

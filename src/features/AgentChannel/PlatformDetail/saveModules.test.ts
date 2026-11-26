@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
 import {
+  clearEditedModuleErrors,
   dirtyModuleIds,
   discardPatch,
   moduleDirty,
@@ -167,6 +168,26 @@ describe('module changes', () => {
     const values = { settings: { botWakeAllowChannels: [] } };
 
     expect(dirtyModuleIds(lists, values, { settings: {} })).toEqual([]);
+  });
+});
+
+describe('clearEditedModuleErrors', () => {
+  const modules = resolveSaveModules(groups(['botWakeWindowSeconds', 'charLimit']), false);
+  const before = { settings: { botWakeWindowSeconds: 300, charLimit: 2000 } };
+  const errors = { 'advanced': 'advanced failed', 'wake-pace': 'pace failed' };
+
+  it('clears only the failure of the module the edit touched', () => {
+    // charLimit belongs to `advanced`; the `wake-pace` failure was not touched.
+    const after = { settings: { ...before.settings, charLimit: 3000 } };
+
+    expect(clearEditedModuleErrors(errors, modules, after, before)).toEqual({
+      'wake-pace': 'pace failed',
+    });
+  });
+
+  it('keeps every failure when nothing changed or the previous values are unknown', () => {
+    expect(clearEditedModuleErrors(errors, modules, before, before)).toBe(errors);
+    expect(clearEditedModuleErrors(errors, modules, before, undefined)).toBe(errors);
   });
 });
 

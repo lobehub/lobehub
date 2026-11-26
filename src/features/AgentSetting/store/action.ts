@@ -69,7 +69,6 @@ export interface Action extends PublicAction {
   setChatConfig: (config: Partial<LobeAgentChatConfig>) => Promise<void>;
   streamUpdateMetaArray: (key: keyof MetaData) => any;
   streamUpdateMetaString: (key: keyof MetaData) => any;
-  toggleAgentPlugin: (pluginId: string, state?: boolean) => void;
 
   /**
    * Update loading state
@@ -361,10 +360,6 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
         }
       }
     };
-  },
-
-  toggleAgentPlugin: (id, state) => {
-    get().dispatchConfig({ pluginId: id, state, type: 'togglePlugin' });
   },
 
   updateLoadingState: (key, value) => {

@@ -25,6 +25,10 @@ export class WorkspaceUserSettingsService {
   setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
     lambdaClient.workspaceUserSettings.setWorktreeModeDir.mutate({ enabled, key });
 
+  /** This member's Codex Plan switch for one directory; resolves to the stored list. */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    lambdaClient.workspaceUserSettings.setHeteroPlanModeDir.mutate({ enabled, key });
+
   /** This member's Claude Code permission mode for one directory; resolves to the stored list. */
   setHeteroPermissionModeDir = async (
     key: string,

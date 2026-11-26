@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { userContactRequests, users, workspaceMembers } from '../../../schemas';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-card');
+const fixture = createChannelFixture(db, 'channel-card', tableContacts);
 beforeEach(async () => {
   await fixture.setup();
   // Cards check the address book, which counts fellow workspace members.
@@ -32,6 +33,7 @@ describe('a contact card message', () => {
     });
 
     expect(sent.content).toBe('[Contact card] mia');
+    expect(sent.kind).toBe('contact');
     const [seen] = (await asOwner.detail(channel.id)).messages;
     expect(seen.card).toEqual({
       avatar: null,

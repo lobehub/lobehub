@@ -1,7 +1,7 @@
 import type { FileShareConfig, ShareVisibility } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { createNanoId } from '../utils/idGenerator';
+import { generateShareToken } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { files } from './file';
 import { users } from './user';
@@ -15,9 +15,7 @@ import { workspaces } from './workspace';
 export const fileShares = pgTable(
   'file_shares',
   {
-    id: text('id')
-      .$defaultFn(() => createNanoId(16)())
-      .primaryKey(),
+    id: text('id').$defaultFn(generateShareToken).primaryKey(),
 
     fileId: text('file_id')
       .notNull()

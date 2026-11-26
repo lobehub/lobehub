@@ -92,6 +92,7 @@ async function readRouterSources() {
       'collaborationRoutes.tsx',
       'evalRoutes.tsx',
       'marketplaceRoutes.tsx',
+      'legacySettingsRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -328,10 +329,19 @@ describe('desktop router shared definition', () => {
 
       expect(paths).toContain('settings');
       expect(paths).not.toContain(':workspaceSlug');
-      expect(paths?.at(-1)).toBe('memory');
+      expect(paths).toContain('memory');
+      expect(matches?.at(-1)?.route.index).toBe(true);
       expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
     },
   );
+
+  it.each(mainAreaVariants)('%s mounts the memory pages under settings', (_, factory) => {
+    for (const section of ['overview', 'identities', 'preferences', 'contexts', 'activities']) {
+      const matches = matchRoutes(createMainAreaRoutes(factory), `/settings/memory/${section}`);
+      expect(matches?.map((match) => match.route.path)).toContain('settings');
+      expect(matches?.at(-1)?.route.path).toBe(section);
+    }
+  });
 
   it.each(mainAreaVariants)(
     '%s personal devices list and detail resolve the devices tab skeleton',
@@ -769,25 +779,30 @@ describe('desktop router shared definition', () => {
       );
       // Discover pages: no category column layout, the Codex groups are the page.
       expect(matchRoutes(routes, '/marketplace/skill')?.at(-1)?.route.path).toBe('skill');
-      const connectorDiscover = matchRoutes(routes, '/marketplace/connector')?.at(-1)?.route;
-      expect(connectorDiscover?.path).toBe('connector');
+      const appDiscover = matchRoutes(routes, '/marketplace/app')?.at(-1)?.route;
+      expect(appDiscover?.path).toBe('app');
       expect(
-        (connectorDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
-      ).toBe('navigation.marketplaceConnectors');
+        (appDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
+      ).toBe('navigation.marketplaceApps');
     },
   );
 
   it.each(mainAreaVariants)(
-    '%s folds the MCP list into Connectors and keeps MCP detail pages',
+    '%s distinguishes Apps, their capabilities, and MCP routes',
     (_, factory) => {
       const routes = createMainAreaRoutes(factory);
 
-      for (const url of ['/marketplace/mcp', '/acme/marketplace/mcp']) {
-        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
-          ReactElement<{ to: string }> | undefined;
-
-        expect(element?.type, url).toBe(LegacyPathRedirect);
-        expect(element?.props.to, url).toBe('/marketplace/connector');
+      for (const prefix of ['', '/acme']) {
+        for (const [url, pattern] of [
+          ['app', 'app'],
+          ['app/slack', 'app/:appId'],
+          ['mcp', 'mcp'],
+          ['mcp/installed', 'mcp/installed'],
+        ]) {
+          expect(matchRoutes(routes, `${prefix}/marketplace/${url}`)?.at(-1)?.route.path).toBe(
+            pattern,
+          );
+        }
       }
 
       expect(matchRoutes(routes, '/marketplace/mcp/notion')?.at(-1)?.route.path).toBe('mcp/:slug');
@@ -839,6 +854,21 @@ describe('desktop router shared definition', () => {
         const element = matchRoutes(routes, url)?.at(-1)?.route.element as ReactElement | undefined;
         expect(element?.type, url).toBe(LegacyCommunityRedirect);
       }
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s serves Conversation settings and forwards old chat-preference links to it',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      expect(matchRoutes(routes, '/acme/settings/conversation')?.at(-1)?.route.path).toBe(
+        'conversation',
+      );
+
+      const legacy = matchRoutes(routes, '/acme/settings/chat-preference')?.at(-1)?.route
+        .element as ReactElement<{ to: string }> | undefined;
+      expect(legacy?.props.to).toBe('../conversation');
     },
   );
 

@@ -23,7 +23,14 @@ export type LinkWorkResourceType = 'link';
 export type ExternalWorkResourceType =
   GithubWorkResourceType | LinearWorkResourceType | LinkWorkResourceType;
 export type WorkResourceType =
-  'artboard' | 'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'collection' | 'goal_report' | 'task';
+  | 'artboard'
+  | 'canvas'
+  | 'document'
+  | ExternalWorkResourceType
+  | 'file'
+  | 'collection'
+  | 'goal_report'
+  | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -851,7 +858,7 @@ export interface TopicPullRequestsMeta {
 }
 
 /**
- * One GitHub pull request linked to a topic (Better Coding Experience): by any
+ * One GitHub pull request linked to a topic: by any
  * `work_versions` row of a `github_pull_request` Work with that `topicId`, or by
  * a topic link (branch match / by hand). A topic can carry several.
  */

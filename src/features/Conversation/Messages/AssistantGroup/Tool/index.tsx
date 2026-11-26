@@ -13,7 +13,9 @@ import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
+import { STEP_TRIGGER_STYLES } from '../../../components/stepTriggerStyles';
 import { dataSelectors, useConversationStore } from '../../../store';
 import { isImageReadTool } from '../toolRenderRules';
 import Actions from './Actions';
@@ -35,6 +37,7 @@ export interface GroupToolProps {
 }
 
 const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) => {
+  const { density } = useDensity();
   // Subscribe directly to this tool's data so a streaming chunk that only
   // updates a sibling tool does not push new props through this subtree.
   // `stabilizeReferences` keeps an unchanged tool's object across snapshots, so
@@ -135,7 +138,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
       <Accordion
         hideIndicator={isAlwaysExpand}
         indicatorPlacement="inline"
-        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        styles={STEP_TRIGGER_STYLES[density]}
         value={isToolDetailExpand ? [id] : []}
         items={[
           {

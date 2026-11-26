@@ -38,8 +38,17 @@ When('I open the recommended assistants', async function (this: CustomWorld) {
   await this.page.locator('section a[href="/marketplace/agent?sort=recommended"]').click();
 });
 
+When('I open the MCP catalog from the Marketplace sidebar', async function (this: CustomWorld) {
+  await expect(this.page.getByRole('heading', { exact: true, level: 1, name: 'Apps' })).toBeVisible(
+    {
+      timeout: WAIT_TIMEOUT,
+    },
+  );
+  await this.page.getByRole('link', { exact: true, name: 'MCP Servers' }).click();
+});
+
 When('I open the MCP category {string}', async function (this: CustomWorld, category: string) {
-  await this.page.locator(`section a[href="/marketplace/connector?category=${category}"]`).click();
+  await this.page.locator(`section a[href="/marketplace/mcp?category=${category}"]`).click();
 });
 
 When('I wait for the filtered results to load', async function (this: CustomWorld) {

@@ -64,17 +64,19 @@ const agentId = 'agent-1';
 const workspaceId = 'ws-1';
 
 describe('lifecycleRouter.removeAgent', () => {
+  let getAgentVisibilityMeta: ReturnType<typeof vi.fn>;
   let getDeleteImpact: ReturnType<typeof vi.fn>;
   let trashAgent: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
+    getAgentVisibilityMeta = vi.fn().mockResolvedValue({ slug: null });
     getDeleteImpact = vi.fn().mockResolvedValue({ foreignTopicCount: 2, hasForeignContent: true });
     trashAgent = vi.fn().mockResolvedValue({ id: agentId });
 
     vi.mocked(AgentModel).mockImplementation(function () {
-      return { getDeleteImpact } as any;
+      return { getAgentVisibilityMeta, getDeleteImpact } as any;
     });
     vi.mocked(TrashService).mockImplementation(function () {
       return { trashAgent } as any;
@@ -96,6 +98,17 @@ describe('lifecycleRouter.removeAgent', () => {
     lifecycleRouter
       .createCaller({ userId, workspaceId, workspaceRole } as any)
       .removeAgent({ acknowledgeForeignContent, acknowledgeOtherCreator, agentId });
+
+  it('refuses to delete a builtin agent (Lobe AI) in either scope', async () => {
+    vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
+    getAgentVisibilityMeta.mockResolvedValue({ slug: 'inbox' });
+
+    await expect(callRemove('owner', true, true)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      lifecycleRouter.createCaller({ userId } as any).removeAgent({ agentId }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(trashAgent).not.toHaveBeenCalled();
+  });
 
   it("lets the agent's author delete it with teammates' topics once the impact is acknowledged", async () => {
     vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
@@ -200,7 +213,10 @@ describe('lifecycleRouter.getAgentDeleteImpact', () => {
 
     getDeleteImpact = vi.fn().mockResolvedValue({ foreignTopicCount: 3, hasForeignContent: true });
     vi.mocked(AgentModel).mockImplementation(function () {
-      return { getDeleteImpact } as any;
+      return {
+        getAgentVisibilityMeta: vi.fn().mockResolvedValue({ slug: null }),
+        getDeleteImpact,
+      } as any;
     });
     vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(true);
   });

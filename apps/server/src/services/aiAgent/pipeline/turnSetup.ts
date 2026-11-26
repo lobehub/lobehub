@@ -26,6 +26,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import type { TopicModel } from '@/database/models/topic';
+import { ProjectDirectoryRepository } from '@/database/repositories/projectDirectory';
 import { defaultsToAuto } from '@/helpers/executionTarget';
 import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
@@ -356,6 +357,8 @@ export interface TurnSetupInput {
   cronJobId?: string;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
+  /** Whether the turn @-mentions agents in a non-group conversation. */
+  hasMentionedAgents?: boolean;
   modelOverride?: string;
   /** See `ExecAgentParams.openedByTopicId`. */
   openedByTopicId?: string;
@@ -374,6 +377,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
+  /** Tools the user selected for this turn; see `ExecAgentParams.selectedToolIds`. */
+  selectedToolIds?: string[];
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
   /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
@@ -473,6 +478,7 @@ export const setupTurn = async (
     webhookThread,
     openedByTopicId,
     files,
+    hasMentionedAgents,
     modelOverride,
     operationTaskId,
     parentMessageId,
@@ -486,6 +492,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     selectedSkillIds,
+    selectedToolIds,
     shareGate,
     steer,
     throwIfExecutionAborted,
@@ -708,6 +715,7 @@ export const setupTurn = async (
               db: deps.db,
               expectedShareId: shareGate.shareId,
               ownerId: deps.userId,
+              visitorUserId: shareGate.visitorUserId,
               workspaceId: deps.workspaceId,
             },
             newTopicParams,
@@ -730,7 +738,19 @@ export const setupTurn = async (
       // Explicit per-run values (such as callSubAgent) override their own field.
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
-      const existingTopic = await deps.topicModel.findById(topicId);
+      let existingTopic = await deps.topicModel.findById(topicId);
+      // The Project tool's `switchRunner` cannot move a conversation inside the
+      // turn that called it, so it records the folder; the move happens here,
+      // at the start of the next turn a user message opens (not a resume of
+      // the same turn), before anything below reads where the topic runs.
+      if (!resume && !shareGate && existingTopic?.metadata?.pendingProjectWorkingDirectoryId) {
+        const moved = await new ProjectDirectoryRepository(
+          deps.db,
+          deps.userId,
+          deps.workspaceId,
+        ).applyPendingTopicMove(topicId);
+        if (moved) existingTopic = { ...existingTopic, ...moved };
+      }
       const pendingRun = existingTopic?.metadata?.scheduledRun;
       if (
         existingTopic?.status === 'scheduled' &&
@@ -922,7 +942,9 @@ export const setupTurn = async (
     botSender,
     composerMetadata: userMessage?.metadata,
     externalOrigin,
+    hasMentionedAgents,
     selectedSkillIds,
+    selectedToolIds,
     steer,
     trigger,
   });

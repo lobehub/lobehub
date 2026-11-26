@@ -82,6 +82,30 @@ describe('Channel reply opening', () => {
     expect((await jobById(db, job.id)).threadId).toBeNull();
   });
 
+  it('marks the acknowledgement in the list preview, so it raises no notification, and not the answer', async () => {
+    const { channel, job } = await mentionAgent();
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const preview = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+    expect(await preview()).toMatchObject({ opening: false });
+
+    await execution.open(channel.id, job.id, {
+      ack: 'On it, comparing the two configs first.',
+      threadTitle: 'Deploy failure',
+    });
+    expect(await preview()).toMatchObject({
+      content: 'On it, comparing the two configs first.',
+      opening: true,
+      thread: { title: 'Deploy failure' },
+    });
+
+    await execution.claim(channel.id, job.id, lease);
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'The token expired.');
+    await execution.publish(channel.id, job.id);
+    expect(await preview()).toMatchObject({ content: 'The token expired.', opening: false });
+  });
+
   it('names the acknowledgement on the job, so a failed run shows under it', async () => {
     const { channel, job } = await mentionAgent();
     await execution.open(channel.id, job.id, { ack: 'Got it, checking CI.' });
@@ -647,6 +671,97 @@ describe('Channel reply opening', () => {
         .where(eq(channelThreads.id, thread.id));
 
       expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('leaves out a Thread the Agent never answered in', async () => {
+      const { channel, asMember, thread } = await answeredInThread();
+      const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+      const request = await asMember.send(channel.id, {
+        content: 'Clone the repo and map its frontend',
+        mentions: [reviewer.id],
+        requestKey: 'reviewer',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, request.id);
+
+      expect((await execution.openingCandidate(channel.id, job.id))?.threads).toEqual([]);
+      // Nor can the opener move it there by naming the Thread.
+      await execution.open(channel.id, job.id, { ack: 'Looking.', threadId: thread.id });
+      expect((await jobById(db, job.id)).threadId).toBeNull();
+    });
+
+    it('leaves out a Thread quiet for hours before the request', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      const longAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      await db
+        .update(channelMessages)
+        .set({ createdAt: longAgo })
+        .where(eq(channelMessages.threadId, thread.id));
+      await db
+        .update(channelThreads)
+        .set({ createdAt: longAgo })
+        .where(eq(channelThreads.id, thread.id));
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('leaves out a Thread another Agent is answering in', async () => {
+      const { asMember, channel, followUpJob, thread } = await answeredInThread();
+      const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+      await asMember.send(channel.id, {
+        content: 'Review this too',
+        mentions: [reviewer.id],
+        requestKey: 'in-thread',
+        routing: 'decision',
+        threadId: thread.id,
+      });
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('offers only where a quoted request was answered, and hands the opener the quote', async () => {
+      const { agent, asMember, asOwner, channel, message, thread } = await answeredInThread();
+      // A second request answered in place, on the main timeline.
+      const inPlace = await asMember.send(channel.id, {
+        content: 'Should the member list match the personal space?',
+        mentions: [agent.id],
+        requestKey: 'in-place',
+        routing: 'decision',
+      });
+      const [inPlaceJob] = await jobsOf(db, inPlace.id);
+      await execution.open(channel.id, inPlaceJob.id, {});
+
+      // From someone else: the same person's request queued right behind theirs would be merged
+      // into that run, which opens for both.
+      const quoting = await asOwner.send(channel.id, {
+        content: 'Why is this UI still unchanged?',
+        mentions: [agent.id],
+        replyToId: inPlace.id,
+        requestKey: 'quoting',
+        routing: 'decision',
+      });
+      const [quotingJob] = await jobsOf(db, quoting.id);
+      const candidate = await execution.openingCandidate(channel.id, quotingJob.id);
+      expect(candidate?.threads).toEqual([]);
+      expect(candidate?.quoted).toMatchObject({
+        content: 'Should the member list match the personal space?',
+        id: inPlace.id,
+      });
+
+      // The first request, answered in the Thread.
+      const quotingRoot = await asMember.send(channel.id, {
+        content: 'Is this still failing?',
+        mentions: [agent.id],
+        replyToId: message.id,
+        requestKey: 'quoting-root',
+        routing: 'decision',
+      });
+      const [quotingRootJob] = await jobsOf(db, quotingRoot.id);
+      expect(
+        (await execution.openingCandidate(channel.id, quotingRootJob.id))?.threads.map(
+          ({ id }) => id,
+        ),
+      ).toEqual([thread.id]);
     });
 
     it('acknowledges on the main timeline with the Thread linked and answers inside it', async () => {

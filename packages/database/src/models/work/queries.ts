@@ -175,6 +175,15 @@ export const listSummariesByRootOperations = async (
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
+    /**
+     * Narrows the type set to the ones the caller actually draws, on top of the
+     * opt-in gates. A caller that drops a type from the result afterwards (a
+     * Channel card keeps `external` + `canvas`) would otherwise have that type
+     * take a summary slot: opting into canvases also enables `file` and
+     * `collection`, and 20 files saved after the link would push it past `limit`
+     * before the caller filters them out.
+     */
+    types?: WorkType[];
   },
 ): Promise<WorkSummaryMap> => {
   const rootOperationIds = Array.from(
@@ -184,6 +193,13 @@ export const listSummariesByRootOperations = async (
     rootOperationIds.map((rootOperationId) => [rootOperationId, []]),
   );
   if (rootOperationIds.length === 0) return result;
+
+  // Intersect the caller's own types with the opt-in gates: an un-opted-in
+  // request cannot widen its read set by naming a gated type.
+  const allowedTypes = resolveAllowedWorkTypes(params).filter(
+    (type) => !params.types || params.types.includes(type),
+  );
+  if (allowedTypes.length === 0) return result;
 
   const limit = params.limit ?? 20;
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
@@ -205,7 +221,7 @@ export const listSummariesByRootOperations = async (
     .where(
       and(
         inArray(workVersions.rootOperationId, rootOperationIds),
-        inArray(works.type, resolveAllowedWorkTypes(params)),
+        inArray(works.type, allowedTypes),
       ),
     )
     .orderBy(desc(workVersions.createdAt))

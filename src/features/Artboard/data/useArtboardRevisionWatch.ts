@@ -1,7 +1,6 @@
 import type { ArtboardItem } from '@lobechat/types';
 import { useEffect, useRef } from 'react';
 
-import { artboardActions, useArtboardStore } from '../store';
 import { useAgentRunningInTopic } from './agentRunning';
 import { checkArtboardRevision } from './revisionWatch';
 
@@ -13,13 +12,8 @@ export const useArtboardRevisionWatch = (
 ) => {
   const { id, revision, topicId, updatedAt } = artboard;
   const running = useAgentRunningInTopic(topicId);
-  const stale = useArtboardStore((s) => s.staleRevision);
   const shown = useRef({ revision, updatedAt });
   shown.current = { revision, updatedAt };
-
-  useEffect(() => {
-    if (stale !== null && revision >= stale) artboardActions.setStaleRevision(null);
-  }, [revision, stale]);
 
   useEffect(() => {
     const check = () => void checkArtboardRevision(id, shown.current).catch(() => {});

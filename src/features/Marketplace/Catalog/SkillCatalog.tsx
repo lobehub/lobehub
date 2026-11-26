@@ -12,6 +12,7 @@ import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { useMarketSkillInstall } from '@/features/CommunitySkillDetail/useMarketSkillInstall';
 import AgentSkillItem from '@/features/Settings/skill/features/AgentSkillItem';
 import { matchesConnectorKeyword } from '@/features/Settings/skill/features/connectorSections';
+import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
 import { useQuery } from '@/hooks/useQuery';
 import { useSkillCategory } from '@/hooks/useSkillCategory';
@@ -31,12 +32,10 @@ import {
 } from '@/types/discover';
 
 import CatalogViewTabs from '../CatalogViewTabs';
-import { buildInstalledDetailPath } from '../InstalledNav';
-import { MARKETPLACE_SKILL_PATH } from '../paths';
+import { buildInstalledDetailPath, MARKETPLACE_SKILL_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
 import DiscoverCatalogHeader from './DiscoverCatalogHeader';
-import RowAction from './RowAction';
 import {
   buildCatalogListUrl,
   CATALOG_LIST_PAGE_SIZE,
@@ -51,8 +50,22 @@ const SkillCatalogRow = memo<{ item: DiscoverSkillItem }>(({ item }) => {
   const { description, icon, identifier, name } = item;
   const { t } = useTranslation('discover');
   const { t: tp } = useTranslation('plugin');
-  const { canCreate, install, installed, installing } = useMarketSkillInstall(identifier, name);
+  const { canCreate, install, installedSkillId, installing } = useMarketSkillInstall(
+    identifier,
+    name,
+  );
   const navigate = useCatalogDetailNavigate();
+
+  const openDetail = () => {
+    discoverService
+      .reportSkillEvent({ event: 'click', identifier, source: location.pathname })
+      .catch(() => {});
+    navigate(
+      installedSkillId
+        ? buildInstalledDetailPath('skill', installedSkillId, 'agent-skill')
+        : urlJoin(MARKETPLACE_SKILL_PATH, identifier),
+    );
+  };
 
   return (
     <SkillListRow
@@ -61,22 +74,18 @@ const SkillCatalogRow = memo<{ item: DiscoverSkillItem }>(({ item }) => {
       testId={'skill-item'}
       title={name}
       extra={
-        <RowAction
-          addLabel={tp('store.actions.install')}
-          disabled={!canCreate}
-          installed={installed}
-          installedLabel={t('skills.details.header.installed')}
-          loading={installing}
-          name={name}
-          onAdd={install}
-        />
+        installedSkillId ? (
+          <RowMoreMenu onOpenDetail={openDetail} />
+        ) : (
+          <RowAddAction
+            disabled={!canCreate}
+            label={t('catalog.rowAction', { action: tp('store.actions.install'), name })}
+            loading={installing}
+            onClick={install}
+          />
+        )
       }
-      onClick={() => {
-        discoverService
-          .reportSkillEvent({ event: 'click', identifier, source: location.pathname })
-          .catch(() => {});
-        navigate(urlJoin(MARKETPLACE_SKILL_PATH, identifier));
-      }}
+      onClick={openDetail}
     />
   );
 });

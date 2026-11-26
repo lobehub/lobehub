@@ -1,5 +1,7 @@
 import { type CreateImagePayload } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import type * as SSRFSafeFetchModule from '@lobechat/ssrf-safe-fetch';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
@@ -15,6 +17,11 @@ vi.mock('@/server/services/comfyui/core/modelResolverService');
 vi.mock('@/server/services/comfyui/core/workflowBuilderService');
 vi.mock('@/server/services/comfyui/core/errorHandlerService');
 vi.mock('@/server/services/comfyui/utils/workflowDetector');
+
+vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => {
+  const mod = await importOriginal<typeof SSRFSafeFetchModule>();
+  return { ...mod, ssrfSafeFetch: vi.fn() };
+});
 
 // Mock sharp module for image processing
 vi.mock('sharp', () => ({
@@ -58,9 +65,8 @@ describe('ImageService', () => {
       handleError: vi.fn(),
     };
 
-    // Mock global fetch
-    mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    // Mock the SSRF-safe fetch used for image downloads
+    mockFetch = vi.mocked(ssrfSafeFetch);
 
     // Setup mocks for constructor
     vi.mocked(ComfyUIClientService, true).mockImplementation(function () {
@@ -531,6 +537,47 @@ describe('ImageService', () => {
 
       // Verify error handler was called
       expect(mockErrorHandler.handleError).toHaveBeenCalledWith(testError);
+    });
+  });
+
+  describe('SSRF boundary', () => {
+    beforeEach(async () => {
+      vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', undefined);
+      vi.stubEnv('SSRF_ALLOW_PRIVATE_IP_ADDRESS', undefined);
+
+      const { ssrfSafeFetch: realImpl } = await vi.importActual<typeof SSRFSafeFetchModule>(
+        '@lobechat/ssrf-safe-fetch',
+      );
+      mockFetch.mockImplementation(realImpl);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      mockModelResolverService.validateModel.mockResolvedValue({
+        actualFileName: 'flux1-schnell-fp8.safetensors',
+        exists: true,
+      });
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
+        throw error;
+      });
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      'http://169.254.169.254/latest/meta-data/image.png',
+      'http://127.0.0.1:8188/image.png',
+      'http://10.0.0.1/image.png',
+      'http://192.168.1.1/image.png',
+      'http://[::1]/image.png',
+    ])('rejects imageUrl pointing at %s', async (imageUrl) => {
+      const payload: CreateImagePayload = {
+        model: 'flux-schnell',
+        params: { imageUrl, prompt: 'test prompt' },
+      };
+
+      await expect(imageService.createImage(payload)).rejects.toThrow(/SSRF blocked/);
+      expect(mockClientService.uploadImage).not.toHaveBeenCalled();
     });
   });
 });

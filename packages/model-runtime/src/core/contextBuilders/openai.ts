@@ -7,6 +7,7 @@ import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } fro
 import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { fetchReferenceImageBytes } from '../../utils/referenceImageCache';
 import { type SignatureScope } from '../../utils/signatureScope';
+import { ssrfFetch } from '../../utils/ssrfFetch';
 import { parseDataUri } from '../../utils/uriParser';
 import { videoUrlToBase64 } from '../../utils/videoToBase64';
 
@@ -220,7 +221,7 @@ export const convertImageUrlToFile = async (imageUrl: string) => {
   } else {
     // a http url; generation retries and batch siblings reuse the same download
     ({ buffer, mimeType } = await fetchReferenceImageBytes(imageUrl, async (url) => {
-      const response = await fetch(url);
+      const response = await ssrfFetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch image from ${url}: ${response.statusText}`);
       }

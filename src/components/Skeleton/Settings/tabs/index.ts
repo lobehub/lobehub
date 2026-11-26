@@ -6,16 +6,15 @@ import APIKeySkeleton from './APIKey';
 import AppearanceSkeleton from './Appearance';
 import AutomationsSkeleton from './Automations';
 import BillingSkeleton from './Billing';
+import ConversationSkeleton from './Conversation';
 import CreditsSkeleton from './Credits';
 import CredsSkeleton from './Creds';
 import DevicesSkeleton from './Devices';
 import EnvironmentsSkeleton from './Environments';
 import HotkeySkeleton from './Hotkey';
-import IntegrationsSkeleton from './Integrations';
 import LabelsSkeleton from './Labels';
 import LabsSkeleton from './Labs';
 import MemorySkeleton from './Memory';
-import MessengerSkeleton from './Messenger';
 import NotificationSkeleton from './Notification';
 import OAuthAppsSkeleton from './OAuthApps';
 import PlansSkeleton from './Plans';
@@ -45,16 +44,15 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   // The same list surface.
   [SettingsTabs.Webhooks]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
+  [SettingsTabs.Conversation]: ConversationSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,
   [SettingsTabs.Creds]: CredsSkeleton,
   [SettingsTabs.Devices]: DevicesSkeleton,
   [SettingsTabs.Environments]: EnvironmentsSkeleton,
   [SettingsTabs.Hotkey]: HotkeySkeleton,
-  [SettingsTabs.Integrations]: IntegrationsSkeleton,
   [SettingsTabs.Labels]: LabelsSkeleton,
   [SettingsTabs.Labs]: LabsSkeleton,
   [SettingsTabs.Memory]: MemorySkeleton,
-  [SettingsTabs.Messenger]: MessengerSkeleton,
   [SettingsTabs.Notification]: NotificationSkeleton,
   [SettingsTabs.OAuthApps]: OAuthAppsSkeleton,
   [SettingsTabs.Plans]: PlansSkeleton,

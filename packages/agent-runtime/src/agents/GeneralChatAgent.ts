@@ -39,6 +39,7 @@ import {
 } from '../utils/operationToolSet';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
+import { buildToolCallBudgetContent, TOOL_CALL_BUDGET_REASON } from '../utils/toolCallRepeatGuard';
 import {
   findCurrentTurnPendingToolMessages,
   isFoldedAssistantGroup,
@@ -673,7 +674,7 @@ export class GeneralChatAgent implements Agent {
 
       case 'llm_result': {
         // LLM response received, check if it contains tool calls
-        const { hasToolsCalling, toolsCalling, parentMessageId, result } =
+        const { hasToolsCalling, overBudgetToolCalls, toolsCalling, parentMessageId, result } =
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
@@ -705,9 +706,40 @@ export class GeneralChatAgent implements Agent {
             } satisfies AgentInstruction);
           }
 
-          if (executableCalls.length === 0) return instructions;
+          // Calls past their API's `maxCallsPerOperation` get a rejected row
+          // that tells the model to answer with what it has; the rest of the
+          // batch still runs. The finalizer counted the turn and stops the run
+          // if the model keeps asking anyway (see `updateToolCallBudget`).
+          const budgetLimitByCallId = new Map(
+            (overBudgetToolCalls ?? []).map(({ id, limit }) => [id, limit]),
+          );
+          const overBudgetCalls = executableCalls.filter((call) =>
+            budgetLimitByCallId.has(call.id),
+          );
+          const withinBudgetCalls = executableCalls.filter(
+            (call) => !budgetLimitByCallId.has(call.id),
+          );
 
-          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(executableCalls);
+          if (overBudgetCalls.length > 0) {
+            instructions.push({
+              payload: {
+                blockedContentByCallId: Object.fromEntries(
+                  overBudgetCalls.map((call) => [
+                    call.id,
+                    buildToolCallBudgetContent(call, budgetLimitByCallId.get(call.id)!),
+                  ]),
+                ),
+                blockedReason: TOOL_CALL_BUDGET_REASON,
+                parentMessageId,
+                toolsCalling: overBudgetCalls,
+              },
+              type: 'resolve_blocked_tools',
+            } satisfies AgentInstruction);
+          }
+
+          if (withinBudgetCalls.length === 0) return instructions;
+
+          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(withinBudgetCalls);
           // Check which tools need human intervention
           const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             allowedTools,

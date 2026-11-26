@@ -36,7 +36,7 @@ describe('server-side steer queue in the step loop', () => {
     steerQueueLength.mockResolvedValue(0);
     steerQueueSeal.mockResolvedValue(undefined);
     steerQueueUnseal.mockResolvedValue(undefined);
-    readFollowUpMode.mockResolvedValue('legacy');
+    readFollowUpMode.mockResolvedValue('steer');
   });
 
   describe('Follow-up behavior: Queue', () => {

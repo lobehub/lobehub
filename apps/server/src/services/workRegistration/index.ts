@@ -32,11 +32,7 @@ export {
   type LocalRunShellWorksResult,
   registerShellWorksForLocalRun,
 } from './localRunWorkRegistration';
-export {
-  isBetterCodingExperienceEnabled,
-  resolveShellPullRequestLinking,
-  type ShellPullRequestLinking,
-} from './pullRequestLinking';
+export { createShellPullRequestLinking, type ShellPullRequestLinking } from './pullRequestLinking';
 export {
   registerWorksForOperation,
   type RegisterWorksForOperationParams,
@@ -54,4 +50,5 @@ export {
   linkPushedPullRequests,
   type LinkPushedPullRequestsResult,
   listTopicPullRequestsWithStatus,
+  listTopicsPullRequestsWithStatus,
 } from './topicPullRequests';

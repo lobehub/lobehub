@@ -148,11 +148,14 @@ const ServiceModelForm = ({ scope = 'personal' }: ServiceModelFormProps) => {
   }
 
   const isWorkspaceSettings = scope === 'workspace';
+  // Personal tiers still pin the chat-assist slots that follow them; a
+  // workspace's tiers never write the member's personal slots.
   const skipSlots = isWorkspaceSettings ? PERSONAL_SLOTS : NO_SLOTS;
+  // Chat-assist rows are edited on the Conversation page in both scopes.
   const tiers = TIERS.map((tier) => ({
     ...tier,
     rows: tier.rows.filter(
-      (row) => row === DEFAULT_AGENT_ROW || !skipSlots.has(row as UserServiceModelConfigKey),
+      (row) => row === DEFAULT_AGENT_ROW || !PERSONAL_SLOTS.has(row as UserServiceModelConfigKey),
     ),
   }));
 

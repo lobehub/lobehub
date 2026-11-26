@@ -424,6 +424,28 @@ export const messageRouter = router({
     }),
 
   /**
+   * Change probe for a topic waiting on approval cards, for the client poll
+   * that waits for an answer from another device. A topic's full message page
+   * can be megabytes; this answers "did anything change?" in a few bytes: each
+   * card's intervention status (`null` when deleted or not visible) and a
+   * revision that moves on any message or card-argument change. The client
+   * re-reads the page only when a card settled or the revision moved.
+   */
+  getInterventionSnapshot: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(50), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await Promise.all([
+        assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]),
+        assertCanViewMessageTargets(guardCtx(ctx), input.messageIds),
+      ]);
+
+      return ctx.messageModel.getInterventionSnapshot({
+        ids: input.messageIds,
+        topicId: input.topicId,
+      });
+    }),
+
+  /**
    * Where a message came from, for answering it: its conversation and, for a
    * message another agent sent, that agent and its conversation
    * (`metadata.agentSender`). Read by `lh message reply`.
@@ -596,6 +618,24 @@ export const messageRouter = router({
     .use(serverDatabase)
     .input(messagesByCursorInputSchema)
     .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
+
+  /**
+   * One older page of a compression group's members, for a reader scrolling
+   * up past the slice its `compressedGroup` node carries. Pass the newest id of
+   * the node's (or the previous page's) `compressedOmittedIds` as `untilId`.
+   */
+  getCompressedGroupMembers: messageProcedure
+    .input(z.object({ groupId: z.string(), topicId: z.string(), untilId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      const page = await ctx.messageModel.queryCompressedGroupMembers(input, {
+        postProcessUrl: (path, file) =>
+          ctx.fileService.getFileAccessUrl({ id: file.id, url: path }),
+      });
+
+      return { ...page, messages: page.messages.map(omitToolWorkRegistration) };
+    }),
 
   getTopicPreviews: messageProcedure
     .input(topicPreviewsInputSchema)

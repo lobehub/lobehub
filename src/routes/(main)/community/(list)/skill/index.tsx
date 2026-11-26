@@ -1,1 +1,1 @@
-export { default } from '@/features/Marketplace/Catalog/SkillCatalog';
+export { default } from '@/features/Marketplace/Skills/SkillsPage';

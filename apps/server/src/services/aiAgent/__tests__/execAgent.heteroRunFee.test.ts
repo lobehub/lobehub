@@ -182,6 +182,7 @@ vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
     return {
       getHeterogeneousResumeSessionId: mockGetHeterogeneousResumeSessionId,
+      getThreadResumeSessionId: vi.fn().mockResolvedValue(undefined),
     };
   }),
 }));

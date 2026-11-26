@@ -2,6 +2,7 @@ import type {
   RuntimeMentionedAgent,
   RuntimeSelectedSkill,
   RuntimeSelectedTool,
+  UIChatMessage,
 } from '@lobechat/types';
 import { FILESYSTEM_SKILL_SELECTION_PREFIX } from '@lobechat/types';
 
@@ -80,6 +81,24 @@ export const parseSelectedSkillsFromEditorData = (
     return acc;
   }, []);
 };
+
+/**
+ * Identifiers of every skill the user selected across these turns. A selection
+ * is persisted on the user message (`metadata.selectedSkillIds`, or the editor
+ * state on older rows), not passed along with the run.
+ */
+export const collectSelectedSkillIds = (
+  messages: readonly Pick<UIChatMessage, 'editorData' | 'metadata' | 'role'>[],
+): string[] =>
+  messages
+    .filter((message) => message.role === 'user')
+    .flatMap(
+      (message) =>
+        message.metadata?.selectedSkillIds ??
+        parseSelectedSkillsFromEditorData(message.editorData ?? undefined).map(
+          (skill) => skill.identifier,
+        ),
+    );
 
 export const parseGatewaySkillIdsFromEditorData = (
   editorData: Record<string, any> | undefined,

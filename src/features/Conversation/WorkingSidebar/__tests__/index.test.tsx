@@ -31,74 +31,6 @@ const { default: PullRequestHeader } = await import('../PullRequest/Header');
 const { default: PullRequestSections } = await import('../PullRequest/Sections');
 
 describe('AgentWorkingSidebar — controlled panel width', () => {
-  it('opens a scoped saved PR before branch lookup and discards it after authoritative empty lookup', () => {
-    linkedPR.branch = undefined;
-    reviewState.workingDirectory = '/repo';
-    chatStore.activeTopicId = 'topic-pr';
-    chatStore.topicDetailMap = {
-      'topic-pr': {
-        id: 'topic-pr',
-        metadata: {
-          workingDirectoryConfig: {
-            path: '/repo',
-            git: {
-              branch: 'feature',
-              github: {
-                pullRequest: {
-                  number: 42,
-                  title: 'Saved PR',
-                  state: 'open',
-                  url: 'https://github.com/test/repo/pull/42',
-                },
-              },
-            },
-          },
-        },
-      },
-    };
-    globalStore.status.workingSidebarTab = 'pr';
-    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
-    const { rerender } = render(<AgentWorkingSidebar />);
-    expect(screen.getByRole('textbox', { name: 'PR draft' })).toBeInTheDocument();
-    linkedPR.status = 'ok';
-    rerender(<AgentWorkingSidebar availableWidth={1200} />);
-    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    { path: '/other', boundDeviceId: undefined },
-    { path: '/repo', boundDeviceId: 'other-device' },
-  ])('does not bootstrap a snapshot from another scope: %o', ({ path, boundDeviceId }) => {
-    linkedPR.branch = undefined;
-    reviewState.workingDirectory = '/repo';
-    chatStore.activeTopicId = 'topic-pr';
-    chatStore.topicDetailMap = {
-      'topic-pr': {
-        id: 'topic-pr',
-        metadata: {
-          boundDeviceId,
-          workingDirectoryConfig: {
-            path,
-            git: {
-              github: {
-                pullRequest: {
-                  number: 42,
-                  state: 'open',
-                  title: 'Other PR',
-                  url: 'https://github.com/test/repo/pull/42',
-                },
-              },
-            },
-          },
-        },
-      },
-    };
-    globalStore.status.workingSidebarTab = 'pr';
-    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
-    render(<AgentWorkingSidebar />);
-    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
-  });
-
   it('resets PR state when the PR number or directory changes', () => {
     reviewState.repoType = 'github';
     reviewState.workingDirectory = '/repo';
@@ -120,7 +52,6 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     reviewState.repoType = 'github';
     reviewState.workingDirectory = '/repo';
     linkedPR.number = 42;
-    linkedPR.status = 'ok';
 
     render(<AgentWorkingSidebar />);
 
@@ -1174,5 +1105,23 @@ describe('AgentWorkingSidebar — tab strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
 
     expect(screen.queryByRole('button', { name: 'topicComment.title' })).not.toBeInTheDocument();
+  });
+
+  it('renders Tools tab for standard agents and hides it in chat or heterogeneous mode', async () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = { 'draft:agent:none': ['tools', 'params'] };
+    globalStore.status.workingSidebarTab = 'tools';
+
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1000} />);
+    await waitFor(() => expect(screen.getByTestId('tools-section')).toBeInTheDocument());
+
+    agentStore.isChatMode = true;
+    rerender(<AgentWorkingSidebar availableWidth={1001} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
+
+    agentStore.isChatMode = false;
+    agentStore.isHeterogeneous = true;
+    rerender(<AgentWorkingSidebar availableWidth={1002} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
   });
 });

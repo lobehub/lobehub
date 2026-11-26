@@ -128,9 +128,6 @@ describe('usePullRequestActions', () => {
       'aheadBehind',
       'workingTreeStatus',
     ]);
-    const matcher = mutate.mock.calls.find(([key]) => typeof key === 'function')?.[0];
-    expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/repo', 'feat/x', 7))).toBe(true);
-    expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/other', 'feat/x'))).toBe(false);
   });
 
   it('targets the confirmed PR and reports success even if the worktree disappeared', async () => {

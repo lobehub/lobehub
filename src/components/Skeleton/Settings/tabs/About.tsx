@@ -1,6 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
+import { isDesktop } from '@lobechat/const';
 import { Divider, Flexbox, Grid } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -35,7 +36,7 @@ const LinkRow = ({ keys }: { keys: string[] }) => {
 };
 
 /**
- * The "About" group (logo + version row, the five social cards, contact and
+ * The "About" group (logo + version row, the desktop update channel, the five social cards, contact and
  * legal links) above the single-row analytics group.
  */
 const Body = () => {
@@ -62,6 +63,19 @@ const Body = () => {
             </Flexbox>
             <SkeletonBar height={32} radius={8} width={80} />
           </Flexbox>
+          {isDesktop && (
+            <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} width={'100%'}>
+              <Flexbox gap={4}>
+                <div style={{ fontWeight: 500 }}>
+                  {setting('tab.advanced.updateChannel.title', 96, 14)}
+                </div>
+                <div style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+                  {setting('tab.advanced.updateChannel.desc', 360, 12)}
+                </div>
+              </Flexbox>
+              <SkeletonBar height={32} radius={8} width={200} />
+            </Flexbox>
+          )}
           <Divider style={{ marginBlock: 0 }} />
           <Grid gap={8} maxItemWidth={160} rows={SOCIAL_COUNT} width={'100%'}>
             {Array.from({ length: SOCIAL_COUNT }, (_, index) => (

@@ -32,7 +32,7 @@ export type DeferredOperationInitDeps = Omit<
  * The share a visitor run was created under, re-read from its live row: the
  * init works under the share's CURRENT grants, never a snapshot of them — the
  * same rule `createShareRunScope` follows for every visitor turn. Fails closed:
- * a share that is gone, no longer public or no longer this agent's ends the run.
+ * a share that is gone, no longer admits the visitor or no longer this agent's ends the run.
  */
 const resolveShareGate = async (
   deps: Pick<DeferredOperationInitDeps, 'db' | 'userId' | 'workspaceId'>,
@@ -47,7 +47,7 @@ const resolveShareGate = async (
     !share ||
     share.agentId !== shareVisitor.agentId ||
     share.ownerId !== deps.userId ||
-    share.visibility !== 'link'
+    !(await AgentShareModel.admitsVisitor(deps.db, share, shareVisitor.visitorUserId))
   ) {
     throw new Error(`Share ${shareVisitor.shareId} no longer authorizes this run`);
   }

@@ -37,6 +37,8 @@ import {
 import { memo, type MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { cacheScope } from '@/libs/replica';
 import {
   agentQuotaSelectors,
@@ -250,6 +252,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
     [accounts, readingsMap],
   );
   const [busy, setBusy] = useState(false);
+  const [manageError, setManageError] = useState<InlineErrorState | null>(null);
   // Staged account selection — applied only when the user confirms.
   const [pending, setPending] = useState<string | null>(null);
   // Inline rename state (no nested modal).
@@ -326,6 +329,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       run(async () => {
         const value = pending;
         if (value === null) return;
+        setManageError(null);
         // Never turn this desktop's pick into an agent-wide one.
         if (needsLocalDevice && !targetDeviceId) return;
         if (value !== AUTO && !bindings.some((b) => b.accountId === value)) {
@@ -340,11 +344,14 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         }
       })
         .then(() => setPending(null))
-        .catch((error: { data?: { code?: string } }) => {
-          toast.error(
-            error?.data?.code === 'PRECONDITION_FAILED'
-              ? t('heteroAgent.claudeQuota.manage.notSignedInOnDevice')
-              : t('heteroAgent.claudeQuota.manage.switchFailed'),
+        .catch((error: { data?: { code?: string }; message?: string }) => {
+          setManageError(
+            toInlineError(
+              error?.data?.code === 'PRECONDITION_FAILED'
+                ? t('heteroAgent.claudeQuota.manage.notSignedInOnDevice')
+                : t('heteroAgent.claudeQuota.manage.switchFailedRetry'),
+              error,
+            ),
           );
         }),
     [
@@ -397,6 +404,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   const signIn = useCallback(
     async (email?: string) => {
       loginCancelled.current = false;
+      setManageError(null);
       try {
         const local = await loginClaudeAccount(email);
         const account = agentQuotaSelectors
@@ -410,8 +418,12 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
             account: local.identity.email || local.identity.externalAccountId,
           }),
         );
-      } catch {
-        if (!loginCancelled.current) toast.error(t('heteroAgent.claudeQuota.manage.loginFailed'));
+      } catch (error) {
+        console.error('[QuotaAccountManager] Claude login failed:', error);
+        if (!loginCancelled.current)
+          setManageError(
+            toInlineError(t('heteroAgent.claudeQuota.manage.loginFailedRetry'), error),
+          );
       }
     },
     [agentId, bindQuotaAccount, bindingOf, loginClaudeAccount, t],
@@ -586,13 +598,22 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
             };
           }),
         ]}
-        onChange={setPending}
+        onChange={(value) => {
+          setManageError(null);
+          setPending(value);
+        }}
       />
 
       {accounts.length === 0 && (accountsConfirmed || !!accountsError) && (
         <Text className={stylex.props(styles.hint).className}>
           {t('heteroAgent.claudeQuota.manage.empty')}
         </Text>
+      )}
+
+      {manageError && (
+        <div style={{ marginBlockStart: 8 }}>
+          <InlineErrorText detail={manageError.detail}>{manageError.summary}</InlineErrorText>
+        </div>
       )}
 
       {dirty ? (

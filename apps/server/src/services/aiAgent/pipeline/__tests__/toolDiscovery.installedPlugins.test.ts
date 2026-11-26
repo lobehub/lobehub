@@ -150,26 +150,53 @@ const MANUAL = { chatConfig: { skillActivateMode: 'manual' } };
 
 describe('Agent first-turn tool payload', () => {
   it.each([
-    { expected: ['lobe-user-memory', 'lobe-web-browsing'], memory: true, search: true },
-    { expected: ['lobe-user-memory'], memory: true, search: false },
-    { expected: ['lobe-web-browsing'], memory: false, search: true },
-    { expected: [], memory: false, search: false },
+    {
+      discoverable: ['lobe-user-memory'],
+      enabled: ['lobe-activator', 'lobe-skills', 'lobe-web-browsing'],
+      explicitlyActivatable: ['lobe-user-memory', 'lobe-web-browsing'],
+      memory: true,
+      offeredCount: 9,
+      search: true,
+    },
+    {
+      discoverable: ['lobe-user-memory'],
+      enabled: ['lobe-activator', 'lobe-skills'],
+      explicitlyActivatable: ['lobe-user-memory'],
+      memory: true,
+      offeredCount: 6,
+      search: false,
+    },
+    {
+      discoverable: [],
+      enabled: ['lobe-activator', 'lobe-skills', 'lobe-web-browsing'],
+      explicitlyActivatable: ['lobe-web-browsing'],
+      memory: false,
+      offeredCount: 9,
+      search: true,
+    },
+    {
+      discoverable: [],
+      enabled: ['lobe-activator', 'lobe-skills'],
+      explicitlyActivatable: [],
+      memory: false,
+      offeredCount: 6,
+      search: false,
+    },
   ])(
-    'only lists available capabilities (memory=$memory, search=$search)',
-    async ({ expected, memory, search }) => {
+    'preloads web browsing when enabled and defers other available capabilities (memory=$memory, search=$search)',
+    async ({ discoverable, enabled, explicitlyActivatable, memory, offeredCount, search }) => {
       const result = await run({
         chatConfig: { searchMode: search ? 'auto' : 'off' },
         memoryEnabled: memory,
       });
-      const loaders = ['lobe-activator', 'lobe-skills'];
       const capabilities = ['lobe-user-memory', 'lobe-web-browsing'];
-      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(loaders);
-      expect(offeredToolNames(result)).toHaveLength(6);
+      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(enabled);
+      expect(offeredToolNames(result)).toHaveLength(offeredCount);
       expect(
-        availableToolIds(result.toolManifestMap, loaders)
+        availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)
           .filter((id) => capabilities.includes(id))
           .toSorted(),
-      ).toEqual(expected);
+      ).toEqual(discoverable);
       const activated = result.toolsEngine!.generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: 'test-model',
@@ -184,7 +211,7 @@ describe('Agent first-turn tool payload', () => {
           'lobe-mcp-events',
         ],
       });
-      expect(activated.enabledToolIds.toSorted()).toEqual(expected);
+      expect(activated.enabledToolIds.toSorted()).toEqual(explicitlyActivatable);
     },
   );
 });

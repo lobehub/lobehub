@@ -70,10 +70,10 @@ describe('resolveCliCommand — Antigravity', () => {
     vi.resetModules();
   });
 
-  it('detects Antigravity stream-json and preserves prerelease/build versions', async () => {
+  it('detects Antigravity with ACP and preserves prerelease/build versions', async () => {
     callExecFile('/Users/x/.local/bin/agy\n');
     callExecFile('1.2.13-beta.1+build.5');
-    callExecFile('', '--input-format --output-format stream-json --conversation');
+    callExecFile('', 'acp             Start the Agent Client Protocol (ACP) stdio server');
     const { detectHeterogeneousCliCommand } = await importModule();
     expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
       available: true,
@@ -82,7 +82,7 @@ describe('resolveCliCommand — Antigravity', () => {
     });
   });
 
-  it('rejects older agy versions that cannot stream input or resume', async () => {
+  it('rejects older agy versions without the ACP server', async () => {
     callExecFile('1.0.7');
     callExecFile('Usage: agy --print --output-format json');
     const { detectHeterogeneousCliCommand } = await importModule();
@@ -97,7 +97,7 @@ describe('resolveCliCommand — Antigravity', () => {
     try {
       callExecFileError(new Error('not found'));
       callExecFile('1.2.13');
-      callExecFile('--input-format --output-format stream-json --conversation');
+      callExecFile('acp             Start the Agent Client Protocol (ACP) stdio server');
       const { detectHeterogeneousCliCommand } = await importModule();
       expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
         available: true,
@@ -121,7 +121,7 @@ describe('resolveCliCommand — Antigravity', () => {
       callExecFileError(new Error('no registry PATH'));
       callExecFileError(new Error('no registry PATH'));
       callExecFile('1.2.13');
-      callExecFile('--input-format --output-format stream-json --conversation');
+      callExecFile('acp             Start the Agent Client Protocol (ACP) stdio server');
       const { detectHeterogeneousCliCommand } = await importModule();
       expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
         available: true,

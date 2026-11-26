@@ -328,12 +328,14 @@ describe('compressContext executor', () => {
       id: 'source-group-1',
       lastMessageId: 'assistant-in-source-1',
       role: 'compressedGroup',
+      threadId: 'thread-123',
     };
     const sourceGroup2 = {
       content: 'Second prior summary',
       id: 'source-group-2',
       lastMessageId: 'assistant-in-source-2',
       role: 'compressedGroup',
+      threadId: 'thread-123',
     };
     messagesQuery.mockResolvedValue([
       sourceGroup1,
@@ -382,12 +384,87 @@ describe('compressContext executor', () => {
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
   });
 
+  it('leaves the main-conversation rows a thread shows out of its compaction', async () => {
+    // createState() runs in thread-123; the page starts with the main-conversation turn
+    // and summary the thread branched from.
+    const mainGroup = {
+      content: 'main summary',
+      id: 'main-group',
+      role: 'compressedGroup',
+      threadId: null,
+    };
+    const threadGroup = {
+      content: 'thread summary',
+      id: 'thread-group',
+      role: 'compressedGroup',
+      threadId: 'thread-123',
+    };
+    // An earlier thread compaction that also folded main-conversation rows: the
+    // server will not merge it, so its summary must stay out of the new one.
+    const mixedGroup = { content: 'mixed summary', id: 'mixed-group', role: 'compressedGroup' };
+    messagesQuery.mockResolvedValue([
+      mainGroup,
+      mixedGroup,
+      { content: 'parent question', id: 'main-user', role: 'user', threadId: null },
+      { content: 'parent answer', id: 'main-assistant', role: 'assistant', threadId: null },
+      threadGroup,
+      { content: 'thread question', id: 'thread-user', role: 'user', threadId: 'thread-123' },
+      {
+        content: 'thread answer',
+        id: 'thread-assistant',
+        role: 'assistant',
+        threadId: 'thread-123',
+      },
+    ]);
+    const state = createState({
+      messages: [{ content: 'thread question', id: 'thread-user', role: 'user' }],
+    });
+
+    await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['thread-user', 'thread-assistant'],
+        threadId: 'thread-123',
+      }),
+    );
+    expect(compressionBuildPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ existingSummary: 'thread summary' }),
+    );
+    expect(compressionFinalizeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceGroupIds: ['thread-group'] }),
+    );
+  });
+
+  it('does not fall back to a page summary it cannot supersede', async () => {
+    // The only summary on the page mixes main-conversation and thread rows; the agent's
+    // payload summary is built from every summary on the page, so it carries it too.
+    const mixedGroup = { content: 'mixed summary', id: 'mixed-group', role: 'compressedGroup' };
+    messagesQuery.mockResolvedValue([
+      mixedGroup,
+      { content: 'thread question', id: 'thread-user', role: 'user', threadId: 'thread-123' },
+    ]);
+    const state = createState({ messages: [mixedGroup] });
+    const instruction = createInstruction(state.messages);
+    instruction.payload.existingSummary = 'mixed summary';
+
+    await compressContext(host)(instruction, state);
+
+    expect(compressionBuildPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ existingSummary: '' }),
+    );
+    expect(compressionFinalizeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceGroupIds: [] }),
+    );
+  });
+
   it('can recompress summaries when there are no new persisted messages', async () => {
     const sourceGroup = {
       content: 'Prior summary',
       id: 'source-group',
       lastMessageId: 'assistant-in-source',
       role: 'compressedGroup',
+      threadId: 'thread-123',
     };
     messagesQuery.mockResolvedValue([sourceGroup]);
     compressionCreateGroup.mockResolvedValue({
@@ -456,6 +533,7 @@ describe('compressContext executor', () => {
       content: 'Existing summary',
       id: 'source-group',
       role: 'compressedGroup',
+      threadId: 'thread-123',
     };
     messagesQuery.mockResolvedValue([
       sourceGroup,

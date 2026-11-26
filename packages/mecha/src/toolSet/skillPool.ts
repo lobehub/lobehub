@@ -47,7 +47,8 @@ export interface AssembleSkillPoolOptions {
    * "only user-selected tools and skills are available to AI" — so the
    * selectable sources collapse to `enabledPluginIds`. Withholding the
    * discovery tools is not enough on its own: `activateSkill` ships with the
-   * always-on `lobe-skills` tool and resolves against this pool.
+   * always-on `lobe-skills` tool, which offers it whenever this pool is not
+   * empty, and resolves against this pool.
    */
   skillActivateMode?: 'auto' | 'manual';
   /**
@@ -72,22 +73,18 @@ export const assembleSkillPool = (
 ): OperationSkillSet => {
   const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
   const turnSkillIds = new Set(options.turnSkillIds ?? []);
-  // Manual mode exposes only what the user picked. Project / device skills are
-  // discovered from the run's working directory and can never be picked in the
-  // UI, so the mode does not speak about them and they stay.
-  const selectable =
-    options.skillActivateMode === 'manual'
-      ? (skills: readonly SkillMeta[] = []) =>
-          skills.filter(
-            (skill) => enabledPluginIds.has(skill.identifier) || turnSkillIds.has(skill.identifier),
-          )
-      : (skills: readonly SkillMeta[] = []) => skills;
-
   // Profile-managed skills are opt-in. A legacy pin and explicit auto both
   // make a skill discoverable, even on agents with the old manual setting.
   const on = new Set([...enabledPluginIds, ...turnSkillIds, ...(options.autoSkillIds ?? [])]);
   const offered = (skills: readonly SkillMeta[] = []) =>
     skills.filter((skill) => on.has(skill.identifier));
+
+  // Manual mode exposes only what the user (or turn) opted into. Project / device
+  // skills come from the working directory and stay visible either way.
+  const selectable =
+    options.skillActivateMode === 'manual'
+      ? offered
+      : (skills: readonly SkillMeta[] = []) => skills;
 
   const ordered = [
     ...(sources.project ?? []),

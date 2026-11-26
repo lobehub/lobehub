@@ -345,6 +345,25 @@ export const projectWorkingDirectoryRouter = router({
         });
       return { data: await ctx.directoryRepo.bind(input), success: true };
     }),
+  /** The cloud sandbox's place among the project's execution environments. */
+  executionOrder: procedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.directoryRepo.executionOrder(input.projectId),
+      success: true,
+    })),
+  /** Reorder the project's execution environments: folder ids and `'sandbox'`. */
+  reorderExecutionEnvironments: write
+    .input(
+      z.object({
+        order: z.array(z.string().min(1)).min(1).max(200),
+        projectId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.directoryRepo.reorderExecutionEnvironments(input.projectId, input.order);
+      return { success: true };
+    }),
   list: procedure
     .input(z.object({ projectId: z.string().optional() }))
     .query(async ({ ctx, input }) => ({

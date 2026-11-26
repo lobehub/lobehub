@@ -29,6 +29,7 @@ const analyzeIntentMock = vi.hoisted(() => vi.fn());
 const synthesizeInstructionMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = vi.hoisted(() => vi.fn());
 const createGoalModalMock = vi.hoisted(() => vi.fn());
 const activeWorkspaceMock = vi.hoisted(() => ({
   id: 'workspace-1' as string | undefined,
@@ -88,7 +89,7 @@ vi.mock('@lobehub/editor/react', async () => {
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  toast: { error: vi.fn(), success: toastSuccessMock },
+  toast: { error: toastErrorMock, success: toastSuccessMock },
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({
@@ -315,6 +316,7 @@ describe('CreateTaskInlineEntry', () => {
     navigateMock.mockReset();
     locationMock.state = undefined;
     toastSuccessMock.mockReset();
+    toastErrorMock.mockReset();
     createGoalModalMock.mockReset();
     activeWorkspaceMock.id = 'workspace-1';
     workspaceMembersMock.isLoading = false;
@@ -382,6 +384,22 @@ describe('CreateTaskInlineEntry', () => {
 
     expect(insertNewlineMock).not.toHaveBeenCalled();
     await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a failed create inline next to the submit button and keeps the draft', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+    analyzeIntentMock.mockResolvedValue(clearReading);
+    createTaskMock.mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    // A corner toast is far from the composer and gone in seconds; the failure
+    // belongs on the surface that stays open with the user's draft.
+    expect(await screen.findByText('createTask.createFailedRetry')).toBeInTheDocument();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('task-editor')).toBeInTheDocument();
   });
 
   it('submits agent and member assignments together', async () => {

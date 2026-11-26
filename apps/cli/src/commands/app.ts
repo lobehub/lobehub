@@ -5,8 +5,8 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import {
-  type DesktopChannel,
   type DesktopAppLocation,
+  type DesktopChannel,
   installShim,
   isDesktopChannel,
   launchDesktopApp,

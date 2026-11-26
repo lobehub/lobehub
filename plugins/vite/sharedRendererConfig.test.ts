@@ -73,6 +73,8 @@ describe('lobe-dev-editor-provider', () => {
 
 describe('sharedOptimizeDeps', () => {
   it('parses CJK emphasis after pre-bundling alongside the root Markdown serializer', async () => {
+    expect(sharedOptimizeDeps.include).toContain('remark-cjk-friendly');
+
     const root = path.resolve(import.meta.dirname, '../..');
     const cacheDir = await mkdtemp(path.join(root, 'node_modules/.vite-markdown-test-'));
 

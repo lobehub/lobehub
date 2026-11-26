@@ -5,9 +5,11 @@ import type {
 } from '@lobechat/agent-gateway-client';
 import type { BackgroundTaskEventData } from '@lobechat/heterogeneous-agents';
 import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import { isCollaborationModeReport } from '@lobechat/heterogeneous-agents/codexPlanMode';
 import type { ConversationContext } from '@lobechat/types';
 
 import { applyPermissionModeReport } from '@/store/chat/heteroPermissionMode';
+import { applyCollaborationModeReport } from '@/store/chat/heteroPlanMode';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -117,6 +119,14 @@ export const resolveStepSideEvent = (
   if (isPermissionModeReport(data)) {
     return {
       apply: () => void applyPermissionModeReport(get, context.topicId, data, { persist: false }),
+    };
+  }
+
+  // Codex Plan switch: the server already wrote the report; the topic follows.
+  if (isCollaborationModeReport(data)) {
+    return {
+      apply: () =>
+        void applyCollaborationModeReport(get, context.topicId, data, { persist: false }),
     };
   }
 

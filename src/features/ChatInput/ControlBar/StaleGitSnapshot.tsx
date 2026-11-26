@@ -10,11 +10,9 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { GitBranchIcon, GitForkIcon, GitPullRequest, RotateCcwIcon } from 'lucide-react';
+import { GitBranchIcon, GitForkIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { gitChipStyles } from './gitChipStyles';
 import { resolveStaleSnapshot } from './staleSnapshot';
@@ -61,9 +59,10 @@ interface StaleGitSnapshotProps {
  * Every live control (checkout, worktree switch, pull/push, diff review) needs a
  * directory that no longer exists, so none of them render. What remains is the
  * topic's own snapshot — the same one the sidebar meta hover card reads — plus
- * the two things that still work without a local directory: opening the linked
- * PR, and dropping the dead worktree override so the conversation falls back to
- * its source repo. Without that second one the state is a dead end: the bar
+ * the one thing that still works without a local directory: dropping the dead
+ * worktree override so the conversation falls back to its source repo (the
+ * topic's linked PRs stay beside it, from the server). Without it the state is
+ * a dead end: the bar
  * explains why the branch is frozen but leaves no way out of it.
  */
 const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
@@ -78,14 +77,11 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
       topicId,
     });
 
-    const { explanation, isWorktree, label, pullRequest, reset, worktreePath } =
-      resolveStaleSnapshot({ git, path, sourcePath });
-
-    const handleOpenPr = useCallback(() => {
-      if (pullRequest?.url) {
-        openTrustedExternalUrl(pullRequest.url);
-      }
-    }, [pullRequest?.url]);
+    const { explanation, isWorktree, label, reset, worktreePath } = resolveStaleSnapshot({
+      git,
+      path,
+      sourcePath,
+    });
 
     const resetTarget = reset?.targetPath;
     const handleReset = useCallback(async () => {
@@ -138,15 +134,6 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
             </DropdownMenuPositioner>
           </DropdownMenuPortal>
         </DropdownMenuRoot>
-        {pullRequest && (
-          <>
-            <div {...stylex.props(gitChipStyles.separator)} />
-            <div {...stylex.props(gitChipStyles.prTrigger)} role="button" onClick={handleOpenPr}>
-              <Icon icon={GitPullRequest} size={12} />
-              <span>#{pullRequest.number}</span>
-            </div>
-          </>
-        )}
       </>
     );
   },

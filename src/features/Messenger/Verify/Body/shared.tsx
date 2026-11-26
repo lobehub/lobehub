@@ -1,11 +1,13 @@
 'use client';
 
-import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
+import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import InlineErrorText from '@/components/InlineErrorText';
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
 import { messengerService } from '@/services/messenger';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -35,9 +37,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 14px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 6%),
-      0 4px 12px rgb(0 0 0 / 4%);
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   card: css`
     width: 100%;
@@ -82,8 +82,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   successBubble: css`
-    color: #fff;
-    background: #22c55e;
+    color: ${cssVar.colorTextLightSolid};
+    background: ${cssVar.colorSuccess};
   `,
   warningBlock: css`
     padding-block: ${densityVars.contentGap};
@@ -193,6 +193,8 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     );
 
     const [confirming, setConfirming] = useState(false);
+    /** Link failure (already mapped to localized copy), shown above the confirm button so the user's agent pick stays in view. */
+    const [confirmError, setConfirmError] = useState('');
 
     // Default-select the first agent (inbox is pinned to the top) once the
     // server confirms a scope's list, and drop a pick that list no longer has.
@@ -227,12 +229,13 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
     const handleConfirm = async () => {
       if (!selectedAgentId || !isAgentsConfirmed) return;
+      setConfirmError('');
       setConfirming(true);
       try {
         await messengerService.confirmLink({ initialAgentId: selectedAgentId, randomId });
         onSuccess();
       } catch (error) {
-        toast.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
+        setConfirmError(getMessengerErrorMessage(error, t, 'verify.error.generic'));
       } finally {
         setConfirming(false);
       }
@@ -287,6 +290,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                     setScope((next as string | null) ?? PERSONAL_SCOPE);
                     // Re-default to the new scope's inbox agent.
                     setSelectedAgentId(undefined);
+                    setConfirmError('');
                   }}
                 />
               </Flexbox>
@@ -300,14 +304,21 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                   placeholder={t('verify.confirm.defaultAgentPlaceholder')}
                   value={selectedAgentId}
                   workspaceId={scopeWorkspaceId}
-                  onChange={setSelectedAgentId}
+                  onChange={(id) => {
+                    setSelectedAgentId(id);
+                    setConfirmError('');
+                  }}
                 />
               )}
               <Text style={{ fontSize: 12 }} type="secondary">
-                {t('verify.confirm.defaultAgentHint')}
+                {t('verify.confirm.defaultAgentMarketplaceHint')}
               </Text>
             </Flexbox>
           </Flexbox>
+        )}
+
+        {confirmError && (
+          <InlineErrorText style={{ width: '100%' }}>{confirmError}</InlineErrorText>
         )}
 
         <Button
@@ -354,10 +365,10 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platf
           </Button>
         )}
         {/* Mirror the Slack/Discord install callback's landing page so every
-            platform's flow ends back on its Messenger settings tab. */}
+            platform's flow ends back on its Marketplace app. */}
         <Button
           block
-          href={`/settings/messenger/${platform}`}
+          href={marketplaceAppPath(platform)}
           size="large"
           type={openBotUrl ? 'default' : 'primary'}
         >

@@ -54,7 +54,8 @@ DocumentRoutes.post(
   '/',
   routeDoc({
     data: DocumentSchema,
-    description: 'Creates a page from Markdown, or a folder with `fileType: "custom/folder"`.',
+    description:
+      'Creates a page from Markdown or Lexical `editorData`, or a folder with `fileType: "custom/folder"`.',
     // 404: the parent folder does not exist or is not visible.
     errors: [404],
     status: 201,
@@ -70,7 +71,13 @@ DocumentRoutes.post(
 /** GET /api/v1/documents/:id */
 DocumentRoutes.get(
   '/:id',
-  routeDoc({ data: DocumentSchema, errors: [404], summary: 'Get a document', tags: ['documents'] }),
+  routeDoc({
+    data: DocumentSchema,
+    description: 'Returns the Markdown `content` and the Lexical `editorData` of the body.',
+    errors: [404],
+    summary: 'Get a document',
+    tags: ['documents'],
+  }),
   requireAuth,
   documentRead,
   zValidator('param', DocumentIdParamSchema),
@@ -83,8 +90,9 @@ DocumentRoutes.patch(
   routeDoc({
     data: DocumentSchema,
     description:
-      'Replaces the title and/or the whole Markdown body. A page open in the editor receives the write through its live room.',
-    errors: [404],
+      'Replaces the title and/or the whole body, sent as Markdown `content` or Lexical `editorData`. A page open in the editor receives the write through its live room. Send `ifUpdatedAt` to get 409 instead of overwriting an edit made since the client last read the page; a page someone else is editing also answers 409.',
+    // 409: `ifUpdatedAt` is stale, or another member holds the page's edit lock.
+    errors: [404, 409],
     summary: 'Update a document',
     tags: ['documents'],
   }),

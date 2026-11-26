@@ -32,7 +32,6 @@
   "features.messageTextSelectionActions.title": "메시지 텍스트 선택 작업",
   "features.oauthApps.desc": "개인 및 워크스페이스 설정에서 OAuth 앱 관리를 표시합니다. 이 기능은 기본적으로 숨겨져 있습니다.",
   "features.oauthApps.title": "OAuth 앱",
-  "features.projects.desc": "장기적인 목표를 전용 작업 공간으로 구성하여 고유한 에이전트, 지식 베이스 및 작업을 관리하세요.",
   "features.projects.title": "프로젝트 작업 공간",
   "features.selfLearning.desc": "각 에이전트가 실제 연습을 통해 학습한 내용을 보여줍니다 — 규칙 기반, 실제로 사용된 규칙, 그리고 아직 비어 있는 레이어를 확인할 수 있습니다.",
   "features.selfLearning.note": "백그라운드에서 모델 호출을 실행하며 추가 할당량을 사용합니다. 각 야간 리뷰는 최대 50개의 대화를 다룹니다.",

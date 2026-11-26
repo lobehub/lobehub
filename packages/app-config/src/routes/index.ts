@@ -5,10 +5,10 @@ import {
   FolderKanbanIcon,
   Image,
   LayoutDashboardIcon,
+  LayoutGridPlus,
   LibraryBigIcon,
   ListTodoIcon,
   Settings,
-  ShapesIcon,
   TargetIcon,
   Video,
 } from 'lucide-react';
@@ -43,7 +43,7 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     // Same label as the sidebar entry (common:tab.marketplace) in every locale.
     cmdkKey: 'tab.marketplace',
     electronKey: 'navigation.marketplace',
-    icon: ShapesIcon,
+    icon: LayoutGridPlus,
     id: 'community',
     // "community" stays searchable for people who knew the page by its old name.
     keywords: [

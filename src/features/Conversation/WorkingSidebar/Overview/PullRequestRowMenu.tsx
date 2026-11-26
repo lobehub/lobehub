@@ -27,7 +27,7 @@ interface PullRequestRowMenuProps {
   view: TopicPullRequestView;
 }
 
-/** Better Coding Experience: the "⋯" menu at the end of a topic's PR row. */
+/** The "⋯" menu at the end of a topic's PR row. */
 const PullRequestRowMenu = ({ onDismiss, topicId, view }: PullRequestRowMenuProps) => {
   const { t } = useTranslation('chat');
   const router = useQueryRoute();

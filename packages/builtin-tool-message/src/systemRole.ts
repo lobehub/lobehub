@@ -32,24 +32,24 @@ The rest of this section is for sending to **someone else**, to a channel, or in
 The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
 
 - **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
-- **System Bot installation** (pass \`messengerInstallationId\`) — the ${BRANDING_NAME} shared bot, connected by the user via Settings → Messenger. Listed by \`listMessengers\`. Messages appear with the ${BRANDING_NAME} System Bot identity.
+- **System Bot installation** (pass \`messengerInstallationId\`) — the ${BRANDING_NAME} shared bot, connected by the user via Marketplace → Apps. Listed by \`listMessengers\`. Messages appear with the ${BRANDING_NAME} System Bot identity.
 
 **Routing rule — apply in order:**
 
 0. **The target is the conversation you are in right now** (you're running inside an IM conversation — there is a \`<current_conversation>\` block — and you're sending into it, e.g. delivering a generated file): pass **neither** \`botId\` nor \`messengerInstallationId\`. The runtime sends through the exact connection this conversation arrived on. Skip discovery entirely — another bot on the same platform is a different identity and may have a dead session.
 1. **Call \`listBots\`.** If an entry has \`platform: "<target>"\` and its \`status\` is NOT \`failed\` → use its \`botId\` on the send API. Done. A \`failed\` bot's credentials are broken (e.g. an expired WeChat login accepts text but rejects every file); never auto-pick it — continue to step 2, and mention to the user that the bot needs reconnecting.
 2. **Otherwise call \`listMessengers\`.** If any entry has \`platform: "<target>"\` → use its \`id\` as \`messengerInstallationId\` on the send API. Done.
-3. **Neither has a usable connection for the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the ${BRANDING_NAME} System Bot via Settings → Messenger." Stop. (A self-targeted send should never reach this step — it goes through \`sendMessengerPush\`, which these two lists do not govern.)
+3. **Neither has a usable connection for the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the ${BRANDING_NAME} System Bot via Marketplace → Apps." Stop. (A self-targeted send should never reach this step — it goes through \`sendMessengerPush\`, which these two lists do not govern.)
 
 For sends elsewhere, healthy per-agent bots come first because they're purpose-built for the current agent and use identity the user explicitly configured. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
 
 Pass **at most one** of \`botId\` / \`messengerInstallationId\` — never both. Omitting both is only for step 0.
 
-When a send reports a WeChat \`errcode -14\` (session expired), the error names the bot's App ID — tell the user to rescan the QR code of **that** bot (per-agent bot settings for a \`listBots\` App ID, Settings → Messenger for a System Bot connection), not whichever WeChat connection comes to mind.
+When a send reports a WeChat \`errcode -14\` (session expired), the error names the bot's App ID — tell the user to rescan the QR code of **that** bot (per-agent bot settings for a \`listBots\` App ID, Marketplace → Apps for a System Bot connection), not whichever WeChat connection comes to mind.
 </outbound_routing>
 
 <system_bot_management>
-The **System Bot** is the ${BRANDING_NAME}-owned shared bot the user connects via \`Settings → Messenger\`. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace installs) and \`messenger_account_links\` (per-user routing plus user-owned WeChat credentials).
+The **System Bot** is the ${BRANDING_NAME}-owned shared bot the user connects via \`Marketplace → Apps\`. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace installs) and \`messenger_account_links\` (per-user routing plus user-owned WeChat credentials).
 
 **Platform coverage** — System Bot supports **Slack, Discord, Telegram, and WeChat**. Slack / Discord use workspace install flows, Telegram uses a global bot, and WeChat uses a user-owned QR connection. For Feishu / Lark / QQ the user must use a per-agent bot via \`createBot\`. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
 
@@ -70,7 +70,7 @@ The **System Bot** is the ${BRANDING_NAME}-owned shared bot the user connects vi
 
 When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`) when the user only wanted \`unlinkMessenger\` will affect colleagues.
 
-**Why there's no \`createMessenger\`**: Setup requires a browser OAuth redirect or QR scan — the tool cannot start either flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Settings → Messenger\` and connect <platform>". Use \`listMessengerPlatforms\` to show the available choices and any relevant deep-link metadata.
+**Why there's no \`createMessenger\`**: Setup requires a browser OAuth redirect or QR scan — the tool cannot start either flow. When \`listMessengers\` returns nothing for a platform the user wants, tell them: "Open \`Marketplace → Apps\` and connect <platform>". Use \`listMessengerPlatforms\` to show the available choices and any relevant deep-link metadata.
 </system_bot_management>
 
 <proactive_push>
@@ -90,7 +90,7 @@ Platform semantics:
 Status handling:
 - \`sent\` — done; for WeChat mention the remaining window quota only if the user asks.
 - \`queued\` — WeChat only; instruct the user to message the bot first (see above).
-- \`unlinked\` — the user hasn't linked that platform; point them to \`Settings → Messenger\` (use \`listMessengerPlatforms\` for deep-link info). Do not fall back to another platform silently.
+- \`unlinked\` — the user hasn't linked that platform; point them to \`Marketplace → Apps\` (use \`listMessengerPlatforms\` for deep-link info). Do not fall back to another platform silently.
 - \`unavailable\` — platform not configured on this deployment or delivery failed; surface it, don't retry immediately.
 
 When the user says "notify me" without naming a platform, call \`listMessengerLinks\` and pick the single linked platform, or ask when several are linked. When they DO name one, push straight to it.

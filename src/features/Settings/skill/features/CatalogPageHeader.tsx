@@ -82,11 +82,11 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
     viewMode,
     visibility,
   }) => {
-    const { t } = useTranslation('setting');
+    const { t } = useTranslation(['setting', 'discover']);
     const [showAddConnector, setShowAddConnector] = useState(false);
     const { allowed: canCreate } = usePermission('create_content');
     const { canManage, isPending } = useConnectorManageable();
-    const isConnectorView = viewMode === 'connector';
+    const isConnectorView = viewMode !== 'skill';
     const isPrivateTab = visibility === 'private';
     const description = t(
       !isConnectorView
@@ -115,7 +115,9 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
               type={'primary'}
               onClick={() => setShowAddConnector(true)}
             >
-              {t('connectorMarket.add.custom')}
+              {viewMode === 'mcp'
+                ? t('apps.addMcp', { ns: 'discover' })
+                : t('connectorMarket.add.custom')}
             </Button>
           </span>
         </Tooltip>
@@ -130,9 +132,12 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
           {t('agentSkillModal.title')}
         </Button>
       );
-    const searchPlaceholder = t(
-      isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
-    );
+    const searchPlaceholder =
+      viewMode === 'mcp'
+        ? t('catalog.searchIn', { ns: 'discover', name: 'MCP' })
+        : t(
+            isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
+          );
 
     const searchBelowTitle = getPageSearchPlacement(compact) === 'below-title';
     const search = (
@@ -156,7 +161,9 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
         <div {...stylex.props(styles.pageHeader, compact && styles.pageHeaderCompact)}>
           <div {...stylex.props(styles.pageHeadRow)}>
             <h1 {...stylex.props(styles.pageTitle)}>
-              {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
+              {viewMode === 'mcp'
+                ? t('tab.mcp', { ns: 'discover' })
+                : t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
             </h1>
             <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
               {!searchBelowTitle && search}
@@ -173,7 +180,9 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
             </Flexbox>
           </div>
           {searchBelowTitle && search}
-          <Text type={'secondary'}>{description}</Text>
+          <Text type={'secondary'}>
+            {viewMode === 'mcp' ? t('apps.mcpDescription', { ns: 'discover' }) : description}
+          </Text>
         </div>
         {showAddConnector && (
           <CustomConnectorModal

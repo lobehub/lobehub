@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 
+import { onChangeRequestSettled } from '@/business/server/scm/onChangeRequestSettled';
 import { isFailingCheck, ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
 import type { ScmChangeRequestItem, ScmInstallationItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -215,7 +216,28 @@ export class ScmIngestService {
     );
 
     await this.onChangeRequestEvent({ event, kind: event.kind, row });
+    await this.notifySettled(row);
     return { detail: `${row.id} ${event.kind}`, status: 'processed' };
+  };
+
+  /**
+   * Merged / closed follow-up through the `@/business` slot (default impl is
+   * a no-op). A failure is logged and never fails the ingest.
+   */
+  private notifySettled = async (row: ScmChangeRequestItem) => {
+    if (row.state !== 'merged' && row.state !== 'closed') return;
+    try {
+      await onChangeRequestSettled({
+        changeRequestId: row.id,
+        settledAt: (row.state === 'merged' ? row.mergedAt : row.closedAt) ?? new Date(),
+        state: row.state,
+        userId: row.userId,
+        workId: row.workId,
+        workspaceId: row.workspaceId,
+      });
+    } catch (error) {
+      console.error('[ScmIngestService] change-request settled follow-up failed:', error);
+    }
   };
 
   private applyChecks = async (

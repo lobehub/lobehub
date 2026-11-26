@@ -381,6 +381,7 @@ export class AbandonOperationService {
         }).dispatchHooks(operationId, finalState, 'error', {
           settledAsAbandoned: claimedStatus === 'abandoned',
           skipErrorMessageWrite: result.assistantMessageUpdated,
+          terminalClaimed: claimedStatus !== undefined,
         });
       } catch (e) {
         reportSettleFailure(
@@ -706,10 +707,12 @@ export class AbandonOperationService {
         },
         'error',
         // Persist onto the pre-claimed `abandoned` row instead of being refused
-        // as a conflicting terminal owner, which would skip the hooks.
+        // as a conflicting terminal owner, which would skip the hooks. Either way
+        // this abandonment already retired the row (its claim, or the write above),
+        // so the lifecycle's write is the run's end, not a replay.
         preClaimedAbandoned
-          ? { settledAsAbandoned: true, skipErrorMessageWrite: true }
-          : { skipErrorMessageWrite: true },
+          ? { settledAsAbandoned: true, skipErrorMessageWrite: true, terminalClaimed: true }
+          : { skipErrorMessageWrite: true, terminalClaimed: true },
       );
     } catch (e) {
       reportSettleFailure(

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import { ChatErrorType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,17 +17,18 @@ import {
   userSettings,
 } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture, jobsOf, lease, operationById } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-shared-agent');
+const fixture = createChannelFixture(db, 'channel-shared-agent', tableContacts);
 const execution = new ChannelExecutionRepository(db);
 
 // The fixture's member is the visitor; its owner shares an Agent.
 const visitorId = fixture.memberId;
 const ownerId = fixture.ownerId;
 const agentId = 'agt_channel_shared';
-const visitor = new ChannelRepository(db, visitorId);
+const visitor = new ChannelRepository(db, visitorId, undefined, tableContacts);
 
 let shareId: string;
 
@@ -195,15 +197,22 @@ describe('a contact’s shared Agent in a direct conversation', () => {
           },
         })
         .where(eq(agents.id, agentId));
-      const { channel } = await new ChannelRepository(db, visitorId, fixture.workspaceId).create({
+      const { channel } = await new ChannelRepository(
+        db,
+        visitorId,
+        fixture.workspaceId,
+        tableContacts,
+      ).create({
         agentId,
         sharedAgent: true,
         title: 'Shared Helper',
       });
-      const message = await new ChannelRepository(db, visitorId, fixture.workspaceId).send(
-        channel.id,
-        { content: 'Hello', requestKey: 'routed', routing: 'fallback' },
-      );
+      const message = await new ChannelRepository(
+        db,
+        visitorId,
+        fixture.workspaceId,
+        tableContacts,
+      ).send(channel.id, { content: 'Hello', requestKey: 'routed', routing: 'fallback' });
       const [job] = await jobsOf(db, message.id);
       const routedDevice = vi.fn(async () => ({ deviceId: 'owner-device', online: true }));
 
@@ -239,7 +248,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     },
   );
 
-  it('is blocked once the owner pauses the share', async () => {
+  it('waits for its owner once the owner pauses the share', async () => {
     const { channel } = await visitor.create({
       agentId,
       sharedAgent: true,
@@ -250,10 +259,12 @@ describe('a contact’s shared Agent in a direct conversation', () => {
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
-    expect(blocked.blockedCode).toBe('unavailable');
+    // The visitor may ask its owner again: the paused share is what is missing.
+    expect(blocked.blockedCode).toBe('access_request_pending');
   });
 
-  it('refuses attachments, which the owner’s run could not read', async () => {
+  // The reply's dispatch copies them into the share for the owner's run.
+  it('sends the visitor’s own attachments', async () => {
     const { channel } = await visitor.create({
       agentId,
       sharedAgent: true,
@@ -269,14 +280,19 @@ describe('a contact’s shared Agent in a direct conversation', () => {
         userId: visitorId,
       })
       .returning();
-    await expect(
-      visitor.send(channel.id, {
-        content: 'See file',
-        fileIds: [file.id],
-        requestKey: 'file',
-        routing: 'fallback',
-      }),
-    ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
+    const message = await visitor.send(channel.id, {
+      content: 'See file',
+      fileIds: [file.id],
+      requestKey: 'file',
+      routing: 'fallback',
+    });
+
+    const [job] = await jobsOf(db, message.id);
+    await execution.claim(channel.id, job.id, lease);
+
+    expect(await execution.input(channel.id, job.id)).toEqual([
+      expect.objectContaining({ fileIds: [file.id], id: message.id }),
+    ]);
   });
 
   it('keeps continuing its topic however many messages it holds', async () => {
@@ -368,7 +384,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
           message: 'This shared Agent reached its monthly usage limit',
           type: 'ShareSpendLimitExceeded',
         }),
-      ).toBe(true);
+      ).toBe('error');
       const job = (await visitor.detail(channel.id))!.jobs.find(
         (item) => item.id === claim.job.id,
       )!;
@@ -453,23 +469,22 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       expect(await jobsOf(db, message.id)).toHaveLength(1);
     });
 
-    it.each(['ShareMessageLimitExceeded', 'SharePromptTooLong', 'ShareSpendLimitExceeded'])(
-      'keeps the %s refusal of its reply readable after a reload',
-      async (type) => {
-        const channel = await open();
-        const claim = (await execution.claim(
-          channel.id,
-          (await send(channel.id, 'hi')).id,
-          lease,
-        ))!;
-        await execution.retireReservation(channel.id, claim.job.id, { message: 'Readable', type });
-        const job = (await visitor.detail(channel.id))!.jobs.find(
-          (item) => item.id === claim.job.id,
-        )!;
+    it.each([
+      'ShareAttachmentTooLarge',
+      'ShareFileStorageExceeded',
+      'ShareMessageLimitExceeded',
+      'SharePromptTooLong',
+      'ShareSpendLimitExceeded',
+    ])('keeps the %s refusal of its reply readable after a reload', async (type) => {
+      const channel = await open();
+      const claim = (await execution.claim(channel.id, (await send(channel.id, 'hi')).id, lease))!;
+      await execution.retireReservation(channel.id, claim.job.id, { message: 'Readable', type });
+      const job = (await visitor.detail(channel.id))!.jobs.find(
+        (item) => item.id === claim.job.id,
+      )!;
 
-        expect(job).toMatchObject({ errorMessage: 'Readable', errorType: type, status: 'failed' });
-      },
-    );
+      expect(job).toMatchObject({ errorMessage: 'Readable', errorType: type, status: 'failed' });
+    });
   });
 
   describe('reading its conversation history', () => {
@@ -526,7 +541,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
 });
 
 describe('a shared Agent in the visitor’s workspace', () => {
-  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId);
+  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId, tableContacts);
 
   const open = async () => {
     const { channel } = await inWorkspace.create({
@@ -582,7 +597,7 @@ describe('a shared Agent in the visitor’s workspace', () => {
     ).rejects.toThrow('Channel operation not found');
   });
 
-  it('refuses attachments, like a personal conversation', async () => {
+  it('sends the visitor’s own attachments, like a personal conversation', async () => {
     const channel = await open();
     const [file] = await db
       .insert(files)
@@ -595,14 +610,39 @@ describe('a shared Agent in the visitor’s workspace', () => {
         workspaceId: fixture.workspaceId,
       })
       .returning();
+    const message = await inWorkspace.send(channel.id, {
+      content: 'See file',
+      fileIds: [file.id],
+      requestKey: 'ws-file',
+      routing: 'fallback',
+    });
+
+    expect(await jobsOf(db, message.id)).toHaveLength(1);
+  });
+
+  // The share copies only the visitor's own files for the run; a colleague's would never arrive.
+  it('refuses a workspace file the visitor did not upload', async () => {
+    const channel = await open();
+    const [file] = await db
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'team.txt',
+        size: 1,
+        url: 'files/ws-team.txt',
+        userId: ownerId,
+        workspaceId: fixture.workspaceId,
+      })
+      .returning();
+
     await expect(
       inWorkspace.send(channel.id, {
         content: 'See file',
         fileIds: [file.id],
-        requestKey: 'ws-file',
+        requestKey: 'ws-team-file',
         routing: 'fallback',
       }),
-    ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
+    ).rejects.toThrow(ChatErrorType.ChannelAttachmentUnavailable);
   });
 
   it('still cannot join a workspace group', async () => {

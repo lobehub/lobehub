@@ -9,8 +9,8 @@ import { useTheme } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
@@ -32,7 +32,7 @@ const OverlaySnapshotPublisher = memo(() => {
 
   const allAgents = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const theme = useTheme();
-  const enabledChatModels = useEnabledChatModels();
+  const enabledChatModels = useSelectableChatModels();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const inboxMeta = useAgentStore((s) =>

@@ -4,7 +4,7 @@ import type { ShellWorkScanner } from './types';
 
 /**
  * A `git push` to a branch that already has an open pull request links that
- * pull request to the topic (Better Coding Experience only). The branch and
+ * pull request to the topic. The branch and
  * repository come from git's own push report; which pull request the branch
  * heads comes from the GitHub App's rows — never from the agent's text — so a
  * push links nothing in a repository no installation tracks (the client's

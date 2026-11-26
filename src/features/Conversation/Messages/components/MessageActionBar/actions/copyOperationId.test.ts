@@ -16,7 +16,6 @@ interface MockOperation {
 }
 
 const mocks = vi.hoisted(() => ({
-  isDevMode: true,
   copyToClipboard: vi.fn(),
   messageOperationMap: {} as Record<string, string>,
   messageSuccess: vi.fn(),
@@ -55,16 +54,6 @@ vi.mock('@/store/chat', () => ({
     }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: {
-    config: () => ({ isDevMode: mocks.isDevMode }),
-  },
-}));
-
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     // Test double for the parent-chain walk: climbs `parentOperationId` until
@@ -97,15 +86,8 @@ const build = (
 describe('copyOperationIdAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isDevMode = true;
     mocks.messageOperationMap = {};
     mocks.operations = {};
-  });
-
-  it('is absent when Advanced Tools (dev mode) is off', () => {
-    mocks.isDevMode = false;
-
-    expect(build({ metadata: { operationId: 'op-server' } })).toBeNull();
   });
 
   it('is absent when no operation id is resolvable', () => {

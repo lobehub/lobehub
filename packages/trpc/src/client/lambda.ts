@@ -288,6 +288,9 @@ const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   // dozens of ids, and a dropped lookup would let deleted documents back into
   // the model context.
   'agentDocument.listRevokedDocumentReads',
+  // "Archive merged PR topics" asks for the linked PRs of every listed topic,
+  // 100 ids per read — about 3,000 characters as a GET.
+  'work.listTopicsPullRequests',
 ]);
 
 /**
@@ -391,6 +394,14 @@ export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
     ],
   });
 };
+
+/**
+ * The lambda client for an optional scope: `undefined` follows the active workspace like
+ * `lambdaClient`; a workspace id or `null` (personal) pins it like
+ * {@link createWorkspaceLambdaClient}.
+ */
+export const scopedLambdaClient = (workspaceId?: string | null) =>
+  workspaceId === undefined ? lambdaClient : createWorkspaceLambdaClient(workspaceId);
 
 export const lambdaQuery = createTRPCReact<LambdaRouter>();
 

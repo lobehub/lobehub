@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Ziyaretçiler sadece bu Ajanı okumaz — onu çalıştırır. Her yanıt Çalışma Alanında oluşturulur ve paylaşılan bütçesine faturalandırılır, yaratıcının veya başka bir üyenin kotasını tüketmeden. Ajan yalnızca aşağıda verdiğiniz ziyaretçi erişimiyle hareket eder.",
   "share.settings.notice.workspaceTitle": "Ziyaretçiler bu Ajanda Çalışma Alanı bütçesiyle çalışır",
   "share.settings.permissions.allowCreatorViewSessions": "Ziyaretçi konuşmalarını okumama izin ver",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Varsayılan olarak kapalı: ziyaretçi konuşmaları ziyaretçiye özel kalır.",
   "share.settings.permissions.allowReadMemory": "Hafızamı okumaya izin ver",
   "share.settings.permissions.allowReadMemoryHint": "Ajan, bir ziyaretçiye yanıt verirken uzun süreli hafızanızı kullanabilir.",
   "share.settings.permissions.desc": "Bir ziyaretçi çalıştırmasının okuyabileceği ve ziyaretçiye geri gösterebileceği şeyler.",

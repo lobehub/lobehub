@@ -1,14 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
-import {
-  ActionIcon,
-  cssVar,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  type ModalInstance,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, cssVar, DropdownMenu, Flexbox, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
@@ -22,7 +14,7 @@ import {
   UserRound,
   UsersIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
@@ -43,6 +35,7 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
+import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -51,9 +44,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { useHeaderActionSize } from '@/styles/density';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
-import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentSocialShare from './AgentSocialShare';
@@ -259,14 +252,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   // Ownership handover to a workspace member — separate from the scope moves.
   const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
-  const settingsModalRef = useRef<ModalInstance | null>(null);
-  useEffect(
-    () => () => {
-      settingsModalRef.current?.close();
-      settingsModalRef.current = null;
-    },
-    [],
-  );
+  const openAdvancedSettings = useOpenChatSettings();
 
   const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
   // External sharing is stronger than General Access `edit`: only the Agent
@@ -296,21 +282,25 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
+    // Desktop reaches these from the profile sidebar; mobile has no sidebar there.
+    const showConfigEntries = isMobileSurface();
+
     return [
-      {
-        // View/use-level members can't edit the agent config — keep the entry
-        // visible but disabled (project convention: disabled, not hidden).
-        disabled: !canConfigure,
-        icon: <Icon icon={Settings2Icon} />,
-        key: 'advanced-settings',
-        label: t('advancedSettings', { ns: 'setting' }),
-        onClick: () => {
-          if (!canConfigure) return;
-          settingsModalRef.current?.close();
-          settingsModalRef.current = openAgentSettingsModal();
-        },
-      },
-      showPermissionPageEntry
+      showConfigEntries
+        ? {
+            // View/use-level members can't edit the agent config — keep the entry
+            // visible but disabled (project convention: disabled, not hidden).
+            disabled: !canConfigure,
+            icon: <Icon icon={Settings2Icon} />,
+            key: 'advanced-settings',
+            label: t('advancedSettings', { ns: 'setting' }),
+            onClick: () => {
+              if (!canConfigure) return;
+              openAdvancedSettings();
+            },
+          }
+        : null,
+      showConfigEntries && showPermissionPageEntry
         ? {
             // Same gate the page itself applies (ResourceConfigAccessGate):
             // without edit-level access it redirects straight back with a
@@ -319,14 +309,14 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
             disabled: !canConfigure,
             icon: <Icon icon={UsersIcon} />,
             key: 'permission',
-            label: t('permission.page.entry', { ns: 'setting' }),
+            label: t('permission.page.agentEntry', { ns: 'setting' }),
             onClick: () => {
               if (!canConfigure) return;
               if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
             },
           }
         : null,
-      { type: 'divider' as const },
+      showConfigEntries ? { type: 'divider' as const } : null,
       showMarketSubmission
         ? {
             disabled: !canSubmitToMarket || marketSubmission.isSubmitting,
@@ -408,6 +398,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
     marketSubmission.isSubmitting,
     marketSubmission.open,
     navigate,
+    openAdvancedSettings,
     showMarketSubmission,
     showPermissionPageEntry,
     t,

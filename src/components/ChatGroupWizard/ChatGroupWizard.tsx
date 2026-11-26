@@ -26,7 +26,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
 import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useSessionStore } from '@/store/session';
 import { sx } from '@/styles/sx';
 import { type LobeAgentSession } from '@/types/session';
@@ -214,7 +214,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
   }) => {
     const { t } = useTranslation(['chat', 'common']);
     const groupTemplates = useGroupTemplates();
-    const enabledModels = useEnabledChatModels();
+    const enabledModels = useSelectableChatModels();
     const agentSessions = useSessionStore((s) =>
       (s.sessions || []).filter((session) => session.type === LobeSessionType.Agent),
     );

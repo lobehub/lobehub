@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Tài liệu dài; chỉ phần đầu được đọc.",
   "rules.distill.untitled": "Chưa có tiêu đề",
   "rules.distill.upload": "Tải lên một tệp",
-  "rules.distill.uploadFailed": "Không thể tải lên tệp.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint hoặc văn bản thuần",
   "rules.enforcement.block": "Chặn",
   "rules.enforcement.blockDesc": "Sẽ giữ lại việc giao hàng cho đến khi bạn cho phép. Chưa có hiệu lực: hiện tại chỉ nhắc nhở",

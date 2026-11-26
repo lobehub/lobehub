@@ -50,7 +50,7 @@ AgentSignalRoutes.post(
     data: AgentSignalEmissionSchema,
     // 404: the agent named in the payload is not usable by the caller.
     errors: [404],
-    operationId: 'emitSourceEvent',
+    operationId: 'signals.emit',
     status: 202,
     summary: 'Emit an agent signal source event',
     tags: ['signals'],
@@ -70,7 +70,7 @@ AgentSignalRoutes.post(
     // 404: the target agent is not usable by the caller; 429: the hourly
     // manual-trigger budget is spent.
     errors: [404, 429],
-    operationId: 'triggerSourceEvent',
+    operationId: 'signals.trigger',
     status: 202,
     summary: 'Trigger a synthesized agent signal source event',
     tags: ['signals'],
@@ -87,7 +87,6 @@ AgentSignalRoutes.get(
   '/receipts',
   routeDoc({
     data: AgentSignalReceiptListSchema,
-    operationId: 'listSignalReceipts',
     summary: 'List agent signal receipts for a topic',
     tags: ['signals'],
   }),

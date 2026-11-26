@@ -5,10 +5,19 @@
  * Provides unified error handling and abstraction over SDK
  * Uses modular services for authentication, connection, and caching
  */
+import { assertSsrfSafeUrl, ssrfSafeAgent, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { type ComfyUIKeyVault } from '@lobechat/types';
-import { type PromptBuilder } from '@saintno/comfyui-sdk';
+import {
+  type BasicCredentials,
+  type BearerTokenCredentials,
+  type CustomCredentials,
+  type FetchOptions,
+  type PromptBuilder,
+  type WebSocketInterface,
+} from '@saintno/comfyui-sdk';
 import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
 import debug from 'debug';
+import WebSocket, { type ClientOptions } from 'ws';
 
 import { COMFYUI_DEFAULTS } from '@/server/services/comfyui/config/constants';
 import { ComfyUIAuthService } from '@/server/services/comfyui/core/comfyUIAuthService';
@@ -18,6 +27,30 @@ import { ServicesError } from '@/server/services/comfyui/errors';
 import { TTLCacheManager } from '@/server/services/comfyui/utils/cacheManager';
 
 const log = debug('lobe-image:comfyui:client');
+
+/**
+ * WebSocket transport for the ComfyUI SDK that applies the SSRF policy at
+ * connect time: `ws` runs its handshake through the supplied agent, and the
+ * request-filtering agent checks the host on every connect.
+ */
+class SsrfSafeComfyUIWebSocket extends WebSocket {
+  constructor(
+    url: string | URL,
+    protocolsOrOptions?: string | string[] | ClientOptions,
+    options?: ClientOptions,
+  ) {
+    const agent = ssrfSafeAgent(String(url));
+    if (
+      protocolsOrOptions &&
+      typeof protocolsOrOptions === 'object' &&
+      !Array.isArray(protocolsOrOptions)
+    ) {
+      super(url, { ...protocolsOrOptions, agent } as ClientOptions);
+    } else {
+      super(url, protocolsOrOptions, { ...options, agent });
+    }
+  }
+}
 
 /**
  * Workflow execution result
@@ -45,8 +78,16 @@ export type ProgressCallback = (info: any) => void;
  * Encapsulates all SDK interactions using modular services
  */
 export class ComfyUIClientService {
-  private client: ComfyApi;
+  private client?: ComfyApi;
   private baseURL: string;
+  /**
+   * Resolves once the ComfyUI `baseURL` has passed the SSRF policy and the SDK
+   * client exists. The baseURL is user-configurable, so nothing may reach the
+   * SDK — its internal `fetchApi` calls do not go through `ssrfSafeFetch` —
+   * until the host is checked (T-07). The WebSocket transport is additionally
+   * guarded at connect time by {@link SsrfSafeComfyUIWebSocket}.
+   */
+  private readonly clientReady!: Promise<ComfyApi>;
 
   // Modular services for separation of concerns
   private cacheManager: TTLCacheManager;
@@ -69,17 +110,70 @@ export class ComfyUIClientService {
       this.baseURL =
         options.baseURL || process.env.COMFYUI_DEFAULT_URL || COMFYUI_DEFAULTS.BASE_URL;
 
-      // Initialize client with credentials from AuthService
-      this.client = new ComfyApi(this.baseURL, undefined, {
-        credentials: this.authService.getCredentials(),
+      // Create the SDK client only after the baseURL passes the SSRF policy.
+      this.clientReady = assertSsrfSafeUrl(this.baseURL).then(() => {
+        this.client = new ComfyApi(this.baseURL, undefined, {
+          // Credentials are applied by hardenComfyApi, not here: the constructor
+          // would fire testCredentials() synchronously, ahead of the fetchApi
+          // patch, and that probe would reach the network unfiltered.
+          // The SDK types the impl against the DOM WebSocket, but only uses the
+          // members `ws` implements (onopen/onclose/onmessage/onerror, send,
+          // close, readyState, ready-state constants).
+          customWebSocketImpl: SsrfSafeComfyUIWebSocket as unknown as WebSocketInterface,
+        });
+        this.hardenComfyApi(this.client, this.authService.getCredentials());
+        this.client.init();
+        return this.client;
       });
-      this.client.init();
+
+      // Callers observe the rejection when they await clientReady; this branch
+      // only keeps an unused service from producing an unhandled rejection.
+      this.clientReady.catch((error) => {
+        log('❌ ComfyUI client initialization failed:', error);
+      });
 
       log('✅ ComfyUI Client Service initialized with baseURL:', this.baseURL);
     } catch (error) {
       // Use ErrorHandlerService to transform internal errors to framework errors
       this.errorHandler.handleError(error);
     }
+  }
+
+  /**
+   * Route the SDK's HTTP traffic through the SSRF policy (T-07).
+   *
+   * Every SDK HTTP call funnels through `fetchApi` → global `fetch`. The
+   * constructor-time `assertSsrfSafeUrl` check cannot cover what happens once
+   * it has passed: a hostile ComfyUI endpoint (the baseURL is user-supplied)
+   * can answer any request with a redirect to an internal address, which the
+   * runtime fetch follows unchecked, and a hostname can re-resolve to a
+   * private address after the check (DNS rebinding). `fetchApi` is
+   * re-implemented 1:1 — credential headers plus `mode: 'cors'` — on top of
+   * `ssrfSafeFetch`, so every connect, including redirect hops, is filtered.
+   */
+  private hardenComfyApi(
+    client: ComfyApi,
+    credentials: BasicCredentials | BearerTokenCredentials | CustomCredentials | undefined,
+  ): void {
+    const api = client as unknown as {
+      apiURL: (route: string) => string;
+      credentials: typeof credentials;
+      getCredentialHeaders: () => Record<string, string>;
+      testCredentials?: () => Promise<boolean>;
+    };
+
+    client.fetchApi = async (route: string, options?: FetchOptions): Promise<Response> => {
+      // Same init the SDK builds: credential headers, `mode: 'cors'`.
+      const init: FetchOptions = {
+        ...options,
+        headers: { ...api.getCredentialHeaders() },
+        mode: 'cors',
+      };
+      return ssrfSafeFetch(api.apiURL(route), init);
+    };
+
+    api.credentials = credentials;
+    void api.testCredentials?.();
   }
 
   /**
@@ -96,6 +190,12 @@ export class ComfyUIClientService {
    * Get the path for an image result
    */
   getPathImage(imageInfo: any): string {
+    if (!this.client) {
+      throw new ServicesError(
+        'ComfyUI client is not initialized',
+        ServicesError.Reasons.CONNECTION_FAILED,
+      );
+    }
     return this.client.getPathImage(imageInfo);
   }
 
@@ -108,7 +208,8 @@ export class ComfyUIClientService {
   async uploadImage(file: Buffer | Blob, fileName: string): Promise<string> {
     log('📤 Uploading image to ComfyUI:', fileName);
 
-    const result = await this.client.uploadImage(file, fileName);
+    const client = await this.clientReady;
+    const result = await client.uploadImage(file, fileName);
 
     if (!result) {
       throw new ServicesError(
@@ -131,8 +232,10 @@ export class ComfyUIClientService {
   ): Promise<WorkflowResult> {
     log('🚀 Executing workflow...');
 
+    const client = await this.clientReady;
+
     return new Promise<WorkflowResult>((resolve, reject) => {
-      new CallWrapper(this.client, workflow)
+      new CallWrapper(client, workflow)
         .onFinished((result: any) => {
           log('✅ Workflow execution finished successfully');
           log('🔍 Raw workflow result structure:', {
@@ -161,8 +264,9 @@ export class ComfyUIClientService {
    * Uses unified TTL cache for performance optimization
    */
   async getCheckpoints(): Promise<string[]> {
+    const client = await this.clientReady;
     return await this.cacheManager.get('checkpoints', async () => {
-      return await this.client.getCheckpoints();
+      return await client.getCheckpoints();
     });
   }
 
@@ -172,8 +276,9 @@ export class ComfyUIClientService {
    * Uses unified TTL cache for performance optimization
    */
   async getLoras(): Promise<string[]> {
+    const client = await this.clientReady;
     return await this.cacheManager.get('loras', async () => {
-      return await this.client.getLoras();
+      return await client.getLoras();
     });
   }
 
@@ -184,8 +289,9 @@ export class ComfyUIClientService {
    * @param nodeName - Optional specific node name to query
    */
   async getNodeDefs(nodeName?: string): Promise<any> {
+    const client = await this.clientReady;
     const allNodeDefs = await this.cacheManager.get('nodeDefs', async () => {
-      return await this.client.getNodeDefs();
+      return await client.getNodeDefs();
     });
 
     // Return specific node or all nodes
@@ -197,7 +303,8 @@ export class ComfyUIClientService {
    * Wraps SDK method to avoid Law of Demeter violation
    */
   async getSamplerInfo(): Promise<{ samplerName: string[]; scheduler: string[] }> {
-    const info = await this.client.getSamplerInfo();
+    const client = await this.clientReady;
+    const info = await client.getSamplerInfo();
 
     return {
       samplerName: this.extractStrings(info.sampler),

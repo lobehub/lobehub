@@ -5,6 +5,7 @@ export * from './chat.controller';
 export * from './chat-group.controller';
 export * from './eval.controller';
 export * from './file.controller';
+export * from './generation.controller';
 export * from './mcp-server.controller';
 export * from './message.controller';
 export * from './message-translation.controller';

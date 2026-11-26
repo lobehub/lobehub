@@ -28,6 +28,8 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
+import { forDeviceRuntime } from './codexCollaboration';
+import { recordHeteroDeviceRoute } from './deviceRoute';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -190,6 +192,10 @@ export const dispatchToCliDevice = async (
     );
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+  const collaborationMode = forDeviceRuntime(heteroParams.collaborationMode, {
+    native: !!nativeCodex,
+    supportsCollaborationMode: !!nativeCodex?.supportsCollaborationMode,
+  });
 
   // A turn the server starts on its own (a delegated task reporting back)
   // never passed the composer's restore step: bring back the worktree a
@@ -310,6 +316,7 @@ export const dispatchToCliDevice = async (
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
           ...(claudeAccountRouting && { claudeAccountRouting }),
           clientKinds: nativeCodex?.clientKinds,
+          collaborationMode,
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
@@ -383,6 +390,16 @@ export const dispatchToCliDevice = async (
         heteroType,
       }),
     );
+    // A background sub-agent outlives its parent's marker; keep the route
+    // where a later Stop can still find it.
+    if (dispatchDeviceId) {
+      await recordHeteroDeviceRoute(deps, operationId, {
+        deviceId: dispatchDeviceId,
+        deviceUserId: deps.userId,
+        deviceWorkspaceId: dispatchWorkspaceId,
+        heteroType,
+      });
+    }
     log(
       'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
       patched,

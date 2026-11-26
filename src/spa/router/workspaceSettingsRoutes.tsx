@@ -195,6 +195,19 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/coding-plans'),
+        'Desktop > Workspace > Settings > Coding Plans',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.CodingPlans,
+          createSurfaceSkeleton('grid'),
+        ),
+      },
+      path: 'coding-plans',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
         'Desktop > Workspace > Settings > Service Model',
       ),
@@ -444,70 +457,21 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/chat-preference'),
-        'Desktop > Workspace > Settings > Chat Preference',
+        () => import('@/routes/(main)/[workspaceSlug]/settings/conversation'),
+        'Desktop > Workspace > Settings > Conversation',
       ),
       handle: {
         meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.ChatPreference,
+          WorkspaceSettingsTabs.Conversation,
           createSurfaceSkeleton('form'),
         ),
       },
+      path: 'conversation',
+    },
+    // Legacy `/:slug/settings/chat-preference` URLs — the page became Conversation.
+    {
+      element: redirectElement('../conversation'),
       path: 'chat-preference',
-    },
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger',
-    },
-    // Platform detail level — the page reads the platform from `sub`.
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger > Platform',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger/:sub',
-    },
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-        'Desktop > Workspace > Settings > Integrations',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Integrations,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'integrations',
-    },
-    // Integration detail level — the page reads the integration from `sub`.
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-        'Desktop > Workspace > Settings > Integrations > Detail',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Integrations,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'integrations/:sub',
     },
     // Developer tools mirrored inside the workspace (user preferences).
     {

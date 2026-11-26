@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Посетителите не само четат този Агента — те го изпълняват. Всеки отговор се генерира в Работното пространство и се таксува към неговия споделен бюджет, без да се използва квотата на създателя или друг член. Агента действа само с достъпа, който предоставите по-долу.",
   "share.settings.notice.workspaceTitle": "Посетителите изпълняват този Агента на бюджета на Работното пространство",
   "share.settings.permissions.allowCreatorViewSessions": "Позволи ми да чета разговорите на посетителите",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Изключено по подразбиране: разговорите на посетителите остават лични за тях.",
   "share.settings.permissions.allowReadMemory": "Позволи четене на моята памет",
   "share.settings.permissions.allowReadMemoryHint": "Агентът може да използва вашата дългосрочна памет, докато отговаря на посетител.",
   "share.settings.permissions.desc": "Какво може да чете посетителят и какво може да види обратно.",

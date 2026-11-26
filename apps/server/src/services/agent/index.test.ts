@@ -1118,5 +1118,43 @@ describe('AgentService', () => {
         message: 'Agent not found',
       });
     });
+
+    const createPromptService = () => {
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue({ id: 'agent-1' }),
+        updateConfig: vi.fn().mockResolvedValue(undefined),
+      };
+      (AgentModel as any).mockImplementation(function () {
+        return mockAgentModel;
+      });
+      (parseAgentConfig as any).mockReturnValue({});
+
+      return { mockAgentModel, service: new AgentService(mockDb, mockUserId) };
+    };
+
+    it('clears stale editorData when only systemRole is written', async () => {
+      const { mockAgentModel, service } = createPromptService();
+
+      await service.updateAgentConfig('agent-1', { systemRole: 'new prompt' });
+
+      expect(mockAgentModel.updateConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { editorData: null, systemRole: 'new prompt' },
+        undefined,
+      );
+    });
+
+    it('keeps editorData written together with systemRole', async () => {
+      const { mockAgentModel, service } = createPromptService();
+      const editorData = { root: { children: [{ type: 'paragraph' }], type: 'root' } };
+
+      await service.updateAgentConfig('agent-1', { editorData, systemRole: 'new prompt' });
+
+      expect(mockAgentModel.updateConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { editorData, systemRole: 'new prompt' },
+        undefined,
+      );
+    });
   });
 });
