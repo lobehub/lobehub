@@ -1,6 +1,6 @@
 import { A2uiApiName, A2uiIdentifier, systemPrompt } from '@lobechat/builtin-tool-a2ui';
 import { A2uiExecutionRuntime } from '@lobechat/builtin-tool-a2ui/executionRuntime';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { ChannelError } from '@/database/repositories/channel';
@@ -36,7 +36,7 @@ export class ChannelCardService {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly operationId: string,
-    workspaceId?: string,
+    private readonly workspaceId?: string,
   ) {
     this.messages = new MessageModel(db, userId, workspaceId);
   }
@@ -76,16 +76,22 @@ export class ChannelCardService {
 
     const toolCallId = cliCardToolCallId(this.operationId, surfaceId);
     const args = JSON.stringify({ operations });
-    const existing = await this.messages.findToolMessageIdByToolCallId(toolCallId);
-    if (existing) {
-      await this.messages.updateMessagePlugin(existing, { arguments: args });
-      await this.messages.updateToolMessage(existing, {
-        content: output.content,
-        pluginState: state,
-        replacePluginState: true,
-      });
-    } else {
-      await this.messages.create({
+    // Serialized per run and surface: two overlapping renders of one surface must not both miss
+    // the lookup and store the card twice (`tool_call_id` has no unique index).
+    const replaced = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${toolCallId}))`);
+      const messages = new MessageModel(tx, this.userId, this.workspaceId);
+      const existing = await messages.findToolMessageIdByToolCallId(toolCallId);
+      if (existing) {
+        await messages.updateMessagePlugin(existing, { arguments: args });
+        await messages.updateToolMessage(existing, {
+          content: output.content,
+          pluginState: state,
+          replacePluginState: true,
+        });
+        return true;
+      }
+      await messages.create({
         agentId: step.agentId ?? undefined,
         content: output.content,
         parentId: step.id,
@@ -99,13 +105,14 @@ export class ChannelCardService {
         role: 'tool',
         threadId: step.threadId ?? undefined,
         tool_call_id: toolCallId,
-        topicId: job.topicId,
+        topicId: job.topicId!,
       });
-    }
+      return false;
+    });
     return {
       message: output.content,
       ok: true,
-      replaced: !!existing,
+      replaced,
       surfaceId,
     };
   };

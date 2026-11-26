@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { systemPrompt } from '@lobechat/builtin-tool-a2ui';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -157,9 +156,12 @@ describe('ChannelCardService.render', () => {
     await expect(service.render(card('Early'))).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
-  it('serves the builtin tool’s card guide unchanged', async () => {
-    const { service } = await setup();
-    expect(await service.guide()).toEqual({ guide: systemPrompt });
+  it('stores one card when two renders of the same surface overlap', async () => {
+    const { model, operationId, service, topicId } = await setup();
+    const results = await Promise.all([service.render(card('A')), service.render(card('B'))]);
+    expect(results.map((result) => result.ok && result.replaced).sort()).toEqual([false, true]);
+    expect(await cardRows(topicId)).toHaveLength(1);
+    expect(await runSurfaces(model, operationId, topicId)).toHaveLength(1);
   });
 });
 
