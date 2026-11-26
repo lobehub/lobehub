@@ -17,6 +17,26 @@ import {
 import { buildConnectorMigrationRow } from './legacyMigration';
 import { connectorWriteProcedure } from './procedures';
 
+const migrationConnectionOverridesSchema = z.object({
+  args: z.array(z.string()).optional(),
+  auth: z
+    .object({
+      accessToken: z.string().optional(),
+      clientId: z.string().optional(),
+      clientSecret: z.string().optional(),
+      token: z.string().optional(),
+      type: z.enum(['none', 'bearer', 'oauth2']),
+    })
+    .optional(),
+  boundDeviceId: z.string().optional(),
+  command: z.string().optional(),
+  connectVia: z.enum(['auto', 'device']).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  type: z.enum(['http', 'stdio']),
+  url: z.string().optional(),
+});
+
 /** Legacy MCP plugin promotion and cleanup. */
 export const legacyMigrationRouter = router({
   /**
@@ -25,7 +45,12 @@ export const legacyMigrationRouter = router({
    * replacement connector has synchronized its tools.
    */
   migrateLegacyPlugin: connectorWriteProcedure
-    .input(z.object({ identifier: z.string().min(1).max(255) }))
+    .input(
+      z.object({
+        identifier: z.string().min(1).max(255),
+        overrides: migrationConnectionOverridesSchema.optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       // Members can install the same legacy plugin with different settings and
       // credentials. Migration must copy the caller's own row, never whichever
@@ -40,7 +65,18 @@ export const legacyMigrationRouter = router({
       if (!plugin) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plugin not found' });
       assertWorkspaceRowManageable(ctx, plugin.userId, 'plugin');
 
-      const migration = buildConnectorMigrationRow(plugin);
+      // A repair retry sends the whole connection form. It is authoritative
+      // for the connection fields only: settings, manifest and marketplace
+      // provenance still come from the server-confirmed legacy row.
+      const migrationSource = input.overrides
+        ? {
+            ...plugin,
+            customParams: { ...plugin.customParams, mcp: input.overrides },
+          }
+        : plugin;
+      const migration = buildConnectorMigrationRow(migrationSource, {
+        preferConnectionValues: !!input.overrides,
+      });
       if (!migration.ok) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

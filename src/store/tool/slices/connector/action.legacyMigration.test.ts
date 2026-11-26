@@ -2,6 +2,7 @@ import type { LobeToolCustomPlugin } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import { useToolStore } from '../../store';
 import { initialConnectorState } from './initialState';
@@ -15,6 +16,7 @@ vi.mock('@/libs/trpc/client', () => ({
       list: { query: vi.fn() },
       listAgentBound: { query: vi.fn() },
       migrateLegacyPlugin: { mutate: vi.fn() },
+      startOAuth: { mutate: vi.fn() },
       syncTools: { mutate: vi.fn() },
       syncToolsFromClientById: { mutate: vi.fn() },
     },
@@ -26,6 +28,11 @@ vi.mock('@/libs/trpc/client', () => ({
       removePlugin: { mutate: vi.fn() },
     },
   },
+}));
+
+vi.mock('@/utils/connectorOAuth', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  waitForConnectorOAuth: vi.fn(),
 }));
 
 const legacy = {
@@ -149,6 +156,57 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
     expect(
       vi.mocked(connector.completeLegacyPluginMigration.mutate).mock.invocationCallOrder[0],
     ).toBeGreaterThan(vi.mocked(connector.syncTools.mutate).mock.invocationCallOrder[0]);
+  });
+
+  it('passes repair overrides through to server-side migration', async () => {
+    vi.mocked(connector.list.query).mockResolvedValue([
+      { id: 'created', identifier: 'legacy', mcpConnectionType: 'http' },
+    ] as never);
+    const overrides = {
+      headers: { 'x-team': 'platform' },
+      type: 'http' as const,
+      url: 'https://repaired.example.com/mcp',
+    };
+
+    await useToolStore.getState().migrateLegacyPluginToConnector('legacy', overrides);
+
+    expect(connector.migrateLegacyPlugin.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+      overrides,
+    });
+  });
+
+  it('authorizes an OAuth repair before the first connector tool sync', async () => {
+    vi.mocked(connector.list.query).mockResolvedValue([
+      { id: 'created', identifier: 'legacy', mcpConnectionType: 'http' },
+    ] as never);
+    vi.mocked(connector.startOAuth.mutate).mockResolvedValue({
+      authorizationUrl: 'https://auth.example.com',
+    });
+    const popup = {} as Window;
+
+    await useToolStore.getState().migrateLegacyPluginToConnector(
+      'legacy',
+      {
+        auth: { clientId: 'client-id', type: 'oauth2' },
+        type: 'http',
+        url: 'https://repaired.example.com/mcp',
+      },
+      popup,
+    );
+
+    expect(connector.startOAuth.mutate).toHaveBeenCalledWith({ id: 'created' });
+    expect(waitForConnectorOAuth).toHaveBeenCalledWith(
+      popup,
+      'created',
+      'https://auth.example.com',
+    );
+    expect(vi.mocked(connector.syncTools.mutate).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(waitForConnectorOAuth).mock.invocationCallOrder[0],
+    );
+    expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+    });
   });
 
   it('server-side migration keeps the legacy row and rolls back a new connector when sync fails', async () => {

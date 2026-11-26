@@ -103,6 +103,30 @@ describe('gated entrypoint discovery refresh', () => {
     renderHook(() => useMcpAppEntrypoints());
     expect(mocks.discover).toHaveBeenCalledOnce();
   });
+  it('does not write a discovery that finishes after the user store resets', async () => {
+    mocks.enabled = true;
+    let finish!: (manifest: any) => void;
+    mocks.discover.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mocks.state.installedPlugins = [
+      {
+        identifier: 'notes',
+        customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+        manifest: { api: [] },
+      },
+    ];
+    renderHook(() => useMcpAppEntrypoints());
+    await waitFor(() => expect(mocks.discover).toHaveBeenCalledOnce());
+
+    useMcpAppStore.setState(initialState);
+    finish({ api: [], mcpAppEntrypoints: [{ title: 'Notes', toolName: 'open' }] });
+    await waitFor(() => expect(useMcpAppStore.getState().discoveredPluginManifests).toEqual({}));
+  });
+
   it("waits for the server's plugin records before spending a plugin's discovery", async () => {
     mocks.enabled = true;
     mocks.confirmed = false;

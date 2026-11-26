@@ -12,6 +12,8 @@ import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CustomConnectorModal from '@/features/Connectors/CustomConnectorModal';
+import { asLegacyMigrationPlugin } from '@/features/Connectors/legacyMigrationPlugin';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -70,7 +72,15 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const isConfirming = useToolStore(pluginSelectors.isInstalledPluginsCacheOnly);
 
   const [showModal, setModal] = useState(false);
+  const [showMigrationRepair, setShowMigrationRepair] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const legacyPluginRow = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
+  const migrationRepairPlugin =
+    isCommunityMCP &&
+    legacyPluginRow?.type === 'plugin' &&
+    legacyPluginRow.customParams?.mcp?.type !== 'cloud'
+      ? asLegacyMigrationPlugin(legacyPluginRow)
+      : undefined;
 
   // A market-hosted (cloud) connector has no connection settings to edit.
   const showConfigureButton = marketConnector
@@ -102,6 +112,11 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                 toast.error(
                   error instanceof Error ? error.message : t('store.actions.migrateFailed'),
                 );
+                // The legacy settings editor used to be the repair path for a
+                // moved endpoint or broken launch command. Migration keeps that
+                // path by reopening the connection form with the failed values;
+                // saving it retries the server-side migration with those repairs.
+                if (migrationRepairPlugin) setShowMigrationRepair(true);
               } finally {
                 setMigrating(false);
               }
@@ -182,6 +197,14 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           </Button>
         )}
       </Flexbox>
+      {migrationRepairPlugin && (
+        <CustomConnectorModal
+          legacyPlugin={migrationRepairPlugin}
+          open={showMigrationRepair}
+          onClose={() => setShowMigrationRepair(false)}
+          onEditSuccess={() => setShowMigrationRepair(false)}
+        />
+      )}
     </>
   );
 });

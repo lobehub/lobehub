@@ -457,4 +457,16 @@ describe('chat input tool picker', () => {
     expect(result.current.marketItems).toEqual([]);
     expect(result.current.enabledSections).toEqual([]);
   });
+
+  it('keeps the configure control reachable for a legacy custom MCP in enabledOnly mode', () => {
+    const { result } = renderHook(() => useControls({ enabledOnly: true }));
+    const customSection = result.current.enabledSections.find(
+      (section) => section.key === 'custom',
+    );
+    const row = customSection?.items.find((item) => String(item.key) === 'custom-mcp') as
+      { label?: { props?: Record<string, unknown> } } | undefined;
+
+    expect(row?.label?.props?.trailing).toBeDefined();
+    expect(row?.label?.props?.onContextMenu).toBeDefined();
+  });
 });

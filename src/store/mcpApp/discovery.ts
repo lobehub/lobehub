@@ -17,7 +17,10 @@ const drain = () => {
 };
 
 /** One compatibility refresh per user session, shared across sidebar mounts. */
-export const refreshMcpAppDiscovery = (key: string, run: () => Promise<unknown>) => {
+export const refreshMcpAppDiscovery = (
+  key: string,
+  run: (isCurrent: () => boolean) => Promise<unknown>,
+) => {
   const config = getServerConfigStoreState();
   if (!config || !serverConfigSelectors.enableMcpApps(config)) return;
   if (useMcpAppStore.getState().discoveryAttempts[key]) return;
@@ -27,17 +30,19 @@ export const refreshMcpAppDiscovery = (key: string, run: () => Promise<unknown>)
     false,
     'mcpApp/discoveryAttempt',
   );
-  pending.push(async () => {
+  const isCurrent = () => {
     const currentConfig = getServerConfigStoreState();
+    return (
+      useMcpAppStore.getState().discoveryAttempts[key] === attempt &&
+      !!currentConfig &&
+      serverConfigSelectors.enableMcpApps(currentConfig)
+    );
+  };
+  pending.push(async () => {
     // A logout/reset or disabled feature must not start queued work for the old user.
-    if (
-      useMcpAppStore.getState().discoveryAttempts[key] !== attempt ||
-      !currentConfig ||
-      !serverConfigSelectors.enableMcpApps(currentConfig)
-    )
-      return;
+    if (!isCurrent()) return;
     try {
-      await run();
+      await run(isCurrent);
     } catch (error) {
       console.warn('[MCPApp] entrypoint discovery refresh failed', error);
     }

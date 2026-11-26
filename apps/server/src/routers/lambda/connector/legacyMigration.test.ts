@@ -168,6 +168,65 @@ describe('buildConnectorMigrationRow', () => {
     });
   });
 
+  it('lets explicit repair connection values override preserved settings', () => {
+    const result = buildConnectorMigrationRow(
+      plugin({
+        customParams: {
+          mcp: {
+            env: { API_KEY: 'repaired-key' },
+            type: 'stdio',
+            command: 'npx',
+          },
+        },
+        settings: { API_KEY: 'old-key' },
+      }),
+      { preferConnectionValues: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.mcpStdioConfig?.env).toEqual({ API_KEY: 'repaired-key' });
+  });
+
+  it('validates a URL template only after rendering settings into it', () => {
+    const result = buildConnectorMigrationRow(
+      plugin({
+        customParams: {
+          mcp: { type: 'http', url: 'https://example.com:{{config.PORT}}/mcp' },
+        },
+        settings: { PORT: '8443' },
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.mcpServerUrl).toBe('https://example.com:8443/mcp');
+  });
+
+  it('keeps the OAuth client for an authorization repair before an access token exists', () => {
+    const result = buildConnectorMigrationRow(
+      plugin({
+        customParams: {
+          mcp: {
+            auth: { clientId: 'client-id', clientSecret: 'client-secret', type: 'oauth2' },
+            type: 'http',
+            url: 'https://mcp.example.com',
+          },
+        },
+      }),
+      { preferConnectionValues: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.credentials).toBeUndefined();
+    expect(result.payload.oidcConfig).toEqual({
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      scheme: 'pre_registration',
+    });
+  });
+
   it('refuses rows with no usable endpoint instead of dropping their connection silently', () => {
     expect(buildConnectorMigrationRow(plugin({ customParams: {} }))).toEqual({
       ok: false,

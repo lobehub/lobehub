@@ -74,11 +74,11 @@ export const useMcpAppEntrypoints = (agentId?: string, topicId?: string) => {
     for (const plugin of pluginsConfirmed ? plugins : []) {
       const config = plugin.customParams?.mcp;
       if (!config || plugin.manifest?.mcpAppEntrypoints !== undefined) continue;
-      refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async () => {
+      refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async (isCurrent) => {
         const { mcpService } = await import('@/services/mcp');
         // Same params as the plugin's tool calls: its settings carry credentials
         const manifest = await mcpService.getPluginMcpManifest(plugin);
-        if (!manifest) return;
+        if (!manifest || !isCurrent()) return;
         useMcpAppStore.setState(
           (s) => ({
             discoveredPluginManifests: {

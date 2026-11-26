@@ -19,6 +19,24 @@ export interface MigrationCreatePayload {
   sourceType: typeof ConnectorSourceType.custom;
 }
 
+export interface MigrationConnectionOverrides {
+  args?: string[];
+  auth?: {
+    accessToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    token?: string;
+    type: 'none' | 'bearer' | 'oauth2';
+  };
+  boundDeviceId?: string;
+  command?: string;
+  connectVia?: 'auto' | 'device';
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+  type: 'http' | 'stdio';
+  url?: string;
+}
+
 export type MigrationResult =
   | { ok: true; payload: MigrationCreatePayload }
   | { ok: false; reason: 'no-mcp' | 'no-endpoint' | 'unsupported-transport' };

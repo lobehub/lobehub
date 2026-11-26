@@ -27,7 +27,10 @@ import type { StoreSetter } from '@/store/types';
 import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
-import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import {
+  executeLegacyMigrationSave,
+  type MigrationConnectionOverrides,
+} from './legacyPluginMigration';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -455,9 +458,38 @@ export class ConnectorActionImpl {
    * replacement connector has listed its tools; a failed migration of a newly
    * created connector rolls that connector back.
    */
-  migrateLegacyPluginToConnector = async (identifier: string): Promise<void> => {
-    const migrated = await lambdaClient.connector.migrateLegacyPlugin.mutate({ identifier });
+  migrateLegacyPluginToConnector = async (
+    identifier: string,
+    overrides?: MigrationConnectionOverrides,
+    oauthPopup?: Window | null,
+  ): Promise<void> => {
+    const migrated = await lambdaClient.connector.migrateLegacyPlugin.mutate({
+      identifier,
+      ...(overrides ? { overrides } : {}),
+    });
     try {
+      // A repair that selects OAuth must authorize before the first tool sync:
+      // until the callback stores its account credential there is nothing the
+      // server could sync with. Migration mode has no connected baseline, so
+      // every OAuth save takes this path, including one replacing an expired token.
+      if (overrides?.auth?.type === 'oauth2') {
+        const authorizationUrl = await this.#get().startConnectorOAuth(migrated.id);
+        try {
+          await waitForConnectorOAuth(oauthPopup, migrated.id, authorizationUrl);
+        } catch (error) {
+          const dismissedConnected =
+            error instanceof ConnectorOAuthError &&
+            error.reason === 'dismissed' &&
+            (await this.#refreshConnectorLists()
+              .then(
+                () =>
+                  connectorSelectors.connectorById(migrated.id)(this.#get())?.status ===
+                  'connected',
+              )
+              .catch(() => false));
+          if (!dismissedConnected) throw error;
+        }
+      }
       await this.#refreshConnectorLists();
       await this.#writeConnectorTools(
         migrated.id,

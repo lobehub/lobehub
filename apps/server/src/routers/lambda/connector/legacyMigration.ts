@@ -112,7 +112,10 @@ const validHttpUrl = (url?: string) => {
  * config values as headers. OAuth tokens stay server-side end to end: the
  * caller supplies only the legacy identifier, never the token.
  */
-export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationResult => {
+export const buildConnectorMigrationRow = (
+  plugin: LegacyPluginRow,
+  options: { preferConnectionValues?: boolean } = {},
+): MigrationResult => {
   const mcp = plugin.customParams?.mcp;
   if (!mcp) return { ok: false, reason: 'no-mcp' };
 
@@ -159,7 +162,9 @@ export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationRe
 
   if (mcp.type === 'stdio') {
     if (!mcp.command) return { ok: false, reason: 'no-endpoint' };
-    const env = mergeDefined(trimRecord(mcp.env), settings);
+    const env = options.preferConnectionValues
+      ? mergeDefined(settings, trimRecord(mcp.env))
+      : mergeDefined(trimRecord(mcp.env), settings);
     return {
       ok: true,
       payload: {
@@ -178,7 +183,9 @@ export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationRe
 
   if (mcp.type === 'cloud') {
     if (!mcp.cloudEndPoint) return { ok: false, reason: 'no-endpoint' };
-    const customHeaders = mergeDefined(headers, settings);
+    const customHeaders = options.preferConnectionValues
+      ? mergeDefined(settings, headers)
+      : mergeDefined(headers, settings);
     return {
       ok: true,
       payload: {
@@ -194,10 +201,15 @@ export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationRe
     };
   }
 
-  if (!validHttpUrl(mcp.url)) return { ok: false, reason: 'no-endpoint' };
-  const rendered = renderUrlTemplate(mcp.url!, settings);
+  if (!mcp.url) return { ok: false, reason: 'no-endpoint' };
+  const rendered = renderUrlTemplate(mcp.url, settings);
+  // Settings can carry a port or host fragment: validate the endpoint after
+  // the same substitution the legacy runtime applied, not the raw template.
+  if (!validHttpUrl(rendered.url)) return { ok: false, reason: 'no-endpoint' };
   const headerSettings = omitKeys(settings, rendered.usedKeys);
-  const customHeaders = mergeDefined(headers, headerSettings);
+  const customHeaders = options.preferConnectionValues
+    ? mergeDefined(headerSettings, headers)
+    : mergeDefined(headers, headerSettings);
   if (customHeaders) metadata.customHeaders = customHeaders;
 
   const auth = mcp.auth;
@@ -214,12 +226,14 @@ export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationRe
     };
   }
 
-  if (auth?.type === 'oauth2' && auth.accessToken) {
+  if (auth?.type === 'oauth2' && (auth.accessToken || options.preferConnectionValues)) {
     return {
       ok: true,
       payload: {
         ...base,
-        credentials: JSON.stringify({ accessToken: auth.accessToken, type: 'oauth2' }),
+        ...(auth.accessToken
+          ? { credentials: JSON.stringify({ accessToken: auth.accessToken, type: 'oauth2' }) }
+          : {}),
         mcpConnectionType: ConnectorMcpConnectionType.http,
         mcpServerUrl: rendered.url,
         metadata,

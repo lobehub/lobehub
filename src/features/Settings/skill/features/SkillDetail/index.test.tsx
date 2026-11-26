@@ -77,6 +77,12 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@lobechat/const', () => ({
   COMPOSIO_APP_TYPES: [],
+  hasCallableMcpEndpoint: (connector: { mcpConnectionType?: string; mcpServerUrl?: string }) =>
+    Boolean(
+      connector.mcpServerUrl ||
+      connector.mcpConnectionType === 'stdio' ||
+      connector.mcpConnectionType === 'cloud',
+    ),
   isDesktop: false,
   getLobehubSkillProviderById: (identifier: string) =>
     identifier === 'notion'
@@ -194,17 +200,15 @@ vi.mock('@/store/tool/slices/connector', () => ({
 
 // Mock the real selector to avoid pulling its `toolAvailability` → `skillFilters`
 // → `@lobechat/const` (isDesktop) transitive imports into the unit env; mirror
-// the real `getCustomPluginById` behaviour against the mocked tool state.
+// the real installed-plugin lookup behaviour against the mocked tool state.
 vi.mock('@/store/tool/slices/plugin/selectors', () => ({
   pluginSelectors: {
-    getCustomPluginById:
+    getInstalledPluginById:
       (identifier: string) =>
       (
         state: typeof mocks.toolState,
       ): (typeof mocks.toolState.installedPlugins)[number] | undefined =>
-        state.installedPlugins.find(
-          (plugin) => plugin.identifier === identifier && plugin.type === 'customPlugin',
-        ),
+        state.installedPlugins.find((plugin) => plugin.identifier === identifier),
   },
 }));
 
@@ -284,6 +288,31 @@ describe('SkillDetail', () => {
     expect(
       screen.queryByText('This skill does not expose configurable tool permissions.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('offers the migration action instead of projection refresh for a legacy marketplace MCP', async () => {
+    mocks.toolState.connectors = [
+      {
+        id: 'projection',
+        identifier: 'market-mcp',
+      },
+    ];
+    mocks.toolState.installedPlugins = [
+      {
+        customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
+        identifier: 'market-mcp',
+        type: 'plugin',
+      },
+    ];
+
+    render(<SkillDetail identifier="market-mcp" type="plugin" />);
+
+    expect(await screen.findByRole('button', { name: 'Configure' })).toBeEnabled();
+    expect(
+      screen.getByText(
+        'This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows a disconnect action for a connected LobeHub connector without configurable tools', async () => {

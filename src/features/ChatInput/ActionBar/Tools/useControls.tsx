@@ -454,7 +454,7 @@ export const useControls = ({
           </>
         }
         trailing={
-          enabledOnly || (!badge && !action) ? undefined : (
+          (enabledOnly && !action) || (!badge && !action) ? undefined : (
             <>
               {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
               {action}
@@ -465,7 +465,7 @@ export const useControls = ({
           stylex.props(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)
             .className
         }
-        onContextMenu={enabledOnly ? undefined : () => openSkillPolicyMenu(id)}
+        onContextMenu={enabledOnly && !action ? undefined : () => openSkillPolicyMenu(id)}
       />
     ),
     [detailPlacement, enabledOnly, openSkillPolicyMenu, policyOpenId],
@@ -500,8 +500,22 @@ export const useControls = ({
       searchText?: string;
       supportedModes?: SkillPolicyMode[];
       title: ReactNode;
-    }): SkillMenuItem =>
-      ({
+    }): SkillMenuItem => {
+      // The enabled-only sidebar is not activation UI, but a configurable row
+      // still needs its repair/manage path. Its menu omits the activation modes.
+      const action =
+        enabledOnly && !configureConfig
+          ? undefined
+          : renderPolicyMenu(id, {
+              configureConfig,
+              defaultMode,
+              deleteConfig,
+              deleteOnly: enabledOnly,
+              modeOverride,
+              panelExtra,
+              supportedModes,
+            });
+      return {
         optionTitle: title,
         optionIcon: icon,
         detailContent: popoverContent,
@@ -511,23 +525,15 @@ export const useControls = ({
         label: renderToolLabel(
           id,
           title,
-          enabledOnly
-            ? undefined
-            : renderPolicyMenu(id, {
-                configureConfig,
-                defaultMode,
-                deleteConfig,
-                modeOverride,
-                panelExtra,
-                supportedModes,
-              }),
+          action,
           enabledOnly ? undefined : badge,
           icon,
           enabledOnly ? undefined : extraTag,
           popoverContent,
         ),
         searchText: searchText || String(title || id),
-      }) as SkillMenuItem,
+      } as SkillMenuItem;
+    },
     [enabledOnly, renderPolicyMenu, renderToolLabel],
   );
 

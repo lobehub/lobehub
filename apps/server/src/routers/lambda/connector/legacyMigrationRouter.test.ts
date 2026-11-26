@@ -118,6 +118,39 @@ describe('connectorRouter.migrateLegacyPlugin', () => {
     expect(models.connector.createUnlessIdentifierHeld).not.toHaveBeenCalled();
   });
 
+  it('uses repair overrides for connection fields while server-owned settings still render templates', async () => {
+    models.plugin.findOwnedById.mockResolvedValue({
+      ...legacyPlugin,
+      settings: { team: 'platform' },
+    });
+    models.connector.findScopedByIdentifier.mockResolvedValue(null);
+    models.connector.createUnlessIdentifierHeld.mockResolvedValue({ created: { id: 'created' } });
+
+    await expect(
+      caller().migrateLegacyPlugin({
+        identifier: 'github-mcp',
+        overrides: {
+          auth: { token: 'replacement-token', type: 'bearer' },
+          type: 'http',
+          url: 'https://{{team}}.example.com/mcp',
+        },
+      }),
+    ).resolves.toEqual({ id: 'created', isNew: true });
+
+    expect(models.connector.createUnlessIdentifierHeld).toHaveBeenCalledWith(
+      expect.objectContaining({
+        credentials: JSON.stringify({ token: 'replacement-token', type: 'bearer' }),
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://platform.example.com/mcp',
+        metadata: expect.objectContaining({
+          marketplaceInstalled: true,
+          marketplaceToolPolicies: { send: 'always' },
+          migratedFromLegacyPlugin: true,
+        }),
+      }),
+    );
+  });
+
   it('refuses to overwrite an endpointless row that already holds an OAuth account', async () => {
     models.connector.findScopedByIdentifier.mockResolvedValue({
       agentId: null,
