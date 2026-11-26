@@ -37,6 +37,25 @@ afterEach(async () => {
 });
 
 describe('initWorkspace', () => {
+  it('keeps a device skill alias when the original name is shadowed by a project skill', async () => {
+    const repo = path.join(base, 'repo');
+    const projectSkills = path.join(repo, '.agents', 'skills');
+    const deviceSkill = path.join(home, '.agents', 'skills', 'foo');
+    const alias = path.join(home, '.claude', 'skills', 'bar');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await writeSkill(projectSkills, 'foo');
+    await write(path.join(deviceSkill, 'SKILL.md'), '---\ndescription: Device skill\n---\n');
+    await mkdir(path.dirname(alias), { recursive: true });
+    await symlink(deviceSkill, alias, 'dir');
+
+    const result = await initWorkspace({ scope: repo });
+
+    expect(result.skills).toMatchObject([
+      { name: 'bar', path: path.join(alias, 'SKILL.md'), scope: 'device' },
+      { name: 'foo', path: path.join(projectSkills, 'foo', 'SKILL.md'), scope: 'project' },
+    ]);
+  });
+
   it('reads instructions from the working directory up to the repository root, root first', async () => {
     const repo = path.join(base, 'outside', 'repo');
     const pkg = path.join(repo, 'packages', 'web');
@@ -165,6 +184,45 @@ describe('initWorkspace', () => {
 });
 
 describe('listProjectSkills', () => {
+  it('preserves manual-only declarations without hiding project or device skills', async () => {
+    const repo = path.join(base, 'repo');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await write(
+      path.join(repo, '.agents/skills/deploy/SKILL.md'),
+      '---\nname: deploy\ndisable-model-invocation: true\n---\nDeploy instructions',
+    );
+    await write(
+      path.join(home, '.claude/skills/release/SKILL.md'),
+      '---\nname: release\ndisable-model-invocation: true\n---\nRelease instructions',
+    );
+    await write(
+      path.join(home, '.codex/skills/review/SKILL.md'),
+      '---\nname: review\ndisable-model-invocation: false\n---\nReview instructions',
+    );
+    await write(
+      path.join(repo, '.claude/skills/context/SKILL.md'),
+      '---\nname: context\nuser-invocable: false\n---\nBackground knowledge',
+    );
+    await write(
+      path.join(repo, '.agents/skills/string-value/SKILL.md'),
+      '---\nname: string-value\ndisable-model-invocation: "false"\n---\nInvalid boolean',
+    );
+
+    const result = await listProjectSkills({ scope: repo });
+
+    expect(result.skills.map((skill) => skill.name)).toEqual([
+      'context',
+      'deploy',
+      'release',
+      'review',
+      'string-value',
+    ]);
+    expect(result.skills.filter((skill) => skill.disableModelInvocation)).toMatchObject([
+      { name: 'deploy', scope: 'project' },
+      { name: 'release', scope: 'device' },
+    ]);
+  });
+
   it('approves the source directory of a parent-level skill for preview', async () => {
     const repo = path.join(base, 'repo');
     const pkg = path.join(repo, 'pkg');
@@ -179,5 +237,58 @@ describe('listProjectSkills', () => {
       path.join(repo, '.agents', 'skills', 'lint', 'SKILL.md'),
     ]);
     expect(approveProjectRoot).toHaveBeenCalledWith(path.join(repo, '.agents', 'skills'));
+  });
+
+  it('deduplicates symlinked skills pointing to the same physical SKILL.md via realpath', async () => {
+    const repo = path.join(base, 'repo');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    // Physical skill without frontmatter `name`, so directory name would otherwise decide `name`
+    const targetDir = path.join(repo, '.agents', 'skills', 'shared-skill');
+    await write(path.join(targetDir, 'SKILL.md'), '---\ndescription: Shared physical skill\n---\n');
+
+    // Symlink in .claude/skills under a different directory name and in home .codex/skills
+    await mkdir(path.join(repo, '.claude', 'skills'), { recursive: true });
+    await symlink(targetDir, path.join(repo, '.claude', 'skills', 'claude-alias'), 'dir');
+    await mkdir(path.join(home, '.codex', 'skills'), { recursive: true });
+    await symlink(targetDir, path.join(home, '.codex', 'skills', 'codex-alias'), 'dir');
+
+    const result = await initWorkspace({ scope: repo });
+
+    expect(result.skills).toMatchObject([
+      {
+        description: 'Shared physical skill',
+        disableModelInvocation: false,
+        name: 'shared-skill',
+        path: path.join(targetDir, 'SKILL.md'),
+        previewRoot: repo,
+        scope: 'project',
+        skillDir: targetDir,
+        source: '.agents/skills',
+      },
+    ]);
+  });
+
+  it('stops at SKILL.md without traversing subdirectories inside a skill directory', async () => {
+    const repo = path.join(base, 'repo');
+    const skillDir = path.join(repo, '.agents', 'skills', 'lobe-design');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await writeSkill(path.join(repo, '.agents', 'skills'), 'lobe-design');
+    await write(path.join(skillDir, 'references', 'rules.md'), '# rules');
+    await write(path.join(skillDir, 'scripts', 'route.mjs'), 'export default {}');
+
+    const result = await listProjectSkills({ scope: repo });
+
+    expect(result.skills).toEqual([
+      {
+        description: 'lobe-design skill',
+        disableModelInvocation: false,
+        name: 'lobe-design',
+        path: path.join(skillDir, 'SKILL.md'),
+        previewRoot: repo,
+        scope: 'project',
+        skillDir,
+        source: '.agents/skills',
+      },
+    ]);
   });
 });

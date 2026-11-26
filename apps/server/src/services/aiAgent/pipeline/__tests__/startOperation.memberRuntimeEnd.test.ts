@@ -11,6 +11,7 @@ const sourceExecutor = { capabilities: ['llm_relay@1'], clientId: 'tab-a', provi
 const setup = (sourceAccepts: boolean) => {
   const calls: string[] = [];
   const agentRuntimeService = {
+    acceptsArtboardWorks: vi.fn(async () => sourceAccepts),
     acceptsFileWorks: vi.fn(async () => sourceAccepts),
     acceptsMemberRuntimeEnd: vi.fn(async () => {
       calls.push('read-source');
@@ -63,6 +64,29 @@ const setup = (sourceAccepts: boolean) => {
     }) as any;
   return { agentRuntimeService, calls, ctx, deps, input };
 };
+
+describe('startOperation artboard Works continuation', () => {
+  it('inherits the parked client capability before starting an approval continuation', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(true);
+    await startOperation(deps, ctx, input({ approvalSourceOperationId: 'op-parked' }));
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptsArtboardWorks: true }),
+    );
+  });
+
+  it('does not upgrade a released client from a parked operation capability', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(true);
+    await startOperation(
+      deps,
+      ctx,
+      input({ acceptsArtboardWorks: false, approvalSourceOperationId: 'op-parked' }),
+    );
+    expect(agentRuntimeService.acceptsArtboardWorks).not.toHaveBeenCalled();
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptsArtboardWorks: false }),
+    );
+  });
+});
 
 describe('startOperation › member_runtime_end declaration', () => {
   it('records the calling client declaration on the new operation', async () => {

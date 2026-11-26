@@ -1,11 +1,13 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Footer hosting the approve / reject actions (portal target). Hidden until
   // the Intervention component fills it.
   actions: css`
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
 
@@ -21,14 +23,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
   `,
   reviewSummary: css`
     padding-block: 4px 8px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
   `,
@@ -57,7 +59,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 0;
     max-height: 42vh;
     padding-block: 6px 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   header: css`
     display: flex;
@@ -65,7 +67,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   headerMeta: css`
     overflow: hidden;
@@ -84,13 +86,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
 
     span {
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       font-weight: 500;
       color: ${cssVar.colorText};
     }
   `,
   headerTitle: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
     overflow-wrap: anywhere;
@@ -152,7 +154,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
 
     padding-block: 4px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   userRequestBody: css`

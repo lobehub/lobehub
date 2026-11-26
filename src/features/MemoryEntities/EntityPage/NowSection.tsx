@@ -4,6 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { PencilIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useEntityDataContext } from '../context';
 import { resolveDraft, useDraftStore } from '../drafts';
 import { useEntityFormat } from '../format';
@@ -18,7 +20,10 @@ const styles = stylex.create({
     margin: 0,
     whiteSpace: 'pre-wrap',
   },
-  placeholder: { color: cssVar.colorTextTertiary, fontSize: '14px' },
+  placeholder: {
+    color: cssVar.colorTextTertiary,
+    fontSize: densityTokens['--lobe-density-font-size'],
+  },
   foot: {
     alignItems: 'center',
     color: cssVar.colorTextTertiary,

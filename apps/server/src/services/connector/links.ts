@@ -17,6 +17,22 @@ export const getConnectorLinkModel = (ctx: ConnectorLinksContext) =>
   ctx.connectorLinkModel ?? ctx.connectorModel.getLinkModel();
 
 /**
+ * The links context of a connector row's own scope. A private agent's
+ * workspace run can resolve its owner's personal connector (`workspace_id IS
+ * NULL`), whose accounts the run's workspace-scoped models can neither list
+ * nor write (`ConnectorModel.forRow`). Every other row is in the run's scope.
+ */
+export const connectorLinksContextForRow = (
+  ctx: ConnectorLinksContext,
+  row: Pick<DecryptedConnector, 'userId' | 'workspaceId'>,
+): ConnectorLinksContext => {
+  // Only a personal row can lie outside the run's scope
+  if (row.workspaceId !== null) return ctx;
+  const connectorModel = ctx.connectorModel.forRow(row);
+  return connectorModel === ctx.connectorModel ? ctx : { connectorModel };
+};
+
+/**
  * Accounts exist only for OAuth connectors: an authorization needs the
  * connector's OAuth client, and replacing OAuth with static credentials
  * removes both the client and the accounts. A single OAuth token written
@@ -34,11 +50,22 @@ export const loadConnectorLinksMap = async (
   const map = new Map<string, DecryptedConnectorLink[]>();
   const candidates = connectors.filter(mayHaveLinks);
   if (!candidates.length) return map;
-  const model = getConnectorLinkModel(ctx);
-  for (const link of await model.listByConnectorIds(candidates.map((c) => c.id))) {
-    const links = map.get(link.userConnectorId) ?? [];
-    links.push(link);
-    map.set(link.userConnectorId, links);
+  // Each row's accounts are listed in its own scope: the run's, or the
+  // caller's personal one (`connectorLinksContextForRow`)
+  const groups = new Map<ConnectorLinksContext, DecryptedConnector[]>();
+  let personal: ConnectorLinksContext | undefined;
+  for (const connector of candidates) {
+    let rowContext = connectorLinksContextForRow(ctx, connector);
+    if (rowContext !== ctx) rowContext = personal ??= rowContext;
+    groups.set(rowContext, [...(groups.get(rowContext) ?? []), connector]);
+  }
+  for (const [rowContext, rows] of groups) {
+    const model = getConnectorLinkModel(rowContext);
+    for (const link of await model.listByConnectorIds(rows.map((c) => c.id))) {
+      const links = map.get(link.userConnectorId) ?? [];
+      links.push(link);
+      map.set(link.userConnectorId, links);
+    }
   }
   return map;
 };
@@ -80,20 +107,17 @@ export const resolveConnectorAccount = async (
   link?: DecryptedConnectorLink;
   linkId?: string;
 }> => {
-  const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
+  // Read and refreshed in the row's own scope (a personal row in a workspace run)
+  const rowContext = connectorLinksContextForRow(ctx, connector);
+  const links = (await loadConnectorLinksMap([connector], rowContext)).get(connector.id) ?? [];
   const link = linkId ? links.find((l) => l.id === linkId) : pickPrimaryLink(links);
   if (linkId && !link) throw new ConnectorAccountGoneError();
   if (!link)
     return {
       accountCount: links.length,
-      connector: await ensureFreshConnectorToken(connector, ctx.connectorModel),
+      connector: await ensureFreshConnectorToken(connector, rowContext.connectorModel),
     };
-  const fresh = await ensureFreshLinkToken(
-    connector,
-    link,
-    getConnectorLinkModel(ctx),
-    ctx.connectorModel,
-  );
+  const fresh = await ensureFreshLinkToken(connector, link, rowContext.connectorModel);
   return {
     accountCount: links.length,
     connector: withLinkCredentials(connector, fresh),
@@ -122,7 +146,8 @@ export const resolveLinkedCall = async (
   linkName?: string;
 }> => {
   const { connector } = params;
-  const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
+  const rowContext = connectorLinksContextForRow(ctx, connector);
+  const links = (await loadConnectorLinksMap([connector], rowContext)).get(connector.id) ?? [];
   if (!links.length) {
     if (
       params.linkId ||
@@ -166,12 +191,7 @@ export const resolveLinkedCall = async (
     throw new ConnectorLinkSelectionError(
       `The selected account no longer exists. Current accounts: ${choices}`,
     );
-  const fresh = await ensureFreshLinkToken(
-    connector,
-    link,
-    getConnectorLinkModel(ctx),
-    ctx.connectorModel,
-  );
+  const fresh = await ensureFreshLinkToken(connector, link, rowContext.connectorModel);
   return {
     connector: withLinkCredentials(connector, fresh),
     argsStr: split.argsStr,

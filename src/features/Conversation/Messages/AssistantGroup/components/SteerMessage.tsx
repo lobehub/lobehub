@@ -18,7 +18,7 @@ interface SteerMessageProps {
 
 /**
  * A queued follow-up rendered inside the turn it steered. It is the same user
- * row as a standalone message — avatar, title, bubble and the steer tag
+ * row as a standalone message — avatar, title, bubble and the steer arrow
  * (driven by `metadata.steer`) — with editing disabled: hovering it must not
  * claim the message action bar from the assistant turn that hosts it.
  */

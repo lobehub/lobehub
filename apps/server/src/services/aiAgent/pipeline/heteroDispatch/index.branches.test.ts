@@ -52,7 +52,10 @@ vi.mock('@/server/services/agentRuntime/hooks', () => ({
 
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
-    return { getHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined) };
+    return {
+      getHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
+      getThreadResumeSessionId: vi.fn().mockResolvedValue(undefined),
+    };
   }),
 }));
 
@@ -361,6 +364,27 @@ describe('dispatchHeteroAgent — remote platform agents', () => {
       }),
     );
     expect(mocks.executeToolCall).not.toHaveBeenCalled();
+  });
+
+  it('names the channel when the device is limited to other channels', async () => {
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' }), {
+        canUseDevice: false,
+        deviceAccessReason: 'bot-channel-restricted',
+      }),
+      createInput('openclaw'),
+    );
+
+    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+      deps,
+      finalizeParams({
+        detail: 'Running agents on a bound device is not allowed in this channel.',
+        message: 'Device access denied',
+      }),
+    );
   });
 
   it('fails when no device is available', async () => {
@@ -706,6 +730,38 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     expect(deps.bindTopicWorkingDirectory).toHaveBeenCalledWith(
       expect.objectContaining({ config: workingDirectoryConfig }),
     );
+  });
+
+  it('spawns in a worktree the app created on the first send, without describing it', async () => {
+    // Fixed before the first turn, so the CLI session starts — and stays — there.
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/wt/quiet-hill', autoCreated: true, branch: 'lobehub/quiet-hill' },
+      path: '/repo',
+      repoType: 'github' as const,
+      sessionPath: '/wt/quiet-hill',
+    };
+    const { deps, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({
+      metadata: {
+        boundDeviceId: 'dev-1',
+        workingDirectory: '/wt/quiet-hill',
+        workingDirectoryConfig,
+      },
+    });
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(dispatched.cwd).toBe('/wt/quiet-hill');
+    expect(dispatched.systemContext ?? '').not.toContain('<active_worktree>');
   });
 
   it('keeps a timed-out dispatch alive and settles it later as a device timeout', async () => {

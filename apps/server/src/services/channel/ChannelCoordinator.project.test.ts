@@ -12,6 +12,7 @@ const { executions, execAgent, getScopedOnlineDevices } = vi.hoisted(() => ({
     finishDispatch: vi.fn(),
     heartbeat: vi.fn(),
     input: vi.fn(),
+    coAddressed: vi.fn(),
     openingReply: vi.fn(),
     primaryReply: vi.fn(),
     recentContext: vi.fn(),
@@ -106,6 +107,7 @@ describe('Channel dispatch project context', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
     executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });

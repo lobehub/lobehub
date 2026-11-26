@@ -42,30 +42,9 @@ vi.mock('@/database/models/message', () => ({
     return { query: vi.fn().mockResolvedValue([]) };
   }),
 }));
-vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
-    return {
-      loadAgentState: vi.fn(),
-      saveAgentState: vi.fn(),
-      saveStepResult: vi.fn(),
-      createAgentOperation: vi.fn(),
-      getOperationMetadata: vi.fn(),
-      isInterrupted: vi.fn().mockResolvedValue(false),
-      hasQueuedMessages: vi.fn().mockResolvedValue(false),
-      tryClaimStep: vi.fn().mockResolvedValue(true),
-      releaseStepLock: vi.fn().mockResolvedValue(undefined),
-      refreshStepLock: vi.fn().mockResolvedValue(true),
-    };
-  }),
-  createStreamEventManager: vi.fn(function () {
-    return {
-      publishStreamEvent: vi.fn(),
-      publishAgentRuntimeEnd: vi.fn(),
-      publishAgentRuntimeInit: vi.fn(),
-      cleanupOperation: vi.fn(),
-    };
-  }),
-}));
+vi.mock('@/server/modules/AgentRuntime', () =>
+  import('./testUtils').then((m) => m.executeStepAgentRuntimeModule()),
+);
 vi.mock('@/server/modules/AgentRuntime/RuntimeExecutors', () => ({
   createRuntimeExecutors: vi.fn(function () {
     return {};
@@ -579,7 +558,7 @@ describe('AgentRuntimeService.executeStep - durable Review lifecycle retry', () 
       runtime: { step: runtimeStep },
     });
     vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
-    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(completionLifecycle as any, 'persistCompletion').mockResolvedValue({});
     const notifyPendingReview = vi
       .spyOn(completionLifecycle as any, 'notifyPendingAgentIntervention')
       .mockRejectedValueOnce(

@@ -7,21 +7,26 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { MemberStatus } from './MemberStatus';
 
-const { openEnvironment } = vi.hoisted(() => ({ openEnvironment: vi.fn() }));
+const { menus, openEnvironment } = vi.hoisted(() => ({
+  menus: [] as any[][],
+  openEnvironment: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: ({ title }: { title?: string }) => createElement('button', {}, title),
   Button: () => null,
   // Lists the menu flat so each action can be read and clicked.
-  DropdownMenu: ({ items }: { items: any[] }) =>
-    createElement(
+  DropdownMenu: ({ items }: { items: any[] }) => {
+    menus.push(items);
+    return createElement(
       'ul',
       {},
       items
         .filter((item) => item.key)
         .map((item) => createElement('li', { key: item.key, onClick: item.onClick }, item.key)),
-    ),
+    );
+  },
   Flexbox: ({ children }: { children?: unknown }) => createElement('div', {}, children as never),
   Popover: () => null,
   Text: () => null,
@@ -49,7 +54,13 @@ vi.mock('./useChannelMenu', () => ({
   ],
 }));
 
-const cook = { agentId: 'agt_cook', id: 'mem_cook', name: 'Cook', status: 'active' };
+const cook = {
+  agentId: 'agt_cook',
+  canOpenAgent: true,
+  id: 'mem_cook',
+  name: 'Cook',
+  status: 'active',
+};
 const detail = (channel: Record<string, unknown> = {}, member: Record<string, unknown> = {}) =>
   ({
     channel: {
@@ -74,6 +85,24 @@ describe('MemberStatus in a direct conversation', () => {
     expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId']);
     fireEvent.click(screen.getByText('environment'));
     expect(openEnvironment).toHaveBeenCalledWith('chn_cook', expect.objectContaining(cook));
+  });
+
+  // A workspace colleague's private Agent: the viewer may chat with it, not open its page.
+  it('offers no way to open an Agent the viewer cannot see', () => {
+    render(createElement(MemberStatus, { detail: detail({}, { canOpenAgent: false }) }));
+
+    expect(menuKeys()).toEqual(['environment', 'copyId']);
+  });
+
+  it('leaves no stray divider when the Agent has no actions for the viewer', () => {
+    menus.length = 0;
+    render(
+      createElement(MemberStatus, {
+        detail: detail({ canDelete: false }, { canOpenAgent: false }),
+      }),
+    );
+
+    expect(menus.at(-1)?.[0]).toEqual({ key: 'copyId' });
   });
 
   it('offers no environment setup once the conversation is archived', () => {
@@ -118,5 +147,42 @@ describe('MemberStatus in a group Channel', () => {
     render(createElement(MemberStatus, { detail: detail({ agentId: null, canDelete: false }) }));
 
     expect(menuKeys()).toEqual(['copyId']);
+  });
+});
+
+describe('MemberStatus on a thread page', () => {
+  // The thread page header showed the thread's `…` right beside the Channel's `…`: two identical
+  // icons for two menus. The thread's actions now head the Channel's single menu.
+  it('folds the thread actions into the one Channel menu', () => {
+    menus.length = 0;
+    render(
+      createElement(MemberStatus, {
+        detail: detail({ agentId: null }),
+        threadMenu: [{ key: 'copyThreadLink' }, { key: 'deleteThread' }],
+      }),
+    );
+
+    expect(screen.getAllByRole('list')).toHaveLength(1);
+    expect(
+      menus.at(-1)!.map((item) =>
+        item.type === 'group'
+          ? {
+              [item.label]: item.children.map(
+                (child: { key?: string; type?: string }) => child.key ?? child.type,
+              ),
+            }
+          : item.type,
+      ),
+    ).toEqual([
+      { thread: ['copyThreadLink', 'deleteThread'] },
+      'divider',
+      { channel: ['copyId', 'divider', 'settings'] },
+    ]);
+  });
+
+  it('keeps the plain Channel menu when the thread offers no actions', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null }), threadMenu: [] }));
+
+    expect(menuKeys()).toEqual(['copyId', 'settings']);
   });
 });

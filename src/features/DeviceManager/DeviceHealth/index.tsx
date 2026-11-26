@@ -6,6 +6,7 @@ import { Button, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { buildHealthTimeline, groupStripBlocks, type HealthSlot } from './buildHealthTimeline';
@@ -37,7 +38,7 @@ const styles = stylex.create({
    */
   charts: {
     display: 'grid',
-    gap: 16,
+    gap: densityTokens['--lobe-density-section-gap'],
     gridTemplateColumns:
       'repeat(auto-fill, minmax(max(min(100%, 320px), calc((100% - 16px) / 2)), 1fr))',
   },

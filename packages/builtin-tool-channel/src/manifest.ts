@@ -1,4 +1,5 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
+import { CHANNEL_ASK_LIMITS } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { ChannelApiName, ChannelIdentifier } from './types';
@@ -10,13 +11,70 @@ export const ChannelManifest: BuiltinToolManifest = {
   meta: {
     avatar: '#',
     title: 'Channel',
-    description: 'Read the current shared conversation, and message Agents in your other Channels.',
+    description: 'Read the current shared conversation, and ask Agents in your other Channels.',
   },
   api: [
     {
+      name: ChannelApiName.askUser,
+      description:
+        "Ask your requester to choose, as a card of options posted with your final answer. Use it when you need their decision to go on and the choices can be listed, e.g. which area to start with. The run does not wait: after calling it, end your turn with a short lead-in to the question (do not repeat the options, the card shows them). Their pick arrives later as a new request replying to your question, and you continue from there. Every card also offers 'Other' for their own words. Once per reply; only for a person's own request.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['questions'],
+        properties: {
+          questions: {
+            type: 'array',
+            minItems: 1,
+            maxItems: CHANNEL_ASK_LIMITS.maxQuestions,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['question', 'options'],
+              properties: {
+                question: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.questionLength,
+                  description: "The question, in your requester's language.",
+                },
+                header: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.headerLength,
+                  description: 'Optional short label above the question.',
+                },
+                multiSelect: {
+                  type: 'boolean',
+                  description: 'Allow picking several options. Default false.',
+                },
+                options: {
+                  type: 'array',
+                  minItems: CHANNEL_ASK_LIMITS.minOptions,
+                  maxItems: CHANNEL_ASK_LIMITS.maxOptions,
+                  description: "Distinct choices; do not add an 'Other' option, the card has one.",
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['label'],
+                    properties: {
+                      label: { type: 'string', maxLength: CHANNEL_ASK_LIMITS.labelLength },
+                      description: {
+                        type: 'string',
+                        maxLength: CHANNEL_ASK_LIMITS.descriptionLength,
+                        description: 'Optional one-line explanation.',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    {
       name: ChannelApiName.readMessages,
       description:
-        'Read recent public messages in the current Channel or thread, in chronological order. Includes the parent channel prefix up to the thread root. Default 10, maximum 20 messages, with 2000-character excerpts. Use nextBeforeSequence to page backwards; readMessage retrieves full text and attachments. Scope and request cutoff are fixed by the runtime.',
+        'Read recent public messages in the current Channel or thread, in chronological order. Includes the parent channel prefix up to the thread root. Default 10, maximum 20 messages, with 2000-character excerpts. Use nextBeforeSequence to page backwards; readMessage retrieves full text and attachments. Your own conversation is read up to the request cutoff; pass threadId (from listThreads) to read another Thread of this Channel live, up to its latest message.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -32,13 +90,18 @@ export const ChannelManifest: BuiltinToolManifest = {
             maximum: 20,
             description: 'Number of messages; default 10.',
           },
+          threadId: {
+            type: 'string',
+            description:
+              'Another Thread of this Channel, from listThreads. Omit for your own conversation.',
+          },
         },
       },
     },
     {
       name: ChannelApiName.readMessage,
       description:
-        'Read up to 12000 characters of one public message, with author and attachment references. Use a message ID returned by readMessages (or the current request). Follow nextOffset for the remaining text; null means complete.',
+        'Read up to 12000 characters of one public message, with author and attachment references. Use a message ID returned by readMessages (or the current request), with the same threadId if readMessages read another Thread. Follow nextOffset for the remaining text; null means complete.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -49,6 +112,11 @@ export const ChannelManifest: BuiltinToolManifest = {
             type: 'integer',
             minimum: 0,
             description: 'Character offset from nextOffset. Default 0.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
           },
         },
       },
@@ -79,26 +147,273 @@ export const ChannelManifest: BuiltinToolManifest = {
       },
     },
     {
-      name: ChannelApiName.sendMessage,
+      name: ChannelApiName.requestConnector,
       description:
-        "Post a message into another Channel on your requester's behalf, @mentioning one or more of its Agents so they answer there. The message appears as your requester's, marked as relayed by you; the addressed Agent decides what to do with it and answers in that Channel, and its reply is brought back to you here as a new request. Get channelId and agentIds from listChannels. Not for the current Channel: your final answer is posted there. Returns a link to the Channel; include it in your final answer.",
+        'Ask the person to connect a connector (an app or MCP server) you need, as a card in this conversation with a one-click Connect button; they authorize in place and need no URL or key from you. Use it whenever the person asks you to connect something or a task needs a connector that is not connected yet, instead of pasting an authorization link. Pass a catalog identifier (e.g. github, linear, notion, sentry, stripe); for an MCP server outside the catalog also pass its https url. The card is posted right away; finish your answer by saying it is there, and use the connector from your next turn once connected.',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['channelId', 'agentIds', 'content'],
+        required: ['identifier'],
         properties: {
-          channelId: { type: 'string', description: 'Target Channel id from listChannels.' },
+          auth: {
+            type: 'string',
+            enum: ['oauth', 'none'],
+            description: 'Only with url: how the server authorizes. Default oauth.',
+          },
+          identifier: {
+            type: 'string',
+            description: 'Catalog identifier, or a short id (letters, digits, _ and -) for a url.',
+          },
+          name: { type: 'string', description: 'Only with url: display name of the server.' },
+          reason: {
+            type: 'string',
+            description: 'One short sentence on what you will do with it, shown on the card.',
+          },
+          url: {
+            type: 'string',
+            description: 'The https MCP endpoint of a server outside the catalog.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.addReaction,
+      description:
+        'React to a message in the current conversation with an emoji, as yourself, the way a person would: it posts nothing, notifies nobody and does not replace your answer. Any emoji; you can leave several different ones on one message.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.removeReaction,
+      description: 'Remove a reaction you left on a message in the current conversation.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['messageId', 'emoji'],
+        properties: {
+          emoji: { type: 'string', description: 'One Unicode emoji, e.g. "👀" or "✅".' },
+          messageId: {
+            type: 'string',
+            description:
+              "A message ID in the current conversation: the request's id, or one returned by readMessages.",
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.sendMessage,
+      description:
+        "Ask or tell another Agent something, in the conversation between you two, never in the person's conversation or a group: its answer wakes you there, and what you then write is posted back where you asked. Address one Agent per call; to ask several, call once for each. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['agentIds', 'content'],
+        properties: {
           agentIds: {
             type: 'array',
             items: { type: 'string' },
             minItems: 1,
-            maxItems: 5,
-            description: 'Agents to address; each must be a member of the target Channel.',
+            maxItems: 1,
+            description: 'The one Agent to ask.',
+          },
+          channelId: {
+            type: 'string',
+            description:
+              'Optional: a Channel from listChannels where the person reaches that Agent, whose setup it keeps.',
           },
           content: {
             type: 'string',
             description:
-              'The message, self-contained: the addressed Agent sees only that Channel, not this conversation.',
+              'The message, self-contained: the addressed Agent does not see this conversation.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.listThreads,
+      description:
+        "List the Threads of the current Channel, newest first: each Thread's root (what it is about), its latest message, and your latest reply there with its status (queued, running, completed, failed, cancelled, silent), when it started, steps taken and, for a running reply your requester asked for, its latest steps. Use it to know what you are working on in parallel before reporting progress, stopping or steering. Default 10, maximum 20; pass before from nextBefore to read older Threads when hasMore is true.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          activeOnly: {
+            type: 'boolean',
+            description: 'Only Threads where you have a queued or running reply.',
+          },
+          before: {
+            type: 'string',
+            description:
+              'Exclusive cursor: the last threadId of the previous page (nextBefore). Omit for the newest page.',
+          },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 20,
+            description: 'Number of Threads; default 10.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.createThread,
+      description:
+        "Open a new Thread in the current Channel for one piece of work and start it: the title is posted on the main timeline as the Thread root, and the request is posted in the Thread as your requester's, @mentioning the Agent (you by default), which then answers there in parallel with you. Use it to split work into parallel Threads. Not available when an Agent posted the request you are answering.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'content'],
+        properties: {
+          title: {
+            type: 'string',
+            description:
+              "Short title of the work, in your requester's language (max 200 characters).",
+          },
+          content: {
+            type: 'string',
+            description:
+              'The request, self-contained: the run in the Thread sees the Thread and the main timeline up to its root, not your conversation.',
+          },
+          agentId: {
+            type: 'string',
+            description: 'An Agent member of this Channel to answer; defaults to you.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.stopThread,
+      description:
+        "Stop the replies running or queued in another Thread of the current Channel (your requester's own requests there; every reply for an admin). The Thread and its history stay. Use it when the person says a piece of work is no longer needed.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadId'],
+        properties: {
+          threadId: { type: 'string', description: 'Thread id from listThreads.' },
+          reason: { type: 'string', description: 'Optional. One short sentence on why.' },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.steerThread,
+      description:
+        'Send a correction to your reply in another Thread of the current Channel. If it is running, the reply takes the correction in at its next step and keeps going (delivery `steered`), and the correction is posted in the Thread for the record. If nothing of yours runs there, it is posted in the Thread as a new request for you (delivery `queued`). Prefer this over stopping and starting again when the work only needs to change course.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadId', 'content'],
+        properties: {
+          threadId: { type: 'string', description: 'Thread id from listThreads.' },
+          content: {
+            type: 'string',
+            description: 'The correction, self-contained, as an instruction to the running reply.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.watchThreads,
+      description:
+        "Report on Threads every intervalMinutes: each report is posted on the main timeline as your requester's request to you, so you answer it with an update (use listThreads / readMessages there). It stops after maxReports, when stopped with unwatchThreads, or once none of your replies in those Threads runs, with a last report asking for a summary. Use it when the person asks for regular progress updates. Not available when an Agent posted the request you are answering.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadIds', 'intervalMinutes'],
+        properties: {
+          threadIds: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: 10,
+            description: 'Thread ids from listThreads.',
+          },
+          intervalMinutes: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 120,
+            description: 'Minutes between reports.',
+          },
+          maxReports: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 48,
+            description: 'Most reports to post; default 12.',
+          },
+          prompt: {
+            type: 'string',
+            description:
+              "What each report should cover, in your requester's language, e.g. what the person asked to be told.",
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.unwatchThreads,
+      description: 'Stop the scheduled reports of a watch started with watchThreads.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['watchId'],
+        properties: {
+          watchId: { type: 'string', description: 'The watchId watchThreads returned.' },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.postMessage,
+      description:
+        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) and have not posted yet, unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. A card it posts is not posted again, neither by a later postMessage nor with your final answer; to post one again (say, redrawn with newer data), name it in surfaceIds. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            type: 'string',
+            description:
+              'Another Channel from listChannels that you are a member of. Omit for the current Channel.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              "A Thread of that Channel, from listThreads. Omit for the Channel's main timeline.",
+          },
+          content: {
+            type: 'string',
+            description:
+              'The message, written for the people there; self-contained, as they do not see this conversation. May be empty when it carries cards.',
+          },
+          includeCards: {
+            type: 'boolean',
+            description:
+              'Carry the cards you drew in this run and have not posted yet. Default true.',
+          },
+          surfaceIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Carry exactly these cards (by surfaceId, each in its latest drawing) instead, including one already posted.',
           },
         },
       },

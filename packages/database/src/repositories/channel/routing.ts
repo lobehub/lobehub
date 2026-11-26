@@ -3,6 +3,7 @@ import type {
   ChannelJobWake,
   ChannelMessageRoutingStatus,
 } from '@lobechat/types';
+import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -142,6 +143,10 @@ export const retryRouting = async (
 ): Promise<ChannelMessageItem> => {
   const message = await findMessage(tx, channelId, messageId);
   assertThreadOpen(await findThread(tx, channelId, message.threadId));
+  // A tombstone is `unassigned` after deletion; sending it back to the decision model would
+  // restart a request whose author already withdrew it.
+  if (channelMessageDeletedAt(message.metadata))
+    throw new ChannelError('CONFLICT', 'A deleted message cannot be routed again');
   if (message.routingStatus !== 'unassigned')
     throw new ChannelError('CONFLICT', 'Only an unassigned message can be routed again');
 

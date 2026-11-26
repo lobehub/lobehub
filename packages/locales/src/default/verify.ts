@@ -1133,6 +1133,8 @@ export default {
   'acceptance.collaboration.sendFailed': "Couldn't send the message. Try again.",
   'acceptance.collaboration.agentFallback': 'the agent',
   'acceptance.access.submit': 'Send request',
+  'acceptance.comments.createFailedRetry':
+    "Couldn't post the comment. Check your network and try again.",
   'acceptance.repair.description':
     'The project Agent will create and run a repair task for the unresolved feedback at submission time. Later feedback stays for the next handoff. You confirm the fixes after reviewing the delivery.',
   'acceptance.repair.originDescription':

@@ -120,6 +120,11 @@ export const parseBrowserKey = (
   return { combo: [...ordered, key].join('+'), key, modifiers: ordered };
 };
 
+/** Whether the press inserts text: a printable key, Enter or Space with no Control/Alt/Meta. */
+export const browserKeyTypesText = ({ key, modifiers }: BrowserKeyCombo): boolean =>
+  ([...key].length === 1 || key === 'Enter' || key === 'Space') &&
+  !modifiers.some((modifier) => modifier !== 'Shift');
+
 const MAC_EDIT_COMMANDS: Record<string, BrowserEditCommand> = {
   a: 'selectAll',
   c: 'copy',

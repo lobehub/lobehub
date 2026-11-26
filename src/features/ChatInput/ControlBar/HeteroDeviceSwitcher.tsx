@@ -31,6 +31,8 @@ import {
   getMachineDefaultTarget,
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
+import { getPrivateDeviceBlock } from '@/features/HeterogeneousAgent/ExecutionEnvironment/heteroTargetSelection';
+import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   isHeterogeneousSandboxExecutionAvailable,
@@ -48,12 +50,18 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import { autoDispatchPool, summarizeAutoTarget } from './autoTargetSummary';
+import CloudSandboxOptions from './CloudSandboxOptions';
+import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
+import GroupSubmenu from './GroupSubmenu';
+import { LOCAL_SANDBOX_ENTRY_ENABLED } from './localSandboxEntry';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
+import { useSandboxOptions } from './useSandboxOptions';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
 const styles = stylex.create({
@@ -69,13 +77,14 @@ const styles = stylex.create({
     fontSize: '12px',
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     whiteSpace: 'nowrap',
-    transition: 'all 0.2s',
+    transition: 'color 0.2s, background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   buttonLabel: {
     overflow: 'hidden',
-    maxWidth: '120px',
+    // Room for "Auto · <device>" before a long machine name truncates.
+    maxWidth: '160px',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -99,12 +108,6 @@ const styles = stylex.create({
     color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextSecondary },
     transition: 'color 0.2s',
   },
-  deviceList: {
-    overflowY: 'auto',
-    maxHeight: '240px',
-    marginInlineEnd: '-4px',
-    paddingInlineEnd: '4px',
-  },
   empty: {
     paddingBlock: '8px',
     paddingInline: '8px',
@@ -114,9 +117,9 @@ const styles = stylex.create({
   downloadCard: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '10px',
+    gap: '8px',
     alignItems: 'center',
-    paddingBlock: '8px',
+    paddingBlock: '6px',
     paddingInline: '8px',
     borderRadius: cssVar.borderRadius,
     textDecoration: 'none',
@@ -130,15 +133,9 @@ const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadius,
+    width: '16px',
+    height: '16px',
     color: cssVar.colorText,
-    backgroundColor: cssVar.colorBgElevated,
-    backgroundImage: 'none',
   },
   optionMeta: { display: 'flex', flex: '1', flexDirection: 'column', gap: '1px', minWidth: '0' },
   optionTitle: {
@@ -164,7 +161,7 @@ const styles = stylex.create({
   },
   headerLink: {
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     fontSize: '11px',
     color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
@@ -175,7 +172,7 @@ const styles = stylex.create({
   manageButton: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '3px',
+    gap: '4px',
     alignItems: 'center',
     padding: '0',
     borderStyle: 'none',
@@ -185,13 +182,6 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.2s',
   },
-  groupLabel: {
-    paddingBlock: '4px',
-    paddingInline: '8px',
-    fontSize: '11px',
-    fontWeight: 500,
-    color: cssVar.colorTextQuaternary,
-  },
 });
 
 interface HeteroDeviceSwitcherProps {
@@ -199,7 +189,7 @@ interface HeteroDeviceSwitcherProps {
 }
 
 const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'setting']);
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
   const { canUseResource } = useChatInputResourceAccess();
@@ -209,6 +199,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const topicId = useTopicId();
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
+  const agentVisibility = useAgentStore((s) => s.agentMap[agentId]?.visibility);
+  // The stored (shared) policy, not the effective one: the effective config
+  // drops the policy for a private Agent's owner, for whom it is dormant.
+  const sharedSelectionPolicy = useAgentStore(
+    (s) => s.agentMap[agentId]?.agencyConfig?.executionTargetSelectionPolicy,
+  );
+  const { canManageAgent } = useAgentManagementAccess(agentId);
 
   // Shared config merged with the caller's per-agent override —
   // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
@@ -338,17 +335,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // exactly when a command would actually be fenced.
   const localSandboxEnabled = isLocalSandboxEnabled(agencyConfig, executionTarget);
   const localSandboxNetwork = agencyConfig?.localSandboxNetwork === true;
+  // The entry can be switched off as a whole (T-14823). Hidden, it is not
+  // probed either: the capability only ever decides how that row looks.
+  const showLocalSandboxRow = isDesktop && LOCAL_SANDBOX_ENTRY_ENABLED;
   const { data: sandboxCapability, mutate: revalidateSandboxCapability } =
-    useLocalSandboxCapability();
+    useLocalSandboxCapability(showLocalSandboxRow);
   const canUseLocalSandbox = sandboxCapability?.available === true;
 
   // The desktop downgrades its own verdict when a fence fails to establish (the
   // cheap probe can't see that far), so re-ask each time the picker opens
   // instead of showing a stale "available" for the rest of the session.
   useEffect(() => {
-    if (!isDesktop || !open) return;
+    if (!showLocalSandboxRow || !open) return;
     void revalidateSandboxCapability();
-  }, [open, revalidateSandboxCapability]);
+  }, [open, revalidateSandboxCapability, showLocalSandboxRow]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const { selectTarget, topicDeviceId } = useTopicAwareTargetSelect({
@@ -360,12 +360,29 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   });
 
   const handleSelect = useCallback(
-    async (target: DeviceExecutionTarget, deviceId?: string, localSandbox?: boolean) => {
+    async (
+      target: DeviceExecutionTarget,
+      deviceId?: string,
+      localSandbox?: boolean,
+      afterApply?: () => Promise<void>,
+    ) => {
       setOpen(false);
-      await selectTarget(target, deviceId, localSandbox);
+      await selectTarget(target, deviceId, localSandbox, afterApply);
     },
     [selectTarget],
   );
+
+  // The cloud sandbox's storage — temporary, or a drive folder — is picked one
+  // level under its row. Asked once the menu could show it.
+  const sandboxOptions = useSandboxOptions(agentId, {
+    enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
+    topicId,
+  });
+  // An option picked while the conversation runs elsewhere moves it to the
+  // cloud sandbox first; the menu stays open for the other option.
+  const ensureSandbox = useCallback(async () => {
+    if (executionTarget !== 'sandbox') await selectTarget('sandbox');
+  }, [executionTarget, selectTarget]);
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
   // OS account, so it only ever happens on this explicit click. The popover
@@ -488,6 +505,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   );
   const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(otherDevices);
   const privateDevices = isWorkspaceAgent ? privateWorkspace : [];
+  // A manager's pick on a published fixed Agent writes the shared contract,
+  // which the server only accepts with a public device
+  // (`FixedAgentRequiresPublicWorkspaceDevice`): say so on the rows rather
+  // than after a failed save. A private Agent's owner may pick any of them —
+  // its policy is dormant until publication.
+  const privateDeviceBlockedReason =
+    getPrivateDeviceBlock({
+      canManageAgent,
+      isWorkspaceAgent,
+      selectionPolicy: sharedSelectionPolicy,
+      visibility: agentVisibility,
+    }) === 'fixed'
+      ? t('setting:settingAgent.devicePolicy.privateDeviceFixed')
+      : undefined;
   const workspaceDevices = isWorkspaceAgent ? workspace : [];
   const personalOnlyDevices = isWorkspaceAgent ? [] : personal;
   // Workspace agents always render the Private / Workspace group split (even
@@ -527,6 +558,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
+  // One cloud sandbox: whether it keeps files on the drive, and what it is set
+  // up from, are its options on the chips beside this one.
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
   if (chipExecutionTarget === 'none') {
     chipIcon = <ExecutionTargetIcon target={'none'} />;
@@ -534,6 +567,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   } else if (chipExecutionTarget === 'auto') {
     chipIcon = <ExecutionTargetIcon target={'auto'} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
+    // A bare "Auto" hides three different runs: one online device is used
+    // directly, several leave the pick to the Agent, none runs without a
+    // device. Say which one, from the pool the server dispatches among.
+    if (canShowExecutionTargetSelector) {
+      const autoSummary = summarizeAutoTarget({
+        isConfirmed: isDeviceListConfirmed,
+        pool: autoDispatchPool({ boundDeviceId, devices, isWorkspaceAgent }),
+      });
+      if (autoSummary.kind === 'single') {
+        const name =
+          isDesktop && isThisComputerDevice(autoSummary.device, localMachineDeviceIds)
+            ? t('heteroAgent.executionTarget.local')
+            : autoSummary.device.friendlyName ||
+              autoSummary.device.hostname ||
+              t('heteroAgent.executionTarget.unknownDevice');
+        chipLabel = t('heteroAgent.executionTarget.autoOn', { name });
+      } else if (autoSummary.kind === 'multiple') {
+        chipLabel = t('heteroAgent.executionTarget.autoAgentPicks');
+      } else if (autoSummary.kind === 'none') {
+        chipLabel = t('heteroAgent.executionTarget.autoNoDevice');
+      }
+    }
   } else if (chipExecutionTarget === 'local') {
     // 本机始终使用通用的本地电脑图标，不区分具体平台
     chipIcon = <ExecutionTargetIcon target={canShowExecutionTargetSelector ? 'local' : 'device'} />;
@@ -594,10 +649,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     return executionTarget === target;
   };
 
+  const isLocalSandboxActive = executionTarget === 'local' && localSandboxEnabled;
+
   const showLocalRow = isDesktop && (!ownWorkspaceDevice || isActive('local'));
-  const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
+  const activeDeviceId = executionTarget === 'device' ? boundDeviceId : undefined;
+  const renderDeviceRow = (
+    d: DeviceListItem,
+    {
+      blockedReason,
+      thisComputer = false,
+    }: { blockedReason?: string; thisComputer?: boolean } = {},
+  ) => (
     <DeviceOptionRow
       active={isActive('device', d.deviceId)}
+      blockedReason={blockedReason}
       device={d}
       key={d.deviceId}
       // Users pick a machine, not a transport: this one is "This computer".
@@ -610,7 +675,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   );
 
   const content = (
-    <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox style={{ maxWidth: 280, minWidth: 240 }}>
       <div {...stylex.props(styles.header)}>
         <Flexbox horizontal align={'center'} gap={4}>
           <span {...stylex.props(styles.headerTitle)}>
@@ -656,8 +721,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           plain row stays only while it is still the active pick. */}
       {showLocalRow ? (
         <OptionRow
+          compact
           active={isActive('local')}
-          desc={t('heteroAgent.executionTarget.localDesc')}
           icon={<ExecutionTargetIcon target={'local'} />}
           label={t('heteroAgent.executionTarget.local')}
           tags={tagsFor(isActive('local'))}
@@ -668,15 +733,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           `local` is still the pick) it keeps its machine name, so two rows
           never both read "This computer". */}
       {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
-      {isDesktop ? (
-        <div {...stylex.props(styles.groupLabel)}>
-          {t('heteroAgent.executionTarget.builtinGroup')}
-        </div>
-      ) : null}
+      {/* The first level is one plain list with no section labels: the choices
+          that run nowhere in particular (no device, auto), the sandboxes, then
+          a row per device group whose choices open beside it. A
+          heterogeneous agent has neither of the first two rows. */}
       {isHetero ? null : (
         <OptionRow
+          compact
           active={isActive('none')}
-          desc={t('heteroAgent.executionTarget.noneDesc')}
           icon={<ExecutionTargetIcon target={'none'} />}
           label={t('heteroAgent.executionTarget.none')}
           onClick={() => void handleSelect('none')}
@@ -684,11 +748,39 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       {isHetero ? null : (
         <OptionRow
+          compact
           active={isActive('auto')}
-          desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<ExecutionTargetIcon target={'auto'} />}
           label={t('heteroAgent.executionTarget.auto')}
           onClick={() => void handleSelect('auto')}
+        />
+      )}
+      {/* One cloud sandbox, its storage one level down: a temporary sandbox,
+          or a folder on the drive. A runtime that cannot use it gets a
+          disabled row saying why. */}
+      {supportsSandbox ? (
+        <GroupSubmenu
+          active={isActive('sandbox')}
+          icon={<ExecutionTargetIcon target={'sandbox'} />}
+          label={t('heteroAgent.executionTarget.sandbox')}
+          testId={'cloud-sandbox-row'}
+        >
+          <CloudSandboxOptions
+            options={sandboxOptions}
+            onClose={() => setOpen(false)}
+            onEnsureSandbox={ensureSandbox}
+          />
+        </GroupSubmenu>
+      ) : (
+        <OptionRow
+          compact
+          disabled
+          icon={<ExecutionTargetIcon target={'sandbox'} />}
+          label={t('heteroAgent.executionTarget.sandbox')}
+          desc={t('heteroAgent.executionTarget.sandboxUnsupported', {
+            name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined,
+          })}
+          onClick={() => {}}
         />
       )}
       {/* This machine, fenced: writes confined to the working
@@ -696,14 +788,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
           "not installed yet" and silently hiding the feature would strand the
-          user with no way to find out why. */}
-      {isDesktop ? (
+          user with no way to find out why. Hidden as a whole while the entry is
+          switched off; see `LOCAL_SANDBOX_ENTRY_ENABLED`. */}
+      {showLocalSandboxRow ? (
         <OptionRow
-          active={executionTarget === 'local' && localSandboxEnabled}
+          compact
+          active={isLocalSandboxActive}
           disabled={!canUseLocalSandbox}
           icon={<Icon icon={ShieldCheckIcon} size={14} />}
           label={t('heteroAgent.executionTarget.localSandbox')}
-          tags={tagsFor(executionTarget === 'local' && localSandboxEnabled)}
+          tags={tagsFor(isLocalSandboxActive)}
           desc={
             canUseLocalSandbox
               ? t(
@@ -743,55 +837,38 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local', undefined, true)}
         />
       ) : null}
-      <OptionRow
-        active={isActive('sandbox')}
-        disabled={!supportsSandbox}
-        icon={<ExecutionTargetIcon target={'sandbox'} />}
-        label={t('heteroAgent.executionTarget.sandbox')}
-        desc={t(
-          supportsSandbox
-            ? 'heteroAgent.executionTarget.sandboxDesc'
-            : 'heteroAgent.executionTarget.sandboxUnsupported',
-          { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
-        )}
-        onClick={() => void handleSelect('sandbox')}
-      />
-      {deviceRows.length > 0 ? (
-        showDeviceGroups ? (
-          <>
-            {privateDevices.length > 0 ? (
-              <>
-                <div {...stylex.props(styles.groupLabel)}>
-                  {t('heteroAgent.executionTarget.personalGroup')}
-                </div>
-                <div {...stylex.props(styles.deviceList)}>
-                  {privateDevices.map((d) => renderDeviceRow(d))}
-                </div>
-              </>
-            ) : null}
-            {workspaceDevices.length > 0 ? (
-              <>
-                <div {...stylex.props(styles.groupLabel)}>
-                  {t('heteroAgent.executionTarget.workspaceGroup')}
-                </div>
-                <div {...stylex.props(styles.deviceList)}>
-                  {workspaceDevices.map((d) => renderDeviceRow(d))}
-                </div>
-              </>
-            ) : null}
-          </>
-        ) : personalOnlyDevices.length > 0 ? (
-          <>
-            {isDesktop ? (
-              <div {...stylex.props(styles.groupLabel)}>
-                {t('heteroAgent.executionTarget.otherDevicesGroup')}
-              </div>
-            ) : null}
-            <div {...stylex.props(styles.deviceList)}>
-              {personalOnlyDevices.map((d) => renderDeviceRow(d))}
-            </div>
-          </>
-        ) : null
+      {/* Devices sit one level down too, a row per group: the list keeps
+          growing, and the environments above should not scroll away with it. */}
+      {showDeviceGroups && privateDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={privateDevices}
+          kind={'private'}
+          label={t('heteroAgent.executionTarget.personalGroup')}
+          renderDevice={(d) => renderDeviceRow(d, { blockedReason: privateDeviceBlockedReason })}
+        />
+      ) : null}
+      {showDeviceGroups && workspaceDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={workspaceDevices}
+          kind={'workspace'}
+          label={t('heteroAgent.executionTarget.workspaceGroup')}
+          renderDevice={renderDeviceRow}
+        />
+      ) : null}
+      {!showDeviceGroups && personalOnlyDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={personalOnlyDevices}
+          kind={'devices'}
+          renderDevice={renderDeviceRow}
+          label={t(
+            isDesktop
+              ? 'heteroAgent.executionTarget.otherDevicesGroup'
+              : 'heteroAgent.executionTarget.myDevicesGroup',
+          )}
+        />
       ) : null}
       {poolStatus === 'loading' ? (
         <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.loading')}</div>

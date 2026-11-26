@@ -1,5 +1,6 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest, MessagesEngineParams } from '@lobechat/context-engine';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import type { ContextSnapshot } from './types';
 import { createVariableGenerators } from './variableGenerators';
@@ -8,6 +9,13 @@ const definedOnly = <T extends Record<string, unknown>>(record: T): Partial<T> =
   Object.fromEntries(
     Object.entries(record).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+
+const builtInProviders = new Set<string>(Object.values(ModelProvider));
+const responsesProviders = new Set<string>([
+  ModelProvider.OpenAI,
+  ModelProvider.ChatGPT,
+  ModelProvider.LobeHub,
+]);
 
 const CURRENT_DATE_LINE = /Current date: \d{4}-\d{2}-\d{2}/g;
 
@@ -84,6 +92,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     historyCount: agent.historyCount,
     inputTemplate: agent.inputTemplate,
     knowledge: agent.knowledge,
+    ...(agent.revokedDocumentReads?.length && { revokedDocumentReads: agent.revokedDocumentReads }),
     systemRole: agent.systemRole,
 
     // --- model ---
@@ -96,8 +105,13 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     // --- tools + skills ---
     selectedSkills: tools?.selectedSkills,
     selectedTools: tools?.selectedTools,
+    ...(tools?.skillChanges && { skillChanges: tools.skillChanges }),
     toolDiscoveryConfig: tools?.toolDiscoveryConfig,
     toolsConfig: {
+      // Custom provider IDs use the OpenAI-compatible runtime. Defer the final
+      // decision until aliases, relays and the effective protocol are resolved.
+      anchorActivatedTools:
+        responsesProviders.has(model.provider) || !builtInProviders.has(model.provider),
       disabledToolIdentifiers,
       manifests,
       tools: enabledToolIds,

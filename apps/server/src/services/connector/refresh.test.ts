@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
   buildLastSyncedAtMap,
   CONNECTOR_TOOLS_REFRESH_TTL_MS,
+  connectorSyncContextForRow,
   scheduleStaleConnectorToolsRefresh,
 } from './refresh';
 import { syncConnectorToolsById } from './sync';
@@ -66,6 +68,50 @@ describe('buildLastSyncedAtMap', () => {
 
   it('returns an empty map for no tools', () => {
     expect(buildLastSyncedAtMap([]).size).toBe(0);
+  });
+});
+
+describe('connectorSyncContextForRow', () => {
+  const db = {} as any;
+  const runContext = (forRow: (row: unknown) => unknown) =>
+    ({ connectorModel: { forRow }, connectorToolModel: { scope: 'run' } }) as any;
+
+  it("keeps the run's own context for a row in the run's scope", () => {
+    const ctx = runContext(function (this: unknown) {
+      return ctx.connectorModel;
+    });
+    const row = { userId: 'user-1', workspaceId: 'ws-1' };
+
+    expect(connectorSyncContextForRow(ctx, row, db)).toBe(ctx);
+  });
+
+  /**
+   * @example
+   * expect(connectorSyncContextForRow(workspaceRun, ownersPersonalRow, db).connectorModel).toBe(personalModel);
+   */
+  it("writes the owner's personal row through the personal scope", () => {
+    // ROOT CAUSE:
+    //
+    // A private agent's workspace run resolves its owner's personal connector, but its stale-tool
+    // refresh used the run's workspace-scoped models, which cannot find or write that row, so the
+    // tool list stayed at its install-time state.
+    const personalModel = { scope: 'personal' };
+    const ctx = runContext(() => personalModel);
+    const row = { userId: 'user-1', workspaceId: null };
+
+    const result = connectorSyncContextForRow(ctx, row, db);
+
+    expect(result?.connectorModel).toBe(personalModel);
+    expect(result?.connectorToolModel).toBeInstanceOf(ConnectorToolModel);
+    expect(result?.connectorToolModel).not.toBe(ctx.connectorToolModel);
+  });
+
+  it('has no context for a personal row without a database to reach it', () => {
+    const ctx = runContext(() => ({ scope: 'personal' }));
+
+    expect(
+      connectorSyncContextForRow(ctx, { userId: 'user-1', workspaceId: null }, undefined),
+    ).toBe(undefined);
   });
 });
 

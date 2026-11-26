@@ -1,7 +1,7 @@
 import { type UserCredSummary } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { isOwnCredRow, workspaceCredRowAccess } from './credAccess';
+import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
 
 const ME = 42;
 const OTHER = 99;
@@ -129,5 +129,15 @@ describe('workspaceCredRowAccess', () => {
       });
       expect(workspaceCredRowAccess(cred, member).unshare).toBe(false);
     });
+  });
+});
+
+describe('isWriteOnlyCredRow', () => {
+  it('is true only for a workspace credential shared with every member', () => {
+    expect(isWriteOnlyCredRow(row({ ownerType: 'organization', visibility: 'public' }))).toBe(true);
+    expect(isWriteOnlyCredRow(row({ ownerType: 'organization', visibility: 'private' }))).toBe(
+      false,
+    );
+    expect(isWriteOnlyCredRow(row({ ownerType: 'user', visibility: 'public' }))).toBe(false);
   });
 });

@@ -116,8 +116,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );
 
-  const globalActiveTopicId = useChatStore((s) => s.activeTopicId);
-  const activeTopicId = routeTopicId === undefined ? globalActiveTopicId : routeTopicId;
+  // An explicit `routeTopicId` (including `null`) must not subscribe the caller
+  // to every active-topic switch; sidebar rows re-rendered on each switch.
+  const activeTopicId = useChatStore((s) =>
+    routeTopicId === undefined ? s.activeTopicId : routeTopicId,
+  );
   const activeTopic = useChatStore((s) =>
     activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
   );

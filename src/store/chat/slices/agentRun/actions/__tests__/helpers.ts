@@ -7,6 +7,7 @@ import {
   agentChatConfigSelectors,
   agentSelectors,
 } from '@/store/agent/selectors';
+import { useToolStore } from '@/store/tool';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -40,6 +41,8 @@ export const setupMockSelectors = (
   vi.spyOn(agentSelectors, 'currentAgentMeta').mockImplementation(
     () => options.agentMeta || { tags: [] },
   );
+
+  vi.spyOn(useToolStore.getState(), 'ensureAgentSkillsLoaded').mockResolvedValue(undefined);
 };
 
 /**

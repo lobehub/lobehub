@@ -16,6 +16,7 @@ import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
 import { removeByAgent, removeByTopics } from '@/server/services/inboundWebhook/lifecycle';
+import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
 
 import {
   resolveTrashHandler,
@@ -171,6 +172,15 @@ export class TrashService {
     });
     // Do remote teardown after commit, for the actual rows stamped (including cascades).
     // A rollback never removes live subscriptions; a missing remote cannot undo the trash operation.
+    // The worktrees the app created for these topics go with them; the branch
+    // stays, so a restore can check it out again.
+    scheduleWorktreeCleanup({
+      db: this.db,
+      topicIds: removedTopics,
+      trigger: 'trashed',
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
     if (removedTopics.length || removedAgents.length) {
       try {
         const scope = { userId: this.userId, workspaceId: this.workspaceId };

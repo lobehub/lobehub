@@ -43,6 +43,68 @@ describe('useProjectDraftStaging', () => {
     expect(pending()).toEqual(switched);
   });
 
+  // Regression: moving a folder draft to the project's sandbox (by hand or by
+  // the automatic choice) was undone by the next click in the pane.
+  it("follows a move to its project's sandbox instead of reverting it", () => {
+    const a = renderHook(() => useProjectDraftStaging(paneA, ids, 'prj_1'));
+    const sandbox = { agentId: 'agt_a', auto: true, projectId: 'prj_1' };
+
+    act(() => useChatStore.getState().setPendingNewTopicDirectory(sandbox));
+    act(() => a.result.current());
+
+    expect(pending()).toEqual(sandbox);
+  });
+
+  it("does not follow another project's sandbox draft", () => {
+    const a = renderHook(() => useProjectDraftStaging(paneA, ids, 'prj_1'));
+
+    act(() =>
+      useChatStore.getState().setPendingNewTopicDirectory({ agentId: 'agt_a', projectId: 'prj_2' }),
+    );
+    act(() => a.result.current());
+
+    expect(pending()).toEqual(paneA);
+  });
+
+  // Left behind, the draft outlived its pane: the agent's next blank
+  // conversation anywhere sent into this project and offered its environment.
+  it('withdraws its draft when the pane leaves it', () => {
+    const projectDraft = { agentId: 'agt_a', projectId: 'prj_1' };
+    const pane = renderHook(({ draft }) => useProjectDraftStaging(draft, ids), {
+      initialProps: { draft: projectDraft as typeof projectDraft | undefined },
+    });
+    expect(pending()).toEqual(projectDraft);
+
+    pane.rerender({ draft: undefined });
+    expect(pending()).toBeUndefined();
+
+    pane.rerender({ draft: projectDraft });
+    pane.unmount();
+    expect(pending()).toBeUndefined();
+  });
+
+  /** @example Review: closing one of two split panes on the same draft cleared the other's staging. */
+  it('keeps a draft staged while another live pane holds the same one', () => {
+    const projectDraft = { agentId: 'agt_a', projectId: 'prj_1' };
+    const first = renderHook(() => useProjectDraftStaging({ ...projectDraft }, ids));
+    const second = renderHook(() => useProjectDraftStaging({ ...projectDraft }, ids));
+
+    first.unmount();
+    expect(pending()).toEqual(projectDraft);
+
+    second.unmount();
+    expect(pending()).toBeUndefined();
+  });
+
+  it("leaves another pane's staged draft alone", () => {
+    const a = renderHook(() => useProjectDraftStaging(paneA, ids));
+    renderHook(() => useProjectDraftStaging(paneB, ids));
+
+    a.unmount();
+
+    expect(pending()).toEqual(paneB);
+  });
+
   it('stages nothing without a draft', () => {
     const { result } = renderHook(() => useProjectDraftStaging(undefined, ids));
     act(() => result.current());

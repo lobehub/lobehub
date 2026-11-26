@@ -1,4 +1,8 @@
 import type {
+  ChannelAgentGrantMetadata,
+  ChannelAgentGrantRevokeReason,
+  ChannelAgentGrantStatus,
+  ChannelAskInput,
   ChannelAuditDetails,
   ChannelConfig,
   ChannelExecutionConfig,
@@ -14,6 +18,7 @@ import type {
   ChannelMemberMetadata,
   ChannelMemberRole,
   ChannelMemberStatus,
+  ChannelMessageKind,
   ChannelMessageMetadata,
   ChannelMessageRoutingSource,
   ChannelMessageRoutingStatus,
@@ -88,6 +93,12 @@ export const channels = pgTable(
      * is kept by the application, which serializes opening it.
      */
     peerUserId: text('peer_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * The two Agents of a conversation between Agents (`agentA:agentB`, sorted), opened when one
+     * of `userId`'s Agents asks another. `userId` is its owner member and the execution identity
+     * of both Agents; it watches the exchange without being part of it.
+     */
+    agentPairKey: text('agent_pair_key'),
 
     title: text('title').notNull(),
     /** Last allocated message sequence; incremented under the row lock when a message lands. */
@@ -115,6 +126,10 @@ export const channels = pgTable(
     uniqueIndex('channels_direct_unique')
       .on(t.agentId, t.userId, sql`coalesce(${t.workspaceId}, '')`)
       .where(sql`${t.agentId} IS NOT NULL`),
+    // One conversation per Agent pair, person and scope, like the direct conversation.
+    uniqueIndex('channels_agent_pair_unique')
+      .on(t.agentPairKey, t.userId, sql`coalesce(${t.workspaceId}, '')`)
+      .where(sql`${t.agentPairKey} IS NOT NULL`),
     check(
       'channels_direct_visibility_check',
       sql`${t.agentId} IS NULL OR ${t.visibility} = 'private'`,
@@ -124,6 +139,30 @@ export const channels = pgTable(
       .where(sql`${t.projectId} IS NOT NULL`),
     index('channels_workspace_visibility_idx').on(t.workspaceId, t.visibility),
   ],
+);
+
+/**
+ * A person's own sidebar section for organizing channels (Slack-style). Sections belong to one
+ * person in one scope: channels are shared, so how each member files them is not a channel
+ * property. Built-in sections (pinned, channels, direct messages) are derived, not stored.
+ */
+export const channelSections = pgTable(
+  'channel_sections',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** NULL for the personal scope. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    name: text('name').notNull(),
+    sort: integer('sort'),
+    collapsed: boolean('collapsed').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('channel_sections_user_id_workspace_id_idx').on(t.userId, t.workspaceId)],
 );
 
 /**
@@ -147,6 +186,17 @@ export const channelMembers = pgTable(
     role: text('role').$type<ChannelMemberRole>(),
     /** Highest sequence this person has read in the main channel. */
     lastReadSequence: integer('last_read_sequence'),
+    /** This person's sidebar section; NULL falls back to the built-in section. */
+    sectionId: uuid('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
+    /**
+     * @deprecated Unused duplicate of `pinnedAt`, which carries both the pin and its order. Kept
+     * only so dropping it needs no migration; read and write `pinnedAt` instead.
+     */
+    pinned: boolean('pinned').notNull().default(false),
+    /** Hidden from this person's sidebar until new activity reaches them. */
+    hidden: boolean('hidden').notNull().default(false),
+    /** When this person pinned the conversation atop their own list; NULL when not pinned. */
+    pinnedAt: timestamptz('pinned_at'),
 
     // Agent members
     /** NULL after Agent deletion; keep membership and authored history. */
@@ -169,6 +219,9 @@ export const channelMembers = pgTable(
       .on(t.channelId, t.userId)
       .where(sql`${t.userId} IS NOT NULL`),
     index('channel_members_user_id_idx').on(t.userId),
+    index('channel_members_section_id_idx')
+      .on(t.sectionId)
+      .where(sql`${t.sectionId} IS NOT NULL`),
     index('channel_members_agent_id_idx').on(t.agentId),
     // One constraint per rule, so a new actor type adds constraints instead of rewriting these.
     check('channel_members_actor_type_check', sql`${t.actorType} IN ('user', 'agent')`),
@@ -189,6 +242,11 @@ export const channelMembers = pgTable(
     check(
       'channel_members_agent_id_owner_check',
       sql`${t.agentId} IS NULL OR ${t.actorType} = 'agent'`,
+    ),
+    // Sidebar placement is a person's view; Agent members have no sidebar.
+    check(
+      'channel_members_section_id_owner_check',
+      sql`${t.sectionId} IS NULL OR ${t.actorType} = 'user'`,
     ),
     check(
       'channel_members_config_owner_check',
@@ -241,6 +299,74 @@ export const channelMemberGrants = pgTable(
       foreignColumns: [channelMembers.channelId, channelMembers.id],
       name: 'channel_member_grants_requester_fk',
     }),
+  ],
+);
+
+/**
+ * An Agent owner's consent for others in the Channel to run their Agent member as the owner, at
+ * the owner's cost. `granteeMemberId` and `threadId` narrow the scope; leaving both empty covers
+ * the whole Channel, and a reply runs when any live grant matches its requester and Thread.
+ * A changed scope is a new row, so a decision never carries over to a scope the owner did not see.
+ */
+export const channelAgentGrants = pgTable(
+  'channel_agent_grants',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    channelId: text('channel_id')
+      .references(() => channels.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** The Agent member the grant lets others run. */
+    memberId: uuid('member_id').notNull(),
+    /** Agent owner who approves, rejects or revokes, and who pays for the runs. */
+    ownerId: text('owner_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Person the grant covers; empty covers everyone in the Channel. */
+    granteeMemberId: uuid('grantee_member_id'),
+    /** Thread the grant covers; empty covers the main timeline and every Thread. */
+    threadId: text('thread_id'),
+    /** Person who asked for it; empty when the owner granted it themselves. */
+    requestedByMemberId: uuid('requested_by_member_id'),
+
+    status: text('status').$type<ChannelAgentGrantStatus>().notNull().default('pending'),
+    decidedAt: timestamptz('decided_at'),
+    revokedAt: timestamptz('revoked_at'),
+    revokeReason: text('revoke_reason').$type<ChannelAgentGrantRevokeReason>(),
+    metadata: jsonb('metadata').$type<ChannelAgentGrantMetadata>().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // One live grant per scope; decided-against and revoked rows stay as history.
+    uniqueIndex('channel_agent_grants_live_scope_unique')
+      .on(
+        t.memberId,
+        sql`coalesce(${t.granteeMemberId}::text, '')`,
+        sql`coalesce(${t.threadId}, '')`,
+      )
+      .where(sql`${t.status} IN ('pending', 'approved')`),
+    index('channel_agent_grants_owner_status_idx').on(t.ownerId, t.status),
+    index('channel_agent_grants_grantee_idx').on(t.granteeMemberId),
+    foreignKey({
+      columns: [t.channelId, t.memberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_member_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.granteeMemberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_grantee_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.requestedByMemberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_requester_fk',
+    }),
+    foreignKey({
+      columns: [t.channelId, t.threadId],
+      foreignColumns: [channelThreads.channelId, channelThreads.id],
+      name: 'channel_agent_grants_thread_fk',
+    }).onDelete('cascade'),
   ],
 );
 
@@ -312,10 +438,15 @@ export const channelMessages = pgTable(
       .notNull(),
     threadId: text('thread_id'),
     sequence: integer('sequence').notNull(),
+    /** What the message is (`ChannelMessageKind`); its payload is `metadata.<kind>`. */
+    kind: text('kind').$type<ChannelMessageKind>().notNull().default('text'),
     content: text('content').notNull(),
     /** Actual human sender, not the owner/requester of an Agent reply. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    /** Actual Agent sender. Author deletion retains group history and clears its reference. */
+    /**
+     * Actual Agent sender: of a reply, or of a request one Agent sent another in their
+     * conversation. Author deletion retains group history and clears its reference.
+     */
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     /** Mentioned member ids. Mentioned Agents run; mentioned people are only notified. */
     mentions: jsonb('mentions').$type<string[]>().notNull().default([]),
@@ -363,10 +494,6 @@ export const channelMessages = pgTable(
       'channel_messages_user_sender_check',
       sql`${t.routingStatus} <> 'reply' OR ${t.userId} IS NULL`,
     ),
-    check(
-      'channel_messages_agent_sender_check',
-      sql`${t.routingStatus} = 'reply' OR ${t.agentId} IS NULL`,
-    ),
   ],
 );
 
@@ -386,6 +513,43 @@ export const channelMessageFiles = pgTable(
   (t) => [
     unique('channel_message_files_message_file_unique').on(t.messageId, t.fileId),
     index('channel_message_files_file_idx').on(t.fileId),
+  ],
+);
+
+/**
+ * One member's emoji reaction to a message. People and Agents react through their member row,
+ * so an Agent can acknowledge with 👀 and finish with ✅ instead of posting a message.
+ */
+export const channelMessageReactions = pgTable(
+  'channel_message_reactions',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    channelId: text('channel_id')
+      .references(() => channels.id, { onDelete: 'cascade' })
+      .notNull(),
+    messageId: uuid('message_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    /** A Unicode emoji (`👍`) or a custom emoji id (`emj_xxx`). */
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('channel_message_reactions_message_member_emoji_unique').on(
+      t.messageId,
+      t.memberId,
+      t.emoji,
+    ),
+    index('channel_message_reactions_channel_member_idx').on(t.channelId, t.memberId),
+    foreignKey({
+      columns: [t.channelId, t.messageId],
+      foreignColumns: [channelMessages.channelId, channelMessages.id],
+      name: 'channel_message_reactions_message_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.memberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_message_reactions_member_fk',
+    }).onDelete('cascade'),
   ],
 );
 
@@ -454,11 +618,13 @@ export const channelJobs = pgTable(
     /**
      * Set when termination could not be confirmed in time (INC-049). Publication is revoked so
      * the member may run again, though not in the same device directory until the stop is
-     * confirmed: isolation frees the member lock but never `writerHeld`.
+     * confirmed: isolation frees the member's branch but never `writerHeld`.
      */
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
     draft: text('draft'),
+    /** Questions the run asked (`lobe-channel.askUser`), posted with its reply as an `ask`. */
+    ask: jsonb('ask').$type<ChannelAskInput>(),
     /** A revoked job never publishes. Set by stops, failures and isolation. */
     publicationRevoked: boolean('publication_revoked').notNull().default(false),
     publishedMessageId: uuid('published_message_id'),
@@ -481,20 +647,14 @@ export const channelJobs = pgTable(
     index('channel_jobs_lease_expires_idx')
       .on(t.leaseExpiresAt)
       .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
-    /** At most one writer per member. */
-    uniqueIndex('channel_jobs_active_member_unique')
-      .on(t.memberId)
-      .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
     /**
-     * At most one writer per device directory, across all channels. Unlike the member lock,
-     * isolation does not release it: only physical stop confirmation proves the old process
-     * has left the directory.
+     * Live writers by device directory. The locks themselves are application rules checked in
+     * `claimJob` (one writer per member and branch under the channel lock, one per device
+     * directory under an advisory lock), not database constraints, so they can change freely.
      */
-    uniqueIndex('channel_jobs_active_directory_unique')
+    index('channel_jobs_active_directory_idx')
       .on(t.deviceId, t.workingDirectory)
-      .where(
-        sql`${t.deviceId} IS NOT NULL AND ${t.workingDirectory} IS NOT NULL AND ${t.writerHeld}`,
-      ),
+      .where(sql`${t.writerHeld}`),
     foreignKey({
       columns: [t.channelId, t.memberId],
       foreignColumns: [channelMembers.channelId, channelMembers.id],
@@ -521,8 +681,11 @@ export const channelJobs = pgTable(
 export type ChannelItem = typeof channels.$inferSelect;
 export type NewChannel = typeof channels.$inferInsert;
 export type ChannelMemberItem = typeof channelMembers.$inferSelect;
+export type ChannelSectionItem = typeof channelSections.$inferSelect;
 export type NewChannelMember = typeof channelMembers.$inferInsert;
 export type ChannelMemberGrantItem = typeof channelMemberGrants.$inferSelect;
+export type ChannelAgentGrantItem = typeof channelAgentGrants.$inferSelect;
+export type NewChannelAgentGrant = typeof channelAgentGrants.$inferInsert;
 export type ChannelThreadItem = typeof channelThreads.$inferSelect;
 export type ChannelMessageItem = typeof channelMessages.$inferSelect;
 export type NewChannelMessage = typeof channelMessages.$inferInsert;

@@ -243,7 +243,7 @@ interface WechatDetailProps {
     requiredPlan?: 'paid';
   };
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {

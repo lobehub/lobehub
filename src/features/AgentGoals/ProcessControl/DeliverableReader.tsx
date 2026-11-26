@@ -25,6 +25,7 @@ import { EntityLinkHostProvider, useEntityMarkdown } from '@/features/EntityLink
 import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useDocumentStore } from '@/store/document';
+import { densityVars } from '@/styles/densityVars';
 
 import type { DeliverableItem } from './deliverableList';
 import {
@@ -67,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     flex: none;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 24px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -129,7 +130,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     width: 320px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

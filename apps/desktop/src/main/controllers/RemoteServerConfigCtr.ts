@@ -1,10 +1,11 @@
+import { readFileSync } from 'node:fs';
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
 
 import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electron-client-ipc';
 import { safeStorage, session as electronSession } from 'electron';
 
-import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { isDev, OFFICIAL_CLOUD_SERVER } from '@/const/env';
 import { refreshAppSignIn, withdrawAppSignIn } from '@/modules/cliEmbedding/appSignInFile';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
@@ -578,10 +579,43 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     return this.lastRefreshAt;
   }
 
+  // Before windows open: the main window picks onboarding vs app from this config.
+  beforeAppReady() {
+    const login = this.readDevRemoteLogin();
+    if (!login) return;
+    logger.info(`Dev login: signing in to ${login.remoteServerUrl}`);
+    this.app.storeManager.set('dataSyncConfig', {
+      active: true,
+      remoteServerUrl: login.remoteServerUrl,
+      storageMode: 'selfHost',
+    });
+    this.app.storeManager.set('desktopOnboardingCompleted', true);
+  }
+
   // Initialize by loading tokens from store when the controller is ready
   // We might need a dedicated lifecycle method if constructor is too early for storeManager
   afterAppReady() {
+    const login = this.readDevRemoteLogin();
+    // safeStorage encrypts only once the app is ready. No refresh token exists for a minted
+    // login; the access token outlives the dev session.
+    if (login) void this.saveTokens(login.accessToken, 'dev-login', login.expiresIn);
     this.loadTokensFromStore();
+  }
+
+  /**
+   * Dev builds only: a sign-in to a local server without the OAuth flow. The dev launcher
+   * (`electron-dev.sh start-local`) mints an access token with the local server's own signing key
+   * and points LOBE_DESKTOP_DEV_REMOTE_LOGIN at a file holding it. Tokens are then stored the
+   * normal way, so keychain encryption and the `lh` sign-in file stay the app's business.
+   */
+  private readDevRemoteLogin() {
+    const file = process.env.LOBE_DESKTOP_DEV_REMOTE_LOGIN;
+    if (!isDev || !file) return;
+    return JSON.parse(readFileSync(file, 'utf8')) as {
+      accessToken: string;
+      expiresIn: number;
+      remoteServerUrl: string;
+    };
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {

@@ -35,7 +35,7 @@ export const userFavorites = pgTable(
     title: text('title').notNull(),
     /** Emoji or avatar URL snapshot; null renders the type icon. */
     icon: text('icon'),
-    /** Position in the section, ascending. New favorites append to the end. */
+    /** Position in the section, ascending. New favorites go on top (one below the current minimum, so it can be negative); a reorder rewrites it to 0..n-1. */
     sortOrder: integer('sort_order').notNull().default(0),
 
     ...timestamps,

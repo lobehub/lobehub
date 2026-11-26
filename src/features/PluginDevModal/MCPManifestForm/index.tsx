@@ -26,8 +26,10 @@ import { type McpConnectionParams, type MCPErrorInfoMetadata } from '@/types/plu
 import ArgsInput from './ArgsInput';
 import BoundDeviceSelect from './BoundDeviceSelect';
 import CollapsibleSection from './CollapsibleSection';
+import { getMcpManifestSummary } from './mcpManifestSummary';
 import MCPTypeSelect from './MCPTypeSelect';
 import QuickImportSection from './QuickImportSection';
+import { hasAdvancedValue, useAdvancedSectionExpanded } from './useAdvancedSection';
 
 interface MCPManifestFormProps {
   /**
@@ -54,6 +56,11 @@ interface MCPManifestFormProps {
    * button: there is nothing to authorize or test.
    */
   onAuthorizeOAuth?: () => void;
+  /**
+   * The edited connector is private to its creator, so its device binding may
+   * also name their own private devices (see `bindableMcpDeviceGroups`).
+   */
+  privateConnector?: boolean;
 }
 
 export interface OAuthNotice {
@@ -103,8 +110,9 @@ const MCPManifestForm = ({
   enableOAuth,
   onAuthorizeOAuth,
   oauthNotice,
+  privateConnector,
 }: MCPManifestFormProps) => {
-  const { t } = useTranslation('plugin');
+  const { t, i18n } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
   const authType = useWatch(form, AUTH_TYPE);
   const connectVia = useWatch(form, CONNECT_VIA);
@@ -117,6 +125,13 @@ const MCPManifestForm = ({
   // For OAuth servers there is no token to test with — "testing" the connection
   // means running the authorize flow instead.
   const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
+
+  const clientId = useWatch(form, AUTH_CLIENT_ID);
+  const clientSecret = useWatch(form, AUTH_CLIENT_SECRET);
+  const headers = useWatch(form, HEADERS);
+  const [advancedExpanded, setAdvancedExpanded] = useAdvancedSectionExpanded(
+    hasAdvancedValue({ clientId, clientSecret, connectVia, headers, isOAuth }),
+  );
 
   // The redirect URI the server will use at authorize time (APP_URL-based), shown
   // so the user registers a matching URI on their OAuth app. Fetched lazily once
@@ -144,11 +159,18 @@ const MCPManifestForm = ({
 
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [errorMetadata, setErrorMetadata] = useState<MCPErrorInfoMetadata | null>(null);
+  // What the last successful test found ("12 tools"), kept with the
+  // connection it tested: once that changes it no longer vouches for it.
+  const stdioCommand = useWatch(form, STDIO_COMMAND);
+  const connectionKey = JSON.stringify([mcpType, httpUrl, stdioCommand, authType]);
+  const [testResult, setTestResult] = useState<{ key: string; summary: string } | null>(null);
+  const testSummary = testResult?.key === connectionKey ? testResult.summary : null;
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setConnectionError(null);
     setErrorMetadata(null);
+    setTestResult(null);
 
     // Manually trigger validation for fields needed for the test
     const fieldsToValidate: FieldPath<LobeToolCustomPlugin>[] =
@@ -188,6 +210,10 @@ const MCPManifestForm = ({
         // Optionally update form if manifest ID differs or to store the fetched manifest
         // Be careful about overwriting user input if not desired
         form.setValues({ manifest: result.manifest });
+        setTestResult({
+          key: connectionKey,
+          summary: getMcpManifestSummary(result.manifest, t, i18n.resolvedLanguage),
+        });
         setConnectionError(null); // Clear local error state
         setErrorMetadata(null);
       } else if (result.error) {
@@ -275,22 +301,6 @@ const MCPManifestForm = ({
                 <Input placeholder="https://mcp.higress.ai/mcp-github/xxxxx" />
               </Form.Field>
               <Form.Field
-                label={t('dev.mcp.connectVia.label')}
-                name={CONNECT_VIA}
-                desc={
-                  connectVia === 'device'
-                    ? t('dev.mcp.connectVia.deviceDesc')
-                    : t('dev.mcp.connectVia.autoDesc')
-                }
-              >
-                <ConnectViaRadio
-                  options={[
-                    { label: t('dev.mcp.connectVia.auto'), value: 'auto' },
-                    { label: t('dev.mcp.connectVia.device'), value: 'device' },
-                  ]}
-                />
-              </Form.Field>
-              <Form.Field
                 desc={t('dev.mcp.auth.desc')}
                 label={t('dev.mcp.auth.label')}
                 name={AUTH_TYPE}
@@ -330,39 +340,59 @@ const MCPManifestForm = ({
                   />
                 </Form.Field>
               )}
-              {enableOAuth && authType === 'oauth2' && (
-                <>
-                  <Form.Field
-                    desc={t('dev.mcp.auth.oauth.clientId.desc')}
-                    label={t('dev.mcp.auth.oauth.clientId.label')}
-                    name={AUTH_CLIENT_ID}
-                  >
-                    <Input placeholder={t('dev.mcp.auth.oauth.clientId.placeholder')} />
-                  </Form.Field>
-                  <Form.Field
-                    desc={t('dev.mcp.auth.oauth.clientSecret.desc')}
-                    label={t('dev.mcp.auth.oauth.clientSecret.label')}
-                    name={AUTH_CLIENT_SECRET}
-                  >
-                    <InputPassword
-                      autoComplete="new-password"
-                      placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')}
-                    />
-                  </Form.Field>
-                  <div
-                    style={{
-                      color: 'var(--lobe-colors-textDescription)',
-                      fontSize: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {t('dev.mcp.auth.oauth.redirectHint')}
-                    <br />
-                    <code style={{ wordBreak: 'break-all' }}>{redirectUri}</code>
-                  </div>
-                </>
-              )}
-              <CollapsibleSection title={t('dev.mcp.advanced.title')}>
+              <CollapsibleSection
+                expanded={advancedExpanded}
+                title={t('dev.mcp.advanced.title')}
+                onExpandedChange={setAdvancedExpanded}
+              >
+                <Form.Field
+                  label={t('dev.mcp.connectVia.label')}
+                  name={CONNECT_VIA}
+                  desc={
+                    connectVia === 'device'
+                      ? t('dev.mcp.connectVia.deviceDesc')
+                      : t('dev.mcp.connectVia.autoDesc')
+                  }
+                >
+                  <ConnectViaRadio
+                    options={[
+                      { label: t('dev.mcp.connectVia.auto'), value: 'auto' },
+                      { label: t('dev.mcp.connectVia.device'), value: 'device' },
+                    ]}
+                  />
+                </Form.Field>
+                {enableOAuth && authType === 'oauth2' && (
+                  <>
+                    <Form.Field
+                      desc={t('dev.mcp.auth.oauth.clientId.desc')}
+                      label={t('dev.mcp.auth.oauth.clientId.label')}
+                      name={AUTH_CLIENT_ID}
+                    >
+                      <Input placeholder={t('dev.mcp.auth.oauth.clientId.placeholder')} />
+                    </Form.Field>
+                    <Form.Field
+                      desc={t('dev.mcp.auth.oauth.clientSecret.desc')}
+                      label={t('dev.mcp.auth.oauth.clientSecret.label')}
+                      name={AUTH_CLIENT_SECRET}
+                    >
+                      <InputPassword
+                        autoComplete="new-password"
+                        placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')}
+                      />
+                    </Form.Field>
+                    <div
+                      style={{
+                        color: 'var(--lobe-colors-textDescription)',
+                        fontSize: 12,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {t('dev.mcp.auth.oauth.redirectHint')}
+                      <br />
+                      <code style={{ wordBreak: 'break-all' }}>{redirectUri}</code>
+                    </div>
+                  </>
+                )}
                 <Form.Field
                   desc={t('dev.mcp.headers.desc')}
                   label={t('dev.mcp.headers.label')}
@@ -418,7 +448,7 @@ const MCPManifestForm = ({
               label={t('dev.mcp.boundDevice.label')}
               name={BOUND_DEVICE}
             >
-              <BoundDeviceSelect />
+              <BoundDeviceSelect privateConnector={privateConnector} />
             </Form.Field>
           )}
           {isOAuth &&
@@ -442,6 +472,13 @@ const MCPManifestForm = ({
                 </Button>
               </Flexbox>
             </Form.Field>
+          )}
+          {testSummary && !connectionError && !testState.error && (
+            <Alert
+              showIcon
+              title={t('dev.mcp.testSuccess', { summary: testSummary })}
+              type="success"
+            />
           )}
           {(connectionError || testState.error) && (
             <Alert

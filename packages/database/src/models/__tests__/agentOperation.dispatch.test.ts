@@ -79,3 +79,33 @@ describe('failed dispatch recovery boundary', () => {
     expect([attempt !== null, settled].filter(Boolean)).toHaveLength(1);
   });
 });
+
+describe('trusted dispatch consumes an idle reservation', () => {
+  it('starts an idle operation and merges the run metadata into it', async () => {
+    await db.insert(agentOperations).values({ id: 'reserved-1', status: 'idle', userId });
+
+    await model().recordStart({
+      metadata: { agentSignal: { runId: 'run-1' } },
+      operationId: 'reserved-1',
+      requireReservation: true,
+      trigger: 'agent',
+    });
+
+    expect(await model().findById('reserved-1')).toMatchObject({
+      metadata: { agentSignal: { runId: 'run-1' } },
+      status: 'running',
+    });
+  });
+
+  it('refuses a reservation that was already consumed', async () => {
+    await db.insert(agentOperations).values({ id: 'reserved-2', status: 'running', userId });
+
+    await expect(
+      model().recordStart({
+        operationId: 'reserved-2',
+        requireReservation: true,
+        trigger: 'agent',
+      }),
+    ).rejects.toThrow('Operation reservation is no longer available');
+  });
+});

@@ -146,6 +146,15 @@ describe('defineConfig', () => {
     process.env = originalEnv;
   });
 
+  it('enables stable database joins without dropping the custom ID generator', async () => {
+    const { defineConfig } = await import('./define-config');
+    defineConfig({ plugins: [] });
+    const options = mocks.betterAuth.mock.calls[0][0];
+    expect(options.advanced.database.joins).toBe(true);
+    expect(options.advanced.database.generateId({ model: 'users' })).toBe('generated-user-id');
+    expect(options.experimental).toBeUndefined();
+  });
+
   it('should configure passkeys with the approved origins', async () => {
     const { defineConfig } = await import('./define-config');
 

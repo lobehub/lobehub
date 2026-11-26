@@ -1,5 +1,3 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-
 import { activityPrompt } from '../prompts';
 import type { ActivityMemory } from '../schemas';
 import { ActivityMemorySchema } from '../schemas';
@@ -35,11 +33,10 @@ export class ActivityExtractor extends BaseMemoryExtractor<ActivityMemory> {
     };
   }
 
-  buildUserPrompt(options: ExtractorTemplateProps): string {
-    if (!this.promptTemplate) {
-      throw new Error('Prompt template not loaded');
-    }
-
-    return renderPlaceholderTemplate(this.promptTemplate!, this.getTemplateProps(options));
+  buildUserPrompt(): string {
+    return this.buildTaskPrompt(
+      'activity',
+      'Return `{ "memories": [] }` when nothing should be extracted.',
+    );
   }
 }

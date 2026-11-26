@@ -11,7 +11,7 @@ const Related = memo(() => {
   const { related } = useDetailContext();
   return (
     <Flexbox gap={16}>
-      <Title more={t('assistants.details.related.more')} moreLink={'/community/provider'}>
+      <Title more={t('assistants.details.related.more')} moreLink={'/marketplace/provider'}>
         {t('assistants.details.related.listTitle')}
       </Title>
       <List data={related} rows={2} />

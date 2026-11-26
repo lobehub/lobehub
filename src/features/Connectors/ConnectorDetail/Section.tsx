@@ -1,13 +1,15 @@
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Surface } from '@lobehub/ui/dashboard';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
 const styles = stylex.create({
-  label: {
-    color: cssVar.colorTextTertiary,
-    fontSize: 12,
-    fontWeight: 500,
+  body: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    minWidth: 0,
+    padding: 16,
   },
 });
 
@@ -15,21 +17,21 @@ interface SectionProps {
   children: ReactNode;
   /** The section's own action (e.g. "Connect another account"), aligned with its label. */
   extra?: ReactNode;
-  label: string;
+  label: ReactNode;
 }
 
-/** One labelled block of the connector Overview tab. */
+/** One labelled block of the connector detail page: the label above, the content in a Surface card. */
 const Section = ({ children, extra, label }: SectionProps) => (
   <Flexbox gap={8}>
-    {extra ? (
-      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-        <span {...stylex.props(styles.label)}>{label}</span>
-        {extra}
-      </Flexbox>
-    ) : (
-      <span {...stylex.props(styles.label)}>{label}</span>
-    )}
-    {children}
+    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+      <Text as={'div'} weight={600}>
+        {label}
+      </Text>
+      {extra}
+    </Flexbox>
+    <Surface>
+      <div {...stylex.props(styles.body)}>{children}</div>
+    </Surface>
   </Flexbox>
 );
 

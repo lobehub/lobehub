@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import { buildOidcConfig } from '../helpers';
+import { buildOidcConfig, getStringClaim } from '../helpers';
 import { type GenericProviderDefinition } from '../types';
 
 const provider: GenericProviderDefinition<{
@@ -19,7 +19,12 @@ const provider: GenericProviderDefinition<{
          * fails with name_is_missing when upstream profiles only expose username/email fields.
          */
         mapProfileToUser: (profile) => ({
-          name: profile.name ?? profile.username ?? profile.email ?? profile.id,
+          name: getStringClaim(
+            profile.name,
+            profile.username,
+            profile.email,
+            profile.id?.toString(),
+          ),
         }),
       },
       providerId: 'generic-oidc',

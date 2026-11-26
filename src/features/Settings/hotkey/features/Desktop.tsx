@@ -47,16 +47,26 @@ const HotkeySetting = memo(() => {
 
   const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
     setLoading(true);
+    // Hotkeys save as soon as they are recorded, so the failure belongs on the hotkey input the
+    // user just changed (conflict, bad format) rather than a corner toast away from it.
     try {
       const result = await updateDesktopHotkey(id, value);
       if (result.success) {
+        form.setErrors({ [id]: undefined });
         toast.success(t('hotkey.updateSuccess', { ns: 'setting' }));
       } else {
-        // Show the appropriate error message based on error type
-        toast.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
+        form.setErrors({
+          [id]: t(
+            result.errorType && result.errorType !== 'UNKNOWN'
+              ? (`hotkey.errors.${result.errorType}` as any)
+              : 'hotkey.updateErrorRetry',
+            { ns: 'setting' },
+          ),
+        });
       }
-    } catch {
-      toast.error(t('hotkey.updateError', { ns: 'setting' }));
+    } catch (error) {
+      console.error('[Hotkey] Failed to update desktop hotkey:', error);
+      form.setErrors({ [id]: t('hotkey.updateErrorRetry', { ns: 'setting' }) });
     } finally {
       setLoading(false);
     }

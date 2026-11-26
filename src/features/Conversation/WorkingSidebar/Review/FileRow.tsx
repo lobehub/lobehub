@@ -1,61 +1,73 @@
 'use client';
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type KeyboardEvent, memo, useCallback } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+
 import type { ComposerTarget } from '../../types';
 import FileItemBody, { FileItemHeader } from './FileItem';
+import { reviewFileRowMarker } from './markers.stylex';
 import type { ReviewMode } from './useReviewPatches';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    /* Skip layout/paint of off-screen rows. Preserved from the previous
-       implementation. */
-    content-visibility: auto;
-    contain-intrinsic-size: auto 32px;
-    flex: none;
-
-    /* Every row carries its own top border — separates file-from-file AND
-       file-from-header without doubling up when a group is collapsed. */
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  row: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 5px;
-    padding-inline: 10px;
-
-    transition: background 0.12s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.2s;
-
-    &[data-expanded='true'] {
-      transform: rotate(90deg);
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    // Skip layout/paint of off-screen rows. Preserved from the previous
+    // implementation.
+    contentVisibility: 'auto',
+    containIntrinsicSize: `auto ${sidebarRow.height}`,
+    flex: 'none',
+    // Every row carries its own top border — separates file-from-file AND
+    // file-from-header without doubling up when a group is collapsed. The first
+    // child of the list drops it: the list's own top border is the separator.
+    borderBlockStartWidth: { 'default': '1px', ':first-child': 'medium' },
+    borderBlockStartStyle: { 'default': 'solid', ':first-child': 'none' },
+    borderBlockStartColor: {
+      'default': cssVar.colorBorderSecondary,
+      ':first-child': 'currentcolor',
+    },
+  },
+  row: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: sidebarRow.gap,
+    alignItems: 'center',
+    width: '100%',
+    minHeight: sidebarRow.height,
+    paddingInline: sidebarRow.paddingInline,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    transition: 'background 0.12s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  indent: (paddingInlineStart: number) => ({ paddingInlineStart }),
+  chevronBox: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: sidebarRow.textLineHeight,
+  },
+  chevron: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 0.2s',
+    transform: { 'default': null, "[data-expanded='true']": 'rotate(90deg)' },
+  },
+});
 
 interface FileRowProps {
   composerTarget: ComposerTarget;
@@ -106,6 +118,7 @@ const FileRow = memo<FileRowProps>(
     viewMode,
     wordWrap,
   }) => {
+    const { paddingInline } = useDensityTokens();
     const onKeyDown = useCallback(
       (e: KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -116,22 +129,27 @@ const FileRow = memo<FileRowProps>(
       [onToggle],
     );
     return (
-      <div className={styles.item} data-file-key={dataFileKey}>
+      <div {...stylex.props(styles.item)} data-file-key={dataFileKey}>
         <div
           data-review-row
           aria-expanded={expanded}
-          className={styles.row}
           role={'button'}
-          style={indent ? { paddingInlineStart: 10 + indent } : undefined}
+          {...stylex.props(
+            styles.row,
+            reviewFileRowMarker,
+            !!indent && styles.indent(paddingInline + indent),
+          )}
           tabIndex={0}
           onClick={onToggle}
           onKeyDown={onKeyDown}
         >
-          <ChevronRightIcon
-            className={styles.chevron}
-            data-expanded={expanded ? 'true' : 'false'}
-            size={14}
-          />
+          <span {...stylex.props(styles.chevronBox)}>
+            <ChevronRightIcon
+              {...stylex.props(styles.chevron)}
+              data-expanded={expanded ? 'true' : 'false'}
+              size={12}
+            />
+          </span>
           <FileItemHeader
             additions={entry.additions}
             deletions={entry.deletions}

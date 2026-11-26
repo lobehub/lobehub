@@ -48,6 +48,7 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   AgentStepContinuation,
+  DeferredMessagePatch,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -176,7 +177,7 @@ export class AiAgentService {
     this.agentService = new AgentService(db, userId, wsId);
     this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
-    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
+    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId, { agentRun: true });
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
@@ -387,9 +388,15 @@ export class AiAgentService {
     return this.agentRuntimeService.createOperationLockOwner(operationId);
   }
 
-  /** Publish a step that an inline loop deferred instead of running. */
-  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
-    return this.agentRuntimeService.scheduleContinuation(continuation);
+  /**
+   * Publish a step that an inline loop deferred instead of running, after the
+   * message patch its previous step left unpublished.
+   */
+  scheduleContinuation(
+    continuation: AgentStepContinuation,
+    deferredMessagePatch?: DeferredMessagePatch,
+  ): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation, deferredMessagePatch);
   }
 
   /** Release a lock retained across an inline step loop. */
@@ -769,6 +776,7 @@ export class AiAgentService {
   verifyShareRunStillAuthorized = async (params: {
     agentId: string;
     shareId: string;
+    visitorUserId?: string;
   }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**

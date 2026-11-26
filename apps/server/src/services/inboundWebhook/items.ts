@@ -1,8 +1,17 @@
 import type { InboundWebhookItem } from '@lobechat/types';
-import { and, inArray } from 'drizzle-orm';
+import { genericWebhookIdentifierOf } from '@lobechat/types';
+import { and, eq, inArray } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
-import { agents, topics, userConnectors } from '@/database/schemas';
+import { ChannelRepository } from '@/database/repositories/channel';
+import {
+  agents,
+  channelMessages,
+  channelThreads,
+  topics,
+  userConnectors,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 import { notTrashed } from '@/database/utils/softDelete';
@@ -33,6 +42,63 @@ export const canManageInboundWebhook = (actor: InboundWebhookActor, row: Inbound
 const pinnedTopicId = (row: InboundWebhookView) =>
   row.kind === 'generic' && row.config.topicMode === 'reuse' ? row.config.topicId : undefined;
 
+/** How a Thread is named in a list: the start of the message it grew from. */
+const THREAD_TITLE_LENGTH = 80;
+
+/**
+ * The Channels (and Threads) rows post to, as the caller sees them: a Channel they are not a member
+ * of is left out, so its title and Threads stay private.
+ */
+async function deliveryChannels(
+  db: LobeChatDatabase,
+  rows: InboundWebhookView[],
+  actor: InboundWebhookActor,
+) {
+  const channelIds = [...new Set(rows.flatMap((r) => r.config.delivery?.channelId ?? []))];
+  const threadIds = [...new Set(rows.flatMap((r) => r.config.delivery?.threadId ?? []))];
+  if (!channelIds.length)
+    return {
+      channels: new Map<string, { projectId: string | null; title: string }>(),
+      threads: [],
+    };
+  const repository = new ChannelRepository(db, actor.userId, actor.workspaceId ?? undefined);
+  const [visible, threads] = await Promise.all([
+    pMap(channelIds, (id) => repository.findAccess(id), { concurrency: 5 }),
+    threadIds.length
+      ? db
+          .select({
+            channelId: channelThreads.channelId,
+            content: channelMessages.content,
+            id: channelThreads.id,
+          })
+          .from(channelThreads)
+          .innerJoin(
+            channelMessages,
+            and(
+              eq(channelMessages.channelId, channelThreads.channelId),
+              eq(channelMessages.id, channelThreads.rootMessageId),
+            ),
+          )
+          .where(and(inArray(channelThreads.id, threadIds), notTrashed(channelThreads.isDeleted)))
+      : [],
+  ]);
+  return {
+    channels: new Map(
+      visible.flatMap((access) =>
+        access && !access.channel.isDeleted
+          ? [
+              [
+                access.channel.id,
+                { projectId: access.channel.projectId, title: access.channel.title },
+              ] as const,
+            ]
+          : [],
+      ),
+    ),
+    threads,
+  };
+}
+
 /** Select public projections only; credentials and opaque runtime state never cross this boundary. */
 export async function inboundWebhookItems(
   db: LobeChatDatabase,
@@ -40,7 +106,7 @@ export async function inboundWebhookItems(
   actor: InboundWebhookActor,
 ): Promise<InboundWebhookItem[]> {
   if (!rows.length) return [];
-  const [connectorRows, agentRows, topicRows] = await Promise.all([
+  const [connectorRows, agentRows, topicRows, delivery] = await Promise.all([
     db
       .select({
         agentId: userConnectors.agentId,
@@ -97,6 +163,7 @@ export async function inboundWebhookItems(
           notTrashed(topics.isDeleted),
         ),
       ),
+    deliveryChannels(db, rows, actor),
   ]);
   // The default agent is stored without a title or avatar. Resolve it the way
   // every other agent read path does, so the list shows the same name and
@@ -123,12 +190,27 @@ export async function inboundWebhookItems(
             (t) => t.id === (row.topicId ?? pinnedTopicId(row)) && t.agentId === row.agentId,
           )
         : undefined;
+      const target = row.config.delivery;
+      const channel = target && delivery.channels.get(target.channelId);
+      const thread =
+        target?.threadId &&
+        delivery.threads.find((t) => t.id === target.threadId && t.channelId === target.channelId);
       return [
         {
           agent: agentRow ? toAgentItem(agentRow) : null,
           canCheck: kind.canCheck,
           canConfigure,
           canManage,
+          channel:
+            target && channel
+              ? {
+                  id: target.channelId,
+                  projectId: channel.projectId,
+                  threadId: target.threadId ?? null,
+                  threadTitle: thread ? thread.content.slice(0, THREAD_TITLE_LENGTH) || null : null,
+                  title: channel.title,
+                }
+              : null,
           connector: connector
             ? {
                 agentId: connector.agentId,
@@ -145,6 +227,8 @@ export async function inboundWebhookItems(
           endpoint: row.kind === 'generic' && agentRow ? genericWebhookEndpoint(row.id) : null,
           expiresAt: kind.expiresAt?.(row) ?? null,
           id: row.id,
+          identifier:
+            row.kind === 'generic' ? genericWebhookIdentifierOf(row) : row.config.eventName,
           instructions: agentRow ? row.instructions : null,
           kind: row.kind,
           lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,

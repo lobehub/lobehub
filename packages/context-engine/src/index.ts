@@ -49,10 +49,16 @@ export {
   tryCountRequestPayloadTokens,
 } from './tokenAccounting/requestPayload';
 // Processors
-export type { PlaceholderValue, PlaceholderValueMap } from './processors';
+export type {
+  DocumentRead,
+  PlaceholderValue,
+  PlaceholderValueMap,
+  RevokedDocumentReads,
+} from './processors';
 export {
   buildPlaceholderGenerators,
   cacheEconomicsForProvider,
+  collectDocumentReads,
   formatPlaceholderValues,
   getSlicedMessages,
   GroupMessageFlattenProcessor,

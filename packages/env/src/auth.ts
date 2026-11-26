@@ -1,6 +1,16 @@
 import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
+/**
+ * The positive, relative subset of the time spans jose's `setExpirationTime` accepts.
+ * jose throws "Invalid time period format" on anything else (a bare `15` has no unit),
+ * which would otherwise only surface when the first internal JWT is signed, failing
+ * every async task. Signs and `ago` are left out because they produce an expired token.
+ * @see https://github.com/panva/jose/blob/main/src/lib/jwt_claims_set.ts
+ */
+const INTERNAL_JWT_EXPIRATION_PATTERN =
+  /^\d+(?:\.\d+)? ?(?:seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)$/i;
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
@@ -201,7 +211,13 @@ export const getAuthConfig = () => {
       ENABLE_OIDC: z.boolean(),
 
       // Internal JWT expiration time (e.g., '10s', '1m', '1h')
-      INTERNAL_JWT_EXPIRATION: z.string().default('30s'),
+      INTERNAL_JWT_EXPIRATION: z
+        .string()
+        .regex(
+          INTERNAL_JWT_EXPIRATION_PATTERN,
+          'INTERNAL_JWT_EXPIRATION needs a positive duration with a unit, e.g. "15s" or "1m"',
+        )
+        .default('30s'),
     },
 
     runtimeEnv: {

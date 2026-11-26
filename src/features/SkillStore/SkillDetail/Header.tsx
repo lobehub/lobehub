@@ -1,14 +1,12 @@
 'use client';
 
 import { Avatar, Button, cssVar, Flexbox, Icon, Text, Tooltip, useModalContext } from '@lobehub/ui';
-import { Plus, SquareArrowOutUpRight } from 'lucide-react';
+import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
-import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 
 import { useDetailContext } from './DetailContext';
 import { ICON_SIZE, styles } from './styles';
@@ -47,19 +45,6 @@ const Header = memo<HeaderProps>(({ type }) => {
     type: isBuiltin ? 'lobehub' : type, // Use lobehub as fallback for builtin
   });
 
-  // Builtin tool installation state (global, stored in tool store)
-  const [installBuiltinTool, isBuiltinInstalled] = useToolStore((s) => [
-    s.installBuiltinTool,
-    builtinToolSelectors.isBuiltinToolInstalled(identifier)(s),
-  ]);
-
-  const handleBuiltinInstall = async () => {
-    if (!canCreate || !canEdit) return;
-
-    await installBuiltinTool(identifier);
-    close();
-  };
-
   const hasTriggeredConnectRef = useRef(false);
 
   useEffect(() => {
@@ -93,26 +78,7 @@ const Header = memo<HeaderProps>(({ type }) => {
   };
 
   const renderConnectButton = () => {
-    // Handle builtin tools - only show install button, uninstall is done in settings
-    if (isBuiltin) {
-      if (isBuiltinInstalled) return null;
-
-      return (
-        <Tooltip title={!canCreate ? createReason : editReason}>
-          <Button
-            disabled={!canCreate || !canEdit}
-            icon={<Icon icon={Plus} />}
-            type="primary"
-            onClick={handleBuiltinInstall}
-          >
-            {t('tools.builtins.install')}
-          </Button>
-        </Tooltip>
-      );
-    }
-
-    // Handle Composio/LobeHub skills
-    if (isConnected) return null;
+    if (isBuiltin || isConnected) return null;
 
     if (isConnecting) {
       return (

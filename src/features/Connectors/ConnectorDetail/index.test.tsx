@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
     deleteConnector: vi.fn(),
     disconnectConnector: vi.fn(),
     fetchConnectors: vi.fn(),
+    installBuiltinTool: vi.fn(),
     resetConnectorPermissions: vi.fn(),
     syncBuiltinTool: vi.fn(),
     syncConnectorTools: vi.fn(),
@@ -42,6 +43,7 @@ const mocks = vi.hoisted(() => ({
     uninstallBuiltinTool: vi.fn(),
     uninstalledBuiltinTools: [] as string[],
     uninstallMCPPlugin: vi.fn(),
+    useFetchUninstalledBuiltinTools: vi.fn(),
     updateToolPermission: vi.fn(),
   },
   manageable: {
@@ -232,7 +234,7 @@ describe('ConnectorDetail', () => {
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeInTheDocument();
   });
 
-  it('keeps authorization and identity in Overview and moves permissions to Tools', () => {
+  it('shows authorization, identity and tool permissions on one page', () => {
     mocks.toolState.connectors[0] = {
       ...mocks.toolState.connectors[0],
       authorizedByName: 'Avery',
@@ -245,18 +247,15 @@ describe('ConnectorDetail', () => {
 
     render(<ConnectorDetail connectorId="connector-1" />);
 
-    // Overview: connection status, identity and lifecycle actions; no permission matrix.
+    // One page: status and identity, the lifecycle actions in the header, then
+    // the Tools section with its permission groups and reset.
     expect(screen.getByText('connector.connected')).toBeInTheDocument();
     expect(screen.getByText('Avery')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeInTheDocument();
-    expect(screen.queryByTestId('permission-group')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /connector\.tab\.tools/ }));
-
-    // Tools: the permission groups and reset, without the lifecycle actions.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByText('connectorMarket.detail.tools')).toBeInTheDocument();
     expect(screen.getAllByTestId('permission-group')).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Reset permissions' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
   });
 
   it('reports an authorization error instead of "not connected"', () => {
@@ -301,26 +300,26 @@ describe('ConnectorDetail', () => {
     expect(screen.queryByText('connector.authError')).not.toBeInTheDocument();
   });
 
-  it('shows an uninstalled built-in tool as uninstalled, matching the list', () => {
-    mocks.toolState.connectors[0] = {
-      id: 'connector-1',
-      identifier: 'lobe-web-browsing',
-      name: 'Web Browsing',
-      sourceType: ConnectorSourceType.builtin,
-    };
-    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
-
-    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(screen.getByText('tools.builtins.uninstalled')).toBeInTheDocument();
-    expect(screen.queryByText('connector.enabled')).not.toBeInTheDocument();
-
-    unmount();
-    mocks.toolState.uninstalledBuiltinTools = [];
-    render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(screen.getByText('connector.enabled')).toBeInTheDocument();
-  });
+  it.each([true, false])(
+    'omits library install actions for a bundled tool (previously installed: %s)',
+    (installed) => {
+      mocks.toolState.connectors[0] = {
+        authorizedByName: 'Avery',
+        id: 'connector-1',
+        identifier: 'lobe-calculator',
+        name: 'Calculator',
+        sourceType: ConnectorSourceType.builtin,
+      };
+      mocks.toolState.uninstalledBuiltinTools = installed ? [] : ['lobe-calculator'];
+      render(<ConnectorDetail connectorId="connector-1" />);
+      expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'connectorMarket.action.install' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('connector.overview.status')).not.toBeInTheDocument();
+      expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    },
+  );
 
   it('shows accounts only for an OAuth connector, each naming its own authorizer', () => {
     mocks.toolState.connectors[0] = {

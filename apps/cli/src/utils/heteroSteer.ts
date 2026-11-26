@@ -1,9 +1,15 @@
+// Built-in control commands register themselves when the steer loop loads.
+import './heteroCollaborationMode';
+import './heteroPermissionMode';
+import './heteroStopTask';
+
 import type {
   AgentContentBlock,
   AgentPromptInput,
   ClaudeCodeControlRequest,
   ClaudeCodeControlRequestHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexCollaborationMode } from '@lobechat/types';
 
 import {
   dispatchHeteroControl,
@@ -28,8 +34,10 @@ export interface HeteroSteerClient {
       mutate: (
         input: {
           acceptsControl?: boolean;
+          acceptsImageAttachments?: boolean;
           acceptsImages?: boolean;
           blockMs?: number;
+          holdSteer?: boolean;
           operationId: string;
         },
         options?: { signal?: AbortSignal },
@@ -50,11 +58,12 @@ export interface HeteroSteerClient {
   };
 }
 
-/** A follow-up to type into the session; `imageList` holds images pasted into its body. */
+/** A follow-up to type into the session, including uploaded and inline images. */
 export interface HeteroSteerMessage {
   content: string;
   imageList?: { id: string; url: string }[];
   messageId: string;
+  requiresImages?: true;
 }
 
 /** The prompt a follow-up is typed in as: its text, then its images as image blocks. */
@@ -72,6 +81,8 @@ export const buildSteerPrompt = (message: HeteroSteerMessage): AgentPromptInput 
 
 export interface HeteroSteerContext {
   getTrpcClient: () => Promise<HeteroSteerClient>;
+  /** Whether the session waits for the user (a question or an approval): nothing is steered then. */
+  isWaitingForUser?: () => boolean;
   operationId: string;
 }
 
@@ -81,6 +92,8 @@ interface SteerableHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
+  supportsSteerImageAttachments?: true;
 }
 
 const RETRY_MS = 2000;
@@ -103,13 +116,15 @@ const isMainStreamStart = (event: { data?: any; type: string }) =>
   event.type === 'stream_start' && !event.data?.subagent;
 
 /**
- * Stream a Claude Code run's events while typing the follow-ups the user
- * queues behind it into the live session (steer), instead of leaving them for
- * the next turn.
+ * Stream a Claude Code, native Codex or Antigravity run's events while typing the
+ * follow-ups the user queues behind it into the live session (steer), instead
+ * of leaving them for the next turn.
  *
  * Polls `aiAgent.waitHeteroSteer` for as long as the run streams and its
  * session takes input; a message the session refuses goes back with
- * `aiAgent.returnHeteroSteer`. Claude Code replays every message it picks up:
+ * `aiAgent.returnHeteroSteer`. The agent reports every message it picks up
+ * (Claude Code replays it, Codex echoes its client id, Antigravity ends the
+ * prompt it interrupts):
  * the replay of a delivery is forwarded for the server to write the message
  * into the conversation; any other replay (the run's own prompt) is dropped.
  * Once the server answered, the next main `stream_start` carries `liveSteer`
@@ -135,6 +150,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
 
   const { operationId } = context;
   const sendControlRequest = handle.sendControlRequest;
+  const setCollaborationMode = handle.setCollaborationMode;
   const delivered = new Set<string>();
   const abort = new AbortController();
   const handling = new Set<Promise<void>>();
@@ -145,6 +161,8 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   // its queue hint changed.
   let supported = false;
   let markedLive = false;
+  // While the session waits on a question or approval nothing is steered.
+  const waitingForUser = () => !!context.isWaitingForUser?.();
 
   const report = async (
     client: HeteroSteerClient,
@@ -173,7 +191,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       log.debug('Control %s: %s', control.id, control.command);
       const outcome = await dispatchHeteroControl(control, {
         operationId,
-        sendControlRequest: sendControlRequest!,
+        // A native Codex run has no stream-json input: its handlers say so.
+        sendControlRequest: sendControlRequest ?? (() => undefined),
+        setCollaborationMode,
         signal: abort.signal,
       });
       await report(client, control, outcome);
@@ -186,17 +206,21 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   const poll = async () => {
     const client = await context.getTrpcClient();
     // Control messages need a way into the session and back to the server.
-    const acceptsControl = !!sendControlRequest && !!client.aiAgent.reportHeteroControlResult;
+    const acceptsControl =
+      (!!sendControlRequest || !!setCollaborationMode) &&
+      !!client.aiAgent.reportHeteroControlResult;
     while (!abort.signal.aborted) {
       let message: HeteroSteerMessage | null;
       try {
         const res = await client.aiAgent.waitHeteroSteer.mutate(
           {
             ...(acceptsControl && { acceptsControl: true }),
+            ...(handle.supportsSteerImageAttachments && { acceptsImageAttachments: true }),
             // The session takes image blocks, so pasted images come along.
             acceptsImages: true,
             // The first poll answers at once, so the run is marked steerable early.
             ...(!answered && { blockMs: 1 }),
+            ...(waitingForUser() && { holdSteer: true }),
             operationId,
           },
           { signal: abort.signal },
@@ -217,11 +241,19 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
         continue;
       }
       if (!message) continue;
+      // Handed out just as the session started waiting for the user: it goes
+      // back, and comes again once the user answered.
+      if (waitingForUser()) {
+        await client.aiAgent.returnHeteroSteer
+          .mutate({ messageId: message.messageId, operationId })
+          .catch((error) => log.debug('Returning steer message failed: %s', String(error)));
+        continue;
+      }
 
       const steer = message;
       const options = { uuid: steer.messageId };
       const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
-        if (!steer.imageList?.length) return false;
+        if (steer.requiresImages || !steer.imageList?.length) return false;
         // An image that cannot be fetched must not cost the message: its
         // markdown still names the image.
         log.debug('Steer images failed, sending the text: %s', String(error));

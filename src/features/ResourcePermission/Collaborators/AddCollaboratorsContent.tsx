@@ -25,13 +25,18 @@ import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorksp
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/services/resourcePermission';
+import { densityVars } from '@/styles/densityVars';
+import {
+  getWorkspaceMemberName,
+  getWorkspaceMemberSearchLabels,
+} from '@/utils/workspaceMemberName';
 
 import { useResourceCollaborators } from '../useResourceCollaborators';
 import { useResourcePermission } from '../useResourcePermission';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -48,14 +53,14 @@ const styles = createStaticStyles(({ css }) => ({
        leaves the screen; 240px keeps ~4 rows visible as the floor. */
     height: clamp(240px, calc(100dvh - 320px), 360px);
     padding-block: 0 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   row: css`
     cursor: pointer;
 
     margin-block: 2px;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     transition: background 0.2s ease;
@@ -85,6 +90,7 @@ const styles = createStaticStyles(({ css }) => ({
  * common type, and each side names its own.
  */
 interface MemberCandidate {
+  config?: { nickname?: string | null } | null;
   role?: string | null;
   user?: {
     avatar?: string | null;
@@ -95,8 +101,7 @@ interface MemberCandidate {
   userId: string;
 }
 
-const memberName = (member: MemberCandidate) =>
-  member.user?.fullName || member.user?.username || member.user?.email || member.userId;
+const memberName = (member: MemberCandidate) => getWorkspaceMemberName(member);
 
 /**
  * Workspace admins hold `:all` update capability and bypass Member
@@ -199,7 +204,7 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
       const keyword = query.trim().toLowerCase();
       if (!keyword) return candidates;
       return candidates.filter((member) =>
-        [member.user?.fullName, member.user?.username, member.user?.email]
+        getWorkspaceMemberSearchLabels(member)
           .filter(Boolean)
           .some((field) => field!.toLowerCase().includes(keyword)),
       );

@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css }) => ({
   aside: css`
     display: flex;
@@ -94,11 +96,11 @@ export const styles = createStaticStyles(({ css }) => ({
   section: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
   `,
   sectionHead: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     font-size: 15px;

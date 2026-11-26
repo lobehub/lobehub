@@ -3,13 +3,15 @@ import type {
   ModelReasoning,
   ModelTokensUsage,
   ModelUsage,
+  ResolveToolActivationContext,
+  ToolActivationPlan,
 } from '@lobechat/types';
 import type OpenAI from 'openai';
 
 import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
-import type { RouteAttemptIdentity } from './routeAttempt';
+import type { DiscardedChatAttempt, RouteAttemptIdentity } from './routeAttempt';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -83,6 +85,17 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  toolActivationPlan?: ToolActivationPlan;
+  /**
+   * Function names that first became callable at this message, e.g. the result of a
+   * mid-conversation tool activation. Their definitions stay in `ChatStreamPayload.tools`.
+   *
+   * A transport that can declare tools inside the conversation moves these definitions
+   * out of the top-level tool list and anchors them here, so activating a tool does not
+   * rewrite the request prefix (and the prompt cache with it). Every other transport
+   * ignores the field and sends the full top-level list.
+   */
+  toolsAdded?: string[];
 }
 
 /**
@@ -221,6 +234,8 @@ export interface ChatMethodOptions {
    * after the provider returns, while diagnostics can contain a large payload.
    */
   diagnostics?: ModelRuntimeDiagnostics;
+  /** Evaluated only by a route supporting transcript-anchored tool definitions. */
+  getToolActivationContext?: ResolveToolActivationContext;
   /**
    * response headers
    */
@@ -234,6 +249,8 @@ export interface ChatMethodOptions {
    */
   requestHeaders?: Record<string, any>;
   signal?: AbortSignal;
+  /** Context edits for a Responses transport that supports inline tool declarations. */
+  toolActivationPlan?: ToolActivationPlan;
   /**
    * userId for the chat completion
    */
@@ -342,6 +359,11 @@ export interface ContentPartData {
 }
 
 export interface ChatStreamCallbacks {
+  /**
+   * `onAttemptDiscarded`: Called by RouterRuntime when it replaces an uncommitted empty or
+   * interrupted attempt with a retry or fallback. That attempt's other callbacks never run.
+   */
+  onAttemptDiscarded?: (attempt: DiscardedChatAttempt) => Promise<void> | void;
   /**
    * `onBase64Image`: Called when a base64 image is received from the model.
    * Used for models that generate images (e.g., GPT-4 with DALL-E, Gemini with image output)

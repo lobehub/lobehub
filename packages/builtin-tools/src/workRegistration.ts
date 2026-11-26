@@ -6,6 +6,7 @@ import type {
   PluginApiWorkAction,
   PluginApiWorkConfig,
   PluginApiWorkResourceType,
+  RegisterArtboardWorkParams,
   RegisterCanvasWorkParams,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
@@ -216,6 +217,7 @@ const resolveTaskWorkIntent = ({
 
   return {
     action: config.action,
+    ...(config.agentEditable && { agentEditable: true }),
     changeType: workChangeTypeFromAction(config.action),
     targets,
     type: 'task',
@@ -238,6 +240,7 @@ const resolveDocumentWorkIntent = ({
     action: 'register',
     document: {
       ...document,
+      ...(config.agentEditable && { agentEditable: true }),
       changeType: workChangeTypeFromAction(config.action),
       // The concrete API name is the document Work's producing tool.
       toolName: apiName,
@@ -282,6 +285,7 @@ export interface WorkRegistrationPorts {
   deleteDocumentWork?: (params: DeleteDocumentWorkParams) => Promise<unknown>;
   deleteTaskWork: (params: DeleteTaskWorkParams) => Promise<unknown>;
   handleSkillToolResult: (params: RegisterSkillToolResultWorkParams) => Promise<unknown>;
+  registerArtboard?: (params: RegisterArtboardWorkParams) => Promise<unknown>;
   registerCanvas?: (params: RegisterCanvasWorkParams) => Promise<unknown>;
   registerDocument: (params: RegisterDocumentWorkParams) => Promise<unknown>;
   registerTask: (params: RegisterTaskWorkParams) => Promise<unknown>;
@@ -358,7 +362,7 @@ const dispatchTaskWorkIntent = async (
     toolName,
     topicId,
   } = provenance;
-  const { action, changeType, targets } = intent;
+  const { action, agentEditable, changeType, targets } = intent;
 
   if (action === 'delete') {
     const deleteTargets = targets.filter((target) => target.taskId);
@@ -374,6 +378,7 @@ const dispatchTaskWorkIntent = async (
   const results = await Promise.allSettled(
     targets.map((target) =>
       ports.registerTask({
+        ...(agentEditable && { agentEditable }),
         agentId,
         changeType,
         cumulativeCost,
@@ -424,6 +429,37 @@ const dispatchDocumentWorkIntent = async (
     cumulativeUsage,
     rootOperationId,
     messageId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  });
+};
+
+const dispatchArtboardWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'artboard'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  } = provenance;
+
+  await ports.registerArtboard?.({
+    ...intent.artboard,
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
     threadId,
     toolCallId,
     toolIdentifier,
@@ -502,6 +538,9 @@ const dispatchSkillWorkIntent = async (
  * fails this exhaustive registry until its behavior is registered here.
  */
 export const WORK_REGISTRATION_ADAPTERS = {
+  artboard: {
+    dispatch: dispatchArtboardWorkIntent,
+  },
   canvas: {
     dispatch: dispatchCanvasWorkIntent,
   },

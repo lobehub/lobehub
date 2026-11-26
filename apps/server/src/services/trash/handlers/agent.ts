@@ -1,4 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
+import { chunk } from 'es-toolkit/compat';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
@@ -11,13 +12,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { MESSAGE_TITLE_LENGTH } from './message';
-import { topicEntry } from './topic';
+import { hasWaitingWorktreeCleanup, topicEntry, WORKTREE_CLEANUP_WAITING_MESSAGE } from './topic';
 import {
   type TrashCascade,
   type TrashHandler,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './types';
+
+/** Ids per purge statement — well under Postgres' bind-parameter cap. */
+const PURGE_CHUNK_SIZE = 1000;
 
 export const agentEntry = (agent: AgentItem, childCount: number) => ({
   meta: {
@@ -34,11 +39,10 @@ export const agentEntry = (agent: AgentItem, childCount: number) => ({
 });
 
 /**
- * Trash an agent with everything the hard delete would cascade through: every
- * topic that hangs off it directly (`agent_id`) or through its legacy session
- * shell (`session_id`), plus the topic-less messages under either (no topic
- * stamp hides those). Both are registered as children so a restore brings the
- * whole conversation history back in one go.
+ * Trash an agent with its conversation history: every topic with its
+ * `agent_id`, plus its topic-less messages (no topic stamp hides those). Both
+ * are registered as children so a restore brings the whole history back in
+ * one go. Rows carrying only a legacy `session_id` are not part of the cascade.
  */
 export const softDeleteAgent = async (
   ctx: TrashHandlerContext,
@@ -55,21 +59,19 @@ export const softDeleteAgent = async (
   const [agent] = await agentModel.softDelete([agentId], options);
   if (!agent) return null;
 
-  // Legacy session shells are not stamped (the agent is the restorable unit
-  // and the list hides them through the agent join); their topics are.
-  const sessionIds = await agentModel.findSessionIdsByAgentIds([agentId]);
   // The cascade is scope-wide on purpose (no `restrictToCreator`): the router
-  // already refused a non-owner delete of an agent that carries teammates'
-  // conversations, so whatever is left is the caller's to take.
+  // only lets a non-owner through when nothing foreign rides along, or when
+  // the agent's author (or an Admin overriding on another member's agent)
+  // acknowledged that teammates' topics go with it.
   const topics = await topicModel.softDeleteByParents(
-    { agentIds: [agentId], sessionIds },
+    { agentIds: [agentId] },
     { deletedAt: options.deletedAt },
   );
   const topiclessMessages = await new MessageModel(
     ctx.db,
     ctx.userId,
     ctx.workspaceId,
-  ).softDeleteTopicless({ agentIds: [agentId], sessionIds }, { deletedAt: options.deletedAt });
+  ).softDeleteTopicless({ agentIds: [agentId] }, { deletedAt: options.deletedAt });
 
   return {
     children: [
@@ -100,17 +102,37 @@ export const agentHandler: TrashHandler = {
 
       const agentIds = await agentModel.lockTrashedForPurge([root.resourceId]);
       if (agentIds.length === 0) return;
+      const topicModel = new TopicModel(db, ctx.userId, ctx.workspaceId);
+      const trashModel = new TrashModel(db, ctx.userId, ctx.workspaceId);
       const sessionIds = await agentModel.findSessionIdsByAgentIds(agentIds);
+      // Bin entries from before the cascade went agent-only can list rows that
+      // only carry `session_id`. The FK below no longer reaches those.
+      const stranded = await trashModel.findChildrenOutsideAgents(root.id, agentIds);
 
-      // Topics / messages trashed on their own before this agent keep separate
-      // roots; the cascade below deletes them, so drop those rows first.
-      await new TrashModel(db, ctx.userId, ctx.workspaceId).removeRootsUnderAgents({
+      // The cascade below takes the agent's topics with it — including the
+      // only record of a worktree cleanup still waiting on an offline device.
+      // Hold the whole purge until those have run (see `./topic`).
+      const waiting = await topicModel.findWaitingCleanupTopicsUnder({
         agentIds,
-        sessionIds,
+        topicIds: stranded.topicIds,
       });
-      // FK cascades take topics / messages / threads with the agent + session rows.
+      if (hasWaitingWorktreeCleanup(waiting))
+        throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
+
+      // Topics outside the cascade keep their messages and threads. Runs before
+      // the root cleanup so a message trashed on its own there keeps its entry.
+      await agentModel.detachFromSurvivingTopics(agentIds);
+      // Topics / messages trashed on their own before this agent keep separate
+      // roots; the deletes below remove them, so drop those rows first.
+      await trashModel.removeRootsUnderAgents({ agentIds, topicIds: stranded.topicIds });
+      await topicModel.purge(stranded.topicIds);
+      // FK cascades take the topics / messages / threads carrying the agent.
       await agentModel.purge(agentIds);
-      await new SessionModel(db, ctx.userId, ctx.workspaceId).deleteShellsByIds(sessionIds);
+      const messageModel = new MessageModel(db, ctx.userId, ctx.workspaceId);
+      for (const ids of chunk(stranded.messageIds, PURGE_CHUNK_SIZE)) {
+        await messageModel.purgeMessages(ids);
+      }
+      await new SessionModel(db, ctx.userId, ctx.workspaceId).deleteEmptyShellsByIds(sessionIds);
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(db, ctx.workspaceId).removeAll('agent', root.resourceId);
       }

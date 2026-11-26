@@ -1,62 +1,56 @@
 'use client';
 
-import type { EnvironmentVisibility } from '@lobechat/types';
-import { Flexbox, Icon, Tabs } from '@lobehub/ui';
-import { LockIcon, UsersIcon } from 'lucide-react';
-import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Flexbox } from '@lobehub/ui';
+import { memo } from 'react';
+import { useParams } from 'react-router';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
 import EnvironmentManager from '@/features/EnvironmentManager';
+import EnvironmentDetailPage from '@/features/EnvironmentManager/EnvironmentDetailPage';
+import PageTabs from '@/features/EnvironmentsAndCreds/PageTabs';
+import { usePageTab } from '@/features/EnvironmentsAndCreds/usePageTab';
+import WorkspaceVault from '@/features/EnvironmentsAndCreds/WorkspaceVault';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /**
- * The workspace's environments, in two pools behind tabs — the same split the
- * workspace device page draws, for the same reason.
+ * Environments & Vault, workspace: the environments and the credentials the
+ * caller can use here, in two tabs (`?tab=vault` opens the vault). Each lists
+ * what members have published together with the caller's own private items,
+ * marked with a lock; each tab's header filter narrows it to everything, the
+ * shared ones or the caller's private ones.
  *
- * - Workspace: what members have published. Running in one means running in its
- *   instances, which carry whatever a session left in them.
- * - Private: the caller's own, which is where every environment starts.
- *
- * The tab also decides where a new environment lands, so creating one from the
- * Private tab cannot quietly publish it.
- *
- * The tabs are handed to the manager rather than rendered above it: they belong
- * on the same row as the actions, and the manager owns that row.
+ * New items start private, so creating one cannot quietly publish it; its row
+ * menu publishes it.
  */
 const WorkspaceEnvironmentsSetting = memo(() => {
-  const { t } = useTranslation('setting');
-  const [visibility, setVisibility] = useState<EnvironmentVisibility>('public');
+  const { sub: environmentId } = useParams<{ sub?: string }>();
+  const navigate = useWorkspaceAwareNavigate();
+  const [tab, setTab] = usePageTab();
+
+  if (environmentId)
+    return (
+      <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
+        <EnvironmentDetailPage
+          environmentId={environmentId}
+          key={environmentId}
+          onBack={() => navigate('/settings/environments')}
+        />
+      </Flexbox>
+    );
+
+  const tabs = <PageTabs value={tab} onChange={setTab} />;
 
   return (
     <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
-      {/* Keyed on the pool so the selected row and its open panel do not
-            survive a tab switch — the environment they pointed at is not in
-            the list any more. */}
-      <EnvironmentManager
-        key={visibility}
-        visibility={visibility}
-        tabs={
-          <Tabs
-            activeKey={visibility}
-            // Tabs fill their container by default, which pushed the actions
-            // onto a second row; size to the tabs so both share one.
-            style={{ width: 'auto' }}
-            items={[
-              {
-                icon: <Icon icon={UsersIcon} />,
-                key: 'public',
-                label: t('environments.visibility.tabs.workspace'),
-              },
-              {
-                icon: <Icon icon={LockIcon} />,
-                key: 'private',
-                label: t('environments.visibility.tabs.private'),
-              },
-            ]}
-            onChange={(key) => setVisibility(key as EnvironmentVisibility)}
-          />
-        }
-      />
+      {tab === 'vault' ? (
+        <WorkspaceVault headerLeading={tabs} />
+      ) : (
+        <EnvironmentManager
+          createVisibility={'private'}
+          headerLeading={tabs}
+          onOpenEnvironment={(id) => navigate(`/settings/environments/${encodeURIComponent(id)}`)}
+        />
+      )}
     </Flexbox>
   );
 });

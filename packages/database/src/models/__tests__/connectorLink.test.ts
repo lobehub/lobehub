@@ -409,3 +409,112 @@ describe('ConnectorLinkModel', () => {
     });
   });
 });
+
+describe('ConnectorLinkModel edge cases', () => {
+  it('keeps allocating past a name that is taken twice', () => {
+    expect(allocateLinkName(['x', 'x (2)'], 'x')).toBe('x (3)');
+  });
+
+  it('reads a live legacy token as a connected account', async () => {
+    const row = await create({ credentials: JSON.stringify(credentials) });
+
+    const [legacy] = await links.listByConnectorIds([row.id]);
+
+    expect(legacy).toMatchObject({ id: LEGACY_LINK_ID, status: 'connected' });
+  });
+
+  it('lists nothing when asked about no connector', async () => {
+    expect(await links.listByConnectorIds([])).toEqual([]);
+  });
+
+  it('returns accounts of several connectors in the order the connectors were asked about', async () => {
+    const first = await create();
+    await save(first.id, 'issuer/first');
+    const second = await create();
+    await save(second.id, 'issuer/second');
+
+    const accounts = await links.listByConnectorIds([second.id, first.id]);
+
+    expect(accounts.map((account) => account.userConnectorId)).toEqual([second.id, first.id]);
+    expect(accounts.map((account) => account.credentials.accessToken)).toEqual([
+      'alice-token',
+      'alice-token',
+    ]);
+  });
+
+  it('updates the status of one account and ignores a status it already has', async () => {
+    const row = await create();
+    const { linkId } = await save(row.id, 'issuer/alice');
+
+    await links.updateStatus(row.id, linkId, 'error');
+    expect((await links.findById(row.id, linkId))?.status).toBe('error');
+
+    await links.updateStatus(row.id, linkId, 'error');
+    expect((await links.findById(row.id, linkId))?.status).toBe('error');
+  });
+
+  it('leaves the other accounts untouched when one changes status', async () => {
+    const row = await create();
+    const { linkId } = await save(row.id, 'issuer/alice');
+    const other = await save(row.id, 'issuer/bob');
+
+    await links.updateStatus(row.id, linkId, 'error');
+
+    const accounts = await links.listByConnectorIds([row.id]);
+    expect(accounts.find((a) => a.id === linkId)?.status).toBe('error');
+    expect(accounts.find((a) => a.id === other.linkId)?.status).toBe('connected');
+  });
+
+  it('leaves the accounts alone when refreshing one that no longer exists', async () => {
+    const row = await create();
+    await save(row.id, 'issuer/alice');
+
+    await links.updateCredentials(row.id, 'lnk_missing', {
+      type: 'oauth2',
+      accessToken: 'nobody',
+    });
+
+    const accounts = await links.listByConnectorIds([row.id]);
+    expect(accounts.map((account) => account.credentials.accessToken)).toEqual(['alice-token']);
+  });
+
+  it('reads credentials written without a vault, and reads unreadable ones as none', async () => {
+    const plainLinks = new ConnectorLinkModel(db, 'alice');
+    const row = await create();
+    await save(row.id, 'issuer/alice');
+    // A vault-less instance cannot read vault ciphertext, and reads it as no account.
+    expect(await plainLinks.listByConnectorIds([row.id])).toEqual([]);
+
+    const [broken] = await db
+      .update(userConnectors)
+      .set({ credentials: 'not-json' })
+      .where(eq(userConnectors.id, row.id))
+      .returning({ id: userConnectors.id });
+    expect(await plainLinks.listByConnectorIds([broken.id])).toEqual([]);
+    // A change never overwrites credentials it could not read.
+    await expect(plainLinks.updateStatus(broken.id, LEGACY_LINK_ID, 'error')).rejects.toThrow();
+  });
+
+  it('stores accounts in the clear for an instance without a vault', async () => {
+    const plainLinks = new ConnectorLinkModel(db, 'alice');
+    const row = await create();
+
+    await plainLinks.applyAuthorization(row.id, {
+      authorizerId: 'alice',
+      credentials,
+      target: { kind: 'new' },
+    });
+
+    expect(JSON.parse((await storedPlaintext(row.id))!)).toMatchObject({ type: 'oauth2' });
+  });
+
+  it('leaves the authorizer name empty when the account has none', async () => {
+    await db.update(users).set({ fullName: null, username: null }).where(eq(users.id, 'alice'));
+    const row = await create();
+    await save(row.id, 'issuer/alice');
+
+    const [account] = await links.listByConnectorIds([row.id]);
+
+    expect(account.authorizedByName).toBeNull();
+  });
+});

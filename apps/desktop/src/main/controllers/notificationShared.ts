@@ -41,7 +41,7 @@ export const openNotificationTarget = (
 ) => {
   app.browserManager.showMainWindow();
   if (navigate?.path) {
-    app.browserManager.getMainWindow().broadcast('navigate', navigate);
+    app.browserManager.getMainWindow().broadcast('navigate', { ...navigate, reuseTab: true });
   }
 };
 

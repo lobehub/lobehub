@@ -51,7 +51,18 @@ export {
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
 } from './agentStreamPipeline';
-export { ANTIGRAVITY_BASE_ARGS, buildAntigravityArgs } from './antigravity';
+export {
+  type AntigravityAcpLaunch,
+  buildAntigravityAcpLaunch,
+  getAntigravitySpawnEnv,
+} from './antigravity';
+export {
+  type AntigravityAcpPromptBlock,
+  AntigravityAcpSession,
+  type AntigravityAcpSessionOptions,
+  buildAntigravityAcpPrompt,
+  isAntigravityAcpSessionNotFoundError,
+} from './antigravityAcpSession';
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
@@ -144,6 +155,7 @@ export {
   DshAcpSession,
   type DshAcpSessionHandle,
   type DshAcpSessionOptions,
+  resolveDshSpawnCommand,
   spawnDshAcpSession,
   type SpawnDshAcpSessionOptions,
 } from './dshAcpSession';
@@ -205,9 +217,12 @@ export {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
   type ClaudeCodeControlResponse,
+  type ClaudeCodeLiveExit,
   ClaudeCodeLiveInput,
+  resolveClaudeCodeLiveRuntimeEnd,
 } from './claudeCodeLiveInput';
 export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
+export { STOP_TASK_ANSWER_TIMEOUT_MS, stopClaudeCodeTask } from './claudeCodeStopTask';
 export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,

@@ -22,6 +22,7 @@ import {
   collectBorrowedConnectors,
 } from '@/server/utils/connectorAttribution';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '.';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -134,6 +135,8 @@ const skillManifest = (identifier: string) => ({
 interface RunOptions {
   agentConfig?: Record<string, unknown>;
   appContext?: Record<string, unknown>;
+  /** The `auto` entries of the agent's plugins — what turns a connector on. */
+  autoSkillIds?: string[];
   canUseDevice?: boolean;
   composioManifests?: unknown[];
   connectorResolve?: (ids: string[]) => unknown[];
@@ -158,6 +161,9 @@ const run = (options: RunOptions = {}) => {
       connectorModel: {
         resolveAll: vi.fn().mockResolvedValue([]),
         resolveByIdentifiers: vi.fn(async (ids: string[]) => options.connectorResolve?.(ids) ?? []),
+        resolveToolSets: toolSetsFrom(
+          async (ids: string[]) => options.connectorResolve?.(ids) ?? [],
+        ),
       },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
@@ -179,6 +185,7 @@ const run = (options: RunOptions = {}) => {
       agentConfig: { chatConfig: {}, id: 'agent-1', plugins: [], ...options.agentConfig },
       appContext: options.appContext,
       assistantMessageId: 'assistant-1',
+      autoSkillIds: options.autoSkillIds ?? [],
       canUseDevice: options.canUseDevice ?? false,
       model: 'test-model',
       prompt: 'hello',
@@ -281,6 +288,7 @@ describe('discoverTools — connector permissions and ownership', () => {
       manifest: skillManifest('community-mcp'),
     };
     const result = await run({
+      autoSkillIds: ['lobehub-notion', 'composio-gmail', 'community-mcp'],
       composioManifests: [skillManifest('composio-gmail')],
       connectorResolve: (ids) =>
         ids.map((identifier, index) => ({ id: `conn-${index}`, identifier })),
@@ -317,6 +325,155 @@ describe('discoverTools — connector permissions and ownership', () => {
     const result = await run().promise;
 
     expect(result.connectorOwnershipNote).toBeUndefined();
+  });
+});
+
+describe('discoverTools — connector discovery', () => {
+  const plugin = (identifier: string) => ({
+    customParams: {},
+    identifier,
+    manifest: skillManifest(identifier),
+  });
+  const sources = {
+    composioManifests: [skillManifest('composio-gmail')],
+    installedPlugins: [plugin('community-mcp')],
+    lobehubSkillManifests: [skillManifest('lobehub-notion')],
+  };
+  const engineManifestIds = () =>
+    lastEngineOptions().additionalManifests.map((m: any) => m.identifier);
+  const engineInstalledIds = () =>
+    (vi.mocked(createServerAgentToolsEngine).mock.calls.at(-1)?.[0] as any).installedPlugins.map(
+      (p: any) => p.identifier,
+    );
+
+  it('offers connected services and installed plugins to an ordinary agent by default', async () => {
+    const result = await run(sources).promise;
+    for (const id of ['lobehub-notion', 'composio-gmail', 'community-mcp']) {
+      expect(result.toolManifestMap).toHaveProperty(id);
+      expect(result.toolsResult.enabledToolIds).not.toContain(id);
+    }
+  });
+
+  it('lets a connector that is on be discovered without invoking it up front', async () => {
+    const result = await run({
+      ...sources,
+      autoSkillIds: ['lobehub-notion', 'composio-gmail', 'community-mcp'],
+    }).promise;
+
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).not.toContain('lobehub-notion');
+    expect(result.agentPlugins).not.toContain('composio-gmail');
+    expect(result.agentPlugins).not.toContain('community-mcp');
+  });
+
+  it('reads a connector pinned before the two-state switch as on, not invoked up front', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { plugins: ['lobehub-notion', 'community-mcp', 'lobe-image-generation'] },
+    }).promise;
+
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    // A pinned builtin tool keeps its pin; only connectors lost that state.
+    expect(result.agentPlugins).toEqual(['lobe-image-generation']);
+  });
+
+  it('limits connector discovery to the custom toolset', async () => {
+    const resolveByIdentifiers = vi.fn((_ids: string[]) => []);
+
+    await run({
+      ...sources,
+      agentConfig: { chatConfig: { toolMode: 'custom' }, plugins: ['lobe-activator'] },
+      autoSkillIds: ['custom-mcp'],
+      connectorResolve: resolveByIdentifiers,
+    }).promise;
+
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['lobe-activator', 'custom-mcp']);
+  });
+
+  it('keeps opted-in connectors discoverable despite a legacy manual preference', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { chatConfig: { skillActivateMode: 'manual' }, plugins: ['lobehub-notion'] },
+      autoSkillIds: ['community-mcp'],
+    }).promise;
+
+    expect(result.agentPlugins).toEqual([]);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
+  });
+
+  it('invokes a connector that is on directly in custom mode, which has no activator either', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { chatConfig: { toolMode: 'custom' }, plugins: ['lobehub-notion'] },
+      autoSkillIds: ['community-mcp'],
+    }).promise;
+
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['lobehub-notion', 'community-mcp']),
+    );
+    expect(result.agentPlugins).not.toContain('composio-gmail');
+  });
+
+  it('keeps a connector the turn mentions even when the agent has it off', async () => {
+    const result = await run({
+      ...sources,
+      input: { selectedToolIds: ['community-mcp'] },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toContain('community-mcp');
+  });
+
+  it('keeps tools and @agent delegation from earlier turns in the topic enabled on follow-up turns', async () => {
+    const result = await run({
+      ...sources,
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            content: '<mention name="Writer" id="agt_writer" /> Hello',
+            metadata: { selectedToolIds: ['community-mcp', 'lobe-agent-management'] },
+            role: 'user',
+          },
+          { content: 'How can I help?', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['community-mcp', 'lobe-agent-management']),
+    );
+  });
+
+  it('does not leak supervisor @-mentioned connectors from shared group history into an in-group member turn', async () => {
+    const result = await run({
+      ...sources,
+      appContext: { groupId: 'group-1', orchestrationRole: 'member' },
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            metadata: { selectedToolIds: ['community-mcp'] },
+            role: 'user',
+          },
+          { content: 'Delegating to member', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(result.agentPlugins).not.toContain('community-mcp');
+  });
+
+  it('leaves an exact toolset untouched by the agent switches', async () => {
+    const result = await run({
+      ...sources,
+      input: { exclusivePluginIds: ['community-mcp'] },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toEqual(['community-mcp']);
   });
 });
 

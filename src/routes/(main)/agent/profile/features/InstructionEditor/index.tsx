@@ -15,14 +15,15 @@ const InstructionEditor = memo(() => {
   const { t } = useTranslation('setting');
 
   return (
-    <Flexbox gap={24} paddingBlock={'8px 48px'}>
-      <Flexbox gap={4}>
-        <Text fontSize={24} weight={600}>
-          {t('settingAgent.instruction.title')}
-        </Text>
-        <Text type={'secondary'}>{t('settingAgent.instruction.desc')}</Text>
-      </Flexbox>
-      <EditorCanvas />
+    <Flexbox paddingBlock={'8px 48px'}>
+      <EditorCanvas
+        description={<Text type={'secondary'}>{t('settingAgent.instruction.description')}</Text>}
+        title={
+          <Text fontSize={24} weight={600}>
+            {t('settingAgent.instruction.title')}
+          </Text>
+        }
+      />
     </Flexbox>
   );
 });

@@ -33,6 +33,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import RunCard from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/RunCard';
 import { agentEvalService } from '@/services/agentEval';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
@@ -50,7 +51,7 @@ const styles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   empty: {
     alignItems: 'center',

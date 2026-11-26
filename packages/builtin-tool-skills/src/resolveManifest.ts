@@ -1,6 +1,7 @@
 import type { BuiltinManifestResolver, BuiltinToolResolveContext } from '@lobechat/types';
 
 import { SkillsManifest } from './manifest';
+import { appendExecutionEnvironment, deviceSystemPrompt } from './systemRole';
 import { SkillsApiName } from './types';
 
 /**
@@ -148,6 +149,7 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
       : {};
   const preamble = unrouted.preamble ?? basePreamble;
   const fact = unrouted.fact ?? (executionEnv && EXEC_ENV_FACTS[executionEnv]);
+  const baseSystemRole = isDeviceRun ? deviceSystemPrompt : SkillsManifest.systemRole;
 
   return {
     ...SkillsManifest,
@@ -158,8 +160,6 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
           ? { ...api, description: `${preamble} ${api.description}` }
           : api,
       ),
-    ...(fact && {
-      systemRole: `${SkillsManifest.systemRole}\n<execution_environment>\n${fact}\n</execution_environment>\n`,
-    }),
+    systemRole: fact ? appendExecutionEnvironment(baseSystemRole, fact) : baseSystemRole,
   };
 };

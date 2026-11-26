@@ -84,6 +84,39 @@ describe('projectWorkingDirectory store', () => {
     });
   });
 
+  describe('updateProjectEnvironment', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("saves through the service and refreshes only that project's environment and folders", async () => {
+      vi.mocked(mutate).mockClear();
+      const update = vi
+        .spyOn(projectWorkingDirectoryService, 'updateEnvironment')
+        .mockResolvedValue({ data: { id: 'env-1' }, success: true } as never);
+      const configuration = { sources: [{ kind: 'git' as const, url: 'https://github.com/a/b' }] };
+
+      await useProjectDirectoryStore
+        .getState()
+        .updateProjectEnvironment({ configuration, projectId: 'project-1' });
+
+      expect(update).toHaveBeenCalledWith({ configuration, projectId: 'project-1' });
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+      // Standalone environments are untouched.
+      expect(invalidates('projectEnvironments', 'all')).toBe(false);
+    });
+  });
+
+  describe('refreshEnvironments', () => {
+    it('refreshes every environment and directory projection', async () => {
+      vi.mocked(mutate).mockClear();
+
+      await useProjectDirectoryStore.getState().refreshEnvironments();
+
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();

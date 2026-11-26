@@ -16,10 +16,9 @@ import { useCallback, useMemo, useRef } from 'react';
 
 import { mutate } from '@/libs/swr';
 import { deviceKeys, localFileKeys } from '@/libs/swr/keys';
-import type { GitBranchSummary, GitLinkedPRSummary } from '@/services/git';
+import type { GitBranchSummary } from '@/services/git';
 
 import {
-  gitLinkedPRKey,
   gitPullRequestKey,
   gitPullRequestMergeContextKey,
   type GitPullRequestMergeContextParams,
@@ -29,7 +28,7 @@ import {
   type ReviewMode,
   type ReviewPatchesData,
 } from './gitReview/projection';
-import { type GitReviewStore, useGitReviewStore, warmPullRequestReplicas } from './gitReview/store';
+import { type GitReviewStore, useGitReviewStore } from './gitReview/store';
 import {
   type GitDiffStats,
   gitStatusKey,
@@ -262,10 +261,14 @@ const useGitStatusRead = <T>(
   path: string | undefined,
   schedule: ReplicaSyncSchedule,
   enabled = true,
+  branch?: string,
 ): GitStatusReadResult<T> => {
   const params = useMemo(
-    () => (enabled && isEnabled(deviceId, path) ? { deviceId, path } : null),
-    [enabled, deviceId, path],
+    () =>
+      enabled && isEnabled(deviceId, path)
+        ? { deviceId, path, ...(branch ? { branch } : {}) }
+        : null,
+    [enabled, deviceId, path, branch],
   );
   const key = params ? gitStatusKey(params) : undefined;
   const stored = useGitStatusStore((s) => (key ? selectMap(s)[key] : undefined));
@@ -384,50 +387,6 @@ export const useFetchGitBranch = (deviceId: string | undefined, path?: string) =
   );
 
 /**
- * PR linked to the current branch. The lookup spawns `gh pr list` (8s timeout),
- * so keep a long 60s dedupe + 60s focus throttle — unlike the cheap branch read,
- * this must NOT re-run on every remount or directory revisit. Keyed by branch,
- * so a checkout naturally re-keys into a fresh lookup; disabled for non-github
- * repos and detached HEAD (no branch ref to query). Includes merged/closed PRs
- * so the lifecycle badge can refresh after GitHub changes outside the app.
- */
-export const useFetchGitLinkedPR = (
-  deviceId: string | undefined,
-  path: string | undefined,
-  branch: string | undefined,
-  isGithub = false,
-) => {
-  const enabled = isGithub && !!branch && isEnabled(deviceId, path);
-  const params = useMemo(
-    () => (enabled ? { branch: branch!, deviceId, path: path! } : null),
-    [enabled, branch, deviceId, path],
-  );
-  // The PR tab mounts the moment the linked PR is known; start reading its
-  // persisted detail / activity then, so the tab body paints from storage on
-  // its first frame instead of a skeleton while its own hydration reads them.
-  const warm = useCallback(
-    (read: GitReviewRead<GitLinkedPRSummary>) => {
-      const number = read.value?.pullRequest?.number;
-      if (number !== undefined && path) warmPullRequestReplicas({ deviceId, number, path });
-    },
-    [deviceId, path],
-  );
-  return useGitReviewRead(
-    (slices) => slices.linkedPR,
-    (s) => s.gitLinkedPRMap,
-    (s) => s.gitLinkedPRReplica.entries,
-    gitLinkedPRKey,
-    params,
-    {
-      dedupingInterval: 60 * 1000,
-      focusThrottleInterval: 60 * 1000,
-      onHydrated: warm,
-      onSuccess: warm,
-    },
-  );
-};
-
-/**
  * Compact uncommitted-diff counts for the composer's `+N −M` chip. There is no
  * read of its own: the review-patch hook writes the counts here once they load,
  * so a reload paints the previous session's chip before the diff is fetched.
@@ -457,10 +416,17 @@ export const useFetchGitWorkingTreeStatus = (deviceId: string | undefined, path?
   );
 
 /**
- * Ahead/behind commit counts. Each load piggybacks a best-effort `git fetch`
- * inside the read, so focus revalidation (5s throttle) surfaces remote updates.
+ * Ahead/behind commit counts — of HEAD, or of `branch` when given (the branch
+ * picked for a new topic, wherever HEAD is). Each load piggybacks a best-effort
+ * `git fetch` inside the read, so focus revalidation (5s throttle) surfaces
+ * remote updates. A named-branch read from a device too old to honour the
+ * branch errors with `DeviceGitOutdatedError` instead of counting HEAD.
  */
-export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: string) =>
+export const useFetchGitAheadBehind = (
+  deviceId: string | undefined,
+  path?: string,
+  branch?: string,
+) =>
   useGitStatusRead<DeviceGitAheadBehind>(
     useGitStatusStore.getState().slices.aheadBehind,
     selectAheadBehindMap,
@@ -468,6 +434,8 @@ export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: stri
     deviceId,
     path,
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true },
+    true,
+    branch,
   );
 
 /**

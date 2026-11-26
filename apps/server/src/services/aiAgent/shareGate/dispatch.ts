@@ -8,6 +8,7 @@ import {
   SHARE_VISITOR_ALLOWED_IDENTIFIERS,
 } from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
+import { isShareDeviceBuiltin } from './deviceAccess';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { SUB_AGENT_DISPATCH_APIS } from './subAgentDispatch';
 import type { ShareDataToolPermissions } from './types';
@@ -45,6 +46,8 @@ export const isShareBlockedDataToolCall = (
   // identifiers are governed by the toolGrants picker, not this allowlist.
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
   if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
+  // Device builtins: granted by `shareConfig.deviceAccess` alone.
+  if (isShareDeviceBuiltin(identifier)) return !permissions.canUseDevice;
 
   // Default-deny: a known builtin identifier not on the allowlist is blocked
   // unconditionally, including any tool registered after this allowlist was
@@ -94,6 +97,9 @@ export const isShareBlockedBuiltinDispatch = (
 
   // A Channel run's history reads only; see `isShareVisitorChannelRead`.
   if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
+  // Device builtins are granted by `shareConfig.deviceAccess` alone, never by
+  // `toolGrants`; the visitor's own approval mode still applies to them.
+  if (isShareDeviceBuiltin(identifier)) return !agentShare.canUseDevice;
   if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
   // The owner's picker must grant this identifier at all (toolset-level or
   // naming this specific `apiName`) — a grant scoped to a DIFFERENT api on

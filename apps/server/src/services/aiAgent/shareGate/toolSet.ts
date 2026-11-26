@@ -17,6 +17,7 @@ import {
   SHARE_VISITOR_CHANNEL_BLOCKED_APIS,
 } from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
+import { isShareDeviceBuiltin } from './deviceAccess';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { stripSubAgentDispatchApis } from './subAgentDispatch';
 import {
@@ -75,7 +76,10 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const grants = resolveEffectiveShareToolGrants(gate.shareConfig);
+  const grants = resolveEffectiveShareToolGrants({
+    ...gate.shareConfig,
+    canUseDevice: gate.canUseDevice,
+  });
 
   // A tool must clear BOTH gates: the owner's own `toolGrants` picker
   // (`grants` — toolset-level OR scoped to at least one API), AND — for
@@ -85,8 +89,10 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   // they pass straight through to the owner-picker check unaffected — this
   // allowlist must never decide their fate, in either direction.
   // MCP servers only the creator's machine can reach (stdio / localhost / LAN)
-  // never survive, grant or not: dispatching one tunnels to the creator's
-  // device under the creator's identity. Decided from the manifest's runtime
+  // survive only when the share grants this visitor the device
+  // (`gate.canUseDevice`), and then still need their own tool grant:
+  // dispatching one tunnels to the creator's device under the creator's
+  // identity. Decided from the manifest's runtime
   // `mcpParams` (set for connector manifests by `buildConnectorManifests`),
   // the same field `ToolExecutionService.executeMCPTool` dispatches on — which
   // also refuses these calls for visitor runs as the unbypassable backstop.
@@ -100,7 +106,10 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   );
 
   const isAllowed = (id: string) => {
-    if (deviceOnlyMcpIds.has(id)) return false;
+    if (deviceOnlyMcpIds.has(id) && !gate.canUseDevice) return false;
+    // Device builtins are granted by `shareConfig.deviceAccess` alone — they
+    // are never picked in the tool picker, like an IM bot's device tools.
+    if (isShareDeviceBuiltin(id)) return gate.canUseDevice;
     // Only a Channel run injects this tool; its reads are narrowed below.
     if (isShareVisitorChannelTool(id)) return true;
     if (!hasShareToolGrant(grants, id)) return false;
@@ -184,7 +193,8 @@ const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
  * Fit `lobe-activator` to the gated set, or drop it when that set leaves it
  * nothing to activate.
  *
- * Its grant is implied by any tool grant (`resolveEffectiveShareToolGrants`),
+ * Its grant is implied by any tool grant or the device grant
+ * (`resolveEffectiveShareToolGrants`),
  * but the activator only ever discovers what is left in `manifestMap` and not
  * already enabled — the same difference `buildToolDiscoveryConfig` renders as
  * `<available_tools>`. A historical activation in `activatableToolIds` counts
@@ -198,7 +208,7 @@ const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
  * never in a visitor's set, and its `activateSkill` lines stay only while
  * `lobe-skills` itself survived the gate (a share with `skillGrants`).
  */
-const applyShareGateToActivator = (toolSet: ShareGateToolSet): void => {
+export const applyShareGateToActivator = (toolSet: ShareGateToolSet): void => {
   const manifest = toolSet.manifestMap[LobeActivatorIdentifier];
   if (!manifest) return;
 

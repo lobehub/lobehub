@@ -84,7 +84,7 @@ describe('favorite slice', () => {
     );
   };
 
-  it('shows a new favorite before the server answers, then keeps the saved row', async () => {
+  it('shows a new favorite on top before the server answers, then keeps the saved row', async () => {
     await loadWith([favorite('a')]);
     let resolveAdd!: (item: FavoriteItem) => void;
     const add = vi
@@ -98,14 +98,14 @@ describe('favorite slice', () => {
         .toggleFavorite({ path: '/page/b', targetId: 'b', title: 'B', type: 'page' });
     });
 
-    expect(list().map((item) => item.targetId)).toEqual(['a', 'b']);
+    expect(list().map((item) => item.targetId)).toEqual(['b', 'a']);
 
     await waitFor(() => expect(add).toHaveBeenCalled());
     await act(async () => {
       resolveAdd(favorite('b', { title: 'B' }));
       await toggled;
     });
-    expect(list()[1]).toEqual(favorite('b', { title: 'B' }));
+    expect(list()).toEqual([favorite('b', { title: 'B' }), favorite('a')]);
   });
 
   it('puts a removed favorite back when the server refuses', async () => {

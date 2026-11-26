@@ -43,7 +43,7 @@
   "magpie.description": "magpie 是一个 LLM 网关：您拥有的每个模型和订阅都通过一个端点提供服务。",
   "meta.description": "Meta 构建 AI 模型与产品，帮助人们交流、创作和完成任务，旗下包括 Llama 和 Muse 模型系列。",
   "minimax.description": "MiniMax 成立于 2021 年，致力于构建通用 AI，拥有多模态基础模型，包括万亿参数的 MoE 文本模型、语音模型与视觉模型，并推出海螺 AI 等应用。",
-  "minimaxcodingplan.description": "MiniMax Token Plan 提供对 MiniMax 模型（包括 M2.7）的访问，适用于编程任务，采用固定月费订阅模式。",
+  "minimaxcodingplan.description": "MiniMax Token Plan 通过固定月费订阅方式访问 MiniMax 模型（包括 M3.1 Flash）用于编程任务。",
   "mistral.description": "Mistral 提供先进的通用、专业与研究型模型，支持复杂推理、多语言任务与代码生成，具备函数调用能力以实现定制集成。",
   "modelscope.description": "ModelScope 是阿里云的模型即服务平台，提供丰富的 AI 模型与推理服务。",
   "moonshot.description": "Moonshot（北京月之暗面科技）推出多款 NLP 模型，适用于内容创作、科研、推荐与医疗分析等场景，具备强大的长文本与复杂生成能力。",

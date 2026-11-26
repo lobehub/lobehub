@@ -6,7 +6,7 @@ import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-import { getRunCommandDisplayCommand } from '../../utils/runCommand';
+import { getRunCommandDisplayCommand, getRunCommandStdout } from '../../utils/runCommand';
 import AnsiOutput from './AnsiOutput';
 
 const styles = stylex.create({
@@ -22,7 +22,7 @@ interface RunCommandArgs {
 
 const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
   ({ args, content, pluginState }) => {
-    const output = pluginState?.stdout || pluginState?.output || content;
+    const output = getRunCommandStdout(pluginState, content);
     const stderr = pluginState?.stderr;
     const command = getRunCommandDisplayCommand(args?.command);
 

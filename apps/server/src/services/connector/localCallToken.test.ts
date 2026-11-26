@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getConnectorLocalCallToken } from './localCallToken';
+import { getConnectorLocalCallToken, getResolvedConnectorLocalCallToken } from './localCallToken';
 import { ensureFreshLinkToken } from './tokens';
 
 vi.mock('./tokens', () => ({ ensureFreshLinkToken: vi.fn(async (_connector, link) => link) }));
@@ -39,6 +39,9 @@ const call = (
 ) => {
   const connectorModel = {
     findById: vi.fn().mockResolvedValue(connector),
+    forRow() {
+      return this;
+    },
     getLinkModel: () => ({ listByConnectorIds: vi.fn().mockResolvedValue(links) }),
   };
   return getConnectorLocalCallToken(
@@ -114,5 +117,49 @@ describe('getConnectorLocalCallToken', () => {
 
   it('fails when the connector is gone', async () => {
     await expect(call(undefined)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('getResolvedConnectorLocalCallToken', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("reads and refreshes a resolved row's accounts through its own scope, without reading it by id", async () => {
+    // A private agent's own topic runs its owner's personal connector, which
+    // the workspace scope can neither read by id nor list the accounts of.
+    const link = account('lnk_a', 'access');
+    const personalLinkModel = { listByConnectorIds: vi.fn().mockResolvedValue([link]) };
+    const personalModel = {
+      forRow() {
+        return this;
+      },
+      getLinkModel: () => personalLinkModel,
+    };
+    const workspaceLinkModel = { listByConnectorIds: vi.fn().mockResolvedValue([]) };
+    const connectorModel = { findById: vi.fn(), forRow: vi.fn(() => personalModel) };
+    const personal = { ...oauthConnector, workspaceId: null };
+
+    await expect(
+      getResolvedConnectorLocalCallToken(
+        {
+          connectorLinkModel: workspaceLinkModel as never,
+          connectorModel: connectorModel as never,
+          userId: 'u1',
+        },
+        personal as never,
+      ),
+    ).resolves.toEqual({ accessToken: 'access', type: 'oauth2' });
+    expect(connectorModel.findById).not.toHaveBeenCalled();
+    expect(connectorModel.forRow).toHaveBeenCalledWith(personal);
+    expect(workspaceLinkModel.listByConnectorIds).not.toHaveBeenCalled();
+    expect(ensureFreshLinkToken).toHaveBeenCalledWith(personal, link, personalModel);
+  });
+
+  it('refuses a resolved row someone else connected', async () => {
+    await expect(
+      getResolvedConnectorLocalCallToken(
+        { connectorModel: {} as never, userId: 'workspace-owner' },
+        oauthConnector as never,
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

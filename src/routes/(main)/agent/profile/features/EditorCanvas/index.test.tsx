@@ -4,6 +4,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { type SaveStatus } from '@/types/saveState';
 
 import EditorCanvas from './index';
@@ -255,7 +256,7 @@ describe('Agent profile EditorCanvas', () => {
   });
 
   it('seeds source mode from the persisted Markdown when editor data also exists', async () => {
-    const editorData = { root: { children: ['parsed source'] } };
+    const editorData = { root: { type: 'root', children: ['parsed source'] } };
     const persistedMarkdown = '<details>\n\n  raw spacing\n\n</details>';
     agentStoreState.agentMap = {
       'agent-a': {
@@ -276,8 +277,8 @@ describe('Agent profile EditorCanvas', () => {
 
   it('ignores source change callbacks caused by a programmatic value sync', async () => {
     permissionState.allowed = true;
-    const initialEditorData = { root: { children: ['initial'] } };
-    const serverEditorData = { root: { children: ['server'] } };
+    const initialEditorData = { root: { type: 'root', children: ['initial'] } };
+    const serverEditorData = { root: { type: 'root', children: ['server'] } };
     agentStoreState.agentMap = {
       'agent-a': { editorData: initialEditorData, systemRole: 'initial prompt' },
     };
@@ -366,19 +367,32 @@ describe('Agent profile EditorCanvas', () => {
     expect(onWrapperClick).not.toHaveBeenCalled();
   });
 
-  it('moves the prompt description into the title tooltip', () => {
+  it('keeps editor controls without repeating the instruction page heading and help', () => {
     render(<EditorCanvas />);
 
+    expect(screen.queryByText('settingAgent.prompt.title')).not.toBeInTheDocument();
     expect(screen.queryByText('settingAgent.prompt.desc')).not.toBeInTheDocument();
-    expect(screen.getByTestId('prompt-description-tooltip')).toHaveAccessibleName(
-      'settingAgent.prompt.desc',
+    expect(screen.queryByTestId('prompt-description-tooltip')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }),
+    ).toBeInTheDocument();
+    const inputSurface = screen.getByTestId('profile-editor').closest('[data-variant="outlined"]');
+    expect(inputSurface).toBeInTheDocument();
+    expect(inputSurface).not.toContainElement(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }),
+    );
+    expect(inputSurface).not.toContainElement(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }),
     );
   });
 
   it('binds a draft save to its original agent and loads the next agent content', async () => {
     permissionState.allowed = true;
-    const agentAEditorData = { root: { children: ['agent-a'] } };
-    const agentBEditorData = { root: { children: ['agent-b'] } };
+    const agentAEditorData = { root: { type: 'root', children: ['agent-a'] } };
+    const agentBEditorData = { root: { type: 'root', children: ['agent-b'] } };
     agentStoreState.agentMap = {
       'agent-a': { editorData: agentAEditorData, systemRole: 'agent-a prompt' },
       'agent-b': { editorData: agentBEditorData, systemRole: 'agent-b prompt' },
@@ -390,7 +404,7 @@ describe('Agent profile EditorCanvas', () => {
     await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', agentAEditorData));
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
-    editorDocuments.json = { root: { children: ['agent-a edited'] } };
+    editorDocuments.json = { root: { type: 'root', children: ['agent-a edited'] } };
     editorDocuments.markdown = 'agent-a edited';
     act(() => editorProps.last?.onTextChange(editor));
     expect(handleContentChange).toHaveBeenCalledWith('agent-a', expect.any(Function), editor);
@@ -423,8 +437,8 @@ describe('Agent profile EditorCanvas', () => {
 
   it('replaces hydrated editor data with a later server config before local editing starts', async () => {
     permissionState.allowed = true;
-    const hydratedEditorData = { root: { children: ['hydrated'] } };
-    const serverEditorData = { root: { children: ['server'] } };
+    const hydratedEditorData = { root: { type: 'root', children: ['hydrated'] } };
+    const serverEditorData = { root: { type: 'root', children: ['server'] } };
     agentStoreState.agentMap = {
       'agent-a': { editorData: hydratedEditorData, systemRole: 'hydrated prompt' },
     };
@@ -449,7 +463,7 @@ describe('Agent profile EditorCanvas', () => {
   it('ignores the editor delayed callback for a programmatic document sync', async () => {
     vi.useFakeTimers();
     permissionState.allowed = true;
-    const editorData = { root: { children: ['programmatic'] } };
+    const editorData = { root: { type: 'root', children: ['programmatic'] } };
     agentStoreState.agentMap = {
       'agent-a': { editorData, systemRole: 'programmatic prompt' },
     };
@@ -468,8 +482,8 @@ describe('Agent profile EditorCanvas', () => {
 
   it('does not overwrite a local draft with a later editor-data refresh', async () => {
     permissionState.allowed = true;
-    const initialEditorData = { root: { children: ['initial'] } };
-    const serverEditorData = { root: { children: ['server'] } };
+    const initialEditorData = { root: { type: 'root', children: ['initial'] } };
+    const serverEditorData = { root: { type: 'root', children: ['server'] } };
     agentStoreState.agentMap = {
       'agent-a': { editorData: initialEditorData, systemRole: 'initial prompt' },
     };
@@ -478,7 +492,7 @@ describe('Agent profile EditorCanvas', () => {
     act(() => editorProps.last?.onInit());
     await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', initialEditorData));
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-    editorDocuments.json = { root: { children: ['local draft'] } };
+    editorDocuments.json = { root: { type: 'root', children: ['local draft'] } };
     editorDocuments.markdown = 'local draft';
     act(() => editorProps.last?.onTextChange(editor));
     editor.setDocument.mockClear();
@@ -537,9 +551,29 @@ describe('Agent profile EditorCanvas', () => {
     expect(screen.queryByTestId('prompt-save-status')).not.toBeInTheDocument();
   });
 
+  it('falls back to systemRole when editorData is an empty root document', async () => {
+    const emptyEditorData = {
+      root: { children: [], direction: 'ltr', format: '', indent: 0, type: 'root', version: 1 },
+    };
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: emptyEditorData, systemRole: '# API written prompt' },
+    };
+
+    render(<EditorCanvas />);
+
+    expect(editorProps.last?.content).toEqual(EMPTY_EDITOR_STATE);
+
+    act(() => editorProps.last?.onInit());
+
+    await waitFor(() =>
+      expect(editor.setDocument).toHaveBeenCalledWith('markdown', '# API written prompt'),
+    );
+    expect(editor.setDocument).not.toHaveBeenCalledWith('json', emptyEditorData);
+  });
+
   it('ignores a stream inherited from the previously active agent', async () => {
     permissionState.allowed = true;
-    const agentBEditorData = { root: { children: ['agent-b'] } };
+    const agentBEditorData = { root: { type: 'root', children: ['agent-b'] } };
     agentStoreState.activeAgentId = 'agent-b';
     agentStoreState.agentMap = {
       'agent-b': { editorData: agentBEditorData, systemRole: 'agent-b prompt' },

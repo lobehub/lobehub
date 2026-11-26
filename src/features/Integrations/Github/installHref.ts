@@ -2,7 +2,7 @@ import urlJoin from 'url-join';
 
 import { integrationInstallOrigin } from '@/utils/integrationInstallOrigin';
 
-/** Where the install callback sends the user back to. */
+/** Where the install callback returns; the route forwards it to the connector page. */
 export const GITHUB_RETURN_TO = '/settings/integrations/github';
 
 interface GithubInstallHrefParams {

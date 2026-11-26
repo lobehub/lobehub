@@ -289,19 +289,6 @@ export class CommonActionImpl {
             if (detectedTimezone) autoDetectedGeneralConfig.timezone = detectedTimezone;
           }
 
-          // Keep reply language aligned with the browser locale until the user makes a choice.
-          // Only auto-fill once onboarding has finished — otherwise it pre-empts the
-          // language step in the onboarding flow, skipping past the user's explicit choice.
-          const hasFinishedOnboarding = !!data.onboarding?.finishedAt;
-          if (
-            hasFinishedOnboarding &&
-            !currentGeneralSettings?.responseLanguage &&
-            typeof navigator !== 'undefined'
-          ) {
-            autoDetectedGeneralConfig.responseLanguage =
-              userGeneralSettingsSelectors.currentResponseLanguage(this.#get());
-          }
-
           if (Object.keys(autoDetectedGeneralConfig).length > 0) {
             this.#get()
               .updateGeneralConfig(autoDetectedGeneralConfig)

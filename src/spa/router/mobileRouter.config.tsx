@@ -10,22 +10,36 @@ import {
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import {
   createSettingsTitleRouteMeta,
   providerDetailRouteMeta,
 } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
+import {
+  legacyCommunityRoutes,
+  legacyConnectorCatalogRoute,
+  legacySettingsMarketplaceRedirects,
+  marketplaceAppAndMcpRoutes,
+  marketplaceIndexRoute,
+  marketplaceManageRoutes,
+} from '@/spa/router/marketplaceRoutes';
+import { mobileSettingsMemoryRedirects } from '@/spa/router/memoryRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { overlayRoutes, withHandle } from '@/spa/router/routeOverlay';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
+
+import { legacyWorkspaceBillingRoute } from './legacySettingsRoutes';
 
 // One element per shape, shared by every tab: switching tabs keeps the page
 // mounted instead of swapping in a new lazy component.
@@ -40,8 +54,17 @@ const settingsTabSubElement = dynamicElement(
   { preloadId: 'mobile-settings' },
 );
 
+// Skills and connectors moved to the Marketplace; their old tabs are redirects.
+// Credentials keep their own mobile page: mobile has no environments page to
+// share, while desktop redirects `/settings/credential` to it.
+const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
+  SettingsTabs.Connector,
+  SettingsTabs.Provider,
+  SettingsTabs.Skill,
+]);
+
 const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(SettingsTabs))]
-  .filter((tab) => tab !== SettingsTabs.Provider && tab !== SettingsTabs.Creds)
+  .filter((tab) => !TABS_WITHOUT_SETTINGS_PAGE.has(tab))
   .flatMap((tab) => {
     const meta = createSettingsTitleRouteMeta(tab);
     return [
@@ -101,18 +124,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'workspace/settings',
       },
+      // Installed skills and connectors: second-level pages with the shell's
+      // back header (the settings layout drew it before they moved here).
+      ...overlayRoutes(marketplaceManageRoutes, {
+        'mcp/installed': withHandle({ mobileShellHeader: true }),
+        'connector/installed': withHandle({ mobileShellHeader: true }),
+        'skill/installed': withHandle({ mobileShellHeader: true }),
+      }),
+      marketplaceIndexRoute,
+      legacyConnectorCatalogRoute,
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
-            index: true,
-          },
           {
             children: [
               {
@@ -121,7 +144,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverAssistants' }),
+                  meta: routeMeta({
+                    icon: ShapesIcon,
+                    Skeleton: MarketplaceCatalogSkeleton,
+                    titleKey: 'navigation.marketplaceAgents',
+                  }),
                 },
                 path: 'agent',
               },
@@ -135,7 +162,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Model',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceModels' }),
                 },
                 path: 'model',
               },
@@ -147,30 +174,24 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Provider',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceProviders' }),
             },
             path: 'provider',
           },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/mcp'),
-                  'Mobile > Discover > List > MCP',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
-                },
-                path: 'mcp',
-              },
-            ],
-          },
+          ...marketplaceAppAndMcpRoutes,
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/skill'),
+              // Mobile keeps the one-column catalog; the desktop route has the two-column Skills page.
+              () => import('@/features/Marketplace/Catalog/SkillCatalog'),
               'Mobile > Discover > List > Skill',
             ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
+            handle: {
+              meta: routeMeta({
+                icon: ShapesIcon,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceSkills',
+              }),
+            },
             path: 'skill',
           },
           {
@@ -290,8 +311,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
       { preloadId: 'mobile-community' },
     ),
     errorElement: <ErrorBoundary />,
-    path: 'community',
+    path: MARKETPLACE_SEGMENT,
   },
+  ...legacyCommunityRoutes,
 
   // Agents view-all route (flat list of workspace/private agents)
   {
@@ -372,6 +394,8 @@ export const mobileRoutes: RouteObject[] = [
             path: 'creds',
           },
           { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+          ...legacySettingsMarketplaceRedirects,
+          ...mobileSettingsMemoryRedirects,
           // Every known tab gets a static segment: `/settings/memory` and
           // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
           // score, and the workspace tree would read `settings` as a slug.
@@ -470,16 +494,8 @@ export const mobileRoutes: RouteObject[] = [
             errorElement: <ErrorBoundary />,
             path: 'settings',
           },
-          // Legacy `/:slug/billing/*` URLs — redirect to `/:slug/settings/*`.
-          {
-            children: [
-              { element: redirectElement('../settings/plans'), path: 'plans' },
-              { element: redirectElement('../settings/usage'), path: 'usage' },
-              { element: redirectElement('../settings/credits'), path: 'credits' },
-              { element: redirectElement('../settings/billing'), path: 'billing' },
-            ],
-            path: 'billing',
-          },
+          // Legacy `/:slug/billing/*` URLs open the matching `/:slug/settings/*` page.
+          legacyWorkspaceBillingRoute,
         ],
         element: dynamicLayout(
           () => import('@/routes/(main)/[workspaceSlug]/_layout'),

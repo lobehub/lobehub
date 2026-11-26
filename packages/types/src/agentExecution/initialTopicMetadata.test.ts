@@ -9,6 +9,8 @@ describe('initialTopicMetadataSchema', () => {
     // still answers 200, so the loss is invisible from both ends — which is why
     // the assertion is on the parse rather than on any caller.
     const metadata = {
+      heteroPermissionMode: 'plan' as const,
+      heteroPlanMode: false,
       repos: ['lobehub/lobehub'],
       sandboxInstanceId: 'a2c1d0e4-0000-4000-8000-000000000000',
       sandboxWorkingDirectory: 'reports',

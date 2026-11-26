@@ -3,7 +3,7 @@ import type { ToolIntervention } from '@lobechat/types';
 
 import type { PersistToolBatchEntry, SubagentRunsState } from '../subagentCoordinator';
 import { createSubagentRunsState } from '../subagentCoordinator';
-import type { ExternalSignalContext, ToolCallPayload } from '../types';
+import type { ExternalSignalContext, HeteroBackgroundTask, ToolCallPayload } from '../types';
 
 /**
  * Main-agent run coordinator — shared, side-effect-free state machine for the
@@ -193,6 +193,7 @@ export type MainAgentIntent =
   | MainStreamContentIntent
   | MainPersistToolBatchIntent
   | MainUpdateToolStateIntent
+  | MainUpdateBackgroundTaskIntent
   | MainResolveToolResultIntent
   | MainSetToolInterventionIntent
   | MainRecordUsageIntent
@@ -262,6 +263,18 @@ export interface MainUpdateToolStateIntent {
   kind: 'updateToolState';
   pluginState: Record<string, unknown>;
   snapshotSeq: number;
+  toolCallId: string;
+}
+
+/**
+ * Store a background task's latest snapshot on the tool message that started
+ * it, as `pluginState.backgroundTask`. It replaces that one key and leaves the
+ * rest of the plugin state alone; unlike `updateToolState` it may land after
+ * the tool's own result, since a background task outlives its call.
+ */
+export interface MainUpdateBackgroundTaskIntent {
+  backgroundTask: HeteroBackgroundTask;
+  kind: 'updateBackgroundTask';
   toolCallId: string;
 }
 

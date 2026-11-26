@@ -19,13 +19,13 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
 import { useGlobalStore } from '@/store/global';
 import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import type {
   TaskCompletedFilter,
@@ -68,6 +68,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(
     const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
     const isPinned = (option: TaskListPinnedOption) => !!pinnedOptions?.includes(option);
     const { t } = useTranslation('chat');
+    const headerActionSmallSize = useHeaderActionSize(true);
     const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
     const form = useForm();
@@ -319,7 +320,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(
         trigger={['click']}
         onOpenChange={setIsViewConfigOpen}
       >
-        <ActionIcon icon={Settings2Icon} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+        <ActionIcon icon={Settings2Icon} size={headerActionSmallSize} />
       </Popover>
     );
   },

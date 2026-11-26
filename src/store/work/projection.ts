@@ -1,5 +1,6 @@
 import type {
   ListedWorkType,
+  TopicPullRequestItem,
   WorkListItem,
   WorkSkillProvider,
   WorkSummaryItem,
@@ -102,6 +103,28 @@ export const conversationWorksResource = defineReplica<ConversationWorksParams, 
   persist: { maxEntries: 100 },
   storage: 'indexedDB',
   syncKey: ({ threadId, topicId }) => workKeys.conversation(topicId, threadId ?? null),
+  version: 1,
+});
+
+export interface TopicPullRequestsParams {
+  topicId: string;
+}
+
+/**
+ * The pull requests a topic's Work rows link: the
+ * control bar's PR chip and the working sidebar's repository card. A reload
+ * paints the last list — with the last known states — before the network
+ * answers. Revalidated by `workService.refreshTopicPullRequests` (run end,
+ * conversation view refresh, a linked push).
+ */
+export const topicPullRequestsResource = defineReplica<
+  TopicPullRequestsParams,
+  TopicPullRequestItem[]
+>({
+  key: ({ topicId }) => topicId,
+  name: 'topicPullRequests',
+  persist: { maxEntries: 100 },
+  storage: 'indexedDB',
   version: 1,
 });
 

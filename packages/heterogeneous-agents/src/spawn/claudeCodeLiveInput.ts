@@ -13,8 +13,8 @@ const DEFAULT_IDLE_CLOSE_MS = 30 * 60 * 1000;
 /**
  * How long a task that ends between turns may wait for the main-agent turn its
  * notification wakes. Claude Code opens that turn within milliseconds; the
- * grace only bounds an end that wakes nothing, such as a task killed between
- * turns.
+ * grace only bounds an end that unexpectedly wakes nothing. A stopped task
+ * never wakes one, so it does not wait (see `observeSystem`).
  */
 const DEFAULT_WAKE_UP_GRACE_MS = 30 * 1000;
 
@@ -39,6 +39,44 @@ export interface ClaudeCodeTurnOutcome {
 const isAbortedResult = (message: any): boolean =>
   !!message.is_error && String(message.terminal_reason ?? '').startsWith('aborted');
 
+/** How a live session's process ended, as its host saw it. */
+export interface ClaudeCodeLiveExit {
+  code: number | null;
+  /** The host killed the process (cancel, stop, quit): its own path reports that end. */
+  killedByHost: boolean;
+  /** The run already reported an error event: that error is its end. */
+  sawError: boolean;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * The runtime end a live session (stdin kept open, see `ClaudeCodeLiveInput`)
+ * reports once, at process exit: complete, or interrupted when its last turn
+ * was stopped. Only a clean exit after a finished turn ends the run here — a
+ * crash after a result is a failure, not a completion. Print mode exits 1 when
+ * its last turn was an error result, which an interrupt is.
+ *
+ * Shared by every host of a live CLI (`lh hetero exec`, the desktop's local
+ * spawn) so they end a run by the same rule.
+ *
+ * @returns the `completeRuntime` data, or undefined when the run does not end here
+ */
+export const resolveClaudeCodeLiveRuntimeEnd = (
+  lastTurn: ClaudeCodeTurnOutcome | undefined,
+  exit: ClaudeCodeLiveExit,
+): Record<string, unknown> | undefined => {
+  if (!lastTurn || exit.killedByHost || exit.sawError) return;
+
+  const cleanExit =
+    exit.code === 0 || (lastTurn.aborted && exit.code === 1 && exit.signal === null);
+  if (!cleanExit) return;
+
+  const end = lastTurn.aborted
+    ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
+    : { reason: 'complete' };
+  return { ...end, transport: 'cli-live' };
+};
+
 /**
  * The `request` of a stream-json `control_request` line, e.g.
  * `{ subtype: 'interrupt' }`. Claude Code answers each one with a
@@ -48,6 +86,13 @@ export interface ClaudeCodeControlRequest {
   [key: string]: unknown;
   subtype: string;
 }
+
+/**
+ * Key of host-only metadata on a control request (e.g. the mode the user
+ * picked, where the request carries the mode Claude Code can run). Stripped
+ * before the request reaches Claude Code; handed to `onControlRequestSent`.
+ */
+export const CONTROL_REQUEST_HOST_META = '__host';
 
 /** Claude Code's answer to a control request. */
 export type ClaudeCodeControlResponse =
@@ -101,6 +146,10 @@ export class ClaudeCodeLiveInput {
   private readonly idleCloseMs: number;
   private lastOutcome: ClaudeCodeTurnOutcome | undefined;
   private lineBuffer = '';
+  private readonly listeners = new Set<(message: unknown) => void>();
+  private readonly sentListeners = new Set<
+    (request: ClaudeCodeControlRequest, meta: Record<string, unknown> | undefined) => void
+  >();
   private readonly pendingControl = new Map<string, (answer: ClaudeCodeControlResponse) => void>();
   private turnOpen = true;
   private readonly unconsumed = new Set<string>();
@@ -156,14 +205,48 @@ export class ClaudeCodeLiveInput {
   ): ClaudeCodeControlRequestHandle | undefined {
     if (this.closed) return;
 
+    const { [CONTROL_REQUEST_HOST_META]: meta, ...wire } = request;
     const requestId = randomUUID();
     const response = new Promise<ClaudeCodeControlResponse>((resolve) => {
       this.pendingControl.set(requestId, resolve);
     });
     this.stdin.write(
-      `${JSON.stringify({ request, request_id: requestId, type: 'control_request' })}\n`,
+      `${JSON.stringify({ request: wire, request_id: requestId, type: 'control_request' })}\n`,
     );
+    for (const listener of this.sentListeners) {
+      listener(wire as ClaudeCodeControlRequest, meta as Record<string, unknown> | undefined);
+    }
     return { requestId, response };
+  }
+
+  /** Watch every control request the host writes, with its host-only metadata. */
+  onControlRequestSent(
+    listener: (
+      request: ClaudeCodeControlRequest,
+      meta: Record<string, unknown> | undefined,
+    ) => void,
+  ): () => void {
+    this.sentListeners.add(listener);
+    return () => this.sentListeners.delete(listener);
+  }
+
+  /**
+   * Answer a control request Claude Code sent the host (`can_use_tool` under
+   * `--permission-prompt-tool stdio`). Returns false once input has closed.
+   */
+  respondToControlRequest(requestId: string, response: Record<string, unknown>): boolean {
+    if (this.closed) return false;
+
+    this.stdin.write(
+      `${JSON.stringify({ response: { request_id: requestId, response, subtype: 'success' }, type: 'control_response' })}\n`,
+    );
+    return true;
+  }
+
+  /** Watch every record Claude Code writes, as `observe` parses it. */
+  subscribe(listener: (message: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   /** Feed raw stdout so the session state tracks what Claude Code reports. */
@@ -184,6 +267,7 @@ export class ClaudeCodeLiveInput {
         }
         // Turns still run after input closes, so keep tracking them.
         this.observeMessage(message);
+        for (const listener of this.listeners) listener(message);
       } catch {
         // Non-JSON noise on stdout carries no session state.
       }
@@ -283,7 +367,13 @@ export class ClaudeCodeLiveInput {
         TERMINAL_TASK_STATUSES.has(message.patch?.status as string));
     if (ended && message.task_id) {
       this.activeTasks.delete(message.task_id);
-      this.awaitWakeUpTurn();
+      // Claude Code wakes the model for a task that ended on its own, never for
+      // one that was stopped: nothing is left to wait for.
+      const stopped =
+        message.patch?.status === 'killed' ||
+        (message.subtype === 'task_notification' && message.status === 'stopped');
+      if (stopped) this.closeIfIdle();
+      else this.awaitWakeUpTurn();
     }
   }
 

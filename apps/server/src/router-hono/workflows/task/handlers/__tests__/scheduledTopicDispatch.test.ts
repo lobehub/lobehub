@@ -95,6 +95,16 @@ describe('scheduledTopicDispatch', () => {
     mocks.findById.mockImplementation(async (id: string) => ({ content: 'summarize my PRs', id }));
   });
 
+  it('limits a worktree wakeup to the topic in the queue envelope', async () => {
+    mocks.getDueScheduledTopics.mockResolvedValue([]);
+    const response = await createApp().request('/scheduled-topic-dispatch', {
+      body: JSON.stringify({ payload: { topicId: 'topic-to-wake' } }),
+      method: 'POST',
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.getDueScheduledTopics).toHaveBeenCalledWith({}, expect.any(Date), 'topic-to-wake');
+  });
+
   it('runs a delayed start off its pre-persisted user turn, without writing it twice', async () => {
     mocks.getDueScheduledTopics.mockResolvedValue([topic(delayedStart)]);
 

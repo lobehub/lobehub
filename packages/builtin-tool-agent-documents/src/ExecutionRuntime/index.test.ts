@@ -639,7 +639,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
   });
 
-  it('truncates an oversized readDocument content but keeps full content in state', async () => {
+  it('truncates an oversized readDocument content without copying the document into state', async () => {
     const hugeXml = 'x'.repeat(500_000);
     const hugeMarkdown = 'm'.repeat(500_000);
     const readDocument = vi.fn().mockResolvedValue({
@@ -657,8 +657,8 @@ describe('AgentDocumentsExecutionRuntime', () => {
     expect(result.content).toContain(
       'Line 1 is 500000 characters long and was cut at 200000; the rest of that line cannot be paged.',
     );
-    // Inspector still receives the untruncated document via state.
-    expect(result.state).toMatchObject({ content: hugeMarkdown, xml: hugeXml });
+    // The inspector reads only the title; the document is not stored again in state.
+    expect(result.state).toEqual({ id: 'agent-doc-1', title: 'Newsletter Archive' });
   });
 
   it('does not truncate a readDocument content under the cap', async () => {

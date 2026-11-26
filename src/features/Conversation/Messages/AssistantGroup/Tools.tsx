@@ -1,6 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useDensity } from '@/styles/density';
+
 import { dataSelectors, useConversationStore } from '../../store';
 import Tool from './Tool';
 import { shouldRenderToolCall } from './toolRenderRules';
@@ -12,6 +14,7 @@ interface ToolsRendererProps {
 }
 
 export const Tools = memo<ToolsRendererProps>(({ disableEditing, messageId, toolIds }) => {
+  const { compact } = useDensity();
   // Subscribe only to the visible tool ids of this block. Streaming chunks that
   // change a single tool's args/result do not invalidate this string array, so
   // sibling Tool components stay isolated and only the changed one re-renders.
@@ -27,7 +30,7 @@ export const Tools = memo<ToolsRendererProps>(({ disableEditing, messageId, tool
   if (visibleToolCallIds.length === 0) return null;
 
   return (
-    <Flexbox gap={8}>
+    <Flexbox gap={compact ? 0 : 8}>
       {visibleToolCallIds.map((toolCallId) => (
         <Tool
           assistantMessageId={messageId}

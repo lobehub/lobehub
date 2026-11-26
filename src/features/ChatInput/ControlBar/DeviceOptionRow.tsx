@@ -21,6 +21,12 @@ const styles = stylex.create({
 
 interface DeviceOptionRowProps {
   active: boolean;
+  /**
+   * Why this device cannot be picked for the current agent. The row is
+   * disabled and the reason replaces its status line, so the user learns why
+   * before trying instead of meeting a generic save error after.
+   */
+  blockedReason?: string;
   device: DeviceListItem;
   /** Replaces the machine name, e.g. "This computer" for this desktop's own row. */
   label?: string;
@@ -36,6 +42,7 @@ interface DeviceOptionRowProps {
  */
 const DeviceOptionRow = ({
   active,
+  blockedReason,
   device,
   label,
   onReconnect,
@@ -48,7 +55,7 @@ const DeviceOptionRow = ({
   const presenceUnknown = isDevicePresenceUnknown(device);
   const { offlineLabelKey, reconnectLabelKey, selectable, showReconnect } = getDeviceOptionState(
     device,
-    { presenceUnknown },
+    { blocked: !!blockedReason, presenceUnknown },
   );
 
   return (
@@ -58,38 +65,41 @@ const DeviceOptionRow = ({
         onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !selectable, onSelect })}
       >
         <OptionRow
+          compact
           active={active}
           disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
           label={label ?? (device.friendlyName || device.hostname || device.deviceId)}
           tags={tags}
           desc={
-            <>
-              <ExecutionTargetDeviceStatus
-                offlineLabel={t(offlineLabelKey)}
-                online={device.online}
-                unknown={presenceUnknown}
-                unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
-                onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
-                  count: device.channels.length,
-                })}
-              />
-              {showReconnect ? (
-                <Button
-                  className={stylex.props(styles.reconnectButton).className}
-                  icon={<Icon icon={RefreshCwIcon} size={10} />}
-                  loading={reconnecting}
-                  size={'small'}
-                  type={'text'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onReconnect();
-                  }}
-                >
-                  {t(reconnectLabelKey)}
-                </Button>
-              ) : null}
-            </>
+            blockedReason || (
+              <>
+                <ExecutionTargetDeviceStatus
+                  offlineLabel={t(offlineLabelKey)}
+                  online={device.online}
+                  unknown={presenceUnknown}
+                  unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
+                  onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
+                    count: device.channels.length,
+                  })}
+                />
+                {showReconnect ? (
+                  <Button
+                    className={stylex.props(styles.reconnectButton).className}
+                    icon={<Icon icon={RefreshCwIcon} size={10} />}
+                    loading={reconnecting}
+                    size={'small'}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onReconnect();
+                    }}
+                  >
+                    {t(reconnectLabelKey)}
+                  </Button>
+                ) : null}
+              </>
+            )
           }
           onClick={onSelect}
         />

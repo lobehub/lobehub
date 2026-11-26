@@ -1,14 +1,17 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   AGENT_SHARE_SLUG_PATTERN,
   RESERVED_AGENT_SHARE_SLUGS,
 } from '@lobechat/const';
-import type { ShareVisibility } from '@lobechat/types';
+import type {
+  AgentShareGrantItem,
+  AgentShareGrantSource,
+  AgentShareVisibility,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -16,8 +19,9 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares, users, workspaces } from '../schemas';
+import { agents, agentShareGrants, agentShares, users, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentShareAdmits } from '../utils/agentShareAdmits';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
@@ -29,11 +33,8 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   demoCases: [],
   featuredWorkIds: [],
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  maxMessagesPerVisitor: AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
-  showErrorDetails: false,
-  showModelInfo: false,
   toolGrants: [],
 } satisfies AgentShareConfig;
 
@@ -44,20 +45,24 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  autoGrantAgentTools: config?.autoGrantAgentTools,
+  /** Left absent like `skillGrants`: absent marks a share whose Agent tools were never reviewed. */
+  declinedGrantIds: config?.declinedGrantIds,
   demoCases: config?.demoCases ?? [],
+  deviceAccess: config?.deviceAccess ?? 'none',
+  deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
+  listedInMarket: config?.listedInMarket,
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
-  maxTopicsPerVisitor:
-    config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
-  maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
+  maxMessagesPerVisitor:
+    config?.maxMessagesPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxMessagesPerVisitor,
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
-  showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
-  showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
   /**
    * Left absent rather than defaulted to `[]`: both read as "no skill
    * granted", so a default would only write a value the creator never picked.
    */
   skillGrants: config?.skillGrants,
+  seedDefaultGrants: config?.seedDefaultGrants,
   slug: config?.slug,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
@@ -254,7 +259,7 @@ export class AgentShareModel {
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
-  create = async (agentId: string, visibility: ShareVisibility = 'private') => {
+  create = async (agentId: string, visibility: AgentShareVisibility = 'private') => {
     const share = await this.withScopedAgentLock(agentId, async (tx, agent) => {
       // One row per agent, forever: `onConflictDoNothing` on `agentId` makes a
       // re-enable fall back to the SELECT below, returning the existing row
@@ -265,7 +270,9 @@ export class AgentShareModel {
         .insert(agentShares)
         .values({
           agentId,
-          shareConfig: DEFAULT_AGENT_SHARE_CONFIG,
+          // Only an inserted row carries the marker; the conflict path below
+          // returns an existing share untouched.
+          shareConfig: { ...DEFAULT_AGENT_SHARE_CONFIG, seedDefaultGrants: true },
           visibility,
         })
         .onConflictDoNothing({ target: agentShares.agentId })
@@ -431,7 +438,7 @@ export class AgentShareModel {
    */
   updateVisibility = async (
     agentId: string,
-    visibility: ShareVisibility,
+    visibility: AgentShareVisibility,
   ): Promise<NormalizedAgentShareItem | null> =>
     this.withScopedAgentLock(agentId, async (tx) => {
       const [updated] = await tx
@@ -526,7 +533,7 @@ export class AgentShareModel {
     });
 
   /**
-   * Read the CURRENT `maxTopicsPerVisitor` / `maxTurnsPerTopic` caps for an
+   * Read the CURRENT `maxMessagesPerVisitor` cap for an
    * agent's share, bypassing any snapshot a caller might already be holding —
    * intended to be called from inside the SAME locked transaction a
    * visitor-abuse guard uses to recount and insert, so a cap reduction the
@@ -542,9 +549,7 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     agentId: string,
   ): Promise<
-    Required<
-      Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic' | 'monthlySpendLimit'>
-    > & {
+    Pick<NormalizedAgentShareConfig, 'maxMessagesPerVisitor' | 'monthlySpendLimit'> & {
       shareId: string | null;
       workspaceId: string | null;
     }
@@ -561,9 +566,8 @@ export class AgentShareModel {
 
     const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
     return {
-      maxTopicsPerVisitor: normalized.maxTopicsPerVisitor!,
-      maxTurnsPerTopic: normalized.maxTurnsPerTopic!,
-      monthlySpendLimit: normalized.monthlySpendLimit!,
+      maxMessagesPerVisitor: normalized.maxMessagesPerVisitor,
+      monthlySpendLimit: normalized.monthlySpendLimit,
       shareId: row?.id ?? null,
       workspaceId: row?.workspaceId ?? null,
     };
@@ -589,7 +593,8 @@ export class AgentShareModel {
   /**
    * Whether an in-flight visitor run is STILL authorized to continue: the
    * agent's share row must exist, still be the SAME instance the run was
-   * authorized against (`shareId`), and still be `link`.
+   * authorized against (`shareId`), and still admit the visitor ({@link admits}):
+   * `link`, or `card` with the visitor's grant.
    *
    * Turning sharing off flips `visibility` to `private` and KEEPS the row, so
    * a disable → re-enable cycle deliberately resumes the same link and must
@@ -608,17 +613,184 @@ export class AgentShareModel {
    */
   static isRunStillAuthorized = async (
     db: LobeChatDatabase,
-    params: { agentId: string; shareId: string },
+    params: { agentId: string; shareId: string; visitorUserId?: string },
   ): Promise<boolean> => {
     const [share] = await db
-      .select({ id: agentShares.id, visibility: agentShares.visibility })
+      .select({ id: agentShares.id })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(and(eq(agentShares.agentId, params.agentId), notTrashed(agents.isDeleted)))
+      .where(
+        and(
+          eq(agentShares.agentId, params.agentId),
+          notTrashed(agents.isDeleted),
+          AgentShareModel.admits(params.visitorUserId),
+        ),
+      )
       .limit(1);
 
-    return !!share && share.id === params.shareId && share.visibility === 'link';
+    return !!share && share.id === params.shareId;
   };
+
+  /** See {@link agentShareAdmits}. */
+  static admits = agentShareAdmits;
+
+  /** {@link admits} for a share already read: one grant lookup when it is a `card` share. */
+  static admitsVisitor = async (
+    db: LobeChatDatabase,
+    share: { shareId: string; visibility: string },
+    visitorUserId: string,
+  ): Promise<boolean> => {
+    if (share.visibility === 'link') return true;
+    if (share.visibility !== 'card') return false;
+    const [grant] = await db
+      .select({ id: agentShareGrants.id })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, share.shareId),
+          eq(agentShareGrants.userId, visitorUserId),
+          isNull(agentShareGrants.revokedAt),
+        ),
+      )
+      .limit(1);
+    return !!grant;
+  };
+
+  /**
+   * Admit a person to a share through the owner's card they added the Agent from, sent at
+   * `issuedAt`. Idempotent: a live grant keeps its first source. A revoked grant is restored
+   * only by a card the owner sent after revoking it, so redeeming an older card again does not
+   * undo the withdrawal. Returns whether the person holds a live grant afterwards.
+   */
+  static grant = async (
+    db: Pick<LobeChatDatabase, 'insert'>,
+    params: { issuedAt: Date; shareId: string; source: AgentShareGrantSource; userId: string },
+  ): Promise<boolean> => {
+    const { issuedAt, ...values } = params;
+    const [row] = await db
+      .insert(agentShareGrants)
+      .values(values)
+      .onConflictDoUpdate({
+        set: { createdAt: sql`now()`, revokedAt: null, source: values.source },
+        setWhere: and(
+          isNotNull(agentShareGrants.revokedAt),
+          lt(agentShareGrants.revokedAt, issuedAt),
+        ),
+        target: [agentShareGrants.shareId, agentShareGrants.userId],
+      })
+      .returning({ id: agentShareGrants.id });
+    if (row) return true;
+    // Neither inserted nor restored: the grant is either already live or revoked after this card.
+    const [live] = await (db as LobeChatDatabase)
+      .select({ id: agentShareGrants.id })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, values.shareId),
+          eq(agentShareGrants.userId, values.userId),
+          isNull(agentShareGrants.revokedAt),
+        ),
+      )
+      .limit(1);
+    return !!live;
+  };
+
+  /**
+   * Admit a person because the share's owner approved their request to use the Agent
+   * (`channel_agent_grants`). The owner's decision is newer than any earlier withdrawal, so it
+   * restores a revoked grant, and it takes over the source of a live one: a request grant is also
+   * what lets {@link resolveShareVisitorDeviceAccess} admit the person to the device without being
+   * in the owner's address book. Idempotent.
+   */
+  static grantByRequest = async (
+    db: Pick<LobeChatDatabase, 'insert'>,
+    params: { channelId: string; grantId: string; shareId: string; userId: string },
+  ): Promise<void> => {
+    const source: AgentShareGrantSource = {
+      channelId: params.channelId,
+      grantId: params.grantId,
+      type: 'request',
+    };
+    await db
+      .insert(agentShareGrants)
+      .values({ shareId: params.shareId, source, userId: params.userId })
+      .onConflictDoUpdate({
+        set: { revokedAt: null, source },
+        target: [agentShareGrants.shareId, agentShareGrants.userId],
+      });
+  };
+
+  /**
+   * Of `userIds`, those a live grant admits because the owner approved their request (see
+   * {@link grantByRequest}), rather than a card they added the Agent from.
+   */
+  static requestGrantedUserIds = async (
+    db: LobeChatDatabase,
+    shareId: string,
+    userIds: string[],
+  ): Promise<string[]> => {
+    if (!userIds.length) return [];
+    const rows = await db
+      .select({ userId: agentShareGrants.userId })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, shareId),
+          inArray(agentShareGrants.userId, userIds),
+          isNull(agentShareGrants.revokedAt),
+          sql`${agentShareGrants.source} ->> 'type' = 'request'`,
+        ),
+      );
+    return rows.map((row) => row.userId);
+  };
+
+  /** The people this Agent's share admits by card, newest first, for its owner. */
+  listGrants = async (agentId: string): Promise<AgentShareGrantItem[]> => {
+    const share = await this.getByAgentId(agentId);
+    if (!share) return [];
+    return this.db
+      .select({
+        createdAt: agentShareGrants.createdAt,
+        user: {
+          avatar: users.avatar,
+          fullName: users.fullName,
+          id: users.id,
+          username: users.username,
+        },
+      })
+      .from(agentShareGrants)
+      .innerJoin(users, eq(users.id, agentShareGrants.userId))
+      .where(and(eq(agentShareGrants.shareId, share.id), isNull(agentShareGrants.revokedAt)))
+      .orderBy(desc(agentShareGrants.createdAt));
+  };
+
+  /**
+   * Withdraw a person's card grant. The row stays, marked revoked, so the cards they already hold
+   * cannot restore it; only a card the owner sends afterwards can. Under the same Agent row lock
+   * as every share mutation, so a run admitted before the revoke is stopped at its next step by
+   * `isRunStillAuthorized`.
+   */
+  revokeGrant = async (agentId: string, userId: string): Promise<boolean> =>
+    !!(await this.withScopedAgentLock(agentId, async (tx) => {
+      const [share] = await tx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .limit(1);
+      if (!share) return false;
+      const removed = await tx
+        .update(agentShareGrants)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(agentShareGrants.shareId, share.id),
+            eq(agentShareGrants.userId, userId),
+            isNull(agentShareGrants.revokedAt),
+          ),
+        )
+        .returning({ id: agentShareGrants.id });
+      return removed.length > 0;
+    }));
 
   /**
    * Resolve public share metadata and derive ownership and billing scope from
@@ -629,8 +801,14 @@ export class AgentShareModel {
 
     const [share] = await db
       .select({
+        // Server-side only: which harness runs the Agent decides which grants
+        // apply (a Claude Code / Codex Agent has no LobeHub tools).
+        agentAgencyConfig: agents.agencyConfig,
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
+        // Server-side only: the profile counts the tools `autoGrantAgentTools`
+        // opens from the Agent's own tool settings.
+        agentChatConfig: agents.chatConfig,
         agentDescription: agents.description,
         agentId: agentShares.agentId,
         // Model identity is for a server-side capability lookup only (what
@@ -638,6 +816,7 @@ export class AgentShareModel {
         agentModel: agents.model,
         agentName: agents.name,
         agentOpeningQuestions: agents.openingQuestions,
+        agentPlugins: agents.plugins,
         agentProvider: agents.provider,
         agentSlug: agents.slug,
         agentTags: agents.tags,
@@ -717,17 +896,20 @@ export class AgentShareModel {
    * Kept as the single access-check implementation so callers that already
    * hold a resolved row (e.g. via `findBySlugOrId`) don't need a second
    * lookup just to reuse the gate.
+   *
+   * `viewerId` is empty for a signed-out caller, which is never the owner.
    */
   static assertShareAccess = (
     share: Pick<AgentShareData, 'ownerId' | 'visibility'>,
-    viewerId: string,
+    viewerId: string | null | undefined,
   ): void => {
-    const isOwner = viewerId === share.ownerId;
+    const isOwner = !!viewerId && viewerId === share.ownerId;
     // NOT_FOUND, not FORBIDDEN: a paused (private) share must be
     // indistinguishable from a share that never existed, otherwise a
     // stranger can probe custom slugs / ids to learn which private shares
     // exist. Only the owner ever sees the private row.
-    if (!isOwner && share.visibility === 'private') {
+    // A `card` share admits its grantees in their Channels only, never through its link page.
+    if (!isOwner && share.visibility !== 'link') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
     }
   };

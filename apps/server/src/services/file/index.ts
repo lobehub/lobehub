@@ -103,6 +103,13 @@ export class FileService {
   }
 
   /**
+   * Like listFileKeys, with each object's ETag (unquoted) and size
+   */
+  public async listFileObjects(prefix: string, limit?: number) {
+    return this.impl.listFileObjects(prefix, limit);
+  }
+
+  /**
    * Get file content
    */
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
@@ -226,8 +233,9 @@ export class FileService {
     key: string,
     buffer: Buffer,
     contentType: string,
+    options?: { abortSignal?: AbortSignal; private?: boolean },
   ): Promise<{ key: string }> {
-    return this.impl.uploadBuffer(key, buffer, contentType);
+    return this.impl.uploadBuffer(key, buffer, contentType, options);
   }
 
   private async isStoredFileAvailable(url: string): Promise<boolean> {

@@ -6,7 +6,7 @@ import {
   getRewrittenUrl,
   unstable_getResponseFromNextConfig,
 } from 'next/experimental/testing/server';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { defineConfig } from './define-config';
 
@@ -15,11 +15,44 @@ describe('defineConfig', () => {
   const originalLegacyPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalAssetBaseUrl === undefined) delete process.env.ASSET_BASE_URL;
     else process.env.ASSET_BASE_URL = originalAssetBaseUrl;
 
     if (originalLegacyPrefix === undefined) delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
     else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
+  });
+
+  describe('deployment file tracing', () => {
+    it.each([false, true])(
+      'keeps required worker files when a deployment adds tracing rules (standalone: %s)',
+      (standalone) => {
+        vi.stubEnv('DOCKER', 'false');
+        vi.stubEnv('NEXT_BUILD_STANDALONE', standalone ? '1' : '0');
+        const required = defineConfig({}).outputFileTracingIncludes!['*'];
+        const config = defineConfig({
+          outputFileTracingIncludes: {
+            '*': ['deployment-assets/**/*'],
+            '/api/custom': ['custom-assets/**/*'],
+          },
+        });
+
+        expect(config.outputFileTracingIncludes!['*']).toEqual([
+          ...required,
+          'deployment-assets/**/*',
+        ]);
+        expect(config.outputFileTracingIncludes!['/api/custom']).toEqual(['custom-assets/**/*']);
+      },
+    );
+
+    it('keeps the shared worker rule when a deployment only adds a route-specific rule', () => {
+      const required = defineConfig({}).outputFileTracingIncludes!['*'];
+      const config = defineConfig({
+        outputFileTracingIncludes: { '/api/custom': ['custom-assets/**/*'] },
+      });
+
+      expect(config.outputFileTracingIncludes!['*']).toEqual(required);
+    });
   });
 
   it('keeps an old image URL working after its static file moves, preserving the query', async () => {
@@ -60,6 +93,21 @@ describe('defineConfig', () => {
       expect(rules[agentIndex].headers).toEqual([
         { key: 'x-robots-tag', value: 'noindex, nofollow' },
       ]);
+    });
+
+    it('lets the app frame artboard files while every other page refuses to be framed', async () => {
+      vi.stubEnv('ENABLED_CSP', '1');
+      const headersOf = async (url: string) =>
+        (await unstable_getResponseFromNextConfig({ nextConfig: defineConfig({}), url })).headers;
+
+      const page = await headersOf('https://app.example.com/settings');
+      const file = await headersOf('https://app.example.com/artboard-files/tok/pages/a.html');
+
+      expect(page.get('x-frame-options')).toBe('DENY');
+      expect(page.get('content-security-policy')).toBe("frame-ancestors 'none';");
+      expect(file.get('x-frame-options')).toBeNull();
+      expect(file.get('content-security-policy')).toBeNull();
+      expect(file.get('x-robots-tag')).toBe('all');
     });
   });
 

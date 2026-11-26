@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { dateTimeSchema } from './common.type';
+
 /**
  * The IM channel: a messaging-app view of one agent conversation.
  *
@@ -147,3 +149,89 @@ export const PushTokenUnregisterQuerySchema = z.object({
   expoToken: z.string().min(1).max(512).optional(),
 });
 export type PushTokenUnregisterQuery = z.infer<typeof PushTokenUnregisterQuerySchema>;
+
+// ==================== Response Schemas ====================
+
+type ShapeOf<T> = Record<keyof T, z.ZodType>;
+
+const ImAttachmentSchema = z
+  .object({
+    fileType: z.string(),
+    id: z.string(),
+    name: z.string(),
+    size: z.number().int().min(0),
+    /** Absolute, fetchable URL. */
+    url: z.string(),
+  } satisfies ShapeOf<ImAttachment>)
+  .strict();
+
+/** One chat bubble of the IM channel — whole, never a partial stream. */
+export const ImMessageSchema = z
+  .object({
+    /** The agent that wrote the message; null on user messages. */
+    agentId: z.string().nullable(),
+    content: z.string(),
+    createdAt: dateTimeSchema,
+    /** Set when the agent's turn failed; the client shows a retry affordance. */
+    error: z.boolean(),
+    /** Present only when the message carries attachments. */
+    files: z.array(ImAttachmentSchema).optional(),
+    id: z.string(),
+    role: z.enum(['assistant', 'user']),
+  } satisfies ShapeOf<ImMessage>)
+  .strict()
+  .meta({ id: 'ImMessage' });
+
+export const ImSendResultSchema = z
+  .object({
+    /** `false` when this was an idempotent retry of an already-received message. */
+    accepted: z.boolean(),
+    /** The agent run that will answer; null on an idempotent retry. */
+    operationId: z.string().nullable(),
+    topicId: z.string(),
+    userMessage: ImMessageSchema,
+  } satisfies ShapeOf<ImSendResult>)
+  .strict()
+  .meta({ id: 'ImSendResult' });
+
+export const ImSyncResultSchema = z
+  .object({
+    /** Pass back as `cursor` to receive only what is new. */
+    cursor: z.string(),
+    /** Whole messages newer than the cursor, oldest first. */
+    messages: z.array(ImMessageSchema),
+    /** The newest user message the agent has picked up (the "read" receipt). */
+    readUpTo: z.object({ messageId: z.string(), readAt: dateTimeSchema }).strict().nullable(),
+    /** Pass back as `state` to long-poll for a change. */
+    state: z.string(),
+    /** The agent is working on a reply ("typing…"). */
+    typing: z.boolean(),
+    /** Agent messages newer than the user's read cursor. */
+    unread: z.number().int().min(0),
+  } satisfies ShapeOf<ImSyncResult>)
+  .strict()
+  .meta({ id: 'ImSyncResult' });
+
+export interface ImReadResult {
+  /** Agent messages still newer than the read cursor. */
+  unread: number;
+}
+
+export const ImReadResultSchema = z
+  .object({ unread: z.number().int().min(0) } satisfies ShapeOf<ImReadResult>)
+  .strict()
+  .meta({ id: 'ImReadResult' });
+
+export interface PushTokenRegistration {
+  deviceId: string;
+  platform: string;
+}
+
+export const PushTokenRegistrationSchema = z
+  .object({
+    deviceId: z.string(),
+    /** `ios` or `android`. */
+    platform: z.string(),
+  } satisfies ShapeOf<PushTokenRegistration>)
+  .strict()
+  .meta({ id: 'PushTokenRegistration' });

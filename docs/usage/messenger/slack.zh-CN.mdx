@@ -13,7 +13,7 @@ tags:
 
 # 在 Slack 使用 LobeHub
 
-Slack 接入分两步：**工作区管理员安装一次** 官方 LobeHub Slack 应用，然后 **每位成员各自关联** 自己的 LobeHub 账号。两步都在 **设置 → Messenger → Slack** 里完成。
+Slack 接入分两步：**工作区管理员安装一次** 官方 LobeHub Slack 应用，然后 **每位成员各自关联** 自己的 LobeHub 账号。两步都在 **市场 → 应用 → Slack** 里完成。
 
 ## 前置条件
 
@@ -24,9 +24,9 @@ Slack 接入分两步：**工作区管理员安装一次** 官方 LobeHub Slack 
 ## 阶段 A —— 安装 LobeHub Slack 应用（管理员，每个工作区一次）
 
 <Steps>
-  ### 打开「设置 → Messenger → Slack」
+  ### 打开「市场 → 应用 → Slack」
 
-  在 LobeHub 中打开 **设置 → Messenger**，点击 **Slack** 卡片，再点右上角的 **连接**。
+  在 LobeHub 中打开 **市场 → 应用**，点击 **Slack** 卡片，再点右上角的 **连接**。
 
   {/* TODO: 截图 —— Slack 详情页（Connections 列表为空 + Connect 按钮） */}
 
@@ -76,7 +76,7 @@ Slack 接入分两步：**工作区管理员安装一次** 官方 LobeHub Slack 
 两种等价方式：
 
 - **在 Slack 里** —— 私聊机器人发送 `/agents`，挑一个新的 Agent。
-- **在 LobeHub 里** —— 打开 **设置 → Messenger → Slack**，在你的关联行里使用 Agent 选择器。
+- **在 LobeHub 里** —— 打开 **市场 → 应用 → Slack**，在你的关联行里使用 Agent 选择器。
 
 切换会对你发送的下一条消息立即生效。
 
@@ -95,7 +95,7 @@ Slack 有两种含义不同的断开操作：
 
 - **"Workspace already connected"（工作区已连接）** —— 工作区已被另一位 LobeHub 用户安装过。私聊 **@LobeHub** 完成个人关联即可，无需重装。如需接管，请请求最初的安装者先断开。
 - **Slack 安装失败（`<原因>`）** —— 常见原因：用户取消授权、安装会话过期（重新打开弹窗再试）、Slack 返回的数据不完整（重试；持续失败请联系支持）。
-- **机器人不回 DM** —— 工作区安装可能已被断开。检查 **设置 → Messenger → Slack** 是否还有 workspace 行；没有就请管理员重新安装。
+- **机器人不回 DM** —— 工作区安装可能已被断开。检查 **市场 → 应用 → Slack** 是否还有 workspace 行；没有就请管理员重新安装。
 - **"This link is already used"** —— 一次性确认链接只能用一次，给机器人再发一条消息获取新链接。
 - **"This account is already linked"** —— 这个 Slack 账号已绑定到另一个 LobeHub 账号。请用那个 LobeHub 账号登录管理，或先在那边解绑。
-- **"Another Slack account is already linked"** —— 你的 LobeHub 账号在该工作区里已有 Slack 关联。先在 **设置 → Messenger → Slack** 断开旧关联，再绑定新的 Slack 账号。
+- **"Another Slack account is already linked"** —— 你的 LobeHub 账号在该工作区里已有 Slack 关联。先在 **市场 → 应用 → Slack** 断开旧关联，再绑定新的 Slack 账号。

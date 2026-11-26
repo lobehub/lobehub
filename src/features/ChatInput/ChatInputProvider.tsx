@@ -27,13 +27,13 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     sendButtonProps,
     onSend,
     onVoiceMessageSend,
-    sendMenu,
     chatInputEditorRef,
     onMarkdownContentChange,
     mentionItems,
     allowExpand = true,
     slashPlacement,
     getMessages,
+    queueSendWhileUploading,
     resolveSendBlocked,
     topicId,
     uploadContextKey,
@@ -58,7 +58,6 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             rightActions,
             onVoiceMessageSend,
             sendButtonProps,
-            sendMenu,
             slashMenuRef,
             slashPlacement,
             topicId,
@@ -79,10 +78,10 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           leftActions={leftActions}
           mentionItems={mentionItems}
           mobile={mobile}
+          queueSendWhileUploading={queueSendWhileUploading}
           resolveSendBlocked={resolveSendBlocked}
           rightActions={rightActions}
           sendButtonProps={sendButtonProps}
-          sendMenu={sendMenu}
           slashPlacement={slashPlacement}
           topicId={topicId}
           uploadContextKey={uploadContextKey}

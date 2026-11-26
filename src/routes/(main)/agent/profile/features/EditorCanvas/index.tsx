@@ -3,21 +3,22 @@
 import type { IEditor } from '@lobehub/editor';
 import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { ActionIcon, Block, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CodeXmlIcon, LetterTextIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import InfoTooltip from '@/components/InfoTooltip';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { useAgentStore } from '@/store/agent';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
@@ -30,24 +31,23 @@ import { useSlashItems } from './useSlashItems';
 const styles = createStaticStyles(({ css }) => ({
   editorShell: css`
     min-height: 300px;
-    padding-block: 18px;
-  `,
-  root: css`
-    padding-block-end: 16px;
+
+    [contenteditable] {
+      min-height: 300px;
+    }
   `,
   sourceEditor: css`
-    min-height: 262px;
+    min-height: 300px;
     background: transparent;
-  `,
-  title: css`
-    cursor: default;
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
   `,
 }));
 
-interface AgentEditorCanvasProps {
+interface EditorCanvasProps {
+  description?: ReactNode;
+  title?: ReactNode;
+}
+
+interface AgentEditorCanvasProps extends EditorCanvasProps {
   agentId: string;
 }
 
@@ -87,7 +87,7 @@ const usePromptEditorMode = () => {
   } as const;
 };
 
-const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
+const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId, description, title }) => {
   const { t } = useTranslation('setting');
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
@@ -103,9 +103,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       updateConfigById(targetAgentId, payload, { rethrow: true, showErrorMessage: false }),
     [updateConfigById],
   );
-  const [initialLoad] = useState(
-    editorData === undefined || editorData?.root === undefined ? EMPTY_EDITOR_STATE : editorData,
-  );
+  const [initialLoad] = useState(isValidEditorData(editorData) ? editorData : EMPTY_EDITOR_STATE);
   const mentionOptions = useMentionOptions();
   const editor = useProfileStore((s) => s.editor);
   const handleContentChange = useProfileStore((s) => s.handleContentChange);
@@ -342,7 +340,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     // Don't init if streaming is in progress
     if (streamingInProgress) return;
     try {
-      if (editorData && editorData?.root !== undefined) {
+      if (isValidEditorData(editorData)) {
         setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
       } else if (systemRole) {
@@ -381,7 +379,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     if (!editor || !editorInit || !contentInit) return;
     if (streamingInProgress) return;
 
-    const hasEditorData = !!editorData && editorData?.root !== undefined;
+    const hasEditorData = isValidEditorData(editorData);
     if (hasEditorData) {
       lastSyncedRoleRef.current = undefined;
       // A fresh server response is authoritative while this agent has not been
@@ -419,18 +417,11 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   ]);
 
   return (
-    <Flexbox className={styles.root} gap={16}>
+    <Flexbox gap={24}>
       <Flexbox gap={4}>
-        <Flexbox horizontal align={'center'} distribution={'space-between'} gap={8}>
-          <Flexbox horizontal align={'center'} gap={6}>
-            <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
-            <InfoTooltip
-              iconStyle={{ cursor: 'help' }}
-              size={'small'}
-              title={t('settingAgent.prompt.desc')}
-            />
-          </Flexbox>
-          <Flexbox horizontal align={'center'} gap={4}>
+        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+          {title}
+          <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
             {promptSaveStatus !== 'idle' && (
               <AutoSaveHint
                 lastUpdatedTime={promptLastUpdatedTime}
@@ -468,59 +459,62 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
             </Flexbox>
           </Flexbox>
         </Flexbox>
+        {description}
       </Flexbox>
-      <div
-        className={styles.editorShell}
-        style={
-          editable ? undefined : { cursor: 'not-allowed', opacity: 0.65, pointerEvents: 'none' }
-        }
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <EditingIndicator
-          holderId={lockedByOther ? lockHolderId : null}
-          pending={canEdit && lockPending}
-        />
-        <div hidden={activeEditorMode !== 'visual'}>
-          <Editor
-            content={initialLoad}
-            editable={editable}
-            editor={editor!}
-            lineEmptyPlaceholder={t('settingAgent.prompt.editorPlaceholder')}
-            mentionOption={mentionOptions}
-            placeholder={t('settingAgent.prompt.editorPlaceholder')}
-            style={{ paddingBottom: 0 }}
-            plugins={[
-              ...createChatInputRichPlugins(),
-              ReactTablePlugin,
-              ReactMentionPlugin,
-              Editor.withProps(ReactToolbarPlugin, {
-                children: <TypoBar />,
-              }),
-            ]}
-            slashOption={{
-              items: slashItems,
-            }}
-            onInit={() => setEditorInit(true)}
-            onTextChange={handleChange}
+      <Block padding={16} variant={'outlined'}>
+        <div
+          className={styles.editorShell}
+          style={
+            editable ? undefined : { cursor: 'not-allowed', opacity: 0.65, pointerEvents: 'none' }
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          <EditingIndicator
+            holderId={lockedByOther ? lockHolderId : null}
+            pending={canEdit && lockPending}
           />
+          <div hidden={activeEditorMode !== 'visual'}>
+            <Editor
+              content={initialLoad}
+              editable={editable}
+              editor={editor!}
+              lineEmptyPlaceholder={t('settingAgent.prompt.editorPlaceholder')}
+              mentionOption={mentionOptions}
+              placeholder={t('settingAgent.prompt.editorPlaceholder')}
+              style={{ paddingBottom: 0 }}
+              plugins={[
+                ...createChatInputRichPlugins(),
+                ReactTablePlugin,
+                ReactMentionPlugin,
+                Editor.withProps(ReactToolbarPlugin, {
+                  children: <TypoBar />,
+                }),
+              ]}
+              slashOption={{
+                items: slashItems,
+              }}
+              onInit={() => setEditorInit(true)}
+              onTextChange={handleChange}
+            />
+          </div>
+          {activeEditorMode === 'source' && contentInit && (
+            <CodeEditorPane
+              className={styles.sourceEditor}
+              language={'markdown'}
+              readOnly={!editable || streamingInProgress}
+              value={sourceMarkdown}
+              onChange={handleSourceChange}
+            />
+          )}
         </div>
-        {activeEditorMode === 'source' && contentInit && (
-          <CodeEditorPane
-            className={styles.sourceEditor}
-            language={'markdown'}
-            readOnly={!editable || streamingInProgress}
-            value={sourceMarkdown}
-            onChange={handleSourceChange}
-          />
-        )}
-      </div>
+      </Block>
     </Flexbox>
   );
 });
 
-const EditorCanvas = memo(() => {
+const EditorCanvas = memo<EditorCanvasProps>(({ description, title }) => {
   const { t } = useTranslation();
   const agentId = useAgentStore((s) => s.activeAgentId);
   const flushSave = useProfileStore((s) => s.flushSave);
@@ -548,7 +542,9 @@ const EditorCanvas = memo(() => {
 
   if (!agentId) return null;
 
-  return <AgentEditorCanvas agentId={agentId} key={agentId} />;
+  return (
+    <AgentEditorCanvas agentId={agentId} description={description} key={agentId} title={title} />
+  );
 });
 
 export default EditorCanvas;

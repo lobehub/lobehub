@@ -24,6 +24,7 @@ import RoutingBadge from '@/components/ModelSelect/RoutingBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { createModelConfigModal } from './ModelConfigModal';
 import { formatModelPricingLabels } from './pricingLabels';
@@ -66,6 +67,7 @@ const ModelItem = memo<ModelItemProps>(
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
     const { modelEditable, showDeployName } = use(ProviderSettingsContext);
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
+    const compact = useInterfaceDensity() === 'compact';
 
     const [activeAiProvider, isModelLoading, toggleModelEnabled, removeAiModel] = useAiInfraStore(
       (s) => [
@@ -199,13 +201,20 @@ const ModelItem = memo<ModelItemProps>(
         className={stylex.props(styles.container, stylex.defaultMarker()).className}
         gap={24}
         justify={'space-between'}
-        padding={12}
+        paddingBlock={compact ? 4 : 12}
+        paddingInline={12}
+        style={compact ? { minHeight: 40 } : undefined}
         width={'100%'}
       >
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
-          <ModelIcon model={id} size={32} />
-          <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-            <Flexbox horizontal align={'center'} gap={8}>
+          <ModelIcon model={id} size={compact ? 24 : 32} />
+          <Flexbox flex={1} gap={compact ? 0 : 2} style={{ minWidth: 0 }}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={8}
+              style={compact ? { fontSize: 13 } : undefined}
+            >
               {displayName || id}
               <RoutingBadge id={id} provider={activeAiProvider} />
               {ModelIdTag}
@@ -214,7 +223,14 @@ const ModelItem = memo<ModelItemProps>(
             </Flexbox>
             <Flexbox horizontal align={'baseline'} gap={8}>
               {content.length > 0 && (
-                <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12, marginBottom: 0 }}>
+                <Text
+                  style={{
+                    color: cssVar.colorTextSecondary,
+                    fontSize: 12,
+                    lineHeight: compact ? '16px' : undefined,
+                    marginBottom: 0,
+                  }}
+                >
                   {content.join(' · ')}
                 </Text>
               )}

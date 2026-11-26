@@ -10,6 +10,7 @@ import { projectReviewService } from '@/services/projectReview';
 import type { ProjectDetail } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import ProjectCreator from '../ProjectCreator';
 import { openAddMemberModal } from './AddMemberModal';
@@ -23,6 +24,8 @@ interface MembersSettingsProps {
 
 export function MembersSettings({ project }: MembersSettingsProps) {
   const { t } = useTranslation('project');
+  const { pageTitleFontSize } = useDensityTokens();
+  const compact = useInterfaceDensity() === 'compact';
   const projectId = project.id;
   const { data, error, mutate } = useProjectMembers(projectId);
   const actorId = useUserStore(userProfileSelectors.userId);
@@ -37,7 +40,7 @@ export function MembersSettings({ project }: MembersSettingsProps) {
   if (!data.workspaceId)
     return (
       <Flexbox gap={20}>
-        <Text fontSize={16} weight={600}>
+        <Text fontSize={pageTitleFontSize} weight={600}>
           {t('review.members.title')}
         </Text>
         <Block variant="outlined">{creatorRow}</Block>
@@ -81,7 +84,7 @@ export function MembersSettings({ project }: MembersSettingsProps) {
     <Flexbox gap={20}>
       <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
         <Flexbox gap={6}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('review.members.title')}
           </Text>
           <Text type="secondary">{t('review.members.roleInheritance')}</Text>
@@ -97,7 +100,7 @@ export function MembersSettings({ project }: MembersSettingsProps) {
       <Block variant="outlined">
         {!creatorHasRole && creatorRow}
         {!members.length && (
-          <Text style={{ padding: '12px 16px' }} type="secondary">
+          <Text style={{ padding: compact ? '8px 16px' : '12px 16px' }} type="secondary">
             {t('review.members.empty')}
           </Text>
         )}

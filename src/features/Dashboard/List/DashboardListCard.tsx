@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import type { DashboardListItem } from '@/services/dashboard';
+import { densityVars } from '@/styles/densityVars';
 
 import DashboardActionsMenu from '../DashboardActionsMenu';
 import DashboardAvatar from '../DashboardAvatar';
@@ -19,7 +20,7 @@ export const dashboardListStyles = createStaticStyles(({ css }) => ({
     display: block;
 
     height: 100%;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -49,7 +50,7 @@ export const dashboardListStyles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   menu: css`
     position: absolute;

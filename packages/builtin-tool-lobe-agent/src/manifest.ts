@@ -1,6 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { isDesktop } from './const';
+import { MAX_MEDIA_URLS } from './media';
 import { systemPrompt } from './systemRole';
 import {
   LobeAgentApiName,
@@ -14,18 +15,18 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Analyze audio, images, or videos selected by media file refs or direct media URLs and answer a question about them. Prefer the active model's native multimodal capability when it can inspect the media directly; use this tool only as a fallback when the active model lacks the required audio, image, or video capability. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.audio_1, msg_xxx.image_1, or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. For media stored on a local filesystem, never pass an OS path or file:// URL through urls and never convert or copy the media as base64 text. If this fallback is needed, first use an available local file-reading tool to upload the media, then pass its stable ref through refs. After this tool returns, answer the user directly with the result.",
+        "Analyze audio, images, or videos via refs or direct URLs and answer a question about them. Prefer the active model's native multimodal capability when it can inspect the media directly; use this tool only as a fallback when native capability is unavailable or media appears only as remote URLs. Provide either refs or urls (at least one required). Prefer refs when stable refs are available in <files_info> (e.g. msg_xxx.audio_1, msg_xxx.image_1, msg_xxx.video_1), and use urls only for direct media URLs not available as refs. For local filesystem media, never pass OS paths or file:// URLs or copy base64 text — upload with a local file-reading tool first and pass its stable ref. After this tool returns, answer the user directly with the result.",
       name: LobeAgentApiName.analyzeMedia,
       parameters: {
         additionalProperties: false,
         properties: {
           question: {
-            description: 'The question or task to answer about the selected media.',
+            description: 'Question or task to answer about the media.',
             type: 'string',
           },
           refs: {
             description:
-              'Stable media file ref strings from <files_info>, including refs created for media uploaded by local file-reading tools, such as ["msg_xxx.audio_1"], ["msg_xxx.image_1"], or ["msg_xxx.video_1"].',
+              'Stable media refs from <files_info> (including uploads from local file-reading tools), e.g. ["msg_xxx.image_1"].',
             items: {
               type: 'string',
             },
@@ -33,11 +34,11 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'array',
           },
           urls: {
-            description:
-              'Direct provider-readable HTTP(S) or data URLs to analyze when no stable media ref exists. Local filesystem paths and file:// URLs are unsupported; use an available local file-reading tool first, then pass its stable ref through refs.',
+            description: `Direct provider-readable HTTP(S) or data URLs (at most ${MAX_MEDIA_URLS} per call). Local filesystem paths and file:// URLs are unsupported — use a local file-reading tool first and pass its stable ref via refs.`,
             items: {
               type: 'string',
             },
+            maxItems: MAX_MEDIA_URLS,
             minItems: 1,
             type: 'array',
           },
@@ -49,24 +50,22 @@ export const LobeAgentManifest: BuiltinToolManifest = {
 
     // ==================== Planning ====================
     {
-      description:
-        'Create a high-level plan document. Plans define the strategic direction (the "what" and "why"), while todos handle the actionable steps.',
+      description: 'Create a high-level strategic plan document (goal, summary, and context).',
       name: LobeAgentApiName.createPlan,
       humanIntervention: 'required',
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
           goal: {
-            description: 'The main goal or objective to achieve (used as document title).',
+            description: 'Main objective (used as document title).',
             type: 'string',
           },
           description: {
-            description: 'A brief summary of the plan (1-2 sentences).',
+            description: 'Brief 1-2 sentence summary.',
             type: 'string',
           },
           context: {
-            description:
-              'Detailed context, constraints, background information, or strategic considerations relevant to the goal.',
+            description: 'Constraints, background, and strategic context.',
             type: 'string',
           },
         },
@@ -75,14 +74,13 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Update an existing plan document. Only use this when the goal fundamentally changes. Plans should remain stable once created - do not update plans just because details change.',
+      description: 'Update an existing plan document when the overarching goal changes.',
       name: LobeAgentApiName.updatePlan,
       parameters: {
         properties: {
           planId: {
             description:
-              'The document ID of the plan to update (e.g., "docs_xxx"). This ID is returned in the createPlan response. Do NOT use the goal text as planId.',
+              'Plan document ID (e.g. "docs_xxx") returned by createPlan. Do NOT use the goal text as planId.',
             type: 'string',
           },
           goal: {
@@ -94,7 +92,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'string',
           },
           context: {
-            description: 'Updated detailed context.',
+            description: 'Updated context.',
             type: 'string',
           },
         },
@@ -105,13 +103,13 @@ export const LobeAgentManifest: BuiltinToolManifest = {
 
     // ==================== Quick Todo ====================
     {
-      description: 'Create new todo items. Pass an array of text strings.',
+      description: 'Create new todo items from a list of strings.',
       name: LobeAgentApiName.createTodos,
       humanIntervention: 'required',
       parameters: {
         properties: {
           adds: {
-            description: 'Array of todo item texts to create.',
+            description: 'Todo item texts to create.',
             items: { type: 'string' },
             type: 'array',
           },
@@ -121,43 +119,34 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: `Update todo items with batch operations. Each operation type requires specific fields:
-- "add": requires "text" (the todo text to add)
-- "update": requires "index", optional "newText" and/or "status"
-- "remove": requires "index" only
-- "complete": requires "index" only (marks item as completed)
-- "processing": requires "index" only (marks item as in progress)`,
+      description:
+        'Batch update todos: add (text), update (index + newText/status), or remove/complete/processing (index only).',
       name: LobeAgentApiName.updateTodos,
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
           operations: {
-            description:
-              'Array of update operations. IMPORTANT: For "complete", "processing" and "remove" operations, only pass "type" and "index" - no other fields needed.',
+            description: 'Operations to apply in order.',
             items: {
               properties: {
                 type: {
-                  description:
-                    'Operation type. "add" needs text, "update" needs index + optional newText/status, "remove", "complete" and "processing" need index only.',
                   enum: ['add', 'update', 'remove', 'complete', 'processing'],
                   type: 'string',
                 },
                 text: {
-                  description: 'Required for "add" only: the text to add.',
+                  description: 'For "add": item text.',
                   type: 'string',
                 },
                 index: {
-                  description:
-                    'Required for "update", "remove", "complete", "processing": the item index (0-based).',
+                  description: '0-based index (for update/remove/complete/processing).',
                   type: 'number',
                 },
                 newText: {
-                  description: 'Optional for "update" only: the new text.',
+                  description: 'For "update": replacement text.',
                   type: 'string',
                 },
                 status: {
-                  description:
-                    'Optional for "update" only: set status (todo, processing, completed).',
+                  description: 'For "update": new status.',
                   enum: ['todo', 'processing', 'completed'],
                   type: 'string',
                 },
@@ -173,14 +162,13 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: 'Clear todo items. Can clear only completed items or all items.',
+      description: 'Clear completed or all todo items.',
       name: LobeAgentApiName.clearTodos,
       humanIntervention: 'required',
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
           mode: {
-            description: '"completed" clears only done items, "all" clears the entire list.',
             enum: ['completed', 'all'],
             type: 'string',
           },
@@ -234,42 +222,41 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     // ==================== Sub-Agent ====================
     {
       description:
-        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation. Pass `subAgentId` to send a follow-up message to an earlier sub-agent instead of starting a new one.',
+        'Dispatch an isolated sub-agent for multi-step work, or pass `subAgentId` to continue or steer an existing sub-agent.',
       name: LobeAgentApiName.callSubAgent,
       parameters: {
         properties: {
           description: {
-            description: 'Brief description of what this sub-agent does (shown in UI).',
+            description: 'Short UI label for the task.',
             type: 'string',
           },
           instruction: {
-            description: 'Detailed instruction/prompt for the sub-agent execution.',
+            description: 'Detailed prompt for the sub-agent.',
             type: 'string',
           },
           inheritMessages: {
-            description:
-              'Whether to inherit context messages from the parent conversation. Default is false.',
+            description: 'Inherit parent conversation history (default false).',
             type: 'boolean',
           },
           subAgentId: {
             description:
-              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. If that sub-agent is still running, the instruction is queued and it reads it at its next step to correct course. Leave empty (or omit) to start a new sub-agent; never invent an id.',
+              'ID from an earlier `<sub_agent id="..." />` tag to resume a stopped sub-agent or steer a running one. Omit to start a new sub-agent; never invent an ID.',
             type: 'string',
           },
           runInBackground: {
             description:
-              'Optional. Start the sub-agent and get control back immediately instead of waiting for it. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this result. The result arrives later as a new message (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the result in this turn.',
+              'Return immediately with the sub-agent ID and deliver `<sub_agent_result>` later (default false: wait in this turn). Never poll.',
             type: 'boolean',
           },
           ...(isDesktop && {
             runInClient: {
               description:
-                'Whether to run on the desktop client (for local file/shell access). MUST be true when the sub-agent requires local-system tools. Default is false (server execution).',
+                'Run on the desktop client (must be true for local-system file/shell access; default false).',
               type: 'boolean',
             },
           }),
           timeout: {
-            description: 'Optional timeout in milliseconds. Default is 30 minutes.',
+            description: 'Timeout in ms (default 30 min).',
             type: 'number',
           },
         },
@@ -279,18 +266,17 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Cancel a sub-agent that is still running — typically one started with `runInBackground` — whose work is no longer needed. It stops at its next step, no result is delivered for it, and its history is kept. To correct a sub-agent that has gone off track, do not cancel it: send the correction with `callSubAgent` and the same `subAgentId` while it runs.',
+        'Cancel a running sub-agent whose result is no longer needed (to steer one instead, use `callSubAgent` with its `subAgentId`).',
       name: LobeAgentApiName.cancelSubAgent,
       parameters: {
         additionalProperties: false,
         properties: {
           subAgentId: {
-            description:
-              'The id from the `<sub_agent id="..." />` tag of the sub-agent to cancel. Never invent an id.',
+            description: 'ID from `<sub_agent id="..." />`. Never invent an ID.',
             type: 'string',
           },
           reason: {
-            description: 'Optional. One short sentence on why it is no longer needed.',
+            description: 'Optional short reason.',
             type: 'string',
           },
         },
@@ -298,58 +284,51 @@ export const LobeAgentManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+
+    // ==================== Vent ====================
     {
       description:
-        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, just reply to the user; repeated or empty vents are rejected.',
+        'Privately report genuine platform friction to platform builders (not user-facing; fixes nothing). Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, reply to the user; repeated or empty vents are rejected.',
       name: LobeAgentApiName.vent,
       parameters: {
         additionalProperties: false,
         properties: {
           category: {
             description:
-              'Friction category: missing_tool, schema_mismatch, doc_conflict, platform_bug, env_limitation, or other.',
+              'missing_tool (no tool exists), schema_mismatch (params disagree with docs/behavior), doc_conflict (wrong/contradictory docs), platform_bug (anomalous surface error), env_limitation (sandbox/network/timeout/resource limit), or other.',
             enum: [...VENT_CATEGORIES],
             type: 'string',
           },
           severity: {
-            description:
-              'How badly it blocked the task: high = could not complete, medium = forced a costly workaround, low = friction but recovered.',
+            description: 'high = blocked, medium = costly workaround, low = minor friction.',
             enum: [...VENT_SEVERITIES],
             type: 'string',
           },
           summary: {
-            description:
-              'One short sentence naming the specific friction. Name the tool/surface if one is at fault.',
+            description: 'One short sentence naming the specific friction/surface.',
             type: 'string',
           },
           details: {
-            description:
-              'What you tried, what you expected, what actually happened, and why it blocked you. Specific enough for an engineer to reproduce or fix.',
+            description: 'What you tried, expected, observed, and why it blocked you.',
             type: 'string',
           },
           attempts: {
-            description: 'How many times you hit this wall before venting, when countable.',
+            description: 'How many times you hit this blocker.',
             minimum: 1,
             type: 'integer',
           },
           toolName: {
-            description:
-              'Exact tool/API/surface involved, when one specific component is at fault.',
+            description: 'Exact tool/API/surface involved, if applicable.',
             type: 'string',
           },
           evidenceRefs: {
-            description:
-              'Optional stable references that ground the report. Prefer tool_call, message, operation, topic, or task refs.',
+            description: 'Optional stable refs (tool_call, message, operation, topic, task).',
             items: {
               additionalProperties: false,
               properties: {
-                id: { description: 'Stable evidence identifier.', type: 'string' },
-                summary: {
-                  description: 'Optional short note explaining why this evidence matters.',
-                  type: 'string',
-                },
+                id: { type: 'string' },
+                summary: { type: 'string' },
                 type: {
-                  description: 'Evidence object type.',
                   enum: [...VENT_EVIDENCE_REF_TYPES],
                   type: 'string',
                 },
@@ -369,7 +348,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🤖',
     description:
-      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.',
+      'Create and update conversation plans and todos, ask the user a structured question, analyze media, report a platform blocker, or delegate work to a sub-agent when available.',
     readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
     title: 'Lobe Agent',
   },

@@ -1,4 +1,11 @@
 // @vitest-environment node
+import { mkdtemp, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { optimizeDeps, resolveConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -65,12 +72,52 @@ describe('lobe-dev-editor-provider', () => {
 });
 
 describe('sharedOptimizeDeps', () => {
+  it('parses CJK emphasis after pre-bundling alongside the root Markdown serializer', async () => {
+    expect(sharedOptimizeDeps.include).toContain('remark-cjk-friendly');
+
+    const root = path.resolve(import.meta.dirname, '../..');
+    const cacheDir = await mkdtemp(path.join(root, 'node_modules/.vite-markdown-test-'));
+
+    try {
+      const config = await resolveConfig(
+        {
+          cacheDir,
+          configFile: false,
+          logLevel: 'silent',
+          optimizeDeps: {
+            ...sharedOptimizeDeps,
+            entries: [],
+            include: ['remark-cjk-friendly', 'mdast-util-to-markdown'],
+            noDiscovery: true,
+          },
+          root,
+        },
+        'serve',
+      );
+      const { optimized } = await optimizeDeps(config, true);
+      const { default: remarkCjkFriendly } = await import(
+        /* @vite-ignore */ pathToFileURL(optimized['remark-cjk-friendly'].file).href
+      );
+      const tree = unified().use(remarkParse).use(remarkCjkFriendly).parse('中文**加粗**测试');
+
+      expect(tree.children[0]).toMatchObject({
+        children: [
+          { type: 'text', value: '中文' },
+          { children: [{ type: 'text', value: '加粗' }], type: 'strong' },
+          { type: 'text', value: '测试' },
+        ],
+        type: 'paragraph',
+      });
+    } finally {
+      await rm(cacheDir, { force: true, recursive: true });
+    }
+  });
+
   it('pre-bundles the @lobehub/ui root entrypoint', () => {
     expect(sharedOptimizeDeps.include).toContain('@lobehub/ui');
     expect(sharedOptimizeDeps.exclude).toEqual([
       '@lobehub/ui/stylex/cssVar.stylex',
       '@lobehub/ui/stylex/media.stylex',
-      'mdast-util-to-markdown',
     ]);
   });
 });

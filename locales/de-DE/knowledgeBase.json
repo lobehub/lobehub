@@ -1,9 +1,9 @@
 {
   "addToKnowledgeBase.addSuccess": "Datei erfolgreich hinzugefügt",
-  "addToKnowledgeBase.alreadyExists": "Diese Datei befindet sich bereits in der Bibliothek",
+  "addToKnowledgeBase.alreadyExists": "Diese Datei ist bereits in der Bibliothek",
   "addToKnowledgeBase.confirm": "Hinzufügen",
   "addToKnowledgeBase.error": "Datei konnte nicht zur Bibliothek hinzugefügt werden",
-  "addToKnowledgeBase.id.placeholder": "Bitte wählen Sie eine Bibliothek zum Hinzufügen aus",
+  "addToKnowledgeBase.id.placeholder": "Bitte wählen Sie eine Bibliothek aus, zu der die Datei hinzugefügt werden soll",
   "addToKnowledgeBase.id.required": "Bitte wählen Sie eine Bibliothek aus",
   "addToKnowledgeBase.id.title": "Zielbibliothek",
   "addToKnowledgeBase.title": "Zur Bibliothek hinzufügen",

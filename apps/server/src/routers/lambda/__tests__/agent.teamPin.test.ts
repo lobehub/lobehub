@@ -18,6 +18,12 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/session', () => ({ SessionModel: vi.fn() }));
 vi.mock('@/database/models/task', () => ({ TaskModel: vi.fn() }));
 vi.mock('@/database/models/chatGroup', () => ({ ChatGroupModel: vi.fn() }));
+// The publish guard counts the agent's private connectors (none here)
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: vi.fn(function () {
+    return { countPrivateAgentBindings: vi.fn().mockResolvedValue(0) };
+  }),
+}));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() }));
 vi.mock('@/database/models/resourcePermission', () => ({ ResourcePermissionModel: vi.fn() }));
