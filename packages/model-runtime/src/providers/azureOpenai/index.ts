@@ -221,14 +221,19 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
         tools: azureTools,
       } as ChatStreamPayload;
     },
-    // An Azure endpoint is never the official OpenAI host, so it anchors only when its
-    // channel opts in after verifying the deployment accepts the anchored items. The model
-    // checked is the deployment name, so it must be named after the GPT model it serves.
+    // An Azure endpoint is never the official OpenAI host, so it anchors only when an
+    // operator opts in after verifying the deployment accepts the anchored items: per
+    // endpoint through the option, or for every Azure endpoint through its own env, kept
+    // apart from the OpenAI relay env because each backend needs its own verification.
+    // The model checked is the deployment name, so it must be named after the GPT model
+    // it serves. The env is read per request so a change applies without a rebuild.
     toolAnchoring: ({ baseURL, model, options }) =>
       resolveOpenAIToolAnchoring({
         baseURL,
         isSupportedModel: isToolAnchoringGPTModel(model),
-        override: (options as ResponsesToolAnchoringOptions).responsesToolAnchoring,
+        override:
+          (options as ResponsesToolAnchoringOptions).responsesToolAnchoring ??
+          process.env.AZURE_OPENAI_RESPONSES_TOOL_ANCHORING,
       }),
   },
 });

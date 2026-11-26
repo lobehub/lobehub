@@ -268,6 +268,17 @@ describe('Responses tool anchoring', () => {
       expect(JSON.stringify(requests)).not.toContain('additional_tools');
     });
 
+    it('anchors every Azure endpoint when its own env opts in, unless the channel opts out', async () => {
+      vi.stubEnv('AZURE_OPENAI_RESPONSES_TOOL_ANCHORING', 'additional_tools');
+
+      const anchored = await captureRun(azure(), 'gpt-5.6-sol');
+      expectGrowingPrefix(anchored);
+      expect(toolNames(anchored.at(-1)!.tools)).toEqual([activator.function.name]);
+
+      const optedOut = await captureRun(azure({ responsesToolAnchoring: 'off' }), 'gpt-5.6-sol');
+      expect(toolNames(optedOut.at(-1)!.tools)).toHaveLength(3);
+    });
+
     it.each(['additional_tools', 'tool_search'] as const)(
       'keeps the request prefix stable when the channel opts into %s',
       async (mode) => {
