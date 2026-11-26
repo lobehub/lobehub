@@ -43009,21 +43009,76 @@ paths:
                   maxItems: 200
                   type: array
                   items:
-                    type: object
-                    properties:
-                      content:
-                        type: string
-                        description: Plain-text message content.
-                      role:
-                        type: string
-                        enum:
-                          - system
-                          - user
-                          - assistant
-                    required:
-                      - content
-                      - role
-                    additionalProperties: false
+                    anyOf:
+                      - type: object
+                        properties:
+                          content:
+                            anyOf:
+                              - type: string
+                              - minItems: 1
+                                maxItems: 50
+                                type: array
+                                items:
+                                  oneOf:
+                                    - type: object
+                                      properties:
+                                        text:
+                                          type: string
+                                        type:
+                                          type: string
+                                          const: text
+                                      required:
+                                        - text
+                                        - type
+                                      additionalProperties: false
+                                    - type: object
+                                      properties:
+                                        image_url:
+                                          type: object
+                                          properties:
+                                            detail:
+                                              type: string
+                                              enum:
+                                                - auto
+                                                - low
+                                                - high
+                                            url:
+                                              type: string
+                                              pattern: ^(?:https?:\/\/\S+|data:image\/[\w.+-]+;base64,[\d+/=a-z]+)$
+                                          required:
+                                            - url
+                                          additionalProperties: false
+                                        type:
+                                          type: string
+                                          const: image_url
+                                      required:
+                                        - image_url
+                                        - type
+                                      additionalProperties: false
+                            description: Plain text, or text and image parts (OpenAI chat format) for a
+                              model that takes images. An image is an http(s)
+                              URL or a base64 `data:image/...` URL.
+                          role:
+                            type: string
+                            const: user
+                        required:
+                          - content
+                          - role
+                        additionalProperties: false
+                      - type: object
+                        properties:
+                          content:
+                            type: string
+                            description: Plain-text message content.
+                          role:
+                            type: string
+                            enum:
+                              - system
+                              - assistant
+                        required:
+                          - content
+                          - role
+                        additionalProperties: false
                 model:
                   description: Model id. Omit to use the platform's default chat model.
                   type: string
@@ -43272,21 +43327,76 @@ paths:
                   maxItems: 200
                   type: array
                   items:
-                    type: object
-                    properties:
-                      content:
-                        type: string
-                        description: Plain-text message content.
-                      role:
-                        type: string
-                        enum:
-                          - system
-                          - user
-                          - assistant
-                    required:
-                      - content
-                      - role
-                    additionalProperties: false
+                    anyOf:
+                      - type: object
+                        properties:
+                          content:
+                            anyOf:
+                              - type: string
+                              - minItems: 1
+                                maxItems: 50
+                                type: array
+                                items:
+                                  oneOf:
+                                    - type: object
+                                      properties:
+                                        text:
+                                          type: string
+                                        type:
+                                          type: string
+                                          const: text
+                                      required:
+                                        - text
+                                        - type
+                                      additionalProperties: false
+                                    - type: object
+                                      properties:
+                                        image_url:
+                                          type: object
+                                          properties:
+                                            detail:
+                                              type: string
+                                              enum:
+                                                - auto
+                                                - low
+                                                - high
+                                            url:
+                                              type: string
+                                              pattern: ^(?:https?:\/\/\S+|data:image\/[\w.+-]+;base64,[\d+/=a-z]+)$
+                                          required:
+                                            - url
+                                          additionalProperties: false
+                                        type:
+                                          type: string
+                                          const: image_url
+                                      required:
+                                        - image_url
+                                        - type
+                                      additionalProperties: false
+                            description: Plain text, or text and image parts (OpenAI chat format) for a
+                              model that takes images. An image is an http(s)
+                              URL or a base64 `data:image/...` URL.
+                          role:
+                            type: string
+                            const: user
+                        required:
+                          - content
+                          - role
+                        additionalProperties: false
+                      - type: object
+                        properties:
+                          content:
+                            type: string
+                            description: Plain-text message content.
+                          role:
+                            type: string
+                            enum:
+                              - system
+                              - assistant
+                        required:
+                          - content
+                          - role
+                        additionalProperties: false
                 model:
                   description: Model id. Omit to use the platform's default chat model.
                   type: string
