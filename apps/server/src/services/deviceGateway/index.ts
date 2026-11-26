@@ -261,6 +261,10 @@ export class DeviceGateway {
     return workspace.initWorkspace(this.clientGetter, ...args);
   }
 
+  discoverAgentFiles(...args: DeviceRpcArgs<typeof workspace.discoverAgentFiles>) {
+    return workspace.discoverAgentFiles(this.clientGetter, ...args);
+  }
+
   prepareSkillDirectory(...args: DeviceRpcArgs<typeof workspace.prepareSkillDirectory>) {
     return workspace.prepareSkillDirectory(this.clientGetter, ...args);
   }

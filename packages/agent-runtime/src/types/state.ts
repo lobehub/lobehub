@@ -384,6 +384,30 @@ export interface AgentRunBinding {
   skillIndex?: SkillIndexSnapshot;
 }
 
+/** A filesystem skill found on the device after the run started. */
+export interface DiscoveredAgentSkill {
+  description: string;
+  /** Absolute path of its `SKILL.md`. */
+  location: string;
+  name: string;
+}
+
+/**
+ * Agent files (`AGENTS.md` / `CLAUDE.md`, project skills) found while the run
+ * was working, when a file tool touched a directory the start-of-run scan did
+ * not cover. The instructions themselves travel in that tool's result; this
+ * record keeps them from being injected twice and lets `activateSkill` load
+ * the skills. Bound to one device: a different device starts a fresh record.
+ */
+export interface DiscoveredAgentFiles {
+  deviceId: string;
+  /** Directories already walked, so a later call there skips the device round-trip. */
+  dirs: string[];
+  /** Absolute paths of the instruction files already shown to the model. */
+  instructionPaths: string[];
+  skills: DiscoveredAgentSkill[];
+}
+
 /**
  * Agent's serializable state.
  * This is the "passport" that can be persisted and transferred.
@@ -399,7 +423,6 @@ export interface AgentState {
    * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
-
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
@@ -409,6 +432,7 @@ export interface AgentState {
    * needs the user's device and no client was there to run it.
    */
   clientLlmWait?: AgentRunClientLlmWait;
+
   cost: Cost;
   /**
    * Optional cost limits configuration.
@@ -424,6 +448,8 @@ export interface AgentState {
    * operation — before the LLM runs again — instead of being dropped.
    */
   deferredHumanApproval?: AgentInstructionRequestHumanApprove;
+  /** Agent files found mid-run; see {@link DiscoveredAgentFiles}. */
+  discoveredAgentFiles?: DiscoveredAgentFiles;
   /** @deprecated Use `world.enableExpertise`. */
   enableExpertise?: boolean;
   error?: any;

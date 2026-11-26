@@ -831,4 +831,30 @@ describe('single tool executors', () => {
       }),
     ]);
   });
+
+  it('records agent files a device file tool discovered, for later steps', async () => {
+    const agentFileDiscovery = {
+      deviceId: 'device-a',
+      dirs: ['/repo/admin'],
+      instructionPaths: ['/repo/admin/AGENTS.md'],
+      skills: [{ description: 'Admin', location: '/repo/admin/SKILL.md', name: 'admin' }],
+    };
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: { content: 'file body', state: { agentFileDiscovery }, success: true },
+    });
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: { ...createToolCall('read-1', 'lobe-local-system'), apiName: 'readFile' },
+        },
+        type: 'call_tool',
+      },
+      createState(),
+    );
+
+    expect(result.newState.discoveredAgentFiles).toEqual(agentFileDiscovery);
+  });
 });

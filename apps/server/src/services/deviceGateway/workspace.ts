@@ -6,6 +6,7 @@ import type {
   DeviceListeningPortsResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
+  WorkspaceInstructions,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -65,6 +66,71 @@ export async function initWorkspace(
     };
   } catch (error) {
     log('initWorkspace: error for deviceId=%s — %O', deviceId, error);
+    return undefined;
+  }
+}
+
+/** What {@link discoverAgentFiles} returns: a directory's agent files, metadata-only skills. */
+export interface AgentFileDiscoveryResult {
+  /** Directories the device walked, nearest first. */
+  dirs: string[];
+  instructions: WorkspaceInstructions[];
+  skills: ProjectSkillMeta[];
+}
+
+/**
+ * Find the agent files (`AGENTS.md` / `CLAUDE.md`, project skills) that apply
+ * to a path a file tool is about to touch, walking up from it until one of
+ * `knownDirs` or the repository root. Same relay as {@link initWorkspace}.
+ *
+ * Returns `undefined` when the gateway is unconfigured, the device is offline,
+ * the client predates this RPC, or the call fails: discovery is best-effort and
+ * never blocks the tool call it accompanies.
+ */
+export async function discoverAgentFiles(
+  getClient: DeviceClientGetter,
+  params: {
+    deviceId: string;
+    knownDirs: string[];
+    path: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  },
+): Promise<AgentFileDiscoveryResult | undefined> {
+  const { deviceId, knownDirs, path, timeout = 10_000, userId, workspaceId } = params;
+  const client = getClient();
+  if (!client) return undefined;
+
+  try {
+    const result = await client.invokeRpc<{
+      dirs?: string[];
+      instructions?: WorkspaceInstructions[];
+      skills?: (ProjectSkillMeta & Record<string, unknown>)[];
+    }>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'discoverAgentFiles', params: { knownDirs, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('discoverAgentFiles: failed for deviceId=%s — %s', deviceId, result.error);
+      return undefined;
+    }
+
+    const { dirs, instructions, skills } = result.data;
+    return {
+      dirs: dirs ?? [],
+      instructions: instructions ?? [],
+      skills: (skills ?? []).map(({ description, disableModelInvocation, name, path, scope }) => ({
+        description,
+        ...(disableModelInvocation ? { disableModelInvocation: true } : {}),
+        name,
+        path,
+        scope,
+      })),
+    };
+  } catch (error) {
+    log('discoverAgentFiles: error for deviceId=%s — %O', deviceId, error);
     return undefined;
   }
 }

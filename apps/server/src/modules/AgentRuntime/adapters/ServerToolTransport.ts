@@ -49,7 +49,10 @@ import {
   TOOL_PRICING,
 } from '../executorHelpers';
 import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
-import { resolveRunProjectSkills } from '../executors/resolveRunProjectSkills';
+import {
+  resolveRunAgentFiles,
+  resolveRunProjectSkills,
+} from '../executors/resolveRunProjectSkills';
 import { resolveToolTimeoutMs } from '../resolveToolTimeout';
 import { buildToolCallHookContext } from './toolCallHookContext';
 
@@ -265,6 +268,10 @@ export class ServerToolTransport implements ToolTransport {
             toolExecutionService.executeTool(chatToolPayload, {
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state),
+              agentFiles: resolveRunAgentFiles(
+                context.state,
+                resolveRunActiveDeviceId(context.state),
+              ),
               activeDeviceScope: context.state.principal?.actor?.deviceScope,
               agentId: context.state.origin?.agentId,
               agentMember: buildServerAgentMemberRunner(
@@ -315,7 +322,11 @@ export class ServerToolTransport implements ToolTransport {
               messageId: context.state.origin?.sourceMessageId,
               operationId,
               projectId: context.state.origin?.projectId,
-              projectSkills: resolveRunProjectSkills(context.state.plan),
+              projectSkills: resolveRunProjectSkills(
+                context.state.plan,
+                context.state.discoveredAgentFiles,
+                resolveRunActiveDeviceId(context.state),
+              ),
               rootOperationId: operationId,
               runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
               scope: context.state.origin?.scope,

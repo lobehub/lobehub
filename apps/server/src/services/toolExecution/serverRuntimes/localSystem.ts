@@ -12,6 +12,7 @@ import {
 import { buildShellCompletion } from '@/server/services/deviceGateway/toolCallCompletion';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { applyAgentFileDiscovery, startAgentFileDiscovery } from './agentFileDiscovery';
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
@@ -200,6 +201,22 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             },
             context.executionTimeoutMs,
           );
+        // A file tool entering a directory the run has not scanned asks the
+        // device for that directory's agent files, concurrently with the call
+        // itself so the tool does not wait on it. See `agentFileDiscovery`.
+        const discover = () =>
+          startAgentFileDiscovery({
+            agentFiles: context.agentFiles,
+            apiName: api.name,
+            args: finalArgs,
+            deviceId: context.activeDeviceId!,
+            getWorkspaceId: getDeviceWorkspaceId,
+            serverDB: context.serverDB,
+            userId: context.userId!,
+            workingDirectory: context.workingDirectory,
+          });
+        let discovery = discover();
+
         let result = await execute();
 
         // A managed cloud device that is asleep or still starting is woken and
@@ -211,8 +228,20 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             { db: context.serverDB, userId: context.userId!, workspaceId: deviceWorkspaceId },
             context.activeDeviceId!,
           );
-          if (managed === 'online') result = await execute();
-          else if (managed) return withoutDeviceReplay(managed);
+          if (managed === 'online') {
+            // The first discovery hit the same sleeping device and came back
+            // empty; ask again now that it can answer.
+            discovery = discover();
+            result = await execute();
+          } else if (managed) return withoutDeviceReplay(managed);
+        }
+
+        if (discovery) {
+          result = applyAgentFileDiscovery(result, await discovery, {
+            deviceId: context.activeDeviceId!,
+            operationId: context.operationId,
+            run: context.agentFiles ?? { instructionPaths: [], knownDirs: [], skillNames: [] },
+          });
         }
 
         return withoutDeviceReplay(result);

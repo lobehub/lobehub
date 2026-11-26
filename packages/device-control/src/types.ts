@@ -56,6 +56,30 @@ export interface InitWorkspaceResult {
   skills: ProjectSkillItem[];
 }
 
+export interface DiscoverAgentFilesParams {
+  /**
+   * Directories whose agent files the run already has (the bound working
+   * directory and every directory an earlier discovery returned). The walk
+   * stops before reaching one, so their files are never read again.
+   */
+  knownDirs?: string[];
+  /** Absolute path of the file (or directory) a tool call is about to touch. */
+  path: string;
+}
+
+export interface DiscoverAgentFilesResult {
+  /**
+   * Directories this call walked, nearest first. The caller adds them to its
+   * known set even when they held nothing, so the next call in the same
+   * directory skips the walk.
+   */
+  dirs: string[];
+  /** `AGENTS.md` / `CLAUDE.md` in `dirs`, root first like {@link InitWorkspaceResult}. */
+  instructions: WorkspaceInstructionsItem[];
+  /** Project skills under `dirs`, nearest directory winning on a name collision. */
+  skills: ProjectSkillItem[];
+}
+
 export interface ListProjectSkillsParams {
   /** Working directory used to resolve the project root. */
   scope: string;

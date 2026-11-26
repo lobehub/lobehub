@@ -62,6 +62,7 @@ import type {
   CopyAssetForPublishParams,
   CreateTerminalSessionParams,
   DeviceControlDeps,
+  DiscoverAgentFilesParams,
   EnrollWorkspaceParams,
   ExternalAssetForPublishParams,
   InitWorkspaceParams,
@@ -80,7 +81,13 @@ import type {
   UnenrollWorkspaceParams,
   WriteTerminalParams,
 } from './types';
-import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
+import {
+  browseDirectory,
+  discoverAgentFiles,
+  initWorkspace,
+  listProjectSkills,
+  statPath,
+} from './workspace';
 import { assertEntriesWithinWorkspace, WORKSPACE_ESCAPE_MESSAGE } from './workspaceGuard';
 
 /**
@@ -93,6 +100,7 @@ export const DEVICE_RPC_METHODS = [
   'enrollWorkspace',
   'unenrollWorkspace',
   'initWorkspace',
+  'discoverAgentFiles',
   'listHeterogeneousAgentModels',
   'listMcpTools',
   'getClaudeCodeQuota',
@@ -271,6 +279,10 @@ export const executeDeviceRpc = async (
 
     case 'initWorkspace': {
       return initWorkspace(params as InitWorkspaceParams, deps);
+    }
+
+    case 'discoverAgentFiles': {
+      return discoverAgentFiles(params as DiscoverAgentFilesParams);
     }
 
     case 'listHeterogeneousAgentModels': {

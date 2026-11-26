@@ -9,6 +9,8 @@ import matter from 'gray-matter';
 import type {
   BrowseDirectoryParams,
   BrowseDirectoryResult,
+  DiscoverAgentFilesParams,
+  DiscoverAgentFilesResult,
   InitWorkspaceParams,
   InitWorkspaceResult,
   ListProjectSkillsParams,
@@ -340,6 +342,81 @@ export const initWorkspace = async (
   await approvePreviewRoots(skills, deps, root ? [root] : []);
 
   return { instructions, root, skills };
+};
+
+/**
+ * The directory a tool call touches: `target` itself when it is a directory,
+ * otherwise its parent (also for a file `writeFile` is about to create).
+ */
+const resolveTouchedDir = async (target: string): Promise<string> => {
+  const resolved = path.resolve(target);
+  try {
+    if ((await stat(resolved)).isDirectory()) return resolved;
+  } catch {
+    // Not created yet; its parent is still the directory being entered.
+  }
+  return path.dirname(resolved);
+};
+
+/**
+ * Directories a mid-run tool call newly brings into scope, nearest first: the
+ * touched directory, then each parent until one the run already has
+ * (`known`, excluded) or the repository root (included). Reaching neither means
+ * the directory sits outside any repository the run knows, so only the
+ * directory itself applies — the same rule as {@link resolveAgentFileDirs}.
+ */
+const resolveDiscoveryDirs = async (
+  start: string,
+  known: ReadonlySet<string>,
+): Promise<string[]> => {
+  const dirs: string[] = [];
+  let current = start;
+
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+    if (known.has(current)) return dirs;
+    dirs.push(current);
+    if (await pathExists(path.join(current, '.git'))) return dirs;
+
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return [start];
+};
+
+/**
+ * Mid-run counterpart of {@link initWorkspace}: when a tool call touches a
+ * directory the run has not scanned (another repository, or a package below
+ * the working directory), find the agent files that apply there. Mirrors
+ * Claude Code and OpenCode, which load a subdirectory's `CLAUDE.md` /
+ * `AGENTS.md` the first time the model reads a file in it.
+ *
+ * Only project skills are returned — device skills came with the run's start.
+ * No preview root is approved: these skills are loaded through the run's file
+ * tools, and approving a root here would widen what the web preview can read
+ * on the strength of one tool call.
+ */
+export const discoverAgentFiles = async (
+  params: DiscoverAgentFilesParams,
+): Promise<DiscoverAgentFilesResult> => {
+  const known = new Set((params.knownDirs ?? []).map((dir) => path.resolve(dir)));
+  const start = await resolveTouchedDir(params.path);
+  const dirs = await resolveDiscoveryDirs(start, known);
+  if (dirs.length === 0) return { dirs, instructions: [], skills: [] };
+
+  const roots = dirs.flatMap((dir) =>
+    SKILL_SOURCES.map((source) => {
+      const sourceRoot = path.join(dir, source);
+      return { previewRoot: sourceRoot, scope: 'project' as const, source, sourceRoot };
+    }),
+  );
+  const [instructions, skills] = await Promise.all([
+    readWorkspaceInstructions(dirs),
+    collectSkills(roots),
+  ]);
+
+  return { dirs, instructions, skills };
 };
 
 /**
