@@ -1009,6 +1009,7 @@ export default {
   'detailModal.emptyState.title': 'Install to view Skill details',
   'detailModal.info.description': 'API description',
   'detailModal.info.name': 'API name',
+  'detailModal.tabs.manifest': 'Manifest',
   'detailModal.title': 'Skill details',
   'dev.addConnector': 'Add',
   'dev.confirmDeleteDevPlugin': 'This local Skill will be deleted permanently. Continue?',

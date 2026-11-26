@@ -928,6 +928,7 @@
   "detailModal.emptyState.title": "安装后查看技能详情",
   "detailModal.info.description": "API 描述",
   "detailModal.info.name": "API 名称",
+  "detailModal.tabs.manifest": "安装文件",
   "detailModal.title": "技能详情",
   "dev.addConnector": "添加",
   "dev.confirmDeleteDevPlugin": "即将删除该本地技能，删除后将无法找回，是否删除该技能？",
