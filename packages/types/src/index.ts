@@ -25,6 +25,7 @@ export * from './channelMessage';
 export * from './channelMessageCard';
 export * from './channelReaction';
 export * from './chunk';
+export * from './consentEvent';
 export * from './contact';
 export * from './conversation';
 export * from './creds';

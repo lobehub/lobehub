@@ -1624,6 +1624,13 @@
       "when": 1795708868265,
       "tag": "0231_widen_token_totals_to_bigint",
       "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "7",
+      "when": 1795764965058,
+      "tag": "0232_add_user_consent_events",
+      "breakpoints": true
     }
   ],
   "version": "6"

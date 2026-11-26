@@ -5383,6 +5383,29 @@ table users {
   }
 }
 
+table user_consent_events {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  actor_user_id text [not null]
+  workspace_id text
+  kind text [not null]
+  source text [not null]
+  resource_type text
+  resource_id text
+  before jsonb
+  after jsonb
+  notice jsonb
+  ip_address text
+  user_agent text
+  client jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (resource_type, resource_id, created_at) [name: 'user_consent_events_resource_created_at_idx']
+    (actor_user_id, created_at) [name: 'user_consent_events_actor_created_at_idx']
+    (workspace_id, created_at) [name: 'user_consent_events_workspace_created_at_idx']
+  }
+}
+
 table user_memories_activities {
   id varchar(255) [pk, not null]
   user_id text

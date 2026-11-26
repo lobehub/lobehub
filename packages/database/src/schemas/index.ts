@@ -82,6 +82,7 @@ export * from './topicAnalysis';
 export * from './topicComment';
 export * from './trash';
 export * from './user';
+export * from './userConsentEvent';
 export * from './userMemories';
 export * from './verify';
 export * from './widget';
