@@ -63,7 +63,12 @@ module.exports = defineConfig({
     entryLocale: 'en-US',
     outputLocales: ['zh-CN'],
     includeMatter: true,
-    exclude: ['./README.zh-CN.md', './docs/**/*.zh-CN.md', './docs/**/*.zh-CN.mdx'],
+    exclude: [
+      './README.zh-CN.md',
+      './README.ja-JP.md',
+      './docs/**/*.zh-CN.md',
+      './docs/**/*.zh-CN.mdx',
+    ],
     outputExtensions: (locale, { filePath }) => {
       if (filePath.includes('.mdx')) {
         if (locale === 'en-US') return '.mdx';

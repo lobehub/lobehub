@@ -9,7 +9,7 @@
 Add super-agents to the chats your team already uses.<br/>
 They take on work by themselves and get better every week.
 
-**English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
+**English** · [简体中文](./README.zh-CN.md) · [日本語](./README.ja-JP.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
 <!-- SHIELD GROUP -->
 
