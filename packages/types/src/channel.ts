@@ -747,6 +747,11 @@ export interface ChannelAvatarMember {
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
   /**
+   * An Agent's access request card with its request's current status, for the Agent's owner, so
+   * a list can read "Allowed …" once it was answered; null for any other message or reader.
+   */
+  agentAccess?: ChannelAgentAccessCard | null;
+  /**
    * The first attachment's MIME type and how many there are, so a message of only an image
    * still has a preview line; null without attachments.
    */
