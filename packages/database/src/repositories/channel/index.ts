@@ -68,7 +68,7 @@ import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
-import { channelMentionCounts, channelThreadMentions } from './threadMentions';
+import { channelMentionCounts, channelThreadMentions, channelUnreadCounts } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView, viewerJobs } from './view';
@@ -579,6 +579,7 @@ export class ChannelRepository {
         /** False for an open project Channel the caller can read but has not joined. */
         joined: boolean;
         lastMessage: ChannelLastMessage | null;
+        lastReadSequence: number;
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
@@ -668,7 +669,10 @@ export class ChannelRepository {
     const unreadMemberIds = rows
       .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
       .map(({ memberId }) => memberId);
-    const mentionCountOf = await channelMentionCounts(this.db, unreadMemberIds);
+    const [mentionCountOf, unreadCountOf] = await Promise.all([
+      channelMentionCounts(this.db, unreadMemberIds),
+      channelUnreadCounts(this.db, unreadMemberIds),
+    ]);
 
     // Thread mentions outlive the read position, which opening the main conversation moves.
     const threadMentionsOf = await channelThreadMentions(
@@ -733,7 +737,8 @@ export class ChannelRepository {
           replyJobs: replyJobsOf.get(channel.id) ?? [],
           sectionId,
           threadMentions: threadMentionsOf.get(channel.id) ?? [],
-          unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+          lastReadSequence: lastReadSequence ?? 0,
+          unreadCount: unreadCountOf.get(channel.id) ?? 0,
         };
       },
     );
@@ -749,6 +754,7 @@ export class ChannelRepository {
         hidden: false,
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
+        lastReadSequence: channel.sequence,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
         memberRole: null,
         mentionCount: 0,
