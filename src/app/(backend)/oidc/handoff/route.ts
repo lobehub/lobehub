@@ -2,8 +2,8 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { getServerDB } from '@/database/core/db-adaptor';
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
-import { serverDB } from '@/database/server';
 
 const log = debug('lobe-oidc:handoff');
 
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   log('Received GET request for /oidc/handoff');
 
   try {
+    const serverDB = await getServerDB();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const client = searchParams.get('client');

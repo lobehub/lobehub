@@ -1,4 +1,4 @@
-import { serverDB } from '@/database/server';
+import { getServerDB } from '@/database/core/db-adaptor';
 import { UserService } from '@/server/services/user';
 
 type Params = Promise<{ id: string; image: string }>;
@@ -28,6 +28,7 @@ function getContentType(filename: string): string {
 
 export const GET = async (req: Request, segmentData: { params: Params }) => {
   try {
+    const serverDB = await getServerDB();
     const params = await segmentData.params;
     const type = getContentType(params.image);
     const userService = new UserService(serverDB);

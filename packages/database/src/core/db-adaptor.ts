@@ -20,5 +20,3 @@ export const getServerDB = async (): Promise<LobeChatDatabase> => {
     throw error;
   }
 };
-
-export const serverDB = getDBInstance();

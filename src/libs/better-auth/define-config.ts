@@ -1,7 +1,7 @@
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
+import { createNanoId, idGenerator } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -12,6 +12,7 @@ import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
 import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
+import { serverDB } from '@/database/core/server-db';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import {

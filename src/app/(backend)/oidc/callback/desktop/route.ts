@@ -2,8 +2,8 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
 
+import { getServerDB } from '@/database/core/db-adaptor';
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
-import { serverDB } from '@/database/server';
 
 const log = debug('lobe-oidc:callback:desktop');
 
@@ -17,6 +17,7 @@ const redirectTo = (pathname: string, params?: Record<string, string>) => {
 
 export const GET = async (req: NextRequest) => {
   try {
+    const serverDB = await getServerDB();
     const searchParams = req.nextUrl.searchParams;
     const code = searchParams.get('code');
     const state = searchParams.get('state'); // This `state` is the handoff ID
