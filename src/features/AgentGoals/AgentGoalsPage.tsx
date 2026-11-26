@@ -297,8 +297,12 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         left={
-          agentId || (isGlobal && !activeWorkspaceId) ? (
-            <AgentGoalsAndTasksTabs agentId={agentId} view={'goals'} />
+          agentId || isGlobal ? (
+            <AgentGoalsAndTasksTabs
+              agentId={agentId}
+              showMine={isGlobal && !!activeWorkspaceId}
+              view={'goals'}
+            />
           ) : (
             <Text weight={600}>{t('goalList.title')}</Text>
           )

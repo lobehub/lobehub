@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
 import {
   ActionIcon,
@@ -81,7 +82,7 @@ const Actions = ({
         await refreshAgentList();
       } else await updateAgentGroup(item.id, target);
     });
-  const items: DropdownItem[] = [
+  const organizeItems: DropdownItem[] = [
     {
       key: 'pin',
       title: editReason,
@@ -137,6 +138,8 @@ const Actions = ({
         },
       ],
     },
+  ];
+  const deleteItems: DropdownItem[] = [
     { type: 'divider' },
     {
       key: 'delete',
@@ -181,6 +184,12 @@ const Actions = ({
       },
     },
   ];
+  // Lobe AI (the inbox) is the built-in default Agent: it cannot be deleted,
+  // and a copy would come out nameless (its stored title is blank).
+  const items =
+    item.slug === INBOX_SESSION_ID
+      ? organizeItems.filter((menuItem) => menuItem?.key !== 'duplicate')
+      : [...organizeItems, ...deleteItems];
   return (
     <div
       role="presentation"

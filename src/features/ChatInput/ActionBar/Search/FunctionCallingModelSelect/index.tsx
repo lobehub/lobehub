@@ -3,7 +3,7 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { type WorkingModel } from '@/types/agent';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -20,7 +20,7 @@ interface ModelSelectProps extends Omit<SelectProps, 'onChange' | 'value'> {
 }
 
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
-  const enabledList = useEnabledChatModels();
+  const enabledList = useSelectableChatModels();
 
   const options = useMemo<SelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>

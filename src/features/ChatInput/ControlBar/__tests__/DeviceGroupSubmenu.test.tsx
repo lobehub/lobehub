@@ -58,7 +58,10 @@ describe('DeviceGroupSubmenu', () => {
     const submenu = screen.getByTestId('submenu');
     expect(submenu.textContent).toContain('row:hetzner');
     expect(submenu.textContent).toContain('row:zeabur');
-    expect(submenu.textContent).toContain('row:lin-pc');
+    // Offline machines fold behind a toggle at the end of the submenu.
+    expect(submenu.textContent).not.toContain('row:lin-pc');
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByTestId('submenu').textContent).toContain('row:lin-pc');
   });
 
   it('names the picked device on the first level when it is in the group', () => {

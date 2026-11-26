@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { archiveMergedPullRequestTopics } from '@/features/AgentSidebar/Topic/archiveMergedPullRequestTopics';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -42,21 +43,9 @@ export const useTopicActionsDropdownMenu = (
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const topics = useChatStore(topicSelectors.currentTopics);
-  const [
-    activeGroupId,
-    removeUnstarredTopic,
-    removeGroupTopics,
-    importTopic,
-    updateTopicStatus,
-    refreshTopic,
-  ] = useChatStore((s) => [
-    s.activeGroupId,
-    s.removeUnstarredTopic,
-    s.removeGroupTopics,
-    s.importTopic,
-    s.updateTopicStatus,
-    s.refreshTopic,
-  ]);
+  const [activeGroupId, removeUnstarredTopic, removeGroupTopics, importTopic] = useChatStore(
+    (s) => [s.activeGroupId, s.removeUnstarredTopic, s.removeGroupTopics, s.importTopic],
+  );
 
   const removeAllTopic = useCallback(
     async (scope: 'own' | 'workspace' = 'own') => {
@@ -67,39 +56,13 @@ export const useTopicActionsDropdownMenu = (
   );
 
   const handleArchiveMergedPullRequests = useCallback(
-    async (scope: TopicMaintenanceScope = 'own') => {
-      const mergedTopics = (topics ?? []).filter((topic) => {
-        if (
-          activeWorkspaceId &&
-          scope === 'own' &&
-          (!currentUserId || topic.userId !== currentUserId)
-        ) {
-          return false;
-        }
-
-        const pullRequest = topic.metadata?.workingDirectoryConfig?.git?.github?.pullRequest;
-        const isMerged = !!pullRequest?.mergedAt || pullRequest?.state?.toLowerCase() === 'merged';
-
-        return (
-          isMerged &&
-          topic.status !== 'completed' &&
-          topic.status !== 'archived' &&
-          topic.status !== 'unread'
-        );
-      });
-
-      if (mergedTopics.length === 0) {
-        toast.info(t('actions.archiveMergedPullRequestsNone'));
-        return;
-      }
-
-      await Promise.all(
-        mergedTopics.map(({ id }) => updateTopicStatus({ status: 'completed', topicId: id })),
-      );
-      await refreshTopic();
-      toast.success(t('actions.archiveMergedPullRequestsSuccess', { count: mergedTopics.length }));
-    },
-    [activeWorkspaceId, currentUserId, refreshTopic, t, topics, updateTopicStatus],
+    (scope: TopicMaintenanceScope = 'own') =>
+      archiveMergedPullRequestTopics({
+        ownerId: activeWorkspaceId && scope === 'own' ? (currentUserId ?? null) : undefined,
+        t,
+        topics: topics ?? [],
+      }),
+    [activeWorkspaceId, currentUserId, t, topics],
   );
 
   const handleImport = useCallback(

@@ -80,7 +80,9 @@ const SearchResults = memo<SearchResultsProps>(({ isIndexing, query, results }) 
             // Modifier clicks (cmd/ctrl) open a new tab via the href; don't also
             // navigate the current tab.
             if (isModifierClick(e)) return;
-            navigate(result.url);
+            // Result URLs are complete: workspace results carry their slug and
+            // a personal page linked from a workspace must not gain one.
+            navigate(result.url, { escape: true });
           }}
         />
       ))}

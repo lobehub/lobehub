@@ -116,6 +116,15 @@ vi.mock('@/database/models/projectWorkingDirectory', () => ({
   }),
 }));
 
+const { mockApplyPendingTopicMove } = vi.hoisted(() => ({
+  mockApplyPendingTopicMove: vi.fn(),
+}));
+vi.mock('@/database/repositories/projectDirectory', () => ({
+  ProjectDirectoryRepository: vi.fn().mockImplementation(function () {
+    return { applyPendingTopicMove: mockApplyPendingTopicMove };
+  }),
+}));
+
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
     return {
@@ -817,6 +826,60 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
+    // The Project tool's switchRunner records a folder mid-turn; the next turn
+    // a user message opens moves there before resolving where it runs.
+    it('moves to a pending project folder before routing the next turn', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001', pendingProjectWorkingDirectoryId: 'dir-2' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+      mockApplyPendingTopicMove.mockResolvedValueOnce({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-002', workingDirectory: '/other' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'dir-2',
+      });
+      mockResolveProjectDirectoryForTopic.mockResolvedValueOnce({
+        deviceId: 'device-002',
+        path: '/other',
+        permission: 'readWrite',
+        platform: 'darwin',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(mockApplyPendingTopicMove).toHaveBeenCalledWith('topic-1');
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
+    });
+
+    it('leaves a pending move alone on a resume of the same turn', async () => {
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { pendingProjectWorkingDirectoryId: 'dir-2' },
+        projectId: 'project-1',
+      });
+
+      await service
+        .execAgent({
+          agentId: 'agent-1',
+          appContext: { topicId: 'topic-1' },
+          parentMessageId: 'msg-1',
+          prompt: '',
+          resume: true,
+        } as any)
+        .catch(() => undefined);
+
+      expect(mockApplyPendingTopicMove).not.toHaveBeenCalled();
     });
 
     // Regression: the directory lives on one device, so an offline device has to

@@ -521,3 +521,31 @@ of the smells above, and localize the _cause_ too where it maps to a known error
 - [ ] No log / stack framing in the copy — drop `Execution failed:` / `Error:` / `[Module]` prefixes; state what happened as a plain clause. _(Meaningful)_
 - [ ] The message doesn't repeat identity the surface's meta row already shows (task ref, agent name) — the body carries the _new_ info (what failed, why). _(Certainty)_
 - [ ] Error framing is **localized** through i18n at the view; any server-assembled stored string is a clean English fallback (no id / no log prefix), and a known error _cause_ is localized too. _(Meaningful・Certainty)_
+
+## 4.6 Submit errors sit next to the action that caused them・Certainty・Meaningful
+
+A failure caused by submitting a form, dialog, or inline editor that **stays open** is shown
+**on that surface**: under the field the user must change, or next to the submit button
+when no single field is at fault. A corner toast is far from the action, disappears in
+seconds, and leaves the user re-reading the form to guess what to fix. Toasts stay right for
+outcomes with no open form: menu and row actions, background jobs, copy-to-clipboard.
+
+The message names the next step ("use a different email", "sign in instead", "check your
+network and try again"), not just the failure. Map known server codes to that copy; never
+show the raw server message, which is untranslated and often a bare code such as
+`BLOCKED_DOMAIN`. Clear the error when the user edits the related input or resubmits.
+
+With `@lobehub/ui/form`, put field errors through `form.setErrors({ email: message })`,
+which clears when the user edits that field; render other errors as
+`<Alert showIcon title={error} type="error" />` directly above the submit button.
+
+> ✅ Sign-up maps a deleted-account email to the email field, telling the user when it can be
+> reused or to pick another address now (`features/Auth/SignUp/resolveSignUpError.ts`).
+> ❌ Its prior form toasted "This email is still in the account deletion cooldown period" in
+> the bottom-right corner, away from the email field and with no way forward.
+
+**Checklist**
+
+- [ ] A submit failure on a form / dialog / inline editor that stays open renders on that surface (under the field to change, or beside the submit button), not as a toast. _(Certainty)_
+- [ ] The message names the next step, maps known server codes to localized copy, and never shows the raw server message. _(Meaningful)_
+- [ ] The inline error clears when the user edits the related input or resubmits. _(Certainty)_

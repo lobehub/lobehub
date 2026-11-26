@@ -2,6 +2,7 @@ import { cleanup, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SettingsTabs } from '@/store/global/initialState';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -20,6 +21,7 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
+  codingPlans: false,
   canCreateContent: true,
   canManageWorkspace: true,
   canViewBilling: true,
@@ -29,6 +31,10 @@ const permissionFlags: Record<string, () => boolean> = {
   create_content: () => mocks.canCreateContent,
   view_billing: () => mocks.canViewBilling,
 };
+
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
+}));
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => ({
@@ -60,6 +66,7 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
+  mocks.codingPlans = false;
   mocks.canCreateContent = true;
   mocks.canManageWorkspace = true;
   mocks.canViewBilling = true;
@@ -91,7 +98,8 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Profile,
       WorkspaceSettingsTabs.Appearance,
       WorkspaceSettingsTabs.Hotkey,
-      WorkspaceSettingsTabs.ChatPreference,
+      WorkspaceSettingsTabs.Conversation,
+      SettingsTabs.Memory,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
@@ -102,12 +110,21 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
     ]);
     expect(result.current.at(-1)?.key).toBe(WorkspaceSettingsGroupKey.System);
+
+    // Account tabs form their own set; Trash stays with the workspace.
+    expect(
+      result.current.filter((group) => group.scope === 'account').map((group) => group.key),
+    ).toEqual([WorkspaceSettingsGroupKey.Account, WorkspaceSettingsGroupKey.System]);
+    expect(
+      result.current
+        .find((group) => group.key === WorkspaceSettingsGroupKey.Data)
+        ?.items.map((item) => item.key),
+    ).toEqual([WorkspaceSettingsTabs.Trash]);
   });
 
   it('groups devices, subscription accounts and environments & credentials under Runtime', () => {
@@ -143,11 +160,9 @@ describe('workspace settings useCategory', () => {
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
-    const systemGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.System,
-    );
+    const dataGroup = result.current.find((group) => group.key === WorkspaceSettingsGroupKey.Data);
 
-    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(dataGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
     expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
 
     const itemKeys = result.current.flatMap((group) => group.items.map((item) => item.key));
@@ -214,7 +229,7 @@ describe('workspace settings useCategory', () => {
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
-  it('hides API Key from viewers but keeps Advanced and Labs in the System group', () => {
+  it('hides API Key from viewers but keeps Advanced and Labs in the account System group', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 
@@ -224,7 +239,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
@@ -247,7 +261,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Trash,
       WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.OAuthApps,
       WorkspaceSettingsTabs.Labs,
@@ -264,6 +277,63 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
+  });
+
+  it('lists Coding Plans only where the business slot supplies it, after Usage, for every role', () => {
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.CodingPlans);
+
+    mocks.codingPlans = true;
+    mocks.canViewBilling = false;
+    mocks.canManageWorkspace = false;
+    const itemKeys = getItemKeys();
+
+    expect(itemKeys.indexOf(WorkspaceSettingsTabs.CodingPlans)).toBe(
+      itemKeys.indexOf(WorkspaceSettingsTabs.Usage) + 1,
+    );
+  });
+});
+
+describe('workspace settings useCategory account set', () => {
+  // The account set is the same in every space: tabs that exist only as
+  // personal pages are listed too and open the personal page.
+  it('lists the personal-only account tabs, opening their personal pages', () => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider
+          createStore={() =>
+            initServerConfigStore({
+              serverConfig: { aiProvider: {}, enableBusinessFeatures: true, telemetry: {} },
+            } as never)
+          }
+        >
+          {children}
+        </Provider>
+      ),
+    });
+    const accountItems = result.current
+      .filter((group) => group.scope === 'account')
+      .flatMap((group) => group.items);
+
+    expect(accountItems.find((item) => item.key === SettingsTabs.Memory)?.href).toBe(
+      '/settings/memory',
+    );
+    expect(accountItems.find((item) => item.key === SettingsTabs.Referral)?.href).toBe(
+      '/settings/referral',
+    );
+    // Personal notification preferences open the personal page; the
+    // workspace's own Notifications tab stays in the Workspace group.
+    expect(accountItems.find((item) => item.key === SettingsTabs.Notification)?.href).toBe(
+      '/settings/notification',
+    );
+    expect(
+      result.current
+        .find((group) => group.key === WorkspaceSettingsGroupKey.General)
+        ?.items.find((item) => item.key === WorkspaceSettingsTabs.Notification)?.href,
+    ).toBeUndefined();
+    // Workspace tabs keep no href: they open under the workspace prefix.
+    expect(
+      accountItems.find((item) => item.key === WorkspaceSettingsTabs.Appearance)?.href,
+    ).toBeUndefined();
   });
 });
 

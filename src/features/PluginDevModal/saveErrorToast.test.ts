@@ -23,11 +23,11 @@ describe('getSaveErrorToast', () => {
     });
   });
 
-  it('keeps internal OAuth errors generic', () => {
+  it('folds an internal OAuth error under the generic title', () => {
     const error = trpcError('INTERNAL_SERVER_ERROR', 500, 'connection reset');
 
     expect(getSaveErrorToast(error, true)).toEqual({
-      description: undefined,
+      description: 'connection reset',
       titleKey: 'dev.oauthError.failed',
     });
   });
@@ -40,6 +40,7 @@ describe('getSaveErrorToast', () => {
 
   it('reports a permission failure before anything else', () => {
     expect(getSaveErrorToast(trpcError('FORBIDDEN', 403, 'nope'), true)).toEqual({
+      description: 'nope',
       titleKey: 'dev.permissionDenied',
     });
   });
@@ -54,13 +55,14 @@ describe('getSaveErrorToast', () => {
 
     expect(getSaveErrorToast(error, isOAuth)).toEqual({
       description: reason,
-      titleKey: 'mcpInstall.errorTypes.SSRF_BLOCKED',
+      titleKey: 'dev.ssrfBlockedRetry',
     });
   });
 
   it('uses the plain install error outside the OAuth path', () => {
     expect(getSaveErrorToast(trpcError('BAD_REQUEST', 400, 'bad url'), false)).toEqual({
-      titleKey: 'dev.saveError',
+      description: 'bad url',
+      titleKey: 'dev.saveFailedRetry',
     });
   });
 });

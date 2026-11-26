@@ -92,6 +92,7 @@ async function readRouterSources() {
       'collaborationRoutes.tsx',
       'evalRoutes.tsx',
       'marketplaceRoutes.tsx',
+      'legacySettingsRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -328,10 +329,19 @@ describe('desktop router shared definition', () => {
 
       expect(paths).toContain('settings');
       expect(paths).not.toContain(':workspaceSlug');
-      expect(paths?.at(-1)).toBe('memory');
+      expect(paths).toContain('memory');
+      expect(matches?.at(-1)?.route.index).toBe(true);
       expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
     },
   );
+
+  it.each(mainAreaVariants)('%s mounts the memory pages under settings', (_, factory) => {
+    for (const section of ['overview', 'identities', 'preferences', 'contexts', 'activities']) {
+      const matches = matchRoutes(createMainAreaRoutes(factory), `/settings/memory/${section}`);
+      expect(matches?.map((match) => match.route.path)).toContain('settings');
+      expect(matches?.at(-1)?.route.path).toBe(section);
+    }
+  });
 
   it.each(mainAreaVariants)(
     '%s personal devices list and detail resolve the devices tab skeleton',
@@ -844,6 +854,21 @@ describe('desktop router shared definition', () => {
         const element = matchRoutes(routes, url)?.at(-1)?.route.element as ReactElement | undefined;
         expect(element?.type, url).toBe(LegacyCommunityRedirect);
       }
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s serves Conversation settings and forwards old chat-preference links to it',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      expect(matchRoutes(routes, '/acme/settings/conversation')?.at(-1)?.route.path).toBe(
+        'conversation',
+      );
+
+      const legacy = matchRoutes(routes, '/acme/settings/chat-preference')?.at(-1)?.route
+        .element as ReactElement<{ to: string }> | undefined;
+      expect(legacy?.props.to).toBe('../conversation');
     },
   );
 

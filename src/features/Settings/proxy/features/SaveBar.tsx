@@ -8,11 +8,16 @@ import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
     pointerEvents: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    alignItems: 'center',
     position: 'fixed',
     zIndex: 1000,
     insetBlockEnd: '24px',
@@ -38,6 +43,7 @@ const styles = stylex.create({
     backdropFilter: 'blur(16px) saturate(1.2)',
     boxShadow: cssVar.boxShadowSecondary,
   },
+  error: { pointerEvents: 'auto', maxWidth: '480px' },
   dot: {
     flexShrink: 0,
     width: '6px',
@@ -74,13 +80,15 @@ const styles = stylex.create({
 });
 
 interface SaveBarProps {
+  /** Why the last Save failed; shown right above the pill, next to the Save button that caused it. */
+  error?: string;
   isDirty: boolean;
   isSaving: boolean;
   onReset: () => void;
   onSave: () => void;
 }
 
-const SaveBar = memo<SaveBarProps>(({ isDirty, isSaving, onReset, onSave }) => {
+const SaveBar = memo<SaveBarProps>(({ error, isDirty, isSaving, onReset, onSave }) => {
   const { t } = useTranslation('electron');
 
   return (
@@ -95,6 +103,11 @@ const SaveBar = memo<SaveBarProps>(({ isDirty, isSaving, onReset, onSave }) => {
           role="status"
           transition={{ duration: 0.18, ease: 'easeOut' }}
         >
+          {error && (
+            <div {...stylex.props(styles.error)}>
+              <InlineErrorText>{error}</InlineErrorText>
+            </div>
+          )}
           <div {...stylex.props(styles.pill)}>
             <span {...stylex.props(styles.dot)} />
             <span {...stylex.props(styles.message)}>{t('proxy.unsavedChanges')}</span>

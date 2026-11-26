@@ -141,4 +141,24 @@ describe('restoreSlimState', () => {
 
     expect(JSON.stringify(state)).toBe(before);
   });
+
+  it('restores a promoted tool from the deferred manifest it was copied from', () => {
+    const fullManifest = { api: [{ name: 'a' }, { name: 'a2' }], identifier: 'a' };
+    const state = {
+      ...buildState(),
+      activatedStepTools: [
+        {
+          activatedAtStep: 1,
+          id: 'a',
+          manifest: structuredClone(fullManifest),
+          source: 'discovery',
+        },
+      ],
+      operationToolSet: { ...toolSet, deferredManifestMap: { a: fullManifest } },
+    };
+
+    const slim = slimStateForPersist(state) as any;
+    expect(slim.activatedStepTools[0].manifest).toBeUndefined();
+    expect(roundTrip(state)).toEqual(state);
+  });
 });

@@ -11,9 +11,11 @@ import {
   agentEngineRouteMeta,
   agentEnvironmentRouteMeta,
   agentGoalsRouteMeta,
+  agentGraphRouteMeta,
   agentInstructionRouteMeta,
   agentKnowledgeRouteMeta,
   agentMailRouteMeta,
+  agentOpeningRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
@@ -192,6 +194,14 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(
+      () => import('@/routes/(main)/agent/visitor'),
+      'Desktop > Chat > Share Visitors',
+    ),
+    handle: { meta: agentShareVisitorTopicRouteMeta },
+    path: 'visitor',
+  },
+  {
+    element: dynamicElement(
       () => import('@/routes/(main)/agent/visitor/[topicId]'),
       'Desktop > Chat > Share Visitor Topic',
     ),
@@ -278,6 +288,22 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: routeMeta({ Skeleton: NoRouteSkeleton }) },
     path: 'self-learning/*',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/opening'),
+      'Desktop > Chat > Opening Settings',
+    ),
+    handle: { meta: agentOpeningRouteMeta },
+    path: 'opening',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/graph'),
+      'Desktop > Chat > Graph Runtime',
+    ),
+    handle: { meta: agentGraphRouteMeta },
+    path: 'graph',
   },
   {
     element: dynamicElement(

@@ -1,6 +1,5 @@
 /**
- * Claude Code permission modes a topic can run in (Better Coding Experience
- * lab). Claude Code also has `dontAsk`, which is deliberately not offered.
+ * Claude Code permission modes a topic can run in. Claude Code also has `dontAsk`, which is deliberately not offered.
  *
  * - `default`: ask before every edit and command.
  * - `acceptEdits`: edits run, commands still ask.

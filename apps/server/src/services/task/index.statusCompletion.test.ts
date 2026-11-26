@@ -12,8 +12,11 @@ const mocks = vi.hoisted(() => ({
   cascadeOnCompletion: vi.fn(),
   findById: vi.fn(),
   shouldPauseAfterComplete: vi.fn(),
+  onTaskSettled: vi.fn(),
   updateStatus: vi.fn(),
 }));
+
+vi.mock('@/business/server/task/onTaskSettled', () => ({ onTaskSettled: mocks.onTaskSettled }));
 
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: vi.fn() }));
@@ -101,6 +104,37 @@ describe('TaskService.updateStatus completion', () => {
     expect(result).not.toHaveProperty('checkpointTriggered');
     expect(result).not.toHaveProperty('allSubtasksDone');
     expect(result).toMatchObject({ paused: ['T-9'], unlocked: ['T-3'] });
+  });
+
+  it('hands the newly completed task to the settled follow-up', async () => {
+    mocks.shouldPauseAfterComplete.mockReturnValue(false);
+    mocks.areAllSubtasksCompleted.mockResolvedValue(false);
+
+    await new TaskService(db as any, 'user-1', 'ws-1').updateStatus({
+      id: 'task-2',
+      status: 'completed',
+    });
+
+    expect(mocks.onTaskSettled).toHaveBeenCalledWith({
+      status: 'completed',
+      taskIds: ['task-2'],
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
+  });
+
+  it('keeps the transition when the settled follow-up fails', async () => {
+    mocks.shouldPauseAfterComplete.mockReturnValue(false);
+    mocks.areAllSubtasksCompleted.mockResolvedValue(false);
+    mocks.onTaskSettled.mockRejectedValueOnce(new Error('queue down'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await new TaskService(db as any, 'user-1').updateStatus({
+      id: 'task-2',
+      status: 'completed',
+    });
+
+    expect(result).toMatchObject({ unlocked: ['T-3'] });
   });
 
   it('rejects an error message on a non-failed status before reading the task', async () => {

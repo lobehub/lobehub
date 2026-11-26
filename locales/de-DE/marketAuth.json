@@ -27,6 +27,7 @@
   "claimResources.claim": "Ausgewählte beanspruchen",
   "claimResources.description": "Wir haben Ressourcen gefunden, die mit Ihrem Konto verknüpft sind und die Sie beanspruchen können:",
   "claimResources.error": "Ressourcen konnten nicht beansprucht werden. Bitte versuchen Sie es erneut.",
+  "claimResources.failedRetry": "Diese Ressourcen konnten nicht beansprucht werden. Überprüfe deine Netzwerkverbindung und versuche es erneut.",
   "claimResources.mcpSection": "MCP-Server",
   "claimResources.selectedCount": "{{count}} Element(e) ausgewählt",
   "claimResources.skillSection": "Fähigkeiten",

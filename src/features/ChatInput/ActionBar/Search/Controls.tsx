@@ -89,16 +89,8 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
   );
 });
 
-/**
- * Search settings that are only meaningful once web search is on: which engine
- * answers (app tool vs the model's built-in search) and which model runs the
- * function-calling search. Extracted so the search capability row in the
- * chat-input Tools popover can host it beside the Auto/Disable policy.
- */
-export const SearchAdvancedControls = memo(() => {
+export const useSearchAdvancedVisibility = () => {
   const agentId = useAgentId();
-  const { allowed: canCreate } = usePermission('create_content');
-
   const { model, provider } = useEffectiveModel(agentId);
   const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
@@ -128,11 +120,28 @@ export const SearchAdvancedControls = memo(() => {
     !supportFC &&
     (!modelBuiltinSearchImpl || (!isModelBuiltinSearchInternal && !useModelBuiltinSearch));
 
-  if (!showModelBuiltinSearch && !showFCSearchModel) return null;
+  return {
+    hasControls: showModelBuiltinSearch || showFCSearchModel,
+    showFCSearchModel,
+    showModelBuiltinSearch,
+  };
+};
+
+/**
+ * Search settings that are only meaningful once web search is on: which engine
+ * answers (app tool vs the model's built-in search) and which model runs the
+ * function-calling search. Extracted so both the Tools popover and the agent
+ * Tools settings page can host it cleanly.
+ */
+export const SearchAdvancedControls = memo<{ showDivider?: boolean }>(({ showDivider = true }) => {
+  const { allowed: canCreate } = usePermission('create_content');
+  const { hasControls, showFCSearchModel, showModelBuiltinSearch } = useSearchAdvancedVisibility();
+
+  if (!hasControls) return null;
 
   return (
     <>
-      <Divider style={{ margin: 0 }} />
+      {showDivider && <Divider style={{ margin: 0 }} />}
       {showModelBuiltinSearch && <ModelBuiltinSearch disabled={!canCreate} />}
       {showFCSearchModel && <FCSearchModel disabled={!canCreate} />}
     </>

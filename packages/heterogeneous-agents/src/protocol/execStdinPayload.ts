@@ -1,4 +1,4 @@
-import type { HeteroPermissionMode } from '@lobechat/types';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
 
 import { buildHeterogeneousPrompt } from './promptEngine';
 
@@ -35,11 +35,13 @@ export interface HeteroExecImageRef {
  * resume failed and the CLI is starting the agent from scratch — so it carries
  * session-scoped context regardless of what the primary attempt got.
  *
- * `permissionMode` (Claude Code, Better Coding Experience lab) rides the same
+ * `permissionMode` (Claude Code) rides the same
  * envelope for the same reason: an `lh` that predates it unwraps `content` and
- * keeps allowing everything, rather than failing on an unknown flag.
+ * keeps allowing everything, rather than failing on an unknown flag. The
+ * Codex Plan switch (`collaborationMode`) rides it for the same reason.
  */
 export const buildHeteroExecStdinPayload = (params: {
+  collaborationMode?: CodexCollaborationMode;
   imageList?: HeteroExecImageRef[];
   isNewSession?: boolean;
   permissionMode?: HeteroPermissionMode;
@@ -48,6 +50,7 @@ export const buildHeteroExecStdinPayload = (params: {
   systemContext?: string;
 }): string => {
   const {
+    collaborationMode,
     imageList = [],
     isNewSession,
     permissionMode,
@@ -57,8 +60,9 @@ export const buildHeteroExecStdinPayload = (params: {
   } = params;
   const blocks = buildHeterogeneousPrompt({ imageList, isNewSession, prompt, systemContext });
 
-  if (resumeFallbackSystemContext !== undefined || permissionMode) {
+  if (resumeFallbackSystemContext !== undefined || permissionMode || collaborationMode) {
     return JSON.stringify({
+      ...(collaborationMode && { collaborationMode }),
       content: blocks,
       ...(permissionMode && { permissionMode }),
       resumeFallback:

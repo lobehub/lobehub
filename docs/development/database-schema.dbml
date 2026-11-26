@@ -967,6 +967,7 @@ table agent_operations {
     parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
     status [name: 'agent_operations_status_idx']
     created_at [name: 'agent_operations_running_created_at_idx']
+    created_at [name: 'agent_operations_waiting_for_human_created_at_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
     (workspace_id, created_at) [name: 'agent_operations_workspace_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
@@ -1630,6 +1631,33 @@ table verifications {
   }
 }
 
+table channel_agent_grants {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  member_id uuid [not null]
+  owner_id text [not null]
+  grantee_member_id uuid
+  thread_id text
+  requested_by_member_id uuid
+  status text [not null, default: 'pending']
+  decided_at "timestamp with time zone"
+  revoked_at "timestamp with time zone"
+  revoke_reason text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (member_id, grantee_member_id, thread_id) [name: 'channel_agent_grants_live_scope_unique', unique]
+    (owner_id, status) [name: 'channel_agent_grants_owner_status_idx']
+    grantee_member_id [name: 'channel_agent_grants_grantee_idx']
+    
+    
+    
+    
+  }
+}
+
 table channel_audit {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   channel_id text [not null]
@@ -1668,6 +1696,7 @@ table channel_jobs {
   writer_held boolean [not null, default: false]
   isolated_at "timestamp with time zone"
   draft text
+  ask jsonb
   publication_revoked boolean [not null, default: false]
   published_message_id uuid
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1762,11 +1791,28 @@ table channel_message_files {
   }
 }
 
+table channel_message_reactions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  message_id uuid [not null]
+  member_id uuid [not null]
+  emoji text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (message_id, member_id, emoji) [name: 'channel_message_reactions_message_member_emoji_unique', unique]
+    (channel_id, member_id) [name: 'channel_message_reactions_channel_member_idx']
+    
+    
+  }
+}
+
 table channel_messages {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   channel_id text [not null]
   thread_id text
   sequence integer [not null]
+  kind text [not null, default: 'text']
   content text [not null]
   user_id text
   agent_id text
@@ -2239,6 +2285,66 @@ table document_shares {
     document_id [name: 'document_shares_document_id_unique', unique]
     user_id [name: 'document_shares_user_id_idx']
     workspace_id [name: 'document_shares_workspace_id_idx']
+  }
+}
+
+table custom_emojis {
+  id text [pk, not null]
+  pack_id text [not null]
+  user_id text
+  file_hash varchar(64) [not null]
+  name text [not null]
+  keywords jsonb [not null, default: `[]`]
+  bound_emojis jsonb [not null, default: `[]`]
+  animated boolean [not null, default: false]
+  width integer
+  height integer
+  sort_order integer [not null, default: 0]
+  removed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (pack_id, sort_order) [name: 'custom_emojis_pack_id_sort_order_idx']
+    file_hash [name: 'custom_emojis_file_hash_idx']
+    (pack_id, name) [name: 'custom_emojis_pack_id_name_unique', unique]
+  }
+}
+
+table emoji_packs {
+  id text [pk, not null]
+  scope text [not null]
+  user_id text
+  workspace_id text
+  kind text [not null]
+  title text [not null]
+  removed_at "timestamp with time zone"
+  visibility text [not null, default: 'private']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'emoji_packs_user_id_idx']
+    workspace_id [name: 'emoji_packs_workspace_id_idx']
+    user_id [name: 'emoji_packs_user_favorites_unique', unique]
+    
+    
+    
+  }
+}
+
+table user_emoji_packs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  pack_id text [not null]
+  sort_order integer [not null, default: 0]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, pack_id) [name: 'user_emoji_packs_user_id_pack_id_unique', unique]
+    pack_id [name: 'user_emoji_packs_pack_id_idx']
   }
 }
 

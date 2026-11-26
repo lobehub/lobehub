@@ -1,5 +1,3 @@
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { FolderIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,40 +7,46 @@ import EnvironmentForm, {
 } from '@/features/EnvironmentManager/EnvironmentForm';
 import EnvironmentSummary from '@/features/EnvironmentManager/EnvironmentSummary';
 import { EnvironmentListSkeleton } from '@/features/EnvironmentManager/Skeleton';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { SandboxEnvironmentSpecification } from '@/services/environment';
-import {
-  useProjectDirectories,
-  useProjectDirectoryStore,
-  useProjectEnvironments,
-} from '@/store/projectWorkingDirectory';
-import { useDensityTokens } from '@/styles/density';
+import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
-interface ProjectWorkingDirectoriesProps {
+import { EnvironmentNotes } from './EnvironmentNotes';
+import { ExecutionEnvironments } from './ExecutionEnvironments';
+
+interface ProjectSettingsTabProps {
   /** Whether the caller may change the project, and so its environment. */
   canManage?: boolean;
   projectId: string;
 }
 
 /**
- * The project's environment, laid out in full and flat — the same form an
- * environment's own page shows: the repositories it checks out (any number, or
- * none, each with its own setup), the setup that runs after, and the variables
- * every command sees. Every project has exactly one, made with it — there is nothing
- * to link, pick or create here, only the environment itself to fill in.
+ * Where the project's work can run, in the priority a new conversation
+ * follows: the cloud sandbox and every device with its workspace folder.
+ * What gets checked out there, and how, is the environment, on its own tab.
  */
-export function ProjectWorkingDirectories({
-  canManage,
-  projectId,
-}: ProjectWorkingDirectoriesProps) {
-  const { t } = useTranslation(['project', 'setting']);
-  const { pageTitleFontSize } = useDensityTokens();
-  const navigate = useWorkspaceAwareNavigate();
+export function ProjectRunners({ canManage, projectId }: ProjectSettingsTabProps) {
+  useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const [environment] = useProjectEnvironments(projectId);
+
+  return (
+    <ExecutionEnvironments
+      canManage={!!canManage}
+      environmentId={environment?.id}
+      projectId={projectId}
+    />
+  );
+}
+
+/**
+ * What every runner prepares before work starts, whichever one it is: the
+ * repositories it checks out, the setup that runs, the variables every
+ * command sees — and notes on what a run needs from a machine.
+ */
+export function ProjectEnvironment({ canManage, projectId }: ProjectSettingsTabProps) {
+  const { t } = useTranslation('project');
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
-  const directories = useProjectDirectories(projectId);
 
   const save = async (changes: {
     configuration?: SandboxEnvironmentSpecification;
@@ -55,43 +59,40 @@ export function ProjectWorkingDirectories({
     });
   };
 
-  let content: ReactNode;
-  if (request.error && !environment) {
-    content = <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
-  } else if (!request.hasData || !environment) {
-    content = <EnvironmentListSkeleton />;
-  } else {
-    const value: EnvironmentFormValue = environment;
-    content = canManage ? (
-      <EnvironmentForm hideBasics environment={value} onSave={save} />
-    ) : (
-      <EnvironmentSummary environment={value} />
-    );
-  }
+  if (request.error && !environment)
+    return <AsyncError error={request.error} onRetry={() => request.revalidate()} />;
+  if (!request.hasData || !environment) return <EnvironmentListSkeleton />;
 
-  const folderCount = directoriesRequest.hasData ? directories.length : undefined;
+  const value: EnvironmentFormValue = environment;
+  const form: ReactNode = canManage ? (
+    <EnvironmentForm
+      hideBasics
+      hideRepositoryHints
+      envNotice={t('settings.envSandboxOnly')}
+      environment={value}
+      onSave={save}
+    />
+  ) : (
+    <EnvironmentSummary environment={value} />
+  );
 
   return (
-    <Flexbox gap={16}>
-      <Flexbox gap={8}>
-        <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
-          <Text fontSize={pageTitleFontSize} weight={600}>
-            {t('settings.environments')}
-          </Text>
-          {folderCount !== undefined && (
-            <Button
-              icon={<Icon icon={FolderIcon} />}
-              onClick={() => navigate(`/project/${projectId}/settings/directories`)}
-            >
-              {t(folderCount ? 'settings.viewDirectories' : 'settings.configureDirectory', {
-                count: folderCount,
-              })}
-            </Button>
-          )}
-        </Flexbox>
-        <Text type="secondary">{t('settings.environmentIntro')}</Text>
-      </Flexbox>
-      {content}
-    </Flexbox>
+    <>
+      {form}
+      <EnvironmentNotes
+        canManage={!!canManage}
+        notes={environment.configuration?.notes}
+        // The stored definition goes back whole, as the form sends it: an edit
+        // replaces the configuration rather than merging into it.
+        onSave={(notes) =>
+          save({
+            configuration: {
+              ...(environment.configuration as SandboxEnvironmentSpecification),
+              notes: notes || undefined,
+            },
+          })
+        }
+      />
+    </>
   );
 }

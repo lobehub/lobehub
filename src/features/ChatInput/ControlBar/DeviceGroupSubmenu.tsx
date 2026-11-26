@@ -3,7 +3,10 @@
 import type { DeviceListItem } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { Building2Icon, LockKeyholeIcon, MonitorSmartphoneIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useState } from 'react';
+
+import { isDeviceOffline } from '@/features/DeviceManager/devicePicker';
+import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 
 import { summarizeDeviceGroup } from './deviceGroupSummary';
 import GroupSubmenu from './GroupSubmenu';
@@ -34,6 +37,11 @@ interface DeviceGroupSubmenuProps {
 const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
   ({ activeDeviceId, devices, kind, label, renderDevice }) => {
     const { activeDevice } = summarizeDeviceGroup(devices, activeDeviceId);
+    const [showOffline, setShowOffline] = useState(false);
+    // Reachable machines first; offline ones fold away unless one is the pick.
+    const folds = (d: DeviceListItem) => isDeviceOffline(d) && d.deviceId !== activeDeviceId;
+    const visible = devices.filter((d) => !folds(d));
+    const folded = devices.filter(folds);
 
     return (
       <GroupSubmenu
@@ -43,7 +51,15 @@ const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
         label={label}
         testId={`device-group-${kind}`}
       >
-        {devices.map((d) => renderDevice(d))}
+        {visible.map((d) => renderDevice(d))}
+        {folded.length > 0 && (
+          <OfflineDevicesToggle
+            count={folded.length}
+            expanded={showOffline}
+            onToggle={() => setShowOffline((v) => !v)}
+          />
+        )}
+        {showOffline && folded.map((d) => renderDevice(d))}
       </GroupSubmenu>
     );
   },

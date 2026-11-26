@@ -10,7 +10,7 @@ interface LinkPullRequestRowProps {
   onLink: (url: string) => Promise<string | undefined>;
 }
 
-/** Better Coding Experience: the repository card's "Link a pull request" action. */
+/** The repository card's "Link a pull request" action. */
 export const LinkPullRequestRow = memo<LinkPullRequestRowProps>(({ onLink }) => {
   const { t } = useTranslation('chat');
 

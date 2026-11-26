@@ -43,7 +43,7 @@ const AskUserQuestion = memo<
 AskUserQuestion.displayName = 'CCAskUserQuestion';
 
 /**
- * Claude Code's permission requests (Better Coding Experience) ride the same
+ * Claude Code's permission requests ride the same
  * AskUserQuestion-shaped card every review surface understands; their extra
  * `claudeCodePermission` detail gets the dedicated result instead.
  */

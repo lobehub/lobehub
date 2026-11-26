@@ -37,4 +37,17 @@ describe('OutgoingStatus', () => {
     render(createElement(OutgoingStatus, { message: failed('offline'), onRetry: () => {} }));
     expect(screen.getByText('outgoing.failed')).toBeTruthy();
   });
+
+  // Retrying resends the same refused files, so only deleting and reattaching can help.
+  it('explains a refused attachment and offers no retry', () => {
+    render(
+      createElement(OutgoingStatus, {
+        message: failed(ChatErrorType.ChannelAttachmentUnavailable),
+        onRetry: () => {},
+      }),
+    );
+    expect(screen.getByRole('alert').textContent).toContain('receipt.errorAttachmentUnavailable');
+    expect(screen.queryByText('outgoing.retry')).toBeNull();
+    expect(screen.getByText('outgoing.discard')).toBeTruthy();
+  });
 });

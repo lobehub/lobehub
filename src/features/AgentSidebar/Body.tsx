@@ -1,7 +1,6 @@
 import { AccordionRoot, Flexbox } from '@lobehub/ui';
 import React, { memo, useCallback, useMemo } from 'react';
 
-import ShareVisitorTopicsSection from '@/features/ShareVisitorTopics/SidebarSection';
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -9,12 +8,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import Topic from './Topic';
 
 export enum ChatSidebarKey {
-  ShareVisitors = 'shareVisitors',
   Topic = 'topic',
 }
 
 const DEFAULT_EXPANDED: Record<string, boolean> = {
-  [ChatSidebarKey.ShareVisitors]: true,
   [ChatSidebarKey.Topic]: true,
 };
 
@@ -36,7 +33,6 @@ const Body = memo(() => {
       updateSystemStatus({
         expandAgentSidebarSectionsByAgent: {
           [agentId]: {
-            [ChatSidebarKey.ShareVisitors]: keys.includes(ChatSidebarKey.ShareVisitors),
             [ChatSidebarKey.Topic]: keys.includes(ChatSidebarKey.Topic),
           },
         },
@@ -57,9 +53,6 @@ const Body = memo(() => {
           expanded={expandedKeys.includes(ChatSidebarKey.Topic)}
           itemKey={ChatSidebarKey.Topic}
         />
-        {agentId && (
-          <ShareVisitorTopicsSection agentId={agentId} itemKey={ChatSidebarKey.ShareVisitors} />
-        )}
       </AccordionRoot>
     </Flexbox>
   );

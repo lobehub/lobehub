@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "Bình luận về sự chấp nhận này và chấp nhận hoặc gửi lại từ trang xem trước của nó",
   "consent.scope.acceptance-review-site": "Bình luận về đánh giá của trang web này từ chính trang web, trong vòng 8 giờ",
   "consent.scope.email": "Truy cập địa chỉ email của bạn",
+  "consent.scope.generation-read": "Xem hình ảnh, video và âm thanh đã tạo của bạn",
+  "consent.scope.generation-write": "Tạo hình ảnh, video và âm thanh, xóa kết quả và sử dụng hạn mức của bạn",
   "consent.scope.offline_access": "Cho phép ứng dụng truy cập dữ liệu của bạn",
   "consent.scope.openid": "Xác thực bằng tài khoản LobeHub của bạn",
   "consent.scope.profile": "Truy cập thông tin hồ sơ cơ bản của bạn (tên, ảnh đại diện, v.v.)",

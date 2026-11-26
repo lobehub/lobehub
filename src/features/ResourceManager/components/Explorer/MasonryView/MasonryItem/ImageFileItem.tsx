@@ -10,13 +10,14 @@ import {
 } from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { densityVars } from '@/styles/densityVars';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
+import { thumbhashToDataUrl } from '@/utils/client/imageThumbhash';
 import { formatSize } from '@/utils/format';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
@@ -196,6 +197,11 @@ const ImageFileItem = memo<ImageFileItemProps>(
   }) => {
     const { t } = useTranslation('components');
     const knownAspectRatio = readAspectRatio(metadata);
+    const thumbhash = metadata?.thumbhash;
+    const thumbhashUrl = useMemo(
+      () => (typeof thumbhash === 'string' ? thumbhashToDataUrl(thumbhash) : undefined),
+      [thumbhash],
+    );
     const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
     // Falls back to a reserved box until the bitmap reports its own ratio.
     const [aspectRatio, setAspectRatio] = useState(knownAspectRatio ?? FALLBACK_ASPECT_RATIO);
@@ -209,8 +215,22 @@ const ImageFileItem = memo<ImageFileItemProps>(
 
     return (
       <>
-        <div className={styles.imageWrapper} style={{ aspectRatio }}>
-          {!imageLoaded && (
+        <div
+          className={styles.imageWrapper}
+          style={{
+            aspectRatio,
+            // Blurred preview from the ThumbHash recorded at upload: painted beneath the bitmap
+            // so it shows while the image loads and stays under its fade-in.
+            ...(thumbhashUrl &&
+              status !== 'error' && {
+                backgroundImage: `url(${thumbhashUrl})`,
+                backgroundPosition: 'center',
+                backgroundSize: 'cover',
+              }),
+          }}
+        >
+          {/* A ThumbHash already says "picture on its way"; the glyph is for boxes without one. */}
+          {!imageLoaded && !(status === 'loading' && thumbhashUrl) && (
             <div
               className={cx(styles.placeholder, status === 'loading' && styles.placeholderLoading)}
             >

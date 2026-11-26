@@ -372,9 +372,9 @@ describe('WorkModel · canvas', () => {
       const work = await owner.registerCanvas(params());
       const versionId = (await owner.findCanvasVersionId('cvs_cost', 1))!;
 
-      expect(await new WorkModel(serverDB, userId2).findCanvasSourcesByVersionIds([versionId])).toEqual(
-        {},
-      );
+      expect(
+        await new WorkModel(serverDB, userId2).findCanvasSourcesByVersionIds([versionId]),
+      ).toEqual({});
 
       await serverDB
         .update(works)

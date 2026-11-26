@@ -20,7 +20,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
-import type { CSSProperties, DragEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -48,7 +48,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
@@ -58,13 +58,10 @@ import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
-import {
-  getCiVisual,
-  getPullRequestState,
-  getTopicMetaCard,
-  PR_STATE_VISUAL,
-} from './metaCardData';
+import InlineTitleEditor from './InlineTitleEditor';
+import { getTopicMetaCard } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
+import { useRenameTopic } from './useRenameTopic';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
@@ -80,32 +77,6 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  ciBadge: css`
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-
-    line-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  ciPending: css`
-    animation: ci-spin 1s linear infinite;
-
-    @keyframes ci-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
   markerIcon: css`
     position: relative;
     display: inline-flex;
@@ -344,6 +315,20 @@ const TopicItemRow = memo<TopicItemRowProps>(
       void navRef.current.navigateToTopic(id);
     }, [id, navRef]);
 
+    // Double clicking the row, or the menu's Rename, turns the title into an
+    // input in place. The first click of a double click has already switched
+    // to the topic.
+    const [editing, setEditing] = useState(false);
+    const { autoRename, canRename, saveTitle } = useRenameTopic(id, title, activeAgentId);
+    const startEditing = useCallback(() => setEditing(true), []);
+    const stopEditing = useCallback(() => setEditing(false), []);
+    const handleDoubleClick = useCallback((event: MouseEvent) => {
+      // The trailing actions (complete, archive, more) stop click propagation
+      // but not double clicks; a fast double click on them must not rename.
+      if ((event.target as HTMLElement).closest('[data-nav-item-actions]')) return;
+      setEditing(true);
+    }, []);
+
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
     const isScheduled = status === 'scheduled';
@@ -421,11 +406,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
     // keeping the row itself clean.
-    const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-    const metaCard = useMemo(
-      () => getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding }),
-      [betterCoding, metadata],
-    );
+    const metaCard = useMemo(() => getTopicMetaCard(metadata), [metadata]);
 
     // For default topic (no id)
     if (!id) {
@@ -538,37 +519,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
           </Tooltip>
         );
       }
-      // GitHub PR state marker (open=green, merged=purple, closed=red),
-      // like Codex. It is secondary metadata, so only an idle topic uses it
-      // as the leading icon.
-      if (metaCard?.pullRequest) {
-        const prState = getPullRequestState(metaCard.pullRequest);
-        const prVisual = PR_STATE_VISUAL[prState];
-        const ciStatus = metaCard.pullRequest.ciStatus;
-        const ciVisual = getCiVisual(ciStatus);
-        const showCiBadge =
-          prState !== 'merged' && ciStatus !== undefined && ciStatus !== 'unknown';
-        const tooltip = showCiBadge
-          ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
-          : t(prVisual.labelKey);
-        return (
-          <Tooltip title={tooltip}>
-            <span className={styles.markerIcon}>
-              <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
-              {showCiBadge && (
-                <span className={styles.ciBadge}>
-                  <Icon
-                    className={ciStatus === 'pending' ? styles.ciPending : undefined}
-                    icon={ciVisual.icon}
-                    size={9}
-                    style={{ color: ciVisual.color }}
-                  />
-                </span>
-              )}
-            </span>
-          </Tooltip>
-        );
-      }
       if (metadata?.bot?.platform) {
         const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
         if (ProviderIcon) {
@@ -582,7 +532,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
 
     // Workspace mode (creator resolvable): the creator's round avatar is the
     // primary visual and always leads the row; the row's own icon — execution
-    // status first, then identity icons (Discord / WeChat / PR marker) —
+    // status first, then identity icons (Discord / WeChat) —
     // shrinks into a bottom-right corner badge. Personal mode keeps the
     // original layout untouched.
     const ownIconNode = statusIconNode ?? identityIconNode;
@@ -610,7 +560,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       );
 
     const navItem = (
-      <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
+      <TopicItemContextMenu fav={fav} id={id} status={status} title={title} onRename={startEditing}>
         <NavItem
           draggable
           titleMarquee
@@ -628,6 +578,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
               showInlineArchive={!shouldShowRunningIcon}
               status={status}
               title={title}
+              onRename={startEditing}
             />
           )}
           extra={
@@ -654,6 +605,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
+          onDoubleClick={canRename ? handleDoubleClick : undefined}
           onDragStart={handleDragStart}
         />
       </TopicItemContextMenu>
@@ -666,10 +618,18 @@ const TopicItemRow = memo<TopicItemRowProps>(
         style={{ position: 'relative' }}
         {...hoverPrefetchHandlers}
       >
-        {metaCard ? (
+        {editing ? (
+          <InlineTitleEditor
+            icon={leadingIconNode}
+            title={title}
+            onAutoRename={autoRename}
+            onClose={stopEditing}
+            onSave={saveTitle}
+          />
+        ) : metaCard ? (
           <Popover
             arrow={false}
-            content={<MetaHoverCard metadata={metadata} title={title} topicId={id} />}
+            content={<MetaHoverCard metadata={metadata} title={title} />}
             mouseEnterDelay={0.8}
             placement={'right'}
             styles={META_HOVER_CARD_STYLES}

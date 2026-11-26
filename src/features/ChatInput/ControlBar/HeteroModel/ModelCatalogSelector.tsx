@@ -103,6 +103,9 @@ const styles = stylex.create({
 
 const getCatalogErrorKey = (name: string) => {
   switch (name) {
+    case 'auth_required': {
+      return 'heteroAgent.antigravityQuota.authRequired';
+    }
     case 'cli_not_found': {
       return 'heteroAgent.cliModel.cliNotFound';
     }
@@ -347,9 +350,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                 </DropdownMenuItemLabel>
               )}
               <DropdownMenuItemExtra className={stylex.props(styles.submenuMeta).className}>
-                {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-                  ? t('heteroAgent.modelSelector.default')
-                  : currentModel}
+                {triggerModelLabel}
               </DropdownMenuItemExtra>
               <DropdownMenuSubmenuArrow>
                 <Icon icon={ChevronRightIcon} size={12} />

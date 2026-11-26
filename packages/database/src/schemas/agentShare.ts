@@ -10,7 +10,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
 
-export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
+export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'everyone' | 'none';
 
 export interface AgentShareConfig {
   /**
@@ -59,9 +59,12 @@ export interface AgentShareConfig {
    * - `contacts`: everyone currently in the Agent's address book, so a creator
    *   can prepare the share before someone joins: they can use it as soon as
    *   they are added, and lose it when removed.
+   * - `everyone`: every signed-in visitor holding the link, address book or
+   *   not, for an Agent published openly. Only the creator's explicit consent
+   *   in the share settings sets it.
    *
-   * There is no "every visitor" value: a stranger never reaches the creator's
-   * machine. The visitor never picks the device — it always follows the
+   * A legacy stored `all` is not `everyone`: it predates that consent and
+   * stays denied. The visitor never picks the device — it always follows the
    * Agent's own execution-environment setting. Resolved per run by
    * `resolveShareVisitorDeviceAccess`.
    */
@@ -77,6 +80,11 @@ export interface AgentShareConfig {
   deviceAllowUserIds?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
+  /**
+   * The owner lists this share in the shared-Agent market, where anyone signed in can browse
+   * it. Only read while the share is `link`; a link alone never puts an Agent in the market.
+   */
+  listedInMarket?: boolean;
   /**
    * Total bytes this share's visitor uploads may occupy in the Agent's owning
    * scope (settled files plus in-flight reservations). Mandatory like

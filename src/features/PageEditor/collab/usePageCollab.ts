@@ -42,9 +42,12 @@ const readGatewayUrl = () => {
     : undefined;
 };
 
+export const usePageCollabAvailable = () => !!readGatewayUrl();
+
 export const usePageCollabEnabled = () => {
   const labEnabled = useUserStore(labPreferSelectors.enablePageCollab);
-  return labEnabled && !!readGatewayUrl();
+  const available = usePageCollabAvailable();
+  return labEnabled && available;
 };
 
 /**

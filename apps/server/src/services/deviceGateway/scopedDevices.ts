@@ -6,6 +6,7 @@ import debug from 'debug';
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+import { recordDevicesSeen } from './lastSeen';
 import { filterAuthorizedDevicePresence } from './scopedDevicePresence';
 
 const log = debug('lobe-server:device-scope');
@@ -71,6 +72,7 @@ export const getScopedOnlineDevices = async (
   const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
   const authorizedOnline = filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
   const liveById = new Map(authorizedOnline.map((d) => [d.deviceId, d]));
+  await recordDevicesSeen(deviceModel, rows, new Set(liveById.keys()));
   const seen = new Set<string>();
   const fromDb = rows.map((row): DeviceAttachment => {
     seen.add(row.deviceId);

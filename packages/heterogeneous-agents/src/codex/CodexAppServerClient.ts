@@ -384,7 +384,7 @@ export class CodexAppServerClient {
     const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
-      env: this.options.env,
+      env: spawnPlan.env ?? this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const processGeneration = { child, generation, stdoutBuffer: '' };

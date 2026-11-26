@@ -82,6 +82,12 @@ describe('getTargetSelectValue', () => {
     expect(getTargetSelectValue('none', undefined)).toBeUndefined();
     expect(getTargetSelectValue('auto', undefined)).toBeUndefined();
   });
+
+  it('selects "No device" and "Auto" for a LobeHub agent, which lists them as choices', () => {
+    expect(getTargetSelectValue('none', undefined, { builtin: true })).toBe('target:none');
+    expect(getTargetSelectValue('auto', undefined, { builtin: true })).toBe('target:auto');
+    expect(getTargetSelectValue('device', undefined, { builtin: true })).toBeUndefined();
+  });
 });
 
 describe('getTargetHint', () => {

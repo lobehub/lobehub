@@ -25,26 +25,6 @@ vi.mock('@/server/services/channel/featureGate', () => ({
   isChannelEnabled: vi.fn().mockResolvedValue(true),
 }));
 
-const contactModel = vi.hoisted(() => ({
-  addAgent: vi.fn(),
-  list: vi.fn(),
-  listRequests: vi.fn(),
-  openTo: vi.fn(),
-  removeExternal: vi.fn(),
-  removeUser: vi.fn(),
-  search: vi.fn(),
-  sendRequest: vi.fn(),
-}));
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: vi.fn(function () {
-    return contactModel;
-  }),
-}));
-vi.mock('@/server/services/contact/notify', () => ({
-  notifyContactRequestAfterResponse: vi.fn(),
-  notifyContactsChangedAfterResponse: vi.fn(),
-}));
-
 const channelService = vi.hoisted(() => ({
   create: vi.fn(),
   join: vi.fn(),
@@ -58,11 +38,9 @@ vi.mock('@/server/services/channel/ChannelService', () => ({
   }),
 }));
 
-const { contactRouter } = await import('../contact');
 const { channelRouter } = await import('../channel');
 
 const ctx = { serverDB: {}, userId: 'u_bob' } as any;
-const contacts = () => contactRouter.createCaller(ctx);
 const channels = () => channelRouter.createCaller(ctx);
 const CHANNEL_ID = 'chn_abcdefghijkl';
 
@@ -70,13 +48,11 @@ describe('a workspace external contact', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     caller.external = true;
-    contactModel.list.mockResolvedValue([]);
     channelService.repository.list.mockResolvedValue([]);
     channelService.openPeer.mockResolvedValue({ channel: { id: CHANNEL_ID } });
   });
 
-  it('reaches their address book and their one-on-one conversations', async () => {
-    await expect(contacts().list()).resolves.toEqual([]);
+  it('reaches their one-on-one conversations', async () => {
     await expect(channels().list()).resolves.toEqual({ data: [], success: true });
     await expect(channels().openPeer({ userId: 'u_alice' })).resolves.toEqual({
       data: CHANNEL_ID,
@@ -86,9 +62,6 @@ describe('a workspace external contact', () => {
 
   it('is refused everything else, before the model or service runs', async () => {
     const refused = [
-      () => contacts().sendRequest({ userId: 'u_carol' }),
-      () => contacts().openToExternal({ userId: 'u_carol' }),
-      () => contacts().addAgent({ share: 'helper' }),
       () => channels().listJoinable(),
       () => channels().join({ channelId: CHANNEL_ID }),
       () => channels().openDirect({ agentId: 'agt_team' }),
@@ -99,8 +72,6 @@ describe('a workspace external contact', () => {
         code: 'FORBIDDEN',
         message: 'Not available to external contacts',
       });
-    expect(contactModel.sendRequest).not.toHaveBeenCalled();
-    expect(contactModel.openTo).not.toHaveBeenCalled();
     expect(channelService.repository.listJoinable).not.toHaveBeenCalled();
     expect(channelService.join).not.toHaveBeenCalled();
     expect(channelService.openDirect).not.toHaveBeenCalled();

@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
@@ -28,7 +29,10 @@ const AskAIMenu = memo(() => {
 
   // Get agent list (limit to first 20 items for simplicity)
   const allAgents = useHomeStore(homeAgentListSelectors.allAgents);
-  const agents = allAgents.filter((item) => item.type === 'agent').slice(0, 20);
+  // Lobe AI has its own fixed row above, so its list item is left out.
+  const agents = allAgents
+    .filter((item) => item.type === 'agent' && item.slug !== INBOX_SESSION_ID)
+    .slice(0, 20);
 
   const heading = search.trim()
     ? t('cmdk.askAIHeading', { query: `"${search.trim()}"` })

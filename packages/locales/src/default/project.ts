@@ -7,16 +7,15 @@ export default {
   'settings.editDirectoryOtherEnvironment':
     'This folder already belongs to another environment. Choose a different folder or device.',
   'settings.editDirectoryDescription':
-    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+    'Choose the device and folder this device folder points to. Its topics move to the new folder and start new sessions there.',
   'settings.editDirectoryFailed': 'Could not update the folder',
   'settings.removeDirectory': 'Remove folder',
   'settings.removeDirectoryConfirmDescription':
-    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+    '{{path}} on {{device}} will no longer be a device folder of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
   'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
   'settings.removeDirectoryFailed':
     'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
-  'settings.configureDirectory': 'Add a working directory',
-  'settings.addDirectoryFailed': 'Could not add working directory',
+  'settings.addDirectoryFailed': 'Could not add the device folder',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
     'Prefix for this project’s task numbers, set when the project is created. Projects without one use the default prefix.',
@@ -24,26 +23,21 @@ export default {
     'Used in the project URL. Changing it updates the address; leave blank to use the project ID.',
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
-  'settings.workLocations': 'Working directories',
-  'settings.directoryListDescription':
-    'Device folders this project works in. Agents read and change files in them on that device.',
-  'settings.allEnvironments': 'All environments',
-  'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
   'directories.sourceSummary': 'Existing directory',
   'directories.keepFiles':
     'Files stay on {{device}}. Linking only organizes the topics in this directory.',
   'directories.bindFailed': 'Could not link directory',
   'topics.associateFailed': 'Could not add topic to project',
-  'topics.chooseLocation': 'Choose a working directory',
-  'topics.addLocation': 'Add a working directory (optional)',
+  'topics.chooseLocation': 'Choose a device folder',
+  'topics.addLocation': 'Add a device folder (optional)',
 
   'topics.complete': 'Mark completed',
   'topics.resume': 'Resume work',
   'topics.gatewayUnavailable': 'Enable Agent Gateway before using this project work location.',
 
-  'settings.deviceOnline': 'Device connected',
-  'settings.deviceOffline': 'Device disconnected',
+  'settings.deviceOnline': 'Online',
+  'settings.deviceOffline': 'Offline',
   'topics.title': 'Topics',
   'topics.groupBy': 'Group topics',
   'topics.group.status': 'By status',
@@ -70,7 +64,7 @@ export default {
   'topics.subGroup.byStatus': 'By status',
   'settings.addDirectory': 'Add folder',
   'settings.addDirectoryDescription':
-    'Select an environment and a connected device, then enter the full path of an existing folder. Files stay on that device.',
+    'Pick a device and a workspace folder on it. The agent prepares the code inside this folder; nothing outside it is touched.',
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -92,12 +86,13 @@ export default {
   'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
   'settings.logoUploadFailed': 'Could not upload the logo',
   'settings.advanced': 'Advanced',
+  'settings.management': 'Project management',
+  'settings.managementDescription': 'Connected services and actions that affect the whole project.',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
-    'No folders in this environment yet. Add an existing folder on a connected device to start working.',
+    'No device folders yet. Add a folder on a connected device to run this project there.',
   'settings.title': 'Project settings',
-  'settings.environments': 'Environment',
-  'settings.addEnvironment': 'Add environment',
+  'settings.environments': 'Execution environments',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -108,14 +103,14 @@ export default {
   'directories.boundTip':
     "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   'directories.boundRoot':
-    'This topic is bound to a project directory. Start a new topic to use a different directory.',
+    'This topic is bound to a device folder of the project. Start a new topic to use a different folder.',
   'directories.detectRepository': 'Detect GitHub repository',
   'directories.stagedNewTopic': 'A new topic will start in <project>{{name}}</project>',
   'directories.unavailable':
     'Device is offline or the directory is unavailable. Reconnect and retry.',
 
-  'directories.title': 'Working directories',
-  'directories.add': 'Add working directory',
+  'directories.title': 'Device folders',
+  'directories.add': 'Add device folder',
   'directories.bind': 'Link to project',
   'directories.bindDescription':
     'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
@@ -227,7 +222,7 @@ export default {
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'delete.confirm.continue': 'Delete project',
-  'delete.confirm.kept.files': 'Files in the working directories on your devices',
+  'delete.confirm.kept.files': "Files in the project's device folders",
   'delete.confirm.kept.work': 'Tasks, goals, topics and channels',
   'delete.confirm.keptLead': 'These are kept, but no longer belong to a project:',
   'delete.confirm.namePrompt': 'Type “{{name}}” to confirm',
@@ -235,8 +230,7 @@ export default {
     'Project widgets and their run history, Linear sync rules, review sites, dashboards and project memories',
   'delete.confirm.removed.bindings':
     'Links to agents, groups and knowledge bases (your agents and knowledge bases are kept)',
-  'delete.confirm.removed.settings':
-    'Project settings, members, working directories and environments',
+  'delete.confirm.removed.settings': 'Project settings, members, device folders and environment',
   'delete.confirm.removedLead': 'Deleting “{{name}}” cannot be undone. It permanently removes:',
   'delete.confirm.title': 'Delete project',
   'delete.description':
@@ -307,15 +301,15 @@ export default {
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
   'overview.context.location.devices': 'Devices',
-  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directories': 'Device folders',
   'overview.context.location.directoryUnavailable':
     "Couldn't reach this folder. Check that the device is online and the folder still exists.",
-  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectories': 'No folders on this device yet.',
   'overview.context.location.noDirectoryTooltip':
-    "This device has no project folder yet, so the conversation starts in the device's default directory.",
-  'overview.context.location.environments': 'Code environments',
-  'overview.context.location.noEnvironments': 'No code environments yet.',
-  'overview.context.location.title': 'Work location',
+    "This device has no folder for the project yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Environment',
+  'overview.context.location.noEnvironments': 'The environment has no repositories yet.',
+  'overview.context.location.title': 'Execution environment',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
   'overview.context.repository.publishHint':
@@ -335,7 +329,7 @@ export default {
   'sections.dashboard': 'Dashboards',
   'sections.goals': 'Goals',
   'sections.home': 'Home',
-  'sections.knowledgeBases': 'Libraries',
+  'sections.knowledgeBases': 'Knowledge Bases',
   'sections.conversations': 'Topics',
   'sections.tasks': 'Tasks',
   'sidebar.reorderError': "Couldn't save the project order. Please try again.",
@@ -347,7 +341,7 @@ export default {
   'sidebar.agentsEmpty': 'No agents are connected yet',
   'sidebar.conversationsEmpty': 'No project topics yet',
   'sidebar.coordinatorTag': 'Lead',
-  'sidebar.librariesEmpty': 'No libraries are connected yet',
+  'sidebar.librariesEmpty': 'No knowledge bases are connected yet',
   'sidebar.newConversation': 'New topic',
   'sidebar.title': 'Projects',
   'sidebar.untitledConversation': 'Untitled topic',
@@ -410,24 +404,24 @@ export default {
   'review.role.member': 'Can edit',
   'review.role.admin': 'Administrator',
   'knowledgeBases.add': 'Link',
-  'knowledgeBases.addFailed': 'Could not link the library',
+  'knowledgeBases.addFailed': 'Could not link the knowledge base',
   'knowledgeBases.added': 'Linked',
-  'knowledgeBases.addTitle': 'Link libraries',
+  'knowledgeBases.addTitle': 'Link knowledge bases',
   'knowledgeBases.description':
-    "Agents can search these libraries while working on this project's tasks.",
+    "Agents can search these knowledge bases while working on this project's tasks.",
   'knowledgeBases.empty':
-    'No libraries linked yet. Link one so project tasks can draw on your material.',
+    'No knowledge bases linked yet. Link one so project tasks can draw on your material.',
   'knowledgeBases.enabled': 'Searchable in project tasks',
-  'knowledgeBases.libraryEmpty': 'You have no libraries yet. Create one in Resources first.',
-  'knowledgeBases.link': 'Link library',
-  'knowledgeBases.noMatch': 'No matching libraries',
+  'knowledgeBases.libraryEmpty': 'You have no knowledge bases yet. Create one in Library first.',
+  'knowledgeBases.link': 'Link knowledge base',
+  'knowledgeBases.noMatch': 'No matching knowledge bases',
   'knowledgeBases.remove': 'Unlink',
   'knowledgeBases.removeConfirmDescription':
-    'Project tasks will stop searching it. The library and its files are kept.',
+    'Project tasks will stop searching it. The knowledge base and its files are kept.',
   'knowledgeBases.removeConfirmTitle': 'Unlink {{name}}?',
-  'knowledgeBases.removeFailed': 'Could not unlink the library',
-  'knowledgeBases.searchPlaceholder': 'Search libraries',
-  'knowledgeBases.updateFailed': 'Could not update the library',
+  'knowledgeBases.removeFailed': 'Could not unlink the knowledge base',
+  'knowledgeBases.searchPlaceholder': 'Search knowledge bases',
+  'knowledgeBases.updateFailed': 'Could not update the knowledge base',
   'members.coordinatorResponsibility': 'Leads topics and tasks in this project',
   'members.description': 'Invite agents to work on this project and note what each one owns.',
   'members.edit': 'Edit role and responsibility',
@@ -460,7 +454,7 @@ export default {
   'members.role': 'Role',
   'members.rolePlaceholder': 'e.g. Researcher, Reviewer',
   'members.updateFailed': 'Could not update the agent',
-  'settings.knowledgeBases': 'Libraries',
+  'settings.knowledgeBases': 'Knowledge Bases',
   'settings.members': 'Members',
   'overview.createTask': 'Create task',
   'overview.createTaskFailed': 'Could not create the task',
@@ -479,7 +473,7 @@ export default {
   'review.sites.detectWaitingTitle': 'Waiting for the script to load for the first time',
   'create.moreSettings': 'More settings (identifier, slug)',
   'create.afterCreateHint':
-    "After it's created, the project home helps you connect code folders, sites and libraries.",
+    "After it's created, the project home helps you connect code folders, sites and knowledge bases.",
   'onboarding.basics.importTasks.title': 'Bring in or create tasks',
   'onboarding.basics.importTasks.create': 'New task',
   'onboarding.basics.firstChat.title': 'Start a first chat with the main agent',
@@ -495,7 +489,7 @@ export default {
   'onboarding.connect.site.description': 'Review right on the page',
   'onboarding.connect.site.waiting': 'Waiting for the script',
   'onboarding.connect.site.seen': 'Script detected',
-  'onboarding.connect.knowledge.title': 'Libraries',
+  'onboarding.connect.knowledge.title': 'Knowledge Bases',
   'onboarding.connect.knowledge.description': 'Docs and references',
   'onboarding.connect.knowledge.count': '{{count}} added',
   'onboarding.connect.goal.title': 'Goals',
@@ -566,6 +560,9 @@ export default {
   'artboard.share.unpublished': 'Sharing stopped',
   'artboard.share.unpublishFailed': 'Couldn’t stop sharing. Try again.',
   'artboard.share.update': 'Update share',
+  'artboard.outline.collapseAll': 'Collapse all',
+  'artboard.outline.expandAll': 'Expand all',
+  'artboard.outline.other': 'Other boards',
   'artboard.outline.title': 'Outline',
   'artboard.selection.discuss': 'Quote in chat',
   'artboard.selection.view': 'View larger',
@@ -627,8 +624,6 @@ export default {
   'artboard.fullscreen.placeholder': 'The board is open full screen',
   'artboard.header.exitFullscreen': 'Back to panel',
   'artboard.header.fullscreen': 'Full screen',
-  'artboard.stale.refresh': 'Refresh',
-  'artboard.stale.title': 'This board has a newer version',
   'artboard.gallery.openConversation': 'Open conversation',
   'artboard.finalize.pending.goChoose': 'Go to the choice',
   'artboard.finalize.pending.goAnswer': 'Answer',
@@ -680,9 +675,8 @@ export default {
   'artboard.question.placeholder': 'Answer this question…',
   'artboard.question.answer': 'Answer',
   'artboard.question.hint': 'Your answer goes to the agent with the next send.',
+  'create.failedRetry': "Couldn't create the project. Check your network and try again.",
   'environment.configure': 'Configure environment',
-  'settings.environmentIntro':
-    'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
   'createFromGithub.addRepository': 'Add',
   'createFromGithub.removeRepository': 'Remove',
   'createFromGithub.openIntegrations': 'Open GitHub settings',
@@ -695,4 +689,42 @@ export default {
   'createFromGithub.advancedWithCount': 'Advanced settings · {{count}} extra',
   'createFromGithub.extraRepositoriesLabel': 'More repositories',
   'createFromGithub.chooseFromGithub': 'Choose from GitHub',
+  'knowledgeBases.addFailedRetry':
+    "Couldn't add this knowledge base. Check your network and try again.",
+  'overview.context.location.sandboxes': 'Cloud sandbox',
+  'overview.context.location.emptySandbox': 'Empty sandbox',
+  'overview.context.location.emptySandboxDesc':
+    'Starts in an empty folder, without the project environment',
+  'settings.cloudSandboxGroup': 'Cloud sandbox',
+  'settings.addExecutionEnvironment': 'Add runner',
+  'settings.configureSandbox': 'Configure',
+  'settings.executionOrderHint':
+    'New conversations run on the first available runner in this order and prepare the environment there. Drag to reorder.',
+  'settings.sandboxNoRepository': 'No repository yet',
+  'settings.reorderFailed': "Couldn't save the new order. Try again.",
+  'settings.setDeviceDirectory': 'Set folder',
+  'settings.setDirectoryDescription':
+    'Enter the full path of an existing folder on {{device}}. Files stay on that device.',
+  'settings.directoryUnavailableTag': 'Unavailable',
+  'settings.directoryUnavailable_offline':
+    'The device is offline. The folder becomes usable once the device is online.',
+  'settings.directoryUnavailable_missing':
+    "This folder isn't on the device. Edit its path or remove it.",
+  'settings.directoryUnavailable_failed':
+    "This folder couldn't be set up. Check its path, or try again later.",
+  'settings.directoryUnavailable_needsManager':
+    'A project manager needs to open this page while the device is online.',
+  'settings.environment': 'Environment',
+  'settings.environmentNotes': 'Run notes',
+  'settings.environmentNotesEmpty': 'No notes',
+  'settings.environmentNotesHint':
+    'What a run needs from a machine. The agent reads these when it picks where to work; nothing enforces them.',
+  'settings.environmentNotesPlaceholder': 'For example: running dev needs at least 8 GB of memory',
+  'settings.runners': 'Runners',
+  'settings.sandboxRunnerDesc': 'A temporary cloud machine, removed after use',
+  'settings.envSandboxOnly':
+    'These variables are set only in the cloud sandbox, never on your devices. For runs on a device, set the variables you need on that device yourself.',
+  'runnerPicker.auto': 'Auto',
+  'runnerPicker.autoDesc': 'Run on the first available runner in the project order',
+  'runnerPicker.autoResolved': 'Will run on {{runner}}',
 };

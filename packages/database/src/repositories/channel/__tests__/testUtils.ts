@@ -12,6 +12,7 @@ import {
   workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import type { ChannelContacts } from '..';
 import { ChannelRepository } from '..';
 
 type AgentFixtureConfig = ChannelMemberConfig & {
@@ -46,7 +47,12 @@ export const lease = { serverDefaultAgentConfig: {}, leaseMs: 60_000, leaseOwner
  * Users and a workspace for one test file. Each file passes its own prefix so files can
  * share a server database.
  */
-export const createChannelFixture = (db: LobeChatDatabase, prefix: string) => {
+export const createChannelFixture = (
+  db: LobeChatDatabase,
+  prefix: string,
+  /** Who counts as a contact; nobody by default, as without an address book. */
+  contacts?: ChannelContacts,
+) => {
   const ownerId = `${prefix}-owner`;
   const memberId = `${prefix}-member`;
   const workspaceId = `${prefix}-workspace`;
@@ -108,7 +114,7 @@ export const createChannelFixture = (db: LobeChatDatabase, prefix: string) => {
             : { heterogeneousProvider: { type: config.runtime } },
       })
       .returning();
-    return new ChannelRepository(db, ownerId, channel.workspaceId).addAgent(channelId, {
+    return new ChannelRepository(db, ownerId, channel.workspaceId, contacts).addAgent(channelId, {
       agentId: source.id,
       config,
       name,
@@ -125,12 +131,12 @@ export const createChannelFixture = (db: LobeChatDatabase, prefix: string) => {
 
   /** A workspace channel owned by `ownerId`, with `memberId` as a plain member. */
   const createTeamChannel = async (title = 'Team') => {
-    const asOwner = new ChannelRepository(db, ownerId, workspaceId);
+    const asOwner = new ChannelRepository(db, ownerId, workspaceId, contacts);
     const { channel, member: owner } = await asOwner.create({ title });
     const member = await addPerson(channel.id, memberId, 'member');
 
     return {
-      asMember: new ChannelRepository(db, memberId, workspaceId),
+      asMember: new ChannelRepository(db, memberId, workspaceId, contacts),
       asOwner,
       channel,
       member,

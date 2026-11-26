@@ -10,13 +10,14 @@ describe('heteroOperationCapabilities', () => {
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:read');
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:message');
   });
-  it("lets an owner's bot run message Channels, but not read one", () => {
-    const capabilities = heteroOperationCapabilities('tell the LobeHub agent', {
-      ownerBotTurn: true,
-    });
-    expect(capabilities).toContain('channel:message');
-    expect(capabilities).not.toContain('channel:read');
-    expect(capabilities).not.toContain('goal:manage');
+  it('keeps Channel messaging out of bot, chat, Task and server-started runs', () => {
+    expect(heteroOperationCapabilities('send tj a message', { userTurn: true })).not.toContain(
+      'channel:message',
+    );
+    expect(
+      heteroOperationCapabilities('send tj a message', { taskId: 'task_1', userTurn: true }),
+    ).not.toContain('channel:message');
+    expect(heteroOperationCapabilities('tell the LobeHub agent')).not.toContain('channel:message');
   });
 
   it('grants goal management to a /goal run', () => {
@@ -51,6 +52,7 @@ describe('heteroOperationCapabilities', () => {
     // Every hetero run used to carry it, so a server-started run (Task, goal
     // planning, wakeups) could drive `lh goal create` and start uncapped work.
     expect(heteroOperationCapabilities('fix the build')).toEqual([
+      'caller:act',
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
@@ -85,7 +87,8 @@ describe('heteroOperationCapabilities for a share visitor', () => {
   it.each([
     ['a /goal prompt', '/goal ship the report', { userTurn: true }],
     ['a task', 'do the step', { taskId: 'task_1', userTurn: true }],
-    ['a channel', 'read the discussion', { channel: true, ownerBotTurn: true }],
+    ['a channel', 'read the discussion', { channel: true }],
+    ['a chat turn', 'send tj a message', { userTurn: true }],
   ])('grants only the run callbacks and its own Works for %s', (_, prompt, options) => {
     expect(heteroOperationCapabilities(prompt, { ...options, shareVisitor: true })).toEqual([
       'hetero:ingest',

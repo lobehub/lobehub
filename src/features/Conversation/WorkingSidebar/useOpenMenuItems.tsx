@@ -84,6 +84,7 @@ export const useOpenMenuItems = ({
       'works',
       'comments',
       'skills',
+      'tools',
       'documents',
       'web',
       ...extraTabs.map((tab) => tab.key),

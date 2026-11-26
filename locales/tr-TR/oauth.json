@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "Bu kabul hakkında yorum yapın ve önizleme sayfasından kabul edin veya geri gönderin",
   "consent.scope.acceptance-review-site": "Bu sitenin incelemesine site üzerinden yorum yapın, 8 saat boyunca",
   "consent.scope.email": "E-posta adresinize erişim",
+  "consent.scope.generation-read": "Oluşturulan görsellerinizi, videolarınızı ve seslerinizi görüntüleyin",
+  "consent.scope.generation-write": "Kotanızı kullanarak görsel, video ve ses oluşturun ve sonuçları silin",
   "consent.scope.offline_access": "Uygulamanın verilerinize erişmesine izin verin",
   "consent.scope.openid": "LobeHub hesabınızla kimlik doğrulama",
   "consent.scope.profile": "Temel profil bilgilerinize erişim (isim, avatar vb.)",

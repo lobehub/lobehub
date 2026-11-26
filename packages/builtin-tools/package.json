@@ -25,6 +25,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.15.1",
+    "@lobechat/builtin-tool-a2ui": "workspace:*",
     "@lobechat/builtin-tool-acceptance-evidence": "workspace:*",
     "@lobechat/builtin-tool-activator": "workspace:*",
     "@lobechat/builtin-tool-agent-account": "workspace:*",
@@ -55,6 +56,7 @@
     "@lobechat/builtin-tool-message": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
+    "@lobechat/builtin-tool-project": "workspace:*",
     "@lobechat/builtin-tool-remote-device": "workspace:*",
     "@lobechat/builtin-tool-self-iteration": "workspace:*",
     "@lobechat/builtin-tool-skill-maintainer": "workspace:*",

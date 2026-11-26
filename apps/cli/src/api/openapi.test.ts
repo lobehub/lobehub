@@ -58,12 +58,22 @@ describe('getOpenApi', () => {
     });
   });
 
-  it("replaces a run's operation token with the same account's stored login", async () => {
+  /**
+   * Regression: a run's operation token was swapped for this machine's stored login, which on a
+   * shared device belongs to someone other than the run's user.
+   */
+  it("refuses a run's operation token instead of using the stored login", async () => {
     process.env.LOBEHUB_JWT = jwt({ purpose: 'hetero-operation', sub: 'user-1' });
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit');
+    }) as never);
 
-    await getOpenApi('/usage');
+    await expect(getOpenApi('/usage')).rejects.toThrow('exit');
 
-    expect(sentHeaders().Authorization).toBe(`Bearer ${storedToken}`);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getValidToken).not.toHaveBeenCalled();
+    exit.mockRestore();
   });
 
   it('keeps a regular JWT from the environment', async () => {

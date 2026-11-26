@@ -87,6 +87,14 @@ export interface EnvironmentConfiguration {
    * once. This is the short reconciliation that follows.
    */
   maintenanceCommand?: string;
+  /**
+   * Free-text notes for whoever picks where the work runs, the agent included:
+   * what a run needs from a machine ("`dev` needs at least 8 GB of memory"),
+   * which device suits which task. Read, not enforced — and, like
+   * {@link EnvironmentConfiguration.kind}, the product's own, so it is stripped
+   * before the execution plane digests the definition.
+   */
+  notes?: string;
   /** Requirements, not a selection of a particular machine or provider. */
   requirements?: EnvironmentResourceRequirements;
   sources?: EnvironmentSource[];
@@ -127,7 +135,8 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 
 /**
  * A definition as the execution plane receives it: without the fields that are
- * only the product's own (today, {@link EnvironmentConfiguration.kind}). The
+ * only the product's own ({@link EnvironmentConfiguration.kind} and
+ * {@link EnvironmentConfiguration.notes}). The
  * execution plane digests what it is sent to decide which build a snapshot
  * belongs to, so a presentation field passed through would mark every
  * existing instance as built from a different specification.
@@ -135,7 +144,7 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 export const toExecutionConfiguration = (
   configuration: EnvironmentConfiguration,
 ): EnvironmentConfiguration => {
-  const { kind: _kind, ...rest } = withRepositorySetup(configuration);
+  const { kind: _kind, notes: _notes, ...rest } = withRepositorySetup(configuration);
 
   return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
 };

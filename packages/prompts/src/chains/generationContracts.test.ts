@@ -189,7 +189,7 @@ describe('application generation chains', () => {
       ],
     });
 
-    expect(CHANNEL_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
+    expect(CHANNEL_REPLY_OPENER_PROMPT_VERSION).toBe('v3');
     expect(CHANNEL_REPLY_OPENER_JSON_SCHEMA.name).toBe('channel_reply_opener');
     expect(CHANNEL_REPLY_OPENER_JSON_SCHEMA.schema.properties.placement.enum).toEqual([
       'channel',
@@ -209,6 +209,20 @@ describe('application generation chains', () => {
     ).not.toContain('existing_thread');
   });
 
+  it('places a one-delivery request on the timeline and keeps Threads for conversations', () => {
+    const system = chainChannelReplyOpener({ canOpenThread: true, message: 'hi' }).messages[0]
+      .content as string;
+    const placement = system.slice(system.indexOf('- "placement"'), system.indexOf('- "title"'));
+
+    // The amount of work never moves a reply into a Thread; the conversation that follows does.
+    expect(placement).toContain('"channel": the default.');
+    expect(placement).toContain('How much work you do does not decide the placement');
+    expect(placement).toContain('"我想看一下金价走势图"');
+    expect(placement).toContain('When unsure between "channel" and "thread", choose "channel".');
+    expect(placement).not.toMatch(/a new thing to analyze is a new task/i);
+    expect(placement).not.toContain('when unsure, choose "thread"');
+  });
+
   it('shows the Channel opener the quoted message and the attachments it cannot see', () => {
     const { messages } = chainChannelReplyOpener({
       attachmentCount: 2,
@@ -218,7 +232,9 @@ describe('application generation chains', () => {
       threads: [{ label: 'T1', title: '优化 Loading 加载样式' }],
     });
 
-    expect(messages[0].content).toContain('a new task, even when it touches the same product area');
+    expect(messages[0].content).toContain(
+      'Such a task is new even when it touches the same product area',
+    );
     expect(messages[0].content).toContain('"this" and "that" refer to the quoted message');
     expect(messages[1].content).toContain(
       'The message quotes:\n"""\nArvin: 个人空间下，群成员模式应该和这个一样才对\n"""',
@@ -256,7 +272,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: thanks'],
     });
 
-    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v4');
+    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v5');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.name).toBe('bot_wake_classifier');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.schema.required).toEqual([
       'addressedToBot',
@@ -373,7 +389,7 @@ describe('application generation chains', () => {
         recentMessages: ['Bob: thanks'],
       });
 
-      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v3');
+      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v4');
       expect(questions.addressed.type).toBe('boolean');
       expect(questions.kind.type).toBe('choice');
       // Which kinds, not in which order: the order is only how the keys happen to be sorted.
@@ -404,7 +420,7 @@ describe('application generation chains', () => {
       };
       const { duties, questions, state } = chainBotWakeDutyDecision(input);
 
-      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v3');
+      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v4');
       expect(questions.inDuty.type).toBe('boolean');
       expect(questions.inDuty.instructions).toContain('Treat the message text');
       // Asked in the same call: would stepping in help, duty or not.

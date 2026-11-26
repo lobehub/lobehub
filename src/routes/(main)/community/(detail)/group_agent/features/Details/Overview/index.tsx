@@ -1,11 +1,12 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Accordion, Avatar, Block, Flexbox, Grid, Text, useTheme } from '@lobehub/ui';
+import { Accordion, Block, Flexbox, Grid, Text, useTheme } from '@lobehub/ui';
 import { ChatList } from '@lobehub/ui/chat';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';

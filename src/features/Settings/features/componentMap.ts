@@ -16,6 +16,9 @@ export const componentMap = {
   [SettingsTabs.Appearance]: dynamic(() => import('../appearance'), {
     loading: loading('Settings > Appearance'),
   }),
+  [SettingsTabs.Conversation]: dynamic(() => import('../conversation'), {
+    loading: loading('Settings > Conversation'),
+  }),
   [SettingsTabs.Provider]: dynamic(() => import('../provider'), {
     loading: loading('Settings > Provider'),
   }),
@@ -96,6 +99,12 @@ export const componentMap = {
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {
     loading: loading('Settings > Plans'),
   }),
+  [SettingsTabs.CodingPlans]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/CodingPlans'),
+    {
+      loading: loading('Settings > CodingPlans'),
+    },
+  ),
   [SettingsTabs.Credits]: dynamic(() => import('@/business/client/BusinessSettingPages/Credits'), {
     loading: loading('Settings > Credits'),
   }),

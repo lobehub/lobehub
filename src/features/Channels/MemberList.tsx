@@ -110,7 +110,8 @@ const MemberRow = ({
         openChannelAgentEnvironment(channelId, entry.member);
       },
     });
-  if (agentId)
+  // A colleague's private Agent sits in the Channel, but its page is not the viewer's to open.
+  if (agentId && entry.member.canOpenAgent)
     menuItems.push({
       icon: <Icon icon={ExternalLink} />,
       key: 'open',

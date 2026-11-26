@@ -158,7 +158,7 @@ describe('TrashService inbound webhook hooks', () => {
     expect(boundary.unsubscribe).toHaveBeenCalledTimes(2);
   });
 
-  it('cleans agent roots and child topics in its linked sessions without deleting retained subscriptions', async () => {
+  it("cleans the agent's own topics and leaves another agent's topic in its linked session", async () => {
     const crossLinkedTopic = 'trash-webhook-cascaded-other-agent-topic';
     await db
       .insert(topics)
@@ -171,13 +171,13 @@ describe('TrashService inbound webhook hooks', () => {
     expect(root).toMatchObject({ resourceType: 'agent', resourceId: agentId });
     if (!root) throw new Error('Expected the agent trash root');
     const children = await db.select().from(trashItems).where(eq(trashItems.rootId, root.id));
-    expect(children.map((item) => item.resourceId)).toEqual(
-      expect.arrayContaining([topicId, crossLinkedTopic]),
-    );
+    const childIds = children.map((item) => item.resourceId);
+    expect(childIds).toContain(topicId);
+    expect(childIds).not.toContain(crossLinkedTopic);
     expect(await model.findById(native.id)).toBeUndefined();
-    expect(await model.findById(child.id)).toBeUndefined();
+    expect(await model.findById(child.id)).toMatchObject({ status: 'active' });
     expect(await model.findById(retained.id)).toMatchObject({ status: 'active' });
-    expect(boundary.unsubscribe).toHaveBeenCalledTimes(2);
+    expect(boundary.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it.each(['topic', 'agent'] as const)(

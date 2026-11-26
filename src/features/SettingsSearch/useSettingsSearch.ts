@@ -13,6 +13,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { getPlatform } from '@/utils/platform';
 
 import {
@@ -158,6 +159,7 @@ export const useSettingsSearch = (
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
+      isMobile: isMobileSurface(),
       isWindows: getPlatform() === 'Windows',
       showAiImage: !!showAiImage,
     };
@@ -187,21 +189,27 @@ export const useSettingsSearch = (
     const withoutOwnedKeywords = (tab: SettingsSearchTab, keywords: string[]) =>
       ownerTabs.has(tab) ? keywords : keywords.filter((keyword) => !ownedKeywords.has(keyword));
 
+    const indexedUrls = new Set<string>();
     for (const group of categoryGroups) {
       for (const item of group.items) {
-        // The same tab may appear in multiple groups (e.g. APIKey in Agent and
+        // The same page may appear in multiple groups (e.g. APIKey in Agent and
         // System when dev mode is on); index only the first occurrence,
         // matching the sidebar's top-to-bottom order — otherwise one query
-        // shows duplicate results pointing at the same page.
-        if (visibleTabs.has(item.key)) continue;
-
+        // shows duplicate results pointing at the same page. Dedupe by URL,
+        // not key: one key can name two pages (a workspace lists the personal
+        // Notifications page beside its own Notifications tab).
         const url = item.href ?? getTabUrl(item.key);
-        visibleTabs.set(item.key, {
-          groupTitle: group.title,
-          icon: item.icon,
-          label: item.label,
-          url,
-        });
+        if (indexedUrls.has(url)) continue;
+        indexedUrls.add(url);
+
+        // Item-level entries attach to the first page listed for their tab.
+        if (!visibleTabs.has(item.key))
+          visibleTabs.set(item.key, {
+            groupTitle: group.title,
+            icon: item.icon,
+            label: item.label,
+            url,
+          });
 
         const texts = Array.from(
           new Set([

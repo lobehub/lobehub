@@ -61,6 +61,22 @@ export const assignedWorktree = (
     return worktree;
 };
 
+/**
+ * The member's directory recently failed to host a worktree (not a git repo, device too old),
+ * so its branches run side by side in the directory itself rather than wait for it. Once the
+ * marker goes stale the next claim waits again just long enough to retry the worktree.
+ */
+export const sharesDirectory = (member: Pick<ChannelMemberItem, 'config' | 'metadata'>) => {
+  const { deviceId, workingDirectory } = member.config ?? {};
+  const unavailable = (member.metadata as ChannelMemberMetadata | null)?.worktreeUnavailable;
+  return (
+    !!deviceId &&
+    unavailable?.deviceId === deviceId &&
+    unavailable.sourceDirectory === workingDirectory &&
+    Date.now() - new Date(unavailable.at).getTime() < WORKTREE_RETRY_MS
+  );
+};
+
 export interface ChannelWorktreeCandidate {
   branch: string;
   deviceId: string;
@@ -98,13 +114,7 @@ export const findWorktreeCandidate = async (
   const { deviceId, deviceOwnerId, workingDirectory } = member.config ?? {};
   if (!deviceId || !workingDirectory || assignedWorktree(member, job.threadId)) return;
 
-  const unavailable = (member.metadata as ChannelMemberMetadata | null)?.worktreeUnavailable;
-  if (
-    unavailable?.deviceId === deviceId &&
-    unavailable.sourceDirectory === workingDirectory &&
-    Date.now() - new Date(unavailable.at).getTime() < WORKTREE_RETRY_MS
-  )
-    return;
+  if (sharesDirectory(member)) return;
 
   const [requester] = await tx
     .select({ userId: channelMembers.userId })
@@ -176,7 +186,7 @@ export const assignWorktree = async (
   return true;
 };
 
-/** The directory could not host a worktree; the job keeps waiting for the directory. */
+/** The directory could not host a worktree; the job runs in the directory itself instead. */
 export const markWorktreeUnavailable = async (
   tx: Transaction,
   channelId: string,

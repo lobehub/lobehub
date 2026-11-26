@@ -6,6 +6,7 @@ import APIKeySkeleton from './APIKey';
 import AppearanceSkeleton from './Appearance';
 import AutomationsSkeleton from './Automations';
 import BillingSkeleton from './Billing';
+import ConversationSkeleton from './Conversation';
 import CreditsSkeleton from './Credits';
 import CredsSkeleton from './Creds';
 import DevicesSkeleton from './Devices';
@@ -43,6 +44,7 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   // The same list surface.
   [SettingsTabs.Webhooks]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
+  [SettingsTabs.Conversation]: ConversationSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,
   [SettingsTabs.Creds]: CredsSkeleton,
   [SettingsTabs.Devices]: DevicesSkeleton,

@@ -19,6 +19,7 @@ import {
   type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
+  type WorkType,
   type WorkVisibility,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -66,7 +67,11 @@ import {
   type RegisterGoalReportWorkParams,
 } from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
-import { listTopicPullRequests, listTopicsByPullRequest } from './pullRequests';
+import {
+  listTopicPullRequests,
+  listTopicsByPullRequest,
+  listTopicsPullRequests,
+} from './pullRequests';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
 import type { ExternalToolWorkOperation } from './toolResultParsing';
@@ -336,6 +341,8 @@ export class WorkModel {
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
+    /** See {@link queries.listSummariesByRootOperations}: narrows the types the caller draws. */
+    types?: WorkType[];
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {
@@ -355,4 +362,7 @@ export class WorkModel {
   listTopicPullRequests = (topicId: string) => listTopicPullRequests(this.ctx, topicId);
 
   listTopicsByPullRequest = (identifier: string) => listTopicsByPullRequest(this.ctx, identifier);
+
+  /** See {@link listTopicsPullRequests}. */
+  listTopicsPullRequests = (topicIds: string[]) => listTopicsPullRequests(this.ctx, topicIds);
 }

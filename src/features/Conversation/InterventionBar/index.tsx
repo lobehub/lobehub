@@ -2,6 +2,8 @@ import { ChatInput } from '@lobehub/editor/react';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useMemo, useState } from 'react';
 
+import { useDensity } from '@/styles/density';
+
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
 import {
@@ -19,6 +21,7 @@ interface InterventionBarProps {
 
 const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { compact } = useDensity();
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
 
@@ -75,7 +78,12 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
     <ChatInput
       data-pending-hotkey-scope
       className={stylex.props(styles.container).className}
-      footer={<div {...stylex.props(styles.actions)} ref={setActionsPortalTarget} />}
+      footer={
+        <div
+          {...stylex.props(styles.actions, compact && styles.actionsCompact)}
+          ref={setActionsPortalTarget}
+        />
+      }
       // The card's action row — Stop sits beside Submit inside `ApprovalActions`
       // and the whole row portals in here.
       maxHeight={'50vh' as any}

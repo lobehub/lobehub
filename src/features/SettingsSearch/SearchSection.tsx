@@ -25,7 +25,10 @@ const SearchSection = memo<PropsWithChildren<{ scope: SettingsSearchScope }>>(
 
     return (
       <>
-        <Flexbox paddingInline={4}>
+        {/* The 5px below the bar, plus the sidebar's 4px gap, matches the 9px
+            between two category groups (the 8px accordion gap plus 1px panel
+            padding), so the first group title does not sit tight under the bar. */}
+        <Flexbox paddingBlock={'0 5px'} paddingInline={4}>
           <SearchBar
             allowClear
             placeholder={t('settingsSearch.placeholder')}
