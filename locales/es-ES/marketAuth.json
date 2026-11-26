@@ -27,6 +27,7 @@
   "claimResources.claim": "Reclamar seleccionados",
   "claimResources.description": "Hemos encontrado recursos vinculados a tu cuenta que puedes reclamar:",
   "claimResources.error": "No se pudo reclamar los recursos. Por favor, inténtalo de nuevo.",
+  "claimResources.failedRetry": "No se pudieron reclamar estos recursos. Comprueba tu red e inténtalo de nuevo.",
   "claimResources.mcpSection": "Servidores MCP",
   "claimResources.selectedCount": "{{count}} elemento(s) seleccionado(s)",
   "claimResources.skillSection": "Habilidades",

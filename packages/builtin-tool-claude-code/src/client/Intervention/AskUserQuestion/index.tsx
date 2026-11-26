@@ -83,15 +83,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   });
 
   const labels = {
+    addNote: t('claudeCode.askUserQuestion.note.add'),
     customPlaceholder: t('claudeCode.askUserQuestion.customOption.placeholder'),
-    escapeBack: t('claudeCode.askUserQuestion.escape.back'),
-    escapeEnter: t('claudeCode.askUserQuestion.escape.enter'),
-    escapePlaceholder: t('claudeCode.askUserQuestion.escape.placeholder'),
-    multiSelectTag: t('claudeCode.askUserQuestion.multiSelectTag'),
+    next: (title: string) => t('claudeCode.askUserQuestion.next', { title }),
+    noteLabel: t('claudeCode.askUserQuestion.note.label'),
+    progress: (answered: number, total: number) =>
+      t('claudeCode.askUserQuestion.progress', { answered, total }),
     recommendedTag: t('claudeCode.askUserQuestion.recommendedTag'),
     skip: t('claudeCode.askUserQuestion.skip'),
     submit: t('claudeCode.askUserQuestion.submit'),
-    supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
+    removeNote: t('claudeCode.askUserQuestion.note.remove'),
+    sendNoteOnly: t('claudeCode.askUserQuestion.note.sendOnly'),
     supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
     timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),

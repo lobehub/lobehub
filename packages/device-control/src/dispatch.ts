@@ -1,6 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises';
 
-import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -45,7 +44,6 @@ import type {
 import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
 import { toRedactedAgentCredentialError } from './agentCredentials/redact';
-import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -97,7 +95,6 @@ export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listHeterogeneousAgentModels',
   'listMcpTools',
-  'getAntigravityQuota',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -290,10 +287,6 @@ export const executeDeviceRpc = async (
 
     case 'getClaudeCodeQuota': {
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
-    }
-
-    case 'getAntigravityQuota': {
-      return getAntigravityQuota(params as AntigravityQuotaParams);
     }
 
     case 'getCodexQuota': {

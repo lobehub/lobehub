@@ -36,6 +36,7 @@ export const useMetaColumns = () => useContext(MetaColumnsContext);
 
 const listItemModels = (item: ListItem): { model: AiModelForSelect; provider: string }[] => {
   switch (item.type) {
+    case 'featured-model-item':
     case 'provider-model-item': {
       return [{ model: item.model, provider: item.provider.id }];
     }

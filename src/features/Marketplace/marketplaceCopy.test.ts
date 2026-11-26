@@ -70,7 +70,8 @@ describe('Marketplace page copy', () => {
     expect(hint('zh-CN')).toContain('市场');
     for (const locale of locales) {
       const value = hint(locale);
-      if (value) expect(value, locale).not.toMatch(/Community|社区|社群/);
+      // 社群 alone is the old "Community" name; 社群媒體 is social media, which the hint names.
+      if (value) expect(value, locale).not.toMatch(/Community|社区|社群(?!媒體)/);
     }
   });
 

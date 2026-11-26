@@ -23,6 +23,7 @@ import { workspaceTeamRouter } from '@/business/server/lambda-routers/workspaceT
 import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
+import { a2uiRouter } from './a2ui';
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
@@ -155,6 +156,7 @@ export const lambdaRouter = router({
   agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
   agentSteerQueue: agentSteerQueueRouter,
+  a2ui: a2uiRouter,
   artboard: artboardRouter,
   canvas: canvasRouter,
   changelog: changelogRouter,

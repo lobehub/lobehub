@@ -169,6 +169,16 @@ const taskListFilters = (s: GlobalState) => s.status.taskListFilters ?? EMPTY_TA
 const taskListFilter = (scope: string) => (s: GlobalState) =>
   taskListFilters(s).find((entry) => entry.scope === scope)?.filter;
 
+const EMPTY_TASK_LIST_COLLAPSED_GROUPS: NonNullable<
+  GlobalState['status']['taskListCollapsedGroups']
+> = [];
+
+const taskListCollapsedGroups = (s: GlobalState) =>
+  s.status.taskListCollapsedGroups ?? EMPTY_TASK_LIST_COLLAPSED_GROUPS;
+
+const taskListCollapsedGroupKeys = (scope: string) => (s: GlobalState) =>
+  taskListCollapsedGroups(s).find((entry) => entry.scope === scope)?.keys;
+
 const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
 
 // Default the inline composer to collapsed so a populated task list keeps the
@@ -701,6 +711,8 @@ export const systemStatusSelectors = {
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
+  taskListCollapsedGroupKeys,
+  taskListCollapsedGroups,
   taskListViewMode,
   taskListFilter,
   taskListFilters,

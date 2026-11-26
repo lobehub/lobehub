@@ -692,3 +692,62 @@ describe('TelegramWebhookClient guest messenger', () => {
     );
   });
 });
+
+describe('TelegramWebhookClient forum topic messenger', () => {
+  const okResponse = () =>
+    new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
+  let fetchSpy: MockInstance<typeof fetch>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse());
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  const callTo = (method: string) => {
+    const call = fetchSpy.mock.calls.find((c) => String(c[0]).endsWith(`/${method}`));
+    expect(call, `expected a ${method} call`).toBeDefined();
+    return JSON.parse(String(call![1]!.body)) as Record<string, unknown>;
+  };
+
+  it('posts replies and typing into the topic the thread id names', async () => {
+    const messenger = createClient().getMessenger('telegram:-100123:42');
+
+    await messenger.createMessage('hello from the agent');
+    await messenger.triggerTyping?.();
+
+    expect(callTo('sendMessage')).toMatchObject({ chat_id: '-100123', message_thread_id: 42 });
+    expect(callTo('sendChatAction')).toMatchObject({
+      action: 'typing',
+      chat_id: '-100123',
+      message_thread_id: 42,
+    });
+  });
+
+  it('sends attachments into the topic', async () => {
+    const messenger = createClient().getMessenger('telegram:-100123:42');
+
+    await messenger.createMessage({
+      attachments: [{ fetchUrl: 'https://cdn.example.com/a.png', name: 'a.png', type: 'image' }],
+      content: 'see image',
+    });
+
+    expect(callTo('sendPhoto')).toMatchObject({ chat_id: '-100123', message_thread_id: 42 });
+  });
+
+  it('omits message_thread_id for a chat without topics', async () => {
+    const messenger = createClient().getMessenger('telegram:-100123');
+
+    await messenger.createMessage('hello');
+    await messenger.triggerTyping?.();
+
+    expect(callTo('sendMessage')).not.toHaveProperty('message_thread_id');
+    expect(callTo('sendChatAction')).not.toHaveProperty('message_thread_id');
+  });
+});

@@ -9,6 +9,7 @@ export default {
   'mcpApp.entrypoint.retry': 'Retry',
   'mcpApp.entrypoint.open': 'Open app',
   'mcpApp.entrypoint.loading': 'Opening app…',
+  'builtins.lobe-a2ui.apiName.readCardDocs': 'Read card components',
   'builtins.lobe-a2ui.apiName.renderUI': 'Draw card',
   'builtins.lobe-a2ui.title': 'Cards',
   'builtins.lobe-channel.title': 'Channel',

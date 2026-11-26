@@ -252,6 +252,10 @@ const latencyCriticalProcedures = new Set([
   // workspace revalidates every SWR key at once; batched, this read waited for
   // the slowest home read and the admin stayed on the home page.
   'workspace.getSettings',
+  // The member's model override on a shared Workspace Agent: the chat input's
+  // model and Agent-mode controls hold a placeholder until it answers on a
+  // cold load. Batched, that wait grew to the slowest read beside it.
+  'workspaceUserSettings.getPreference',
 ]);
 const SKIP_BATCH_PROCEDURES = new Set([
   ...initialLoadProcedures,

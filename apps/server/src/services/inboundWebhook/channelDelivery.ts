@@ -14,7 +14,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { extractTextFromMessage } from '@/server/services/agentRuntime/CompletionLifecycle/messageContent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { notifyChannel } from '@/server/services/channel/notify';
-import { runSurfaces } from '@/server/services/channel/runSurfaces';
+import { unpostedRunSurfaces } from '@/server/services/channel/runSurfaces';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
@@ -114,7 +114,9 @@ export async function channelOriginOfRun(
   return job;
 }
 
-export type RunChannelPostResult = 'not-done' | 'posted' | 'silent' | 'unavailable';
+/** `not-delivered`: a run that is not one this delivery carries (see `trigger`). */
+export type RunChannelPostResult =
+  'not-delivered' | 'not-done' | 'posted' | 'silent' | 'unavailable';
 
 /**
  * Post what a finished run concluded to a Channel (or Thread) as the Agent's message: its final
@@ -136,6 +138,11 @@ export async function postRunAnswerToChannel(
     operationId: string;
     requestKey: string;
     scope: Scope;
+    /**
+     * Only a run started with this trigger posts: a task delivers its own runs, never a person's
+     * follow-up in the run's Topic, which answers them privately there.
+     */
+    trigger?: string;
   },
 ): Promise<{ error?: ChannelError; result: RunChannelPostResult; topicId?: string }> {
   const { scope } = params;
@@ -144,13 +151,15 @@ export async function postRunAnswerToChannel(
   );
   if (operation?.status !== 'done' || !operation.topicId) return { result: 'not-done' };
   const topicId = operation.topicId;
+  if (params.trigger && operation.trigger !== params.trigger)
+    return { result: 'not-delivered', topicId };
   const agentId = params.agentId ?? operation.agentId;
   if (!agentId) return { result: 'unavailable', topicId };
 
   const messages = new MessageModel(db, scope.userId, scope.workspaceId);
   const [final, surfaces] = await Promise.all([
     messages.findLatestAssistantByOperationId({ operationId: params.operationId, topicId }),
-    runSurfaces(messages, params.operationId, topicId),
+    unpostedRunSurfaces(messages, params.operationId, topicId),
   ]);
   // A run that stopped on a tool call (out of steps) has nothing to tell yet, unless it drew a
   // card: a card is posted even with no words after it, like a Channel reply's.

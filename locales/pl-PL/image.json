@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Ziarno",
   "config.seed.random": "Losowe ziarno",
+  "config.size.autoByOpenAI": "Automatycznie (określane przez OpenAI)",
   "config.size.label": "Rozmiar",
   "config.steps.label": "Kroki",
   "config.title": "Konfiguracja",

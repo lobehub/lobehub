@@ -150,6 +150,7 @@
   "builtins.goalCommand.plan.loading": "Planning goal tasks",
   "builtins.linear.render.empty": "No {{collection}} found",
   "builtins.linear.render.updatedAt": "Updated {{time}}",
+  "builtins.lobe-a2ui.apiName.readCardDocs": "Read card components",
   "builtins.lobe-a2ui.apiName.renderUI": "Draw card",
   "builtins.lobe-a2ui.title": "Cards",
   "builtins.lobe-activator.apiName.activateTools": "Activate Tools",

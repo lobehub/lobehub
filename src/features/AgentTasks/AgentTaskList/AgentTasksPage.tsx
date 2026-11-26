@@ -65,6 +65,7 @@ import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
 import TasksGroupConfig from './TasksGroupConfig';
+import { taskListCollapseScopeKey } from './useTaskListGroupCollapse';
 
 interface TaskCreateActionBehaviorParams {
   canCreateTask: boolean;
@@ -295,9 +296,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // applied server-side by every collection, so paginated pages and board
   // columns count only the matching tasks.
   const filterFields = useTaskFilterFields({ agentId, projectId });
-  const [storedFilter, setFilter] = useTaskListFilter(
-    taskListFilterScopeKey({ agentId, projectId, workspaceId: activeWorkspaceId }),
-  );
+  const pageScope = taskListFilterScopeKey({ agentId, projectId, workspaceId: activeWorkspaceId });
+  const [storedFilter, setFilter] = useTaskListFilter(pageScope);
   const filter = useMemo(
     () =>
       pickOfferedTaskFilter(
@@ -737,6 +737,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               />
             ) : (
               <TaskList
+                collapseScope={taskListCollapseScopeKey(pageScope, `mine:${myTaskScope}`)}
                 data={isCollectionListInit || undefined}
                 emptyAction={filterEmptyAction}
                 error={collectionSWR.error ?? projectListError}
@@ -803,6 +804,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               />
             )}
             <TaskList
+              collapseScope={taskListCollapseScopeKey(pageScope, 'tasks')}
               createScope={groupCreateScope}
               data={isTaskListInit || undefined}
               emptyAction={filterEmptyAction}

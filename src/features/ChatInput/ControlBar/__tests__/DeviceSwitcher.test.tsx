@@ -50,6 +50,8 @@ vi.mock('@/store/projectWorkingDirectory', () => ({
     }),
 }));
 
+vi.mock('../useBlankProjectAuto', () => ({ useBlankProjectAuto: () => undefined }));
+
 vi.mock('../HeteroDeviceSwitcher', () => ({
   default: () => <div>general-picker</div>,
 }));

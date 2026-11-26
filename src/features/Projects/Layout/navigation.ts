@@ -11,10 +11,18 @@ export const getProjectTopicPath = (projectId: string, topicId?: string) =>
  * lives in the route so it stays with its own pane (and survives a reload);
  * nothing is created until its first message.
  */
-export const getProjectDraftPath = (projectId: string, agentId: string, directoryId?: string) =>
-  `${getProjectTopicPath(projectId)}?${new URLSearchParams(
-    directoryId ? { agent: agentId, dir: directoryId } : { agent: agentId },
-  )}`;
+/** `auto`: the draft follows the project's runner order (see `useBlankProjectAuto`). */
+export const getProjectDraftPath = (
+  projectId: string,
+  agentId: string,
+  directoryId?: string,
+  auto?: boolean,
+) =>
+  `${getProjectTopicPath(projectId)}?${new URLSearchParams({
+    agent: agentId,
+    ...(directoryId && { dir: directoryId }),
+    ...(auto && { auto: '1' }),
+  })}`;
 
 export const getProjectLibraryPath = (projectId: string, libraryId: string) =>
   `/project/${projectId}/library/${libraryId}`;

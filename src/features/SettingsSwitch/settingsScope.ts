@@ -8,9 +8,10 @@
  *   (providers, devices, credentials, billing, members, …).
  *
  * Both sets live under the current space's URL prefix, so opening account
- * settings never moves the user out of the workspace they are in. The sidebar
- * shows only the set the active tab belongs to, and the card at its bottom
- * switches to the other one.
+ * settings never moves the user out of the workspace they are in. Settings
+ * lead with the space set: entering without a tab opens it. The sidebar shows
+ * only the set the active tab belongs to, and the card at its bottom switches
+ * to the other one.
  */
 export type SettingsScope = 'account' | 'space';
 
@@ -45,6 +46,22 @@ export const filterGroupsByScope = <Group extends ScopedSettingsGroup>(
   groups: Group[],
   scope: SettingsScope,
 ): Group[] => groups.filter((group) => group.scope === scope);
+
+/**
+ * The tab a settings surface opens on when entered without one: the space
+ * set's first tab, so settings lead with the current space. The account set's
+ * first tab is the fallback when every space tab is hidden.
+ */
+export const getSettingsDefaultTab = <TabKey extends string>(
+  groups: ScopedSettingsGroup<TabKey>[],
+): TabKey | undefined => {
+  for (const scope of ['space', 'account'] as const) {
+    const item = filterGroupsByScope(groups, scope)
+      .flatMap((group) => group.items)
+      .find((entry) => !entry.href);
+    if (item) return item.key;
+  }
+};
 
 export const otherSettingsScope = (scope: SettingsScope): SettingsScope =>
   scope === 'account' ? 'space' : 'account';

@@ -1162,5 +1162,15 @@ describe('lobeAgentRuntime', () => {
       expect(result.state.todos.items).toHaveLength(4);
       expect(result.state.todos.items[3].text).toBe('publish report');
     });
+
+    it('forwards ctx.todoCallStreak so a todo-only loop gets paused', async () => {
+      const loopingContext = { ...todoContext, todoCallStreak: 10 };
+      const runtime = lobeAgentRuntime.factory(loopingContext);
+
+      const result = await runtime.createTodos({ adds: ['publish report'] }, loopingContext);
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Todo tools paused');
+    });
   });
 });

@@ -36,9 +36,9 @@ import {
   buildHeteroSpawnArgs,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
+  stampServerDefaultHeterogeneousReport,
   ThreadStatus,
   ThreadType,
-  unwrapServerDefaultHeterogeneousModel,
 } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui';
@@ -1648,16 +1648,11 @@ export const executeHeterogeneousAgent = async (
    */
   const reduceAndApplyMain = async (event: AgentStreamEvent) => {
     // Server-default CLIs report `lobehub/${catalogId}` (older Claude Code
-    // sessions used `lobehub-default`). Stamp the catalog id onto the message
-    // so the usage footer and model-card lookup resolve the real model.
+    // sessions used `lobehub-default`). Stamp the catalog id and serving provider
+    // onto the message so the usage footer and model-card lookup resolve the real model.
     if (serverDefaultConfiguredModel) {
-      const reported = event.data?.model;
-      if (typeof reported === 'string') {
-        const model = unwrapServerDefaultHeterogeneousModel(reported, serverDefaultConfiguredModel);
-        if (model && model !== reported) {
-          event = { ...event, data: { ...event.data, model } };
-        }
-      }
+      const data = stampServerDefaultHeterogeneousReport(event.data, serverDefaultConfiguredModel);
+      if (data) event = { ...event, data };
     }
 
     // Capture the CC-native session id off the stream_start stream so every

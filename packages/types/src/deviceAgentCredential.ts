@@ -34,6 +34,11 @@ export interface InstallAgentCredentialParams {
 export interface InstallAgentCredentialResult {
   installed: true;
   provider: DeviceAgentCredentialProvider;
+  /**
+   * Runs on the replaced login that the device stopped first, so they could
+   * not write it back over the new one. Omitted when none were running.
+   */
+  stoppedRuns?: number;
 }
 
 export interface RemoveAgentCredentialParams {

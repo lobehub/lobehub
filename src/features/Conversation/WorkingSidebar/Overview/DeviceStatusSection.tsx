@@ -128,7 +128,7 @@ const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) 
   const { gap } = useDensityTokens();
   const online = (device.channels ?? []).length > 0;
   const usage = latestUsageView({ data, error });
-  const platformLabel = getPlatformLabel(device.platform, device.architecture);
+  const platformLabel = getPlatformLabel(device.platform, device.architecture, device.metadata);
   const displayName = device.friendlyName || device.hostname || device.deviceId;
 
   return (

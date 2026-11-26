@@ -479,6 +479,22 @@ export const TaskDetailSchema = z
     agentId: z.string().nullable().optional(),
     archivedAt: dateTimeSchema.nullable().optional(),
     automationMode: TaskAutomationModeSchema.nullable().optional(),
+    channelDelivery: z
+      .object({
+        channelId: z.string(),
+        lastError: z
+          .object({
+            at: z.string(),
+            code: z.literal('channel_unavailable'),
+            message: z.string().optional(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+        threadId: z.string().nullable().optional(),
+      })
+      .strict()
+      .optional(),
     checkpoint: CheckpointConfigSchema.optional(),
     /** Task configuration pockets, stored as JSON. */
     config: jsonObjectSchema.optional(),

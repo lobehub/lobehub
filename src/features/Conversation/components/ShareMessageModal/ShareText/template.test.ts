@@ -112,3 +112,35 @@ describe('generateMarkdown', () => {
     expect(result).toContain('Intro<think>Reasoning</think>Outro');
   });
 });
+
+describe('generateMarkdown for a multi-step reply', () => {
+  it('shares the text of every step, without the tool results', () => {
+    const group = {
+      children: [
+        {
+          content: 'Let me draw it.',
+          id: 'step-1',
+          tools: [
+            {
+              apiName: 'generate',
+              arguments: '{}',
+              id: 'call-1',
+              identifier: 'image',
+              result: { content: '{"url":"https://example.com/a.png"}', id: 'tool-1' },
+              result_msg_id: 'tool-1',
+              type: 'builtin',
+            },
+          ],
+        },
+        { content: 'Here is the picture.', id: 'step-2' },
+      ],
+      content: '',
+      createdAt: Date.now(),
+      id: 'step-1',
+      role: 'assistantGroup',
+      updatedAt: Date.now(),
+    } as unknown as UIChatMessage;
+
+    expect(generateMarkdown({ messages: [group] })).toBe('Let me draw it.\n\nHere is the picture.');
+  });
+});

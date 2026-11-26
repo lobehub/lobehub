@@ -48,6 +48,22 @@ describe('sendTelegramAttachments', () => {
     });
   });
 
+  it('passes the forum topic to every media call, including the document fallback', async () => {
+    const api = makeApi();
+    api.sendPhoto.mockRejectedValueOnce(new Error('400 wrong type'));
+
+    await sendTelegramAttachments(
+      api as any,
+      'chat-1',
+      [{ data: Buffer.from('png').toString('base64'), name: 'a.png', type: 'image' }],
+      'caption',
+      42,
+    );
+
+    expect(api.sendPhoto.mock.calls[0][0].messageThreadId).toBe(42);
+    expect(api.sendDocument.mock.calls[0][0].messageThreadId).toBe(42);
+  });
+
   it('dispatches to sendDocument for file with base64 data → Buffer', async () => {
     const api = makeApi();
 

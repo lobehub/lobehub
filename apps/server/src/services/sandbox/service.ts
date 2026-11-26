@@ -228,9 +228,10 @@ export class SandboxMiddlewareService implements SandboxService {
    * first time this service instance is used. Best-effort: any failure is
    * swallowed so it never blocks the actual tool call.
    *
-   * The downloaded command is guarded by an in-sandbox marker file, which is the
-   * single source of truth for idempotency: it is a cheap no-op once synced, and
-   * if the sandbox session is recycled the marker disappears so the next call
+   * Each download is guarded by an in-sandbox marker per file id, which is the
+   * single source of truth for idempotency: it is a cheap no-op for files already
+   * synced, a file attached later in the topic is fetched by the next call, and
+   * if the sandbox session is recycled the markers disappear so the next call
    * re-syncs automatically. We intentionally do NOT cache the "done" state out of
    * band (e.g. in Redis), because that could skip the re-sync after a recycle and
    * leave the agent believing files exist when /mnt/data is empty.
@@ -255,7 +256,7 @@ export class SandboxMiddlewareService implements SandboxService {
             const url = await fileService
               .createCachedPreSignedUrlForPreview(file.url)
               .catch(() => '');
-            return url ? { name: file.name, url } : null;
+            return url ? { id: file.id, name: file.name, url } : null;
           }),
         )
       ).filter((item): item is SandboxInitDownload => item !== null);
