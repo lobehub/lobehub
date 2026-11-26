@@ -59,10 +59,10 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-x: auto;
     display: flex;
     flex: 1;
-    gap: 8px;
+    gap: ${densityVars.sectionGap};
 
-    padding-block: 0 16px;
-    padding-inline: ${densityVars.contentGap};
+    padding-block: 0 ${densityVars.pagePaddingBlockEnd};
+    padding-inline: ${densityVars.pagePaddingInline};
   `,
 }));
 

@@ -49,7 +49,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>((props) => {
-  const { fontSize: rowFontSize, listRowHeight } = useDensityTokens();
+  const { cardPadding, fontSize: rowFontSize, listRowHeight } = useDensityTokens();
   const { className, hideProject, task, routeScope = 'agent', variant = 'default' } = props;
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
@@ -189,7 +189,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
           clickable
           className={className}
           gap={8}
-          padding={12}
+          padding={cardPadding}
           variant={'borderless'}
           onClick={handleClick}
         >
