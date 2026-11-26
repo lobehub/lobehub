@@ -120,17 +120,16 @@ export function registerLegacyPluginCommand(program: Command) {
       console.log(`${pc.green('✓')} Uninstalled plugin ${pc.bold(id)}`);
     });
 
-  // ── update ────────────────────────────────────────────
+  plugin.on('command:*', (operands: string[]) => {
+    if (operands[0] !== 'update') {
+      plugin.unknownCommand();
+      return;
+    }
 
-  plugin
-    .command('update <id>', { hidden: true })
-    .description('Removed — legacy plugins cannot be edited in place')
-    .option('--manifest <json>', 'Accepted for compatibility; ignored')
-    .option('--settings <json>', 'Accepted for compatibility; ignored')
-    .action((id: string) => {
-      log.error(
-        `\`lh legacy-plugin update\` was removed. Legacy plugins are read-only and cannot be edited in place. To migrate, recreate the MCP server with \`lh connector add\`, then uninstall the legacy plugin with \`lh legacy-plugin uninstall ${id}\`.`,
-      );
-      process.exit(1);
-    });
+    const uninstall = operands[1] ? ` ${operands[1]}` : ' <id>';
+    log.error(
+      `\`lh legacy-plugin update\` is not supported because legacy plugins cannot be edited in place. To replace one, recreate its MCP server with \`lh connector add\`, verify the connector tools, then uninstall the legacy plugin with \`lh legacy-plugin uninstall${uninstall}\`.`,
+    );
+    process.exit(1);
+  });
 }

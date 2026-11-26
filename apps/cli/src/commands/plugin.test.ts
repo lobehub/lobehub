@@ -22,13 +22,13 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 describe('legacy-plugin command', () => {
-  let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    mockGetTrpcClient.mockClear();
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    mockGetTrpcClient.mockReset();
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of [
       ...Object.values(mockTrpcClient.plugin),
@@ -41,8 +41,8 @@ describe('legacy-plugin command', () => {
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
     consoleSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
   function createProgram() {
@@ -73,7 +73,7 @@ describe('legacy-plugin command', () => {
           .commands.map((c) => c.name());
 
       expect(subcommands('plugin')).toEqual(subcommands('legacy-plugin'));
-      expect(subcommands('legacy-plugin')).toEqual(['list', 'search', 'uninstall', 'update']);
+      expect(subcommands('legacy-plugin')).toEqual(['list', 'search', 'uninstall']);
 
       mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([
         { id: 'p1', identifier: 'search', type: 'plugin' },
@@ -83,19 +83,6 @@ describe('legacy-plugin command', () => {
 
       expect(mockTrpcClient.plugin.getPlugins.query).toHaveBeenCalledTimes(2);
       expect(consoleSpy.mock.calls[1]).toEqual(consoleSpy.mock.calls[0]);
-    });
-
-    it('keeps the removed update command out of help as a compatibility error', () => {
-      const program = createProgram();
-      const command = program.commands.find((c) => c.name() === 'legacy-plugin')!;
-      const visible = command
-        .createHelp()
-        .visibleCommands(command)
-        .map((c) => c.name())
-        .filter((name) => name !== 'help');
-
-      expect(visible).toEqual(['list', 'search', 'uninstall']);
-      expect(command.commands.map((c) => c.name())).toContain('update');
     });
   });
 
@@ -192,8 +179,10 @@ describe('legacy-plugin command', () => {
     });
   });
 
-  describe('update', () => {
-    it('rejects a settings edit with migration guidance and never contacts the server', async () => {
+  describe('legacy update migration guidance', () => {
+    it('maps old update invocations to connector replacement guidance without server access', async () => {
+      mockGetTrpcClient.mockRejectedValueOnce(new Error('server unavailable'));
+
       const program = createProgram();
       await program.parseAsync([
         'node',
@@ -205,30 +194,20 @@ describe('legacy-plugin command', () => {
         '{"key":"value"}',
       ]);
 
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('was removed'));
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('lh connector add'));
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('verify the connector tools'));
       expect(log.error).toHaveBeenCalledWith(
         expect.stringContaining('lh legacy-plugin uninstall p1'),
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
-      expect(mockGetTrpcClient).not.toHaveBeenCalled();
     });
 
-    it('rejects a manifest edit the same way', async () => {
+    it('preserves unknown-command errors for other legacy-plugin subcommands', async () => {
       const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'update',
-        'p1',
-        '--manifest',
-        '{"identifier":"search"}',
-      ]);
 
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('was removed'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
-      expect(mockGetTrpcClient).not.toHaveBeenCalled();
+      await expect(
+        program.parseAsync(['node', 'test', 'legacy-plugin', 'unknown-command']),
+      ).rejects.toMatchObject({ code: 'commander.unknownCommand' });
     });
   });
 });

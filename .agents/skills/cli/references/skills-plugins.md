@@ -130,7 +130,3 @@ lh legacy-plugin list [--json [fields]]
 ```bash
 lh legacy-plugin uninstall <id> [--yes]
 ```
-
-### Removed: `lh legacy-plugin update <id>`
-
-Legacy plugins cannot be edited in place. The hidden command remains only as a compatibility error: it accepts the old flags, exits 1 without contacting the server, and tells the user to recreate the MCP server with `lh connector add` before uninstalling the legacy plugin.

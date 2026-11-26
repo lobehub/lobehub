@@ -51,9 +51,9 @@ describe('lh legacy-plugin - E2E', () => {
     });
   });
 
-  // ── update ────────────────────────────────────────
+  // ── legacy update compatibility ─────────────────────
 
-  describe('update', () => {
+  describe('legacy update migration guidance', () => {
     const runError = (args: string) => {
       try {
         run(args);
@@ -63,16 +63,13 @@ describe('lh legacy-plugin - E2E', () => {
       throw new Error(`Expected \`${args}\` to fail`);
     };
 
-    it('should reject edits with migration guidance', () => {
+    it('maps old edit invocations to connector replacement guidance', () => {
       const output = runError('legacy-plugin update some-id --settings "not-json"');
 
-      expect(output).toContain('was removed');
+      expect(output).toContain('cannot be edited in place');
       expect(output).toContain('lh connector add');
+      expect(output).toContain('verify the connector tools');
       expect(output).toContain('lh legacy-plugin uninstall some-id');
-    });
-
-    it('should reject the command even without edit flags', () => {
-      expect(runError('legacy-plugin update nonexistent-id')).toContain('was removed');
     });
   });
 });

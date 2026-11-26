@@ -23,7 +23,6 @@ Full \`lh connector\` options and tool-sync behavior: \`references/connector\`.
 
 ## Tips
 
-- Legacy plugin editing was removed: \`lh legacy-plugin update <id>\` exits with migration guidance and never writes to the server
 - When replacing a legacy plugin, create the connector first and confirm its tools are available before uninstalling the legacy row
 - A request to install a plugin from a manifest, with no MCP server URL or command, cannot be fulfilled: ask for the MCP server URL instead
 `;
