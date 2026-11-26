@@ -19,7 +19,7 @@ import { HumanInterventionHandler } from '../HumanInterventionHandler';
 import { OperationTraceRecorder } from '../OperationTraceRecorder';
 import { createDefaultSnapshotStore } from '../snapshotStore';
 import {
-  allPendingToolsFulfilled,
+  checkPendingToolsBarrier,
   maybeScheduleAsyncToolVerify,
   resolveAsyncToolOnComplete,
   tryResumeParentFromAsyncTool,
@@ -297,7 +297,7 @@ export class AgentRuntimeService {
       acceptsArtboardWorks: (...args) => self.acceptsArtboardWorks(...args),
       acceptsFileWorks: (...args) => self.acceptsFileWorks(...args),
       acceptsMemberRuntimeEnd: (...args) => self.acceptsMemberRuntimeEnd(...args),
-      allPendingToolsFulfilled: (...args) => self.allPendingToolsFulfilled(...args),
+      checkPendingToolsBarrier: (...args) => self.checkPendingToolsBarrier(...args),
       buildShareAbortResult: (...args) => self.buildShareAbortResult(...args),
       calculatePriority: (...args) => self.calculatePriority(...args),
       calculateStepDelay: (...args) => self.calculateStepDelay(...args),
@@ -523,8 +523,8 @@ export class AgentRuntimeService {
     return maybeScheduleAsyncToolVerify(this.context, ...args);
   }
 
-  private allPendingToolsFulfilled(...args: MethodArgs<typeof allPendingToolsFulfilled>) {
-    return allPendingToolsFulfilled(this.context, ...args);
+  private checkPendingToolsBarrier(...args: MethodArgs<typeof checkPendingToolsBarrier>) {
+    return checkPendingToolsBarrier(this.context, ...args);
   }
 
   private resolveAsyncToolOnComplete(...args: MethodArgs<typeof resolveAsyncToolOnComplete>) {
