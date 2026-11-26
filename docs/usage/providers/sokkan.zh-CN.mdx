@@ -1,0 +1,44 @@
+---
+title: 在 LobeHub 中使用 SOKKAN Router
+description: 学习如何在 LobeHub 中配置 SOKKAN Router。SOKKAN Router 是一个兼容 OpenAI 的推理网关，在欧盟和瑞士区域提供开放权重模型。
+tags:
+  - LobeHub
+  - SOKKAN Router
+  - API密钥
+  - Web UI
+---
+
+# 在 LobeHub 中使用 SOKKAN Router
+
+[SOKKAN Router](https://router.sokkan.ch) 是由 NINABOT Sàrl（瑞士日内瓦）运营的兼容 OpenAI 的推理网关，在欧盟和瑞士区域提供开放权重的 Qwen 和 gpt-oss 模型，支持流式输出和工具调用，按 token 从预付余额中计费。
+
+本文档将指导你如何在 LobeHub 中使用 SOKKAN Router。
+
+<Steps>
+  ### 步骤一：获取 SOKKAN Router API 密钥
+
+  - 在 [router.sokkan.ch](https://router.sokkan.ch) 注册并充值预付余额
+  - 在账户页面创建 API 密钥，密钥以 `skr_` 开头
+
+  <Callout type={'warning'}>
+    密钥只会显示一次，请妥善保存；你可以随时在账户页面吊销密钥。
+  </Callout>
+
+  ### 步骤二：在 LobeHub 中配置 SOKKAN Router
+
+  - 打开 **应用设置 → AI 服务商**，选择 **SOKKAN Router**
+  - 启用该服务商并填入 API 密钥
+  - 点击 **检查** 验证连接，然后为助手选择一个 SOKKAN Router 模型
+
+  <Callout type={'info'}>
+    获取模型列表时只会添加按需提供的模型。公开的 `/v1/models` 接口中标记为 `committed` 的模型需要签订承诺吞吐量合同，使用按量计费的密钥调用会返回 `403 committed_throughput`。
+  </Callout>
+</Steps>
+
+## 价格
+
+请求按 token 以美元从预付余额中计费。当前价格见 [模型与价格页面](https://router.sokkan.ch/models)，也可通过 `GET https://router.sokkan.ch/v1/models` 获取。
+
+## 自托管
+
+设置 `SOKKAN_API_KEY` 即可为自托管部署的所有用户启用该服务商。参见 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#sokkan-router)。

@@ -67,6 +67,7 @@ import { default as sambanova } from './sambanova';
 import { default as search1api } from './search1api';
 import { default as sensenova } from './sensenova';
 import { default as siliconcloud } from './siliconcloud';
+import { default as sokkan } from './sokkan';
 import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
@@ -184,6 +185,7 @@ const staticModelMap: ModelsMap = {
   search1api,
   sensenova,
   siliconcloud,
+  sokkan,
   spark,
   stepfun,
   straico,
@@ -307,6 +309,7 @@ export { default as sambanova } from './sambanova';
 export { default as search1api } from './search1api';
 export { default as sensenova } from './sensenova';
 export { default as siliconcloud } from './siliconcloud';
+export { default as sokkan } from './sokkan';
 export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
