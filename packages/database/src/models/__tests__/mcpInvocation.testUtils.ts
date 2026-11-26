@@ -138,7 +138,7 @@ export async function createInteraction(
   } = {},
 ) {
   const batchId = options.batchId ?? randomUUID();
-  const model = new AgentInterventionModel(db, anchor.userId, anchor.workspaceId);
+  const model = new AgentInterventionModel(db, anchor.userId, anchor.workspaceId, 'mcp');
   const requests = {
     input: {
       mode: 'form',

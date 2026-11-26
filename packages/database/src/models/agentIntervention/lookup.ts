@@ -217,7 +217,7 @@ export const withOwnerLazyTimeout = async (
   ) {
     return row;
   }
-  const scopedCtx = { db: ctx.db, userId: ctx.userId, workspaceId: row.workspaceId ?? undefined };
+  const scopedCtx = { ...ctx, workspaceId: row.workspaceId ?? undefined };
   await markBatchTerminal(scopedCtx, row.operationId, row.batchId, 'timed_out', now);
   const [updated] = await ctx.db
     .select()

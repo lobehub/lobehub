@@ -61,7 +61,7 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 /** Uses the same sealed intervention batches and private resolution outbox as ask-user. */
 export class McpElicitationService {
   readonly invocations: McpInvocationModel;
-  readonly interventions: AgentInterventionModel;
+  readonly interventions: AgentInterventionModel<'mcp'>;
   readonly messages: MessageModel;
   readonly operations: AgentOperationModel;
 
@@ -72,7 +72,7 @@ export class McpElicitationService {
     private readonly onExpire?: McpElicitationExpiry,
     readonly runtime?: McpElicitationRuntime,
   ) {
-    this.interventions = new AgentInterventionModel(db, userId, workspaceId);
+    this.interventions = new AgentInterventionModel(db, userId, workspaceId, 'mcp');
     this.invocations = new McpInvocationModel(db, userId, workspaceId);
     this.messages = new MessageModel(db, userId, workspaceId);
     this.operations = new AgentOperationModel(db, userId, workspaceId);

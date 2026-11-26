@@ -19,13 +19,47 @@ beforeEach(resetFixtures);
 afterAll(clearFixtures);
 
 describe('MCP intervention input and completion persistence', () => {
+  it('keeps MCP requests and answers outside the standard intervention API for the same owner', async () => {
+    const anchor = await createAnchor({ workspaceId: workspace });
+    const interaction = await createInteraction(anchor);
+    const { resolutionRequestId } = await claimInteraction(interaction);
+    const standard = new AgentInterventionModel(db, anchor.userId, workspace);
+    const { item } = interaction;
+
+    expect(await standard.findById(item.id)).toBeUndefined();
+    expect(await standard.findByIdForOwner(item.id)).toBeUndefined();
+    expect(await standard.findByReviewTokenHash(item.reviewTokenHash)).toBeUndefined();
+    expect(await standard.findBatch(anchor.id, item.batchId)).toEqual({
+      interventions: [],
+      resolutions: [],
+    });
+    expect(await standard.findResolutionByRequestId(resolutionRequestId)).toBeUndefined();
+    expect(await standard.rollbackResolution(resolutionRequestId)).toMatchObject({
+      outcome: 'not_found',
+    });
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(db, anchor.id, item.toolCallId),
+    ).toBeUndefined();
+    expect(
+      await AgentInterventionModel.locateByReviewTokenHash(db, item.reviewTokenHash),
+    ).toBeUndefined();
+    expect(
+      await AgentInterventionModel.locateByResolutionRequestId(db, resolutionRequestId),
+    ).toBeUndefined();
+    expect(await interaction.model.findResolutionByRequestId(resolutionRequestId)).toMatchObject({
+      source: 'mcp',
+      status: 'resolving',
+    });
+  });
+
   it('completes only the owning published MCP resolution, idempotently, without retiring its still-running parent', async () => {
     const a = await createAnchor({ workspaceId: workspace });
     const interaction = await createInteraction(a);
     const { resolutionRequestId: rid } = await claimInteraction(interaction);
     expect((await interaction.model.completeMcpResolution(rid)).outcome).toBe('conflict');
     expect(
-      (await new AgentInterventionModel(db, other, workspace).completeMcpResolution(rid)).outcome,
+      (await new AgentInterventionModel(db, other, workspace, 'mcp').completeMcpResolution(rid))
+        .outcome,
     ).toBe('not_found');
     expect((await interaction.model.markResolutionPublished(rid)).outcome).toBe('applied');
     const complete = await interaction.model.completeMcpResolution(rid);

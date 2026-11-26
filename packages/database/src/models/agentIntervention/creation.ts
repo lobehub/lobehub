@@ -41,6 +41,15 @@ export const createBatchInTransaction = async (
   params: CreateAgentInterventionBatchParams,
   lockedOperationStatus?: AgentInterventionOperationIdentity['status'],
 ): Promise<AgentInterventionItem[]> => {
+  const mcp = ctx.family === 'mcp';
+  if (
+    (params.source === 'mcp') !== mcp ||
+    params.items.some(
+      (item) => (item.sanitizedRequest.customDetail?.kind === 'mcp_elicitation') !== mcp,
+    )
+  ) {
+    throw new Error(AGENT_INTERVENTION_INVALID_BATCH);
+  }
   let operationStatus = lockedOperationStatus;
   if (operationStatus === undefined) {
     const [ownedOperation] = await tx

@@ -3,7 +3,12 @@ import { and, eq, sql } from 'drizzle-orm';
 import { agentInterventionResolutions, agentInterventions } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { HASH_PATTERN, UUID_PATTERN } from './constants';
-import type { AgentInterventionLocator, AgentInterventionResolutionLocator } from './types';
+import { familyFilter } from './context';
+import type {
+  AgentInterventionLocator,
+  AgentInterventionResolutionLocator,
+  StandardIntervention,
+} from './types';
 
 /**
  * System-only locator. It returns only routing/ACL context and never exposes
@@ -12,7 +17,7 @@ import type { AgentInterventionLocator, AgentInterventionResolutionLocator } fro
 export const locateByReviewTokenHash = async (
   db: LobeChatDatabase,
   reviewTokenHash: string,
-): Promise<AgentInterventionLocator | undefined> => {
+): Promise<StandardIntervention<AgentInterventionLocator> | undefined> => {
   if (!HASH_PATTERN.test(reviewTokenHash)) return undefined;
 
   const [row] = await db
@@ -28,10 +33,15 @@ export const locateByReviewTokenHash = async (
       workspaceId: agentInterventions.workspaceId,
     })
     .from(agentInterventions)
-    .where(eq(agentInterventions.reviewTokenHash, reviewTokenHash))
+    .where(
+      and(
+        eq(agentInterventions.reviewTokenHash, reviewTokenHash),
+        familyFilter(agentInterventions.source),
+      ),
+    )
     .limit(1);
 
-  return row;
+  return row && row.source !== 'mcp' ? { ...row, source: row.source } : undefined;
 };
 
 /**
@@ -55,7 +65,7 @@ export const locateByOperationAndToolCall = async (
   operationId: string,
   toolCallId: string,
   callback?: { batchId?: string; interventionId?: string },
-): Promise<AgentInterventionLocator | undefined> => {
+): Promise<StandardIntervention<AgentInterventionLocator> | undefined> => {
   if (!operationId.trim() || !toolCallId.trim()) return undefined;
 
   const rows = await db
@@ -74,6 +84,7 @@ export const locateByOperationAndToolCall = async (
     .where(
       and(
         eq(agentInterventions.operationId, operationId),
+        familyFilter(agentInterventions.source),
         eq(agentInterventions.toolCallId, toolCallId),
         callback?.batchId ? eq(agentInterventions.batchId, callback.batchId) : undefined,
         callback?.interventionId
@@ -85,14 +96,15 @@ export const locateByOperationAndToolCall = async (
 
   if (rows.length > 1)
     throw new Error('Ambiguous intervention callback; batch or callback identity is required');
-  return rows[0];
+  const row = rows[0];
+  return row && row.source !== 'mcp' ? { ...row, source: row.source } : undefined;
 };
 
 /** System-only owner/workspace recovery for post-claim delivery callbacks. */
 export const locateByResolutionRequestId = async (
   db: LobeChatDatabase,
   resolutionRequestId: string,
-): Promise<AgentInterventionResolutionLocator | undefined> => {
+): Promise<StandardIntervention<AgentInterventionResolutionLocator> | undefined> => {
   if (!UUID_PATTERN.test(resolutionRequestId)) return undefined;
   const [row] = await db
     .select({
@@ -103,7 +115,12 @@ export const locateByResolutionRequestId = async (
       workspaceId: agentInterventionResolutions.workspaceId,
     })
     .from(agentInterventionResolutions)
-    .where(eq(agentInterventionResolutions.resolutionRequestId, resolutionRequestId))
+    .where(
+      and(
+        eq(agentInterventionResolutions.resolutionRequestId, resolutionRequestId),
+        familyFilter(agentInterventionResolutions.source),
+      ),
+    )
     .limit(1);
-  return row;
+  return row && row.source !== 'mcp' ? { ...row, source: row.source } : undefined;
 };
