@@ -834,3 +834,79 @@ describe('LocalSystemExecutionRuntime.runCommand', () => {
     expect((output.state as { sandboxed?: boolean }).sandboxed).toBe(true);
   });
 });
+
+describe('LocalSystemExecutionRuntime.executeToolCall — agent file scan', () => {
+  const scanRequest = { knownDirs: ['/repo'], root: '/repo' };
+  const readResult = { charCount: 4, content: 'body', filename: 'a.ts', totalLineCount: 1 };
+
+  it('answers the server’s scan request after a successful read', async () => {
+    const scan = { dirs: ['/repo/web'], instructions: [], outcome: 'empty', skills: [] };
+    const service = createService({
+      discoverAgentFiles: vi.fn().mockResolvedValue(scan),
+      readLocalFile: vi.fn().mockResolvedValue(readResult),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall(
+      'readFile',
+      { agentFileScan: scanRequest, cwd: '/repo', path: 'web/a.ts' },
+      { trustArgsCwd: true },
+    );
+
+    expect(service.discoverAgentFiles).toHaveBeenCalledWith({
+      ...scanRequest,
+      cwd: '/repo',
+      path: 'web/a.ts',
+    });
+    expect(output?.state?.agentFileScan).toEqual(scan);
+    // The scan request is not a read param.
+    expect(vi.mocked(service.readLocalFile).mock.calls[0][0]).not.toHaveProperty('agentFileScan');
+  });
+
+  it('ignores a scan request on an untrusted (renderer) call', async () => {
+    const service = createService({
+      discoverAgentFiles: vi.fn(),
+      readLocalFile: vi.fn().mockResolvedValue(readResult),
+    });
+
+    await new LocalSystemExecutionRuntime(service).executeToolCall('readFile', {
+      agentFileScan: scanRequest,
+      path: '/repo/web/a.ts',
+    });
+
+    expect(service.discoverAgentFiles).not.toHaveBeenCalled();
+  });
+
+  it('skips the scan when the edit failed', async () => {
+    const service = createService({
+      discoverAgentFiles: vi.fn(),
+      editLocalFile: vi
+        .fn()
+        .mockResolvedValue({ error: 'not found', replacements: 0, success: false }),
+    });
+
+    await new LocalSystemExecutionRuntime(service).executeToolCall(
+      'editFile',
+      { agentFileScan: scanRequest, file_path: '/repo/web/a.ts', new_string: 'b', old_string: 'a' },
+      { trustArgsCwd: true },
+    );
+
+    expect(service.discoverAgentFiles).not.toHaveBeenCalled();
+  });
+
+  it('keeps the tool result when the scan throws', async () => {
+    const service = createService({
+      discoverAgentFiles: vi.fn().mockRejectedValue(new Error('EACCES')),
+      writeFile: vi.fn().mockResolvedValue({ success: true }),
+    });
+
+    const output = await new LocalSystemExecutionRuntime(service).executeToolCall(
+      'writeFile',
+      { agentFileScan: scanRequest, content: 'x', path: '/repo/web/a.ts' },
+      { trustArgsCwd: true },
+    );
+
+    expect(output?.success).toBe(true);
+    expect(output?.state).not.toHaveProperty('agentFileScan');
+  });
+});

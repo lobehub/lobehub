@@ -12,7 +12,12 @@ import {
 import { buildShellCompletion } from '@/server/services/deviceGateway/toolCallCompletion';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
-import { applyAgentFileDiscovery, startAgentFileDiscovery } from './agentFileDiscovery';
+import {
+  buildAgentFileScanRequest,
+  collectAgentFileScan,
+  withoutScanRequest,
+  withScanRequest,
+} from './agentFileDiscovery';
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
@@ -118,7 +123,9 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // be approved by the audit as a workspace-relative `scope` and then
         // execute against `/etc`. Likewise `readFile({ path: 'passwd', cwd:
         // '/etc' })` — only `path` is audited, and it looks workspace-relative.
-        const { cwd: _offContractCwd, ...sanitized } = (args ?? {}) as Record<string, unknown>;
+        const { cwd: _offContractCwd, ...sanitized } = withoutScanRequest(
+          (args ?? {}) as Record<string, unknown>,
+        );
         let finalArgs = sanitized as typeof args;
         if (workingDirArg && context.workingDirectory) {
           const scopeValue: unknown = finalArgs?.[workingDirArg];
@@ -173,6 +180,17 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
+        // A file tool entering a directory below the working directory that
+        // the run has not scanned asks the device, in the same call, for that
+        // directory's agent files. See `agentFileDiscovery`.
+        const scanRequest = buildAgentFileScanRequest({
+          agentFiles: context.agentFiles,
+          apiName: api.name,
+          args: finalArgs,
+          workingDirectory: context.workingDirectory,
+        });
+        finalArgs = withScanRequest(finalArgs, scanRequest);
+
         const deviceWorkspaceId = await getDeviceWorkspaceId();
         // Only a command can outlive its call. The device may keep watching it
         // and report the final result later, which lets the transport park the
@@ -201,22 +219,6 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             },
             context.executionTimeoutMs,
           );
-        // A file tool entering a directory the run has not scanned asks the
-        // device for that directory's agent files, concurrently with the call
-        // itself so the tool does not wait on it. See `agentFileDiscovery`.
-        const discover = () =>
-          startAgentFileDiscovery({
-            agentFiles: context.agentFiles,
-            apiName: api.name,
-            args: finalArgs,
-            deviceId: context.activeDeviceId!,
-            getWorkspaceId: getDeviceWorkspaceId,
-            serverDB: context.serverDB,
-            userId: context.userId!,
-            workingDirectory: context.workingDirectory,
-          });
-        let discovery = discover();
-
         let result = await execute();
 
         // A managed cloud device that is asleep or still starting is woken and
@@ -228,21 +230,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             { db: context.serverDB, userId: context.userId!, workspaceId: deviceWorkspaceId },
             context.activeDeviceId!,
           );
-          if (managed === 'online') {
-            // The first discovery hit the same sleeping device and came back
-            // empty; ask again now that it can answer.
-            discovery = discover();
-            result = await execute();
-          } else if (managed) return withoutDeviceReplay(managed);
+          if (managed === 'online') result = await execute();
+          else if (managed) return withoutDeviceReplay(managed);
         }
 
-        if (discovery) {
-          result = applyAgentFileDiscovery(result, await discovery, {
-            deviceId: context.activeDeviceId!,
-            operationId: context.operationId,
-            run: context.agentFiles ?? { instructionPaths: [], knownDirs: [], skillNames: [] },
-          });
-        }
+        result = collectAgentFileScan(result, {
+          deviceId: context.activeDeviceId!,
+          requested: !!scanRequest,
+          run: context.agentFiles ?? { instructionPaths: [], knownDirs: [], skillNames: [] },
+        });
 
         return withoutDeviceReplay(result);
       };

@@ -57,25 +57,37 @@ export interface InitWorkspaceResult {
 }
 
 export interface DiscoverAgentFilesParams {
+  /** The working directory a relative `path` resolves against, as the file tool does. */
+  cwd?: string;
   /**
    * Directories whose agent files the run already has (the bound working
-   * directory and every directory an earlier discovery returned). The walk
-   * stops before reaching one, so their files are never read again.
+   * directory, its parents, and every directory an earlier discovery
+   * returned). The walk stops before reaching one.
    */
   knownDirs?: string[];
-  /** Absolute path of the file (or directory) a tool call is about to touch. */
+  /** The path the file tool was given (absolute, relative, or `~/…`). */
   path: string;
+  /** The run's working directory. Nothing outside it is scanned. */
+  root: string;
 }
+
+/**
+ * Why a discovery returned what it did, so a missing `AGENTS.md` can be told
+ * apart from a slow disk or a path outside the working directory.
+ */
+export type DiscoverAgentFilesOutcome = 'empty' | 'failed' | 'found' | 'outside-root' | 'timed-out';
 
 export interface DiscoverAgentFilesResult {
   /**
    * Directories this call walked, nearest first. The caller adds them to its
    * known set even when they held nothing, so the next call in the same
-   * directory skips the walk.
+   * directory skips the walk. Empty unless `outcome` is `found` or `empty`.
    */
   dirs: string[];
+  durationMs: number;
   /** `AGENTS.md` / `CLAUDE.md` in `dirs`, root first like {@link InitWorkspaceResult}. */
   instructions: WorkspaceInstructionsItem[];
+  outcome: DiscoverAgentFilesOutcome;
   /** Project skills under `dirs`, nearest directory winning on a name collision. */
   skills: ProjectSkillItem[];
 }

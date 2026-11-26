@@ -76,6 +76,8 @@ const localSystemService: ILocalSystemService = {
 const createRuntime = (uploadImage?: ImageUploader) =>
   new LocalSystemExecutionRuntime({
     ...localSystemService,
+    discoverAgentFiles: async (params) =>
+      (await import('@lobechat/device-control')).discoverAgentFiles(params),
     readLocalFile: (params) => readLocalFile(params, uploadImage),
   });
 

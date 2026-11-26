@@ -22,6 +22,11 @@ import {
   normalizeTodosState,
   redactResultForEvents,
 } from '../utils';
+import {
+  applyAgentFileDiscovery,
+  createAgentFileBatchSeen,
+  hasSkillsTool,
+} from '../utils/discoveredAgentFiles';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
 import { persistActivatedTools } from './persistActivatedTools';
@@ -510,7 +515,11 @@ export const callTool =
         });
       }
 
-      const executionResult = execution.result;
+      const executionResult = applyAgentFileDiscovery(execution.result, {
+        blocked: execution.resultBlocked,
+        seen: createAgentFileBatchSeen(),
+        skillsToolAvailable: hasSkillsTool(runContext.effectiveManifestMap),
+      });
       const executionTime = executionResult.executionTime ?? 0;
       const isSuccess = executionResult.success;
 
@@ -806,6 +815,7 @@ export const callToolsBatch =
     }
 
     const toolResults: ToolResultEntry[] = [];
+    const agentFileSeen = createAgentFileBatchSeen();
     /**
      * Calls this batch could not settle because the operation was aborted
      * mid-flight. Tracked separately from `deferredTools` (which are alive and
@@ -897,7 +907,11 @@ export const callToolsBatch =
           return;
         }
 
-        const executionResult = execution.result;
+        const executionResult = applyAgentFileDiscovery(execution.result, {
+          blocked: execution.resultBlocked,
+          seen: agentFileSeen,
+          skillsToolAvailable: hasSkillsTool(runContext.effectiveManifestMap),
+        });
         const executionTime = executionResult.executionTime ?? 0;
         const isSuccess = executionResult.success;
         if (isTodoCall) {

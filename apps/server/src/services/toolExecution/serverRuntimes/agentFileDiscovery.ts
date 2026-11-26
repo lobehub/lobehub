@@ -1,13 +1,12 @@
 import path from 'node:path';
 
-import { AGENT_FILE_DISCOVERY_STATE_KEY, type DiscoveredAgentFiles } from '@lobechat/agent-runtime';
+import {
+  AGENT_FILE_DISCOVERY_STATE_KEY,
+  type PendingAgentFileDiscovery,
+} from '@lobechat/agent-runtime';
 import { LocalSystemApiName } from '@lobechat/builtin-tool-local-system';
-import type { LobeChatDatabase } from '@lobechat/database';
+import { AGENT_FILE_SCAN_ARG, AGENT_FILE_SCAN_STATE_KEY } from '@lobechat/tool-runtime';
 import debug from 'debug';
-
-import { deviceGateway } from '@/server/services/deviceGateway';
-import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
-import type { AgentFileDiscoveryResult } from '@/server/services/deviceGateway/workspace';
 
 import type { RunAgentFiles } from '../types';
 
@@ -15,10 +14,10 @@ const log = debug('lobe-server:agent-file-discovery');
 
 /**
  * The file tools whose target brings a directory into the run's scope, and the
- * argument naming it. Claude Code and OpenCode load a directory's agent files
- * on the same trigger: the model reading, writing or editing a file there.
- * Searches and commands are left out — a `grep` over a tree or a `cd` in a
- * command does not say which directory the model is working in.
+ * argument naming it. Claude Code loads a subdirectory's agent files on the
+ * same trigger: the model reading, writing or editing a file there. Searches
+ * and commands are left out — a `grep` over a tree or a `cd` in a command does
+ * not say which directory the model is working in.
  */
 const TARGET_PATH_ARG: Partial<Record<string, 'file_path' | 'path'>> = {
   [LocalSystemApiName.editFile]: 'file_path',
@@ -26,244 +25,161 @@ const TARGET_PATH_ARG: Partial<Record<string, 'file_path' | 'path'>> = {
   [LocalSystemApiName.writeFile]: 'path',
 };
 
-/**
- * Character budget for the instructions one discovery shows the model. The
- * block leads the tool result so the result's own truncation (which keeps the
- * leading window) never cuts it; the budget keeps it from crowding out the
- * file the model asked for.
- */
-const MAX_INJECTED_INSTRUCTION_CHARS = 16_000;
+/** What the server asks the device for, riding on the file tool's args. */
+export interface AgentFileScanRequest {
+  knownDirs: string[];
+  root: string;
+}
 
 const pathApiFor = (target: string) =>
   /^[A-Za-z]:[\\/]/.test(target) || target.startsWith('\\\\') ? path.win32 : path.posix;
 
-/**
- * The absolute path a file tool call targets, or `undefined` for other calls.
- * A relative path resolves against the working directory, as the device does.
- */
-export const resolveToolTargetPath = (
-  apiName: string,
-  args: Record<string, unknown> | undefined,
-  workingDirectory: string | undefined,
-): string | undefined => {
-  const arg = TARGET_PATH_ARG[apiName];
-  const raw = arg ? args?.[arg] : undefined;
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-
-  const pathApi = pathApiFor(workingDirectory || raw);
-  if (pathApi.isAbsolute(raw)) return pathApi.normalize(raw);
-  return workingDirectory ? pathApi.resolve(workingDirectory, raw) : undefined;
-};
+const trimSeparators = (dir: string) => dir.replace(/[\\/]+$/, '') || dir;
 
 /**
- * Whether the directory holding `target` was already walked, so the device
- * round-trip can be skipped. Only an exact match counts: a subdirectory of a
- * known directory can still hold its own `AGENTS.md` (a package in a
- * monorepo), which is what discovery is for.
+ * Whether the directory holding `target` was already walked, so the scan can
+ * be skipped. Only an exact match counts: a subdirectory of a known directory
+ * can still hold its own `AGENTS.md` (a package in a monorepo), which is what
+ * discovery is for.
  */
 export const isTargetDirKnown = (target: string, knownDirs: readonly string[]) => {
   const pathApi = pathApiFor(target);
   const dir = pathApi.dirname(target);
-  return knownDirs.some((known) => {
-    const normalized = pathApi.normalize(known).replace(/[\\/]+$/, '') || known;
-    return normalized === dir;
-  });
+  return knownDirs.some((known) => trimSeparators(pathApi.normalize(known)) === dir);
 };
 
 /**
- * Ask the device for the agent files around a file tool's target, or return
- * `undefined` when the call is not a file tool, its directory was already
- * walked, or the run carries no record to compare against. Never rejects: a
- * failed discovery resolves to `undefined` and the tool result goes out as is.
+ * The scan request for a file tool call, or `undefined` when there is nothing
+ * to ask: not a file tool, no working directory, a target outside it, or a
+ * directory already walked. Discovery never leaves the working directory —
+ * approving one file elsewhere does not approve reading that tree's agent
+ * files (Claude Code does not load them either).
  *
- * Reading the device is new work dispatched to it, so it passes the same
- * last-moment registry check as the tool call (`executeAuthorizedDeviceToolCall`):
- * a workspace device unshared mid-run must not have its files read.
+ * This is a pre-filter on the path as given. A `~/…` path is left to the
+ * device, which resolves it like the file tool and checks the real path
+ * against the working directory itself.
  */
-export const startAgentFileDiscovery = (params: {
+export const buildAgentFileScanRequest = (params: {
   agentFiles: RunAgentFiles | undefined;
   apiName: string;
   args: Record<string, unknown> | undefined;
-  deviceId: string;
-  getWorkspaceId: () => Promise<string | undefined>;
-  serverDB: LobeChatDatabase | undefined;
-  userId: string;
   workingDirectory: string | undefined;
-}): Promise<AgentFileDiscoveryResult | undefined> | undefined => {
-  const {
-    agentFiles,
-    apiName,
-    args,
-    deviceId,
-    getWorkspaceId,
-    serverDB,
-    userId,
-    workingDirectory,
-  } = params;
-  if (!agentFiles) return undefined;
+}): AgentFileScanRequest | undefined => {
+  const { agentFiles, apiName, args, workingDirectory } = params;
+  const arg = TARGET_PATH_ARG[apiName];
+  const raw = arg ? args?.[arg] : undefined;
+  if (!agentFiles || !workingDirectory || typeof raw !== 'string' || !raw.trim()) return undefined;
 
-  const target = resolveToolTargetPath(apiName, args, workingDirectory);
-  if (!target || isTargetDirKnown(target, agentFiles.knownDirs)) return undefined;
+  const request = { knownDirs: agentFiles.knownDirs, root: workingDirectory };
+  if (raw.startsWith('~')) return request;
 
-  return (async () => {
-    try {
-      const workspaceId = await getWorkspaceId();
-      const denied = await resolveDeviceDispatchAuthorizationFailure(
-        serverDB,
-        userId,
-        deviceId,
-        workspaceId,
-      );
-      if (denied) return undefined;
+  const pathApi = pathApiFor(workingDirectory);
+  const target = pathApi.resolve(workingDirectory, raw);
+  const relative = pathApi.relative(trimSeparators(pathApi.normalize(workingDirectory)), target);
+  if (relative.startsWith('..') || pathApi.isAbsolute(relative)) return undefined;
+  if (isTargetDirKnown(target, agentFiles.knownDirs)) return undefined;
 
-      return await deviceGateway.discoverAgentFiles({
-        deviceId,
-        knownDirs: agentFiles.knownDirs,
-        path: target,
-        userId,
-        workspaceId,
-      });
-    } catch (error) {
-      log('discovery failed for %s: %O', target, error);
-      return undefined;
-    }
-  })();
+  return request;
 };
+
+/** Strip a model-supplied scan request: like `cwd`, only the server may set it. */
+export const withoutScanRequest = <T extends Record<string, unknown>>(args: T): T => {
+  if (!(AGENT_FILE_SCAN_ARG in args)) return args;
+  const { [AGENT_FILE_SCAN_ARG]: _offContract, ...rest } = args;
+  return rest as T;
+};
+
+export const withScanRequest = <T extends Record<string, unknown>>(
+  args: T,
+  request: AgentFileScanRequest | undefined,
+): T => (request ? { ...args, [AGENT_FILE_SCAN_ARG]: request } : args);
+
+interface DeviceScan {
+  dirs?: unknown;
+  durationMs?: unknown;
+  instructions?: { content?: unknown; path?: unknown; source?: unknown }[];
+  outcome?: unknown;
+  skills?: {
+    description?: unknown;
+    disableModelInvocation?: unknown;
+    name?: unknown;
+    path?: unknown;
+    scope?: unknown;
+  }[];
+}
+
+const strings = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
 /**
- * In-process claims per operation: the calls of one batch run concurrently
- * from the same pre-batch state, so without this two reads in a new repository
- * would both show its `AGENTS.md`. State persistence covers later steps.
+ * Turn the device's answer into what the run has not seen, as a
+ * {@link PendingAgentFileDiscovery} the agent runtime renders once the result
+ * is final (`applyAgentFileDiscovery`). Instruction files and skill names the
+ * run already has are dropped; skills that opt out of model invocation or
+ * carry no description stay out, as they do from the start-of-run pool. The
+ * raw answer never reaches the stored result.
  */
-const claims = new Map<string, { at: number; keys: Set<string> }>();
-const CLAIM_TTL_MS = 10 * 60_000;
-
-const claim = (operationId: string | undefined, key: string): boolean => {
-  if (!operationId) return true;
-  const now = Date.now();
-  for (const [id, entry] of claims) if (now - entry.at > CLAIM_TTL_MS) claims.delete(id);
-
-  const entry = claims.get(operationId) ?? { at: now, keys: new Set<string>() };
-  claims.set(operationId, entry);
-  entry.at = now;
-  if (entry.keys.has(key)) return false;
-  entry.keys.add(key);
-  return true;
-};
-
-const escapeAttr = (value: string) => value.replaceAll('"', '&quot;');
-
-const renderDiscovery = (
-  instructions: AgentFileDiscoveryResult['instructions'],
-  skills: DiscoveredAgentFiles['skills'],
-): string => {
-  const parts: string[] = [
-    '<agent_files_discovered>',
-    'This directory has agent files the run had not loaded yet. Follow these instructions for work under their directory, together with the ones you started with; the more specific file wins where they disagree.',
-  ];
-
-  // The device lists files root first, which is also the reading order. The
-  // budget is spent the other way: the file nearest the target is the most
-  // specific and wins on conflict, so a long repository-root file must not
-  // crowd it out.
-  let remaining = MAX_INJECTED_INSTRUCTION_CHARS;
-  const shownLengths = new Map<number, number>();
-  for (let index = instructions.length - 1; index >= 0; index--) {
-    const length = Math.min(instructions[index].content.length, remaining);
-    shownLengths.set(index, length);
-    remaining -= length;
-  }
-
-  for (const [index, { content, path: filePath, source }] of instructions.entries()) {
-    const attrs = `source="${source}"${filePath ? ` path="${escapeAttr(filePath)}"` : ''}`;
-    const shown = content.slice(0, shownLengths.get(index) ?? 0);
-    const fits = shown.length === content.length;
-    const note = fits
-      ? ''
-      : `\n[Truncated to fit this tool result. Read ${filePath ?? source} for the rest.]`;
-    parts.push(`<project_instructions ${attrs}>\n${shown}${note}\n</project_instructions>`);
-  }
-
-  if (skills.length > 0) {
-    parts.push(
-      'Skills available under this directory (load one with activateSkill by name, or read its SKILL.md):',
-      ...skills.map(({ description, location, name }) => `- ${name}: ${description} (${location})`),
-    );
-  }
-
-  parts.push('</agent_files_discovered>');
-  return parts.join('\n');
-};
-
-/**
- * Turn the device's answer into what the run has not seen: instruction files
- * and skill names already in the run (or claimed by a concurrent call in this
- * batch) are dropped. Skills that opt out of model invocation or carry no
- * description stay out, as they do from the start-of-run pool.
- */
-export const selectNewAgentFiles = (
-  discovery: AgentFileDiscoveryResult,
-  run: RunAgentFiles,
-  operationId?: string,
-) => {
-  const knownPaths = new Set(run.instructionPaths);
-  const knownSkills = new Set(run.skillNames.map((name) => name.toLowerCase()));
-
-  const instructions = discovery.instructions.filter(
-    (item) =>
-      !!item.path && !knownPaths.has(item.path) && claim(operationId, `instruction:${item.path}`),
-  );
-  const skills = discovery.skills
-    .filter((skill) => skill.scope !== 'device' && !skill.disableModelInvocation)
-    .flatMap((skill) => {
-      const description = skill.description?.trim();
-      const key = skill.name.toLowerCase();
-      if (!description || knownSkills.has(key)) return [];
-      if (!claim(operationId, `skill:${key}`)) return [];
-      knownSkills.add(key);
-      return [{ description, location: skill.path, name: skill.name }];
-    });
-
-  return { instructions, skills };
-};
-
-/**
- * Attach a discovery to a successful file tool result: the new instructions
- * and skills lead the content, and the result's `state` carries the record the
- * agent runtime folds into `state.discoveredAgentFiles`. The directories are
- * recorded even when they held nothing new, so the next call there skips the
- * device round-trip.
- */
-export const applyAgentFileDiscovery = <
-  T extends { content?: unknown; state?: unknown; success?: boolean },
->(
+export const collectAgentFileScan = <T extends { state?: unknown; success?: boolean }>(
   result: T,
-  discovery: AgentFileDiscoveryResult | undefined,
-  context: { deviceId: string; operationId?: string; run: RunAgentFiles },
+  context: { deviceId: string; requested: boolean; run: RunAgentFiles },
 ): T => {
-  if (!result.success || !discovery || discovery.dirs.length === 0) return result;
+  const state =
+    result.state && typeof result.state === 'object'
+      ? (result.state as Record<string, unknown>)
+      : undefined;
+  const scan = state?.[AGENT_FILE_SCAN_STATE_KEY] as DeviceScan | undefined;
+  if (!state || !(AGENT_FILE_SCAN_STATE_KEY in state)) {
+    if (context.requested && result.success) {
+      // The device ran the tool but did not answer: a client that predates
+      // the scan, which ignores the arg.
+      log('scan outcome=unsupported device=%s', context.deviceId);
+    }
+    return result;
+  }
 
-  const { instructions, skills } = selectNewAgentFiles(discovery, context.run, context.operationId);
-  const record: DiscoveredAgentFiles = {
+  const { [AGENT_FILE_SCAN_STATE_KEY]: _raw, ...rest } = state;
+  const stripped = { ...result, state: rest };
+  if (!context.requested || !scan || typeof scan !== 'object') return stripped;
+
+  const dirs = strings(scan.dirs);
+  log(
+    'scan outcome=%s device=%s dirs=%d durationMs=%s',
+    scan.outcome,
+    context.deviceId,
+    dirs.length,
+    scan.durationMs,
+  );
+  if (dirs.length === 0) return stripped;
+
+  const knownPaths = new Set(context.run.instructionPaths);
+  const knownSkills = new Set(context.run.skillNames.map((name) => name.toLowerCase()));
+
+  const instructions = (scan.instructions ?? []).flatMap((item) =>
+    typeof item.path === 'string' && typeof item.content === 'string' && !knownPaths.has(item.path)
+      ? [
+          {
+            content: item.content,
+            path: item.path,
+            source: typeof item.source === 'string' ? item.source : 'AGENTS.md',
+          },
+        ]
+      : [],
+  );
+  const skills = (scan.skills ?? []).flatMap((skill) => {
+    const description = typeof skill.description === 'string' ? skill.description.trim() : '';
+    if (typeof skill.name !== 'string' || typeof skill.path !== 'string' || !description) return [];
+    if (skill.scope === 'device' || skill.disableModelInvocation === true) return [];
+    const key = skill.name.toLowerCase();
+    if (knownSkills.has(key)) return [];
+    knownSkills.add(key);
+    return [{ description, location: skill.path, name: skill.name }];
+  });
+
+  const pending: PendingAgentFileDiscovery = {
     deviceId: context.deviceId,
-    dirs: discovery.dirs,
-    instructionPaths: instructions.map((item) => item.path!),
+    dirs,
+    instructions,
     skills,
   };
-  const state = {
-    ...(result.state && typeof result.state === 'object' ? result.state : {}),
-    [AGENT_FILE_DISCOVERY_STATE_KEY]: record,
-  };
-
-  if (instructions.length === 0 && skills.length === 0) return { ...result, state };
-
-  log(
-    'discovered %d instruction file(s) and %d skill(s) under %s',
-    instructions.length,
-    skills.length,
-    discovery.dirs.at(-1),
-  );
-  const block = renderDiscovery(instructions, skills);
-  const content = typeof result.content === 'string' ? result.content : '';
-  return { ...result, content: content ? `${block}\n\n${content}` : block, state };
+  return { ...stripped, state: { ...rest, [AGENT_FILE_DISCOVERY_STATE_KEY]: pending } };
 };

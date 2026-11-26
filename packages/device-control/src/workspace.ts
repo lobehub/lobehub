@@ -3,6 +3,7 @@ import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
+import { resolveAgainstCwd } from '@lobechat/local-file-shell/file';
 import { detectGitHubRepository, detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
@@ -157,11 +158,13 @@ type SkillCandidate = ProjectSkillItem & { realPath: string };
  * `SKILL.md`. Once a directory contains `SKILL.md`, treat it as a skill root
  * and do not recurse into its subdirectories (`scripts/`, `references/`, etc.).
  * Returns `[]` when the source directory is absent or unreadable.
- * Candidates are ordered by directory name to make alias precedence stable.
+ * Candidates are ordered by directory name to make alias precedence stable;
+ * at most `limit` of them are read.
  */
 const scanSkillsInSource = async (
   { previewRoot, scope, source, sourceRoot }: SkillScanRoot,
   seenRealPaths: ReadonlySet<string>,
+  limit = Infinity,
 ): Promise<(SkillCandidate | null)[]> => {
   let entries;
   try {
@@ -176,6 +179,7 @@ const scanSkillsInSource = async (
         (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
       )
       .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, limit)
       .map(async (entry): Promise<SkillCandidate | null> => {
         const skillDir = path.join(sourceRoot, entry.name);
         const skillFile = path.join(skillDir, 'SKILL.md');
@@ -203,13 +207,21 @@ const scanSkillsInSource = async (
   );
 };
 
-const collectSkills = async (roots: SkillScanRoot[]): Promise<ProjectSkillItem[]> => {
+/** Skills under `roots`, earlier roots winning on a name; `limit` caps the `SKILL.md` reads. */
+const collectSkills = async (
+  roots: SkillScanRoot[],
+  limit = Infinity,
+): Promise<ProjectSkillItem[]> => {
   const seenNames = new Set<string>();
   const seenRealPaths = new Set<string>();
   const skills: ProjectSkillItem[] = [];
+  let remaining = limit;
 
   for (const root of roots) {
-    for (const skill of await scanSkillsInSource(root, seenRealPaths)) {
+    if (remaining <= 0) break;
+    const candidates = await scanSkillsInSource(root, seenRealPaths, remaining);
+    remaining -= candidates.length;
+    for (const skill of candidates) {
       if (!skill || seenNames.has(skill.name) || seenRealPaths.has(skill.realPath)) continue;
       const { realPath, ...item } = skill;
       seenNames.add(item.name);
@@ -345,65 +357,88 @@ export const initWorkspace = async (
 };
 
 /**
+ * Upper bound on `SKILL.md` files one discovery reads. Each is read whole to
+ * parse its frontmatter, so a directory holding hundreds of skills must not
+ * turn the file tool it rides on into a bulk read.
+ */
+const MAX_DISCOVERED_SKILLS = 50;
+
+/**
+ * Time a discovery may add to the file tool it rides on. Past it the tool
+ * result goes out without agent files and the directory stays unscanned, so a
+ * later call there tries again.
+ */
+const DISCOVERY_TIME_BUDGET_MS = 2000;
+
+const isWithin = (root: string, target: string) => {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+/**
  * The directory a tool call touches: `target` itself when it is a directory,
  * otherwise its parent (also for a file `writeFile` is about to create).
  */
 const resolveTouchedDir = async (target: string): Promise<string> => {
-  const resolved = path.resolve(target);
   try {
-    if ((await stat(resolved)).isDirectory()) return resolved;
+    if ((await stat(target)).isDirectory()) return target;
   } catch {
     // Not created yet; its parent is still the directory being entered.
   }
-  return path.dirname(resolved);
+  return path.dirname(target);
+};
+
+/** `dir` with symlinks resolved, or its nearest existing parent's real path joined back. */
+const realDir = async (dir: string): Promise<string> => {
+  try {
+    return await realpath(dir);
+  } catch {
+    const parent = path.dirname(dir);
+    if (parent === dir) return dir;
+    return path.join(await realDir(parent), path.basename(dir));
+  }
 };
 
 /**
- * Directories a mid-run tool call newly brings into scope, nearest first: the
- * touched directory, then each parent until one the run already has
- * (`known`, excluded) or the repository root (included). Reaching neither means
- * the directory sits outside any repository the run knows, so only the
- * directory itself applies — the same rule as {@link resolveAgentFileDirs}.
+ * Directories a file tool call newly brings into scope, nearest first: the
+ * touched directory, then each parent up to the working directory, stopping
+ * before one the run already has (`known`).
  */
-const resolveDiscoveryDirs = async (
-  start: string,
-  known: ReadonlySet<string>,
-): Promise<string[]> => {
+const resolveDiscoveryDirs = (start: string, root: string, known: ReadonlySet<string>) => {
   const dirs: string[] = [];
   let current = start;
 
   for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
-    if (known.has(current)) return dirs;
+    if (known.has(current)) break;
     dirs.push(current);
-    if (await pathExists(path.join(current, '.git'))) return dirs;
-
+    if (current === root) break;
     const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
   }
 
-  return [start];
+  return dirs;
 };
 
-/**
- * Mid-run counterpart of {@link initWorkspace}: when a tool call touches a
- * directory the run has not scanned (another repository, or a package below
- * the working directory), find the agent files that apply there. Mirrors
- * Claude Code and OpenCode, which load a subdirectory's `CLAUDE.md` /
- * `AGENTS.md` the first time the model reads a file in it.
- *
- * Only project skills are returned — device skills came with the run's start.
- * No preview root is approved: these skills are loaded through the run's file
- * tools, and approving a root here would widen what the web preview can read
- * on the strength of one tool call.
- */
-export const discoverAgentFiles = async (
+const scan = async (
   params: DiscoverAgentFilesParams,
-): Promise<DiscoverAgentFilesResult> => {
-  const known = new Set((params.knownDirs ?? []).map((dir) => path.resolve(dir)));
-  const start = await resolveTouchedDir(params.path);
-  const dirs = await resolveDiscoveryDirs(start, known);
-  if (dirs.length === 0) return { dirs, instructions: [], skills: [] };
+): Promise<Omit<DiscoverAgentFilesResult, 'durationMs'>> => {
+  const target = resolveAgainstCwd(params.path, params.cwd);
+  if (!target) return { dirs: [], instructions: [], outcome: 'outside-root', skills: [] };
+
+  // Compared on real paths: a symlink inside the working directory must not
+  // pull in the agent files of wherever it points.
+  const root = await realDir(path.resolve(params.root));
+  const start = await realDir(await resolveTouchedDir(path.resolve(target)));
+  if (!isWithin(root, start)) {
+    return { dirs: [], instructions: [], outcome: 'outside-root', skills: [] };
+  }
+
+  const known = new Set(
+    await Promise.all((params.knownDirs ?? []).map((dir) => realDir(path.resolve(dir)))),
+  );
+  const dirs = resolveDiscoveryDirs(start, root, known);
+  if (dirs.length === 0) return { dirs, instructions: [], outcome: 'empty', skills: [] };
 
   const roots = dirs.flatMap((dir) =>
     SKILL_SOURCES.map((source) => {
@@ -413,10 +448,59 @@ export const discoverAgentFiles = async (
   );
   const [instructions, skills] = await Promise.all([
     readWorkspaceInstructions(dirs),
-    collectSkills(roots),
+    collectSkills(roots, MAX_DISCOVERED_SKILLS),
   ]);
 
-  return { dirs, instructions, skills };
+  return {
+    dirs,
+    instructions,
+    outcome: instructions.length > 0 || skills.length > 0 ? 'found' : 'empty',
+    skills,
+  };
+};
+
+/**
+ * Mid-run counterpart of {@link initWorkspace}: when a file tool reads, writes
+ * or edits a file in a directory below the working directory that the run has
+ * not scanned (a package of a monorepo), find the agent files that apply
+ * there. Mirrors Claude Code, which loads a subdirectory's `CLAUDE.md` and
+ * skills the first time the model touches a file in it, and likewise never
+ * looks outside the working directory.
+ *
+ * Runs inside the file tool call it rides on (see `LocalSystemExecutionRuntime`),
+ * so it needs no authorization or wake handling of its own.
+ *
+ * Only project skills are returned — device skills came with the run's start.
+ * No preview root is approved: these skills are loaded through the run's file
+ * tools, and approving a root here would widen what the web preview can read
+ * on the strength of one tool call.
+ */
+export const discoverAgentFiles = async (
+  params: DiscoverAgentFilesParams,
+): Promise<DiscoverAgentFilesResult> => {
+  const startedAt = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<Omit<DiscoverAgentFilesResult, 'durationMs'>>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ dirs: [], instructions: [], outcome: 'timed-out', skills: [] }),
+      DISCOVERY_TIME_BUDGET_MS,
+    );
+  });
+
+  try {
+    const result = await Promise.race([
+      scan(params).catch(() => ({
+        dirs: [],
+        instructions: [],
+        outcome: 'failed' as const,
+        skills: [],
+      })),
+      timedOut,
+    ]);
+    return { ...result, durationMs: Date.now() - startedAt };
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 /**

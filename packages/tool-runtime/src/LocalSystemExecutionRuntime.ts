@@ -9,6 +9,17 @@ import type { ServiceResult } from './types';
  * Abstracts the Electron IPC layer so the runtime is testable and decoupled.
  */
 export interface ILocalSystemService {
+  /**
+   * Find the agent files (`AGENTS.md`, project skills) that apply where a file
+   * tool just worked. Optional: a client without it never answers an
+   * {@link AGENT_FILE_SCAN_ARG} request, which the server reads as "nothing found".
+   */
+  discoverAgentFiles?: (params: {
+    cwd?: string;
+    knownDirs?: string[];
+    path: string;
+    root: string;
+  }) => Promise<unknown>;
   editLocalFile: (params: any) => Promise<any>;
   getCommandOutput: (params: any) => Promise<any>;
   globFiles: (params: any) => Promise<any>;
@@ -23,6 +34,34 @@ export interface ILocalSystemService {
   searchLocalFiles: (params: any) => Promise<any>;
   writeFile: (params: any) => Promise<any>;
 }
+
+/**
+ * Host-owned arg of `readFile` / `writeFile` / `editFile`: the server asks the
+ * device to report the agent files of a directory the run has not scanned,
+ * `{ knownDirs, root }`. Honored only on server-sanitized calls
+ * (`trustArgsCwd`), the same trust boundary as `cwd`.
+ */
+export const AGENT_FILE_SCAN_ARG = 'agentFileScan';
+
+/** Key under the tool result's `state` carrying the device's answer to {@link AGENT_FILE_SCAN_ARG}. */
+export const AGENT_FILE_SCAN_STATE_KEY = 'agentFileScan';
+
+interface AgentFileScanRequest {
+  knownDirs?: string[];
+  root: string;
+}
+
+const readScanRequest = (value: unknown): AgentFileScanRequest | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const { knownDirs, root } = value as Record<string, unknown>;
+  if (typeof root !== 'string' || !root) return undefined;
+  return {
+    knownDirs: Array.isArray(knownDirs)
+      ? knownDirs.filter((dir): dir is string => typeof dir === 'string')
+      : undefined,
+    root,
+  };
+};
 
 /**
  * Maps IPC tool names to localFileService method names.
@@ -156,6 +195,11 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
     // would hand that call the model's own `cwd`.
     const trustedArgsCwd = options?.trustArgsCwd ? args.cwd : undefined;
     const cwd = workingDirectory ?? trustedArgsCwd;
+    const scanRequest = options?.trustArgsCwd
+      ? readScanRequest(args[AGENT_FILE_SCAN_ARG])
+      : undefined;
+    const withScan = (output: BuiltinServerRuntimeOutput, target: unknown) =>
+      this.attachAgentFileScan(output, target, cwd, scanRequest);
 
     switch (name) {
       case 'listFiles': {
@@ -169,13 +213,16 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'readFile': {
-        return this.readFile({
-          cwd,
-          endLine: args.loc?.[1],
-          loc: args.loc,
-          path: args.path,
-          startLine: args.loc?.[0],
-        });
+        return withScan(
+          await this.readFile({
+            cwd,
+            endLine: args.loc?.[1],
+            loc: args.loc,
+            path: args.path,
+            startLine: args.loc?.[0],
+          }),
+          args.path,
+        );
       }
 
       case 'readFiles': {
@@ -183,17 +230,23 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'writeFile': {
-        return this.writeFile({ content: args.content, cwd, path: args.path });
+        return withScan(
+          await this.writeFile({ content: args.content, cwd, path: args.path }),
+          args.path,
+        );
       }
 
       case 'editFile': {
-        return this.editFile({
-          all: args.replace_all,
-          cwd,
-          path: args.file_path,
-          replace: args.new_string,
-          search: args.old_string,
-        });
+        return withScan(
+          await this.editFile({
+            all: args.replace_all,
+            cwd,
+            path: args.file_path,
+            replace: args.new_string,
+            search: args.old_string,
+          }),
+          args.file_path,
+        );
       }
 
       case 'moveFiles': {
@@ -390,6 +443,34 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
   /**
    * Batch read multiple files — unique to local system.
    */
+  /**
+   * Answer a server's {@link AGENT_FILE_SCAN_ARG} request after the file tool
+   * succeeded. The scan bounds its own time, and a failed one leaves the tool
+   * result as it was: agent files are an addition, never a reason to fail.
+   */
+  private async attachAgentFileScan(
+    output: BuiltinServerRuntimeOutput,
+    target: unknown,
+    cwd: string | undefined,
+    request: AgentFileScanRequest | undefined,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (!request || !output.success || typeof target !== 'string' || !target) return output;
+    if (!this.service.discoverAgentFiles) return output;
+
+    try {
+      const scan = await this.service.discoverAgentFiles({ ...request, cwd, path: target });
+      return {
+        ...output,
+        state: {
+          ...(output.state && typeof output.state === 'object' ? output.state : {}),
+          [AGENT_FILE_SCAN_STATE_KEY]: scan,
+        },
+      };
+    } catch {
+      return output;
+    }
+  }
+
   async readFiles(params: any): Promise<BuiltinServerRuntimeOutput> {
     try {
       const { formatMultipleFiles } = await import('@lobechat/prompts/fileSystem');
