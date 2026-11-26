@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -15,11 +15,6 @@ import {
 
 let runDir: string;
 const env = () => ({ [AGENT_CREDENTIAL_RUN_DIR_ENV]: runDir });
-const exists = (target: string) =>
-  stat(target).then(
-    () => true,
-    () => false,
-  );
 
 beforeEach(async () => {
   runDir = path.join(await mkdtemp(path.join(os.tmpdir(), 'lh-run-lease-')), 'runs');
@@ -56,6 +51,14 @@ describe('trackAgentCredentialRun', () => {
     expect(await readdir(runDir)).toEqual([]);
   });
 
+  it('refuses the run when its lease cannot be created', async () => {
+    await mkdir(path.dirname(runDir), { recursive: true });
+    // A file where the lease directory belongs.
+    await writeFile(runDir, '');
+    const lease = trackAgentCredentialRun({ env: env(), onStop: () => {}, pid: 4242 });
+    await expect(lease.admitted).rejects.toThrow('Could not register');
+  });
+
   it('ignores a stop request left for an earlier process with the same pid', async () => {
     await mkdir(runDir, { recursive: true });
     await writeFile(path.join(runDir, '4242.stop'), 'old');
@@ -81,6 +84,28 @@ describe('beginAgentCredentialReplacement', () => {
     lease.release();
   });
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'refuses a run while the replacement markers cannot be inspected',
+    async () => {
+      const replacement = await beginAgentCredentialReplacement(runDir);
+      const lease = trackAgentCredentialRun({
+        admissionTimeoutMs: 300,
+        env: env(),
+        onStop: () => {},
+        pid: 4242,
+      });
+      // Searchable but not readable: the markers cannot be listed.
+      await chmod(runDir, 0o300);
+      try {
+        await expect(lease.admitted).rejects.toThrow();
+      } finally {
+        await chmod(runDir, 0o700);
+        lease.release();
+        await replacement.end();
+      }
+    },
+  );
+
   it('ignores a marker left by an installer that died', async () => {
     const replacement = await beginAgentCredentialReplacement(runDir);
     const marker = (await readdir(runDir)).find((name) => name.startsWith('replacing-'))!;
@@ -95,17 +120,55 @@ describe('beginAgentCredentialReplacement', () => {
 });
 
 describe('stopAgentCredentialRuns', () => {
-  it('drops a lease that stopped renewing without signalling its pid', async () => {
+  it('asks a paused run to stop but never kills it, failing if it stays', async () => {
     await mkdir(runDir, { recursive: true });
+    // A live pid whose lease stopped renewing: a paused wrapper or a reused pid.
     const file = path.join(runDir, `${process.pid}.json`);
     await writeFile(file, '{}');
     const old = new Date(Date.now() - 60_000);
     await utimes(file, old, old);
     const killRun = vi.fn(async () => {});
 
-    expect(await stopAgentCredentialRuns(runDir, 'replaced', { killRun })).toBe(0);
+    await expect(
+      stopAgentCredentialRuns(runDir, 'replaced', {
+        forceMs: 20,
+        graceMs: 50,
+        killRun,
+        pollMs: 10,
+      }),
+    ).rejects.toThrow('did not stop');
     expect(killRun).not.toHaveBeenCalled();
-    expect(await exists(file)).toBe(false);
+    // Its stop request is withdrawn with the failed replacement.
+    expect(await readdir(runDir)).toEqual([`${process.pid}.json`]);
+  });
+
+  it('accepts a paused run that stops once asked', async () => {
+    const lease = trackAgentCredentialRun({
+      env: env(),
+      heartbeatMs: 10,
+      onStop: () => lease.release(),
+      pid: process.pid,
+    });
+    const killRun = vi.fn(async () => {});
+
+    expect(
+      await stopAgentCredentialRuns(runDir, 'replaced', { killRun, pollMs: 10, staleMs: -1 }),
+    ).toBe(1);
+    expect(killRun).not.toHaveBeenCalled();
+  });
+
+  it('drops leases of exited or long-abandoned runs', async () => {
+    await mkdir(runDir, { recursive: true });
+    const exited = spawn(process.execPath, ['-e', '']);
+    await new Promise((resolve) => exited.once('exit', resolve));
+    await writeFile(path.join(runDir, `${exited.pid}.json`), '{}');
+    const abandoned = path.join(runDir, `${process.pid}.json`);
+    await writeFile(abandoned, '{}');
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await utimes(abandoned, old, old);
+
+    expect(await stopAgentCredentialRuns(runDir, 'replaced')).toBe(0);
+    expect(await readdir(runDir)).toEqual([]);
   });
 
   it('is a no-op without a lease directory', async () => {

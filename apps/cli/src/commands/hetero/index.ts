@@ -1059,7 +1059,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
       abortForCredentialStop?.();
     },
   });
-  await credentialRun.admitted;
+  const admissionError = await credentialRun.admitted.then(
+    () => undefined,
+    (error: Error) => buildFinishError(error.message, 'AgentRuntimeError'),
+  );
+  if (admissionError) {
+    // Never start an agent the installed credential's replacement cannot see.
+    log.error('Failed to start agent:', admissionError.message);
+    await traceRecorder.finalize({ error: admissionError, result: 'error' });
+    await sink?.finish({ error: admissionError, result: 'error' }).catch(() => {});
+    process.exit(1);
+  }
   const first = await runOneAgent(
     { ...spawnOptions, prompt: resolved.prompt, resumeSessionId: options.resume },
     interceptResume,

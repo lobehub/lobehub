@@ -80,6 +80,7 @@ describe('hetero exec on an installed credential that gets replaced', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     mockHeteroFinishMutate.mockReset();
     mockHeteroFinishMutate.mockResolvedValue({ ack: true });
+    mockSpawnAgent.mockReset();
   });
 
   afterEach(async () => {
@@ -131,4 +132,38 @@ describe('hetero exec on an installed credential that gets replaced', () => {
     // Released once the agent exited, so the replacement stops waiting.
     expect(await readdir(runDir)).toEqual([]);
   }, 10_000);
+
+  it('refuses to start the agent when the run cannot be leased', async () => {
+    // A file where the lease directory belongs.
+    await writeFile(runDir, '');
+    const program = new Command();
+    program.exitOverride();
+    registerHeteroCommand(program);
+    const exit = await program
+      .parseAsync(
+        [
+          'hetero',
+          'exec',
+          '--type',
+          'codex',
+          '--prompt',
+          'hi',
+          '--topic',
+          't',
+          '--operation-id',
+          'op',
+        ],
+        { from: 'user' },
+      )
+      .catch((error: Error) => error.message);
+
+    expect(exit).toBe('__exit__1');
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: expect.stringContaining('Could not register') }),
+        result: 'error',
+      }),
+    );
+  });
 });
