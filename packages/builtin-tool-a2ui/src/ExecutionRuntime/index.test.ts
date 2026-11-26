@@ -11,7 +11,9 @@ describe('A2uiExecutionRuntime.renderUI', () => {
         {
           updateComponents: {
             components: [
-              { child: 'body', component: 'Card', id: 'root', title: 'Offsite plan' },
+              { child: 'column', component: 'Card', id: 'root' },
+              { children: ['title', 'body'], component: 'Column', id: 'column' },
+              { component: 'Text', id: 'title', text: '#### Offsite plan' },
               { component: 'Text', id: 'body', text: 'Hike and a camp dinner' },
             ],
             surfaceId: 'plan',

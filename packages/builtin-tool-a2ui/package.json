@@ -11,7 +11,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/shared-tool-ui": "workspace:*",
-    "@lobehub/a2ui": "^1.0.1"
+    "@lobehub/a2ui": "^1.1.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

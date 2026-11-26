@@ -10,6 +10,7 @@ import {
   jobsOf,
   lease,
 } from '@/database/repositories/channel/__tests__/testUtils';
+import { channelLastMessages } from '@/database/repositories/channel/lastMessage';
 import {
   agents,
   agentShareGrants,
@@ -187,6 +188,12 @@ describe('a friend mentions the owner’s personal Agent in a group', () => {
       owned.messages.find((message) => message.kind === 'agentAccess')?.agentAccess,
     ).toMatchObject({ grantId: request.id, status: 'pending' });
     await expect(asVisitor.detail(directId!)).rejects.toThrow();
+    // The owner's list previews the card with its status; anyone else gets only its text.
+    const preview = async (viewer?: string) =>
+      (await channelLastMessages(db, [directId!], viewer)).get(directId!)?.agentAccess;
+    expect(await preview(ownerId)).toMatchObject({ grantId: request.id, status: 'pending' });
+    expect(await preview(visitorId)).toBeNull();
+    expect(await preview()).toBeNull();
     expect(
       await resolveAgentAccess(db, { agentId, channelId: channel.id, requesterUserId: visitorId }),
     ).toMatchObject({ request: { id: request.id, status: 'pending' }, state: 'grant_pending' });
@@ -218,6 +225,8 @@ describe('a friend mentions the owner’s personal Agent in a group', () => {
       (await asOwner.detail(directId!)).messages.find((message) => message.kind === 'agentAccess')
         ?.agentAccess,
     ).toMatchObject({ status: 'approved' });
+    // Answered, the owner's list reads it as allowed rather than as a request.
+    expect(await preview(ownerId)).toMatchObject({ requesterName: 'mia', status: 'approved' });
 
     const claim = (await execution.claim(channel.id, job.id, lease))!;
     expect(claim.job.executionConfig).toMatchObject({
