@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "이 승인에 대해 의견을 남기고 미리보기 페이지에서 승인하거나 반송하세요.",
   "consent.scope.acceptance-review-site": "이 사이트의 검토에 대해 사이트 자체에서 8시간 동안 댓글을 남길 수 있습니다",
   "consent.scope.email": "귀하의 이메일 주소에 접근",
+  "consent.scope.generation-read": "생성된 이미지, 동영상, 오디오 보기",
+  "consent.scope.generation-write": "할당량을 사용하여 이미지, 동영상, 오디오를 생성하고 결과물 삭제",
   "consent.scope.offline_access": "클라이언트가 귀하의 데이터에 접근할 수 있도록 허용",
   "consent.scope.openid": "귀하의 LobeChat 계정으로 인증",
   "consent.scope.profile": "기본 프로필 정보(이름, 아바타 등)에 접근",

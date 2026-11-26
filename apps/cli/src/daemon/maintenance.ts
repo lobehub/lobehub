@@ -17,7 +17,7 @@ import {
   fetchLatestVersion,
   isNewerVersion,
 } from '../commands/update';
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 import { cliPackageName, cliVersion } from '../pkg';
 import { CONNECT_RETRYABLE_EXIT_CODE } from '../service/connect';
 import { readConnectServices, serviceRestartsAfterExit } from '../service/status';
@@ -35,7 +35,7 @@ type MaintenanceMode = 'daemon' | 'service';
 /** One gate shared by every workspace connection owned by this process. */
 export class CliMaintenance {
   private readonly instanceId = randomUUID();
-  private readonly directory = path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'cli-maintenance');
+  private readonly directory = path.join(os.homedir(), resolveCliDirName(), 'cli-maintenance');
   private readonly statePath = path.join(this.directory, 'state.json');
   private activeRequests = 0;
   private locked = false;
