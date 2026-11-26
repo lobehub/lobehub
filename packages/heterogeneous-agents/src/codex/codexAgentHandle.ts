@@ -14,7 +14,7 @@ import {
   buildCodexAppServerThreadParams,
   getCodexAppServerUnsupportedArgs,
 } from './appServerParams';
-import { CodexAppServerClient } from './CodexAppServerClient';
+import { CodexAppServerClient, type CodexAppServerClientOptions } from './CodexAppServerClient';
 import { CodexThreadSession } from './CodexThreadSession';
 import { pickCodexRunProvenance } from './environment';
 
@@ -36,6 +36,8 @@ export interface CodexAgentHandleOptions {
   cwd: string;
   /** Environment inherited by the native process. */
   env: NodeJS.ProcessEnv;
+  /** Each detached app-server process group, started and exited. */
+  onProcessGroupChange?: CodexAppServerClientOptions['onProcessGroupChange'];
   /** Raw native protocol trace callback. */
   onRawStdout?: (chunk: Buffer) => void;
   /** Registers cancellation before native startup begins. */
@@ -89,6 +91,7 @@ export const createCodexAgentHandle = async (
     commandPath: options.commandPath,
     cwd: options.cwd,
     env: options.env,
+    onProcessGroupChange: options.onProcessGroupChange,
   });
   const stopStderr = client.onStderr((chunk) => {
     stderr.write(chunk);

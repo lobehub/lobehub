@@ -79,18 +79,27 @@ const invokeAgentCredentialRpc = async <T>(
 };
 
 /** Install (or replace) the provider credential on the device. */
-export function installAgentCredential(
+export async function installAgentCredential(
   getClient: DeviceClientGetter,
   address: AgentCredentialRpcAddress,
   params: InstallAgentCredentialParams,
 ) {
-  return invokeAgentCredentialRpc<InstallAgentCredentialResult>(
+  const result = await invokeAgentCredentialRpc<InstallAgentCredentialResult>(
     getClient,
     'installAgentCredential',
     address,
     { provider: params.provider, secret: params.secret },
     15_000,
   );
+  if (result.status === 'ok' && result.data.stoppedRuns) {
+    log(
+      'installAgentCredential: deviceId=%s stopped %d %s run(s) on the replaced login',
+      address.deviceId,
+      result.data.stoppedRuns,
+      params.provider,
+    );
+  }
+  return result;
 }
 
 /** Remove the provider credential from the device; removing twice is fine. */

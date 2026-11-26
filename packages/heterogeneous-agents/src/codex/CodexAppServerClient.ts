@@ -64,6 +64,12 @@ export interface CodexAppServerClientOptions {
   commandPath: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /**
+   * The app-server runs detached, in a process group of its own that killing
+   * the caller's group misses. Reports each one started (`running`) and its
+   * leader's exit, so a caller that may be killed outright can record it.
+   */
+  onProcessGroupChange?: (pgid: number, running: boolean) => void;
   reconnectBaseDelayMs?: number;
   reconnectMaxAttempts?: number;
   reconnectMaxDelayMs?: number;
@@ -381,12 +387,22 @@ export class CodexAppServerClient {
       );
     }
 
+    const detached = process.platform !== 'win32';
     const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
+      detached,
       env: spawnPlan.env ?? this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    const { onProcessGroupChange } = this.options;
+    const pgid = child.pid;
+    if (detached && pgid && onProcessGroupChange) {
+      // Every generation, replaced or not, until its own leader exits. Members
+      // the leader leaves behind (tool commands) are not tracked: they do not
+      // refresh the Codex login, and an emptied group id can be reused.
+      onProcessGroupChange(pgid, true);
+      child.once('exit', () => onProcessGroupChange(pgid, false));
+    }
     const processGeneration = { child, generation, stdoutBuffer: '' };
     if (!this.isCurrentGeneration(generation)) {
       this.terminateChild(child);
