@@ -41,7 +41,7 @@ const Footer = memo<PropsWithChildren>(() => {
           width={358}
         />
       ),
-      desc: t('footer.star.desc'),
+      desc: t('footer.star.desc', { appName: BRANDING_NAME }),
       okText: t('footer.star.action'),
       onOk: () => {
         if (isOnServerSide) return;
@@ -56,7 +56,7 @@ const Footer = memo<PropsWithChildren>(() => {
       cover: (
         <GuideVideo
           height={269}
-          src={'<@985522149420855317> https://hub-apac-1.lobeobjects.space/assets/feedback.mp4'}
+          src={'https://hub-apac-1.lobeobjects.space/assets/feedback.mp4'}
           width={358}
         />
       ),
