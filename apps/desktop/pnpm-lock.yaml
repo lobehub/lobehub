@@ -715,7 +715,7 @@ importers:
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
       '@lobehub/market-types':
         specifier: ^1.19.0
-        version: 1.19.0
+        version: 1.22.0
       '@lobehub/ui':
         specifier: ^6.0.4
         version: 6.0.4(@lobehub/fluent-emoji@5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@shikijs/themes@4.5.0)(@types/mdast@4.0.4)(@types/react@19.3.0)(date-fns@4.4.0)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@9.4.0))(motion@14.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@9.4.0)
@@ -2281,9 +2281,6 @@ packages:
     resolution: {integrity: sha512-N2TFEUJLQ8GZwFaRimoTU6rPZEgMz3Qk9765e+2YrODv+H5qAGEXavTz1EnQww9FrrdpgzzhUhGmwxksh6wOxQ==}
     peerDependencies:
       zod: ^3.24.4
-
-  '@lobehub/market-types@1.19.0':
-    resolution: {integrity: sha512-t6384KeWcSii42kuOqZClhoMs4tus+bW/izoNq96p0M5CvTVxUjrqpmXcKQUK+bnOXMzqqcJZcCU/3hTmFz0lQ==}
 
   '@lobehub/market-types@1.22.0':
     resolution: {integrity: sha512-QAgcPaXgaelqPtiplYuV2aJO0JJ0N6NFICXrM0oUI+IPfFpYlTi4UUARzKCprLGnDg4rQvGHVrdiKEzOTaYYpw==}
@@ -7332,6 +7329,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: 19.2.7
       react-dom: 19.2.7
@@ -9887,10 +9885,6 @@ snapshots:
       zod: 4.6.5
     transitivePeerDependencies:
       - supports-color
-
-  '@lobehub/market-types@1.19.0':
-    dependencies:
-      zod: 3.25.76
 
   '@lobehub/market-types@1.22.0':
     dependencies:
