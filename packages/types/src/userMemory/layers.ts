@@ -58,6 +58,7 @@ export type UserMemoryContextWithoutVectors = Omit<
 export type UserMemoryContextsListItem = Pick<
   UserMemoryContext,
   | 'accessedAt'
+  | 'capturedAt'
   | 'createdAt'
   | 'currentStatus'
   | 'description'
@@ -83,6 +84,7 @@ export type UserMemoryExperiencesListItem = Pick<
   UserMemoryExperience,
   | 'accessedAt'
   | 'action'
+  | 'capturedAt'
   | 'createdAt'
   | 'id'
   | 'keyLearning'
@@ -105,6 +107,7 @@ export type UserMemoryPreferenceWithoutVectors = Omit<
 export type UserMemoryPreferencesListItem = Pick<
   UserMemoryPreference,
   | 'accessedAt'
+  | 'capturedAt'
   | 'conclusionDirectives'
   | 'createdAt'
   | 'id'

@@ -247,6 +247,7 @@ export const queryMemories = async (
         .select({
           context: {
             accessedAt: userMemoriesContexts.accessedAt,
+            capturedAt: userMemoriesContexts.capturedAt,
             createdAt: userMemoriesContexts.createdAt,
             currentStatus: userMemoriesContexts.currentStatus,
             description: userMemoriesContexts.description,
@@ -450,6 +451,7 @@ export const queryMemories = async (
           experience: {
             accessedAt: userMemoriesExperiences.accessedAt,
             action: userMemoriesExperiences.action,
+            capturedAt: userMemoriesExperiences.capturedAt,
             createdAt: userMemoriesExperiences.createdAt,
             id: userMemoriesExperiences.id,
             keyLearning: userMemoriesExperiences.keyLearning,
@@ -633,6 +635,7 @@ export const queryMemories = async (
           memory: baseSelection,
           preference: {
             accessedAt: userMemoriesPreferences.accessedAt,
+            capturedAt: userMemoriesPreferences.capturedAt,
             conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
             createdAt: userMemoriesPreferences.createdAt,
             id: userMemoriesPreferences.id,
