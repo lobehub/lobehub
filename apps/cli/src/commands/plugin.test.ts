@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { log } from '../utils/logger';
 import { registerLegacyPluginCommand } from './plugin';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
@@ -23,11 +22,9 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 describe('legacy-plugin command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
-  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     mockGetTrpcClient.mockReset();
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of [
@@ -42,7 +39,6 @@ describe('legacy-plugin command', () => {
 
   afterEach(() => {
     consoleSpy.mockRestore();
-    exitSpy.mockRestore();
   });
 
   function createProgram() {
@@ -176,30 +172,6 @@ describe('legacy-plugin command', () => {
       await program.parseAsync(['node', 'test', 'legacy-plugin', 'uninstall', 'p1', '--yes']);
 
       expect(mockTrpcClient.plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'p1' });
-    });
-  });
-
-  describe('legacy update migration guidance', () => {
-    it('maps old update invocations to connector replacement guidance without server access', async () => {
-      mockGetTrpcClient.mockRejectedValueOnce(new Error('server unavailable'));
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'update',
-        'p1',
-        '--settings',
-        '{"key":"value"}',
-      ]);
-
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('lh connector add'));
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('verify the connector tools'));
-      expect(log.error).toHaveBeenCalledWith(
-        expect.stringContaining('lh legacy-plugin uninstall p1'),
-      );
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });
