@@ -37,6 +37,7 @@ function expected(): Array<
     ['batchUpdate', 'mutation', 13],
     ['batchUpdateStatus', 'mutation', 13],
     ['cancelTopic', 'mutation', 13],
+    ['checkChannelDelivery', 'mutation', 13],
     ['clearAll', 'mutation', 12],
     ['copyTaskToWorkspace', 'mutation', 13],
     ['create', 'mutation', 13],

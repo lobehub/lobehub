@@ -2368,6 +2368,15 @@ export type TaskDetail = {
     agentId?: string | null;
     archivedAt?: string | null;
     automationMode?: 'heartbeat' | 'schedule' | null;
+    channelDelivery?: {
+        channelId: string;
+        lastError?: {
+            at: string;
+            code: 'channel_unavailable';
+            message?: string;
+        } | null;
+        threadId?: string | null;
+    };
     checkpoint?: {
         onAgentRequest?: boolean;
         tasks?: {
