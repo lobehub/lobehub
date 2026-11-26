@@ -8,7 +8,6 @@ import type {
 import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { WorkspaceModel } from '@/database/models/workspace';
 import {
   ChannelError,
   ChannelHistoryRepository,
@@ -17,9 +16,9 @@ import {
 } from '@/database/repositories/channel';
 import { channelMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { appEnv } from '@/envs/app';
 
 import { ChannelService } from './ChannelService';
+import { channelUrl } from './channelUrl';
 import { channelContacts } from './contacts';
 import { assertChannelEnabled } from './featureGate';
 
@@ -239,17 +238,11 @@ export class ChannelMessagingService {
     };
   };
 
-  private async channelUrl(channelId: string, projectId: string | null) {
-    const origin = appEnv.APP_URL.replace(/\/$/, '');
-    const slug = this.workspaceId
-      ? await new WorkspaceModel(this.db, this.userId)
-          .findById(this.workspaceId)
-          .then((workspace) => workspace?.slug ?? undefined)
-          .catch(() => undefined)
-      : undefined;
-    const base = slug ? `${origin}/${slug}` : origin;
-    return projectId
-      ? `${base}/project/${projectId}/channels/${channelId}`
-      : `${base}/channels/${channelId}`;
-  }
+  private channelUrl = (channelId: string, projectId: string | null) =>
+    channelUrl(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      channelId,
+      projectId,
+    );
 }

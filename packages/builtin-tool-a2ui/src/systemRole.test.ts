@@ -39,4 +39,11 @@ describe('A2UI tool', () => {
     expect(systemPrompt).not.toContain('lobe-channel');
     expect(systemPrompt).not.toContain('postMessage');
   });
+
+  // The guide reaches every run that may draw a card, most of which have no lobe-channel tool; how
+  // to post a card elsewhere belongs to that tool's own guide.
+  it('does not point to a tool the run may not have', () => {
+    expect(systemPrompt).not.toContain('lobe-channel');
+    expect(systemPrompt).not.toContain('postMessage');
+  });
 });

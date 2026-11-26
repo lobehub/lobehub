@@ -384,7 +384,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.postMessage,
       description:
-        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
+        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) and have not posted yet, unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. A card it posts is not posted again, neither by a later postMessage nor with your final answer; to post one again (say, redrawn with newer data), name it in surfaceIds. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -406,7 +406,14 @@ export const ChannelManifest: BuiltinToolManifest = {
           },
           includeCards: {
             type: 'boolean',
-            description: 'Carry the cards you drew in this run. Default true.',
+            description:
+              'Carry the cards you drew in this run and have not posted yet. Default true.',
+          },
+          surfaceIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Carry exactly these cards (by surfaceId, each in its latest drawing) instead, including one already posted.',
           },
         },
       },

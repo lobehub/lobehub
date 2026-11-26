@@ -1,4 +1,5 @@
 import type { TaskContext, TaskDetailData, TaskItem } from '@lobechat/types';
+import { readTaskChannelDelivery } from '@lobechat/types';
 
 const toIso = (value: Date | string | null | undefined) =>
   value ? new Date(value).toISOString() : null;
@@ -7,12 +8,18 @@ const toIso = (value: Date | string | null | undefined) =>
 export const projectTaskDetailState = (
   task: TaskItem,
   taskConfig: Record<string, unknown> | undefined,
-): Pick<TaskDetailData, 'archivedAt' | 'heartbeat' | 'schedule'> => {
+): Pick<TaskDetailData, 'archivedAt' | 'channelDelivery' | 'heartbeat' | 'schedule'> => {
   const taskContext = task.context ? (task.context as TaskContext) : undefined;
   const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
+  const delivery = readTaskChannelDelivery(taskConfig);
+  const deliveryError = taskContext?.delivery?.lastError;
 
   return {
     archivedAt: toIso(task.archivedAt),
+    channelDelivery: delivery && {
+      ...delivery,
+      ...(deliveryError && { lastError: deliveryError }),
+    },
     heartbeat:
       task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
         ? {
