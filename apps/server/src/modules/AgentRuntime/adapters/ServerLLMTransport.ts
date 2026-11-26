@@ -64,6 +64,7 @@ import { resolveLlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
 import { getAgentRuntimeRedisClient } from '../redis';
 import type { IStreamEventManager } from '../types';
 import { createServerCallLlmAttempt, isLlmStepTimeoutError } from './serverCallLlmAttempt';
+import { resolveStepMaxTokens } from './stepOutputCap';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -730,13 +731,23 @@ export class ServerLLMTransport implements LLMTransport {
         ? frozenCard.deploymentName
         : await this.resolveAttemptDeploymentName(input.provider, input.model);
     const apiMode = await this.getResponseApiMode(input.provider);
+    const modelParameters = input.context.modelParameters as Partial<ChatStreamPayload> | undefined;
+    const stepMaxTokens = resolveStepMaxTokens({
+      cards: input.state.modelRuntimeConfig?.modelFacts?.cards,
+      model: input.model,
+      provider: input.provider,
+      requested: modelParameters?.max_tokens,
+    });
     const chatPayload = {
       messages: input.context.messages as ChatStreamPayload['messages'],
       model: input.model,
       stream: resolveRequestStream(this.ctx, input.context),
       tools,
       ...(apiMode && { apiMode }),
-      ...(input.context.modelParameters as Partial<ChatStreamPayload>),
+      ...modelParameters,
+      // After the agent's parameters: they carry `max_tokens: undefined` when
+      // the user has not enabled a limit.
+      ...(stepMaxTokens && { max_tokens: stepMaxTokens }),
       ...(typeof input.context.preserveThinking === 'boolean' && {
         preserveThinking: input.context.preserveThinking,
       }),

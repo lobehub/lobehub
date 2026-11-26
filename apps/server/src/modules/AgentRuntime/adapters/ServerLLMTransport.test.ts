@@ -730,3 +730,104 @@ describe('ServerLLMTransport.runAttempt · step deadline', () => {
     });
   });
 });
+
+describe('ServerLLMTransport.runAttempt · step output cap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createAttemptCtx = () =>
+    ({
+      operationId: 'op-1',
+      serverDB: {},
+      stepIndex: 0,
+      streamManager: {
+        publishStreamChunk: vi.fn().mockResolvedValue('chunk-id'),
+        publishStreamEvent: vi.fn().mockResolvedValue('event-id'),
+      },
+      toolExecutionService: {},
+      userId: 'user-1',
+    }) as unknown as RuntimeExecutorContext;
+
+  const runWith = async ({
+    cards,
+    modelParameters = { max_tokens: undefined },
+  }: {
+    cards: Array<Record<string, unknown>>;
+    modelParameters?: Record<string, unknown>;
+  }) => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+
+    await new ServerLLMTransport(createAttemptCtx()).runAttempt({
+      assistantMessageId: 'msg-1',
+      attempt: 1,
+      context: {
+        messages: [{ content: 'Question', role: 'user' }],
+        modelParameters,
+        replayAssistantReasoning: false,
+        resolvedTools: {
+          enabledToolIds: [],
+          executorMap: {},
+          manifestMap: {},
+          promptManifestMap: {},
+          sourceMap: {},
+          tools: [],
+        },
+      },
+      events: [],
+      maxAttempts: 6,
+      model: 'claude-opus-5-5',
+      provider: 'lobehub',
+      state: {
+        modelRuntimeConfig: {
+          model: 'claude-opus-5-5',
+          modelFacts: { cards, model: 'claude-opus-5-5', provider: 'lobehub' },
+          provider: 'lobehub',
+        },
+      },
+    } as unknown as LLMAttemptInput);
+
+    return chat.mock.calls[0][0];
+  };
+
+  it('caps a 128k-output model at 64k when the agent sets no limit', async () => {
+    // The agent config carries `max_tokens: undefined` when the limit is off,
+    // which must not clear the cap.
+    const payload = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'lobehub' }],
+    });
+
+    expect(payload.max_tokens).toBe(64_000);
+  });
+
+  it('falls back to the canonical card when the provider card has no window', async () => {
+    const payload = await runWith({
+      cards: [
+        { id: 'claude-opus-5-5', providerId: 'lobehub' },
+        { id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'anthropic' },
+      ],
+    });
+
+    expect(payload.max_tokens).toBe(64_000);
+  });
+
+  it('leaves models with a smaller or unknown window on the provider default', async () => {
+    const small = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 32_000, providerId: 'lobehub' }],
+    });
+    const unknown = await runWith({ cards: [] });
+
+    expect(small.max_tokens).toBeUndefined();
+    expect(unknown.max_tokens).toBeUndefined();
+  });
+
+  it('keeps the limit the user configured', async () => {
+    const payload = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'lobehub' }],
+      modelParameters: { max_tokens: 100_000 },
+    });
+
+    expect(payload.max_tokens).toBe(100_000);
+  });
+});
