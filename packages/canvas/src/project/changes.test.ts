@@ -45,6 +45,40 @@ describe('applyCanvasChanges', () => {
     ).toMatchObject({ error: expect.stringContaining('2 times'), ok: false });
   });
 
+  // Regression: oldText "" makes String#indexOf return text.length instead of -1, so match
+  // counting never advances and applyCanvasChanges blocks the event loop.
+  it('rejects an empty oldText on an empty file instead of hanging', () => {
+    expect(
+      applyCanvasChanges(new Map([['index.html', { content: '', path: 'index.html' }]]), {
+        edits: [{ newText: 'replacement', oldText: '', path: 'index.html' }],
+      }),
+    ).toEqual({
+      error:
+        'Cannot edit "index.html": oldText must not be empty. Use writes to replace the entire file.',
+      ok: false,
+    });
+  });
+
+  it('rejects an empty oldText on a non-empty file instead of hanging', () => {
+    expect(
+      applyCanvasChanges(base, {
+        edits: [{ newText: 'replacement', oldText: '', path: 'index.html' }],
+      }),
+    ).toEqual({
+      error:
+        'Cannot edit "index.html": oldText must not be empty. Use writes to replace the entire file.',
+      ok: false,
+    });
+  });
+
+  it('deletes the matched text when newText is empty', () => {
+    const result = applyCanvasChanges(base, {
+      edits: [{ newText: '', oldText: 'Old title', path: 'index.html' }],
+    });
+
+    expect(textOf(result, 'index.html')).toBe('<h1></h1><p>body</p>');
+  });
+
   it('rejects edits and deletes of files that do not exist', () => {
     expect(applyCanvasChanges(base, { deletes: ['nope.css'] })).toMatchObject({ ok: false });
     expect(
