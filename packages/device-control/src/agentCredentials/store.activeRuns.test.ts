@@ -161,6 +161,43 @@ describe('installAgentCredential with Codex runs on the previous login', () => {
     expect(await readdir(path.join(rootDir, 'codex', 'runs'))).toEqual([`${process.pid}.json`]);
   });
 
+  it('lets the later of two overlapping replacements win', async () => {
+    await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
+    // The run takes a while to stop, so both replacements wait on it.
+    const lease = trackAgentCredentialRun({
+      env: await codexRunEnv(),
+      heartbeatMs: 10,
+      onStop: () => {
+        setTimeout(() => {
+          void writeFile(authFile(), chatgptAuth('user-a', 'r2')).then(() => lease.release());
+        }, 100);
+      },
+    });
+    releases.push(lease.release);
+
+    // B notices the run is gone only after C has finished, so B resumes last.
+    const toB = installAgentCredential(codexParams(chatgptAuth('user-b')), {
+      rootDir,
+      runStop: { ...runStop, pollMs: 300 },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const toC = installAgentCredential(codexParams(chatgptAuth('user-c')), options());
+    await Promise.all([toB, toC]);
+
+    expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-c'));
+  });
+
+  it('refuses the replacement when the leases cannot be read', async () => {
+    await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
+    // A file where the lease directory belongs makes listing it fail.
+    await writeFile(path.join(rootDir, 'codex', 'runs'), '');
+
+    await expect(
+      installAgentCredential(codexParams(chatgptAuth('user-b')), options()),
+    ).rejects.toThrow();
+    expect(await readFile(authFile(), 'utf8')).toBe(chatgptAuth('user-a'));
+  });
+
   it('gives each run the lease directory in its spawn env', async () => {
     await installAgentCredential(codexParams(chatgptAuth('user-a')), options());
 
