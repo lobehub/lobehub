@@ -1,4 +1,8 @@
-import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import {
+  BRANDING_PROVIDER,
+  isOfficialProvider,
+  OFFICIAL_PROVIDER_DISABLE_ERROR,
+} from '@lobechat/business-const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import {
   HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
@@ -15,6 +19,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { isWorkspaceByokAllowed } from '@/business/server/workspaceByok';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { UserModel } from '@/database/models/user';
@@ -55,6 +60,31 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
     },
   });
 });
+
+/**
+ * Whether this request may read or write the keys of `providerId`: always in
+ * personal mode and for the platform provider; in a workspace only where it
+ * may use its own provider keys.
+ */
+const canUseOwnProviderKeys = async (
+  ctx: { userId: string; workspaceId?: string | null },
+  providerId: string,
+) =>
+  !ctx.workspaceId ||
+  providerId === BRANDING_PROVIDER ||
+  isWorkspaceByokAllowed({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+
+const assertCanConfigureProvider = async (
+  ctx: { userId: string; workspaceId?: string | null },
+  providerId: string,
+) => {
+  if (await canUseOwnProviderKeys(ctx, providerId)) return;
+
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: 'This workspace cannot configure providers with its own keys',
+  });
+};
 
 const resolveProviderBindingAgentTypes = (
   state: AiProviderRuntimeState,
@@ -176,6 +206,7 @@ export const aiProviderRouter = router({
     .use(withScopedPermission('ai_provider:create'))
     .input(CreateAiProviderSchema)
     .mutation(async ({ input, ctx }) => {
+      await assertCanConfigureProvider(ctx, input.id);
       try {
         const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
         return data?.id;
@@ -200,8 +231,13 @@ export const aiProviderRouter = router({
         KeyVaultsGateKeeper.getUserKeyVaults,
       );
 
-      // restricted API keys must not exfiltrate decrypted provider credentials
-      if (detail && ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+      // restricted API keys must not exfiltrate decrypted provider credentials, and a
+      // workspace that may not use its own provider keys never reads them back
+      if (
+        detail &&
+        ((ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) ||
+          !(await canUseOwnProviderKeys(ctx, input.id)))
+      ) {
         return { ...detail, keyVaults: undefined };
       }
 
@@ -216,8 +252,10 @@ export const aiProviderRouter = router({
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
       const [scopedState, modelReasoningConfigs] = await Promise.all([
-        getUserScopedAiProviderRuntimeState(ctx.userId, () =>
-          ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+        getUserScopedAiProviderRuntimeState(
+          ctx.userId,
+          () => ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+          { workspaceId: ctx.workspaceId ?? undefined },
         ),
         // Loaded here rather than in the shared runtime-state loader: only the
         // client model list needs it, and server-side callers skip the query
@@ -256,8 +294,10 @@ export const aiProviderRouter = router({
   getProviderBindingRuntime: aiProviderProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }): Promise<HeterogeneousProviderBindingRuntime> => {
-      const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
-        ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      const state = await getUserScopedAiProviderRuntimeState(
+        ctx.userId,
+        () => ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+        { workspaceId: ctx.workspaceId ?? undefined },
       );
       const enabled = state.enabledAiProviders.some(({ id }) => id === input.id);
       const runtimeConfig = state.runtimeConfig[input.id];
@@ -315,6 +355,7 @@ export const aiProviderRouter = router({
           message: OFFICIAL_PROVIDER_DISABLE_ERROR,
         });
       }
+      if (input.enabled) await assertCanConfigureProvider(ctx, input.id);
 
       return ctx.aiProviderModel.toggleProviderEnabled(input.id, input.enabled);
     }),
@@ -329,6 +370,7 @@ export const aiProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanConfigureProvider(ctx, input.id);
       return ctx.aiProviderModel.update(input.id, input.value);
     }),
 
@@ -342,6 +384,7 @@ export const aiProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanConfigureProvider(ctx, input.id);
       return ctx.aiProviderModel.updateConfig(
         input.id,
         input.value,

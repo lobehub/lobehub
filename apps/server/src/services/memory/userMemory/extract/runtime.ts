@@ -292,7 +292,7 @@ export async function getAiProviderRuntimeState(
   return getUserScopedAiProviderRuntimeState(
     userId,
     () => aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
-    { throwOnUnresolvedAccess: true },
+    { throwOnUnresolvedAccess: true, workspaceId },
   );
 }
 

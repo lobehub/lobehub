@@ -70,8 +70,10 @@ export const assertGoalModelRunnable = async (
     aiProvider as Record<string, ProviderConfig>,
     workspaceId,
   );
-  const { enabledAiModels } = await getUserScopedAiProviderRuntimeState(owner.userId, () =>
-    repos.getAiProviderRuntimeState(),
+  const { enabledAiModels } = await getUserScopedAiProviderRuntimeState(
+    owner.userId,
+    () => repos.getAiProviderRuntimeState(),
+    { workspaceId },
   );
   if (!enabledAiModels.some((item) => item.id === model && item.providerId === provider))
     throw new TRPCError({

@@ -8,6 +8,11 @@ import {
 
 const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
 const mockGetModelRedirects = vi.hoisted(() => vi.fn(async () => ({})));
+const mockIsWorkspaceByokAllowed = vi.hoisted(() => vi.fn(async () => true));
+
+vi.mock('@/business/server/workspaceByok', () => ({
+  isWorkspaceByokAllowed: mockIsWorkspaceByokAllowed,
+}));
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
@@ -221,5 +226,51 @@ describe('getUserScopedAiProviderRuntimeState', () => {
         { throwOnUnresolvedAccess: true },
       ),
     ).rejects.toThrow('Unable to resolve user-scoped model access');
+  });
+});
+
+describe('getUserScopedAiProviderRuntimeState in a workspace', () => {
+  const state = {
+    enabledAiModels: [
+      { id: 'lobe-model', providerId: 'lobehub', type: 'chat' },
+      { id: 'own-model', providerId: 'deepseek', type: 'chat' },
+    ],
+    enabledAiProviders: [{ id: 'lobehub' }, { id: 'deepseek' }],
+    enabledChatAiProviders: [{ id: 'lobehub' }, { id: 'deepseek' }],
+    enabledImageAiProviders: [],
+    enabledVideoAiProviders: [],
+    runtimeConfig: { deepseek: { keyVaults: { apiKey: 'sk-own' } }, lobehub: { keyVaults: {} } },
+  } as unknown as AiProviderRuntimeState;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+  });
+
+  it('drops own-key providers, their models and keys where the workspace may not use them', async () => {
+    mockIsWorkspaceByokAllowed.mockResolvedValueOnce(false);
+
+    const result = await getUserScopedAiProviderRuntimeState('user-1', async () => state, {
+      workspaceId: 'ws-1',
+    });
+
+    expect(mockIsWorkspaceByokAllowed).toHaveBeenCalledWith({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
+    expect(result.enabledAiProviders.map((provider) => provider.id)).toEqual(['lobehub']);
+    expect(result.enabledAiModels.map((model) => model.id)).toEqual(['lobe-model']);
+    expect(Object.keys(result.runtimeConfig)).toEqual(['lobehub']);
+  });
+
+  it('keeps own-key providers where allowed, and does not ask without a workspace', async () => {
+    const allowed = await getUserScopedAiProviderRuntimeState('user-1', async () => state, {
+      workspaceId: 'ws-1',
+    });
+    expect(Object.keys(allowed.runtimeConfig)).toEqual(['deepseek', 'lobehub']);
+
+    mockIsWorkspaceByokAllowed.mockClear();
+    await getUserScopedAiProviderRuntimeState('user-1', async () => state);
+    expect(mockIsWorkspaceByokAllowed).not.toHaveBeenCalled();
   });
 });

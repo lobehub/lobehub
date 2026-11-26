@@ -1,3 +1,4 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import type {
   AiProviderModelListItem,
   AiProviderRuntimeState,
@@ -5,6 +6,7 @@ import type {
 } from 'model-bank';
 
 import { getHiddenBuiltinModelsForUser, getModelRedirects } from '@/business/server/aiProvider';
+import { isWorkspaceByokAllowed } from '@/business/server/workspaceByok';
 import {
   filterEnabledProvidersByModelType,
   filterHiddenBuiltinModels,
@@ -20,7 +22,35 @@ interface AiProviderModelListOptions {
 
 interface UserScopedRuntimeStateOptions {
   throwOnUnresolvedAccess?: boolean;
+  /**
+   * The workspace whose provider rows the state was loaded from. A workspace
+   * that may not use its own provider keys only keeps the platform provider.
+   */
+  workspaceId?: string;
 }
+
+/** Keep only the platform provider: its models, entries and runtime config. */
+const withoutOwnKeyProviders = (state: AiProviderRuntimeState): AiProviderRuntimeState => {
+  const isPlatform = (providerId: string) => providerId === BRANDING_PROVIDER;
+
+  return {
+    ...state,
+    enabledAiModels: state.enabledAiModels.filter((model) => isPlatform(model.providerId)),
+    enabledAiProviders: state.enabledAiProviders.filter((provider) => isPlatform(provider.id)),
+    enabledChatAiProviders: state.enabledChatAiProviders.filter((provider) =>
+      isPlatform(provider.id),
+    ),
+    enabledImageAiProviders: state.enabledImageAiProviders.filter((provider) =>
+      isPlatform(provider.id),
+    ),
+    enabledVideoAiProviders: state.enabledVideoAiProviders.filter((provider) =>
+      isPlatform(provider.id),
+    ),
+    runtimeConfig: Object.fromEntries(
+      Object.entries(state.runtimeConfig).filter(([providerId]) => isPlatform(providerId)),
+    ),
+  };
+};
 
 /**
  * Resolves a user-scoped model list after the repository has loaded its complete cached data.
@@ -85,10 +115,12 @@ export const getUserScopedAiProviderRuntimeState = async (
   loadRuntimeState: () => Promise<AiProviderRuntimeState>,
   options: UserScopedRuntimeStateOptions = {},
 ): Promise<AiProviderRuntimeState> => {
-  const [runtimeState, hiddenBuiltinModels, modelRedirects] = await Promise.all([
+  const { workspaceId } = options;
+  const [runtimeState, hiddenBuiltinModels, modelRedirects, byokAllowed] = await Promise.all([
     loadRuntimeState(),
     getHiddenBuiltinModelsForUser(userId),
     getModelRedirects(),
+    workspaceId ? isWorkspaceByokAllowed({ userId, workspaceId }) : true,
   ]);
   const isHiddenBuiltinModelsResolved = hiddenBuiltinModels !== undefined;
   if (!isHiddenBuiltinModelsResolved && options.throwOnUnresolvedAccess) {
@@ -99,7 +131,7 @@ export const getUserScopedAiProviderRuntimeState = async (
     ? filterHiddenBuiltinModels(runtimeState.enabledAiModels, hiddenBuiltinModels)
     : [];
 
-  return {
+  const scopedState: AiProviderRuntimeState = {
     ...runtimeState,
     enabledAiModels,
     enabledChatAiProviders: filterEnabledProvidersByModelType(
@@ -128,4 +160,8 @@ export const getUserScopedAiProviderRuntimeState = async (
       : {},
     runtimeConfig: isHiddenBuiltinModelsResolved ? runtimeState.runtimeConfig : {},
   };
+
+  // Own-key providers drop out before any caller (the client store, the model
+  // picker, memory extraction) can read their keys or offer their models.
+  return byokAllowed ? scopedState : withoutOwnKeyProviders(scopedState);
 };

@@ -1,3 +1,14 @@
+export interface WorkspaceByokAccessParams {
+  userId: string;
+  workspaceId: string;
+}
+
+/**
+ * Whether the workspace may configure and call providers with its own keys.
+ * Open by default.
+ */
+export const isWorkspaceByokAllowed = async (_params: WorkspaceByokAccessParams) => true;
+
 export interface WorkspaceByokGateParams {
   /** The provider id the request asks for. */
   provider: string;

@@ -136,8 +136,10 @@ export const imageRouter = router({
       let model = input.model;
       let provider = input.provider;
       if (!model || !provider) {
-        const runtimeState = await getUserScopedAiProviderRuntimeState(userId, () =>
-          aiInfraRepos.getAiProviderRuntimeState(),
+        const runtimeState = await getUserScopedAiProviderRuntimeState(
+          userId,
+          () => aiInfraRepos.getAiProviderRuntimeState(),
+          { workspaceId: wsId },
         );
         const selection = resolveImageModelSelection(
           buildEnabledImageProviderModels(runtimeState),
