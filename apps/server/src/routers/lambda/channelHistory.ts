@@ -66,8 +66,13 @@ const historyProcedure = operationProcedure('channel:read');
 const messagingProcedure = operationProcedure('channel:message');
 
 export const channelHistoryProcedures = {
-  /** The card-drawing guide (`lh card guide`), so an external runtime learns the catalog on demand. */
-  cardGuide: historyProcedure.query(({ ctx }) => ctx.channelCards.guide()),
+  /**
+   * The card-drawing guide (`lh card guide`): the component index, or with `components` their full
+   * schemas and examples, so an external runtime learns the catalog on demand.
+   */
+  cardGuide: historyProcedure
+    .input(z.object({ components: z.array(z.string().min(1)).max(8).optional() }).optional())
+    .query(({ ctx, input }) => ctx.channelCards.guide(input?.components)),
   /**
    * Validates a card like the builtin `renderUI` and records it under the run, so its reply posts
    * it. An invalid card returns its errors; the same `surfaceId` again replaces the card.

@@ -83,7 +83,17 @@ describe('card command', () => {
   it('prints the guide the server serves', async () => {
     mockTrpcClient.channel.cardGuide.query.mockResolvedValue({ guide: '<a2ui_guide>…' });
     await run('guide');
+    expect(mockTrpcClient.channel.cardGuide.query).toHaveBeenCalledWith(undefined);
     expect(consoleSpy).toHaveBeenCalledWith('<a2ui_guide>…');
+  });
+
+  it('asks for the full docs of the named components', async () => {
+    mockTrpcClient.channel.cardGuide.query.mockResolvedValue({ guide: 'Chart schema…' });
+    await run('guide', '--components', 'Chart, Table');
+    expect(mockTrpcClient.channel.cardGuide.query).toHaveBeenCalledWith({
+      components: ['Chart', 'Table'],
+    });
+    expect(consoleSpy).toHaveBeenCalledWith('Chart schema…');
   });
 
   it('sends the file’s messages for the current run and reports the drawn card', async () => {

@@ -42,11 +42,23 @@ export const registerCardCommand = (program: Command) => {
 
   card
     .command('guide')
-    .description('Print the card-drawing guide: when a card helps, its components and their props')
+    .description(
+      'Print the card-drawing guide: when a card helps and an index of its components; with --components, their full schemas and examples',
+    )
+    .option(
+      '-c, --components <names>',
+      'Comma-separated component or function names, e.g. Chart,Table',
+    )
     .option('--json', 'Print structured JSON')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { components?: string; json?: boolean }) => {
+      const components = options.components
+        ?.split(',')
+        .map((name) => name.trim())
+        .filter(Boolean);
       const client = await getTrpcClient();
-      const result = await client.channel.cardGuide.query();
+      const result = await client.channel.cardGuide.query(
+        components?.length ? { components } : undefined,
+      );
       if (options.json) return outputJson(result);
       console.log(result.guide);
     });

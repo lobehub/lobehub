@@ -1,6 +1,7 @@
 import { A2uiApiName, A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { A2uiExecutionRuntime } from '@lobechat/builtin-tool-a2ui/executionRuntime';
-import { buildA2uiSystemPrompt } from '@lobehub/a2ui';
+import { createA2uiProcessor } from '@lobehub/a2ui/processor';
+import { A2UI_CLI_SYSTEM_PROMPT } from '@lobehub/a2ui/systemPrompt';
 import { eq, sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
@@ -12,7 +13,8 @@ import { assertChannelEnabled } from './featureGate';
 
 /** The builtin `renderUI` itself: the same validation and messages; stateless. */
 const runtime = new A2uiExecutionRuntime();
-const cliGuide = buildA2uiSystemPrompt({ delivery: 'cli' });
+/** Docs worded for `lh card guide --components`; built on first use. */
+let cliProcessor: ReturnType<typeof createA2uiProcessor> | undefined;
 
 /**
  * One tool call per surface and run: rendering the surface again finds and replaces it. Not a
@@ -44,12 +46,15 @@ export class ChannelCardService {
   }
 
   /**
-   * The `@lobehub/a2ui` card guide worded for `lh card render`, from the same processor that
-   * validates the builtin tool, so it always matches what the server accepts.
+   * The `@lobehub/a2ui` card guide worded for `lh card render`, from the same package that
+   * validates the builtin tool. Progressive like the builtin: without names, the index of every
+   * component; with names, their full schemas and smallest examples.
    */
-  guide = async () => {
+  guide = async (components?: string[]) => {
     await assertChannelEnabled(this.userId);
-    return { guide: cliGuide };
+    if (!components?.length) return { guide: A2UI_CLI_SYSTEM_PROMPT };
+    cliProcessor ??= createA2uiProcessor({ delivery: 'cli' });
+    return { guide: cliProcessor.docs({ components }) };
   };
 
   render = async (operations: unknown): Promise<ChannelCardRenderResult> => {
