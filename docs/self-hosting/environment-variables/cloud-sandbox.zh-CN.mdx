@@ -46,6 +46,13 @@ tags:
 - 默认值：-
 - 示例：`your-market-trusted-client-secret`
 
+### `HETERO_SANDBOX_RUN_TTL_SEC`
+
+- 类型：可选
+- 描述：编码 Agent 单次沙箱运行的最长时长（秒），即该运行所用认证令牌的有效期。令牌过期后运行无法再回传结果并会被终止。使用 Onlyboxes 时，`ONLYBOXES_LEASE_TTL_SEC` 应不小于此值，否则沙箱会在运行中被销毁。在 Onlyboxes 上运行以脱离方式启动，不受单条沙箱命令十分钟的限制；其输出保存在沙箱内的 `/tmp/lobe-hetero-<operationId>.log`。
+- 默认值：`14400`（四小时）
+- 示例：`43200`
+
 ### `ONLYBOXES_BASE_URL`
 
 - 类型：当 `SANDBOX_PROVIDER=onlyboxes` 时必填
