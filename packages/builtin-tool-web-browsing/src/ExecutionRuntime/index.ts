@@ -65,6 +65,9 @@ const NON_EXISTENT_DOMAIN_RE =
 
 const isEscalatableCrawlError = (data: Record<string, any>): boolean => {
   if (!('errorMessage' in data)) return false;
+  // An anti-bot wall is non-retryable for the crawler, yet it is the one failure a
+  // real browser is most likely to get past.
+  if (data.errorType === 'BlockedPageError') return true;
   if (data.retryable === false) return false;
   if (typeof data.errorType === 'string' && NON_ESCALATABLE_ERROR_TYPES.has(data.errorType)) {
     return false;

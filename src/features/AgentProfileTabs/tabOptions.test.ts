@@ -85,6 +85,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'channel',
@@ -109,6 +110,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'channel',
@@ -174,6 +176,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'mail',
@@ -481,7 +484,7 @@ describe('opening and graph tabs', () => {
       groups.find((group) => group.key === key)?.options.map((option) => option.value);
 
     expect(tabsOf('shape')).toEqual(['instruction', 'knowledge', 'opening']);
-    expect(tabsOf('setup')).toEqual(['engine', 'tools', 'skills']);
+    expect(tabsOf('setup')).toEqual(['engine', 'environment', 'tools', 'skills']);
     expect(tabsOf('advanced')).toEqual(['graph']);
     expect(groups.map((group) => group.key)).toEqual([
       'profile',

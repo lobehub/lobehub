@@ -49,6 +49,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // Legacy alias: chat preferences became `conversation`; the routers keep a
   // redirect, so prefixed deep-links still land on `/:slug/settings/conversation`.
   'chat-preference',
+  'coding-plans',
   // Legacy alias: connectors moved to `/marketplace/connector`; the routers keep
   // a redirect, so prefixed deep-links land on `/:slug/marketplace/connector`.
   'connector',

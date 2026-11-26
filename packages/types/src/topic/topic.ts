@@ -376,6 +376,12 @@ export interface ChatTopicMetadata {
    * the client-writable metadata schema. See `./ownedWorktree`.
    */
   ownedWorktrees?: OwnedWorktree[];
+  /**
+   * A project folder this conversation moves to when its next turn starts —
+   * set by the Project tool's `switchRunner`, which runs inside a turn and so
+   * cannot move the conversation under it. Server-only; cleared once applied.
+   */
+  pendingProjectWorkingDirectoryId?: string;
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**

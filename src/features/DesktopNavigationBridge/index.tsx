@@ -13,15 +13,6 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 const DesktopNavigationBridge = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
-  // A shell launch describes a directory on THIS machine; another bound device
-  // can expose the same path, and its conversation is not the one to open.
-  // Read lazily: on a cold start the identity is still resolving when the
-  // launch replays, and a snapshot taken at mount would be `undefined`.
-  const getDeviceId = useCallback(
-    () => useElectronStore.getState().gatewayDeviceInfo?.deviceId,
-    [],
-  );
-
   const handleNavigate = useCallback(
     ({ escape, path, replace, reuseTab }: MainBroadcastParams<'navigate'>) => {
       if (!path) return;
@@ -59,7 +50,6 @@ const DesktopNavigationBridge = memo(() => {
   const handleOpenDirectory = useCallback(
     ({ newWindow, path }: { newWindow: boolean; path: string }) => {
       void openDirectoryInApp({
-        getDeviceId,
         navigate,
         // `--new-window` means "don't take over the conversation I already have".
         reuseExisting: !newWindow,
@@ -68,7 +58,7 @@ const DesktopNavigationBridge = memo(() => {
         console.error('[DesktopNavigationBridge] Failed to open directory:', error);
       });
     },
-    [getDeviceId, navigate],
+    [navigate],
   );
 
   useWatchBroadcast('navigate', handleNavigate);

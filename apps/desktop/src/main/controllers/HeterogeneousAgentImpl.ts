@@ -3342,8 +3342,8 @@ export default class HeterogeneousAgentCtr {
    * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
-    /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
-    accountEnv?: Record<string, string>;
+    accountEnv?: Record<string, string>; // documented on `LhHeteroExecEnvParams`
+    accountUnsetEnv?: string[];
     agentId?: string;
     agentType: string;
     assistantMessageId?: string;

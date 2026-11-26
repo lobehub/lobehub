@@ -126,6 +126,10 @@ describe('environmentRouter', () => {
         'https://internal.corp/repo.git',
         'https://github.com.attacker.test/a/b',
         'http://github.com/a/b',
+        'https://ghp_token@github.com/a/b',
+        'https://user:pass@github.com/a/b',
+        'https://github.com/a/b?token=x',
+        'https://github.com/a/b#x',
       ]) {
         mockCreate.mockClear();
         await expect(

@@ -4,11 +4,13 @@ import { ChatErrorType } from '@lobechat/types';
 /**
  * The share refusals a visitor reads beside their message instead of behind a failure mark,
  * since the reply will never come; each names what the visitor can do next. Running out of
- * messages or of the share's monthly usage is the owner's limit, and running an Agent on the
+ * messages, of the share's attachment storage or of its monthly usage is the owner's limit, and running an Agent on the
  * owner's own machine needs the owner's permission, so the visitor may ask the owner directly:
  * as a contact, they can message them in their own conversation.
  */
 const SHARE_REFUSALS: Record<string, { addOwner: boolean }> = {
+  [ChatErrorType.ShareAttachmentTooLarge]: { addOwner: false },
+  [ChatErrorType.ShareFileStorageExceeded]: { addOwner: true },
   [ChatErrorType.ShareHeterogeneousAgentUnsupported]: { addOwner: true },
   [ChatErrorType.ShareMessageLimitExceeded]: { addOwner: true },
   [ChatErrorType.SharePromptTooLong]: { addOwner: false },

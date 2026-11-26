@@ -10,10 +10,7 @@ import type {
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
   ChannelListChannelsParams,
-  ChannelListPeopleParams,
   ChannelListThreadsParams,
-  ChannelMessagePersonParams,
-  ChannelPeoplePage,
   ChannelReacted,
   ChannelReactParams,
   ChannelReadMessageParams,
@@ -21,7 +18,6 @@ import type {
   ChannelRequestConnectorParams,
   ChannelSendMessageParams,
   ChannelSentMessage,
-  ChannelSentPersonMessage,
   ChannelSteeredThread,
   ChannelSteerThreadParams,
   ChannelStoppedThread,
@@ -50,14 +46,9 @@ export interface ChannelHistoryService {
   ) => Promise<ChannelConnectorRequestResult>;
 }
 
-/**
- * Reaching Agents in the requester's other Channels, and people in the requester's one-on-one
- * conversations; the runtime binds the run and tool call.
- */
+/** Reaching Agents in the requester's other Channels; the runtime binds the run and tool call. */
 export interface ChannelMessagingService {
   listChannels: (params: ChannelListChannelsParams) => Promise<ChannelDirectoryPage>;
-  listPeople: (params: ChannelListPeopleParams) => Promise<ChannelPeoplePage>;
-  messagePerson: (params: ChannelMessagePersonParams) => Promise<ChannelSentPersonMessage>;
   sendMessage: (params: ChannelSendMessageParams) => Promise<ChannelSentMessage>;
 }
 
@@ -108,11 +99,7 @@ export class ChannelExecutionRuntime {
   }
 
   private async message(
-    run: (
-      messaging: ChannelMessagingService,
-    ) => Promise<
-      ChannelDirectoryPage | ChannelPeoplePage | ChannelSentMessage | ChannelSentPersonMessage
-    >,
+    run: (messaging: ChannelMessagingService) => Promise<ChannelDirectoryPage | ChannelSentMessage>,
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
       if (!this.messaging) throw new Error('Channel messaging is not available in this run');
@@ -189,10 +176,6 @@ export class ChannelExecutionRuntime {
     this.result(() => this.service.readMessage(params));
   listChannels = (params: ChannelListChannelsParams = {}) =>
     this.message((messaging) => messaging.listChannels(params));
-  listPeople = (params: ChannelListPeopleParams = {}) =>
-    this.message((messaging) => messaging.listPeople(params));
-  messagePerson = (params: ChannelMessagePersonParams) =>
-    this.message((messaging) => messaging.messagePerson(params));
   sendMessage = (params: ChannelSendMessageParams) =>
     this.message((messaging) => messaging.sendMessage(params));
   listThreads = (params: ChannelListThreadsParams = {}) =>

@@ -1,4 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { assertNotChallengePage } from '../utils/challengePage';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
@@ -65,6 +66,8 @@ export const tavily: CrawlImpl = async (url) => {
   }
 
   const firstResult = data.results[0];
+
+  assertNotChallengePage({ content: firstResult.raw_content });
 
   // Check if content is empty or too short
   if (!firstResult.raw_content || firstResult.raw_content.length < 100) {

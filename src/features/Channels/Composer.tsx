@@ -1,3 +1,4 @@
+import { SHARE_VISITOR_MAX_FILE_SIZE, SHARE_VISITOR_MAX_FILES_PER_TURN } from '@lobechat/const';
 import type { ChannelListItem, ChannelPublicMember } from '@lobechat/types';
 import type { ISlashOption } from '@lobehub/editor';
 import {
@@ -46,10 +47,16 @@ import {
 } from './mentions';
 import { createChannelSendRequest } from './sendRequest';
 import { styles } from './styles';
-import { useAttachments } from './useAttachments';
+import { type AttachmentLimits, useAttachments } from './useAttachments';
 import { useComposerDraft } from './useComposerDraft';
 import { useMentionInvites } from './useMentionInvites';
 import type { ChannelReplyTarget } from './useReplyTarget';
+
+/** A shared Agent's share bounds a visitor's message as its own share page does. */
+const SHARE_ATTACHMENT_LIMITS: AttachmentLimits = {
+  maxFileSize: SHARE_VISITOR_MAX_FILE_SIZE,
+  maxFiles: SHARE_VISITOR_MAX_FILES_PER_TURN,
+};
 
 export type ChannelComposerMessage = Omit<ChannelQueuedSendInput, 'channelId' | 'threadId'>;
 
@@ -145,11 +152,14 @@ export function Composer({
           workspaces.some((workspace) => workspace.id === channelWorkspaceId))
       ? channelWorkspaceId
       : null;
-  const attachments = useAttachments(draftKey, uploadWorkspaceId);
+  const attachments = useAttachments(
+    draftKey,
+    uploadWorkspaceId,
+    channel?.sharedAgent ? SHARE_ATTACHMENT_LIMITS : undefined,
+  );
   const { allowed } = usePermission('create_content');
   const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
-  /** Files sent to another person's shared Agent are refused server-side, so offer no upload. */
-  const enableUpload = knowledgeBase && !channel?.sharedAgent;
+  const enableUpload = knowledgeBase;
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
     if (!sending.current && canUpload) return attachments.upload(files);
