@@ -8,7 +8,6 @@ import {
   CodeXmlIcon,
   CreditCard,
   Database,
-  EllipsisIcon,
   Gift,
   Info,
   KeyIcon,
@@ -59,8 +58,6 @@ export const useCategory = (): CategoryGroup[] => {
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const codingPlansTab = useCodingPlansTab();
-  // Advanced only holds gateway mode on mobile; without it the page is empty.
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(() => {
@@ -131,12 +128,6 @@ export const useCategory = (): CategoryGroup[] => {
 
     const system: CategoryItem[] = [
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
-      enableGatewayMode &&
-        makeItem({
-          icon: EllipsisIcon,
-          key: SettingsTabs.Advanced,
-          label: t('setting:tab.advanced'),
-        }),
       showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
       enableOAuthApps &&
@@ -167,7 +158,6 @@ export const useCategory = (): CategoryGroup[] => {
     showApiKeyManage,
     showProvider,
     enableOAuthApps,
-    enableGatewayMode,
     navigate,
   ]);
 };

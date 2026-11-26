@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAgentStore } from '@/store/agent';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import * as serverConfigStore from '@/store/serverConfig';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { resolveGatewayModeEnabled, useIsGatewayModeEnabled } from './gatewayMode';
 
@@ -33,6 +34,15 @@ describe('resolveGatewayModeEnabled', () => {
 
     expect(resolveGatewayModeEnabled(stateWith(false), 'agent-1')).toBe(true);
     // `disableGatewayMode: undefined` counts as enabled.
+    expect(resolveGatewayModeEnabled(stateWith(undefined), 'agent-1')).toBe(true);
+  });
+
+  it("ignores the user's default agent opt-out (the retired global switch)", () => {
+    mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: true });
+    vi.spyOn(settingsSelectors, 'defaultAgentConfig').mockReturnValue({
+      chatConfig: { disableGatewayMode: true },
+    } as ReturnType<typeof settingsSelectors.defaultAgentConfig>);
+
     expect(resolveGatewayModeEnabled(stateWith(undefined), 'agent-1')).toBe(true);
   });
 

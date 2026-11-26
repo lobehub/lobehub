@@ -92,7 +92,7 @@ describe('settings useCategory', () => {
       SettingsTabs.Memory,
       SettingsTabs.Referral,
     ]);
-    // Advanced needs gateway mode or the desktop app.
+    // Diagnostics is desktop-only.
     expect(groupKeys(SettingsGroupKey.System)).toEqual([SettingsTabs.Labs, SettingsTabs.About]);
 
     // The personal subscription is the personal space's, like a workspace's.
@@ -200,8 +200,9 @@ describe('settings useCategory', () => {
     expect(renderWithApiKeyFlag(false)).not.toContain(SettingsTabs.APIKey);
   });
 
-  // With Advanced Tools gone, gateway mode is all Advanced holds on the web.
-  it('lists Advanced on the web only when gateway mode is available', () => {
+  // Diagnostics (route key `advanced`) holds only desktop rows; the global
+  // Gateway Mode switch moved to each agent, so the web never lists it.
+  it('does not list Diagnostics on the web, even when gateway mode is available', () => {
     const keysWithGateway = (enableGatewayMode: boolean) =>
       renderHook(() => useCategory(), {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -219,7 +220,7 @@ describe('settings useCategory', () => {
       }).result.current.flatMap((group) => group.items.map((item) => item.key));
 
     expect(keysWithGateway(false)).not.toContain(SettingsTabs.Advanced);
-    expect(keysWithGateway(true)).toContain(SettingsTabs.Advanced);
+    expect(keysWithGateway(true)).not.toContain(SettingsTabs.Advanced);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

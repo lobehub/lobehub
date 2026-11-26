@@ -110,7 +110,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
     ]);
@@ -229,7 +228,7 @@ describe('workspace settings useCategory', () => {
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
-  it('hides API Key from viewers but keeps Advanced and Labs in the account System group', () => {
+  it('hides API Key from viewers but keeps Labs in the account System group (Diagnostics is desktop-only)', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 
@@ -239,7 +238,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,
     ]);
@@ -261,7 +259,6 @@ describe('workspace settings useCategory', () => {
     );
 
     expect(systemGroup?.items.map((item) => item.key)).toEqual([
-      WorkspaceSettingsTabs.Advanced,
       WorkspaceSettingsTabs.OAuthApps,
       WorkspaceSettingsTabs.Labs,
       WorkspaceSettingsTabs.About,

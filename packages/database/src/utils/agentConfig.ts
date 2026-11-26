@@ -31,6 +31,21 @@ export const getNewAgentPlugins = (
   ];
 };
 
+/**
+ * The personal layer of an Agent's config: the user's `defaultAgent.config`,
+ * minus settings that are per-Agent only. `chatConfig.disableGatewayMode` was a
+ * global switch; it is now set on each Agent, so a stale personal value (or one
+ * an older client still writes) must not leak into Agents that never set it.
+ */
+export const getUserDefaultAgentLayer = (userDefault: unknown): PartialDeep<LobeAgentConfig> => {
+  const config =
+    (userDefault as { config?: PartialDeep<LobeAgentConfig> } | undefined)?.config ?? {};
+  if (!isRecord(config.chatConfig) || !('disableGatewayMode' in config.chatConfig)) return config;
+
+  const { disableGatewayMode: _retired, ...chatConfig } = config.chatConfig;
+  return { ...config, chatConfig };
+};
+
 /** Shared by AgentService and execution snapshots: system → server → personal → Agent. */
 export const mergeAgentDefaultConfig = (
   agent: Record<string, unknown>,
@@ -42,9 +57,6 @@ export const mergeAgentDefaultConfig = (
 ): LobeAgentConfig => {
   const base = merge(DEFAULT_AGENT_CONFIG, options.serverDefault ?? {});
   // Shared Agents must never inherit the requesting member's personal defaults.
-  const userConfig = options.workspaceId
-    ? {}
-    : ((options.userDefault as { config?: PartialDeep<LobeAgentConfig> } | undefined)?.config ??
-      {});
+  const userConfig = options.workspaceId ? {} : getUserDefaultAgentLayer(options.userDefault);
   return merge(merge(base, userConfig), cleanObject(agent));
 };

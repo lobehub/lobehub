@@ -1,14 +1,13 @@
 import { DEFAULT_AGENT_CONFIG, DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
-import { type PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { type UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import { getUserDefaultAgentLayer } from '@/database/utils/agentConfig';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 type DefaultAgentConfig = Awaited<ReturnType<UserModel['getUserSettingsDefaultAgentConfig']>>;
@@ -96,8 +95,7 @@ export class AgentGroupService {
     defaultAgentConfig: DefaultAgentConfig,
     agents: T[],
   ) {
-    const userDefaultAgentConfig =
-      (defaultAgentConfig as { config?: PartialDeep<LobeAgentConfig> })?.config || {};
+    const userDefaultAgentConfig = getUserDefaultAgentLayer(defaultAgentConfig);
 
     const serverDefaultAgentConfig = getServerDefaultAgentConfig();
     const baseConfig = merge(DEFAULT_AGENT_CONFIG, serverDefaultAgentConfig);

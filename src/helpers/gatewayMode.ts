@@ -2,8 +2,6 @@ import { useAgentStore } from '@/store/agent';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 
 /**
  * Whether Gateway mode is EFFECTIVELY enabled for a run — the predicate every
@@ -11,8 +9,8 @@ import { settingsSelectors } from '@/store/user/selectors';
  * `device` target the runtime can't actually reach.
  *
  * A configured `agentGatewayUrl` alone is NOT enough: the deployment must also
- * turn Gateway mode on (`enableGatewayMode`) and the agent (or the user's
- * default agent config) must not opt out via `disableGatewayMode`. When any of
+ * turn Gateway mode on (`enableGatewayMode`) and the agent must not opt out via
+ * its own `chatConfig.disableGatewayMode`. When any of
  * these is false, sends fall back to the non-gateway client path, so a bound
  * `local` target cannot actually reach the device — the display must keep it as
  * `sandbox` rather than surfacing `device` ( follow-up).
@@ -26,7 +24,7 @@ import { settingsSelectors } from '@/store/user/selectors';
  * at runtime, so no store subscribes to them (and the display sites'
  * component tests deliberately run without the serverConfig context Provider).
  * `disableGatewayMode`, by contrast, is user-toggleable at runtime (the chat
- * ActionBar / advanced settings), so the reactive `useIsGatewayModeEnabled`
+ * ActionBar), so the reactive `useIsGatewayModeEnabled`
  * hook subscribes to it — see that hook's note.
  */
 const evaluateGatewayModeEnabled = (disableGatewayMode: boolean | undefined): boolean => {
@@ -40,22 +38,19 @@ const evaluateGatewayModeEnabled = (disableGatewayMode: boolean | undefined): bo
 };
 
 /**
- * Resolve the effective `disableGatewayMode` opt-out from an agent state: the
- * agent's own `chatConfig.disableGatewayMode`, falling back to the user's
- * default agent config. `disableGatewayMode: undefined` = enabled.
+ * Resolve the agent's own `chatConfig.disableGatewayMode` opt-out.
+ * `disableGatewayMode: undefined` = enabled. Gateway mode is a per-agent
+ * setting only: the user's default agent config is deliberately NOT a fallback
+ * (the global switch was removed; `scripts/backfillAgentGatewayModeOptOut`
+ * copied existing global opt-outs onto each Agent).
  */
 const resolveDisableGatewayMode = (
   agentState: AgentStoreState,
   resolvedAgentId: string | undefined,
-): boolean | undefined => {
-  const agentDisableGatewayMode = resolvedAgentId
+): boolean | undefined =>
+  resolvedAgentId
     ? agentSelectors.getAgentConfigById(resolvedAgentId)(agentState)?.chatConfig?.disableGatewayMode
     : undefined;
-  const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
-    .chatConfig?.disableGatewayMode;
-
-  return agentDisableGatewayMode ?? defaultDisableGatewayMode;
-};
 
 /**
  * Selector-friendly, non-reactive variant: derives the gate from an agent store
@@ -76,7 +71,7 @@ export const resolveGatewayModeEnabled = (
 /**
  * Reactive hook for render call sites (device switcher, workspace sidebar,
  * resource/skill panels). Subscribes to the live-mutable `disableGatewayMode`
- * (agent chatConfig + user default) so toggling Gateway Mode from the chat
+ * (the agent's own chatConfig) so toggling Gateway Mode from the chat
  * ActionBar re-renders the display and it stops surfacing a `device` target
  * once sends have fallen back to sandbox ( follow-up). `serverConfig`
  * stays a non-reactive read — see `resolveGatewayModeEnabled`'s note.
@@ -84,15 +79,7 @@ export const resolveGatewayModeEnabled = (
 export const useIsGatewayModeEnabled = (agentId?: string): boolean => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const resolvedAgentId = agentId ?? activeAgentId;
-  const agentDisableGatewayMode = useAgentStore((s) =>
-    resolvedAgentId
-      ? agentSelectors.getAgentConfigById(resolvedAgentId)(s)?.chatConfig?.disableGatewayMode
-      : undefined,
-  );
-  const defaultDisableGatewayMode = useUserStore(
-    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
-  );
-  const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
+  const disableGatewayMode = useAgentStore((s) => resolveDisableGatewayMode(s, resolvedAgentId));
 
   return evaluateGatewayModeEnabled(disableGatewayMode);
 };

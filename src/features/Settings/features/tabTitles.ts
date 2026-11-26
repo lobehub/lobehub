@@ -11,7 +11,7 @@ type TitleKey = readonly [namespace: string, key: string];
  */
 export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = {
   [SettingsTabs.About]: ['setting', 'tab.about'],
-  [SettingsTabs.Advanced]: ['setting', 'tab.advanced'],
+  [SettingsTabs.Advanced]: ['setting', 'tab.diagnostics'],
   [SettingsTabs.APIKey]: ['setting', 'tab.apikey'],
   [SettingsTabs.Appearance]: ['setting', 'tab.appearance'],
   [SettingsTabs.Automations]: ['setting', 'tab.automations'],

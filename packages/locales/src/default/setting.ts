@@ -1895,7 +1895,7 @@ export default {
   'settingsSearch.empty': 'No settings found for "{{keyword}}"',
   'settingsSearch.placeholder': 'Search settings...',
   'settingsSearch.tabKeywords.about': 'about, version, changelog, feedback, help',
-  'settingsSearch.tabKeywords.advanced': 'advanced, developer, labs, experiment, beta',
+  'settingsSearch.tabKeywords.advanced': 'advanced, developer, diagnostics, debug, logs',
   'settingsSearch.tabKeywords.apikey': 'api, api key, apikey, token, secret, personal key',
   'settingsSearch.tabKeywords.appearance':
     'appearance, theme, dark mode, light mode, font, language, color, background',
@@ -2315,10 +2315,6 @@ When I am ___, I need ___
   'systemAgent.translation.title': 'Message Translation',
   'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
-  'tab.advanced': 'Advanced',
-  'tab.advanced.gatewayMode.desc':
-    'Run supported agent tasks through the cloud Gateway by default. Individual agents can override this from the chat menu.',
-  'tab.advanced.gatewayMode.title': 'Gateway Mode',
   'tab.advanced.toolsAndDiagnostics.title': 'Tools and diagnostics',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.advanced.updateChannel.canary': 'Canary',
@@ -2344,6 +2340,7 @@ When I am ___, I need ___
   'tab.conversation': 'Conversation',
   'tab.creds': 'Vault',
   'tab.devices': 'Devices',
+  'tab.diagnostics': 'Diagnostics & Debugging',
   'tab.experiment': 'Experiment',
   'tab.hotkey': 'Hotkeys',
   'tab.image': 'Image Generation',
