@@ -13,7 +13,7 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.66"
+    "@anthropic-ai/sandbox-runtime": "0.0.81"
   },
   "devDependencies": {
     "vitest": "5.0.0"
