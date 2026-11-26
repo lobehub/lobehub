@@ -33,6 +33,7 @@
   "config.resolution.options.512": "٥١٢بكسل",
   "config.seed.label": "البذرة",
   "config.seed.random": "بذرة عشوائية",
+  "config.size.autoByOpenAI": "تلقائي (يحدده OpenAI)",
   "config.size.label": "الحجم",
   "config.steps.label": "الخطوات",
   "config.title": "الإعدادات",

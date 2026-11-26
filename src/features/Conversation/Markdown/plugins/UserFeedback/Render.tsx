@@ -5,11 +5,16 @@ import { MessageSquareText } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { type MarkdownElementProps } from '../type';
 import { type ParsedUserFeedbackComment, parseUserFeedback } from './parseUserFeedback';
 
 const styles = stylex.create({
-  body: { paddingBlockStart: '12px', paddingInlineStart: '44px' },
+  body: {
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
+    paddingInlineStart: '44px',
+  },
   comment: {
     fontSize: '13px',
     lineHeight: 1.6,
@@ -46,7 +51,7 @@ const styles = stylex.create({
     marginBlockStart: 0,
     marginBlockEnd: '12px',
     paddingBlockStart: 0,
-    paddingBlockEnd: '12px',
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',

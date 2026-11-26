@@ -72,6 +72,24 @@ describe('openMcpAppEntrypoint', () => {
     });
   });
 
+  it('runs the entrypoint in the conversation it opens from', async () => {
+    // A private connector resolves only in its owner's private-agent topic, so
+    // without the topic both the approval and the call land on another row.
+    mocks.invoke.mockResolvedValue(viewResult('private'));
+
+    await openMcpAppEntrypoint({ ...call, topicId: 'tpc_own' });
+
+    expect(mocks.policy).toHaveBeenCalledWith('fixture', 'open_thread', {
+      agentId: 'agent',
+      fromEntrypoint: true,
+      topicId: 'tpc_own',
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'open_thread', id: call.id }),
+      { agentId: 'agent', fromEntrypoint: true, topicId: 'tpc_own' },
+    );
+  });
+
   it('shows the tab as opening until the call answers', async () => {
     let answer!: (value: unknown) => void;
     mocks.invoke.mockReturnValue(new Promise((resolve) => (answer = resolve)));

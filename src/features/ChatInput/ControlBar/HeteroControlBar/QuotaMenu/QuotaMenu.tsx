@@ -142,7 +142,7 @@ export interface QuotaWindowItem {
   window: HeteroQuotaWindow | null;
 }
 
-export interface CompactQuotaItem {
+interface CompactQuotaItem {
   key: string;
   label?: string;
   leftPercent: number;
@@ -185,8 +185,6 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   contentWidth?: number;
   createErrorSnapshot: (error: unknown) => S;
   fetchQuota: (options?: FetchQuotaOptions<S>) => Promise<S>;
-  /** Non-window providers keep their own native bucket semantics. */
-  getCompactItems?: (quota: S) => CompactQuotaItem[];
   /** Localized explanation for `status: 'error'`; falls back to `error`. */
   getErrorText?: (quota: S) => string | undefined;
   /** Localized explanation for a manual refresh error when stale data is preserved. */
@@ -201,10 +199,11 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   getWindows: (quota: S) => QuotaWindowItem[];
   /** Extra agent-specific data (beyond windows) that makes the body worth rendering. */
   hasExtraData?: (quota: S) => boolean;
-  renderBody?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
   renderFooter?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
   /** Agent-specific content rendered above the quota windows (e.g. account switcher). */
   renderHeader?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
+  /** Disable the generic fallback when the reader supplies account-scoped failure data. */
+  retainLastSnapshotOnError?: boolean;
   sourceKey?: string;
   title: string;
   tooltip: string;
@@ -238,11 +237,10 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   getStaleNotice,
   getUnavailableText,
   getWindows,
-  getCompactItems,
-  renderBody,
   hasExtraData,
   renderFooter,
   renderHeader,
+  retainLastSnapshotOnError = true,
   alwaysRenderHeader,
   sourceKey = 'default',
   title,
@@ -337,7 +335,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         }
 
         // A failed refresh keeps the last good snapshot on screen (and in storage).
-        if (hasQuotaDataForSnapshot(readQuota(requestSourceKey))) {
+        if (retainLastSnapshotOnError && hasQuotaDataForSnapshot(readQuota(requestSourceKey))) {
           if (options.manual) setRefreshError(nextQuota);
           return;
         }
@@ -348,7 +346,13 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       setRefreshError(null);
       setQuotaSnapshot(nextQuota, requestSourceKey, requestContext);
     },
-    [hasQuotaDataForSnapshot, isCurrentRequest, readQuota, setQuotaSnapshot],
+    [
+      hasQuotaDataForSnapshot,
+      isCurrentRequest,
+      readQuota,
+      retainLastSnapshotOnError,
+      setQuotaSnapshot,
+    ],
   );
 
   const loadQuota = useCallback(
@@ -529,8 +533,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       });
     }
   }
-  const compactItems =
-    quota && getCompactItems ? getCompactItems(quota) : [...compactItemsByGroup.values()];
+  const compactItems = [...compactItemsByGroup.values()];
   const hasQuotaData = hasQuotaDataForSnapshot(quota);
   const manualRefreshErrorText =
     refreshError && (getRefreshErrorText?.(refreshError) || t('heteroAgent.quota.refreshFailed'));
@@ -673,11 +676,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       ) : hasQuotaData ? (
         <>
           {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
-          <Flexbox gap={10}>
-            {quota && renderBody
-              ? renderBody(quota, { applyQuota, formatDuration, now })
-              : windows.map((item) => renderQuotaWindow(item))}
-          </Flexbox>
+          <Flexbox gap={10}>{windows.map((item) => renderQuotaWindow(item))}</Flexbox>
           {quota && renderFooter?.(quota, { applyQuota, formatDuration, now })}
           {refreshErrorText && (
             // Stale windows stay the subject; the notice only annotates them.

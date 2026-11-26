@@ -1,7 +1,9 @@
 'use client';
 
-import { Avatar, Block, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
+
+import Avatar from '@/components/Avatar';
 
 import { itemStyles } from './style';
 
@@ -21,7 +23,7 @@ const AgentItem = memo<AgentItemProps>(
 
     return (
       <a
-        href={`/community/agent/${identifier}`}
+        href={`/marketplace/agent/${identifier}`}
         rel="noopener noreferrer"
         style={{ display: 'block', height: '100%' }}
         target="_blank"

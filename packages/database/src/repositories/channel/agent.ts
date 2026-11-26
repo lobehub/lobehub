@@ -1,9 +1,10 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isAgentShareVisitorHeteroType, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   ChannelExecutionConfig,
   ChannelMemberConfig,
   ChannelSharedAgentAccess,
+  ContactUserProfile,
   LobeAgentConfig,
 } from '@lobechat/types';
 import { agentDisplayName, isChannelRuntime } from '@lobechat/types';
@@ -12,13 +13,16 @@ import { and, eq, ne } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
-import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
-import type { Transaction } from '../../type';
+import { agents, agentShares, channelMembers, users, userSettings } from '../../schemas';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
+import { agentShareAdmits } from '../../utils/agentShareAdmits';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import type { ChannelAgentAccess } from './agentAccess';
 import { ChannelError } from './error';
+import { syncMemberGrant } from './grants';
 
 /**
  * Whether a direct conversation is with an Agent reached through its share: someone else's Agent
@@ -41,6 +45,64 @@ export const isSharedAgentChannel = (
     agent.agentVisibility !== 'private'
   );
 
+/**
+ * What a listed Channel tells its viewer about another person's shared Agent it is with: that it
+ * is one, and its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open.
+ */
+export const sharedAgentFields = (
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agent: Parameters<typeof isSharedAgentChannel>[1],
+  viewerId: string,
+  handle: string | null,
+) => {
+  const sharedAgent = isSharedAgentChannel(channel, agent, viewerId);
+  return {
+    sharedAgent,
+    sharedAgentHandle: sharedAgent ? handle : null,
+  };
+};
+
+/**
+ * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
+ * (`isSharedAgentChannel`): the profile a refused reply's contact card shows. `null` otherwise.
+ */
+export const sharedAgentOwner = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+): Promise<ContactUserProfile | null> => {
+  if (!channel.agentId) return null;
+  const [agent] = await tx
+    .select({
+      agentOwnerId: agents.userId,
+      agentVisibility: agents.visibility,
+      agentWorkspaceId: agents.workspaceId,
+      owner: {
+        avatar: users.avatar,
+        fullName: users.fullName,
+        id: users.id,
+        username: users.username,
+      },
+    })
+    .from(agents)
+    .innerJoin(users, eq(users.id, agents.userId))
+    .where(eq(agents.id, channel.agentId));
+  return agent && isSharedAgentChannel(channel, agent, viewerId) ? agent.owner : null;
+};
+
+/**
+ * What a conversation view says about another person's shared Agent it is with: the same marks as
+ * `list` (the composer reads them there to hide upload) and the owner's contact card.
+ */
+export const sharedAgentView = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+) => {
+  const owner = await sharedAgentOwner(tx, channel, viewerId);
+  return { channel: { sharedAgent: !!owner }, owner };
+};
+
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
   cleanObject({
@@ -58,13 +120,13 @@ export interface ChannelAddAgentInput {
 }
 
 /**
- * Another person's Agent that `userId` may talk to through its live link share. A link share is
- * open to anyone signed in, so no contact entry is needed; only a direct conversation (personal
+ * Another person's Agent that `userId` may talk to through its live share: a link share, open to
+ * anyone signed in, or a card share its owner granted them. No contact entry is needed; only a direct conversation (personal
  * or in a workspace) can hold one, because the share admits one person at a time and counts its
  * limits per person.
  */
 export const findSharedChannelAgent = async (
-  tx: Transaction,
+  tx: LobeChatDatabase | Transaction,
   userId: string,
   agentId: string,
 ): Promise<
@@ -84,7 +146,7 @@ export const findSharedChannelAgent = async (
     .where(
       and(
         eq(agents.id, agentId),
-        eq(agentShares.visibility, 'link'),
+        agentShareAdmits(userId),
         notTrashed(agents.isDeleted),
         ne(agents.userId, userId),
       ),
@@ -116,27 +178,52 @@ export const requireChannelAgent = async (
   options: { allowShared?: boolean } = {},
 ) => {
   const [agent] = await tx
-    .select({ name: agents.name, slug: agents.slug, title: agents.title })
+    .select({
+      name: agents.name,
+      slug: agents.slug,
+      title: agents.title,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(agentUsableByWhere(agentId, { userId, workspaceId: workspaceId ?? undefined }))
     .for('share');
   if (agent)
     // LobeAI rows are stored without a title; label it the way the rest of the product does.
-    return { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) };
+    return {
+      name: agent.name,
+      title: normalizeInboxAgentTitle(agent.title, agent),
+      visibility: agent.visibility,
+    };
   const shared = options.allowShared
     ? await findSharedChannelAgent(tx, userId, agentId)
     : undefined;
   if (!shared) throw new ChannelError('NOT_FOUND', 'Agent not found');
-  return { name: shared.name, title: shared.title };
+  return { name: shared.name, title: shared.title, visibility: null };
 };
 
-/** Called under the Channel lock after the caller's admin role has been checked. */
+/**
+ * Whether a workspace Channel may hold its owner's private Agent. Only the owner can use one, so
+ * only conversations no one else can join take it: the direct conversation with it, and the
+ * conversation between two of the owner's Agents. A group would show it, and its replies, to
+ * every member. The personal space has no private Agents.
+ */
+const acceptsPrivateAgent = (
+  channel: Pick<ChannelItem, 'agentId' | 'agentPairKey' | 'workspaceId'>,
+  agentId: string,
+) => !channel.workspaceId || channel.agentId === agentId || !!channel.agentPairKey;
+
+/**
+ * Called under the Channel lock after the caller's admin role has been checked. `inviter` is the
+ * caller's own member: its person must be able to use the Agent, and the join line names it.
+ */
 export const addAgentMember = async (
   tx: Transaction,
   channel: ChannelItem,
-  userId: string,
+  inviter: ChannelMemberItem,
   input: ChannelAddAgentInput,
 ): Promise<ChannelMemberItem> => {
+  const { id: invitedBy, userId } = inviter;
+  if (!userId) throw new ChannelError('FORBIDDEN', 'Only a person adds an Agent');
   if (channel.peerUserId)
     throw new ChannelError('BAD_REQUEST', 'A conversation between two people has no Agents');
   if (channel.agentId) {
@@ -154,6 +241,11 @@ export const addAgentMember = async (
   const agent = await requireChannelAgent(tx, channel.workspaceId, userId, input.agentId, {
     allowShared: acceptsSharedAgent(channel, input.agentId),
   });
+  if (agent.visibility === 'private' && !acceptsPrivateAgent(channel, input.agentId))
+    throw new ChannelError(
+      'FORBIDDEN',
+      'A private Agent cannot join a workspace Channel; make it visible to the workspace first',
+    );
   // Idempotent per Agent: retrying a partly applied batch must not add a second member that
   // answers the same requests again.
   const [joined] = await tx
@@ -176,9 +268,11 @@ export const addAgentMember = async (
       channelId: channel.id,
       config: memberEnvironment(input.config),
       description: input.description,
+      metadata: { invitedBy },
       name: input.name?.trim() || agentDisplayName(agent, 'Agent'),
     })
     .returning();
+  await syncMemberGrant(tx, channel, member, inviter);
   return member;
 };
 
@@ -221,15 +315,23 @@ const agentSettingsColumns = {
   virtual: agents.virtual,
 };
 
-/** Read current settings with the requester's Agent permissions, then freeze the effective config. */
+/**
+ * Read current settings with the requester's Agent permissions, then freeze the effective config.
+ * `access` is how the requester may use it (`resolveChannelAgentAccess`): only `own` and `share`
+ * run.
+ */
 export const resolveExecutionConfig = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
   userId: string,
   serverDefault: PartialDeep<LobeAgentConfig>,
+  access: ChannelAgentAccess,
 ): Promise<ChannelExecutionConfig | null> => {
   if (!member.agentId) return null;
+  if (access.kind === 'share')
+    return sharedExecutionConfig(tx, member.agentId, access.share, serverDefault);
+  if (access.kind !== 'own') return null;
   const [agent] = await tx
     .select(agentSettingsColumns)
     .from(agents)
@@ -237,41 +339,53 @@ export const resolveExecutionConfig = async (
       agentUsableByWhere(member.agentId, { userId, workspaceId: channel.workspaceId ?? undefined }),
     )
     .for('share');
-  if (agent) {
-    const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
-    const runtime = agentRuntime(config);
-    if (!isChannelRuntime(runtime)) return null;
-    return {
-      ...config,
-      ...memberEnvironment(member.config),
-      provider: config.provider || DEFAULT_PROVIDER,
-      runtime,
-    };
-  }
+  if (!agent) return null;
+  const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
+  const runtime = agentRuntime(config);
+  if (!isChannelRuntime(runtime)) return null;
+  return {
+    ...config,
+    ...memberEnvironment(member.config),
+    provider: config.provider || DEFAULT_PROVIDER,
+    runtime,
+  };
+};
 
-  // Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
-  // exactly what a visitor of its share page gets — and only in the cloud.
-  if (!acceptsSharedAgent(channel, member.agentId)) return null;
-  const share = await findSharedChannelAgent(tx, userId, member.agentId);
-  if (!share) return null;
+/**
+ * Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
+ * exactly what a visitor of its share page gets — and only where its share runs.
+ */
+const sharedExecutionConfig = async (
+  tx: Transaction,
+  agentId: string,
+  share: ChannelSharedAgentAccess,
+  serverDefault: PartialDeep<LobeAgentConfig>,
+): Promise<ChannelExecutionConfig | null> => {
   const [owned] = await tx
     .select(agentSettingsColumns)
     .from(agents)
-    .where(eq(agents.id, member.agentId))
+    .where(eq(agents.id, agentId))
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
-  if (agentRuntime(config) !== 'native') return null;
+  // The runtimes its share page runs: Native, or a locally executed CLI runtime. The visitor picks no device;
+  // the run's share gate decides whether the share grants the owner's device and routes there.
+  const runtime = agentRuntime(config);
+  if (
+    !isChannelRuntime(runtime) ||
+    (runtime !== 'native' && !isAgentShareVisitorHeteroType(runtime))
+  )
+    return null;
   return {
     ...config,
     provider: config.provider || DEFAULT_PROVIDER,
-    runtime: 'native',
+    runtime,
     share: { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId },
   };
 };
 
 // Match ordinary Agent execution, including Agents created before agencyConfig existed.
-const agentRuntime = (config: LobeAgentConfig) =>
+export const agentRuntime = (config: Pick<LobeAgentConfig, 'agencyConfig' | 'model'>) =>
   config.agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(config.model) ? config.model : 'native');
 

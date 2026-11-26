@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { idGenerator } from './idGenerator';
+import { fileShares } from '../schemas/fileShare';
+import { goalShares } from '../schemas/goalShare';
+import { topicShares } from '../schemas/topic';
+import { generateShareToken, idGenerator } from './idGenerator';
 
 describe('idGenerator', () => {
   it('should generate an ID with the correct prefix and length', () => {
@@ -38,5 +41,39 @@ describe('idGenerator', () => {
     expect(() => idGenerator('invalid' as any)).toThrowError(
       'Invalid namespace: invalid, please check your code.',
     );
+  });
+});
+
+describe('generateShareToken', () => {
+  it('should draw from the platform CSPRNG', () => {
+    const spy = vi.spyOn(crypto, 'getRandomValues');
+
+    generateShareToken();
+
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('should carry at least 128 bits of entropy in a URL-safe alphabet', () => {
+    const token = generateShareToken();
+
+    expect(token).toMatch(/^[\w-]{22}$/);
+    expect(Buffer.from(token, 'base64url')).toHaveLength(16);
+  });
+
+  it('should not collide across many generations', () => {
+    const tokens = new Set(Array.from({ length: 1000 }, () => generateShareToken()));
+    expect(tokens.size).toBe(1000);
+  });
+
+  it.each([
+    ['topicShares', topicShares],
+    ['fileShares', fileShares],
+    ['goalShares', goalShares],
+  ])('should back the %s id default', (_name, table) => {
+    const token = table.id.defaultFn!() as string;
+
+    expect(token).toMatch(/^[\w-]{22}$/);
+    expect(Buffer.from(token, 'base64url')).toHaveLength(16);
   });
 });

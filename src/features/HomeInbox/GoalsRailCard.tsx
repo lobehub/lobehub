@@ -27,6 +27,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 7px;
     padding-inline: ${BARE_PADDING_INLINE}px;
     border-radius: ${cssVar.borderRadius};
+
+    html[data-density='compact'] & {
+      padding-block: 5px;
+    }
   `,
   glyph: css`
     display: flex;
@@ -57,6 +61,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 9px;
     padding-inline: ${ROW_PADDING_INLINE}px;
     border: 0;
+
+    html[data-density='compact'] & {
+      padding-block: 6px;
+    }
 
     text-align: start;
 

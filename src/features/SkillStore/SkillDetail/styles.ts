@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const ICON_SIZE = 56;
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -30,7 +32,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     border-radius: 12px;
 
@@ -46,7 +48,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     height: ${ICON_SIZE}px;
   `,
   introduction: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.8;
     color: ${cssVar.colorText};
   `,
@@ -54,7 +56,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorder};
   `,
   sectionTitle: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,

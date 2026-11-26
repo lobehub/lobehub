@@ -82,6 +82,7 @@ export const reattachUntrackedHeteroRun = (get: Get, context: ConversationContex
       startedAt: marker.startedAt,
       threadId: marker.threadId,
       topicId: context.topicId,
+      workspaceSlug: context.workspaceSlug,
     })
     .catch((error: unknown) => {
       console.error('[untrackedHeteroRun] re-attaching to the live run failed:', error);

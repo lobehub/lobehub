@@ -22,6 +22,8 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { resolveEffectiveDensity } from '@/styles/density';
+import { compactDensityTheme } from '@/styles/densityTheme';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
@@ -60,10 +62,11 @@ const AppTheme = memo<AppThemeProps>(
     customFontFamily,
   }) => {
     const language = useGlobalStore(systemStatusSelectors.language);
-    const [primaryColor, neutralColor, fontAntialiasing] = useUserStore((s) => [
+    const [primaryColor, neutralColor, fontAntialiasing, interfaceDensity] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
       userGeneralSettingsSelectors.neutralColor(s),
       userGeneralSettingsSelectors.fontAntialiasing(s),
+      userGeneralSettingsSelectors.interfaceDensity(s),
     ]);
     const [userFontFamily, userFontFamilyCode] = useUserStore((s) => [
       preferenceSelectors.fontFamily(s),
@@ -127,6 +130,17 @@ const AppTheme = memo<AppThemeProps>(
       if (fontAntialiasing) delete document.documentElement.dataset.fontAntialiasing;
       else document.documentElement.dataset.fontAntialiasing = 'off';
     }, [fontAntialiasing]);
+
+    useEffect(() => {
+      const effectiveDensity = resolveEffectiveDensity(interfaceDensity);
+      document.documentElement.dataset.density = effectiveDensity;
+      if (effectiveDensity !== 'compact') return;
+      const classes =
+        stylex.props(compactDensityTheme).className?.split(/\s+/).filter(Boolean) ?? [];
+      if (classes.length === 0) return;
+      document.documentElement.classList.add(...classes);
+      return () => document.documentElement.classList.remove(...classes);
+    }, [interfaceDensity]);
 
     return (
       <ConfigProvider

@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs, RouteObject } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { desktopRoutes } from './desktopRouter.config';
+import { LegacyMemoryRedirect } from './legacyPathRedirect';
 import { preferenceListLoader } from './preferenceListLoader';
 
 const loaderModule = vi.hoisted(() => ({ evaluated: false }));
@@ -23,7 +24,12 @@ describe('preference list loader wiring', () => {
   });
 
   it('pre-hydrates the preference list on the desktop preferences route', () => {
-    const routes = flatten(desktopRoutes).filter((r) => r.path === 'preferences');
+    const routes = flatten(desktopRoutes).filter(
+      (r) =>
+        r.path === 'preferences' &&
+        // The old `/memory/preferences` URLs only forward to Settings.
+        (r.element as { type?: unknown } | undefined)?.type !== LegacyMemoryRedirect,
+    );
 
     expect(routes.length).toBeGreaterThan(0);
 

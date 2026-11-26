@@ -253,6 +253,17 @@ describe('ClaudeAgentSdkSession plugins', () => {
     expect(options.extraArgs?.['plugin-dir']).toBeUndefined();
   });
 
+  it('disables the same built-in tools as a CLI spawn, including CronCreate', async () => {
+    const options = await optionsFor([]);
+
+    expect(options.disallowedTools).toEqual([
+      'AskUserQuestion',
+      'Monitor',
+      'ScheduleWakeup',
+      'CronCreate',
+    ]);
+  });
+
   it('passes an appended system prompt through to the CLI', async () => {
     const options = await optionsFor(['--append-system-prompt', 'guide']);
 

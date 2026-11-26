@@ -4,6 +4,7 @@
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -223,6 +224,25 @@ describe('ConversationProvider', () => {
     seedBucket(oldContext, oldMessages);
   });
 
+  it('includes the originating workspace in an embedded conversation context', () => {
+    const ProbeSlug = () => useConversationStore((s) => s.context.workspaceSlug) ?? null;
+    render(
+      <MemoryRouter initialEntries={['/team/page/doc']}>
+        <Routes>
+          <Route
+            path="/:workspaceSlug/page/:id"
+            element={
+              <ConversationProvider context={oldContext}>
+                <ProbeSlug />
+              </ConversationProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('team')).toBeTruthy();
+  });
+
   it('keeps the same store instance across context changes', () => {
     const apis: unknown[] = [];
     const ApiProbe = () => {
@@ -270,6 +290,7 @@ describe('ConversationProvider', () => {
       scrollTo: vi.fn(),
       scrollToEnd: vi.fn(),
       scrollToIndex: vi.fn(),
+      scrollToMessage: vi.fn(),
     };
 
     act(() => {

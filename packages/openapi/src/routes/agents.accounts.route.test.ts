@@ -48,6 +48,7 @@ const { AgentAccountModel } = await import('@/database/models/agentAccount');
 const { hashApiKey } = await import('@lobechat/utils/server');
 const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
 const { userAuthMiddleware } = await import('../middleware/auth');
+const { AgentAccountListSchema, AgentAccountSchema } = await import('../types/agent-account.type');
 const { workspaceAuthMiddleware } = await import('../middleware/workspace');
 const AgentRoutes = (await import('./agents.route')).default;
 const { eq } = await import('drizzle-orm');
@@ -182,6 +183,7 @@ describe('agent account control plane — end to end', () => {
       status: 'active',
     });
     expect(created.data).not.toHaveProperty('credentials');
+    expect(() => AgentAccountSchema.parse(created.data)).not.toThrow();
 
     // 2. The list is an inventory, not a place to hand out secrets.
     const listRes = await call(`/agents/${AGENT}/accounts`, { key: CREDENTIAL_KEY });
@@ -192,6 +194,7 @@ describe('agent account control plane — end to end', () => {
     );
     expect(listed.data.total).toBe(1);
     expect(listed.data.accounts[0]).not.toHaveProperty('credentials');
+    expect(() => AgentAccountListSchema.parse(listed.data)).not.toThrow();
 
     // 3. An `agent:write` key may manage accounts but NOT install a credential.
     const refused = await call(`/agents/${AGENT}/accounts/${id}/credential`, {
@@ -235,6 +238,7 @@ describe('agent account control plane — end to end', () => {
     expect(JSON.stringify(writtenBody)).not.toContain(SECRET);
     expect(writtenBody.data).not.toHaveProperty('credentials');
     expect(writtenBody.data.credentialHint).not.toHaveProperty('password');
+    expect(() => AgentAccountSchema.parse(writtenBody.data)).not.toThrow();
 
     // 5. The column holds AES-GCM ciphertext, and only the internal read decrypts.
     const [row] = await serverDB
@@ -278,6 +282,8 @@ describe('agent account control plane — end to end', () => {
     const revokedBody = await json(revoked);
     expect(revoked.status).toBe(200);
     expect(revokedBody.data).toMatchObject({ hasCredential: false, status: 'revoked' });
+    // Revocation keeps the row for audit, so the DELETE answers with the revoked account.
+    expect(() => AgentAccountSchema.parse(revokedBody.data)).not.toThrow();
     const [afterRevoke] = await serverDB
       .select({ credentials: agentAccounts.credentials })
       .from(agentAccounts)

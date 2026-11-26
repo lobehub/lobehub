@@ -15,6 +15,7 @@ import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
+  connectorLinksContextForRow,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -59,8 +60,14 @@ export interface ToolReadsContext {
    * resolution or the stale-tools refresh.
    */
   candidateIds: string[];
+  disabledPluginIds?: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
+  /**
+   * Explicit connector allowlist for custom toolsets. Ordinary agents use their
+   * scoped connections, and shared agents use their grants.
+   */
+  optedInExtensionIds?: Set<string>;
   /** Project the run belongs to (`appContext.projectId`). */
   projectId?: string;
   requestedDeviceId?: string;
@@ -118,20 +125,21 @@ const CONNECTOR_REFRESH_CONCURRENCY = 5;
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
  * which needs the gatekeeper; without one, keep the stored tokens.
  */
-const refreshConnectorTokens = async (
+const refreshConnectorTokens = async <T extends DecryptedConnector>(
   deps: ToolDiscoveryDeps,
   gateKeeper: KeyVaultsGateKeeper | undefined,
-  connectors: DecryptedConnector[],
+  connectors: T[],
   onTimeout: () => void,
   anonymous = false,
-): Promise<DecryptedConnector[]> => {
+): Promise<T[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
   const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
   const linksContext = { connectorModel: model };
   const map = await loadConnectorLinksMap(connectors, linksContext);
   return pMap(
     connectors,
-    async (connector) => {
+    // Every row keeps what it was resolved with (its tool prefix among them)
+    async (connector): Promise<T> => {
       const links = map.get(connector.id) ?? [];
       const choices = links.map(({ id, name, userId }, index) => ({
         id,
@@ -141,18 +149,29 @@ const refreshConnectorTokens = async (
       if (links.length > 1) return { ...connector, credentials: null, links: choices };
       const primary = pickPrimaryLink(links);
       if (primary) {
-        const [fresh] = await refreshExpiredLinkTokens(connector, [primary], model, { onTimeout });
-        return { ...withLinkCredentials(connector, fresh), links: choices };
+        // A private agent's personal connector refreshes in its own scope
+        const rowContext = connectorLinksContextForRow(linksContext, connector);
+        const [fresh] = await refreshExpiredLinkTokens(
+          connector,
+          [primary],
+          rowContext.connectorModel,
+          { onTimeout },
+        );
+        return { ...connector, ...withLinkCredentials(connector, fresh), links: choices };
       }
-      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+      const [fresh] = await refreshExpiredConnectorTokens([connector], model, { onTimeout });
+      return { ...connector, ...fresh };
     },
     { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 
+/** A connector row the run resolved, with its tool prefix (`resolveToolSets`). */
+type RunConnector = DecryptedConnector & { toolIdentifier: string };
+
 /** Drop unfinished marketplace installs (see `isMarketplaceInstallRunnable`). */
-const filterInstalledMarketplaceConnectors = (
-  connectors: DecryptedConnector[],
+const filterInstalledMarketplaceConnectors = <T extends DecryptedConnector>(
+  connectors: T[],
   installedIds: Set<string>,
 ) =>
   connectors.filter((connector) =>
@@ -177,11 +196,23 @@ const readConnectors = async (
     const onRefreshTimeout = () => {
       refreshTimeouts += 1;
     };
+    // Started with the read below, not after it: a connector that is on is
+    // resolved here, so this is the common path and must not queue behind the
+    // invocation set's own resolution. Never rejects.
+    const discoverableRead = readDiscoverableConnectors(
+      deps,
+      ctx,
+      connectorGateKeeper,
+      onRefreshTimeout,
+      installedPluginIds,
+    );
     const [resolved, installedIds] = await Promise.all([
+      // One tool set per row: a private agent's own topic keeps the owner's
+      // private and personal rows beside the shared one of an identifier
       candidateIds.length > 0
-        ? deps.connectorModel.resolveByIdentifiers(
+        ? deps.connectorModel.resolveToolSets(
+            { agentId: resolvedAgentId, topicId: ctx.topicId },
             candidateIds,
-            resolvedAgentId,
             connectorGateKeeper,
           )
         : [],
@@ -211,13 +242,7 @@ const readConnectors = async (
         ? await deps.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
         : [];
 
-    const discoverable = await readDiscoverableConnectors(
-      deps,
-      ctx,
-      connectorGateKeeper,
-      onRefreshTimeout,
-      installedIds,
-    );
+    const discoverable = await discoverableRead;
     markDegradedStage(span, refreshTimeouts, 'connector token refreshes');
 
     return {
@@ -237,12 +262,13 @@ const readConnectors = async (
 };
 
 /**
- * Connectors the agent has not pinned — `auto` in the three-state plugin
- * config, which is simply "absent from `plugins`". A custom MCP is stored as
- * a connector, so without this source an unpinned one is resolvable only on
- * the turn that @-mentions it: the next turn's activator answers
- * "Not found" and the model's direct call is rejected as an unknown name.
- * Like installed plugins they are discoverable but never enabled.
+ * Connectors the agent turned on. A connector is two-state: on means the model
+ * finds it through the activator, so it is resolved here rather than into the
+ * invocation set. A custom MCP is stored as a connector, so without this
+ * source one that is on is resolvable only on the turn that @-mentions it: the
+ * next turn's activator answers "Not found" and the model's direct call is
+ * rejected as an unknown name. Like installed plugins they are discoverable
+ * but never enabled.
  *
  * A share run resolves only the connectors the share grants, by identifier:
  * `resolveAll` would decrypt every creator connector for a visitor turn.
@@ -253,9 +279,9 @@ const readDiscoverableConnectors = async (
   ctx: ToolReadsContext,
   gateKeeper: KeyVaultsGateKeeper | undefined,
   onRefreshTimeout: () => void,
-  installedIds: Set<string>,
+  installedPluginIds: Promise<Set<string>>,
 ): Promise<{
-  connectorsMcp: DecryptedConnector[];
+  connectorsMcp: RunConnector[];
   manifests: LobeToolManifest[];
   tools: UserConnectorToolItem[];
 }> => {
@@ -263,22 +289,30 @@ const readDiscoverableConnectors = async (
   if (ctx.exclusivePluginIds || ctx.isGoalTurn) return none;
   try {
     const candidates = new Set(ctx.candidateIds);
-    let resolved: DecryptedConnector[];
-    if (ctx.shareGrantedExtensionIds) {
-      const grantedUnpinnedIds = [...ctx.shareGrantedExtensionIds].filter(
-        (identifier) => !candidates.has(identifier),
-      );
-      if (grantedUnpinnedIds.length === 0) return none;
-      resolved = await deps.connectorModel.resolveByIdentifiers(
-        grantedUnpinnedIds,
-        ctx.resolvedAgentId,
+    // Both cuts name what the run may discover: a share's grants, or the
+    // connectors the agent turned on.
+    const discoverableIds = ctx.shareGrantedExtensionIds ?? ctx.optedInExtensionIds;
+    const unresolvedIds = discoverableIds
+      ? [...discoverableIds].filter((identifier) => !candidates.has(identifier))
+      : undefined;
+    if (unresolvedIds?.length === 0) return none;
+    // One tool set per row, in the run's conversation (see `readConnectors`)
+    const [resolved, installedIds] = await Promise.all([
+      deps.connectorModel.resolveToolSets(
+        { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
+        unresolvedIds,
         gateKeeper,
-      );
-    } else {
-      resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
-    }
+        unresolvedIds ? [] : [...candidates, ...(ctx.disabledPluginIds ?? [])],
+      ),
+      installedPluginIds,
+    ]);
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
+      (c) =>
+        !candidates.has(c.identifier) &&
+        !ctx.disabledPluginIds?.includes(c.identifier) &&
+        c.isEnabled &&
+        c.status === 'connected' &&
+        hasCallableMcpEndpoint(c),
     );
     if (connectorsMcp.length === 0) return none;
 
@@ -338,12 +372,24 @@ const readLobehubSkillManifests = async (
   }
 };
 
+/** The devices a run reads at discovery. */
+export interface DevicePool {
+  /** Live devices: the online set routing (`onlineDeviceIds`) reads. */
+  online: DeviceAttachment[];
+  /**
+   * Managed cloud devices of this run's pool with no live connection. They are
+   * always online for the model (the device tool's prompt lists them), but not
+   * for routing, which wakes a bound one on its own.
+   */
+  sleepingCloud: DeviceAttachment[];
+}
+
 const readDevicePool = async (
   deps: ToolDiscoveryDeps,
   ctx: ToolReadsContext,
-): Promise<DeviceAttachment[]> => {
+): Promise<DevicePool> => {
   const { agentConfig, requestedDeviceId } = ctx;
-  if (!deviceGateway.isConfigured) return [];
+  if (!deviceGateway.isConfigured) return { online: [], sleepingCloud: [] };
   try {
     // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
     // tagged with `scope` and the user-set `friendlyName` alias (see
@@ -352,11 +398,11 @@ const readDevicePool = async (
     // (same physical machine under both principals). Keep only live devices:
     // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
     // online set.
-    let devices = (
-      await traceDiscoveryStage('online_devices', () =>
-        getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId),
-      )
-    ).filter((d) => d.online);
+    const scopedDevices = await traceDiscoveryStage('online_devices', () =>
+      getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId),
+    );
+    let devices = scopedDevices.filter((d) => d.online);
+    const sleepingCloud = scopedDevices.filter((d) => d.managed && !d.online);
 
     // A workspace run that targets one of the caller's PERSONAL devices
     // needs that device visible in this run's pool — otherwise
@@ -399,11 +445,15 @@ const readDevicePool = async (
         );
       }
     }
-    log('execAgent: found %d online device(s)', devices.length);
-    return devices;
+    log(
+      'execAgent: found %d online device(s), %d sleeping cloud device(s)',
+      devices.length,
+      sleepingCloud.length,
+    );
+    return { online: devices, sleepingCloud };
   } catch (error) {
     log('execAgent: failed to query device list: %O', error);
-    return [];
+    return { online: [], sleepingCloud: [] };
   }
 };
 
@@ -511,7 +561,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
         ? Promise.resolve<LobeToolManifest[]>([])
         : traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(
-              ctx.resolvedAgentId,
+              { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
               ctx.shareGrantedExtensionIds && { identifiers: [...ctx.shareGrantedExtensionIds] },
             ),
           )

@@ -111,16 +111,18 @@ describe('channel worktrees', () => {
     expect(claim?.job.workingDirectory).toBe('/other');
   });
 
-  it('leaves a directory that cannot host a worktree alone for a while', async () => {
+  it('runs side by side in a directory that cannot host a worktree', async () => {
     const { channel, secondJob } = await sharedDirectory();
     const candidate = (await execution.worktreeCandidate(channel.id, secondJob.id))!;
 
     await execution.worktreeUnavailable(channel.id, candidate, 'not a git repository');
 
     expect(await execution.worktreeCandidate(channel.id, secondJob.id)).toBeUndefined();
-    expect(await jobById(db, secondJob.id)).toMatchObject({
-      blockedCode: 'directory_locked',
-      status: 'queued',
+    const claim = await execution.claim(channel.id, secondJob.id, lease);
+    expect(claim?.job).toMatchObject({
+      blockedCode: null,
+      status: 'running',
+      workingDirectory: candidate.sourceDirectory,
     });
   });
 

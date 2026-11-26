@@ -9,5 +9,4 @@ export interface AgentTransferScope {
 export const useAgentTransferMenuItem = (
   _agentId?: string,
   _agentMeta?: MetaData,
-  _scope?: AgentTransferScope,
 ): ItemType[] | null => null;

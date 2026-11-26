@@ -32,6 +32,17 @@ export type TopicRunSettledHandler = (params: {
  * The in-process runtime keeps calling `dispatchHooks` with its real, rich
  * `state` directly (full message array, interruption, …) — it needs no synthesis.
  */
+/**
+ * The share visitor a run completed for, mirrored onto the synthetic state's
+ * `principal.actor.shareVisitor` so completion treats it as a share run
+ * (no creator recall, share-scoped Works). In-process runs carry the full
+ * context on their own state instead.
+ */
+export interface OperationCompletionShareVisitor {
+  shareId: string;
+  visitorUserId: string;
+}
+
 export interface OperationCompletionInput {
   /** Owning agent id — trace snapshot key + the lifecycle event's `agentId`. */
   agentId?: string;
@@ -60,6 +71,8 @@ export interface OperationCompletionInput {
   provider?: string | null;
   /** Serialized webhook hooks (queue mode); ignored in local in-memory mode. */
   serializedHooks?: SerializedHook[];
+  /** Set for a share visitor run settled outside its in-process state (hetero). */
+  shareVisitor?: OperationCompletionShareVisitor;
   /** When the run started, so the terminal row keeps its processing time. */
   startedAt?: Date | string;
   stepCount?: number | null;
@@ -67,6 +80,7 @@ export interface OperationCompletionInput {
   /** Trace / usage aggregates (llm calls, tokens, tool calls). */
   usage?: unknown;
   userId?: string;
+  worksRegistered?: boolean;
 }
 
 /** Options shared by {@link CompletionLifecycle.completeOperation} / `dispatchHooks`. */
@@ -85,6 +99,12 @@ export interface CompleteOperationOptions {
    * dispatch-failure path, which surfaces a device-specific `detail`).
    */
   skipErrorMessageWrite?: boolean;
+  /**
+   * The caller already moved the row to its terminal status with a compare-and-set it won (an
+   * abandonment claim), so this completion is the run's end even though the row already holds
+   * that status. Without it, the write reads as a replay of a settled run.
+   */
+  terminalClaimed?: boolean;
 }
 
 /** What the extracted completion steps read off a `CompletionLifecycle` instance. */

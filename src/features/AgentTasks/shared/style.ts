@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
     overflow: hidden;
@@ -57,7 +59,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
      * faces in the cards sit on one vertical line, the cards just run wider.
      */
     padding-block: 5px;
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
 
     &::before {
       content: '';

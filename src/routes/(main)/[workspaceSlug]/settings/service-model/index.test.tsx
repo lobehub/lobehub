@@ -14,8 +14,8 @@ vi.mock('@/business/client/hooks/useIsWorkspaceLoading', () => ({
 }));
 
 vi.mock('@/features/Settings/service-model', () => ({
-  default: ({ hidePersonalPreferences }: { hidePersonalPreferences?: boolean }) => (
-    <div data-hide-personal={String(!!hidePersonalPreferences)} data-testid="service-model-page">
+  default: ({ scope }: { scope?: 'personal' | 'workspace' }) => (
+    <div data-scope={scope} data-testid="service-model-page">
       service model settings
     </div>
   ),
@@ -29,11 +29,11 @@ describe('WorkspaceServiceModelSetting', () => {
     expect(screen.getByTestId('service-model-page')).toHaveTextContent('service model settings');
   });
 
-  it('leaves the personal chat-assist rows to the Chat Preferences tab', () => {
+  it('renders the service model page in workspace scope', () => {
     managePermission.allowed = true;
     render(<WorkspaceServiceModelSetting />);
 
-    expect(screen.getByTestId('service-model-page')).toHaveAttribute('data-hide-personal', 'true');
+    expect(screen.getByTestId('service-model-page')).toHaveAttribute('data-scope', 'workspace');
   });
 
   it('renders forbidden screen without manage_settings permission', () => {

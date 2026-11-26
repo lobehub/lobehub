@@ -195,8 +195,37 @@ describe('CodexAppServerAdapter', () => {
       outputTruncated: true,
     });
     expect(result.content).toHaveLength(25_078);
-    expect(result.pluginState.output).toBe(result.content);
+    expect(result.pluginState).not.toHaveProperty('output');
     expect(result.pluginState.stdout).toBe(result.content);
+  });
+
+  it('streams command output into stdout only', () => {
+    const adapter = new CodexAppServerAdapter();
+    adapter.adapt('item/started', {
+      item: {
+        aggregatedOutput: null,
+        command: 'echo hello',
+        durationMs: null,
+        exitCode: null,
+        id: 'command-stream',
+        status: 'inProgress',
+        type: 'commandExecution',
+      },
+      startedAtMs: 1,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+
+    const events = adapter.adapt('item/commandExecution/outputDelta', {
+      delta: 'hello',
+      itemId: 'command-stream',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const state = events.find(({ data }) => data?.chunkType === 'tool_state')?.data.pluginState;
+
+    expect(state).toMatchObject({ isBackground: false, stdout: 'hello' });
+    expect(state).not.toHaveProperty('output');
   });
 
   it('normalizes native file changes into complete single-file patches', () => {

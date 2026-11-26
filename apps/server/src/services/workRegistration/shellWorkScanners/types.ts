@@ -32,7 +32,7 @@ export interface ShellWorkScanner {
     cumulativeUsage: WorkVersionCumulativeUsage | null;
     data: { command: string; exitCode?: number; output?: string };
     messageId: string;
-    /** Present when the lab is on; see {@link ShellPullRequestLinking}. */
+    /** Absent for a share visitor's run; see {@link ShellPullRequestLinking}. */
     pullRequestLinking?: ShellPullRequestLinking;
     rootOperationId: string;
     threadId: string | null;
@@ -49,8 +49,8 @@ export interface ShellWorkScanner {
     workModel: WorkModel;
   }) => Promise<unknown | null>;
   /**
-   * Runs only when the scan carries {@link ShellPullRequestLinking} (the
-   * Better Coding Experience lab is on); without it the scanner is skipped.
+   * Runs only when the scan carries {@link ShellPullRequestLinking}; without
+   * it (a share visitor's run) the scanner is skipped.
    */
   requiresPullRequestLinking?: boolean;
 }

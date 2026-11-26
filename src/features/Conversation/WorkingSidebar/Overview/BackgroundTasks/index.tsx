@@ -1,7 +1,6 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,10 +8,9 @@ import { highlightMessageWhenScrollSettles } from '@/features/Portal/TopicCommen
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { getLocalBackgroundTaskStopper } from '@/store/chat/slices/agentRun/actions/transports/hetero/backgroundTasks';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
-import { sectionProps, sectionStyles } from '../sectionStyles';
+import { SectionHeader } from '../SectionHeader';
+import { sectionProps } from '../sectionStyles';
 import {
   type BackgroundTaskItem,
   groupBackgroundTasks,
@@ -34,20 +32,19 @@ interface BackgroundTasksSectionProps {
 const locate = ({ toolCallId }: BackgroundTaskItem) => {
   const state = useChatStore.getState();
   const location = locateToolCall(displayMessageSelectors.mainDisplayChats(state), toolCallId);
-  const scrollToIndex = state.mainConversationScrollToIndex;
-  if (!location || !scrollToIndex) return;
+  const scrollToMessage = state.mainConversationScrollToMessage;
+  if (!location || !scrollToMessage) return;
   requestAnimationFrame(() => {
-    scrollToIndex(location.index, { align: 'center', smooth: true });
+    scrollToMessage(location.elementId, { align: 'center', smooth: true });
     highlightMessageWhenScrollSettles(location.elementId);
   });
 };
 
 /**
  * Background tasks a Claude Code run started (`run_in_background` Bash,
- * Monitor), Better Coding Experience only. Running ones all show; finished ones
- * fold to the most recent few.
+ * Monitor). Running ones all show; finished ones fold to the most recent few.
  */
-const BackgroundTasksBody = ({
+export const BackgroundTasksSection = ({
   afterBreak,
   deviceId,
   outputReadable,
@@ -88,12 +85,10 @@ const BackgroundTasksBody = ({
 
   return (
     <Flexbox {...sectionProps(afterBreak)}>
-      <Flexbox horizontal align={'center'} {...stylex.props(sectionStyles.sectionHeader)} gap={6}>
-        <span {...stylex.props(sectionStyles.sectionTitle)}>
-          {t('workingPanel.overview.backgroundTasks.title')}
-        </span>
-        {running.length > 0 && <span {...stylex.props(sectionStyles.count)}>{running.length}</span>}
-      </Flexbox>
+      <SectionHeader
+        count={running.length > 0 ? running.length : undefined}
+        title={t('workingPanel.overview.backgroundTasks.title')}
+      />
       {running.map(renderRow)}
       {finished.map(renderRow)}
       {(hiddenCount > 0 || showAllFinished) && (
@@ -110,11 +105,4 @@ const BackgroundTasksBody = ({
       )}
     </Flexbox>
   );
-};
-
-/** Renders nothing unless the Better Coding Experience lab is on. */
-export const BackgroundTasksSection = (props: BackgroundTasksSectionProps) => {
-  const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  if (!enabled) return null;
-  return <BackgroundTasksBody {...props} />;
 };

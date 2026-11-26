@@ -1,12 +1,21 @@
 'use client';
 
 import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
-import { Alert, createStaticStyles, Empty, Icon } from '@lobehub/ui';
+import { Alert, Button, createStaticStyles, Empty, Icon } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
-import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
+import {
+  Bot,
+  InfoIcon,
+  LockIcon,
+  MonitorSmartphone,
+  Share2,
+  UserRoundPlus,
+  UsersIcon,
+} from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentGroupTransferToMemberAction } from '@/business/client/hooks/useAgentGroupTransferToMemberAction';
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import PolicySelect, { type PolicyOption } from '@/features/ResourcePermission/PolicySelect';
@@ -33,7 +42,7 @@ interface PermissionFormProps {
 }
 
 const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation(['setting', 'agent']);
   const {
     accessError,
     accessLevel,
@@ -55,6 +64,9 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     topicSharePolicy,
   } = useGroupPermission(groupId);
   const form = useForm();
+  // Handing the group to another member used to sit in the sidebar row menu;
+  // null when the viewer may not start it (or the deployment has no such flow).
+  const openTransfer = useAgentGroupTransferToMemberAction(groupId);
 
   const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
 
@@ -254,6 +266,28 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
       }
     : undefined;
 
+  const ownershipGroup: FormGroupItem | undefined = openTransfer
+    ? {
+        children: [
+          {
+            avatar: (
+              <span className={styles.rowIcon}>
+                <Icon icon={UserRoundPlus} size={16} />
+              </span>
+            ),
+            children: (
+              <Button onClick={openTransfer}>
+                {t('transfer.transferToMember', { ns: 'agent' })}
+              </Button>
+            ),
+            desc: t('permission.page.groupTransferDesc'),
+            label: t('permission.page.transferLabel'),
+          },
+        ],
+        title: t('permission.page.ownershipGroup'),
+      }
+    : undefined;
+
   return (
     <>
       {/* A failed permission fetch must not read as "this group has no member
@@ -275,9 +309,13 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
       <Form
         collapsible={false}
         form={form}
-        items={[...(memberGroup ? [memberGroup] : []), ...(configGroup ? [configGroup] : [])]}
         itemsType={'group'}
         variant={'filled'}
+        items={[
+          ...(memberGroup ? [memberGroup] : []),
+          ...(configGroup ? [configGroup] : []),
+          ...(ownershipGroup ? [ownershipGroup] : []),
+        ]}
         {...FORM_STYLE}
       />
     </>

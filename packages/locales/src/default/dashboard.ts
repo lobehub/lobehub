@@ -222,4 +222,6 @@ export default {
   'board.emptyPrompt':
     'Build a monitoring widget and put it on the dashboard "{{title}}". I want to see: ',
   'board.emptyAgentUnavailable': "Couldn't open the agent. Try again in a moment.",
+  'form.saveFailedRetry': "Couldn't save the dashboard. Check your network and try again.",
+  'widget.saveFailedRetry': "Couldn't save the widget. Check your network and try again.",
 };

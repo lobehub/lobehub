@@ -2,6 +2,26 @@ import type { ChatTopic, UIChatMessage } from '@lobechat/types';
 
 export const INTERVENTION_REFRESH_INTERVAL = 2000;
 
+/** How long a pending card polls at the base interval before backing off. */
+export const INTERVENTION_FAST_POLL_WINDOW = 5 * 60_000;
+/** Ceiling of the backed-off poll interval. */
+export const INTERVENTION_MAX_REFRESH_INTERVAL = 5 * 60_000;
+
+/**
+ * Poll interval after `elapsed` ms of continuous polling. An answer from
+ * another device normally lands within minutes, so the first window keeps the
+ * base interval; after that the interval doubles every minute up to the
+ * ceiling. A question nobody answers keeps its run parked in
+ * `waiting_for_human` for days, and without this backoff an open tab polled
+ * every 2 s all that time.
+ * Focus revalidation still refreshes immediately when the user returns.
+ */
+export const backoffPollInterval = (base: number, elapsed: number) => {
+  if (base <= 0 || elapsed < INTERVENTION_FAST_POLL_WINDOW) return base;
+  const doublings = 1 + Math.floor((elapsed - INTERVENTION_FAST_POLL_WINDOW) / 60_000);
+  return Math.max(base, Math.min(base * 2 ** doublings, INTERVENTION_MAX_REFRESH_INTERVAL));
+};
+
 /** A missing operation marker can still mean the continuation is starting. */
 export const isInterventionRunActive = (topic: ChatTopic | null) =>
   !!topic?.metadata?.runningOperation ||
@@ -19,6 +39,17 @@ export const hasPendingInterventions = (messages: UIChatMessage[]) =>
       !message.id.startsWith('tmp_') &&
       intervention(message)?.status === 'pending',
   );
+
+/** Ids of the persisted cards still waiting for an answer. */
+export const pendingInterventionIds = (messages: UIChatMessage[]) =>
+  messages
+    .filter(
+      (message) =>
+        message.role === 'tool' &&
+        !message.id.startsWith('tmp_') &&
+        intervention(message)?.status === 'pending',
+    )
+    .map((message) => message.id);
 
 const isTerminal = (status: string | undefined) =>
   status === 'approved' || status === 'rejected' || status === 'aborted';

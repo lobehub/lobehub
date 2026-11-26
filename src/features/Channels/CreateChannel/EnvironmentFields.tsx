@@ -1,10 +1,19 @@
 import type { DeviceListItem } from '@lobechat/types';
-import { Button, Select, Text } from '@lobehub/ui';
+import { Button, Flexbox, Select, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { FolderOpen } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import {
+  isCurrentMachineDevice,
+  isDeviceOffline,
+  splitPickerDevices,
+  useCurrentMachine,
+} from '@/features/DeviceManager/devicePicker';
+import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 import { openPickWorkingDirModal } from '@/features/WorkingDirectory';
 import type { DeviceListResult } from '@/store/device/useDeviceList';
 
@@ -22,7 +31,7 @@ type DraftControls = ReturnType<typeof useChannelAgentDraft>;
 
 /** Device and working directory for one Agent in one Channel. */
 export const EnvironmentFields = ({
-  controls: { change, changeDevice, draft },
+  controls: { change, changeDevice, draft, remote },
   devices,
   name,
 }: {
@@ -30,7 +39,48 @@ export const EnvironmentFields = ({
   devices: DeviceListResult;
   name: string;
 }) => {
-  const { t } = useTranslation('channel');
+  const { t } = useTranslation(['channel', 'device']);
+  const currentMachine = useCurrentMachine();
+  const [showOffline, setShowOffline] = useState(false);
+  // This computer first, then reachable devices; offline ones fold into one
+  // group at the end unless one of them is the pick.
+  const folds = (device: DeviceListItem) =>
+    devices.isConfirmed && isDeviceOffline(device) && device.deviceId !== draft.deviceId;
+  const { available, offline } = splitPickerDevices(devices.data ?? [], currentMachine);
+  const visibleDevices = [...available, ...offline].filter((device) => !folds(device));
+  const foldedDevices = offline.filter(folds);
+  const deviceOption = (device: DeviceListItem) => {
+    const suffix =
+      !devices.isConfirmed || device.onlineUnknown
+        ? t('environment.checkingDevice')
+        : device.online
+          ? ''
+          : t('offline');
+    return {
+      disabled:
+        !devices.isConfirmed ||
+        !device.online ||
+        !!device.onlineUnknown ||
+        (device.scope === 'workspace' && device.visibility !== 'public'),
+      label: (
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          {getDeviceIcon(device.platform, 14)}
+          <Text ellipsis>{deviceLabel(device)}</Text>
+          {isCurrentMachineDevice(device, currentMachine) && (
+            <Tag size={'small'} style={{ flex: 'none' }}>
+              {t('picker.thisDevice', { ns: 'device' })}
+            </Tag>
+          )}
+          {suffix && (
+            <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+              {suffix}
+            </Text>
+          )}
+        </Flexbox>
+      ),
+      value: device.deviceId,
+    };
+  };
   const missingDevice =
     draft.deviceId && !devices.data?.some((item) => item.deviceId === draft.deviceId);
   const canChooseDirectory =
@@ -38,6 +88,13 @@ export const EnvironmentFields = ({
     devices.isConfirmed &&
     devices.data?.some(
       (item) => item.deviceId === draft.deviceId && item.online && !item.onlineUnknown,
+    );
+
+  if (remote)
+    return (
+      <Text fontSize={12} type="secondary">
+        {t('environment.remoteHost')}
+      </Text>
     );
 
   return (
@@ -59,15 +116,21 @@ export const EnvironmentFields = ({
                 },
               ]
             : []),
-          ...(devices.data ?? []).map((device) => ({
-            disabled:
-              !devices.isConfirmed ||
-              !device.online ||
-              !!device.onlineUnknown ||
-              (device.scope === 'workspace' && device.visibility !== 'public'),
-            label: `${deviceLabel(device)}${!devices.isConfirmed || device.onlineUnknown ? ` · ${t('environment.checkingDevice')}` : device.online ? '' : ` · ${t('offline')}`}`,
-            value: device.deviceId,
-          })),
+          ...visibleDevices.map(deviceOption),
+          ...(foldedDevices.length > 0
+            ? [
+                {
+                  label: (
+                    <OfflineDevicesToggle
+                      count={foldedDevices.length}
+                      expanded={showOffline}
+                      onToggle={() => setShowOffline((v) => !v)}
+                    />
+                  ),
+                  options: showOffline ? foldedDevices.map(deviceOption) : [],
+                },
+              ]
+            : []),
         ]}
         onChange={changeDevice}
       />

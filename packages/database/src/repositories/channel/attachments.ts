@@ -1,7 +1,7 @@
 import type { SQLWrapper } from 'drizzle-orm';
 import { asc, inArray } from 'drizzle-orm';
 
-import { channelMessageFiles } from '../../schemas';
+import { channelMessageFiles, files } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 
 /**
@@ -49,4 +49,47 @@ export const fileIdsByMessage = async (
   }
 
   return result;
+};
+
+/** A positive finite pixel count from caller-written JSON metadata, or `null`. */
+const pixels = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+
+/** A base64 ThumbHash from caller-written JSON metadata, or `null`. A real one is ~25-35 chars. */
+const thumbhashOf = (value: unknown) =>
+  typeof value === 'string' && /^[\d+/A-Za-z]{8,64}={0,2}$/.test(value) ? value : null;
+
+/**
+ * The attachments a Channel shows, by file id. `width` / `height` are the picture's intrinsic
+ * pixels as the uploader recorded them in `metadata`, so a client can size the picture's box
+ * before fetching it; `null` when unknown (not an image, or an upload that did not record them).
+ * `thumbhash` is the base64 ThumbHash recorded at upload, painted as a blurred preview while the
+ * picture loads; `null` when unknown. Nothing else in `metadata` is returned: it also holds the storage path.
+ */
+export const channelAttachments = async (tx: LobeChatDatabase | Transaction, ids: string[]) => {
+  if (!ids.length) return [];
+
+  const rows = await tx
+    .select({
+      fileType: files.fileType,
+      id: files.id,
+      metadata: files.metadata,
+      name: files.name,
+      size: files.size,
+      url: files.url,
+    })
+    .from(files)
+    .where(inArray(files.id, ids));
+  return rows.map(({ metadata, ...file }) => {
+    const meta = (metadata ?? {}) as { height?: unknown; thumbhash?: unknown; width?: unknown };
+    const [width, height] = [pixels(meta.width), pixels(meta.height)];
+    // Half a size reserves nothing: report both or neither.
+    const known = width !== null && height !== null;
+    return {
+      ...file,
+      height: known ? height : null,
+      thumbhash: thumbhashOf(meta.thumbhash),
+      width: known ? width : null,
+    };
+  });
 };

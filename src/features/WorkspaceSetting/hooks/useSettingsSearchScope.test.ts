@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { useSettingsSearch } from '@/features/SettingsSearch';
+import { SettingsTabs } from '@/store/global/initialState';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -13,7 +14,7 @@ const memberGroups: WorkspaceSettingCategoryGroup[] = [
   {
     items: [
       { icon: null, key: WorkspaceSettingsTabs.Profile, label: 'Profile' },
-      { icon: null, key: WorkspaceSettingsTabs.ChatPreference, label: 'Chat Preferences' },
+      { icon: null, key: WorkspaceSettingsTabs.Conversation, label: 'Conversation' },
     ],
     key: WorkspaceSettingsGroupKey.Account,
     title: 'Account',
@@ -68,18 +69,18 @@ describe('workspace settings search scope', () => {
     );
   });
 
-  it('deep-links follow-up suggestions to the chat preferences row for members', () => {
+  it('deep-links follow-up suggestions to the conversation row for members', () => {
     const urls = search('follow up', memberGroups).map((result) => result.url);
 
-    expect(urls).toContain('/acme/settings/chat-preference#chat-preference-followUpAction');
+    expect(urls).toContain('/acme/settings/conversation#conversation-followUpAction');
     // Service Model is admin-only: hidden from the sidebar, so not searchable
     expect(urls.some((url) => url.includes('service-model'))).toBe(false);
   });
 
-  it('sends admins searching follow-up only to chat preferences', () => {
+  it('sends admins searching follow-up only to conversation', () => {
     const urls = search('follow up', adminGroups).map((result) => result.url);
 
-    expect(urls).toContain('/acme/settings/chat-preference#chat-preference-followUpAction');
+    expect(urls).toContain('/acme/settings/conversation#conversation-followUpAction');
     // The workspace Service Model page no longer renders these rows
     expect(urls.some((url) => url.includes('service-model'))).toBe(false);
   });
@@ -113,6 +114,56 @@ describe('workspace settings search scope', () => {
       // Only the personal Usage page holds the balance
       expect(urls).not.toContain('/acme/settings/usage');
     }
+  });
+
+  it('deep-links rows of a personal-only account tab into its personal page', () => {
+    const groups: WorkspaceSettingCategoryGroup[] = [
+      {
+        items: [
+          {
+            href: '/settings/referral',
+            icon: null,
+            key: SettingsTabs.Referral,
+            label: 'Referral',
+          },
+        ],
+        key: WorkspaceSettingsGroupKey.Account,
+        scope: 'account',
+        title: 'Account',
+      },
+    ];
+
+    expect(search('invite code', groups).map((result) => result.url)).toContain(
+      '/settings/referral#referral-invite-code',
+    );
+  });
+
+  it('keeps personal and workspace Notifications as two results', () => {
+    const groups: WorkspaceSettingCategoryGroup[] = [
+      {
+        items: [
+          {
+            href: '/settings/notification',
+            icon: null,
+            key: SettingsTabs.Notification,
+            label: 'Notifications',
+          },
+        ],
+        key: WorkspaceSettingsGroupKey.Account,
+        scope: 'account',
+        title: 'Account',
+      },
+      {
+        items: [{ icon: null, key: WorkspaceSettingsTabs.Notification, label: 'Notifications' }],
+        key: WorkspaceSettingsGroupKey.General,
+        scope: 'space',
+        title: 'Workspace',
+      },
+    ];
+    const urls = search('notification', groups).map((result) => result.url);
+
+    expect(urls).toContain('/settings/notification');
+    expect(urls).toContain('/acme/settings/notification');
   });
 
   it('indexes only the tab for workspace pages that differ from the personal ones', () => {

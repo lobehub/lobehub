@@ -2,12 +2,14 @@
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Button, Flexbox, Icon, Input, toast, Upload, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Text, toast, Upload, useModalContext } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import TextArea from '@/components/TextArea';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
@@ -36,6 +38,12 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
   const [loading, setLoading] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  /**
+   * The modal stays open on failure, so the screenshot refusal shows under the upload button and
+   * a failed submit shows above the Submit button, not in a corner toast.
+   */
+  const [screenshotError, setScreenshotError] = useState('');
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const userEmail = useUserStore(userProfileSelectors.email);
@@ -43,8 +51,9 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
   const handleScreenshotUpload = useCallback(
     async (file: File) => {
       const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      setScreenshotError('');
       if (file.size > MAX_SIZE) {
-        toast.error(t('feedback.errors.fileTooLarge'));
+        setScreenshotError(t('feedback.errors.fileTooLarge'));
         return;
       }
 
@@ -57,7 +66,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         }
       } catch (error) {
         console.error('[FeedbackModal] Screenshot upload failed:', error);
-        toast.error(t('feedback.errors.uploadFailed'));
+        setScreenshotError(t('feedback.errors.uploadFailed'));
       } finally {
         setUploadingScreenshot(false);
       }
@@ -75,6 +84,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
       if (!valid) return;
       const values = form.getValues();
       setLoading(true);
+      setSubmitError(null);
 
       await lambdaClient.market.submitFeedback.mutate({
         clientInfo: {
@@ -95,7 +105,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
       close();
     } catch (error: any) {
       console.error('[FeedbackModal] Submission failed:', error);
-      toast.error(t('feedback.errors.submitFailed'));
+      setSubmitError(toInlineError(t('feedback.errors.submitFailed'), error));
     } finally {
       setLoading(false);
     }
@@ -182,6 +192,11 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
               </Upload>
             )}
           </Flexbox>
+          {screenshotError && (
+            <Text fontSize={12} role={'alert'} style={{ marginTop: 8 }} type={'danger'}>
+              {screenshotError}
+            </Text>
+          )}
           <p style={{ color: 'var(--colorTextSecondary)', fontSize: 12, marginTop: 8 }}>
             {t('feedback.fields.screenshot.hint')}
           </p>
@@ -190,6 +205,9 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         {isDesktop && <DiagnosticsField />}
       </Form>
 
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button onClick={handleCancel}>{t('cancel')}</Button>
         <Button icon={<Icon icon={Send} />} loading={loading} type="primary" onClick={handleSubmit}>

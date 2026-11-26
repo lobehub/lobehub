@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveCliDirName } from '../constants/identity';
 import type * as ServiceStatusModule from '../service/status';
 import type { ConnectServiceStatus } from '../service/status';
 import { CliMaintenance } from './maintenance';
@@ -80,7 +81,10 @@ const service = (overrides: Partial<ConnectServiceStatus> = {}): ConnectServiceS
 });
 const readConfig = async () =>
   JSON.parse(
-    await readFile(path.join(home, '.lobehub/cli-maintenance', `${id}.config.json`), 'utf8'),
+    await readFile(
+      path.join(home, resolveCliDirName(), 'cli-maintenance', `${id}.config.json`),
+      'utf8',
+    ),
   );
 
 describe('CLI maintenance admission', () => {
@@ -89,7 +93,7 @@ describe('CLI maintenance admission', () => {
     const state = await maintenance.restart({ requestId: id, update: false });
     const operation = { ...state.operation!, targetVersion: '0.0.0' };
     await writeFile(
-      path.join(home, '.lobehub/cli-maintenance/state.json'),
+      path.join(home, resolveCliDirName(), 'cli-maintenance', 'state.json'),
       JSON.stringify(operation),
     );
 
@@ -144,7 +148,10 @@ describe('CLI maintenance admission', () => {
     expect((await restarted.restart({ requestId: id, update: false })).operation?.id).toBe(id);
     expect(spawn).toHaveBeenCalledTimes(1);
     const config = JSON.parse(
-      await readFile(path.join(home, '.lobehub/cli-maintenance', `${id}.config.json`), 'utf8'),
+      await readFile(
+        path.join(home, resolveCliDirName(), 'cli-maintenance', `${id}.config.json`),
+        'utf8',
+      ),
     );
     expect(config.restartArgs).toEqual(['connect', '--workspace', 'workspace-a', '--public']);
   });

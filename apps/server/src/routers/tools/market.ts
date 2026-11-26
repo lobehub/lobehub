@@ -179,19 +179,72 @@ export interface ExportAndUploadFileResult {
 }
 
 // ============================== Sandbox Handler ==============================
+interface SandboxRouteContext {
+  fileService: FileService;
+  marketAccessToken?: string;
+  marketService: MarketService;
+  marketUserInfo?: TrustedClientUserInfo;
+  serverDB: any;
+  userId: string;
+  workspaceId?: string | null;
+}
+
+/**
+ * The topic's sandbox, opened the way the server runtimes open it: with the
+ * persistence the topic resolved and, when it has one, the storage claim on
+ * the token the call is signed with.
+ *
+ * Every route here that reaches a topic's sandbox must open it through this.
+ * The execution plane binds a topic's session to the placement its call names,
+ * and a token without the claim routes to the ephemeral runtime. A route that
+ * skipped it ran in another sandbox than the conversation's commands. This
+ * happened to `exportAndUploadFile`: files a command wrote under
+ * `/mnt/workspace/ws-*` were "not found" in `/workspace`, `/root` and `/tmp`,
+ * and the live session could be torn down on the way.
+ */
+const createTopicSandboxService = async (ctx: SandboxRouteContext, topicId: string) => {
+  // The persistent workspace, resolved the same way the server runtimes do.
+  // These routes are the client-side executor's way into the sandbox — the one
+  // a conversation uses when its tool calls are not dispatched server-side.
+  const sandbox = await resolveSandboxSessionConfig({
+    // Direct client call, so the caller is always acting as themselves.
+    isShareVisitorRun: false,
+    serverDB: ctx.serverDB,
+    topicId,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId ?? undefined,
+  });
+
+  // The claim has to ride on the identity this call is signed with, not just
+  // on the request: the execution plane reads the entitlement off the trusted
+  // client token, and `ctx.marketService` was built before it was known.
+  const marketService = sandbox.claim
+    ? new MarketService({
+        accessToken: ctx.marketAccessToken,
+        userInfo: { ...ctx.marketUserInfo, sandboxStorage: sandbox.claim, userId: ctx.userId },
+      })
+    : ctx.marketService;
+
+  return createSandboxService({
+    fileService: ctx.fileService,
+    marketService,
+    sandboxCwd: sandbox.cwd,
+    sandboxInitialization: sandbox.initialization,
+    sandboxInstanceId: sandbox.environment,
+    sandboxMode: sandbox.mode,
+    sandboxSpecification: sandbox.specification,
+    sandboxWorkingDir: sandbox.workingDir,
+    serverDB: ctx.serverDB,
+    topicId,
+    userId: ctx.userId,
+  });
+};
+
 const execInSandboxHandler = async ({
   input,
   ctx,
 }: {
-  ctx: {
-    fileService: FileService;
-    marketAccessToken?: string;
-    marketService: MarketService;
-    marketUserInfo?: TrustedClientUserInfo;
-    serverDB: any;
-    userId: string;
-    workspaceId?: string | null;
-  };
+  ctx: SandboxRouteContext;
   input: ExecInSandboxInput;
 }): Promise<CallToolResult> => {
   const { toolName, params, topicId } = input;
@@ -277,45 +330,10 @@ const execInSandboxHandler = async ({
       }
     }
 
-    // The persistent workspace, resolved the same way the server runtimes do.
-    // This route is the client-side executor's way into the sandbox — the one a
-    // conversation uses when its tool calls are not dispatched server-side —
-    // and it used to open a session with no mode, no directory and no claim.
-    // Every run through here was therefore ephemeral: the composer showed the
-    // instance the topic had chosen while `pwd` answered `/workspace`, and
-    // whatever the run wrote went nowhere the file browser reads.
-    const sandbox = await resolveSandboxSessionConfig({
-      // Direct client call, so the caller is always acting as themselves.
-      isShareVisitorRun: false,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId,
-      workspaceId: ctx.workspaceId ?? undefined,
-    });
-
-    // The claim has to ride on the identity this call is signed with, not just
-    // on the request: the execution plane reads the entitlement off the trusted
-    // client token, and `ctx.marketService` was built before it was known.
-    const marketService = sandbox.claim
-      ? new MarketService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: { ...ctx.marketUserInfo, sandboxStorage: sandbox.claim, userId: ctx.userId },
-        })
-      : ctx.marketService;
-
-    const sandboxService = createSandboxService({
-      fileService: ctx.fileService,
-      marketService,
-      sandboxCwd: sandbox.cwd,
-      sandboxInitialization: sandbox.initialization,
-      sandboxInstanceId: sandbox.environment,
-      sandboxMode: sandbox.mode,
-      sandboxSpecification: sandbox.specification,
-      sandboxWorkingDir: sandbox.workingDir,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId,
-    });
+    // This route used to open a session with no mode, no directory and no
+    // claim, so every run through it was ephemeral: the composer showed the
+    // instance the topic had chosen while `pwd` answered `/workspace`.
+    const sandboxService = await createTopicSandboxService(ctx, topicId);
 
     const response = await sandboxService.callTool(toolName, enhancedParams);
 
@@ -746,12 +764,10 @@ export const marketRouter = router({
       log('Exporting and uploading file: %s from path: %s in topic: %s', filename, path, topicId);
 
       try {
-        const sandboxService = createSandboxService({
-          fileService: ctx.fileService,
-          marketService: ctx.marketService,
-          topicId,
-          userId: ctx.userId,
-        });
+        // The same session `execInSandbox` opens for this topic. An export
+        // opened with only `topicId` and `userId` ran ephemeral, in a sandbox
+        // that could not see what the conversation's commands had written.
+        const sandboxService = await createTopicSandboxService(ctx, topicId);
         const result = await sandboxService.exportAndUploadFile(path, filename);
 
         if (!result.success && isSandboxAuthError(result.error)) {

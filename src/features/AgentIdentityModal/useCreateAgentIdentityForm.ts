@@ -60,17 +60,24 @@ export const useCreateAgentIdentityForm = ({
   const [description, setDescription] = useState('');
   const [slug, setSlug] = useState('');
   const [createdAgentId, setCreatedAgentId] = useState<string>();
+  const [createdVisibility, setCreatedVisibility] = useState<'private' | 'public'>();
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const uploadAvatar = async (file: File): Promise<'tooLarge' | void> => {
+  /** Resolves to the reason the image was not applied, for the caller to show under the picker. */
+  const uploadAvatar = async (file: File): Promise<'failed' | 'tooLarge' | void> => {
     if (file.size > MAX_AVATAR_SIZE) return 'tooLarge';
 
     setUploading(true);
     try {
       const result = await uploadWithProgress({ file });
-      if (result?.url) setAvatar(result.url);
+      // The upload store resolves without a URL when the upload fails.
+      if (!result?.url) return 'failed';
+      setAvatar(result.url);
+    } catch (error) {
+      console.error('[AgentIdentity] Avatar upload failed:', error);
+      return 'failed';
     } finally {
       setUploading(false);
     }
@@ -90,9 +97,16 @@ export const useCreateAgentIdentityForm = ({
       let agentId = createdAgentId;
       if (agentId) {
         await updateAgentMeta(agentId, meta);
+        // The visibility may have changed while the form stayed open for a
+        // rejected slug; the retry must not keep the first choice.
+        if (visibility && visibility !== createdVisibility) {
+          await agentService.setAgentVisibility(agentId, visibility);
+          setCreatedVisibility(visibility);
+        }
       } else {
         ({ agentId } = await createAgent({ config: meta, groupId, visibility }));
         setCreatedAgentId(agentId);
+        setCreatedVisibility(visibility);
       }
 
       const nextSlug = slug.trim().toLowerCase();

@@ -5,11 +5,8 @@ import type {
   ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
-  ChannelMessagePersonParams,
-  ChannelPeoplePage,
   ChannelSendMessageParams,
   ChannelSentMessage,
-  ChannelSentPersonMessage,
 } from '@lobechat/types';
 import { Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { CircleAlertIcon } from 'lucide-react';
@@ -17,6 +14,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelApiName } from '../../types';
+import { PostMessageRender } from './PostMessage';
 
 /** One readable line saying what failed and what to do; the raw message stays folded. */
 const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail, summary }) => {
@@ -50,6 +48,7 @@ const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail,
   );
 });
 ChannelErrorDetail.displayName = 'ChannelErrorDetail';
+export { ChannelErrorDetail };
 
 const ChannelHistoryRender = memo<
   BuiltinRenderProps<unknown, ChannelHistoryPage | ChannelHistoryMessageDetail, string>
@@ -162,67 +161,10 @@ const SendMessageRender = memo<
 });
 SendMessageRender.displayName = 'ChannelSendMessageRender';
 
-const ListPeopleRender = memo<BuiltinRenderProps<unknown, ChannelPeoplePage, string>>(
-  ({ content, pluginError, pluginState }) => {
-    const { t } = useTranslation('plugin');
-    if (pluginError)
-      return (
-        <ChannelErrorDetail
-          detail={pluginError.message || content}
-          summary={t('builtins.lobe-channel.listPeopleError')}
-        />
-      );
-    if (!pluginState) return null;
-    if (pluginState.people.length === 0)
-      return <Text type={'secondary'}>{t('builtins.lobe-channel.noPeople')}</Text>;
-    return (
-      <Flexbox gap={4} paddingBlock={8}>
-        {pluginState.people.map((person) => (
-          <Text key={person.userId}>
-            {person.username ? `${person.name} · @${person.username}` : person.name}
-          </Text>
-        ))}
-      </Flexbox>
-    );
-  },
-);
-ListPeopleRender.displayName = 'ChannelListPeopleRender';
-
-const MessagePersonRender = memo<
-  BuiltinRenderProps<ChannelMessagePersonParams, ChannelSentPersonMessage, string>
->(({ args, content, pluginError, pluginState }) => {
-  const { t } = useTranslation('plugin');
-  if (pluginError)
-    return (
-      <ChannelErrorDetail
-        detail={pluginError.message || content}
-        summary={t('builtins.lobe-channel.messagePersonError')}
-      />
-    );
-  if (!pluginState) return null;
-  return (
-    <Flexbox gap={8} paddingBlock={8}>
-      <Text type={'secondary'}>
-        {t('builtins.lobe-channel.sentToPerson', { name: pluginState.person.name })}
-      </Text>
-      {args?.content && (
-        <div style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
-          {args.content.slice(0, 600)}
-        </div>
-      )}
-      <a href={pluginState.url} rel={'noreferrer'} target={'_blank'}>
-        {t('builtins.lobe-channel.openConversation')}
-      </a>
-    </Flexbox>
-  );
-});
-MessagePersonRender.displayName = 'ChannelMessagePersonRender';
-
 export const ChannelRenders = {
   [ChannelApiName.listChannels]: ListChannelsRender,
-  [ChannelApiName.listPeople]: ListPeopleRender,
-  [ChannelApiName.messagePerson]: MessagePersonRender,
   [ChannelApiName.readMessage]: ChannelHistoryRender,
   [ChannelApiName.readMessages]: ChannelHistoryRender,
   [ChannelApiName.sendMessage]: SendMessageRender,
+  [ChannelApiName.postMessage]: PostMessageRender,
 };

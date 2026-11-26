@@ -9,9 +9,20 @@ export interface ChatStreamFallbackAttempt {
   response: Response;
 }
 
+export interface ChatStreamRetryContext {
+  /** Time since the first attempt of this request started. */
+  elapsedMs: number;
+  /** Same-option retries already made for this request. */
+  retryCount: number;
+}
+
 interface CreateChatStreamFallbackResponseOptions {
+  /** Called for each terminal attempt replaced by a retry or fallback; its callbacks never run. */
+  onDiscarded?: (result: RouteAttemptFinished) => void | Promise<void>;
   onSettled?: () => void;
   shouldFallback: (result: RouteAttemptFinished) => Promise<boolean>;
+  /** Checked before fallback: replay the same option instead of moving to the next one. */
+  shouldRetry?: (result: RouteAttemptFinished, context: ChatStreamRetryContext) => Promise<boolean>;
   startAttempt: (index: number) => Promise<ChatStreamFallbackAttempt>;
   totalAttempts: number;
 }
@@ -22,11 +33,15 @@ interface CreateChatStreamFallbackResponseOptions {
  * starting the next route without mixing output from two providers.
  */
 export const createChatStreamFallbackResponse = async ({
+  onDiscarded,
   onSettled,
   shouldFallback,
+  shouldRetry,
   startAttempt,
   totalAttempts,
 }: CreateChatStreamFallbackResponseOptions): Promise<Response> => {
+  const startedAt = Date.now();
+  let retryCount = 0;
   let active = await startAttempt(0);
   const initialResponse = active.response;
   const responseHeaders = new Headers(initialResponse.headers);
@@ -39,24 +54,48 @@ export const createChatStreamFallbackResponse = async ({
     bufferedChunks = [];
   };
 
-  const activateNextAttempt = async () => {
+  const activateAttempt = async (index: number, discarded: RouteAttemptFinished) => {
     active.observation.discard();
-    active = await startAttempt(active.index + 1);
+    try {
+      await onDiscarded?.(discarded);
+    } catch (error) {
+      console.error('[RouterRuntime] onDiscarded callback failed:', error);
+    }
+    active = await startAttempt(index);
     bufferedChunks = [];
     committed = false;
   };
 
-  const shouldFallbackTerminalAttempt = async (result: RouteAttemptFinished) => {
+  /**
+   * The option index to replace an uncommitted terminal attempt with, or undefined to commit
+   * it. A same-option retry keeps the channel's prompt cache, which a fallback would lose.
+   */
+  const resolveReplacementIndex = async (
+    result: RouteAttemptFinished,
+  ): Promise<number | undefined> => {
     if (
       committed ||
       active.observation.hasVisibleOutput() ||
-      active.index + 1 >= totalAttempts ||
       (result.outcome !== 'empty' && result.outcome !== 'interrupted')
     ) {
-      return false;
+      return;
     }
 
-    return shouldFallback(result);
+    if (shouldRetry) {
+      let retry = false;
+      try {
+        retry = await shouldRetry(result, { elapsedMs: Date.now() - startedAt, retryCount });
+      } catch (error) {
+        console.error('[RouterRuntime] shouldRetry callback failed:', error);
+      }
+      if (retry) {
+        retryCount += 1;
+        return active.index;
+      }
+    }
+
+    if (active.index + 1 >= totalAttempts) return;
+    return (await shouldFallback(result)) ? active.index + 1 : undefined;
   };
 
   const commitTerminalAttempt = async (result: RouteAttemptFinished) => {
@@ -80,8 +119,9 @@ export const createChatStreamFallbackResponse = async ({
             while (true) {
               if (!active.reader) {
                 const result = await active.observation.finished;
-                if (await shouldFallbackTerminalAttempt(result)) {
-                  await activateNextAttempt();
+                const replacementIndex = await resolveReplacementIndex(result);
+                if (replacementIndex !== undefined) {
+                  await activateAttempt(replacementIndex, result);
                   continue;
                 }
 
@@ -111,8 +151,9 @@ export const createChatStreamFallbackResponse = async ({
                 }
 
                 const result = await active.observation.finished;
-                if (await shouldFallbackTerminalAttempt(result)) {
-                  await activateNextAttempt();
+                const replacementIndex = await resolveReplacementIndex(result);
+                if (replacementIndex !== undefined) {
+                  await activateAttempt(replacementIndex, result);
                   continue;
                 }
 
@@ -135,8 +176,9 @@ export const createChatStreamFallbackResponse = async ({
                   // The reader may already be errored and the observer terminal.
                 }
                 const result = await active.observation.finished;
-                if (await shouldFallbackTerminalAttempt(result)) {
-                  await activateNextAttempt();
+                const replacementIndex = await resolveReplacementIndex(result);
+                if (replacementIndex !== undefined) {
+                  await activateAttempt(replacementIndex, result);
                   continue;
                 }
 

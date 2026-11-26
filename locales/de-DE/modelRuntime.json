@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Ollama-Dienst ist nicht verfügbar. Bitte überprüfen Sie, ob Ollama ordnungsgemäß läuft oder ob die Cross-Origin-Konfiguration von Ollama korrekt eingestellt ist.",
   "OperationInactivityTimeout": "Die Agentenoperation war zu lange inaktiv und wurde beendet. Bitte versuchen Sie die Anfrage erneut.",
   "PermissionDenied": "Entschuldigung, Sie haben keine Berechtigung, auf diesen Dienst zuzugreifen. Bitte überprüfen Sie, ob Ihr Schlüssel die erforderlichen Zugriffsrechte hat.",
+  "ProviderBaseURLBlocked": "Der {{provider}}-Endpunkt verweist auf eine private oder lokale Netzwerkadresse, die der Server aus Sicherheitsgründen nicht erreichen darf. Diese Adresse funktioniert nur von Ihrem eigenen Gerät aus – verwenden Sie stattdessen einen öffentlich erreichbaren Endpunkt.",
   "ProviderBizError": "Fehler bei der Anforderung des {{provider}}-Dienstes. Bitte beheben Sie das Problem oder versuchen Sie es erneut basierend auf den folgenden Informationen.",
   "ProviderContentPolicyViolation": "Der Anbieter hat diese Anfrage oder deren Ausgabe aufgrund der Inhaltsrichtlinien blockiert. Bitte überarbeiten Sie Ihre Eingabeaufforderung und versuchen Sie es erneut.",
   "ProviderNetworkError": "Die Verbindung zum Anbieter wurde unterbrochen oder ist abgelaufen. Bitte überprüfen Sie Ihr Netzwerk und versuchen Sie es erneut.",
   "ProviderNoImageGenerated": "Der Anbieter hat kein Bild für diese Anfrage zurückgegeben. Versuchen Sie, die Anfrage umzuformulieren, oder wählen Sie ein Modell, das die Bildgenerierung unterstützt.",
   "ProviderServiceUnavailable": "Der Anbieter ist vorübergehend überlastet oder nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.",
+  "ProviderStreamInterrupted": "Der Anbieter hat die Verbindung geschlossen, bevor die Antwort abgeschlossen war. Dies ist normalerweise vorübergehend, bitte versuchen Sie es erneut.",
   "QuotaLimitReached": "Entschuldigung, die Token-Nutzung oder die Anzahl der Anfragen hat das Kontingentlimit für diesen Schlüssel erreicht. Bitte erhöhen Sie das Kontingent des Schlüssels oder versuchen Sie es später erneut.",
   "RateLimitExceeded": "Entschuldigung, die Token-Nutzung oder die Anzahl der Anfragen hat das Ratenlimit für diesen Schlüssel erreicht. Bitte versuchen Sie es später erneut oder erhöhen Sie das Kontingent des Schlüssels.",
   "RemoteMediaDownloadTimeout": "Der Anbieter hat beim Herunterladen eines angehängten Bildes oder einer Datei eine Zeitüberschreitung erreicht. Bitte versuchen Sie es erneut.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "Das Upstream-Gateway oder der Proxy hat einen Fehler zurückgegeben. Bitte versuchen Sie es in Kürze erneut; falls das Problem weiterhin besteht, überprüfen Sie Ihre Proxy-/Endpunktkonfiguration.",
   "UpstreamHttpError": "Der Anbieter hat einen HTTP-Fehler ohne weitere Details zurückgegeben. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre Anfrage- und Modellkonfiguration.",
   "UpstreamMalformedResponse": "Der Anbieter hat eine fehlerhafte Antwort zurückgegeben, die nicht analysiert werden konnte. Bitte versuchen Sie es erneut; falls das Problem weiterhin besteht, versuchen Sie ein anderes Modell oder einen anderen Anbieter.",
-  "UserConfigError": "Die Anbieter-Konfiguration ist ungültig (falsche Basis-URL, fehlende Umgebungsvariable, virtuelle Schlüsselbeschränkung usw.). Bitte überprüfen Sie die Anbietereinstellungen."
+  "UserConfigError": "Die Anbieter-Konfiguration ist ungültig (falsche Basis-URL, fehlende Umgebungsvariable, virtuelle Schlüsselbeschränkung usw.). Bitte überprüfen Sie die Anbietereinstellungen.",
+  "WorkspaceModelRestricted": "Dieses Modell liegt über der höchsten Stufe, die Ihr Arbeitsbereichsadministrator für Sie zulässt. Wählen Sie ein Modell einer niedrigeren Stufe oder bitten Sie einen Arbeitsbereichsadministrator, Ihre Stufe zu erhöhen."
 }

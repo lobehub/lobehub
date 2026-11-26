@@ -11,14 +11,20 @@ import {
 
 const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['copy'];
 const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
+// Ids for tracing sit one level down, as in the assistant message menu.
+const ADVANCED_GROUP: MessageActionSlot = {
+  children: ['copyMessageId', 'copyOperationId'],
+  key: 'advanced',
+};
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
-  'copyOperationId',
   'comments',
   'collapse',
   'divider',
   'share',
+  'divider',
+  ADVANCED_GROUP,
   'divider',
   'regenerate',
   'del',
@@ -50,7 +56,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
   const { content, error, tools } = data;
 
   // Empty error messages render only an interception card — nothing to edit
-  // or copy, so only the dev-mode operation-id action remains menu-worthy
+  // or copy, so only the operation-id action remains menu-worthy
   // (failed runs are exactly what it traces; the menu collapses away when the
   // action opts out). When the turn streamed content before erroring, keep
   // edit/copy so the partial reply stays salvageable.

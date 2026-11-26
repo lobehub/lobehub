@@ -7,12 +7,16 @@ import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { LobeGoogleAI } from '../google';
 
 const DEFAULT_VERTEXAI_LOCATION = 'global';
-type VertexAIInitOptions = GoogleGenAIOptions & ModelIdMappingOptions;
+type VertexAIInitOptions = GoogleGenAIOptions &
+  ModelIdMappingOptions & {
+    /** Provider id the runtime reports and prices with; defaults to `vertexai`. */
+    id?: string;
+  };
 
 export class LobeVertexAI extends LobeGoogleAI {
   static initFromVertexAI(params?: VertexAIInitOptions) {
     try {
-      const { modelIdMapping, ...googleOptions } = params ?? {};
+      const { id, modelIdMapping, ...googleOptions } = params ?? {};
       const client = new GoogleGenAI({
         ...googleOptions,
         location: googleOptions.location ?? DEFAULT_VERTEXAI_LOCATION, // @google/genai throws an error if location is not provided
@@ -22,6 +26,7 @@ export class LobeVertexAI extends LobeGoogleAI {
       return new LobeGoogleAI({
         apiKey: 'avoid-error',
         client,
+        id,
         isVertexAi: true,
         modelIdMapping,
       });

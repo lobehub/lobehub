@@ -39,6 +39,10 @@ vi.mock('@/store/electron', () => ({
   useElectronStore: (selector: (s: unknown) => unknown) =>
     selector({ gatewayDeviceInfo: { deviceId: env.currentDeviceId } }),
 }));
+vi.mock('@/features/DeviceManager/devicePicker', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useCurrentMachine: () => ({ ids: env.currentDeviceId ? [env.currentDeviceId] : [] }),
+}));
 vi.mock('@/store/device', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useDeviceStore: Object.assign(

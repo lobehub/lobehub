@@ -1,6 +1,20 @@
-import { type AgentPluginEntry, getDisabledPluginIds, getLibrarySkillMode } from '@lobechat/types';
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
+import {
+  getLegacyDisabledBuiltinSkillIds,
+  legacyBuiltinSkillIds,
+} from '@lobechat/mecha/builtinSkillGate';
+import {
+  type AgentPluginEntry,
+  getBuiltinOverrides,
+  getDisabledPluginIds,
+  getLibrarySkillMode,
+} from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { UserModel } from '@/database/models/user';
 
 import type { ToolExecutionContext } from '../types';
 
@@ -27,6 +41,22 @@ export const createLibrarySkillGate = (
     getLibrarySkillMode(plugins, identifier) !== 'disabled' || inRunPool.has(identifier);
 };
 
+/** A failed settings read keeps previously uninstallable skills off unless this agent chose them. */
+interface SkillUserSettings {
+  market?: { accessToken?: string };
+  tool?: UninstalledBuiltinToolsScope;
+}
+
+export const readSkillUserSettings = async (
+  model: UserModel,
+): Promise<SkillUserSettings | null> => {
+  try {
+    return ((await model.getUserSettings()) ?? {}) as SkillUserSettings;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * The run agent's own skill tri-state, re-derived for a runtime that resolves
  * skills fresh by name/id.
@@ -43,6 +73,7 @@ export const resolveAgentSkillGates = async (
     ToolExecutionContext,
     'agentId' | 'agentShareVisitor' | 'runSkillIds' | 'serverDB' | 'userId' | 'workspaceId'
   >,
+  settings?: SkillUserSettings | null,
 ): Promise<{
   disabledSkillIds: Set<string>;
   isLibrarySkillEnabled?: (identifier: string) => boolean;
@@ -52,11 +83,29 @@ export const resolveAgentSkillGates = async (
   }
 
   const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-  const agentConfig = await agentModel.getAgentConfigById(context.agentId);
+  const [agentConfig, userSettings] = await Promise.all([
+    agentModel.getAgentConfigById(context.agentId),
+    settings === undefined && !context.agentShareVisitor
+      ? readSkillUserSettings(new UserModel(context.serverDB, context.userId))
+      : settings,
+  ]);
   const plugins = agentConfig?.plugins ?? undefined;
 
+  const legacyUninstalled = userSettings
+    ? resolveUninstalledBuiltinTools(
+        userSettings.tool,
+        context.workspaceId ?? agentConfig?.workspaceId,
+      )
+    : legacyBuiltinSkillIds;
+
   return {
-    disabledSkillIds: new Set(getDisabledPluginIds(plugins)),
+    disabledSkillIds: new Set([
+      ...getDisabledPluginIds(plugins),
+      ...getLegacyDisabledBuiltinSkillIds(
+        context.agentShareVisitor ? [] : legacyUninstalled,
+        getBuiltinOverrides(plugins),
+      ),
+    ]),
     isLibrarySkillEnabled: context.agentShareVisitor
       ? undefined
       : createLibrarySkillGate(plugins, context.runSkillIds),

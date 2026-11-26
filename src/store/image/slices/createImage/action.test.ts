@@ -83,6 +83,33 @@ describe('CreateImageAction', () => {
   });
 
   describe('createImage', () => {
+    it('submits GIF without manual dimensions and restores the static size on PNG output', async () => {
+      useImageStore.setState({
+        model: 'gpt-image-2.6-flare',
+        parameters: { prompt: 'animated fixture', outputFormat: 'png', size: '1536x1024' },
+        refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
+      });
+
+      useImageStore.getState().setParamOnInput('outputFormat', 'gif');
+      await useImageStore.getState().createImage();
+
+      expect(mockImageService.createImage.mock.lastCall?.[0].params).toEqual({
+        prompt: 'animated fixture',
+        outputFormat: 'gif',
+      });
+      expect(useImageStore.getState().parameters.size).toBe('1536x1024');
+
+      useImageStore.getState().setParamOnInput('outputFormat', 'png');
+      useImageStore.getState().setParamOnInput('prompt', 'static fixture');
+      await useImageStore.getState().createImage();
+
+      expect(mockImageService.createImage.mock.lastCall?.[0].params).toEqual({
+        prompt: 'static fixture',
+        outputFormat: 'png',
+        size: '1536x1024',
+      });
+    });
+
     it('should create image with existing topic', async () => {
       const { result } = renderHook(() => useImageStore());
       const mockRefreshGenerationBatches = vi.fn().mockResolvedValue(undefined);
@@ -344,6 +371,56 @@ describe('CreateImageAction', () => {
   });
 
   describe('recreateImage', () => {
+    it('keeps a batch with missing configuration without queuing a replacement', async () => {
+      const batch = useImageStore.getState().generationBatchesMap['active-topic-id'][0];
+      const removeGenerationBatch = vi.fn();
+      useImageStore.setState({
+        generationBatchesMap: { 'active-topic-id': [{ ...batch, config: undefined }] },
+        removeGenerationBatch,
+      });
+
+      await expect(useImageStore.getState().recreateImage('batch-id')).rejects.toThrow(
+        'Generation batch configuration is missing',
+      );
+
+      expect(mockImageService.createImage).not.toHaveBeenCalled();
+      expect(removeGenerationBatch).not.toHaveBeenCalled();
+      expect(useImageStore.getState().generationBatchesMap['active-topic-id'][0].id).toBe(
+        'batch-id',
+      );
+      expect(useImageStore.getState().isCreating).toBe(false);
+    });
+
+    it.each(['gif', 'png'])(
+      'preserves the effective size when recreating a saved %s batch',
+      async (outputFormat) => {
+        const batch = useImageStore.getState().generationBatchesMap['active-topic-id'][0];
+        const historicalConfig = {
+          prompt: 'historical image fixture',
+          outputFormat,
+          size: '1024x1024',
+        };
+        useImageStore.setState({
+          generationBatchesMap: {
+            'active-topic-id': [
+              { ...batch, model: 'gpt-image-2.6-sunburst', config: historicalConfig },
+            ],
+          },
+          removeGenerationBatch: vi.fn().mockResolvedValue(undefined),
+          refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
+        });
+
+        await useImageStore.getState().recreateImage('batch-id');
+
+        expect(mockImageService.createImage.mock.lastCall?.[0].params).toEqual(
+          outputFormat === 'gif'
+            ? { prompt: historicalConfig.prompt, outputFormat }
+            : historicalConfig,
+        );
+        expect(historicalConfig.size).toBe('1024x1024');
+      },
+    );
+
     it('should recreate image successfully', async () => {
       const mockRefreshGenerationBatches = vi.fn().mockResolvedValue(undefined);
       const mockRemoveGenerationBatch = vi.fn().mockResolvedValue(undefined);

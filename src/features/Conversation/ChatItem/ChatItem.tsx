@@ -1,11 +1,12 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { cx, Flexbox } from '@lobehub/ui';
+import { Center, cx, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import FollowUpChips from '../FollowUp/FollowUpChips';
@@ -17,6 +18,7 @@ import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
 import { chatItemMarker } from './markers.stylex';
+import { shouldInlineTimeInActions } from './timePlacement';
 import type { ChatItemProps } from './type';
 
 const LOCATE_HIGHLIGHT = ':is([data-message-locate-highlight])';
@@ -89,6 +91,7 @@ const ChatItem = memo<ChatItemProps>(
     time,
     editing,
     messageExtra,
+    messageLeading,
     children,
     customErrorRender,
     onDoubleClick,
@@ -105,6 +108,15 @@ const ChatItem = memo<ChatItemProps>(
     ...rest
   }) => {
     const isUser = placement === 'right';
+    const { compact, tokens } = useDensity();
+    const spacing = compact ? 6 : 8;
+    const timeInActions = shouldInlineTimeInActions({
+      compact,
+      hasHeaderAddon: !!headerAddon,
+      isUser,
+      showAvatar,
+      showTitle: !!showTitle,
+    });
     const conversationKey = useConversationStore(contextSelectors.conversationKey);
     const isEmptyMessage =
       !message || String(message).trim() === '' || message === placeholderMessage;
@@ -112,12 +124,35 @@ const ChatItem = memo<ChatItemProps>(
       <ErrorContent customErrorRender={customErrorRender} error={error} id={id} />
     );
 
+    const messageNode =
+      error && isEmptyMessage ? (
+        errorContent
+      ) : (
+        <MessageContent
+          disabled={disabled}
+          editing={editing}
+          id={id!}
+          message={message}
+          variant={isUser ? 'bubble' : undefined}
+          messageExtra={
+            <>
+              {errorContent}
+              {messageExtra}
+            </>
+          }
+          onDoubleClick={onDoubleClick}
+        >
+          {children}
+        </MessageContent>
+      );
+
     const avatarContent = (
       <Avatar
         agentId={agentId}
         alt={avatarProps?.alt || agentDisplayName(avatar, 'avatar')}
         loading={loading}
         shape={'square'}
+        size={tokens.headerAvatarSize}
         onClick={onAvatarClick}
         {...avatarProps}
         avatar={avatar}
@@ -128,20 +163,20 @@ const ChatItem = memo<ChatItemProps>(
       <Flexbox
         align={isUser ? 'flex-end' : 'flex-start'}
         data-message-id={id}
-        gap={8}
-        paddingBlock={8}
+        gap={spacing}
+        paddingBlock={spacing}
         {...rest}
         {...sx(styles.container, chatItemMarker, cx('message-wrapper', className), {
-          paddingInlineStart: isUser ? 36 : 0,
+          paddingInlineStart: isUser ? (compact ? 32 : 36) : 0,
           ...style,
         })}
       >
-        {showHeader && (
+        {showHeader && !timeInActions && (
           <Flexbox
             align={quietHeader ? 'baseline' : 'center'}
             className={cx('message-header', stylex.props(selectionStyles.hidden).className)}
             direction={isUser ? 'horizontal-reverse' : 'horizontal'}
-            gap={8}
+            gap={spacing}
             // The row wraps nothing, so without a cap it is sized by its content and
             // simply overflows its lane — on a narrow viewport that is a header
             // wider than the conversation pane (the source-topic link, a long agent
@@ -163,7 +198,7 @@ const ChatItem = memo<ChatItemProps>(
         )}
         <Flexbox
           className={'message-body'}
-          gap={8}
+          gap={spacing}
           style={{
             maxWidth: '100%',
             overflow: 'hidden',
@@ -172,33 +207,31 @@ const ChatItem = memo<ChatItemProps>(
           }}
         >
           {aboveMessage}
-          {error && isEmptyMessage ? (
-            errorContent
+          {messageLeading ? (
+            <Flexbox horizontal align={'flex-start'} gap={spacing} style={{ maxWidth: '100%' }}>
+              {/* The bubble's block padding puts its first line this far down; `1lh`
+                  then centers the marker on that line however long the message is. */}
+              <Center flex={'none'} style={{ blockSize: '1lh', marginBlockStart: compact ? 6 : 8 }}>
+                {messageLeading}
+              </Center>
+              {/* min-width 0 lets a long message wrap instead of pushing the row past its lane. */}
+              <Flexbox style={{ minWidth: 0 }}>{messageNode}</Flexbox>
+            </Flexbox>
           ) : (
-            <MessageContent
-              disabled={disabled}
-              editing={editing}
-              id={id!}
-              message={message}
-              variant={isUser ? 'bubble' : undefined}
-              messageExtra={
-                <>
-                  {errorContent}
-                  {messageExtra}
-                </>
-              }
-              onDoubleClick={onDoubleClick}
-            >
-              {children}
-            </MessageContent>
+            messageNode
           )}
           {belowMessage}
         </Flexbox>
         {id && conversationKey && (
           <FollowUpChips conversationKey={conversationKey} messageId={id} />
         )}
-        {(actionAddon || actions) && (
-          <Actions actionAddon={actionAddon} actions={actions} placement={placement} />
+        {(actionAddon || actions || timeInActions) && (
+          <Actions
+            actionAddon={actionAddon}
+            actions={actions}
+            leading={timeInActions ? <Title avatar={avatar} time={time} /> : undefined}
+            placement={placement}
+          />
         )}
         {afterActions && (
           <Flexbox

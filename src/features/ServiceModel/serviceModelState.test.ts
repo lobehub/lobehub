@@ -188,6 +188,35 @@ describe('canDisableSlot', () => {
   });
 });
 
+describe('file embedding', () => {
+  const EMBED = { model: 'embed-a', provider: 'acme' };
+
+  it('stays on the deployment default when the memory embedding tier changes', () => {
+    const next = applyTierChoice({}, 'embedding', EMBED);
+
+    // Following the tier would re-index new files with another model than the
+    // files already embedded, so it is not a tier slot.
+    expect(next.userMemoryEmbedding).toEqual(EMBED);
+    expect(next.fileEmbedding).toBeUndefined();
+    expect(resolveSlotState(next, defaults, 'fileEmbedding')).toEqual({
+      kind: 'follow',
+      value: defaults.fileEmbedding,
+    });
+  });
+
+  it('pins a picked model and drops it again on 系统推荐', () => {
+    const pinned = applySlotChoice({}, 'fileEmbedding', { kind: 'custom', value: EMBED });
+    expect(pinned).toEqual({ fileEmbedding: EMBED });
+    expect(resolveSlotState(pinned, defaults, 'fileEmbedding')).toEqual({
+      kind: 'custom',
+      value: EMBED,
+    });
+
+    expect(applySlotChoice(pinned, 'fileEmbedding', { kind: 'follow' })).toEqual({});
+    expect(canDisableSlot('fileEmbedding')).toBe(false);
+  });
+});
+
 describe('channel decision settings', () => {
   it('defaults to an enabled decision model independent of chat tiers', () => {
     const stored = applyTierChoice({}, 'flash', FLASH);

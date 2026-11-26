@@ -16,6 +16,10 @@ import { toClientExecAgentResult } from '../_helpers/groupMemberContinuationResu
 import { ResolveAgentInterventionBySourceSchema } from '../_schema/agentIntervention';
 import { dispatchClaimedAgentIntervention } from '../aiAgent';
 import {
+  submitHeteroInterventionAs,
+  SubmitHeteroInterventionSchema,
+} from '../aiAgent/heteroInterventionSubmit';
+import {
   findVisitorTopicOrThrow,
   resolveLinkShareOrThrow,
   toVisitorSafeStartupError,
@@ -158,9 +162,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('resolveInterventionBySource', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('resolveInterventionBySource', error);
       }
     }),
   /**
@@ -231,9 +233,7 @@ export const runControlRouter = router({
           } catch (error: any) {
             if (error instanceof TRPCError) throw error;
 
-            throw toVisitorSafeStartupError('stopPendingApproval', error, {
-              showErrorDetails: share.shareConfig.showErrorDetails,
-            });
+            throw toVisitorSafeStartupError('stopPendingApproval', error);
           }
           return {
             operationId: input.operationId,
@@ -253,9 +253,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('stopPendingApproval', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('stopPendingApproval', error);
       }
     }),
   /**
@@ -272,7 +270,7 @@ export const runControlRouter = router({
   interruptTask: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+      const { aiAgentService } = await authorizeVisitorRunningOperation(
         ctx.serverDB,
         ctx.userId,
         input,
@@ -294,9 +292,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('interruptTask', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('interruptTask', error);
       }
     }),
   /**
@@ -307,7 +303,7 @@ export const runControlRouter = router({
   setQueuedMessages: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string(), pending: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
-      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+      const { aiAgentService } = await authorizeVisitorRunningOperation(
         ctx.serverDB,
         ctx.userId,
         input,
@@ -330,9 +326,33 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('setQueuedMessages', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('setQueuedMessages', error);
       }
+    }),
+  /**
+   * The visitor counterpart of `aiAgent.submitHeteroIntervention`: answers a
+   * question Claude Code / Codex asked during the visitor's own run. Authorized
+   * like `interruptTask` (the operation must be the one running on the
+   * visitor's topic), then published in the creator's scope, which owns the
+   * operation row.
+   */
+  submitHeteroIntervention: shareChatProcedure
+    .input(ShareTopicScopeSchema.merge(SubmitHeteroInterventionSchema))
+    .mutation(async ({ input, ctx }) => {
+      const { share } = await authorizeVisitorRunningOperation(ctx.serverDB, ctx.userId, input);
+
+      log(
+        'submitHeteroIntervention: share=%s visitor=%s topic=%s operation=%s',
+        input.shareId,
+        ctx.userId,
+        input.topicId,
+        input.operationId,
+      );
+
+      const { shareId: _shareId, topicId: _topicId, ...intervention } = input;
+      return submitHeteroInterventionAs(intervention, {
+        userId: share.ownerId,
+        workspaceId: share.workspaceId,
+      });
     }),
 });

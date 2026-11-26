@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v4';
+export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v5';
 
 export const BOT_REPLY_PLACEMENTS = ['channel', 'thread'] as const;
 export type BotReplyPlacement = (typeof BOT_REPLY_PLACEMENTS)[number];
@@ -60,6 +60,14 @@ const coAddressedSection = (agents: NonNullable<BotReplyOpenerInput['coAddressed
   return `The same message also asked ${names.join(', ')} to answer. You answer in parallel, in one shared thread where each of you sees the others. Do not plan to cover the whole request alone: your acknowledgement names only the slice your role is best placed for (for a data role, say, the metrics or attribution; for an engineering role, the tracking or the systems), so the person sees the work divided rather than the same opening twice.`;
 };
 
+/**
+ * When nobody addressed the assistant, the acknowledgement is also its commitment to answer, so it
+ * is posted only for a message that clearly asks it to work.
+ */
+const NOT_ADDRESSED = `You were not @-mentioned or replied to. You were woken because the message may concern you: it says your name, follows up on something you said, or falls within your duties. People also talk about you without asking you anything.
+- Set "acknowledge" true only when the message clearly asks you to do something that takes real work. Acknowledging commits you to answer.
+- When it only talks about you, is meant for someone else, or you are unsure: "acknowledge" false, "ack" empty, "placement" "channel", "title" empty. You decide later whether to speak at all.`;
+
 export interface BotReplyOpenerInput {
   /**
    * Where the acknowledgement lands: `before-thread` posts it in the conversation the person is
@@ -77,6 +85,11 @@ export interface BotReplyOpenerInput {
   /** Other assistants the same message asked to answer, in parallel with this one. */
   coAddressed?: { name?: string; title?: string }[];
   message: string;
+  /**
+   * The assistant was woken without being addressed (its name in the text, a follow-up, its
+   * duties): acknowledge only a clear request for work. Absent: the message was addressed to it.
+   */
+  notAddressed?: boolean;
   /** Short transcript of the messages just before this one, oldest first. */
   recentMessages?: string[];
 }
@@ -101,10 +114,13 @@ const buildState = (input: BotReplyOpenerInput): string => {
   if (input.ackPlacement === 'before-thread') sections.push(ACK_BEFORE_THREAD);
   const coAddressed = input.coAddressed?.length ? coAddressedSection(input.coAddressed) : undefined;
   if (coAddressed) sections.push(coAddressed);
+  if (input.notAddressed) sections.push(NOT_ADDRESSED);
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);
   }
-  sections.push(`Message to you:\n"""\n${input.message.trim()}\n"""`);
+  sections.push(
+    `${input.notAddressed ? 'Message' : 'Message to you'}:\n"""\n${input.message.trim()}\n"""`,
+  );
 
   return sections.join('\n\n');
 };

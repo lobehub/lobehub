@@ -39,7 +39,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     const budget = { required: 12 };
 
     (lifecycle as any).messageModel = { update: updateMessage };
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -81,7 +81,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     const findLatestAssistantByOperationId = vi.fn().mockResolvedValue({ id: 'msg-run' });
 
     (lifecycle as any).messageModel = { findLatestAssistantByOperationId, update: updateMessage };
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -112,9 +112,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
   it('rethrows critical webhook failures after terminal persistence', async () => {
     const lifecycle = buildLifecycle();
-    const persistCompletion = vi
-      .spyOn(lifecycle as any, 'persistCompletion')
-      .mockResolvedValue(undefined);
+    const persistCompletion = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     const dispatch = vi
       .spyOn(hookDispatcher, 'dispatch')
       .mockRejectedValue(

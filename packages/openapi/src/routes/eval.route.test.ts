@@ -27,7 +27,17 @@ vi.mock('../controllers/eval.controller', () => ({
   },
 }));
 
+vi.mock('../services/eval-resource.service', () => ({
+  EvalResourceService: class {
+    async deleteBenchmark(id: string) {
+      return { deleted: true, id };
+    }
+  },
+}));
+
 const { default: EvalRoutes } = await import('./eval.route');
+const { successEnvelope } = await import('../common/openapi');
+const { DeletedResourceSchema } = await import('../types/common.type');
 
 /**
  * `/eval/runs` queues an internal run, which pre-creates real chat topics via
@@ -64,5 +74,23 @@ describe('POST /eval/runs API-key scopes', () => {
     const res = await requestAs(['eval:write', 'chat:write', 'model:invoke']);
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe('DELETE /eval/benchmarks/:id', () => {
+  it('answers with the unified deleted-resource payload', async () => {
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'user-1' as never);
+      await next();
+    });
+    app.route('/', EvalRoutes);
+
+    const res = await app.request('/benchmarks/bm-1', { method: 'DELETE' });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data).toEqual({ deleted: true, id: 'bm-1' });
+    expect(() => successEnvelope(DeletedResourceSchema).parse(body)).not.toThrow();
   });
 });

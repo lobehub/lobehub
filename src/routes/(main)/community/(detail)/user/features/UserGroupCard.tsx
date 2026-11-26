@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   Block,
   DropdownMenu,
   Flexbox,
@@ -29,9 +28,11 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverGroupAgentItem, type GroupAgentStatus } from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -86,7 +87,7 @@ const styles = stylex.create({
   },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
@@ -115,7 +116,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/group_agent', identifier),
+        url: urlJoin('/marketplace/group_agent', identifier),
       },
       { skipNull: true },
     );

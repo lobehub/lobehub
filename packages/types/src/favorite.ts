@@ -10,6 +10,7 @@ export const FAVORITE_TYPES = [
   'dashboard',
   'goal',
   'group',
+  'library',
   'page',
   'project',
   'route',

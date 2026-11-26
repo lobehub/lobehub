@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles';
 import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
@@ -20,6 +19,7 @@ import { contextSelectors, dataSelectors, useConversationStore } from '../store'
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
 import AnimatedCount from './OpStatusTray/AnimatedCount';
 import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
+import { isOpStatusRuntimeOperation } from './OpStatusTray/visibility';
 
 // Cycle the generating phrase like a carousel so a long-running task doesn't
 // stare back with the same line the whole time.
@@ -227,10 +227,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
         activity = mapped;
       }
 
-      const isSteeredSend = op.type === 'sendMessage' && op.metadata.turnStartTime !== undefined;
-      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type) && !isSteeredSend) {
-        continue;
-      }
+      if (!isOpStatusRuntimeOperation(op)) continue;
 
       runtimeOperationIds.push(op.id);
       // Prefer the explicit LLM-call total; older servers only sent the

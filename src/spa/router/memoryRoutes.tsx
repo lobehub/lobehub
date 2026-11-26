@@ -5,13 +5,15 @@ import MemorySkeleton from '@/components/Skeleton/Memory';
 import { activityListLoader } from '@/spa/router/activityListLoader';
 import { memoryRulesLoader } from '@/spa/router/expertiseLoaders';
 import { identitiesListLoader } from '@/spa/router/identitiesListLoader';
+import { LegacyMemoryRedirect } from '@/spa/router/legacyPathRedirect';
 import { preferenceListLoader } from '@/spa/router/preferenceListLoader';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { dynamicElement } from '@/utils/router';
 
 /**
- * `/memory` sections. Mounted by the desktop router under the memory layout
- * and reused by the mobile router (`mobileWorkspaceRoutes.tsx`).
+ * Memory sections. Desktop mounts them under `/settings/memory`
+ * ({@link settingsMemoryChildren}); mobile keeps them at `/memory`
+ * (`mobileWorkspaceRoutes.tsx`), where they open full screen.
  */
 export const memoryChildren: RouteObject[] = [
   {
@@ -88,3 +90,34 @@ export const memoryChildren: RouteObject[] = [
     path: 'activities',
   },
 ];
+
+/** The memory home's segment under Settings, whose bare URL is the memory settings form. */
+const MEMORY_OVERVIEW_SEGMENT = 'overview';
+
+const settingsMemorySegment = (route: RouteObject) =>
+  route.index ? MEMORY_OVERVIEW_SEGMENT : route.path!;
+
+const settingsMemoryPath = (route: RouteObject) =>
+  `/settings/memory/${settingsMemorySegment(route)}`;
+
+/** The sections as desktop mounts them, under `/settings/memory/<section>`. */
+export const settingsMemoryChildren: RouteObject[] = memoryChildren.map((route) =>
+  route.index
+    ? { element: route.element, handle: route.handle, path: MEMORY_OVERVIEW_SEGMENT }
+    : route,
+);
+
+/** Desktop `/memory/*`: old links and bookmarks forward to the Settings sections. */
+export const legacyMemoryRedirects: RouteObject[] = memoryChildren.map((route) => {
+  const element = <LegacyMemoryRedirect to={settingsMemoryPath(route)} />;
+  return route.index
+    ? { element, handle: route.handle, index: true }
+    : { element, handle: route.handle, path: route.path };
+});
+
+/** Mobile `/settings/memory/<section>`: a shared link opens the mobile page. */
+export const mobileSettingsMemoryRedirects: RouteObject[] = memoryChildren.map((route) => ({
+  element: <LegacyMemoryRedirect to={route.index ? '/memory' : `/memory/${route.path}`} />,
+  handle: route.handle,
+  path: `memory/${settingsMemorySegment(route)}`,
+}));

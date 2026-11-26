@@ -5,6 +5,7 @@ import {
   getPendingSandboxSelection,
   isSeededSandboxSelection,
   seedPendingSandboxSelection,
+  setPendingSandboxSelection,
   setSandboxDefaultSelection,
   setSandboxTemporaryDefaultSelection,
 } from '@/store/chat/pendingSandboxSelection';
@@ -12,10 +13,19 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
-import {
-  getRememberedSandboxDirectory,
-  getRememberedSandboxRepository,
-} from './rememberedSandboxDirectory';
+import { getRememberedSandboxDirectory } from './rememberedSandboxDirectory';
+
+/**
+ * The drive default: the folder the agent's last conversation was put in, or
+ * the plan's default folder. The cloud sandbox is not set up from an
+ * environment, so an environment remembered with that folder from before is
+ * not brought back.
+ */
+const driveDefault = (
+  scope: { userId?: string | null; workspaceId?: string | null },
+  agentId: string,
+) =>
+  resolveDefaultSandboxSelection(scope.workspaceId, getRememberedSandboxDirectory(scope, agentId));
 
 /**
  * Give a conversation that does not exist yet the plan's default place to
@@ -45,13 +55,7 @@ export const useSeedDefaultSelection = (
   useEffect(() => {
     if (!eligible) return;
 
-    setSandboxDefaultSelection(
-      agentId,
-      resolveDefaultSandboxSelection(
-        workspaceId,
-        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
-      ),
-    );
+    setSandboxDefaultSelection(agentId, driveDefault({ userId, workspaceId }, agentId));
     return () => setSandboxDefaultSelection(agentId);
   }, [agentId, eligible, hasTopic, userId, workspaceId]);
 
@@ -63,55 +67,62 @@ export const useSeedDefaultSelection = (
     const pending = getPendingSandboxSelection(agentId);
     if (pending && !isSeededSandboxSelection(pending)) return;
 
-    seedPendingSandboxSelection(
-      agentId,
-      resolveDefaultSandboxSelection(
-        workspaceId,
-        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
-      ),
-    );
+    seedPendingSandboxSelection(agentId, driveDefault({ userId, workspaceId }, agentId));
   }, [agentId, entitled, hasTopic, userId, workspaceId]);
 };
 
 /**
- * The temporary sandbox's counterpart: a conversation that does not exist yet,
- * for an agent whose new conversations start in the temporary sandbox, starts
- * from the repository the agent's last temporary sandbox used — or from none,
- * which is the temporary sandbox's own default and needs nothing filled in.
+ * The temporary sandbox's counterpart, for a project conversation that does not
+ * exist yet: it starts from its project's environment — the one the server
+ * applies to a default nobody picked. `project.environmentId` is that
+ * environment, or undefined while it loads or when the server would apply none.
+ *
+ * Any other conversation starts from no environment, the temporary sandbox's
+ * own default: the cloud sandbox is not set up from one, so the repository an
+ * agent's earlier conversation used is not brought back, and one left as a
+ * default by an earlier render is cleared.
  *
  * Filled in as a default rather than a pick, the same as the folder: a pick
- * stays, and a project conversation is still given its project's checkout.
+ * stays.
  */
 export const useSeedTemporaryRepository = (
   agentId: string,
-  { eligible, hasTopic, temporary }: { eligible: boolean; hasTopic: boolean; temporary: boolean },
+  {
+    eligible,
+    hasTopic,
+    project,
+    temporary,
+  }: {
+    eligible: boolean;
+    hasTopic: boolean;
+    /** Set when the conversation belongs to a project. */
+    project?: { environmentId?: string };
+    temporary: boolean;
+  },
 ) => {
-  const workspaceId = useActiveWorkspaceId();
-  const userId = useUserStore(userProfileSelectors.userId);
+  // Outside a project there is none.
+  const environmentId = project?.environmentId;
 
   // Registered as soon as the run is known to use the sandbox — before the
   // entitlement — so a first send that turns out to have no drive still
-  // starts from the remembered repository. Cleared on unmount, like the drive
-  // default.
+  // starts from the project's repository. Cleared on unmount, like the drive
+  // default. Only a conversation not created yet registers one: the entry is
+  // the agent's, and a split pane already on a topic — a project's, say —
+  // would hand its environment to another pane's first send, or clear it.
   useEffect(() => {
-    if (!eligible) return;
-    const environmentId = getRememberedSandboxRepository(
-      { userId, workspaceId },
-      agentId,
-    )?.environmentId;
+    if (!eligible || hasTopic) return;
     setSandboxTemporaryDefaultSelection(agentId, environmentId ? { environmentId } : undefined);
     return () => setSandboxTemporaryDefaultSelection(agentId);
-  }, [agentId, eligible, hasTopic, userId, workspaceId]);
+  }, [agentId, eligible, environmentId, hasTopic]);
 
   useEffect(() => {
     if (!temporary || hasTopic) return;
     const pending = getPendingSandboxSelection(agentId);
     if (pending && !isSeededSandboxSelection(pending)) return;
 
-    const environmentId = getRememberedSandboxRepository(
-      { userId, workspaceId },
-      agentId,
-    )?.environmentId;
     if (environmentId) seedPendingSandboxSelection(agentId, { environmentId });
-  }, [agentId, hasTopic, temporary, userId, workspaceId]);
+    // A default environment nothing replaces is stale: a project's environment
+    // once the agent's next conversation is not that project's.
+    else if (pending?.environmentId) setPendingSandboxSelection(agentId);
+  }, [agentId, environmentId, hasTopic, temporary]);
 };

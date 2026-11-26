@@ -18,8 +18,12 @@ export const channelDraftKey = (channelId: string, threadId?: string | null) =>
 /**
  * Keeps unsent Channel input across Channel/Thread switches and reloads, in the same
  * storage as the chat input. The composer remounts per key, so the key never changes here.
+ *
+ * `starter` is markdown to fill an empty composer when nothing is saved for the key, such as an
+ * opening question picked on an Agent's share page. A saved draft wins: it is the person's own
+ * input.
  */
-export const useComposerDraft = (editor: IEditor, draftKey: string) => {
+export const useComposerDraft = (editor: IEditor, draftKey: string, starter?: string) => {
   // The stored revision this editor carries; an empty editor removes only that revision.
   const loaded = useRef<number | undefined>(undefined);
 
@@ -43,8 +47,10 @@ export const useComposerDraft = (editor: IEditor, draftKey: string) => {
     if (!canSerialize(editor)) return;
     const draft = getDraftEntry(draftKey);
     loaded.current = draft?.updatedAt;
-    if (draft && editor.isEmpty) writeDocument(editor, 'json', draft.json);
-  }, [draftKey, editor]);
+    if (!editor.isEmpty) return;
+    if (draft) writeDocument(editor, 'json', draft.json);
+    else if (starter) writeDocument(editor, 'markdown', starter);
+  }, [draftKey, editor, starter]);
 
   /** Saves pending input and returns its stored revision, taken when a send starts. */
   const snapshot = useCallback(() => {

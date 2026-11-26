@@ -12,6 +12,7 @@ import {
   type ApiKeyScope,
   isFullAccessApiKey,
 } from '@/const/apiKeyScope';
+import { densityTokens } from '@/styles/density.stylex';
 import { type ApiKeyItem, type UpdateApiKeyParams } from '@/types/apiKey';
 
 import ScopeSelector, { ScopeOverview } from './ApiKeyModal/ScopeSelector';
@@ -19,14 +20,19 @@ import { ApiKeyDisplay, EditableCell } from './index';
 
 const styles = stylex.create({
   fullAccessCard: {
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadius,
   },
   label: { flex: 'none', width: '96px', fontSize: '12px', color: cssVar.colorTextSecondary },
-  metaRow: { display: 'flex', gap: '16px', alignItems: 'center', minHeight: '28px' },
+  metaRow: {
+    display: 'flex',
+    gap: densityTokens['--lobe-density-section-gap'],
+    alignItems: 'center',
+    minHeight: '28px',
+  },
   sectionTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
   value: { overflow: 'hidden', display: 'flex', alignItems: 'center', fontSize: '13px' },
 });

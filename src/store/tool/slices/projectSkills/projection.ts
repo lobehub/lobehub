@@ -10,9 +10,8 @@ export interface ProjectSkillsParams {
 }
 
 /**
- * How many scans stay persisted per scope. Each scan carries every skill's file
- * list (capped by the scanner), so only the recently opened device + directory
- * pairs are kept; the one on screen is pinned by its mounted `useSync`.
+ * How many scans stay persisted per scope. Only the recently opened device +
+ * directory pairs are kept; the one on screen is pinned by its mounted `useSync`.
  */
 export const MAX_PERSISTED_PROJECT_SKILL_SCANS = 20;
 

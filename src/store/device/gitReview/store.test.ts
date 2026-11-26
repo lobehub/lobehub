@@ -3,7 +3,7 @@
  *
  * The Review / Pull Request tab reads are replicas: after a reload the last
  * file list (paths + counts, no diff text) and the last PR detail / activity /
- * merge context / linked PR paint from the persisted copy on the first frame,
+ * merge context paint from the persisted copy on the first frame,
  * and the device read only confirms them.
  */
 import { randomUUID } from 'node:crypto';
@@ -22,7 +22,6 @@ import { gitService } from '@/services/git';
 
 import {
   invalidateGitReviewCaches,
-  useFetchGitLinkedPR,
   useFetchGitPullRequestActivity,
   useFetchGitPullRequestDetail,
   useFetchGitPullRequestMergeContext,
@@ -31,11 +30,8 @@ import {
 import {
   getReviewSummaryState,
   GIT_REVIEW_MAX_PERSISTED_BYTES,
-  gitLinkedPRKey,
-  gitLinkedPRResource,
   gitPullRequestActivityResource,
   gitPullRequestDetailResource,
-  gitPullRequestKey,
   gitPullRequestMergeContextResource,
   gitReviewPatchesResource,
   type ReviewPatchesData,
@@ -51,7 +47,6 @@ vi.mock('@/services/git', () => ({
   gitService: {
     getGitBranchDiff: vi.fn(),
     getGitWorkingTreePatches: vi.fn(),
-    getLinkedPullRequest: vi.fn(),
     getPullRequestActivity: vi.fn(),
     getPullRequestDetail: vi.fn(),
     getPullRequestMergeContext: vi.fn(),
@@ -123,7 +118,6 @@ const REVIEW = {
   path: '/repo',
 };
 const PR = { deviceId: 'device-1', number: 42, path: '/repo' };
-const LINKED = { branch: 'feat/x', deviceId: 'device-1', path: '/repo' };
 const MERGE = {
   ...PR,
   baseRefName: 'canary',
@@ -378,14 +372,8 @@ describe('Review / PR tab replicas', () => {
   describe('Pull Request tab', () => {
     // Regression: the PR reads lived only in SWR's memory cache, so after a
     // reload the PR tab body was a skeleton until `gh pr view` answered again.
-    it('paints the persisted linked PR, detail, activity and merge context before gh answers', async () => {
+    it('paints the persisted detail, activity and merge context before gh answers', async () => {
       await Promise.all([
-        seed(gitLinkedPRResource, LINKED, {
-          value: {
-            pullRequest: { number: 42, state: 'open', title: 'Cached PR title', url: 'u' },
-            pullRequestStatus: 'ok',
-          },
-        }),
         seed(gitPullRequestDetailResource, PR, { value: detailResult }),
         seed(gitPullRequestActivityResource, PR, {
           value: { comments: [{ author: 'a', body: 'cached comment' }], commits: [], reviews: [] },
@@ -399,14 +387,12 @@ describe('Review / PR tab replicas', () => {
           },
         }),
       ]);
-      vi.mocked(gitService.getLinkedPullRequest).mockImplementation(pending);
       vi.mocked(gitService.getPullRequestDetail).mockImplementation(pending);
       vi.mocked(gitService.getPullRequestActivity).mockImplementation(pending);
       vi.mocked(gitService.getPullRequestMergeContext).mockImplementation(pending);
 
       const { result } = renderHook(
         () => {
-          const linked = useFetchGitLinkedPR('device-1', '/repo', 'feat/x', true);
           const detail = useFetchGitPullRequestDetail('device-1', '/repo', 42);
           const activity = useFetchGitPullRequestActivity('device-1', '/repo', 42);
           const context = useFetchGitPullRequestMergeContext(
@@ -414,7 +400,7 @@ describe('Review / PR tab replicas', () => {
             '/repo',
             detail.data?.detail ?? undefined,
           );
-          return { activity, context, detail, linked };
+          return { activity, context, detail };
         },
         { wrapper },
       );
@@ -424,46 +410,11 @@ describe('Review / PR tab replicas', () => {
       );
       expect(result.current.detail.isLoading).toBe(false);
       expect(result.current.detail.isValidating).toBe(true);
-      expect(result.current.linked.data?.pullRequest?.number).toBe(42);
       await waitFor(() =>
         expect(result.current.activity.data?.comments[0]?.body).toBe('cached comment'),
       );
       await waitFor(() => expect(result.current.context.data?.requiredChecks).toEqual(['ci']));
       expect(gitService.getPullRequestDetail).toHaveBeenCalledWith({ ...PR, coreOnly: true });
-    });
-
-    // Regression: the PR tab mounts once the linked PR is known, and its own
-    // hydration then read the detail from storage — a skeleton frame in between.
-    it('reads the PR detail and activity from storage once the linked PR hydrates', async () => {
-      await Promise.all([
-        seed(gitLinkedPRResource, LINKED, {
-          value: {
-            pullRequest: { number: 42, state: 'open', title: 'Cached PR title', url: 'u' },
-            pullRequestStatus: 'ok',
-          },
-        }),
-        seed(gitPullRequestDetailResource, PR, { value: detailResult }),
-        seed(gitPullRequestActivityResource, PR, {
-          value: { comments: [{ author: 'a', body: 'cached comment' }], commits: [], reviews: [] },
-        }),
-      ]);
-      vi.mocked(gitService.getLinkedPullRequest).mockImplementation(pending);
-
-      // Only the linked-PR read is mounted: the PR tab is not rendered yet.
-      renderHook(() => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', true), { wrapper });
-
-      const key = gitPullRequestKey(PR);
-      await waitFor(() =>
-        expect(
-          useGitReviewStore.getState().gitPullRequestDetailMap[key]?.value?.detail?.title,
-        ).toBe('Cached PR title'),
-      );
-      await waitFor(() =>
-        expect(
-          useGitReviewStore.getState().gitPullRequestActivityMap[key]?.value?.comments[0]?.body,
-        ).toBe('cached comment'),
-      );
-      expect(gitService.getPullRequestDetail).not.toHaveBeenCalled();
     });
 
     it('replaces the persisted detail with the gh read and persists it', async () => {
@@ -482,63 +433,6 @@ describe('Review / PR tab replicas', () => {
       await waitFor(async () =>
         expect(await readRow(gitPullRequestDetailResource, PR)).toEqual({ value: fresh }),
       );
-    });
-
-    it('lets an empty linked-PR answer replace a stale persisted PR', async () => {
-      await seed(gitLinkedPRResource, LINKED, {
-        value: { pullRequest: { number: 42 }, pullRequestStatus: 'ok' },
-      });
-      const none = { pullRequest: null, pullRequestStatus: 'ok' } as const;
-      vi.mocked(gitService.getLinkedPullRequest).mockResolvedValue(none as any);
-
-      const { result } = renderHook(
-        () => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', true),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.data?.pullRequest).toBeNull());
-      await waitFor(async () =>
-        expect(await readRow(gitLinkedPRResource, LINKED)).toEqual({ value: none }),
-      );
-    });
-
-    // Regression: an offline remote device resolves the lookup to `undefined`;
-    // that was committed as "no PR", so the PR tab vanished and its persisted
-    // copy was overwritten.
-    it('keeps the persisted linked PR when the device read fails', async () => {
-      const cached = { value: { pullRequest: { number: 42 }, pullRequestStatus: 'ok' } };
-      await seed(gitLinkedPRResource, LINKED, cached);
-      vi.mocked(gitService.getLinkedPullRequest).mockResolvedValue(undefined);
-
-      const { result } = renderHook(
-        () => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', true),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.error).toBeTruthy());
-      expect(result.current.data?.pullRequest?.number).toBe(42);
-      expect(await readRow(gitLinkedPRResource, LINKED)).toEqual(cached);
-    });
-
-    // Regression: a transient `gh` failure answers `{ pullRequest: null,
-    // status: 'error' }`; that was committed as "no PR" over the cached one.
-    it('keeps the persisted linked PR when the lookup reports an error', async () => {
-      const cached = { value: { pullRequest: { number: 42 }, pullRequestStatus: 'ok' } };
-      await seed(gitLinkedPRResource, LINKED, cached);
-      vi.mocked(gitService.getLinkedPullRequest).mockResolvedValue({
-        pullRequest: null,
-        pullRequestStatus: 'error',
-      } as any);
-
-      const { result } = renderHook(
-        () => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', true),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.error).toBeTruthy());
-      expect(result.current.data?.pullRequest?.number).toBe(42);
-      expect(result.current.isConfirmed).toBe(false);
-      expect(await readRow(gitLinkedPRResource, LINKED)).toEqual(cached);
     });
 
     // A persisted row paints, but only the device's answer makes it actionable.
@@ -603,72 +497,6 @@ describe('Review / PR tab replicas', () => {
       await waitFor(() => expect(result.current.error).toBeTruthy());
       expect(result.current.data?.requiredChecks).toEqual(['ci']);
       expect(await readRow(gitPullRequestMergeContextResource, MERGE)).toEqual(cached);
-    });
-
-    it('does not read a PR for a non-GitHub repo', async () => {
-      const { result } = renderHook(
-        () => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', false),
-        { wrapper },
-      );
-      await new Promise((resolve) => setTimeout(resolve, 20));
-
-      expect(gitService.getLinkedPullRequest).not.toHaveBeenCalled();
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    // Regression: SWR settles a request still in flight when its key goes null
-    // through the latest callbacks, which closed over null params, so a slow
-    // `gh` lookup that failed after the read was disabled threw
-    // "Cannot destructure property 'branch' of null" from `gitLinkedPRKey`.
-    it('settles a lookup that fails after the read is disabled', async () => {
-      let reject!: (error: unknown) => void;
-      vi.mocked(gitService.getLinkedPullRequest).mockImplementation(
-        () => new Promise((_resolve, rejectLookup) => (reject = rejectLookup)),
-      );
-      const linkedPR = useGitReviewStore.getState().slices.linkedPR;
-      // Earlier never-resolving reads stay pending on the shared slice.
-      const pendingBefore = linkedPR.debugPendingSyncRequests();
-      const unhandled = vi.fn();
-      process.on('unhandledRejection', unhandled);
-
-      try {
-        const { rerender } = renderHook(
-          ({ isGithub }) => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', isGithub),
-          { initialProps: { isGithub: true }, wrapper },
-        );
-        await waitFor(() => expect(gitService.getLinkedPullRequest).toHaveBeenCalled());
-
-        rerender({ isGithub: false });
-        await act(async () => reject(new Error('gh pr list timed out')));
-        await new Promise((resolve) => setTimeout(resolve, 20));
-
-        expect(unhandled).not.toHaveBeenCalled();
-        expect(linkedPR.debugPendingSyncRequests()).toBe(pendingBefore);
-      } finally {
-        process.off('unhandledRejection', unhandled);
-      }
-    });
-  });
-
-  describe('linked PR key', () => {
-    it('shares the composer row when a topic has no recorded PR, and splits it when it has one', () => {
-      const composer = { branch: 'feat/x', deviceId: 'device-1', path: '/repo' };
-
-      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: undefined })).toBe(
-        gitLinkedPRKey(composer),
-      );
-      // A topic that recorded PR #7 asks `gh` about that PR, not "the PR of
-      // this branch": its answer must not land on the composer's row.
-      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: 7 })).not.toBe(
-        gitLinkedPRKey(composer),
-      );
-      expect(gitLinkedPRResource.syncKey!({ ...composer, pullRequestNumber: 7 })).toEqual([
-        'device:gitLinkedPR',
-        'device-1',
-        '/repo',
-        'feat/x',
-        7,
-      ]);
     });
   });
 });

@@ -1,8 +1,14 @@
+import { A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
+import {
+  SHARE_VISITOR_MAX_FILE_SIZE,
+  SHARE_VISITOR_MAX_FILES_PER_TURN,
+  SHARE_VISITOR_PROMPT_MAX_LENGTH,
+} from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -22,24 +28,100 @@ import { extractTextFromMessage } from '@/server/services/agentRuntime/Completio
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
-import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
+import { recordShareRunResult } from '@/server/services/aiAgent/shareGate/runMetrics';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { announceAgentAccessRequests } from './agentAccess/card';
+import { evaluateShareAccess } from './agentAccess/resolve';
 import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { announceDeviceGrants } from './deviceGrantCard';
+import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
+import { type PickedOfflineDevice, wakePickedDevices } from './pickedDeviceWake';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
-import { deliverRelayReceipt } from './relayReceipt';
+import { reportChannelReplyFailure } from './replyError';
 import { openChannelReply } from './replyOpening';
 import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
+import { unpostedRunSurfaces } from './runSurfaces';
+import {
+  importShareAttachments,
+  readVisitorFiles,
+  shareAttachmentLimitType,
+  ShareAttachmentRefusal,
+} from './shareAttachments';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+
+/**
+ * A dispatch refused for a reason the requester can act on. Its `type` is kept on the failed
+ * job, so the visitor of a shared Agent (whose failure text is otherwise redacted) still learns
+ * why, in their own language.
+ */
+class ChannelDispatchError extends Error {
+  constructor(
+    readonly type: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Every refusal of a shared Agent's run its visitor can act on, with the readable text its failed
+ * job carries. Sending never refuses for these: the message is written, and its reply fails with
+ * one of these types, so every limit reads the same way and survives a reload. Raised by
+ * {@link ChannelCoordinator.shareGate}, or by the run's own share guards (the turn guard's atomic
+ * recount, the device checks of a local CLI Agent such as Claude Code or Codex), which name the
+ * type as their message. A client explains the type in the viewer's language; the text is for one that does not know it.
+ */
+const SHARE_REFUSAL_MESSAGES: Record<string, string> = {
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]:
+    'This shared Agent cannot run for visitors in its current setup',
+  [ChatErrorType.ShareHeteroDeviceUnavailable]: 'The device this shared Agent runs on is offline',
+  [ChatErrorType.ShareMessageLimitExceeded]:
+    'You have sent all the messages this shared Agent allows',
+  [ChatErrorType.SharePromptTooLong]: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
+  [ChatErrorType.ShareAttachmentTooLarge]: `A message to a shared Agent can carry up to ${SHARE_VISITOR_MAX_FILES_PER_TURN} files of ${SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024} MB each`,
+  [ChatErrorType.ShareFileStorageExceeded]: 'This shared Agent has no room for more attachments',
+  [ChatErrorType.ShareSpendLimitExceeded]: 'This shared Agent reached its monthly usage limit',
+};
+
+const shareRefusal = (type: string) => new ChannelDispatchError(type, SHARE_REFUSAL_MESSAGES[type]);
+
+/** The failure a refused dispatch records: its type and text, when the requester can act on it. */
+const dispatchFailure = (error: unknown): { message: string; type: string } | undefined => {
+  if (error instanceof ChannelDispatchError) return { message: error.message, type: error.type };
+  if (error instanceof Error && Object.hasOwn(SHARE_REFUSAL_MESSAGES, error.message))
+    return { message: SHARE_REFUSAL_MESSAGES[error.message], type: error.message };
+};
+
+/**
+ * Count a shared Agent's reply retired before its run started. Such a reply never reaches the
+ * runtime's completion, which counts every run that did start. A reply its requester cancelled
+ * meanwhile is `interrupted`, not a failure; nothing counts when another worker settled it.
+ */
+const countShareAdmission = (
+  retired: 'error' | 'interrupted' | false,
+  failure?: { message: string; type: string },
+) => {
+  if (!retired) return;
+  if (retired === 'interrupted') {
+    recordShareRunResult({ outcome: 'interrupted', stage: 'admission' });
+    return;
+  }
+  recordShareRunResult({
+    errorType: failure?.type,
+    outcome: failure ? 'refused' : 'error',
+    stage: 'admission',
+  });
+};
 
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
 const describePeer = (agent: ChannelCoAddressedAgent) => {
@@ -66,22 +148,59 @@ export class ChannelCoordinator {
   }
 
   /**
-   * Recheck a shared Agent's live share and its owner's spend limit right before submission, as
-   * the share page does for every visitor turn, and build the gate the run executes under.
+   * Admit a visitor's message to a shared Agent right before submission, and build the gate the
+   * run executes under. The one place a visitor's limits refuse a Channel reply, in the order the
+   * share page checks them: the live share, the prompt length, the attachments' count and size,
+   * the messages the visitor may send
+   * (`maxMessagesPerVisitor`, across all their conversations with the Agent) and the share's
+   * monthly spend. Like the spend limit, the message count is a guardrail rather than a
+   * reservation: concurrent replies can each pass here, and the run's turn guard
+   * (`reserveShareVisitorTurn`) refuses the one beyond the cap.
    */
   private async shareGate(
     access: ChannelSharedAgentAccess,
     agentId: string,
     requesterId: string,
+    request: {
+      /** The files of each of the visitor's messages the run reads, a quoted one included. */
+      attachments: string[][];
+      /** The visitor's own message; a message it quotes is not part of its prompt. */
+      content: string;
+    },
   ): Promise<AgentShareGate> {
     const share = await AgentShareModel.findByShareId(this.db, access.shareId);
-    if (
-      !share ||
-      share.visibility !== 'link' ||
-      share.agentId !== agentId ||
-      share.ownerId !== access.ownerId
-    )
+    if (!share || share.agentId !== agentId || share.ownerId !== access.ownerId)
       throw new Error('This Agent is no longer shared');
+    const granted = await evaluateShareAccess(this.db, share, requesterId);
+    if (!granted.admits) throw new Error('This Agent is no longer shared');
+    // A local CLI Agent runs for a visitor only on its owner's device. Without that grant the
+    // request is refused here, before an opening acknowledges it: its card asks the owner.
+    if (granted.local && !granted.canUseDevice)
+      throw shareRefusal(ChatErrorType.ShareHeterogeneousAgentUnsupported);
+    if (request.content.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
+      throw shareRefusal(ChatErrorType.SharePromptTooLong);
+    const fileIds = request.attachments.flat();
+    let attachmentLimit: string | undefined;
+    if (fileIds.length) {
+      // The share page's per-message file count holds for each message, not the turn's total.
+      const byId = new Map(
+        (await readVisitorFiles(this.db, requesterId, fileIds)).map((file) => [file.id, file]),
+      );
+      attachmentLimit = shareAttachmentLimitType(
+        request.attachments.map((ids) => [...new Set(ids)].flatMap((id) => byId.get(id) ?? [])),
+        share.shareConfig.maxFileStorage,
+      );
+    }
+    if (attachmentLimit) throw shareRefusal(attachmentLimit);
+    const sent = await new TopicModel(
+      this.db,
+      share.ownerId,
+      share.workspaceId ?? undefined,
+      undefined,
+      { includeShareVisitor: true },
+    ).countMessagesBySender({ agentId, senderId: requesterId });
+    if (sent >= share.shareConfig.maxMessagesPerVisitor)
+      throw shareRefusal(ChatErrorType.ShareMessageLimitExceeded);
     const spend = await checkAgentShareSpendAllowance({
       agentId,
       monthlySpendLimit: share.shareConfig.monthlySpendLimit,
@@ -90,14 +209,46 @@ export class ChannelCoordinator {
       visitorUserId: requesterId,
       workspaceId: share.workspaceId ?? undefined,
     });
-    if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
+    if (!spend.allowed) throw shareRefusal(ChatErrorType.ShareSpendLimitExceeded);
     return {
       agentId,
-      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share.shareConfig, requesterId),
+      canUseDevice: granted.canUseDevice,
       shareConfig: share.shareConfig,
       shareId: share.shareId,
       visitorUserId: requesterId,
     };
+  }
+
+  /**
+   * The visitor's attachments for a shared Agent's run, copied into the share: the run is its
+   * owner's and cannot read the visitor's own files. Running out of the share's storage refuses
+   * the reply like any other share limit.
+   */
+  private async shareAttachments(
+    access: ChannelSharedAgentAccess,
+    gate: AgentShareGate,
+    fileIds: string[],
+  ) {
+    if (!fileIds.length) return {};
+    try {
+      return {
+        fileIds: await importShareAttachments(
+          this.db,
+          {
+            agentId: gate.agentId,
+            maxFileStorage: gate.shareConfig.maxFileStorage,
+            ownerId: access.ownerId,
+            shareId: gate.shareId,
+            visitorUserId: gate.visitorUserId,
+            workspaceId: access.workspaceId,
+          },
+          await readVisitorFiles(this.db, gate.visitorUserId, fileIds),
+        ),
+      };
+    } catch (error) {
+      if (error instanceof ShareAttachmentRefusal) throw shareRefusal(error.type);
+      throw error;
+    }
   }
 
   advance = async (channelId: string) => {
@@ -136,10 +287,11 @@ export class ChannelCoordinator {
             and(eq(channelMembers.channelId, channelId), inArray(channelMembers.id, requesterIds)),
           )
       : [];
-    const routedPresence = createRoutedDevicePresence(this.db, channel.workspaceId);
+    // A shared Agent's run executes as its owner; the claim reads that presence on demand.
+    const routedPresence = createRoutedDevicePresence(this.db);
     await pMap(
       requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
-      (userId) => routedPresence.prefetch(userId),
+      (userId) => routedPresence.prefetch(userId, channel.workspaceId),
       { concurrency: 5 },
     );
     const owners = [
@@ -156,6 +308,8 @@ export class ChannelCoordinator {
       .flat()
       .filter((device) => device.online)
       .map((device) => device.deviceId);
+    // Devices picked in the Channel that a claim found offline; a sleeping cloud one is woken.
+    const pickedOffline: PickedOfflineDevice[] = [];
 
     try {
       await pMap(
@@ -168,13 +322,32 @@ export class ChannelCoordinator {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
               continue;
             }
-            // Before the claim: a reply that moves into a Thread runs there from the start.
-            await openChannelReply(this.db, channelId, job.id);
+            // Before the claim: a reply that moves into a Thread runs there from the start. A
+            // shared Agent's reply opens only once its share admits the request.
+            await openChannelReply(this.db, channelId, job.id, {
+              admitShare: ({ agent, request, requesterUserId, share }) =>
+                // Only a refusal skips the opening; a failed check leaves it to dispatch.
+                this.shareGate(share, agent.id, requesterUserId, {
+                  attachments: [request.fileIds ?? []],
+                  content: request.content,
+                }).then(
+                  () => true,
+                  (error) => !dispatchFailure(error),
+                ),
+            });
+            let accessDenied = false;
             const claimNow = () =>
               this.executions.claim(channelId, job.id, {
                 leaseMs: LEASE_MS,
                 leaseOwner: crypto.randomUUID(),
+                // Its owner declined the requester: the job settled failed, and its card says so.
+                onAccessDenied: () => {
+                  accessDenied = true;
+                },
                 onlineDeviceIds,
+                onPickedDeviceOffline: (device) => {
+                  pickedOffline.push(device);
+                },
                 routedDevice: (run) => resolveChannelRoutedDevice(this.db, run, routedPresence),
                 serverDefaultAgentConfig: getServerDefaultAgentConfig(),
               });
@@ -184,6 +357,7 @@ export class ChannelCoordinator {
               (await this.moveToWorktree(channelId, job.id, channel.workspaceId, onlineDeviceIds))
             )
               claim = await claimNow();
+            if (accessDenied) await this.reportFailure(channelId, job.id);
             await Promise.all([
               notifyChannel(this.db, channelId),
               claim ? this.dispatch(claim, channel.workspaceId, channel.projectId) : undefined,
@@ -195,12 +369,26 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    if (pickedOffline.length)
+      await wakePickedDevices(this.db, {
+        channelId,
+        devices: pickedOffline,
+        onlineDeviceIds,
+        workspaceId: channel.workspaceId,
+      });
+    // A claim that found the device made private since it was picked files a request, and so does
+    // one whose requester may not use the Agent; ask their owners now.
+    if (pending.length) {
+      await announceDeviceGrants(this.db, channelId);
+      await announceAgentAccessRequests(this.db, channelId);
+    }
   };
 
   /**
    * A job held back only because another run uses its member's directory moves its branch into
-   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
-   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   * a worktree of that directory instead of waiting. A directory that cannot host one (not a
+   * git repo, device too old) is shared instead: the job runs in it alongside the other run.
+   * Returns whether the claim is worth retrying.
    */
   private async moveToWorktree(
     channelId: string,
@@ -214,7 +402,7 @@ export class ChannelCoordinator {
     const created = await createChannelWorktree(candidate, workspaceId);
     if (created.path === undefined) {
       await this.executions.worktreeUnavailable(channelId, candidate, created.error);
-      return false;
+      return true;
     }
     return this.executions.assignWorktree(channelId, candidate, created.path);
   }
@@ -301,28 +489,45 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context, primaryReply, opening, coAddressed] = await Promise.all([
+      const resumed = !!job.manifest.resumed;
+      const [input, context, primaryReply, opening, coAddressed, failure] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
         this.executions.primaryReply(job.channelId, job.id),
         this.executions.openingReply(job.channelId, job.id),
         this.executions.coAddressed(job.channelId, job.id),
+        // A resumed reply tells the run why its previous turn stopped, from the card it left.
+        resumed ? this.executions.replyError(job.channelId, job.id) : undefined,
       ]);
+      // A shared Agent reads only what its visitor attached, from their own messages.
+      const visitorAttachments =
+        share && topic.senderId
+          ? input
+              .filter(({ author }) => author.type === 'user' && author.id === topic.senderId)
+              .map((message) => message.fileIds ?? [])
+          : [];
+      const visitorFileIds = visitorAttachments.flat();
       const shareGate =
         share && topic.senderId
-          ? await this.shareGate(share, member.agentId, topic.senderId)
+          ? await this.shareGate(share, member.agentId, topic.senderId, {
+              content:
+                input.find((message) => message.id === job.manifest!.requestMessageId)?.content ??
+                '',
+              attachments: visitorAttachments,
+            })
           : undefined;
       if (share && !shareGate) throw new Error('A shared Agent run needs its requester');
-      // Sending refuses attachments to a shared Agent: the owner's run cannot read them.
-      const attachments = share
-        ? {}
-        : await resolveChannelAttachments(this.db, topic.userId, workspaceId, input);
+      const attachments =
+        share && shareGate
+          ? await this.shareAttachments(share, shareGate, visitorFileIds)
+          : await resolveChannelAttachments(this.db, topic.userId, workspaceId, input);
       // The last check before submission. A dispatcher that stalled past its lease stops
       // here; one that already passed it can only consume the still-idle reservation.
       if (!(await this.executions.heartbeat(job.id, lease)))
         throw new Error('The Channel dispatch lease expired before submission');
       const result = await this.service(topic.userId, workspaceId, !!share).execAgent({
-        additionalPluginIds: [ChannelIdentifier],
+        // A reply may answer with a card; its surfaces publish with the reply's text.
+        additionalPluginIds: [ChannelIdentifier, A2uiIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
         // No device picked in the Channel: the requester's own device for this Agent applies.
@@ -332,35 +537,46 @@ export class ChannelCoordinator {
         ...attachments,
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
-        maxSteps: 32,
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,
           omitted: context.omitted,
           opening,
           peers: coAddressed.map(describePeer).filter((peer): peer is string => !!peer),
           primaryReply,
+          ...(resumed && { resume: { reason: failure?.summary } }),
           wake: job.wake,
         }),
         reservedOperationId: job.operationId,
         shareGate,
-        trigger: 'channel',
+        // A shared Agent's run is the owner's, paid by the share and read by a visitor: it is
+        // recorded as a share run so usage separates it from the owner's own Channel runs. The
+        // Channel reply flow keys off the reserved operation and job, never this label.
+        trigger: share ? RequestTrigger.AgentShare : 'channel',
+        // Nobody can approve a tool mid-run, so tools run without approval. For a shared Agent
+        // that is limited to what the creator granted: `shareGate` keeps ungranted tools out of
+        // the run and blocks their calls, so granting a tool is the creator's consent to run it.
         userInterventionConfig: { approvalMode: 'headless' },
       });
       if (!result.success) throw new Error(result.error || 'Agent could not start');
       await this.executions.accepted(job.channelId, job.id);
     } catch (error) {
       console.error('[channel:dispatch]', error);
+      const failure = dispatchFailure(error);
       const operation = await new AgentOperationModel(
         this.db,
         topic.userId,
         workspaceId ?? undefined,
       ).findById(job.operationId);
       if (operation?.status === 'idle') {
-        await this.executions.retireReservation(job.channelId, job.id);
+        const retired = await this.executions.retireReservation(job.channelId, job.id, failure);
+        if (share) countShareAdmission(retired, failure);
       } else
-        await this.executions.fail(job.channelId, job.id, {
-          message: error instanceof Error ? error.message : 'Agent could not start',
-        });
+        await this.executions.fail(
+          job.channelId,
+          job.id,
+          failure ?? { message: error instanceof Error ? error.message : 'Agent could not start' },
+        );
+      await this.reportFailure(job.channelId, job.id);
     } finally {
       clearInterval(renew);
       await this.executions.finishDispatch(job.channelId, job.id, lease.leaseOwner);
@@ -387,7 +603,9 @@ export class ChannelCoordinator {
     ) {
       // A reservation that was never started can be retired. Its old dispatcher cannot
       // initialise this now-terminal operation, even if it resumes after a process stall.
-      await this.executions.retireReservation(channelId, jobId);
+      const retired = await this.executions.retireReservation(channelId, jobId);
+      if (job.executionConfig?.share) countShareAdmission(retired);
+      if (retired) await this.reportFailure(channelId, jobId);
       return;
     }
     if (job.publicationRevoked && operation.status !== 'done') {
@@ -405,48 +623,82 @@ export class ChannelCoordinator {
         return;
       }
       let reply = job.draft;
+      const messages =
+        operation.userId && job.topicId
+          ? new MessageModel(
+              this.db,
+              operation.userId,
+              operation.workspaceId ?? undefined,
+              undefined,
+              job.executionConfig?.share ? { includeShareVisitor: true } : undefined,
+            )
+          : undefined;
+      // Cards the run drew, less those it already posted elsewhere (postMessage). Read on every
+      // attempt, so a publish retried after a crash keeps them.
+      const surfaces =
+        messages && job.topicId
+          ? await unpostedRunSurfaces(messages, operationId, job.topicId)
+          : [];
       if (job.draft === null) {
-        if (!operation.userId || !job.topicId) return;
-        const final = await new MessageModel(
-          this.db,
-          operation.userId,
-          operation.workspaceId ?? undefined,
-          undefined,
-          job.executionConfig?.share ? { includeShareVisitor: true } : undefined,
-        ).findLatestAssistantByOperationId({ operationId, topicId: job.topicId });
+        if (!messages || !job.topicId) return;
+        const final = await messages.findLatestAssistantByOperationId({
+          operationId,
+          topicId: job.topicId,
+        });
         const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
         // A wake nobody asked for may end in silence. Settled like a reply, not a failure.
         // A run that stopped on a tool call (out of steps) did not choose silence: it failed.
-        const silence = final?.tools?.length
-          ? undefined
-          : detectNoReply({ content, wakeKind: job.wake?.kind });
+        // A run that asked its requester something always posts the questions, whatever it
+        // wrote around them: a card nobody sees cannot be answered. A card it drew is posted
+        // the same way, even with no words after it.
+        const carded = !!job.ask || surfaces.length > 0;
+        const silence =
+          final?.tools?.length || carded
+            ? undefined
+            : detectNoReply({ content, wakeKind: job.wake?.kind });
         if (silence && (await this.executions.silence(channelId, jobId, silence.reason))) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);
           return;
         }
-        if (!content?.trim()) {
+        const text = carded && detectNoReply({ content, wakeKind: 'followup' }) ? '' : content;
+        if (!text?.trim() && !carded) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);
           return;
         }
         await this.executions.accepted(channelId, jobId);
-        await this.executions.saveDraft(channelId, jobId, content);
-        reply = content;
+        await this.executions.saveDraft(channelId, jobId, text ?? '');
+        reply = text ?? '';
       }
-      const replyMessageId = await this.executions.publish(channelId, jobId);
+      const replyMessageId = await this.executions.publish(channelId, jobId, surfaces);
       await this.stopWriters([job]);
+      // `@Name` in the reply addresses people and Agents like a person's mention does.
+      const mentioned = await this.executions
+        .deliverReplyMentions(channelId, replyMessageId)
+        .catch((error) => {
+          console.error('[channel:reply-mentions]', error);
+          return undefined;
+        });
       await notifyChannel(this.db, channelId);
+      if (mentioned?.mentions.length && operation.userId)
+        notifyChannelMentions(
+          this.db,
+          {
+            // The Agent wrote it, so the person it ran for is notified like anyone else.
+            includeActor: true,
+            userId: operation.userId,
+            workspaceId: mentioned.workspaceId ?? undefined,
+          },
+          { channelId, id: replyMessageId, mentions: mentioned.mentions },
+        );
+      if (mentioned?.woke) await wakeChannel(channelId);
       // Between Agents, an answer wakes the Agent that asked, and what that Agent concludes from
       // it is posted where its asking began.
       if (await this.executions.deliverAnswerToAsker(channelId, replyMessageId))
         await wakeChannel(channelId);
       await reportAgentExchange(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
         console.error('[channel:agent-exchange]', error),
-      );
-      // A reply to a relayed request also goes back to the Agent that relayed it.
-      await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
-        console.error('[channel:relay-receipt]', error),
       );
       this.summarizeTopicTitle(channelId, jobId, {
         lastAssistantContent: reply,
@@ -458,10 +710,21 @@ export class ChannelCoordinator {
       await this.executions.fail(channelId, jobId, {
         message: 'Agent execution ended without a reply',
       });
+      await this.reportFailure(channelId, jobId);
       if (job.writerHeld) await this.stopWriters([job]);
       // Device cancellation/unknown outcomes keep the physical writer until confirmed by stop.
     }
   };
+
+  /**
+   * A reply that failed for a system reason shows a card in the Agent's reply slot. Best-effort
+   * and idempotent per run: the card is posted before this returns, its model-written explanation
+   * follows in the background.
+   */
+  private async reportFailure(channelId: string, jobId: string) {
+    const reported = await reportChannelReplyFailure(this.db, channelId, jobId);
+    reported?.refinement?.catch(() => undefined);
+  }
 
   /**
    * Names a responder's topic after its first published reply, as the bot callback does. The
@@ -522,7 +785,12 @@ export class ChannelCoordinator {
         .innerJoin(channelJobs, eq(channelJobs.operationId, agentOperations.id))
         .where(eq(agentOperations.id, job.operationId));
       if (!row?.operation.userId) continue;
-      if (await this.executions.retireReservation(job.channelId, job.id)) continue;
+      const retired = await this.executions.retireReservation(job.channelId, job.id);
+      if (retired) {
+        // A reply stopped before its run started never reaches the runtime's count.
+        if (row.config?.share) countShareAdmission(retired);
+        continue;
+      }
       // Cancellation must not release the writer while a dispatcher can still submit
       // its network request. An operation result alone does not prove device exit.
       const [current] = await this.db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
@@ -569,6 +837,8 @@ export class ChannelCoordinator {
             continue;
         }
         await this.executions.releaseWriter(job.channelId, job.id);
+        // A run that ended without a reply fails only on release.
+        await this.reportFailure(job.channelId, job.id);
       } else {
         // Use the frozen identity even if runtime cleanup already removed the topic marker.
         const result = await deviceGateway.executeToolCall(
@@ -589,8 +859,10 @@ export class ChannelCoordinator {
         // start late, and the device keeps no record that would refuse it. Only a run the
         // device itself reported done shows that the one submission already arrived.
         const unseen = isRecord(result.state) && result.state.reason === 'not_found';
-        if (exited && (dispatch !== 'revoked' || !unseen || row.operation.status === 'done'))
+        if (exited && (dispatch !== 'revoked' || !unseen || row.operation.status === 'done')) {
           await this.executions.releaseWriter(job.channelId, job.id);
+          await this.reportFailure(job.channelId, job.id);
+        }
       }
     }
   };

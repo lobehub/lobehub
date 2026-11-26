@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ImController } from '../controllers/im.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireApiKeyScope } from '../middleware/permission-check';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   PushTokenParamSchema,
   PushTokenRegisterRequestSchema,
+  PushTokenRegistrationSchema,
   PushTokenUnregisterQuerySchema,
 } from '../types/im.type';
 
@@ -28,8 +30,9 @@ const pushScope = requireApiKeyScope('chat:read');
 /** PUT /api/v1/push-tokens/:deviceId */
 PushTokenRoutes.put(
   '/:deviceId',
-  describeRoute({
-    operationId: 'registerPushToken',
+  routeDoc({
+    data: PushTokenRegistrationSchema,
+    operationId: 'pushTokens.register',
     summary: "Register or rotate this device's push token",
     tags: ['push-tokens'],
   }),
@@ -43,8 +46,11 @@ PushTokenRoutes.put(
 /** DELETE /api/v1/push-tokens/:deviceId */
 PushTokenRoutes.delete(
   '/:deviceId',
-  describeRoute({
-    operationId: 'unregisterPushToken',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description:
+      '`id` is the device id. Idempotent: a stale `expoToken` removes nothing and leaves the rotated registration in place.',
+    operationId: 'pushTokens.unregister',
     summary: 'Stop pushing to this device (sign-out)',
     tags: ['push-tokens'],
   }),

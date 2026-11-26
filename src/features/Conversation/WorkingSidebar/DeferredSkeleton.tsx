@@ -1,6 +1,36 @@
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useEffect, useState } from 'react';
 
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+
+const styles = stylex.create({
+  pane: {
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
+});
+
+export const SidebarRowSkeleton = ({ rows = 3 }: { rows?: number }) => {
+  const density = useDensityTokens();
+
+  return (
+    <Flexbox gap={1}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <SkeletonItem
+          avatarSize={density.iconSize}
+          gap={density.gap}
+          height={density.rowHeight}
+          key={index}
+          padding={'0 8px'}
+        />
+      ))}
+    </Flexbox>
+  );
+};
 
 /**
  * The right panel's placeholder for a tab that has not mounted yet.
@@ -18,7 +48,11 @@ const DeferredSkeleton = () => {
   }, []);
 
   if (!show) return null;
-  return <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />;
+  return (
+    <div {...stylex.props(styles.pane)}>
+      <SidebarRowSkeleton rows={6} />
+    </div>
+  );
 };
 
 export default DeferredSkeleton;

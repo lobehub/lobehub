@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { tasks, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -38,7 +39,7 @@ const settings = { routeKey: '/settings', url: 'https://preview.example.com/sett
 const draftOf = (userId: string) => model.createDraft({ projectId, siteId, userId });
 
 beforeEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.insert(users).values([{ id: owner }, { id: reviewer }]);
   const project = await new ProjectRepository(serverDB, owner).create({
     identifier: 'FNT',

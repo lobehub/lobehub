@@ -9,7 +9,6 @@ import {
   Flexbox,
   Icon,
   Input,
-  Spin,
   stopPropagation,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -28,9 +27,10 @@ import {
   SearchIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import { ExplorerTree, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
@@ -38,6 +38,8 @@ import { useClientDataSWR } from '@/libs/swr';
 import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
 import { isPersistedPartialIndex } from '@/store/projectFile';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
@@ -79,26 +81,35 @@ const styles = stylex.create({
     '--trees-fg-override': cssVar.colorTextSecondary,
     '--trees-fg-muted-override': cssVar.colorTextSecondary,
     '--trees-accent-override': cssVar.colorPrimary,
-    '--trees-padding-inline-override': '0px',
-    '--trees-font-size-override': '12px',
-    '--trees-border-radius-override': '6px',
+    '--trees-padding-inline-override': sidebarRow.paneInline,
+    '--trees-item-margin-x-override': '0px',
+    '--trees-item-padding-x-override': sidebarRow.paddingInline,
+    '--trees-item-row-gap-override': sidebarRow.gap,
+    '--trees-font-size-override': sidebarRow.textFontSize,
+    '--trees-border-radius-override': sidebarRow.radius,
     'flex': '1',
     'minHeight': '0',
+    'paddingBlockStart': sidebarRow.paneBlockStart,
   },
   subheader: {
     display: 'flex',
     flexShrink: 0,
     gap: '4px',
     alignItems: 'center',
-    paddingBlockStart: '6px',
-    paddingBlockEnd: '8px',
-    paddingInline: '12px',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
   },
   search: { flex: '1', minWidth: '0' },
+  skeleton: {
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
   truncated: {
     flexShrink: 0,
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -111,6 +122,8 @@ const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
 
 type FileViewMode = 'project' | 'changes';
+
+const NO_DIRTY_FILE_PATHS: Set<string> = new Set();
 
 const getProjectRootName = (root: string) => {
   const normalizedRoot = root.replace(/[\\/]+$/, '');
@@ -221,6 +234,7 @@ const Files = memo<FilesProps>(
       instanceId: sandboxInstanceId,
       topicId: sandboxTopicId,
     });
+    const density = useDensityTokens();
     const projectSource = data?.source;
     const projectRoot = data?.root ?? workingDirectory;
 
@@ -233,7 +247,10 @@ const Files = memo<FilesProps>(
     const projectRootName = getProjectRootName(projectRoot);
     const normalizedDebouncedQuery = debouncedQuery.trim();
     const isFiltering = normalizedDebouncedQuery.length > 0;
-    const changedOnly = viewMode === 'changes';
+    // The buttons flip on `viewMode` at once; the tree, which a view change
+    // rebuilds from scratch, follows in a deferred render so the click never
+    // waits on it.
+    const changedOnly = useDeferredValue(viewMode) === 'changes';
     const hasDisplayFilter = isFiltering || changedOnly || hideIgnored;
     const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
     const dirtyFilePaths = useMemo(
@@ -299,7 +316,7 @@ const Files = memo<FilesProps>(
     const searchEntries = isSandbox ? sandboxMatches : remoteMatches;
     const isSearching = !isSandbox && !!normalizedDebouncedQuery && isSearchingRemote;
 
-    const displayEntries = useMemo(() => {
+    const baseEntries = useMemo(() => {
       const indexedEntries = isFiltering
         ? (searchEntries ?? [])
         : [...entries, ...collapsedChildren];
@@ -308,29 +325,40 @@ const Files = memo<FilesProps>(
         isFiltering ? [] : (gitFiles?.deleted ?? []),
         projectRoot,
       );
-      const visibleEntries = entriesWithDeleted.filter(
-        (entry) => !isExcludedProjectFileEntry(entry),
-      );
 
-      return filterProjectFileEntries(visibleEntries, dirtyFilePaths, {
-        changedOnly,
-        hideIgnored,
-      });
-    }, [
-      changedOnly,
-      collapsedChildren,
-      dirtyFilePaths,
-      entries,
-      gitFiles?.deleted,
-      hideIgnored,
-      isFiltering,
-      projectRoot,
-      searchEntries,
-    ]);
-    const nodes = useMemo(
-      () => buildTreeNodes(displayEntries, projectRootName),
-      [displayEntries, projectRootName],
+      return entriesWithDeleted.filter((entry) => !isExcludedProjectFileEntry(entry));
+    }, [collapsedChildren, entries, gitFiles?.deleted, isFiltering, projectRoot, searchEntries]);
+    // The two views keep separate entries and nodes, so the project tree
+    // survives a visit to Changes: switching back hands the tree the very same
+    // nodes array, which it recognises instead of normalising every path again.
+    const projectEntries = useMemo(
+      () =>
+        filterProjectFileEntries(baseEntries, NO_DIRTY_FILE_PATHS, {
+          changedOnly: false,
+          hideIgnored,
+        }),
+      [baseEntries, hideIgnored],
     );
+    const changesEntries = useMemo(
+      () =>
+        changedOnly
+          ? filterProjectFileEntries(baseEntries, dirtyFilePaths, {
+              changedOnly: true,
+              hideIgnored,
+            })
+          : undefined,
+      [baseEntries, changedOnly, dirtyFilePaths, hideIgnored],
+    );
+    const displayEntries = changesEntries ?? projectEntries;
+    const projectNodes = useMemo(
+      () => buildTreeNodes(projectEntries, projectRootName),
+      [projectEntries, projectRootName],
+    );
+    const changesNodes = useMemo(
+      () => (changesEntries ? buildTreeNodes(changesEntries, projectRootName) : undefined),
+      [changesEntries, projectRootName],
+    );
+    const nodes = changesNodes ?? projectNodes;
     const gitStatus = useMemo(
       () =>
         prefixGitStatusPaths(
@@ -352,8 +380,12 @@ const Files = memo<FilesProps>(
       [changedOnly, isFiltering, nodes],
     );
     const treeStyleVars = useMemo(
-      () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
-      [nodes],
+      () =>
+        getExplorerTreeStyleVars({
+          reserveChevronSlot: nodes.some((node) => node.isFolder),
+          rowGap: density.gap,
+        }),
+      [density.gap, nodes],
     );
 
     useEffect(() => {
@@ -485,11 +517,7 @@ const Files = memo<FilesProps>(
     const showsRefreshFailure = !!data && !!(error || gitError);
 
     if (!data && isLoading) {
-      return (
-        <Center flex={1}>
-          <Spin size="large" />
-        </Center>
-      );
+      return <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={8} />;
     }
 
     return (
@@ -550,11 +578,9 @@ const Files = memo<FilesProps>(
           </DropdownMenu>
         </div>
         {isEmpty && isFiltering && isSearching ? (
-          <Center flex={1}>
-            <Spin size="large" />
-          </Center>
+          <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={4} />
         ) : isEmpty && !actions.pendingCreate ? (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             {/* A failed read and an empty directory look identical once the tree
               is empty, and they are not the same thing to act on: one is
               "nothing here yet", the other is "we could not find out". Saying
@@ -583,6 +609,7 @@ const Files = memo<FilesProps>(
               getContextMenuItems={actions.getContextMenuItems}
               gitStatus={gitStatus}
               iconSet="complete"
+              itemHeight={density.treeItemHeight}
               nodes={nodes}
               ref={treeRef}
               style={{ height: '100%' }}

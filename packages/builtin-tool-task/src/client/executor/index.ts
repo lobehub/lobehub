@@ -51,9 +51,11 @@ import type {
   DeleteTaskCommentParams,
   ListWorkspaceMembersParams,
   RunTasksItemResult,
+  SetTaskScheduleParams,
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
+import { checkChannelDelivery } from './channelDelivery';
 import { applyTaskLabelDelta, resolveLabelIdsOrThrow } from './labelIds';
 import { settleAll } from './settleAll';
 
@@ -599,14 +601,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   setTaskSchedule = async (
-    params: {
-      automationMode?: TaskAutomationMode | null;
-      heartbeatInterval?: number;
-      identifier: string;
-      maxExecutions?: number | null;
-      schedulePattern?: string | null;
-      scheduleTimezone?: string | null;
-    },
+    params: SetTaskScheduleParams,
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -628,6 +623,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           success: false,
         };
       }
+
+      const delivery = await checkChannelDelivery(identifier, params.channelDelivery, ctx);
+      if (delivery?.refused) return delivery.refused;
 
       // Top-level schedule columns — direct service.update bypasses the
       // store.updateTask optimistic path, which would otherwise need to map
@@ -694,6 +692,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
             : `max executions → ${params.maxExecutions}`,
         );
       }
+
+      delivery?.queue(ops, changes);
 
       if (ops.length === 0) {
         return {

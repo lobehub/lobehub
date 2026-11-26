@@ -5,10 +5,12 @@ import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
+import { useParams } from 'react-router';
 
 import { useFetchAvailableAgents } from '@/hooks/useFetchAvailableAgents';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { A2uiConversationHost } from './A2uiConversationHost';
 import AssistantTurnSettledWatcher from './AssistantTurnSettledWatcher';
 import { McpAppHostRegistration } from './McpAppHostRegistration';
 import { createStore, Provider } from './store';
@@ -87,12 +89,20 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     actionsBar,
     children,
     composerTarget,
-    context,
+    context: providedContext,
     hooks = {},
     messages,
     operationState,
     skipFetch,
   }) => {
+    const { workspaceSlug } = useParams<'workspaceSlug'>();
+    const context = useMemo(
+      () =>
+        workspaceSlug && !providedContext.workspaceSlug
+          ? { ...providedContext, workspaceSlug }
+          : providedContext,
+      [providedContext, workspaceSlug],
+    );
     const contextKey = useMemo(() => messageMapKey(context), [context]);
     const resolvedComposerTarget = useMemo(
       () => composerTarget ?? createComposerTarget(contextKey),
@@ -130,7 +140,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
         <AssistantTurnSettledWatcher />
         <McpAppHostRegistration />
         <ConversationContextPrefetcher context={context} />
-        {children}
+        <A2uiConversationHost>{children}</A2uiConversationHost>
       </Provider>
     );
   },

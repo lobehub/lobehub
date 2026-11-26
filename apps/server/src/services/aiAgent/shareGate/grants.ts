@@ -2,6 +2,7 @@ import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-too
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import { AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS } from '@lobechat/builtin-tools';
 import {
   hasShareToolGrant,
   resolveShareAllowedSkillIds,
@@ -27,9 +28,12 @@ export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGa
   const grants = resolveShareToolGrants(gate.shareConfig.toolGrants);
 
   // Device builtins (a pinned Computer Use, say) follow the device grant, not
-  // the tool picker, exactly as `applyShareGateToToolSet` decides them.
+  // the tool picker, exactly as `applyShareGateToToolSet` decides them. The
+  // implied builtins need no grant (see `resolveEffectiveShareToolGrants`).
   return pluginIds.filter((id) =>
-    isShareDeviceBuiltin(id) ? !!gate.canUseDevice : hasShareToolGrant(grants, id),
+    isShareDeviceBuiltin(id)
+      ? !!gate.canUseDevice
+      : AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS.has(id) || hasShareToolGrant(grants, id),
   );
 };
 
@@ -56,11 +60,18 @@ export const filterSkillsByShareGate = (skillIds: string[], gate: AgentShareGate
  * `agentConfig.plugins`. Adding it here only after an explicit Share grant
  * lets the picker act as that opt-in for visitor runs while keeping the
  * default-closed behavior. The final tool-set gate still narrows its APIs.
+ *
+ * The implied builtins (`lobe-work`) are on in every visitor run with no
+ * grant at all: a visitor's Works stay in their own topic (see
+ * {@link resolveEffectiveShareToolGrants}).
  */
 export const getShareGrantActivatedPluginIds = (gate: AgentShareGate): string[] => {
   const grants = resolveShareToolGrants(gate.shareConfig.toolGrants);
 
-  return hasShareToolGrant(grants, AgentDocumentsIdentifier) ? [AgentDocumentsIdentifier] : [];
+  return [
+    ...(hasShareToolGrant(grants, AgentDocumentsIdentifier) ? [AgentDocumentsIdentifier] : []),
+    ...AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS,
+  ];
 };
 
 /**
@@ -142,6 +153,11 @@ export const hasShareSkillAuthorization = (permissions: ShareDataToolPermissions
  *   `applyShareGateToToolSet`. Always written as `activateTools` only, so a
  *   stored or hand-edited `lobe-activator` entry can never widen it to the
  *   runtime's unlisted `activateSkill` method.
+ * - `lobe-work` (every {@link AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS} entry),
+ *   on in every visitor run: it registers what the visitor run produced as
+ *   Works fenced to the visitor topic, never the creator's lists. Added
+ *   after the activator check, so it alone never implies the activator: it is
+ *   enabled directly (`getShareGrantActivatedPluginIds`), not activated.
  *
  * Every gate that asks "did the creator grant this identifier" must go through
  * here, or the tool passes one layer and is rejected by the next.
@@ -157,6 +173,8 @@ export const resolveEffectiveShareToolGrants = (
   }
 
   if (hasShareSkillAuthorization(permissions)) grants.set(SkillsIdentifier, 'all');
+
+  for (const identifier of AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS) grants.set(identifier, 'all');
 
   return grants;
 };

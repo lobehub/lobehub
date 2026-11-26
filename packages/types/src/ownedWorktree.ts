@@ -2,8 +2,8 @@ import type { ChatTopicMetadata } from './topic';
 import type { WorkingDirConfig } from './workingDir';
 
 /**
- * Worktrees a topic owns: the ones the app created for it (Better Coding
- * Experience "New worktree" on the first send). Recorded on the topic's
+ * Worktrees a topic owns: the ones the app created for it ("New worktree"
+ * on the first send). Recorded on the topic's
  * metadata as `ownedWorktrees` and never rewritten by a later worktree change
  * — unlike `workingDirectoryConfig.git.autoCreated`, which is dropped as soon
  * as the topic moves to another checkout. Retiring the topic (archive or

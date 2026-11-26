@@ -6,6 +6,7 @@ import { getInvocationDeadline } from '@/server/utils/invocationDeadline';
 import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { STEP_INVOCATION_MAX_DURATION_MS } from '../../invocationBudget';
 import { runStep, runStepHealth } from '../runStep';
 
 const runningStepResult = (continuation: unknown) => ({
@@ -39,6 +40,7 @@ const mockSettleStaleRunning = vi.hoisted(() => vi.fn());
 const mockResumeAbandonedParent = vi.hoisted(() => vi.fn());
 const mockScheduleOpportunisticStaleSweep = vi.hoisted(() => vi.fn());
 const mockScheduleOpportunisticVerifySweep = vi.hoisted(() => vi.fn());
+const mockScheduleOpportunisticInterventionExpirySweep = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -80,6 +82,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
     return { finalizeAbandoned: mockFinalizeAbandoned };
   }),
   scheduleOpportunisticStaleSweep: mockScheduleOpportunisticStaleSweep,
+  scheduleOpportunisticInterventionExpirySweep: mockScheduleOpportunisticInterventionExpirySweep,
   scheduleOpportunisticVerifySweep: mockScheduleOpportunisticVerifySweep,
 }));
 
@@ -364,9 +367,9 @@ describe('runStep handler', () => {
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
 
-    // The route's 600s maxDuration, counted from the request.
-    expect(deadlineSeen).toBeGreaterThanOrEqual(startedAt + 600_000);
-    expect(deadlineSeen).toBeLessThanOrEqual(Date.now() + 600_000);
+    // The route's maxDuration, counted from the request.
+    expect(deadlineSeen).toBeGreaterThanOrEqual(startedAt + STEP_INVOCATION_MAX_DURATION_MS);
+    expect(deadlineSeen).toBeLessThanOrEqual(Date.now() + STEP_INVOCATION_MAX_DURATION_MS);
   });
 
   it('kicks the opportunistic stale-operation sweep on a valid delivery', async () => {
@@ -379,6 +382,7 @@ describe('runStep handler', () => {
     expect(res.status).toBe(200);
     expect(mockScheduleOpportunisticStaleSweep).toHaveBeenCalledTimes(1);
     expect(mockScheduleOpportunisticVerifySweep).toHaveBeenCalledTimes(1);
+    expect(mockScheduleOpportunisticInterventionExpirySweep).toHaveBeenCalledTimes(1);
   });
 
   it('opts the AiAgentService into visitor rows when metadata carries streamOwnerUserId', async () => {

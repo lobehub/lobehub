@@ -32,7 +32,7 @@ export const createShareRunScope = async (
 
   const shareGate: AgentShareGate = {
     agentId: share.agentId,
-    canUseDevice: await resolveShareVisitorDeviceAccess(db, share.shareConfig, visitorUserId),
+    canUseDevice: await resolveShareVisitorDeviceAccess(db, share, visitorUserId),
     shareConfig: share.shareConfig,
     // See `AgentShareGate.shareId`'s JSDoc — the share instance this run is
     // authorized against, and the token every later revalidation compares.

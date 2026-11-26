@@ -26,6 +26,32 @@ const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
 const hasLaterMessages = (s: State) => s.hasLaterMessages;
 
+const compressedMemberIndexes = new WeakMap<
+  UIChatMessage[],
+  { byId: Map<string, UIChatMessage>; pages: State['compressedHistoryPages'] }
+>();
+
+/** Every compression group's members, node slice and paged-in ones, by id; built once per snapshot. */
+const indexCompressedMembers = (
+  messages: UIChatMessage[],
+  pages: State['compressedHistoryPages'],
+): Map<string, UIChatMessage> => {
+  const cached = compressedMemberIndexes.get(messages);
+  if (cached && cached.pages === pages) return cached.byId;
+
+  const byId = new Map<string, UIChatMessage>();
+  for (const group of messages) {
+    if (group.role !== 'compressedGroup') continue;
+    for (const member of [
+      ...(pages[group.id]?.messages ?? []),
+      ...(group.compressedMessages ?? []),
+    ])
+      byId.set(member.id, member);
+  }
+  compressedMemberIndexes.set(messages, { byId, pages });
+  return byId;
+};
+
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
   const topLevelMessage = indexDisplayMessages(s.displayMessages).byId.get(id);
@@ -39,7 +65,8 @@ const getDisplayMessageById = (id: string) => (s: State) => {
     }
   }
 
-  return undefined;
+  // Compression members render as ordinary message rows above their group.
+  return indexCompressedMembers(s.displayMessages, s.compressedHistoryPages).get(id);
 };
 const getDbMessageById = (id: string) => (s: State) => indexDbMessages(s.dbMessages).byId.get(id);
 const getDbMessageByToolCallId = (id: string) => (s: State) =>
@@ -240,16 +267,23 @@ const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
  * subtrees self-subscribe to their own data instead of receiving it as props
  * from the message-level renderer. O(1) per call: the index is built once per
  * displayMessages snapshot (see `messageIndex.ts`).
+ *
+ * Compression members paged in on scroll live in `compressedHistoryPages`, not
+ * in displayMessages, and their rows read content and tools through here too.
  */
-const findBlockById = (
-  blockId: string,
-  messages: UIChatMessage[],
-): AssistantContentBlock | undefined => findBlockInDisplayMessages(messages, blockId);
+const findBlockById = (blockId: string, s: State): AssistantContentBlock | undefined => {
+  const block = findBlockInDisplayMessages(s.displayMessages, blockId);
+  if (block) return block;
+  for (const page of Object.values(s.compressedHistoryPages)) {
+    const paged = findBlockInDisplayMessages(page.messages, blockId);
+    if (paged) return paged;
+  }
+};
 
 const getToolsInBlock =
   (blockId: string) =>
   (s: State): ChatToolPayloadWithResult[] | undefined => {
-    const block = findBlockById(blockId, s.displayMessages);
+    const block = findBlockById(blockId, s);
     return block?.tools;
   };
 
@@ -263,7 +297,7 @@ const getToolInBlock =
 const getBlockContent =
   (blockId: string) =>
   (s: State): string | undefined =>
-    findBlockById(blockId, s.displayMessages)?.content;
+    findBlockById(blockId, s)?.content;
 
 /**
  * Block metadata from the same recursive lookup as {@link getBlockContent}, so blocks nested in
@@ -272,12 +306,12 @@ const getBlockContent =
 const getBlockMetadata =
   (blockId: string) =>
   (s: State): AssistantContentBlock['metadata'] =>
-    findBlockById(blockId, s.displayMessages)?.metadata;
+    findBlockById(blockId, s)?.metadata;
 
 const getBlockHasTools =
   (blockId: string) =>
   (s: State): boolean => {
-    const tools = findBlockById(blockId, s.displayMessages)?.tools;
+    const tools = findBlockById(blockId, s)?.tools;
     return !!tools && tools.length > 0;
   };
 

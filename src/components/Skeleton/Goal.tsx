@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useInterfaceDensity } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -23,22 +24,28 @@ const styles = stylex.create({
 /**
  * The three row shapes a goal list settles into. Exported so a list that is
  * re-reading one of its tabs can hold the same shape instead of collapsing to
- * blank while the server answers.
+ * blank while the server answers. Compact rows (6px padding, 14px title over a
+ * 12px requirement) settle at ~57px, so the skeleton pads 11px around its 35px
+ * bar stack.
  */
-export const GoalListRowsSkeleton = () => (
-  <Flexbox aria-busy className={stylex.props(styles.listRows).className}>
-    {Array.from({ length: 3 }).map((_, index) => (
-      <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={14}>
-        <SkeletonBar height={20} radius={'50%'} width={20} />
-        <Flexbox flex={1} gap={7}>
-          <SkeletonBar height={16} width={`${36 + index * 8}%`} />
-          <SkeletonBar height={12} width={`${54 + index * 6}%`} />
+export const GoalListRowsSkeleton = () => {
+  const compact = useInterfaceDensity() === 'compact';
+
+  return (
+    <Flexbox aria-busy className={stylex.props(styles.listRows).className}>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={compact ? 11 : 14}>
+          <SkeletonBar height={20} radius={'50%'} width={20} />
+          <Flexbox flex={1} gap={7}>
+            <SkeletonBar height={16} width={`${36 + index * 8}%`} />
+            <SkeletonBar height={12} width={`${54 + index * 6}%`} />
+          </Flexbox>
+          <SkeletonBar height={24} width={72} />
         </Flexbox>
-        <SkeletonBar height={24} width={72} />
-      </Flexbox>
-    ))}
-  </Flexbox>
-);
+      ))}
+    </Flexbox>
+  );
+};
 
 const GoalSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'}>

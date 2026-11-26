@@ -1,4 +1,4 @@
-import type { ChannelListItem, GroupedTopic } from '@lobechat/types';
+import type { ChannelListItem, GroupedTopic, ShareVisitorConversation } from '@lobechat/types';
 import {
   getTopicWorkingDirectoryEffectivePath,
   getTopicWorkingDirectorySourcePath,
@@ -150,6 +150,37 @@ export const sortChannelsBy = (channels: ChannelListItem[], sortBy: SortBy): Cha
     if (sortBy === 'title') return a.title.localeCompare(b.title);
     if (sortBy === 'createdAt') return time(b.createdAt) - time(a.createdAt);
     return time(b.updatedAt ?? b.createdAt) - time(a.updatedAt ?? a.createdAt);
+  });
+};
+
+/**
+ * A visitor's conversation under the topic status tabs: it is never archived or completed and
+ * reports no run, so it counts as active.
+ */
+export const matchesShareVisitorStatus = (status: StatusFilter): boolean =>
+  status === 'all' || status === 'active';
+
+/** Search matches the visitor's name or the conversation's latest message. */
+export const matchesShareVisitorSearch = (
+  conversation: ShareVisitorConversation,
+  search: string,
+): boolean => {
+  const keyword = search.trim().toLowerCase();
+  if (!keyword) return true;
+  return [conversation.visitor.name, conversation.lastMessage?.content].some((text) =>
+    text?.toLowerCase().includes(keyword),
+  );
+};
+
+export const sortShareVisitorsBy = (
+  conversations: ShareVisitorConversation[],
+  sortBy: SortBy,
+): ShareVisitorConversation[] => {
+  const time = (value: Date | string) => new Date(value).getTime();
+  return [...conversations].sort((a, b) => {
+    if (sortBy === 'title') return (a.visitor.name ?? '').localeCompare(b.visitor.name ?? '');
+    if (sortBy === 'createdAt') return time(b.createdAt) - time(a.createdAt);
+    return time(b.updatedAt) - time(a.updatedAt);
   });
 };
 

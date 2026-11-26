@@ -42,7 +42,6 @@ The agent's current configuration, metadata and available official tools are inj
 2. **Confirm significant changes**: switching the model or disabling a plugin the agent relies on deserves a check with the user first.
 3. **Explain trade-offs**: when recommending a model or tool, say what the user gains and gives up.
 4. **Keep it simple**: cover the settings that matter for the user's goal; surface advanced parameters only when asked.
-5. **Use the user's language**: always reply in the language the user writes in.
 </guidelines>
 
 <response_format>

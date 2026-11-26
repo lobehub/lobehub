@@ -11,14 +11,14 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
-import { sx } from '@/styles/sx';
 
 import { shouldShowCiLabel } from './overviewData';
 import { OverviewRow, rowStyles } from './OverviewRow';
 import { sectionStyles } from './sectionStyles';
+import { statusTint } from './statusTint';
 
 interface PullRequestRowProps {
-  /** Better Coding Experience: the row's "⋯" menu, after the CI pill. */
+  /** The row's "⋯" menu, after the CI pill. */
   actions?: ReactNode;
   onClick: () => void;
   pullRequest: DeviceGitLinkedPullRequest;
@@ -40,6 +40,7 @@ const PullRequestRow = memo<PullRequestRowProps>(
       <Tooltip title={tooltip ?? `#${pullRequest.number} ${pullRequest.title}`}>
         <div>
           <OverviewRow
+            actions={actions}
             icon={prVisual.icon}
             iconColor={prVisual.color}
             trailing={
@@ -50,15 +51,15 @@ const PullRequestRow = memo<PullRequestRowProps>(
                       aria-label={t('workingPanel.overview.pr.unvouched')}
                       color={cssVar.colorWarning}
                       icon={TriangleAlertIcon}
-                      size={13}
+                      size={14}
                     />
                   </Tooltip>
                 )}
                 <span
-                  {...sx(sectionStyles.pill, {
-                    background: `color-mix(in srgb,  12%, transparent)`,
-                    color: ci.color,
-                  })}
+                  {...stylex.props(
+                    sectionStyles.pill,
+                    sectionStyles.pillTone(ci.color, statusTint(ci.color)),
+                  )}
                 >
                   <Icon icon={ci.icon} size={12} />
                   {shouldShowCiLabel(ciStatus)
@@ -67,7 +68,6 @@ const PullRequestRow = memo<PullRequestRowProps>(
                       )
                     : null}
                 </span>
-                {actions}
               </>
             }
             value={

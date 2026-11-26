@@ -274,7 +274,23 @@ const EnvironmentEditor = memo(() => {
                 </WorkspaceAgentPolicyCard>
               )}
           </>
-        ) : null}
+        ) : (
+          // A LobeHub agent: the model runs here, its tools reach the device picked here.
+          <WorkspaceAgentPolicyCard
+            fullWidth
+            icon={MonitorSmartphone}
+            title={t('settingAgent.devicePolicy.title')}
+          >
+            <HeteroExecutionTargetSelect
+              agentId={agentId}
+              deviceId={executionTarget.deviceId}
+              isOverridden={executionTarget.isOverridden}
+              isPending={executionTarget.isPending}
+              isSelectable={executionTarget.isSelectable}
+              target={executionTarget.target}
+            />
+          </WorkspaceAgentPolicyCard>
+        )}
       </Flexbox>
     </Flexbox>
   );

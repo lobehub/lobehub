@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 
 import { canvasRuntime } from './plugins/vite/canvasRuntime';
 import { stylexPlugin, stylexTokenModules } from './plugins/vite/stylex';
+import { DurationShardSequencer } from './tests/ci/shardByDuration';
 
 if (process.env.NODE_ENV === 'production') {
   Reflect.set(process.env, 'NODE_ENV', 'test');
@@ -174,6 +175,11 @@ export default defineConfig({
     },
     environment: 'happy-dom',
     exclude,
+    // Worker threads start faster than the default forked processes: a third of
+    // the files of each project ran ~30% (app) and ~20% (server) faster on the
+    // CI runners, with the same results. `isolate: false` was faster still but
+    // broke 255 server files, and `vmThreads` crashed a worker.
+    pool: 'threads',
     // Vitest 4 removed `environmentMatchGlobs`; split the run into an `app`
     // (happy-dom) and a `server` (node) project instead. The server project
     // matters because `apps/server` is backend code: forcing Node keeps
@@ -186,6 +192,7 @@ export default defineConfig({
         test: {
           name: 'app',
           exclude: [...exclude, '**/apps/server/**'],
+          setupFiles: join(__dirname, './tests/setup.ts'),
         },
       },
       {
@@ -194,6 +201,9 @@ export default defineConfig({
           name: 'server',
           environment: 'node',
           include: ['**/apps/server/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+          // The app setup prepares a browser (jest-dom, IndexedDB, storage,
+          // React stubs) that server tests never use; theirs is much lighter.
+          setupFiles: join(__dirname, './tests/setup.server.ts'),
         },
       },
     ],
@@ -281,8 +291,10 @@ export default defineConfig({
         ],
       },
     },
+    // CI shards split by recorded duration when VITEST_SHARD_DURATIONS is set;
+    // otherwise this is Vitest's default count-based split.
+    sequence: { sequencer: DurationShardSequencer },
     // Migrates PGlite once per run so each DB test file restores a snapshot.
     globalSetup: join(__dirname, './packages/database/tests/pgliteSnapshot.globalSetup.ts'),
-    setupFiles: join(__dirname, './tests/setup.ts'),
   },
 });

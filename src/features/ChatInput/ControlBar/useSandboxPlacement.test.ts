@@ -11,10 +11,13 @@ interface TopicSandbox {
   sandboxEnvironmentId?: string;
   sandboxInstanceId?: string;
   sandboxWorkingDirectory?: string;
+  sessionId?: string;
 }
 
 const state = vi.hoisted(() => ({
   activeTopicId: undefined as string | undefined,
+  creatingTopicIds: [] as string[],
+  draft: undefined as { agentId: string; projectId: string } | undefined,
   refreshTopicDetail: vi.fn(),
   topics: {} as Record<string, TopicSandbox>,
   updateTopicMetadata: vi.fn(),
@@ -26,12 +29,14 @@ vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: object) => unknown) =>
     selector({
       activeTopicId: state.activeTopicId,
+      creatingTopicIds: state.creatingTopicIds,
+      pendingNewTopicDirectory: state.draft,
       topicDataMap: {},
       refreshTopicDetail: state.refreshTopicDetail,
       topicDetailMap: Object.fromEntries(
-        Object.entries(state.topics).map(([id, { projectId, ...metadata }]) => [
+        Object.entries(state.topics).map(([id, { projectId, sessionId, ...metadata }]) => [
           id,
-          { id, metadata, projectId },
+          { id, metadata, projectId, sessionId },
         ]),
       ),
       updateTopicMetadata: state.updateTopicMetadata,
@@ -42,6 +47,8 @@ vi.mock('@/store/chat', () => ({
 beforeEach(() => {
   // The main column's topic stays globally active while a side pane renders another.
   state.activeTopicId = 'main-topic';
+  state.draft = undefined;
+  state.creatingTopicIds = [];
   state.topics = {
     'main-topic': { sandboxInstanceId: 'main-instance' },
     'pane-topic': { sandboxDrive: 'personal', sandboxWorkingDirectory: 'reports' },
@@ -148,6 +155,33 @@ describe('useSandboxPlacement', () => {
     const { result } = renderHook(() => useSandboxPlacement('agent-1', 'project-topic'));
 
     expect(result.current.projectId).toBe('proj_1');
+  });
+
+  // A project sidebar "+" stages a blank draft; it is the project's before a
+  // topic exists, and only for the agent it was staged on.
+  it("names a project draft's project, for its own agent only", () => {
+    state.draft = { agentId: 'agent-1', projectId: 'proj_1' };
+
+    expect(renderHook(() => useSandboxPlacement('agent-1', null)).result.current.projectId).toBe(
+      'proj_1',
+    );
+    expect(
+      renderHook(() => useSandboxPlacement('agent-2', null)).result.current.projectId,
+    ).toBeUndefined();
+  });
+
+  // A first send drops the draft before the pane moves to the topic it mints;
+  // that topic, still being created, keeps naming the project meanwhile.
+  it('names the project of the topic a first send is creating, for its own agent only', () => {
+    state.topics['minted-topic'] = { projectId: 'proj_1', sessionId: 'agent-1' };
+    state.creatingTopicIds = ['minted-topic'];
+
+    expect(renderHook(() => useSandboxPlacement('agent-1', null)).result.current.projectId).toBe(
+      'proj_1',
+    );
+    expect(
+      renderHook(() => useSandboxPlacement('agent-2', null)).result.current.projectId,
+    ).toBeUndefined();
   });
 
   it('follows the global active topic when no topic is given', () => {

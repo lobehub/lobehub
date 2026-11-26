@@ -34,8 +34,16 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   const factories: ((original: typeof importOriginal) => unknown)[] = [
     async (importOriginal) => ({
       ...(await importOriginal<object>()),
-      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
-        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
+      Flexbox: ({
+        children,
+        paddingInline,
+      }: {
+        children: React.ReactNode;
+        paddingInline?: number;
+      }) => (
+        <div data-testid={paddingInline === undefined ? 'sidebar-sections' : 'sidebar-body'}>
+          {children}
+        </div>
       ),
     }),
     async (importOriginal) => ({
@@ -97,6 +105,10 @@ vi.mock('@/features/Channels/ChannelList', () => ({
   default: () => <div data-testid="sidebar-channels" />,
 }));
 
+vi.mock('@/features/Channels/useChannelsEnabled', () => ({
+  useChannelsEnabled: () => true,
+}));
+
 vi.mock('./Agent', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
 }));
@@ -150,7 +162,7 @@ describe('Home sidebar body', () => {
     expect(mocks.updateSystemStatus).toHaveBeenCalledWith({ sidebarExpandedKeys: ['agent'] });
   });
 
-  it('renders items strictly in sidebarItems order with the spacer at its stored position', () => {
+  it('renders items strictly in sidebarItems order as one continuous list', () => {
     mocks.navLayout = {
       bottomMenuItems: [
         { key: 'image', title: 'Image', url: '/image' },
@@ -174,20 +186,17 @@ describe('Home sidebar body', () => {
     render(<Body />);
 
     const children = Array.from(screen.getByTestId('sidebar-body').children);
-    const spacerIndex = children.findIndex((child) =>
-      child.hasAttribute('data-sidebar-bottom-spacer'),
-    );
-
-    expect(spacerIndex).toBe(2);
+    // A saved `__spacer__` no longer pushes the links after it to the bottom.
+    expect(children).toHaveLength(5);
     expect(children[0]).toHaveTextContent('Pages');
     expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
-    expect(children[3]).toHaveTextContent('Image');
-    expect(children[4]).toHaveTextContent('Tasks');
-    expect(children[5]).toHaveTextContent('Resource');
+    expect(children[2]).toHaveTextContent('Image');
+    expect(children[3]).toHaveTextContent('Tasks');
+    expect(children[4]).toHaveTextContent('Resource');
   });
 
-  it('keeps a top item that was dragged past the spacer in its new position', () => {
+  it('keeps a top item dragged below the sections in its new position', () => {
     mocks.navLayout = {
       bottomMenuItems: [{ key: 'image', title: 'Image', url: '/image' }],
       topNavItems: [{ key: 'tasks', title: 'Tasks', url: '/tasks' }],
@@ -201,9 +210,8 @@ describe('Home sidebar body', () => {
 
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
-    expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
-    expect(children[2]).toHaveTextContent('Image');
-    expect(children[3]).toHaveTextContent('Tasks');
+    expect(children[1]).toHaveTextContent('Image');
+    expect(children[2]).toHaveTextContent('Tasks');
   });
 
   it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
@@ -216,6 +224,28 @@ describe('Home sidebar body', () => {
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
     expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+
+  it('places Channels where the saved order puts them', () => {
+    mocks.globalState.status.sidebarItems = ['channels', 'recents', 'agent', 'favorites'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
+
+    expect(children[0]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+  });
+
+  it('leaves Channels out once they are hidden', () => {
+    mocks.globalState.status.sidebarItems = ['recents', 'agent', 'channels'];
+    mocks.globalState.status.hiddenSidebarSections = ['channels'];
+
+    render(<Body />);
+
+    expect(screen.queryByTestId('sidebar-channels')).toBeNull();
+    expect(screen.getByTestId('sidebar-item-agent')).toBeInTheDocument();
   });
 
   // The Projects entry is keyed `project` like its sidebar layout id, but its page is `/projects`.

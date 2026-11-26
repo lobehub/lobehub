@@ -328,16 +328,6 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
-  gitLinkedPR: def(
-    'device:gitLinkedPR',
-    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
-      'device:gitLinkedPR',
-      deviceId,
-      path,
-      branch,
-      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
-    ],
-  ),
   gitPullRequestDetail: def(
     'device:gitPullRequestDetail',
     (deviceId: string, path: string, number: number) => [
@@ -437,12 +427,14 @@ export const mcpAppKeys = {
         onThisDevice = false,
         server,
         toolArguments,
+        topicId,
       }: {
         agentId?: string;
         linkId?: string;
         onThisDevice?: boolean;
         server?: string;
         toolArguments?: string;
+        topicId?: string;
       },
     ) => [
       'mcpApp:resource',
@@ -453,6 +445,7 @@ export const mcpAppKeys = {
       server ?? null,
       toolArguments ?? null,
       linkId ?? null,
+      topicId ?? null,
     ],
   ),
 };

@@ -2,12 +2,16 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ChatController } from '../controllers/chat.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
+  ChatGenerateReplyResponseSchema,
+  ChatResponseSchema,
   ChatServiceParamsSchema,
+  ChatTranslateResponseSchema,
   MessageGenerationParamsSchema,
   TranslateServiceParamsSchema,
 } from '../types/chat.type';
@@ -17,6 +21,11 @@ const requireModelInvoke = requireAnyPermission(getAllScopePermissions('AI_MODEL
 
 app.post(
   '/',
+  routeDoc({
+    data: ChatResponseSchema,
+    summary: 'Run a non-streaming chat completion',
+    tags: ['chat'],
+  }),
   requireAuth,
   requireModelInvoke,
   zValidator('json', ChatServiceParamsSchema),
@@ -25,6 +34,7 @@ app.post(
 
 app.post(
   '/translate',
+  routeDoc({ data: ChatTranslateResponseSchema, summary: 'Translate text', tags: ['chat'] }),
   requireAuth,
   requireModelInvoke,
   zValidator('json', TranslateServiceParamsSchema),
@@ -33,6 +43,11 @@ app.post(
 
 app.post(
   '/generate-reply',
+  routeDoc({
+    data: ChatGenerateReplyResponseSchema,
+    summary: 'Generate a reply to a message',
+    tags: ['chat'],
+  }),
   requireAuth,
   requireModelInvoke,
   zValidator('json', MessageGenerationParamsSchema),

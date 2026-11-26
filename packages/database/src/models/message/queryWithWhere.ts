@@ -11,6 +11,7 @@ import {
   logTimingSink as logTiming,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
+import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 
 import { messagePlugins, messages, messageTranslates, messageTTS, users } from '../../schemas';
@@ -24,6 +25,7 @@ import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
 import type { MessageGroupNodeWindow, ModelTimingContext, QueryMessagesOptions } from './types';
+import { viewModelPluginState } from './viewModelPluginState';
 
 export class MessagePageQueries extends MessageScope {
   private readonly relations: MessageRelationQueries;
@@ -58,15 +60,19 @@ export class MessagePageQueries extends MessageScope {
       where,
       before,
       current = 0,
+      includeArtboardWorks,
       includeFileWorks,
       pageSize = 1000,
       postProcessUrl,
+      skipCompressedMembers,
       skipWorks,
       topicId,
       timing,
       allowShareVisitor,
       workAccessScope,
       groupNodeWindow,
+      groupMemberScope,
+      viewModelPluginState: selectViewModelPluginState,
     } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
@@ -140,7 +146,7 @@ export class MessagePageQueries extends MessageScope {
             },
             pluginError: messagePlugins.error,
             pluginIntervention: messagePlugins.intervention,
-            pluginState: messagePlugins.state,
+            pluginState: selectViewModelPluginState ? viewModelPluginState : messagePlugins.state,
 
             translate: {
               content: messageTranslates.content,
@@ -212,11 +218,14 @@ export class MessagePageQueries extends MessageScope {
     const messageGroupNodesPromise = this.queryMessageGroupNodesForPage({
       allowShareVisitor: allowShareVisitor || this.includeShareVisitor,
       current,
+      groupMemberScope,
       hasBeforeCursor: !!before,
       postProcessUrl,
+      skipCompressedMembers,
       result,
       timing,
       topicId,
+      viewModelPluginState: selectViewModelPluginState,
       window: groupNodeWindow,
     });
 
@@ -243,7 +252,7 @@ export class MessagePageQueries extends MessageScope {
         ? ({} as Record<string, WorkSummaryItem[]>)
         : this.relations.queryMessageWorkSummaries(
             result,
-            includeFileWorks,
+            { includeArtboardWorks, includeFileWorks },
             timing,
             workAccessScope,
           ),
@@ -386,11 +395,14 @@ export class MessagePageQueries extends MessageScope {
   private queryMessageGroupNodesForPage = async ({
     allowShareVisitor,
     current,
+    groupMemberScope,
     hasBeforeCursor,
     postProcessUrl,
     result,
     timing,
     topicId,
+    skipCompressedMembers,
+    viewModelPluginState: selectViewModelPluginState,
     window,
   }: {
     /**
@@ -404,6 +416,8 @@ export class MessagePageQueries extends MessageScope {
      */
     allowShareVisitor?: boolean;
     current: number;
+    /** See `QueryMessagesOptions.groupMemberScope`. */
+    groupMemberScope?: SQL;
     /**
      * The page was fetched with a round-cursor (`before`): scope group nodes to
      * the page's time window instead of the whole topic — page 0 already
@@ -419,6 +433,10 @@ export class MessagePageQueries extends MessageScope {
     timing?: ModelTimingContext;
     topicId?: string;
     /** Explicit group window (cursor pagination); overrides the row-derived one. */
+    /** See `QueryMessageParams.skipCompressedMembers`. */
+    skipCompressedMembers?: boolean;
+    /** See `QueryMessageParams.viewModelPluginState`. */
+    viewModelPluginState?: boolean;
     window?: MessageGroupNodeWindow;
   }): Promise<UIChatMessage[]> => {
     if (!topicId) return [];
@@ -430,6 +448,9 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            memberScope: groupMemberScope,
+            skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
             window,
           }),
         { current, hasMessages: result.length > 0, topicId },
@@ -445,6 +466,9 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            memberScope: groupMemberScope,
+            skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
           }),
         { current, hasMessages: false, topicId },
       );
@@ -457,6 +481,9 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            memberScope: groupMemberScope,
+            skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
           }),
         { current, hasMessages: true, topicId },
       );
@@ -477,7 +504,12 @@ export class MessagePageQueries extends MessageScope {
           },
           postProcessUrl,
           timing,
-          { allowShareVisitor },
+          {
+            allowShareVisitor,
+            memberScope: groupMemberScope,
+            skipCompressedMembers,
+            viewModelPluginState: selectViewModelPluginState,
+          },
         ),
       { current, hasMessages: true, topicId },
     );

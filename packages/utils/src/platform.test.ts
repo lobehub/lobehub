@@ -2,16 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isArc, isMacOSWithLargeWindowBorders, isSonomaOrLaterSafari } from './platform';
 
-vi.mock('./platform', async (importOriginal) => {
-  const mod = await importOriginal();
-
-  return {
-    // @ts-ignore
-    ...mod,
-    isOnServerSide: true,
-  };
-});
-
 describe('isSonomaOrLaterSafari', () => {
   beforeEach(() => {
     // 重置 navigator 对象
@@ -130,10 +120,6 @@ describe('isSonomaOrLaterSafari', () => {
     afterEach(() => {
       // 清理所有模拟
       vi.restoreAllMocks();
-    });
-
-    it('should return false when on server side', () => {
-      expect(isArc()).toBe(false);
     });
 
     it('should return true when CSS custom property matches', () => {

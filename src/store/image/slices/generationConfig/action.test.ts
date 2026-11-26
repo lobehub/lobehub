@@ -96,6 +96,19 @@ const testImageModels: AIImageModelCard[] = [
 
 const mockProviders = [
   {
+    id: 'openai',
+    name: 'OpenAI',
+    children: ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'].map((id) => ({
+      id,
+      type: 'image',
+      parameters: {
+        prompt: { default: '' },
+        outputFormat: { default: 'png', enum: ['png', 'gif'] },
+        size: { default: '1024x1024', enum: ['1024x1024', '1536x1024'] },
+      },
+    })),
+  },
+  {
     id: 'fal',
     name: 'Fal',
     children: [testImageModels[0]],
@@ -363,6 +376,40 @@ describe('GenerationConfigAction', () => {
   });
 
   describe('Settings Reuse', () => {
+    it.each(['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'])(
+      'preserves the static size when reusing an automatic-size GIF batch for %s',
+      (model) => {
+        useImageStore.setState({
+          model,
+          provider: 'openai',
+          parameters: { prompt: '', outputFormat: 'gif', size: '1536x1024' },
+        });
+
+        useImageStore.getState().reuseSettings(model, 'openai', {
+          prompt: 'reuse GIF fixture',
+          outputFormat: 'gif',
+        });
+        useImageStore.getState().setParamOnInput('outputFormat', 'png');
+
+        expect(useImageStore.getState().parameters).toEqual({
+          prompt: 'reuse GIF fixture',
+          outputFormat: 'png',
+          size: '1536x1024',
+        });
+      },
+    );
+
+    it('uses target defaults when reusing a GIF batch from a different model', () => {
+      useImageStore.setState({ parameters: { prompt: '', size: '1536x1024' } });
+
+      useImageStore.getState().reuseSettings('gpt-image-2.6-flare', 'openai', {
+        prompt: 'reuse GIF fixture',
+        outputFormat: 'gif',
+      });
+
+      expect(useImageStore.getState().parameters.size).toBe('1024x1024');
+    });
+
     it('should merge custom settings with model defaults', () => {
       const { result } = renderHook(() => useImageStore());
       const customSettings: Partial<RuntimeImageGenParams> = {

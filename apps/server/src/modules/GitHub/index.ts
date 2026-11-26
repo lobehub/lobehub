@@ -81,7 +81,11 @@ export class GitHub {
         }
       }
       if (path) {
-        result.path = path;
+        try {
+          result.path = decodeURIComponent(path).replace(/\/+$/, '');
+        } catch {
+          throw new GitHubParseError('Invalid GitHub path encoding');
+        }
       }
     }
 
@@ -131,7 +135,11 @@ export class GitHub {
    * Build the ZIP download URL for a GitHub repository
    */
   buildRepoZipUrl(info: GitHubRepoInfo): string {
-    return `https://github.com/${info.owner}/${info.repo}/archive/refs/heads/${info.branch}.zip`;
+    const ref =
+      info.branch === 'HEAD' || /^[a-f0-9]{40}$/.test(info.branch)
+        ? info.branch
+        : 'refs/heads/' + info.branch;
+    return `https://github.com/${info.owner}/${info.repo}/archive/${ref}.zip`;
   }
 
   /**
@@ -139,6 +147,149 @@ export class GitHub {
    */
   buildRawFileUrl(info: GitHubRawFileInfo): string {
     return `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${info.branch}/${info.filePath}`;
+  }
+
+  private apiRepoUrl(info: GitHubRepoInfo) {
+    return `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}`;
+  }
+
+  /**
+   * Resolve a ref to its commit. With `token`, the request is authenticated
+   * (api.github.com only) and a rejected token throws `GitHubAuthError`.
+   */
+  async resolveCommit(info: GitHubRepoInfo, token?: string) {
+    const response = await fetch(
+      `${this.apiRepoUrl(info)}/commits/${encodeURIComponent(info.branch)}`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.sha',
+          'User-Agent': this.userAgent,
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (token && response.status === 401) throw new GitHubAuthError('GitHub token was rejected');
+    // A missing repository answers 404, a missing ref answers 422.
+    if (response.status === 404 || response.status === 422)
+      throw new GitHubNotFoundError('GitHub repository or ref not found', response.status);
+    if (
+      response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.has('retry-after') ||
+          response.headers.get('x-ratelimit-remaining') === '0'))
+    )
+      throw new GitHubRateLimitError('GitHub rate limit reached');
+    if (response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository is inaccessible', 403);
+    if (!response.ok)
+      throw new GitHubDownloadError(`Could not resolve GitHub revision (HTTP ${response.status})`);
+    const commit = (await response.text()).trim();
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubDownloadError('Invalid GitHub revision');
+    return commit;
+  }
+
+  async downloadCommitZip(info: GitHubRepoInfo, commit: string) {
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
+    const url = `https://codeload.github.com/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/zip/${commit}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (response.status === 404 || response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository or commit is inaccessible');
+    return this.readArchive(response);
+  }
+
+  /**
+   * Download a commit's archive with a token. Only the api.github.com request
+   * carries the token; the archive it redirects to is pre-signed and fetched
+   * without credentials.
+   */
+  async downloadTokenZip(info: GitHubRepoInfo, commit: string, token: string) {
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
+    const response = await fetch(`${this.apiRepoUrl(info)}/zipball/${commit}`, {
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': this.userAgent,
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status === 401) throw new GitHubAuthError('GitHub token was rejected');
+    if (response.status === 404 || response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository or commit is inaccessible', response.status);
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      const location = response.headers.get('location');
+      if (!location) throw new GitHubDownloadError('Missing GitHub archive location');
+      return this.downloadSnapshotZip(
+        new URL(location, response.url || this.apiRepoUrl(info)).href,
+      );
+    }
+    return this.readArchive(response);
+  }
+
+  /**
+   * Download a ref's archive and read the commit it was cut from out of the ZIP
+   * comment. Uses no REST API quota, so it still works when `resolveCommit` is
+   * rate limited.
+   */
+  async downloadRefZip(info: GitHubRepoInfo) {
+    const response = await fetch(this.buildRepoZipUrl(info), {
+      headers: { 'User-Agent': this.userAgent },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (response.status === 404)
+      throw new GitHubNotFoundError('GitHub repository or ref not found');
+    const buffer = await this.readArchive(response);
+    const commit = zipComment(buffer);
+    if (!/^[a-f0-9]{40}$/.test(commit))
+      throw new GitHubDownloadError('GitHub archive does not name its commit');
+    return { buffer, commit };
+  }
+
+  /** A private commit's signed archive URL is short-lived and must never be logged. */
+  async downloadSnapshotZip(location: string) {
+    const signal = AbortSignal.timeout(30_000);
+    for (let redirects = 0; redirects <= 3; redirects++) {
+      const url = new URL(location);
+      if (
+        !['https://github.com', 'https://api.github.com', 'https://codeload.github.com'].includes(
+          url.origin,
+        ) ||
+        url.username ||
+        url.password
+      )
+        throw new GitHubDownloadError('Invalid GitHub archive location');
+      const response = await fetch(url.href, { redirect: 'manual', signal });
+      if (response.status >= 300 && response.status < 400) {
+        await response.body?.cancel();
+        const next = response.headers.get('location');
+        if (!next) throw new GitHubDownloadError('Missing GitHub archive location');
+        location = new URL(next, url).href;
+        continue;
+      }
+      return this.readArchive(response);
+    }
+    throw new GitHubDownloadError('Too many GitHub archive redirects');
+  }
+
+  private async readArchive(response: Response) {
+    if (!response.ok || !response.body)
+      throw new GitHubDownloadError(`Could not download repository (HTTP ${response.status})`);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 32 * 1024 * 1024) {
+        await reader.cancel();
+        throw new GitHubDownloadError('Repository exceeds the 32 MiB download limit');
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks, size);
   }
 
   /**
@@ -244,7 +395,10 @@ export class GitHubParseError extends GitHubError {
 }
 
 export class GitHubNotFoundError extends GitHubError {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
     super(message);
     this.name = 'GitHubNotFoundError';
   }
@@ -256,5 +410,32 @@ export class GitHubDownloadError extends GitHubError {
     this.name = 'GitHubDownloadError';
   }
 }
+
+/** The token sent with a request was rejected (401). */
+export class GitHubAuthError extends GitHubError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubAuthError';
+  }
+}
+
+export class GitHubRateLimitError extends GitHubError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubRateLimitError';
+  }
+}
+
+/** The archive comment sits after the end-of-central-directory record that closes a ZIP. */
+const zipComment = (zip: Buffer) => {
+  for (let at = zip.length - 22; at >= Math.max(0, zip.length - 22 - 0xff_ff); at--) {
+    if (
+      zip.readUInt32LE(at) === 0x06_05_4b_50 &&
+      at + 22 + zip.readUInt16LE(at + 20) === zip.length
+    )
+      return zip.toString('latin1', at + 22);
+  }
+  return '';
+};
 
 export const github = new GitHub();

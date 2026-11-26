@@ -54,7 +54,10 @@ describe('buildViewedTaskContextPrompt', () => {
       'task-row-1',
     );
 
-    expect(getTaskDetail).toHaveBeenCalledWith('task-row-1');
+    expect(getTaskDetail).toHaveBeenCalledWith(
+      'task-row-1',
+      expect.objectContaining({ id: 'task-row-1' }),
+    );
     expect(prompt).toContain('The user is currently viewing the detail page of task T-858');
     expect(prompt).toContain('Make images in the task content draggable');
     expect(prompt).toContain('Default Lobe AI agent id: agt_inbox');

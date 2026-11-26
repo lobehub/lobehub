@@ -34,8 +34,21 @@ describe('parseClientMetadata', () => {
     });
 
     expect(parseClientMetadata(headers)).toEqual({
+      app: 'lobehub',
       type: 'desktop',
       version: '1.2.3',
+    });
+  });
+
+  it('should parse the Lobot desktop user agent', () => {
+    const headers = new Headers({
+      'user-agent': 'Lobot Desktop/0.4.1',
+    });
+
+    expect(parseClientMetadata(headers)).toEqual({
+      app: 'lobot',
+      type: 'desktop',
+      version: '0.4.1',
     });
   });
 
@@ -78,6 +91,7 @@ describe('parseClientMetadata', () => {
     });
 
     expect(parseClientMetadata(headers)).toEqual({
+      app: 'lobehub',
       type: 'desktop',
       version: '1.2.3',
     });

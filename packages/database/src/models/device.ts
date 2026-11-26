@@ -1,6 +1,6 @@
 import type { WorkingDirEntry } from '@lobechat/types';
 import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
-import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 
 import type { DeviceItem } from '../schemas';
 import { agents, devices, workspaces } from '../schemas';
@@ -342,6 +342,36 @@ export class DeviceModel {
         buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, devices),
       ),
     });
+  };
+
+  /**
+   * Stamp `lastSeenAt` on rows the device gateway currently reports online.
+   *
+   * Registration stamps the column once per connect, so a device holding one
+   * session for weeks would otherwise go offline showing the time it last
+   * registered. Writes only rows the caller can read (its personal rows, or
+   * visible rows of the current workspace) and never moves the stamp back.
+   * `updatedAt` stays as it is: liveness is not an edit of the row.
+   *
+   * Only rows whose stored stamp is still older than `staleBefore` (at most
+   * `seenAt`) are written. The check sits in the UPDATE itself, so concurrent
+   * reads that all saw the same stale snapshot write the row once, not once each.
+   */
+  markSeen = async (rowIds: string[], seenAt: Date, staleBefore: Date): Promise<void> => {
+    if (rowIds.length === 0) return;
+
+    const personal = and(eq(devices.userId, this.userId), isNull(devices.workspaceId));
+    const readable = this.workspaceId
+      ? or(
+          personal,
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, devices),
+        )
+      : personal;
+
+    await this.db
+      .update(devices)
+      .set({ lastSeenAt: seenAt, updatedAt: sql`${devices.updatedAt}` })
+      .where(and(inArray(devices.id, rowIds), lt(devices.lastSeenAt, staleBefore), readable));
   };
 
   findByDeviceId = async (deviceId: string) => {

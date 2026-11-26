@@ -10,6 +10,7 @@ import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
 import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
+import { useDensityTokens } from '@/styles/density';
 
 import ConnectedItem from './ConnectedItem';
 
@@ -20,6 +21,7 @@ interface AllRecentsDrawerProps {
 
 const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
+  const { pagePaddingBlockEnd } = useDensityTokens();
   const [searchKeyword, setSearchKeyword] = useState('');
   const useFetchAllRecents = useHomeStore((s) => s.useFetchAllRecents);
   const queryKey = createRecentQueryKey(50);
@@ -60,7 +62,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
           <Empty
             description={t('navPanel.searchResultEmpty')}
             icon={SearchIcon}
-            style={{ paddingBlock: 24 }}
+            style={{ paddingBlock: pagePaddingBlockEnd }}
           />
         ) : (
           filteredItems.map((item) => {

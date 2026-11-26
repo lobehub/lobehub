@@ -53,6 +53,12 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
   message?: ReactNode;
   messageExtra?: ReactNode;
   /**
+   * Marker rendered beside the bubble, on the side facing the conversation
+   * (left of a user bubble), aligned with the message's first line. Used to
+   * label how the message was delivered, such as a steered instruction.
+   */
+  messageLeading?: ReactNode;
+  /**
    * Avatar click handler
    */
   onAvatarClick?: () => void;
