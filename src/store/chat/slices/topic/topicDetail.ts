@@ -77,7 +77,12 @@ export const createTopicDetailSlice = ({
           snapshot.operationIds !== operationIds(topicId))
       )
         return undefined;
-      if (snapshot && snapshot.topic !== current) {
+      // Nothing was loaded when the read started: a row that appeared since is
+      // the persisted copy (or another read) hydrating, not a local edit, so
+      // the server's answer still wins. Dropping it left a reloaded page on
+      // the stored row — a conversation moved to another runner kept showing
+      // its old folder.
+      if (snapshot && snapshot.topic && snapshot.topic !== current) {
         // Preserve newer local fields while still accepting the server's live
         // marker. The linked entity fans that marker into any loaded lists.
         if (current && topic?.metadata?.runningOperation) {

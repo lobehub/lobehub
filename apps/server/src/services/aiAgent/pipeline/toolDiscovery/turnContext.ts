@@ -2,6 +2,7 @@ import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { GoalIdentifier, hasUnfinishedGoalProposal } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import { ProjectIdentifier } from '@lobechat/builtin-tool-project';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { AgentGroupConfig } from '@lobechat/context-engine';
 import debug from 'debug';
@@ -166,8 +167,8 @@ export const collectSelectedToolIds = (
  * and the goal tool while the conversation's latest goal proposal has not
  * created a goal (rejected with feedback, pending, or failed), so the resumed
  * turn or a plain "try again" can revise and resubmit it without `/goal`.
- * The artboard tool belongs to project conversations only; this server-side
- * discovery is its only way in, since it has no client executor.
+ * The artboard and project tools belong to project conversations only; this
+ * server-side discovery is their only way in, since they have no client executor.
  */
 export const resolveTurnScopedPluginIds = async (params: {
   attachedFileTypes: string[];
@@ -219,7 +220,7 @@ export const resolveTurnScopedPluginIds = async (params: {
     ...(isBotConversation ? [MessageToolIdentifier] : []),
     ...(continuesGoalProposal ? [GoalIdentifier] : []),
     ...(isProjectCoordinator ? [TaskIdentifier] : []),
-    ...(isProjectConversation ? [ArtboardIdentifier] : []),
+    ...(isProjectConversation ? [ArtboardIdentifier, ProjectIdentifier] : []),
     ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
   ];
 };
