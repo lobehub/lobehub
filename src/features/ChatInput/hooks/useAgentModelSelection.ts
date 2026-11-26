@@ -57,6 +57,11 @@ export interface UseAgentModelSelectionResult extends ModelSelection {
    * access/preference still loading), so nothing was written.
    */
   selectModel: (selection: ModelSelection, options?: SelectModelOptions) => Promise<boolean>;
+  /**
+   * `selectModel` writes the default every other member of the Workspace sees
+   * (a public Workspace Agent the caller manages), not only the caller's own.
+   */
+  selectsSharedDefault: boolean;
   usesWorkspaceMemberSelection: boolean;
 }
 
@@ -190,6 +195,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     selectionLockReason,
     selectionPolicy,
     selectModel,
+    selectsSharedDefault: isPublicWorkspaceAgent && !usesWorkspaceMemberSelection,
     usesWorkspaceMemberSelection,
   };
 };

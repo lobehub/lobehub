@@ -38,13 +38,19 @@ vi.mock('@/store/chat', () => ({
 
 const picked = { model: 'picked-model', provider: 'picked' };
 
-const renderSwitch = (canSelectModel = true) =>
+const renderSwitch = (
+  canSelectModel = true,
+  selectsSharedDefault = false,
+  defaultProviders?: readonly string[],
+) =>
   renderHook(() =>
     useTopicModelSwitch({
       canSelectModel,
+      defaultProviders,
       model: 'agent-model',
       provider: 'agent-provider',
       selectModel: state.selectModel,
+      selectsSharedDefault,
     }),
   );
 
@@ -81,7 +87,62 @@ describe('useTopicModelSwitch', () => {
     await act(() => result.current.switchModel(picked));
 
     expect(state.updateTopicModel).toHaveBeenCalledWith('own-topic', picked);
+  });
+
+  // The next new topic snapshots the agent selection, so a switch inside a
+  // topic must also become that selection or the next chat reverts to the old model.
+  it('carries a switch inside a topic over to the next new topic', async () => {
+    state.composerTopicId = 'own-topic';
+    const { result } = renderSwitch();
+
+    await act(() => result.current.switchModel(picked));
+
+    expect(state.updateTopicModel).toHaveBeenCalledWith('own-topic', picked);
+    expect(state.selectModel).toHaveBeenCalledWith(picked);
+  });
+
+  // The picker closes at once; a new topic opened while the pin is still
+  // saving must already see the new selection.
+  it('updates the selection without waiting for the topic pin to save', async () => {
+    state.composerTopicId = 'own-topic';
+    let finishPin!: () => void;
+    state.updateTopicModel.mockReturnValue(new Promise<void>((resolve) => (finishPin = resolve)));
+    const { result } = renderSwitch();
+
+    let switching!: Promise<void>;
+    act(() => {
+      switching = result.current.switchModel(picked);
+    });
+
+    expect(state.selectModel).toHaveBeenCalledWith(picked);
+    finishPin();
+    await act(() => switching);
+  });
+
+  it('keeps a switch inside a topic out of a default other Workspace members share', async () => {
+    state.composerTopicId = 'own-topic';
+    const { result } = renderSwitch(true, true);
+
+    await act(() => result.current.switchModel(picked));
+
+    expect(state.updateTopicModel).toHaveBeenCalledWith('own-topic', picked);
     expect(state.selectModel).not.toHaveBeenCalled();
+  });
+
+  // A live Agent Share rejects a default outside its providers; carrying the
+  // switch over would fail with a save error after the topic already switched.
+  it('keeps a switch to a provider a live share rejects inside the topic', async () => {
+    state.composerTopicId = 'own-topic';
+    const { result } = renderSwitch(true, false, ['lobehub']);
+
+    await act(() => result.current.switchModel(picked));
+
+    expect(state.updateTopicModel).toHaveBeenCalledWith('own-topic', picked);
+    expect(state.selectModel).not.toHaveBeenCalled();
+
+    await act(() => result.current.switchModel({ model: 'hosted', provider: 'lobehub' }));
+
+    expect(state.selectModel).toHaveBeenCalledWith({ model: 'hosted', provider: 'lobehub' });
   });
 
   it('follows the global active topic when the host publishes no topic', async () => {

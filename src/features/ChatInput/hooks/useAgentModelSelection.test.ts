@@ -321,6 +321,7 @@ describe('useAgentModelSelection', () => {
       model: 'shared-model',
       provider: 'shared-provider',
       selectionPolicy: 'fixed',
+      selectsSharedDefault: false,
       usesWorkspaceMemberSelection: false,
     });
     expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
@@ -352,6 +353,7 @@ describe('useAgentModelSelection', () => {
       model: 'shared-model',
       provider: 'shared-provider',
       selectionPolicy: 'fixed',
+      selectsSharedDefault: true,
       usesWorkspaceMemberSelection: false,
     });
     expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(

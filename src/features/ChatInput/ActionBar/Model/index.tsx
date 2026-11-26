@@ -18,6 +18,7 @@ import { useModelLockTooltip } from '../../hooks/useModelLockTooltip';
 import { useReasoningEffortControl } from '../../hooks/useReasoningEffortControl';
 import { useActionBarContext } from '../context';
 import SelectorMenu from './SelectorMenu';
+import { resolveShareDefaultProviders } from './shareDefaultProviders';
 import { useTopicModelSwitch } from './useTopicModelSwitch';
 
 const ModelSwitch = memo(() => {
@@ -26,22 +27,30 @@ const ModelSwitch = memo(() => {
   const agentId = useAgentId();
   const selection = useAgentModelSelection(agentId);
   const { canDisplayModel, canSelectModel, isModelLoading, selectionLockReason } = selection;
+  const { isShared, supported: shareSupported } = useAgentShareSupported(agentId);
+  const shareModelExempt = useAgentStore(
+    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
+  );
+  const shareProviders =
+    AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt ? AGENT_SHARE_ALLOWED_PROVIDERS : undefined;
+  const defaultProviders = resolveShareDefaultProviders({
+    isShared,
+    shareProviders,
+    supported: shareSupported,
+    usesWorkspaceMemberSelection: selection.usesWorkspaceMemberSelection,
+  });
   // The composer topic's pin when present, else the agent selection; a switch
-  // pins that topic, otherwise updates the agent.
+  // pins that topic and seeds the next one, otherwise updates the agent.
   const {
     model,
     provider,
     switchModel: handleModelChange,
     topicId,
-  } = useTopicModelSwitch(selection);
-  const { isShared } = useAgentShareSupported(agentId);
-  const shareModelExempt = useAgentStore(
-    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
-  );
+  } = useTopicModelSwitch({ ...selection, defaultProviders });
   const chatModels = useEnabledChatModels();
   const enabledList =
-    !topicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt
-      ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
+    !topicId && isShared && shareProviders
+      ? chatModels.filter((item) => shareProviders.includes(item.id))
       : undefined;
   const modelNotice = enabledList ? (
     <Alert

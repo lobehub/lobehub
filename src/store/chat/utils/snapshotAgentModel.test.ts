@@ -2,6 +2,8 @@ import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useUserStore } from '@/store/user';
+
 import { snapshotAgentModel, snapshotAgentReasoning } from './snapshotAgentModel';
 
 const agentMap: Record<string, any> = {};
@@ -50,6 +52,36 @@ describe('snapshotAgentModel', () => {
     // the effective model IS the default here, and the topic must keep it even
     // after the agent default later changes
     expect(snapshotAgentModel(id)).toEqual({ model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
+  });
+
+  // A member's pick lives in their preference, not the shared row; pinning the
+  // shared row sent every new topic back to the model they had switched away from.
+  it("snapshots a Workspace member's own pick instead of the shared default", () => {
+    useUserStore.setState({
+      workspaceUserPreference: {
+        agentModelOverrides: { 'workspace-public': { model: 'member-model', provider: 'member' } },
+      },
+    });
+    const id = seedAgent('workspace-public', {
+      model: 'shared-model',
+      provider: 'shared',
+      userId: 'author',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(snapshotAgentModel(id)).toEqual({ model: 'member-model', provider: 'member' });
+  });
+
+  it("ignores a member override on the caller's own personal agent", () => {
+    useUserStore.setState({
+      workspaceUserPreference: {
+        agentModelOverrides: { personal: { model: 'member-model', provider: 'member' } },
+      },
+    });
+    const id = seedAgent('personal', { model: 'own-model', provider: 'own' });
+
+    expect(snapshotAgentModel(id)).toEqual({ model: 'own-model', provider: 'own' });
   });
 
   it('snapshots the CLI default selection for a heterogeneous agent', () => {

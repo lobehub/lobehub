@@ -4,6 +4,7 @@ import {
   resolveHeterogeneousTopicRuntimeSnapshot,
 } from '@lobechat/types';
 
+import { resolveAgentConfig } from '@/services/chat/mecha';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
@@ -38,12 +39,18 @@ export const snapshotAgentModel = (
     );
   }
 
-  // Non-hetero: the effective model IS the agent default when nothing is pinned,
-  // so snapshotting the defaulted value is intended — it keeps the topic on the
-  // model it started with even after the agent default later changes.
+  // Non-hetero: snapshot the model an unpinned run would use, which is the
+  // caller's own pick for a public Workspace Agent in member-selection mode
+  // (`workspaceUserPreference.agentModelOverrides`), else the agent default.
+  // Reading the shared row here pinned every new topic of a Workspace member
+  // back to the shared default, discarding the model they had just picked.
+  // Snapshotting the defaulted value is intended: the topic keeps the model it
+  // started with even after the agent default later changes.
+  const { agentConfig } = resolveAgentConfig({ agentId });
   return {
-    model: agentByIdSelectors.getAgentModelById(agentId)(agentState),
-    provider: agentByIdSelectors.getAgentModelProviderById(agentId)(agentState),
+    model: agentConfig?.model || agentByIdSelectors.getAgentModelById(agentId)(agentState),
+    provider:
+      agentConfig?.provider || agentByIdSelectors.getAgentModelProviderById(agentId)(agentState),
   };
 };
 
