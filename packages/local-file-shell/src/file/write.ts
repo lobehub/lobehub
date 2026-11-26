@@ -1,9 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { describeDeviceHost } from '../deviceHost';
 import type { WriteFileParams, WriteFileResult } from '../types';
 import { verifyWrittenContent, withFileLock, writeFileAtomic } from './atomicWrite';
 import { resolveAgainstCwd } from './expandTilde';
+
+const PATH_ACCESS_CODES = new Set(['EACCES', 'ENOENT', 'ENOTDIR', 'EPERM']);
 
 export async function writeLocalFile({
   path: rawPath,
@@ -28,7 +31,15 @@ export async function writeLocalFile({
 
       return { success: true };
     } catch (error) {
-      return { error: `Failed to write file: ${(error as Error).message}`, success: false };
+      const { code, message } = error as NodeJS.ErrnoException;
+      // Name the host and OS account on path-access failures so the model can
+      // tell an ordinary bad path from a device now running under another host
+      // or account (every path from the earlier account fails at once).
+      const where =
+        code && PATH_ACCESS_CODES.has(code)
+          ? `. This device is running on ${describeDeviceHost()}.`
+          : '';
+      return { error: `Failed to write file: ${message}${where}`, success: false };
     }
   });
 }

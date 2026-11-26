@@ -214,6 +214,26 @@ describe('LocalSystemExecutionRuntime.grepContent', () => {
   });
 });
 
+describe('LocalSystemExecutionRuntime.writeFile', () => {
+  it('reports a failed write with its real reason instead of UNKNOWN_EXEC_ERROR', async () => {
+    const reason =
+      "Failed to write file: ENOENT: no such file or directory, mkdir 'C:\\Users\\alice'. This device is running on WIN-1 (OS user Admin).";
+    const service = createService({
+      writeFile: vi.fn().mockResolvedValue({ error: reason, success: false }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.writeFile({
+      content: 'x',
+      path: 'C:\\Users\\alice\\project\\build.js',
+    });
+
+    expect(output.success).toBe(false);
+    expect(output.content).toBe(reason);
+    expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
+  });
+});
+
 describe('LocalSystemExecutionRuntime.readFile', () => {
   it('routes uploaded image results onto state.images', async () => {
     const service = createService({
