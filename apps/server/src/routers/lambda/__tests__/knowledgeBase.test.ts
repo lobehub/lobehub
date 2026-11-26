@@ -12,6 +12,7 @@ const publicMemberKnowledgeBase = () => ({
 });
 
 const routerMocks = vi.hoisted(() => ({
+  scrubDeletedContextSources: vi.fn(),
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertKnowledgeBaseBrowsable: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
@@ -47,6 +48,10 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', async () => {
       }),
   };
 });
+
+vi.mock('@/server/services/contextReplay/scrub', () => ({
+  scrubDeletedContextSources: routerMocks.scrubDeletedContextSources,
+}));
 
 vi.mock('@/server/featureFlags', () => ({
   getServerFeatureFlagsStateFromRuntimeConfig: agentSpaceMocks.flags,
@@ -399,6 +404,19 @@ describe('knowledgeBaseRouter', () => {
         'kb-1',
         expect.any(Boolean),
       );
+    });
+
+    it('clears the library and its removed files from stored model input', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
+      mockKnowledgeBaseModelDeleteWithFiles.mockResolvedValue({
+        deletedFiles: [{ id: 'file-1', url: null }],
+      });
+
+      await caller.removeKnowledgeBase({ id: 'kb-1' });
+
+      expect(routerMocks.scrubDeletedContextSources).toHaveBeenCalledWith(expect.anything(), {
+        ids: ['knowledgeBase:kb-1', 'file:file-1'],
+      });
     });
 
     it("refuses to delete an agent's dedicated space", async () => {

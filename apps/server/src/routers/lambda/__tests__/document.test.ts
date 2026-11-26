@@ -6,6 +6,7 @@ import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { TransferErrorCode } from '@/types/transferError';
 
 const mocks = vi.hoisted(() => ({
+  scrubDeletedContextSources: vi.fn(),
   dropPageRooms: vi.fn(),
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertCanEditResource: vi.fn(),
@@ -34,6 +35,9 @@ vi.mock('@/business/server/document-mention/notifyActivity', () => ({
   notifyDocumentMention: mocks.notifyDocumentMention,
 }));
 vi.mock('@/server/services/pageCollab/notify', () => ({ dropPageRooms: mocks.dropPageRooms }));
+vi.mock('@/server/services/contextReplay/scrub', () => ({
+  scrubDeletedContextSources: mocks.scrubDeletedContextSources,
+}));
 
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: { getWorkspaceUsersPermissions: mocks.getWorkspaceUsersPermissions },
@@ -243,6 +247,22 @@ describe('documentRouter transferDocument', () => {
 
     expect(mocks.deleteDocument).toHaveBeenCalledWith('doc-1');
     expect(mocks.assertCanPerformResourceAction).not.toHaveBeenCalled();
+  });
+
+  it('clears a deleted document from stored model input', async () => {
+    const caller = documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+    await caller.deleteDocument({ id: 'doc-1' });
+
+    expect(mocks.scrubDeletedContextSources).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'member-1', workspaceId: 'ws-1' }),
+      { ids: ['document:doc-1', 'document-read:doc-1'] },
+    );
   });
 });
 

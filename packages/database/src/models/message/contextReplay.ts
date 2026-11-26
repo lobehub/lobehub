@@ -4,6 +4,21 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { messageContextSnapshots, messages } from '../../schemas';
 import { MessageScope } from './scope';
 
+export const scrubContextReplaySnapshot = (
+  snapshot: ContextReplaySnapshot,
+  matches: (source: string) => boolean,
+): ContextReplaySnapshot => {
+  const { system, ...rest } = snapshot;
+  const renderedDocument = snapshot.sourceIds.some(
+    (source) => matches(source) && source.startsWith('document'),
+  );
+  return {
+    ...rest,
+    changes: snapshot.changes.filter((change) => !change.sourceIds.some(matches)),
+    ...(system && !renderedDocument && { system }),
+  };
+};
+
 /** Author-only storage; never joined into ordinary message queries. */
 export class MessageContextReplays extends MessageScope {
   private visibleMessages = (ids: string[]) =>
@@ -89,6 +104,51 @@ export class MessageContextReplays extends MessageScope {
       .innerJoin(messages, eq(messages.id, messageContextSnapshots.messageId))
       .where(and(this.visibleMessages(ids), eq(messageContextSnapshots.userId, this.userId)));
     return Object.fromEntries(rows.map((row) => [row.id, row.snapshot]));
+  };
+
+  // Source ids stay so later access checks still see the dependency; only rendered text goes.
+  scrubContextReplaySources = async ({
+    ids = [],
+    prefixes = [],
+  }: {
+    ids?: string[];
+    prefixes?: string[];
+  }) => {
+    if (!ids.length && !prefixes.length) return 0;
+    const idSet = new Set(ids);
+    const matches = (source: string) =>
+      idSet.has(source) || prefixes.some((prefix) => source.startsWith(prefix));
+    const conditions = [
+      ...(ids.length ? [sql`source.value in ${ids}`] : []),
+      ...prefixes.map((prefix) => sql`starts_with(source.value, ${prefix})`),
+    ];
+    const scope = this.workspaceId
+      ? or(
+          eq(messageContextSnapshots.userId, this.userId),
+          eq(messageContextSnapshots.workspaceId, this.workspaceId),
+        )
+      : eq(messageContextSnapshots.userId, this.userId);
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: messageContextSnapshots.messageId,
+          snapshot: messageContextSnapshots.snapshot,
+        })
+        .from(messageContextSnapshots)
+        .where(
+          and(
+            scope,
+            sql`exists (select 1 from jsonb_array_elements_text(${messageContextSnapshots.snapshot} -> 'sourceIds') as source(value) where ${sql.join(conditions, sql` or `)})`,
+          ),
+        )
+        .for('update');
+      for (const row of rows)
+        await tx
+          .update(messageContextSnapshots)
+          .set({ snapshot: scrubContextReplaySnapshot(row.snapshot, matches) })
+          .where(eq(messageContextSnapshots.messageId, row.id));
+      return rows.length;
+    });
   };
 
   commitContextReplay = async (

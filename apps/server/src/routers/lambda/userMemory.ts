@@ -33,6 +33,7 @@ import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { scrubDeletedContextSources } from '@/server/services/contextReplay/scrub';
 import {
   buildWorkflowPayloadInput,
   MemoryExtractionWorkflowService,
@@ -117,7 +118,9 @@ export const userMemoryRouter = router({
   deleteActivity: userMemoryWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.activityModel.delete(input.id);
+      const result = await ctx.activityModel.delete(input.id);
+      await scrubDeletedContextSources(ctx, { ids: [`memory:activities:${input.id}`] });
+      return result;
     }),
 
   /**
@@ -127,12 +130,16 @@ export const userMemoryRouter = router({
    */
   deletePersona: personalUserMemoryWriteProcedure.mutation(async ({ ctx }) => {
     await ctx.personaModel.deletePersona();
+    await scrubDeletedContextSources(ctx, { prefixes: ['memory-persona:'] });
     return { success: true };
   }),
 
   deleteAll: userMemoryWriteProcedure.mutation(async ({ ctx }) => {
     await ctx.userMemoryModel.deleteAll();
     await ctx.personaModel.deletePersona();
+    await scrubDeletedContextSources(ctx, {
+      prefixes: ['memory:', 'memory-persona:', 'unverified-memory:'],
+    });
 
     // Reset all topics' userMemoryExtractStatus so they can be re-extracted
     // after memories are purged. Without this, isTopicExtracted() skips them
@@ -147,27 +154,35 @@ export const userMemoryRouter = router({
   deleteContext: userMemoryWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.contextModel.delete(input.id);
+      const result = await ctx.contextModel.delete(input.id);
+      await scrubDeletedContextSources(ctx, { ids: [`memory:contexts:${input.id}`] });
+      return result;
     }),
 
   // ============ Experience CRUD ============
   deleteExperience: userMemoryWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.experienceModel.delete(input.id);
+      const result = await ctx.experienceModel.delete(input.id);
+      await scrubDeletedContextSources(ctx, { ids: [`memory:experiences:${input.id}`] });
+      return result;
     }),
 
   deleteIdentity: userMemoryWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.userMemoryModel.removeIdentityEntry(input.id);
+      const result = await ctx.userMemoryModel.removeIdentityEntry(input.id);
+      await scrubDeletedContextSources(ctx, { ids: [`memory:identities:${input.id}`] });
+      return result;
     }),
 
   // ============ Preference CRUD ============
   deletePreference: userMemoryWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.preferenceModel.delete(input.id);
+      const result = await ctx.preferenceModel.delete(input.id);
+      await scrubDeletedContextSources(ctx, { ids: [`memory:preferences:${input.id}`] });
+      return result;
     }),
 
   getActivities: userMemoryProcedure.query(async ({ ctx }) => {
