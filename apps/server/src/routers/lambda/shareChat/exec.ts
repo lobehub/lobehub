@@ -147,13 +147,14 @@ export const execRouter = router({
         monthlySpendLimit: share.shareConfig.monthlySpendLimit,
         ownerUserId: share.ownerId,
         shareId: share.shareId,
+        tipsEnabled: share.shareConfig.tipsEnabled,
         visitorUserId: ctx.userId,
         workspaceId: share.workspaceId ?? undefined,
       });
       if (!spendGate.allowed) {
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
-          message: ChatErrorType.ShareSpendLimitExceeded,
+          message: spendGate.errorType ?? ChatErrorType.ShareSpendLimitExceeded,
         });
       }
 

@@ -32,6 +32,7 @@ import { Trash2Icon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { loadTrashPurgeNotice } from '@/business/client/loadTrashPurgeNotice';
 import Avatar from '@/components/Avatar';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -278,10 +279,24 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
     toast.success(t('trash.restore.success'));
   };
 
-  const handlePurge = (item: TrashItem) => {
+  const handlePurge = async (item: TrashItem) => {
+    let notice: Awaited<ReturnType<typeof loadTrashPurgeNotice>>;
+    try {
+      notice = await loadTrashPurgeNotice({ isWorkspace, target: { items: [item] } });
+    } catch {
+      reportFailure();
+      return;
+    }
     confirmModal({
       cancelText: tc('cancel'),
-      content: t('trash.purgeConfirm.content', { title: item.title || t('trash.untitled') }),
+      content: (
+        <Flexbox gap={8}>
+          <span>
+            {t('trash.purgeConfirm.content', { title: item.title || t('trash.untitled') })}
+          </span>
+          {notice}
+        </Flexbox>
+      ),
       okButtonProps: { danger: true },
       okText: t('trash.actions.purge'),
       onOk: async () => {
@@ -302,11 +317,18 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
     });
   };
 
-  const handleEmpty = () => {
+  const handleEmpty = async () => {
     // Fixed for the whole sweep: switching the view while it runs never widens it.
     const view: TrashViewFilter = { ...filter };
     const count = filterCount ?? 0;
     const filtered = view.projectId !== undefined || !!view.resourceType;
+    let notice: Awaited<ReturnType<typeof loadTrashPurgeNotice>>;
+    try {
+      notice = await loadTrashPurgeNotice({ isWorkspace, target: { view } });
+    } catch {
+      reportFailure();
+      return;
+    }
     confirmModal({
       cancelText: tc('cancel'),
       content: (
@@ -320,6 +342,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
               })}
             </Text>
           )}
+          {notice}
         </Flexbox>
       ),
       okButtonProps: { danger: true },
@@ -470,7 +493,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
               disabled={busy}
               size={'small'}
               type={'text'}
-              onClick={() => handlePurge(item)}
+              onClick={() => void handlePurge(item)}
             >
               {t('trash.actions.purge')}
             </Button>
@@ -551,7 +574,7 @@ const TrashList = ({ isWorkspace = false }: TrashListProps) => {
             disabled={!canEmpty}
             icon={Trash2Icon}
             size={mobile ? 'small' : undefined}
-            onClick={handleEmpty}
+            onClick={() => void handleEmpty()}
           >
             {emptyLabel(filter, filterCount)}
           </Button>

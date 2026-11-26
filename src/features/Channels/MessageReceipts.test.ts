@@ -30,6 +30,12 @@ describe('receiptErrorText', () => {
     ).toBe('receipt.errorShareMessageLimit');
   });
 
+  it('explains a shared Agent that used up its funds for visitor replies', () => {
+    expect(
+      receiptErrorText({ errorMessage: 'out of funds', errorType: 'ShareFundingExhausted' }, t),
+    ).toBe('receipt.errorShareFundingExhausted');
+  });
+
   it('shows the recorded reason, or the fallback when none was recorded', () => {
     expect(receiptErrorText({ errorMessage: ' boom ', errorType: null }, t)).toBe('boom');
     expect(receiptErrorText({ errorMessage: null, errorType: 'AgentRuntimeError' }, t)).toBe(

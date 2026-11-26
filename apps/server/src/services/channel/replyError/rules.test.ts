@@ -214,6 +214,27 @@ describe('rule-based reply error cards', () => {
     expect(card.errorType).toBe('ShareSpendLimitExceeded');
   });
 
+  it("points a shared Agent's visitor to a tip once its visitor funds ran out", () => {
+    const card = ruleBasedReplyError(
+      facts(
+        {
+          error: {
+            message: 'This shared Agent has run out of funds for visitor replies',
+            type: 'ShareFundingExhausted',
+          },
+        },
+        { share: { showErrorDetails: false } },
+        { acceptedAt: null },
+      ),
+      'zh-CN',
+      NOW,
+    );
+    expect(card.kind).toBe('share_funding');
+    expect(card.actions).toEqual([]);
+    expect(card.summary).toBe('Coder 的访客额度已用完，这次没有回复。打赏后即可继续使用。');
+    expect(card.errorType).toBe('ShareFundingExhausted');
+  });
+
   it("explains a shared Agent's message limit without offering a doomed resume", () => {
     const card = ruleBasedReplyError(
       facts(
