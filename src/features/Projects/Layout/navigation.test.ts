@@ -4,6 +4,7 @@ import {
   getProjectAcceptancePath,
   getProjectAgentPath,
   getProjectDashboardPath,
+  getProjectDraftPath,
   getProjectGoalsPath,
   getProjectHomePath,
   getProjectLibraryPath,
@@ -71,5 +72,14 @@ describe('toProjectPathname', () => {
     expect(toProjectPathname('/acme/project/prj_1')).toBe('/project/prj_1');
     expect(toProjectPathname('/acme/project/prj_1/tasks')).toBe('/project/prj_1/tasks');
     expect(toProjectPathname('/project/prj_1/goals')).toBe('/project/prj_1/goals');
+  });
+});
+
+describe('getProjectDraftPath', () => {
+  it('carries the agent, the folder and Auto in the route', () => {
+    expect(getProjectDraftPath('prj_1', 'agt_1')).toBe('/project/prj_1/topic?agent=agt_1');
+    expect(getProjectDraftPath('prj_1', 'agt_1', 'pwd_1', true)).toBe(
+      '/project/prj_1/topic?agent=agt_1&dir=pwd_1&auto=1',
+    );
   });
 });

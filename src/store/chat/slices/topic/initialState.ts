@@ -4,9 +4,14 @@ import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
 import type { TopicShareEntry } from './projection';
 
 /** The project (and directory, when there is one) a blank conversation was opened in. */
+/**
+ * `auto`: nothing was picked by hand — the draft sits on the first runner in
+ * the project's order that can take it, and follows that order (see
+ * `useBlankProjectAuto`). Client-only; never sent.
+ */
 export type PendingNewTopicDirectory =
-  | { agentId: string; projectId?: undefined; projectWorkingDirectoryId: string }
-  | { agentId: string; projectId: string; projectWorkingDirectoryId?: undefined };
+  | { agentId: string; auto?: boolean; projectId?: undefined; projectWorkingDirectoryId: string }
+  | { agentId: string; auto?: boolean; projectId: string; projectWorkingDirectoryId?: undefined };
 
 /**
  * Unified topic data structure for each agent: the generic local-first paged

@@ -38,11 +38,14 @@ export const canStageDraftOn = (
  */
 export const startProjectTopicDraft = ({
   agentId,
+  auto,
   directoryId,
   navigate,
   projectId,
 }: {
   agentId: string;
+  /** Picked by the project's runner order, not by hand: the draft keeps following it. */
+  auto?: boolean;
   /** Omitted when the agent has no directory it can run in: conversation-only. */
   directoryId?: string;
   navigate: (path: string) => void;
@@ -56,7 +59,9 @@ export const startProjectTopicDraft = ({
     skipRefreshMessage: true,
   });
   chat.setPendingNewTopicDirectory(
-    directoryId ? { agentId, projectWorkingDirectoryId: directoryId } : { agentId, projectId },
+    directoryId
+      ? { agentId, projectWorkingDirectoryId: directoryId, ...(auto && { auto }) }
+      : { agentId, projectId, ...(auto && { auto }) },
   );
-  navigate(getProjectDraftPath(projectId, agentId, directoryId));
+  navigate(getProjectDraftPath(projectId, agentId, directoryId, auto));
 };
