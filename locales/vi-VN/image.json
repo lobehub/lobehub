@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Hạt giống",
   "config.seed.random": "Hạt giống ngẫu nhiên",
+  "config.size.autoByOpenAI": "Tự động (do OpenAI xác định)",
   "config.size.label": "Kích thước",
   "config.steps.label": "Số bước",
   "config.title": "Cấu hình",

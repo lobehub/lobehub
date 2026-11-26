@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "Geef commentaar op deze acceptatie en accepteer of stuur deze terug vanaf de voorbeeldpagina.",
   "consent.scope.acceptance-review-site": "Reageer op de beoordeling van deze site vanaf de site zelf, gedurende 8 uur",
   "consent.scope.email": "Toegang tot je e-mailadres",
+  "consent.scope.generation-read": "Bekijk je gegenereerde afbeeldingen, video's en audio",
+  "consent.scope.generation-write": "Genereer afbeeldingen, video's en audio en verwijder de resultaten, met gebruik van je quota",
   "consent.scope.offline_access": "Sta de applicatie toe om toegang te krijgen tot je gegevens",
   "consent.scope.openid": "Authenticeer met je LobeHub-account",
   "consent.scope.profile": "Toegang tot je basisprofielinformatie (naam, avatar, enz.)",

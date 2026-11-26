@@ -64,6 +64,37 @@ describe('SNAPSHOT_SCRIPT visibility', () => {
     expect(snapshot).toContain('checkbox "Remember me"');
   });
 
+  // Monaco's input is a 1×1 px mirror, so the size check left the editor with
+  // no ref and the only entry was its rendered lines with the line numbers.
+  it('lists a Monaco editor by its real input, with its code', () => {
+    const rect = Element.prototype.getBoundingClientRect as ReturnType<typeof vi.fn>;
+    rect.mockImplementation(function (this: Element) {
+      const size = this.tagName === 'TEXTAREA' ? 1 : 100;
+      return { bottom: size, height: size, left: 0, right: size, top: 0, width: size, x: 0, y: 0 };
+    });
+    const editor = {
+      getDomNode: () => document.querySelector('.monaco-editor'),
+      getModel: () => ({ getValue: () => 'const raw=false;\nexport default raw;\n' }),
+      getOption: () => false,
+    };
+    (window as any).monaco = {
+      editor: { EditorOption: { readOnly: 1 }, getEditors: () => [editor] },
+    };
+
+    const snapshot = snapshotOf(`
+      <div class="monaco-editor">
+        <div role="code">1 2 const raw=false;</div>
+        <textarea class="inputarea" role="textbox" aria-label="Editor content"></textarea>
+      </div>
+    `);
+    delete (window as any).monaco;
+
+    expect(snapshot).toBe(
+      '- textbox "Editor content" [ref=e1] [code-editor=monaco] [lines=3] [value="const raw=false; export default raw;"]',
+    );
+    expect((window as any).__lobeBrowserRefs.e1.tagName).toBe('TEXTAREA');
+  });
+
   it('lists the dialog once it is shown', () => {
     const snapshot = snapshotOf(`
       <div class="modal" style="opacity: 1">

@@ -187,6 +187,32 @@ describe('request validation', () => {
     expect(holder.calls).toEqual([]);
   });
 
+  it('takes images only in user messages, as an http(s) or base64 image data URL', async () => {
+    const image = (url: string) => ({ image_url: { url }, type: 'image_url' });
+    const user = (content: unknown) => ({ messages: [{ content, role: 'user' }], schema: SCHEMA });
+    const cases = [
+      user([]),
+      user([image('file:///etc/passwd')]),
+      user([image('data:text/html;base64,PGgxPg==')]),
+      user([image('data:image/png,not-base64')]),
+      user([{ image_url: { url: 'https://example.com/a.png' }, type: 'video_url' }]),
+      {
+        messages: [{ content: [image('https://example.com/a.png')], role: 'system' }],
+        schema: SCHEMA,
+      },
+      {
+        messages: [{ content: [image('https://example.com/a.png')], role: 'assistant' }],
+        schema: SCHEMA,
+      },
+    ];
+    for (const body of cases) {
+      const res = await post('objects', body, { key: KEYS.write });
+      expect(res.status).toBe(400);
+      expect((await json(res)).code).toBe('validation_error');
+    }
+    expect(holder.calls).toEqual([]);
+  });
+
   it('needs an object schema and rejects root keywords the runtime would drop', async () => {
     const cases = [
       { prompt: 'hi' },
@@ -322,5 +348,24 @@ describe('object generation', () => {
       expect(res.status).toBe(422);
       expect((await json(res)).code).toBe('unprocessable_entity');
     }
+  });
+
+  it('passes text and image parts of a user message through to the model', async () => {
+    const content = [
+      { text: 'What product is in this reference?', type: 'text' },
+      { image_url: { detail: 'low', url: 'https://example.com/hood.png' }, type: 'image_url' },
+      { image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' }, type: 'image_url' },
+    ];
+    const res = await post(
+      'objects',
+      { messages: [{ content, role: 'user' }], schema: SCHEMA, system: 'Name the product.' },
+      { key: KEYS.write },
+    );
+
+    expect(res.status).toBe(200);
+    expect(holder.calls[0].input.messages).toEqual([
+      { content: 'Name the product.', role: 'system' },
+      { content, role: 'user' },
+    ]);
   });
 });

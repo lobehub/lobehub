@@ -3,13 +3,14 @@ import type { LLMAttemptInput } from '@lobechat/agent-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
 import { RequestTrigger } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   initModelRuntimeFromDB,
   resolveProviderResponseApiMode,
   resolveServerModel,
 } from '@/server/modules/ModelRuntime';
+import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 
 import type { RuntimeExecutorContext } from '../context';
 import { ServerLLMTransport } from './ServerLLMTransport';
@@ -655,5 +656,178 @@ describe('ServerLLMTransport · provider Responses API preference', () => {
     });
 
     expect(chat.mock.calls[0][0].apiMode).toBe('responses');
+  });
+});
+
+describe('ServerLLMTransport.runAttempt · step deadline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the partial output when the call is stopped before the invocation is killed', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const chat = vi.fn(async (_payload, options) => {
+      await options.callback?.onThinking?.('Long reasoning');
+      await options.callback?.onText?.('Partial answer');
+      await new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason));
+      });
+      return new Response('');
+    });
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveServerModel).mockResolvedValue({ model: 'claude-opus', provider: 'lobehub' });
+
+    const transport = new ServerLLMTransport({
+      messageModel: { update },
+      operationId: 'op-1',
+      serverDB: {},
+      stepIndex: 0,
+      streamManager: {
+        publishStreamChunk: vi.fn().mockResolvedValue('chunk-id'),
+        publishStreamEvent: vi.fn().mockResolvedValue('event-id'),
+      },
+      toolExecutionService: {},
+      userId: 'user-1',
+    } as unknown as RuntimeExecutorContext);
+
+    const run = runWithInvocationDeadline(Date.now() + 100_000, () =>
+      transport.runAttempt({
+        assistantMessageId: 'msg-1',
+        attempt: 1,
+        context: {
+          messages: [{ content: 'Question', role: 'user' }],
+          modelParameters: {},
+          replayAssistantReasoning: false,
+          resolvedTools: {
+            enabledToolIds: [],
+            executorMap: {},
+            manifestMap: {},
+            promptManifestMap: {},
+            sourceMap: {},
+            tools: [],
+          },
+        },
+        events: [],
+        maxAttempts: 6,
+        model: 'claude-opus',
+        provider: 'lobehub',
+        state: {},
+      } as unknown as LLMAttemptInput),
+    );
+    await vi.advanceTimersByTimeAsync(70_000);
+    const execution = await run;
+
+    expect(execution).toMatchObject({ error: { errorType: 'LlmStepTimeout' }, ok: false });
+    expect(update).toHaveBeenCalledWith('msg-1', {
+      content: 'Partial answer',
+      metadata: { interruptedMidStream: true },
+      reasoning: { content: 'Long reasoning' },
+    });
+  });
+});
+
+describe('ServerLLMTransport.runAttempt · step output cap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createAttemptCtx = () =>
+    ({
+      operationId: 'op-1',
+      serverDB: {},
+      stepIndex: 0,
+      streamManager: {
+        publishStreamChunk: vi.fn().mockResolvedValue('chunk-id'),
+        publishStreamEvent: vi.fn().mockResolvedValue('event-id'),
+      },
+      toolExecutionService: {},
+      userId: 'user-1',
+    }) as unknown as RuntimeExecutorContext;
+
+  const runWith = async ({
+    cards,
+    modelParameters = { max_tokens: undefined },
+  }: {
+    cards: Array<Record<string, unknown>>;
+    modelParameters?: Record<string, unknown>;
+  }) => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+
+    await new ServerLLMTransport(createAttemptCtx()).runAttempt({
+      assistantMessageId: 'msg-1',
+      attempt: 1,
+      context: {
+        messages: [{ content: 'Question', role: 'user' }],
+        modelParameters,
+        replayAssistantReasoning: false,
+        resolvedTools: {
+          enabledToolIds: [],
+          executorMap: {},
+          manifestMap: {},
+          promptManifestMap: {},
+          sourceMap: {},
+          tools: [],
+        },
+      },
+      events: [],
+      maxAttempts: 6,
+      model: 'claude-opus-5-5',
+      provider: 'lobehub',
+      state: {
+        modelRuntimeConfig: {
+          model: 'claude-opus-5-5',
+          modelFacts: { cards, model: 'claude-opus-5-5', provider: 'lobehub' },
+          provider: 'lobehub',
+        },
+      },
+    } as unknown as LLMAttemptInput);
+
+    return chat.mock.calls[0][0];
+  };
+
+  it('caps a 128k-output model at 64k when the agent sets no limit', async () => {
+    // The agent config carries `max_tokens: undefined` when the limit is off,
+    // which must not clear the cap.
+    const payload = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'lobehub' }],
+    });
+
+    expect(payload.max_tokens).toBe(64_000);
+  });
+
+  it('falls back to the canonical card when the provider card has no window', async () => {
+    const payload = await runWith({
+      cards: [
+        { id: 'claude-opus-5-5', providerId: 'lobehub' },
+        { id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'anthropic' },
+      ],
+    });
+
+    expect(payload.max_tokens).toBe(64_000);
+  });
+
+  it('leaves models with a smaller or unknown window on the provider default', async () => {
+    const small = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 32_000, providerId: 'lobehub' }],
+    });
+    const unknown = await runWith({ cards: [] });
+
+    expect(small.max_tokens).toBeUndefined();
+    expect(unknown.max_tokens).toBeUndefined();
+  });
+
+  it('keeps the limit the user configured', async () => {
+    const payload = await runWith({
+      cards: [{ id: 'claude-opus-5-5', maxOutput: 128_000, providerId: 'lobehub' }],
+      modelParameters: { max_tokens: 100_000 },
+    });
+
+    expect(payload.max_tokens).toBe(100_000);
   });
 });

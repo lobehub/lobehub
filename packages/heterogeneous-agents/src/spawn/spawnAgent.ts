@@ -28,6 +28,7 @@ import {
   spawnTraeAcpAgent,
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { CLAUDE_CODE_DISALLOWED_TOOLS } from './claudeCodeDisallowedTools';
 import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
@@ -221,14 +222,8 @@ export interface SpawnAgentHandle {
  * sandbox CLI may run as root and skip partials — so they're composed on top
  * of this base.
  *
- * `AskUserQuestion` is disabled because CC's CLI self-injects an
- * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
- * can surface the questions, so the model falls back to plain-text prompting
- * anyway. `Monitor` and `ScheduleWakeup` are also disabled here because they
- * can hit the same stuck wakeup path in both desktop and sandbox runs.
+ * See `CLAUDE_CODE_DISALLOWED_TOOLS` for why each built-in tool is disabled.
  */
-const CLAUDE_CODE_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
-
 export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',

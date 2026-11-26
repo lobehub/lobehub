@@ -173,4 +173,22 @@ describe('Channel completion of a wake that may stay silent', () => {
     expect(findLatest).not.toHaveBeenCalled();
     expect(executions.publish).toHaveBeenCalledWith('channel', 'job', [surface]);
   });
+
+  it('leaves out of the reply the cards the run already posted elsewhere with postMessage', async () => {
+    const card = (surfaceId: string) => ({
+      catalogId: 'c',
+      fallback: surfaceId,
+      operations: [{}],
+      surfaceId,
+      version: '1.0',
+    });
+    toolStates.mockImplementation(async ({ apiName }: { apiName: string }) =>
+      apiName === 'postMessage'
+        ? [{ cards: 1, surfaceIds: ['posted'] }]
+        : [{ surface: card('posted') }, { surface: card('kept') }],
+    );
+    findLatest.mockResolvedValue({ content: 'Done.' });
+    await coordinator({ wake: null }).complete('channel', 'job', 'op');
+    expect(executions.publish).toHaveBeenCalledWith('channel', 'job', [card('kept')]);
+  });
 });

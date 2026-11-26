@@ -13,6 +13,7 @@ import {
   channelMessages,
   channels,
   messages,
+  tasks,
   topics,
   users,
 } from '@/database/schemas';
@@ -62,11 +63,19 @@ const task = (delivery?: unknown) => ({
   identifier: 'T-1',
 });
 
-/** A finished task run in its own topic; `drawn` adds a card step before its final answer. */
-const finishedRun = async (operationId: string, content: string | null, drawn = false) => {
+/**
+ * A finished run in the task's topic; `drawn` adds a card step before its final answer. Started by
+ * the task runner unless `trigger` says otherwise (`chat`: a person's follow-up in that topic).
+ */
+const finishedRun = async (
+  operationId: string,
+  content: string | null,
+  drawn = false,
+  trigger = 'task',
+) => {
   await db
     .insert(agentOperations)
-    .values({ agentId, id: operationId, status: 'done', topicId, userId });
+    .values({ agentId, id: operationId, status: 'done', topicId, trigger, userId });
   const messageModel = new MessageModel(db, userId);
   if (drawn) {
     const step = await messageModel.create({
@@ -190,6 +199,62 @@ describe('postTaskRunToChannel', () => {
       await postTaskRunToChannel(db, { operationId: 'op_gone', scope, task: task({ channelId }) }),
     ).toBe('unavailable');
     expect(await agentPosts()).toEqual([]);
+  });
+
+  it("does not post a person's follow-up in the run's topic, only the task's own runs", async () => {
+    await finishedRun('op_follow_up', 'Here is what I found for you.', true, 'chat');
+
+    expect(
+      await postTaskRunToChannel(db, {
+        operationId: 'op_follow_up',
+        scope,
+        task: task({ channelId }),
+      }),
+    ).toBe('not-delivered');
+    expect(await agentPosts()).toEqual([]);
+  });
+
+  it('records a refused post on the task, and clears it once a post lands', async () => {
+    const [row] = await db
+      .insert(tasks)
+      .values({
+        config: { delivery: { channelId, threadId: null } },
+        createdByUserId: userId,
+        identifier: 'T-9',
+        instruction: 'Daily report',
+        seq: 9,
+      })
+      .returning();
+    const stored = async () => (await db.select().from(tasks).where(eq(tasks.id, row.id)))[0];
+
+    await db
+      .update(channelMembers)
+      .set({ config: { muted: true } })
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.agentId, agentId)));
+    await finishedRun('op_muted', 'Report');
+    expect(await postTaskRunToChannel(db, { operationId: 'op_muted', scope, task: row })).toBe(
+      'unavailable',
+    );
+    const failed = await stored();
+    expect(failed.context).toMatchObject({
+      delivery: {
+        lastError: {
+          at: expect.any(String),
+          code: 'channel_unavailable',
+          message: 'The Agent is muted in this Channel',
+        },
+      },
+    });
+
+    await db
+      .update(channelMembers)
+      .set({ config: {} })
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.agentId, agentId)));
+    await finishedRun('op_back', 'Report');
+    expect(await postTaskRunToChannel(db, { operationId: 'op_back', scope, task: failed })).toBe(
+      'posted',
+    );
+    expect((await stored()).context).toMatchObject({ delivery: { lastError: null } });
   });
 });
 

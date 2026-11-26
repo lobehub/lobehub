@@ -1,34 +1,35 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
+import {
+  A2UI_DOCS_TOOL_DESCRIPTION,
+  A2UI_DOCS_TOOL_PARAMETERS,
+  A2UI_TOOL_DESCRIPTION,
+  A2UI_TOOL_META,
+  A2UI_TOOL_PARAMETERS,
+} from '@lobehub/a2ui/tool';
 
 import { systemPrompt } from './systemRole';
 import { A2uiApiName, A2uiIdentifier } from './types';
 
+/**
+ * The card tool as `@lobehub/a2ui` defines it: `renderUI` draws a card, and `readCardDocs` reads
+ * the full schema of the components the system prompt only indexes (progressive disclosure).
+ */
 export const A2uiManifest: BuiltinToolManifest = {
   api: [
     {
-      description:
-        'Draw a card in the conversation from A2UI 1.0 messages for one surface: createSurface, updateComponents (flat components with ids, root is a Card) and optionally updateDataModel. Mostly for showing information visually (reports, digests, metrics, charts, status lists); also for multi-field input. Not for prose. Invalid cards come back with errors to fix.',
+      description: A2UI_TOOL_DESCRIPTION,
       name: A2uiApiName.renderUI,
-      parameters: {
-        properties: {
-          operations: {
-            description:
-              'The A2UI messages, in order. Each is an object with "version": "1.0" and one of createSurface, updateComponents, updateDataModel, all naming the same surfaceId.',
-            items: { type: 'object' },
-            type: 'array',
-          },
-        },
-        required: ['operations'],
-        type: 'object',
-      },
+      parameters: A2UI_TOOL_PARAMETERS,
+    },
+    {
+      description: A2UI_DOCS_TOOL_DESCRIPTION,
+      name: A2uiApiName.readCardDocs,
+      parameters: A2UI_DOCS_TOOL_PARAMETERS,
+      renderDisplayControl: 'collapsed',
     },
   ],
   identifier: A2uiIdentifier,
-  meta: {
-    avatar: '🧩',
-    description: 'Answer with visual cards: reports, metrics, charts, status lists and forms',
-    title: 'Cards',
-  },
+  meta: { ...A2UI_TOOL_META },
   systemRole: systemPrompt,
   type: 'builtin',
 };

@@ -1,15 +1,20 @@
 'use client';
 
 import {
+  ActionIcon,
   // oxlint-disable-next-line stylex-migration/no-emotion-styles -- media inside markdown, document and video evidence renderers
   createStaticStyles,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { Maximize2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { sx } from '@/styles/sx';
+
+import { EvidenceComparisonFullscreen } from './EvidenceComparisonFullscreen';
 
 /** The `metadata.comparison` an evidence artifact may carry (authored at ingest). */
 export interface EvidenceComparisonMeta {
@@ -65,6 +70,7 @@ const styles = stylex.create({
      halves — the 1px background seam is the divider in either direction, which
      keeps the split correct when the grid collapses to one column. */
   card: {
+    position: 'relative',
     overflow: 'hidden',
     display: 'grid',
     gridTemplateColumns: {
@@ -117,6 +123,24 @@ const styles = stylex.create({
   /* The two captions are themselves a before/after contrast, so they must stay
      readable side by side — wrap rather than ellipsize. */
   caption: { minWidth: '0', opacity: 0.85 },
+  /* Room for the full-screen button in the card's top-right corner. Either band
+     can sit there (after when side by side, before when stacked or on a phone). */
+  labelWithAction: { paddingInlineEnd: '40px' },
+  fullscreenButton: {
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockStart: '4px',
+    insetInlineEnd: '6px',
+  },
+  /* With no caption band the button lies on the picture, so it needs its own surface. */
+  fullscreenButtonFloating: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
   content: { flex: '1', minWidth: '0' },
 });
 
@@ -163,6 +187,11 @@ export interface EvidenceComparisonSide {
   /** Caption in the tinted band — the comparison label, or the evidence description. */
   caption?: string;
   content: ReactNode;
+  /**
+   * The full image URL when this side is a picture (screenshot / gif). When both
+   * sides have one, the card offers a full-screen, synced-zoom comparison.
+   */
+  imageSrc?: string;
 }
 
 interface EvidenceComparisonCardProps {
@@ -175,30 +204,86 @@ interface EvidenceComparisonCardProps {
  * The fused before/after card shared by the verify report and the acceptance
  * union — one implementation so the two surfaces can't drift apart.
  */
+const ComparisonBand = ({
+  caption,
+  role,
+  withAction,
+}: {
+  caption: string;
+  role: 'after' | 'before';
+  withAction?: boolean;
+}) => (
+  <div
+    {...stylex.props(
+      styles.label,
+      role === 'before' ? styles.labelBefore : styles.labelAfter,
+      withAction && styles.labelWithAction,
+    )}
+  >
+    <span {...stylex.props(styles.caption)}>{caption}</span>
+  </div>
+);
+
+/**
+ * The fused before/after card shared by the verify report and the acceptance
+ * union — one implementation so the two surfaces can't drift apart.
+ */
 export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
   ({ after, before, layout = 'horizontal' }) => {
+    const { t } = useTranslation('verify');
+    const cardRef = useRef<HTMLDivElement>(null);
+    const [fullscreen, setFullscreen] = useState(false);
+    const closeFullscreen = useCallback(() => setFullscreen(false), []);
+    const canFullscreen = Boolean(before.imageSrc && after.imageSrc);
+    const sides = [
+      ['before', before],
+      ['after', after],
+    ] as const;
+
     return (
-      <div {...stylex.props(styles.card, layout === 'vertical' && styles.cardVertical)}>
-        {(
-          [
-            ['before', before],
-            ['after', after],
-          ] as const
-        ).map(([role, side]) => (
+      <div
+        ref={cardRef}
+        tabIndex={-1}
+        {...stylex.props(styles.card, layout === 'vertical' && styles.cardVertical)}
+      >
+        {canFullscreen && (
+          <ActionIcon
+            aria-label={t('report.evidence.comparison.fullscreen')}
+            icon={Maximize2}
+            size={'small'}
+            title={t('report.evidence.comparison.fullscreen')}
+            {...stylex.props(
+              styles.fullscreenButton,
+              !(before.caption && after.caption) && styles.fullscreenButtonFloating,
+            )}
+            onClick={() => setFullscreen(true)}
+          />
+        )}
+        {sides.map(([role, side]) => (
           <div {...stylex.props(styles.side)} key={role}>
             {side.caption && (
-              <div
-                {...stylex.props(
-                  styles.label,
-                  role === 'before' ? styles.labelBefore : styles.labelAfter,
-                )}
-              >
-                <span {...stylex.props(styles.caption)}>{side.caption}</span>
-              </div>
+              <ComparisonBand caption={side.caption} role={role} withAction={canFullscreen} />
             )}
             <div {...sx(styles.content, fallback.content)}>{side.content}</div>
           </div>
         ))}
+        {fullscreen && (
+          <EvidenceComparisonFullscreen
+            layout={layout}
+            returnFocusRef={cardRef}
+            after={{
+              alt: after.caption ?? t('report.evidence.comparison.after'),
+              band: after.caption && <ComparisonBand caption={after.caption} role={'after'} />,
+              src: after.imageSrc!,
+            }}
+            before={{
+              alt: before.caption ?? t('report.evidence.comparison.before'),
+              band: before.caption && <ComparisonBand caption={before.caption} role={'before'} />,
+              src: before.imageSrc!,
+            }}
+            onClose={closeFullscreen}
+          />
+        )}
       </div>
     );
   },

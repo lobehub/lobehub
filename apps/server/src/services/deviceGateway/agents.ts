@@ -11,8 +11,6 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
-  AntigravityQuotaParams,
-  AntigravityQuotaSnapshot,
   ClaudeCodeAccountRouting,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
@@ -74,27 +72,6 @@ export function codexQuota(
     env: params.env,
     force: params.force,
   });
-}
-
-/** Native agy quota; relay only, without quota-history ingestion. */
-export function antigravityQuota(
-  getClient: DeviceClientGetter,
-  params: AntigravityQuotaParams & {
-    deviceId: string;
-    userId: string;
-    workspaceId?: string;
-  },
-) {
-  return invokeDeviceRead<AntigravityQuotaSnapshot>(
-    getClient,
-    'getAntigravityQuota',
-    { ...params, timeout: 30_000 },
-    {
-      command: params.command,
-      env: params.env,
-      force: params.force,
-    },
-  );
 }
 
 /** Kimi Code subscription quota sampled from the login on a remote device. */
