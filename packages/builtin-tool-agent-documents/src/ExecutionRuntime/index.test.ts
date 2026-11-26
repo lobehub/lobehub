@@ -783,4 +783,65 @@ describe('AgentDocumentsExecutionRuntime', () => {
       expect(modifyNodes).not.toHaveBeenCalled();
     });
   });
+
+  // maxTokens/priority were accepted on a progressive document and the
+  // result read as plain success, yet nothing was ever injected. The result now
+  // reports the stored mode, and `mode` reaches the service.
+  describe('updateLoadRule', () => {
+    const DOC_ID = '6740f044-b58b-47eb-bdc0-21ade6c85eb2';
+
+    it('reports that a progressive document stays out of context', async () => {
+      const updateLoadRule = vi.fn().mockResolvedValue({
+        documentId: 'docs_1',
+        id: DOC_ID,
+        policy: { context: { maxTokens: 900, priority: 2 } },
+        policyLoad: 'progressive',
+        title: 'Style guide',
+      });
+      const runtime = createRuntime({ updateLoadRule });
+
+      const result = await runtime.updateLoadRule(
+        { id: DOC_ID, rule: { maxTokens: 900, priority: 2 } },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Load mode is "progressive"');
+      expect(result.content).toContain('its content is not injected automatically');
+      expect(result.content).toContain(
+        'maxTokens and priority take effect only after setting rule.mode to "always".',
+      );
+      expect(result.state).toEqual({
+        applied: true,
+        policyLoad: 'progressive',
+        rule: { maxTokens: 900, priority: 2 },
+      });
+    });
+
+    it('forwards mode and reports the stored cap of an always-loaded document', async () => {
+      const updateLoadRule = vi.fn().mockResolvedValue({
+        documentId: 'docs_1',
+        id: DOC_ID,
+        policy: { context: { maxTokens: 900, priority: 2 } },
+        policyLoad: 'always',
+        title: 'Style guide',
+      });
+      const runtime = createRuntime({ updateLoadRule });
+
+      const result = await runtime.updateLoadRule(
+        { id: DOC_ID, rule: { mode: 'always' } },
+        { agentId: 'agent-1' },
+      );
+
+      expect(updateLoadRule).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        id: DOC_ID,
+        rule: { mode: 'always' },
+      });
+      expect(result.content).toContain(
+        'Load mode is now "always": its full content is injected into this agent\'s context on every later model call, truncated to about 900 tokens, priority 2 (lower loads first).',
+      );
+      expect(result.state?.policyLoad).toBe('always');
+    });
+  });
 });

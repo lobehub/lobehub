@@ -1,4 +1,5 @@
 import type { DocumentLoadFormat, DocumentLoadRule } from '@lobechat/agent-templates';
+import type { AgentDocumentToolLoadMode } from '@lobechat/builtin-tool-agent-documents';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 
 import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
@@ -350,6 +351,7 @@ class AgentDocumentService {
       keywordMatchMode?: 'all' | 'any';
       keywords?: string[];
       maxTokens?: number;
+      mode?: AgentDocumentToolLoadMode;
       policyLoadFormat?: DocumentLoadFormat;
       priority?: number;
       regexp?: string;

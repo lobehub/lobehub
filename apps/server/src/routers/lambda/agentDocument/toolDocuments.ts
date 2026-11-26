@@ -1,5 +1,8 @@
 import { DocumentLoadFormat, DocumentLoadRule } from '@lobechat/agent-templates';
-import { MOVE_DOCUMENTS_MAX_IDS } from '@lobechat/builtin-tool-agent-documents';
+import {
+  AGENT_DOCUMENT_TOOL_LOAD_MODES,
+  MOVE_DOCUMENTS_MAX_IDS,
+} from '@lobechat/builtin-tool-agent-documents';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -23,6 +26,7 @@ const toolLoadRuleSchema = z.object({
   keywordMatchMode: z.enum(['any', 'all']).optional(),
   keywords: z.array(z.string()).optional(),
   maxTokens: z.number().int().min(0).optional(),
+  mode: z.enum(AGENT_DOCUMENT_TOOL_LOAD_MODES).optional(),
   policyLoadFormat: z.nativeEnum(DocumentLoadFormat).optional(),
   priority: z.number().int().min(0).optional(),
   regexp: z.string().max(MAX_RULE_REGEXP_LENGTH).optional(),
@@ -550,6 +554,14 @@ export const toolDocumentsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.updateLoadRuleById(input.id, input.rule, input.agentId);
+      try {
+        return await ctx.agentDocumentService.updateLoadRuleById(
+          input.id,
+          input.rule,
+          input.agentId,
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
     }),
 });

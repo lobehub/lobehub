@@ -19,7 +19,7 @@ Only use listDocuments/readDocument when the user is asking about agent document
 8. Create folder (createFolder) - equivalent to mkdir -p
 9. Move documents (moveDocuments) - equivalent to mv under a folder or a document; batch, up to 200 ids per call
 10. List documents (listDocuments) - equivalent to ls; filter by folder or title text
-11. Update load rule (updateLoadRule) - modify how agent documents are loaded into context
+11. Update load rule (updateLoadRule) - choose whether a document's full content is injected into context
 </core_capabilities>
 
 <ids>
@@ -62,7 +62,7 @@ Working with the tree:
 - **createFolder**: create a folder by name, optionally inside another folder. Safe to call repeatedly; an existing folder with the same name is reused.
 - **moveDocuments**: move documents and folders under a folder or a document (\`parentId\`), or back to the root (\`parentId: null\`). Pass every id in one call rather than one call per document.
 - **copyDocument**: duplicate a document, optionally with a new title.
-- **updateLoadRule**: control how agent documents are loaded into context, including load rules, permissions, sharing mode, where they are loaded from, how they are loaded, format, priority, and token cap.
+- **updateLoadRule**: choose whether a document's content is injected into context. Documents start in "progressive" mode: only the title is listed in agent_documents_index, and you read the content with readDocument when needed. Set rule.mode="always" to inject the full content into every later model call; rule.maxTokens caps that content and rule.priority orders always-loaded documents (lower first). maxTokens and priority do nothing while a document is progressive. This tool does not control permissions, sharing, or where a document lives.
 </tool_selection_guidelines>
 
 <best_practices>
@@ -70,7 +70,7 @@ Working with the tree:
 - Prefer readDocument with format="xml" before modifyNodes/remove if content state is uncertain.
 - Use renameDocument for title-only changes; avoid rewriting content unnecessarily.
 - Use copyDocument before major edits when user may want a backup version.
-- Keep load-rule changes explicit and summarize their effect, especially when they change permissions, sharing scope, load location, or load strategy.
+- After updateLoadRule, describe the load mode the result reports. Only tell the user a document will be loaded automatically when the result says it is in "always" mode.
 - Start content directly with the body. Do NOT open with an H1 (\`#\`) heading — the title field already renders as the document header, so the leading H1 is removed automatically; use \`##\` or deeper for in-document sections.
 </best_practices>
 

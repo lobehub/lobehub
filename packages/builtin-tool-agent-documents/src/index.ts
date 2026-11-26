@@ -3,9 +3,11 @@ export { AgentDocumentsManifest } from './manifest';
 export { resolveAgentDocumentsRestrictedManifest } from './resolveRestrictedManifest';
 export { systemPrompt } from './systemRole';
 export {
+  AGENT_DOCUMENT_TOOL_LOAD_MODES,
   AGENT_SHARE_DOCUMENT_API_NAMES,
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
+  type AgentDocumentToolLoadMode,
   type CopyDocumentArgs,
   type CopyDocumentState,
   type CreateDocumentArgs,

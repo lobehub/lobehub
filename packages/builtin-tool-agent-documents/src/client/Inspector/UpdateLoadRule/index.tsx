@@ -9,6 +9,7 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { UpdateLoadRuleArgs, UpdateLoadRuleState } from '../../../types';
 import { formatDocumentId, inspectorChipStyles } from '../_styles';
+import { resolveInspectorLoadMode } from './loadMode';
 
 export const UpdateLoadRuleInspector = memo<
   BuiltinInspectorProps<UpdateLoadRuleArgs, UpdateLoadRuleState>
@@ -17,6 +18,8 @@ export const UpdateLoadRuleInspector = memo<
 
   const id = args?.id || partialArgs?.id;
   const ruleType = args?.rule?.rule || partialArgs?.rule?.rule || pluginState?.rule?.rule;
+  const inFlight = isArgumentsStreaming || isLoading;
+  const loadMode = resolveInspectorLoadMode({ args, inFlight, partialArgs, pluginState });
   const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !id) {
@@ -31,10 +34,18 @@ export const UpdateLoadRuleInspector = memo<
 
   return (
     <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
-      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+      <span className={cx(inFlight && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-agent-documents.apiName.updateLoadRule')}
       </span>
       {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
+      {loadMode && (
+        <>
+          <span className={styles.separator}>·</span>
+          <span className={styles.subdued}>
+            {t(`builtins.lobe-agent-documents.inspector.loadMode.${loadMode}`)}
+          </span>
+        </>
+      )}
       {ruleType && (
         <>
           <span className={styles.separator}>·</span>
