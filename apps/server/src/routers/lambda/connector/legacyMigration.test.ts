@@ -22,6 +22,14 @@ describe('buildConnectorMigrationRow', () => {
   it('preserves a marketplace bearer connection and bakes settings into URL and headers', () => {
     const result = buildConnectorMigrationRow(
       plugin({
+        manifest: {
+          api: [{ humanIntervention: 'always', name: 'send' }, { name: 'search' }],
+          description: 'GitHub tools',
+          icon: 'avatar',
+          identifier: 'github-mcp',
+          name: 'GitHub',
+          version: '1.2.3',
+        },
         customParams: {
           mcp: {
             auth: { token: ' secret-token ', type: 'bearer' },
@@ -49,8 +57,33 @@ describe('buildConnectorMigrationRow', () => {
       customHeaders: { 'REGION': 'us', 'X-Team': 'core' },
       description: 'GitHub tools',
       marketplaceInstalled: true,
+      marketplaceToolPolicies: { search: null, send: 'always' },
       migratedFromLegacyPlugin: true,
       version: '1.2.3',
+    });
+  });
+
+  it('preserves approval policies from the market MCP tools shape', () => {
+    const result = buildConnectorMigrationRow(
+      plugin({
+        manifest: {
+          description: 'GitHub tools',
+          icon: 'avatar',
+          name: 'GitHub',
+          tools: [
+            { inputSchema: {}, humanIntervention: 'always', name: 'send' },
+            { inputSchema: {}, name: 'search' },
+          ],
+          version: '1.2.3',
+        } as never,
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.metadata?.marketplaceToolPolicies).toEqual({
+      search: null,
+      send: 'always',
     });
   });
 

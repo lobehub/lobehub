@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
     ensureConfirmedConnectors: vi.fn().mockResolvedValue(undefined),
     refreshPlugins: vi.fn().mockResolvedValue(undefined),
     syncConnectorTools: vi.fn().mockResolvedValue(undefined),
-    updateInstalledPluginManifestInMemory: vi.fn(),
   },
   discover: vi.fn().mockResolvedValue({ api: [], mcpAppEntrypoints: [] }),
 }));
@@ -45,6 +44,7 @@ beforeEach(() => {
   mocks.enabled = false;
   mocks.state.installedPlugins = [];
   mocks.state.connectors = [];
+  mocks.discover.mockResolvedValue({ api: [], mcpAppEntrypoints: [] });
 });
 
 describe('gated entrypoint discovery refresh', () => {
@@ -63,29 +63,40 @@ describe('gated entrypoint discovery refresh', () => {
     expect(mocks.discover).not.toHaveBeenCalled();
     expect(mocks.state.syncConnectorTools).not.toHaveBeenCalled();
   });
-  it('refreshes an old plugin manifest once and keeps refreshed manifests intact', async () => {
+  it('refreshes an old plugin manifest once and keeps discovery across plugin refreshes', async () => {
     mocks.enabled = true;
-    mocks.state.installedPlugins = [
-      {
-        identifier: 'notes',
-        customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
-        manifest: { api: [] },
-        settings: { API_KEY: 'secret' },
-      },
-    ];
-    const { rerender, unmount } = renderHook(() => useMcpAppEntrypoints());
+    const entry = { title: 'Notes', toolName: 'open' };
+    mocks.discover.mockResolvedValue({ api: [], mcpAppEntrypoints: [entry] });
+    const plugin = {
+      identifier: 'notes',
+      customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+      manifest: { api: [] },
+      settings: { API_KEY: 'secret' },
+    };
+    mocks.state.installedPlugins = [plugin];
+    const { result, rerender, unmount } = renderHook(() => useMcpAppEntrypoints());
     await waitFor(() =>
-      expect(mocks.state.updateInstalledPluginManifestInMemory).toHaveBeenCalledWith(
-        'notes',
-        expect.objectContaining({ mcpAppEntrypoints: [] }),
+      expect(useMcpAppStore.getState().discoveredPluginManifests.notes).toEqual(
+        expect.objectContaining({ mcpAppEntrypoints: [entry] }),
       ),
     );
     // Read as the plugin's tool calls are: with its settings (credentials)
     expect(mocks.discover).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'notes', settings: { API_KEY: 'secret' } }),
     );
-    mocks.state.installedPlugins = [...mocks.state.installedPlugins];
+    await waitFor(() =>
+      expect(result.current).toEqual([
+        expect.objectContaining({ identifier: 'notes', title: 'Notes', toolName: 'open' }),
+      ]),
+    );
+
+    // A later server refresh replaces the row with its stale manifest; the
+    // session discovery is stored separately and the entry does not disappear.
+    mocks.state.installedPlugins = [{ ...plugin }];
     rerender();
+    expect(result.current).toEqual([
+      expect.objectContaining({ identifier: 'notes', title: 'Notes', toolName: 'open' }),
+    ]);
     expect(mocks.discover).toHaveBeenCalledOnce();
     expect(mocks.state.refreshPlugins).not.toHaveBeenCalled();
     unmount();

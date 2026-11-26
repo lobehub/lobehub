@@ -128,28 +128,13 @@ export class PluginActionImpl {
     await this.#get().refreshPlugins();
   };
 
-  removeInstalledPluginRecord = async (identifier: string): Promise<void> => {
-    await pluginService.uninstallPlugin(identifier);
+  removeInstalledPluginLocalRecord = (identifier: string): void => {
     this.#installedPlugins.removeEntity(identifier);
   };
 
-  /**
-   * Runtime discovery may learn a legacy MCP's App entrypoints before the row is
-   * migrated. That discovery is session data, not a client-owned manifest write:
-   * show it in memory only, never persist it to IndexedDB or `plugin.updatePlugin`.
-   */
-  updateInstalledPluginManifestInMemory = (
-    identifier: string,
-    manifest: LobeTool['manifest'],
-  ): void => {
-    this.#installedPlugins.update(
-      INSTALLED_PLUGINS_KEY,
-      (plugins) =>
-        plugins?.map((plugin) =>
-          plugin.identifier === identifier ? { ...plugin, manifest } : plugin,
-        ),
-      { persist: false },
-    );
+  removeInstalledPluginRecord = async (identifier: string): Promise<void> => {
+    await pluginService.uninstallPlugin(identifier);
+    this.removeInstalledPluginLocalRecord(identifier);
   };
 
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {

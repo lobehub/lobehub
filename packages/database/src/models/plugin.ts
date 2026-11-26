@@ -68,6 +68,24 @@ export class PluginModel {
   };
 
   /**
+   * Delete only the caller's own installation. Workspace reads span every
+   * member's row with the same identifier, so migration cleanup must not use
+   * the workspace-wide {@link delete}: members can hold different settings and
+   * credentials for the same legacy plugin.
+   */
+  deleteOwned = async (id: string) => {
+    return this.db
+      .delete(userInstalledPlugins)
+      .where(
+        and(
+          eq(userInstalledPlugins.identifier, id),
+          eq(userInstalledPlugins.userId, this.userId),
+          this.visible(),
+        ),
+      );
+  };
+
+  /**
    * Remove an app's projection when its shared Composio connection goes. The
    * shared connection's projection is the app's, so a teammate's legacy
    * connection goes with it; a row mirroring a member's private connection of
@@ -187,6 +205,17 @@ export class PluginModel {
   findById = async (id: string) => {
     return this.db.query.userInstalledPlugins.findFirst({
       where: and(eq(userInstalledPlugins.identifier, id), this.visible()),
+    });
+  };
+
+  /** The caller's own row for this identifier, never a teammate's same-named row. */
+  findOwnedById = async (id: string) => {
+    return this.db.query.userInstalledPlugins.findFirst({
+      where: and(
+        eq(userInstalledPlugins.identifier, id),
+        eq(userInstalledPlugins.userId, this.userId),
+        this.visible(),
+      ),
     });
   };
 

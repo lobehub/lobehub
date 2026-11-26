@@ -1,4 +1,4 @@
-import { MARKETPLACE_INSTALL_COMPLETED_KEY } from '@lobechat/const';
+import { MARKETPLACE_INSTALL_COMPLETED_KEY, MARKETPLACE_TOOL_POLICIES_KEY } from '@lobechat/const';
 import type { LobeTool } from '@lobechat/types';
 
 import type { NewUserConnector } from '@/database/schemas';
@@ -7,6 +7,7 @@ import {
   ConnectorSourceType,
   ConnectorStatus,
 } from '@/database/schemas';
+import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManifest';
 
 type LegacyPluginRow = Pick<
   LobeTool,
@@ -65,6 +66,35 @@ const omitKeys = (input: Record<string, string> | undefined, keys: string[]) => 
 const mergeDefined = <T extends Record<string, string> | undefined>(base: T, overlay: T) =>
   base || overlay ? { ...base, ...overlay } : undefined;
 
+/** The approval policy a legacy marketplace manifest declared for each of its tools. */
+const marketplaceToolPolicies = (plugin: LegacyPluginRow) => {
+  const manifest = plugin.manifest as
+    | {
+        api?: unknown;
+        description?: string;
+        icon?: string;
+        tools?: unknown;
+      }
+    | undefined;
+  const hasTools =
+    (Array.isArray(manifest?.api) && manifest.api.length > 0) ||
+    (Array.isArray(manifest?.tools) && manifest.tools.length > 0);
+  if (!manifest || !hasTools) return {};
+  const tools = cloudManifestTools(
+    buildCloudMcpManifest({
+      data: manifest,
+      plugin: {
+        description: manifest.description,
+        icon: manifest.icon,
+        identifier: plugin.identifier,
+      },
+    }),
+  );
+  return Object.fromEntries(
+    tools.map((tool) => [tool.toolName, tool.humanIntervention ?? null] as const),
+  );
+};
+
 const validHttpUrl = (url?: string) => {
   if (!url) return false;
   try {
@@ -109,7 +139,14 @@ export const buildConnectorMigrationRow = (plugin: LegacyPluginRow): MigrationRe
   );
   if (mcp.connectVia === 'device') metadata.connectVia = 'device';
   if (mcp.boundDeviceId) metadata.boundDeviceId = mcp.boundDeviceId;
-  if (plugin.type === 'plugin') metadata[MARKETPLACE_INSTALL_COMPLETED_KEY] = true;
+  if (plugin.type === 'plugin') {
+    metadata[MARKETPLACE_INSTALL_COMPLETED_KEY] = true;
+    // The connector runtime cannot read the legacy manifest once its row is
+    // removed. Carry the market's per-tool approvals so a mandatory tool does
+    // not become automatic after migration; a tool the market never declared
+    // stays approval-required by the sync policy.
+    metadata[MARKETPLACE_TOOL_POLICIES_KEY] = marketplaceToolPolicies(plugin);
+  }
 
   const base = {
     identifier: plugin.identifier,

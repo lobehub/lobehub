@@ -9,6 +9,7 @@ import { initialConnectorState } from './initialState';
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
+      completeLegacyPluginMigration: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
       list: { query: vi.fn() },
@@ -70,7 +71,9 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       await vi.waitFor(() =>
         expect(completed).toHaveBeenCalledWith({ connectorId: 'created', ok: true }),
       );
-      expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+      expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+        identifier: 'legacy',
+      });
       expect(useToolStore.getState().installedPlugins).toEqual([]);
       expect(connector.syncTools.mutate).toHaveBeenCalledWith({ id: 'created' });
       expect(connector.list.query).toHaveBeenCalledTimes(1);
@@ -93,7 +96,9 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       expect(log).toHaveBeenCalledWith('[connector-migration] refreshing lists failed', readError),
     );
     expect(connector.delete.mutate).not.toHaveBeenCalled();
-    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+    expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+    });
   });
 
   it('syncs a cloud manifest from the saved transport before the connector is in the list', async () => {
@@ -107,7 +112,9 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       tools: [expect.objectContaining({ toolName: 'search' })],
     });
     expect(connector.syncTools.mutate).not.toHaveBeenCalled();
-    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+    expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+    });
   });
 
   it.each([true, false])(
@@ -120,7 +127,7 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       );
       if (isNew) expect(connector.delete.mutate).toHaveBeenCalledWith({ id: 'target' });
       else expect(connector.delete.mutate).not.toHaveBeenCalled();
-      expect(plugin.removePlugin.mutate).not.toHaveBeenCalled();
+      expect(connector.completeLegacyPluginMigration.mutate).not.toHaveBeenCalled();
     },
   );
 
@@ -136,10 +143,12 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       id: 'created',
       pruneMissingAutoTools: true,
     });
-    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
-    expect(vi.mocked(plugin.removePlugin.mutate).mock.invocationCallOrder[0]).toBeGreaterThan(
-      vi.mocked(connector.syncTools.mutate).mock.invocationCallOrder[0],
-    );
+    expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+    });
+    expect(
+      vi.mocked(connector.completeLegacyPluginMigration.mutate).mock.invocationCallOrder[0],
+    ).toBeGreaterThan(vi.mocked(connector.syncTools.mutate).mock.invocationCallOrder[0]);
   });
 
   it('server-side migration keeps the legacy row and rolls back a new connector when sync fails', async () => {
@@ -153,7 +162,7 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
     );
 
     expect(connector.delete.mutate).toHaveBeenCalledWith({ id: 'created' });
-    expect(plugin.removePlugin.mutate).not.toHaveBeenCalled();
+    expect(connector.completeLegacyPluginMigration.mutate).not.toHaveBeenCalled();
   });
 
   it('does not report a completed server-side migration as failed when the final list refresh fails', async () => {
@@ -170,7 +179,9 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       useToolStore.getState().migrateLegacyPluginToConnector('legacy'),
     ).resolves.toBeUndefined();
 
-    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+    expect(connector.completeLegacyPluginMigration.mutate).toHaveBeenCalledWith({
+      identifier: 'legacy',
+    });
     await vi.waitFor(() =>
       expect(log).toHaveBeenCalledWith('[connector-migration] refreshing lists failed', readError),
     );

@@ -441,8 +441,13 @@ export class ConnectorActionImpl {
         await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]);
       },
       syncConnectorTools: (id, payload) => this.#writeConnectorTools(id, {}, payload),
-      uninstallCustomPlugin: (identifier) => this.#get().removeInstalledPluginRecord(identifier),
+      uninstallCustomPlugin: (identifier) => this.#completeLegacyPluginMigration(identifier),
     });
+
+  #completeLegacyPluginMigration = async (identifier: string): Promise<void> => {
+    await lambdaClient.connector.completeLegacyPluginMigration.mutate({ identifier });
+    this.#get().removeInstalledPluginLocalRecord(identifier);
+  };
 
   /**
    * Promote a legacy MCP plugin row server-side, preserving its endpoint,
@@ -473,7 +478,7 @@ export class ConnectorActionImpl {
       throw error;
     }
 
-    await this.#get().removeInstalledPluginRecord(identifier);
+    await this.#completeLegacyPluginMigration(identifier);
     // The migration itself is complete here. A list refresh failure must not
     // report it as failed after the legacy row has already been removed.
     await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]).catch(
