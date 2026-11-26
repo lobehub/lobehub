@@ -48,7 +48,20 @@ export interface CreateDocumentArgs {
   title: string;
 }
 
-export interface CreateDocumentState {
+/**
+ * What a whole-body write (createDocument, replaceDocumentContent) stored.
+ * The server rejects a body the editor cannot parse to the end instead of
+ * saving the part before it, so a successful write reports `truncated: false`.
+ * Optional on the states below only because states saved before it lack it.
+ */
+export interface DocumentBodyWriteReceipt {
+  /** Characters of Markdown the document holds after the write (the stored body, not the input). */
+  charCount?: number;
+  /** Whether the stored body is shorter than what was sent; always `false` on success. */
+  truncated?: boolean;
+}
+
+export interface CreateDocumentState extends DocumentBodyWriteReceipt {
   agentDocumentId?: string;
   /** Owning agent id — used to attribute the created document's Work. */
   agentId?: string;
@@ -80,7 +93,7 @@ export interface ReplaceDocumentContentArgs {
   id: string;
 }
 
-export interface ReplaceDocumentContentState {
+export interface ReplaceDocumentContentState extends DocumentBodyWriteReceipt {
   /** The `agentDocuments` association row id. */
   agentDocumentId?: string;
   /** Owning agent id — used to attribute the document's Work. */

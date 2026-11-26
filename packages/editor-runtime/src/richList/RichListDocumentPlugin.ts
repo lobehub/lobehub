@@ -1,18 +1,10 @@
 import { ListItemNode } from '@lexical/list';
 import type { LexicalEditor } from 'lexical';
 
+import { MARKDOWN_SERVICE_ID, type ServiceKernel } from '../markdownService';
 import { listHeadingState } from './headingState';
 import { listNumberState, registerListNumberOverrides } from './listNumbering';
 import { registerRichListMarkdown, type RichListMarkdownService } from './markdown';
-
-// @lobehub/editor's IMarkdownShortCutService. Kernels look services up by this
-// name; the constant itself lives in the package's main entry, which pulls in
-// React and so cannot be imported by modules the server loads.
-const MARKDOWN_SERVICE_ID = { __serviceId: 'MarkdownShortCutService' };
-
-interface ServiceKernel {
-  requireService: (serviceId: { __serviceId: string }) => unknown;
-}
 
 interface RegisteredNodeInternals {
   sharedNodeState?: { sharedConfigMap?: Map<string, unknown> };

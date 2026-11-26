@@ -287,6 +287,75 @@ describe('agent document headless editor', () => {
     });
   });
 
+  // 2026-11-15 vent: a plan written with raw `<alert>` blocks between sections
+  // was saved up to the first multi-line alert (4,049 of 11,050 characters)
+  // and the write still reported success.
+  describe('raw HTML blocks', () => {
+    const plan = [
+      '## Background',
+      '',
+      'The importer drops rows when the feed is late.',
+      '',
+      '<alert type="warning">',
+      'Rows dropped before the fix cannot be **recovered**.',
+      '</alert>',
+      '',
+      '## Flow',
+      '',
+      '```mermaid',
+      'graph TD; Feed-->Importer;',
+      '```',
+      '',
+      '<div align="center">',
+      'Figure 1',
+      '</div>',
+      '',
+      '## Backend changes',
+      '',
+      '| Service | Change |',
+      '| --- | --- |',
+      '| importer | retry late feeds |',
+      '',
+      '## Risks',
+      '',
+      'Retry storms if the feed stays down.',
+      '',
+      '<alert type="info">',
+      'Ships behind a flag.',
+    ].join('\n');
+
+    it('should keep every section after a raw HTML block, with the HTML as text', async () => {
+      const snapshot = await createAgentMarkdownSnapshot(plan);
+
+      for (const kept of [
+        '<alert type="warning">\nRows dropped before the fix cannot be **recovered**.\n</alert>',
+        '```mermaid',
+        '<div align="center">\nFigure 1\n</div>',
+        '## Backend changes',
+        '| importer | retry late feeds |',
+        'Retry storms if the feed stays down.',
+        // An unclosed tag stays as its own paragraph ahead of the text it opened.
+        '<alert type="info">\n\nShips behind a flag.',
+      ]) {
+        expect(snapshot.content).toContain(kept);
+      }
+    });
+
+    it('should store editor data that reads back as the whole document', async () => {
+      const snapshot = await createAgentMarkdownSnapshot(plan);
+
+      const reread = await exportEditorDataSnapshot({
+        editorData: snapshot.editorData,
+        fallbackContent: snapshot.content,
+        litexml: true,
+      });
+
+      expect(reread.recoveredFromMarkdown).toBeUndefined();
+      expect(reread.content).toBe(snapshot.content);
+      expect(reread.litexml).toContain('Retry storms if the feed stays down.');
+    });
+  });
+
   describe('raw JSON content', () => {
     // Shape of a real createDocument body: a JSON lorebook whose strings hold
     // escaped quotes, `\n` and a `__` placeholder.
@@ -352,20 +421,20 @@ describe('agent document headless editor', () => {
       ).join('') +
       '</results>';
 
-    it('rejects a raw HTML crawl body that parses to nothing', async () => {
-      // Unguarded snapshot silently mints the shell:
+    it('rejects a raw HTML crawl body instead of storing the page markup', async () => {
+      // Parsing no longer empties it into a shell: the markup is kept as text.
       const unguarded = await createMarkdownEditorSnapshot(htmlBody);
-      expect(unguarded.content).toBe('');
-      expect(isValidEditorData(unguarded.editorData)).toBe(false);
+      expect(unguarded.content).toContain('<span>cell</span>');
+      expect(isValidEditorData(unguarded.editorData)).toBe(true);
 
       await expect(createAgentMarkdownSnapshot(htmlBody)).rejects.toThrow(
-        /empty document after Markdown parsing/i,
+        /full HTML page, but this API stores Markdown/i,
       );
     });
 
-    it('rejects a raw XML crawl body that parses to nothing', async () => {
+    it('rejects a raw XML crawl body', async () => {
       const unguarded = await createMarkdownEditorSnapshot(xmlBody);
-      expect(unguarded.content).toBe('');
+      expect(isValidEditorData(unguarded.editorData)).toBe(true);
 
       // `<?xml …` hits the LiteXML guard before the empty-parse guard; either
       // way the body is rejected and nothing is persisted.
