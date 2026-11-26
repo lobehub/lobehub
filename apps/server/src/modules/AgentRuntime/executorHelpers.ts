@@ -101,7 +101,14 @@ export const archiveRuntimeToolResult = async (
     workspaceId,
   });
 
-  return archive.content === result.content ? result : { ...result, content: archive.content };
+  if (archive.content === result.content) return result;
+
+  const state =
+    result.state && typeof result.state === 'object' && !Array.isArray(result.state)
+      ? { ...result.state, truncated: true }
+      : result.state;
+
+  return { ...result, content: archive.content, state };
 };
 
 /**

@@ -165,12 +165,12 @@ const SKILLS = 'lobe-skills';
 const FILE_TOOL_IDENTIFIERS = new Set([LOCAL_SYSTEM, CLOUD_SANDBOX]);
 
 /** Command-style APIs per tool whose old output is trimmed to a head + tail excerpt. */
-const COMMAND_APIS_BY_IDENTIFIER: Record<string, ReadonlySet<string>> = {
-  [CLOUD_SANDBOX]: new Set(['runCommand', 'getCommandOutput', 'executeCode']),
-  [LOCAL_SYSTEM]: new Set(['runCommand', 'getCommandOutput']),
+const COMMAND_APIS_BY_IDENTIFIER: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [CLOUD_SANDBOX, new Set(['runCommand', 'getCommandOutput', 'executeCode'])],
+  [LOCAL_SYSTEM, new Set(['runCommand', 'getCommandOutput'])],
   // The always-on cloud sandbox shell offered through the Skills tool.
-  [SKILLS]: new Set(['runCommand', 'execScript']),
-};
+  [SKILLS, new Set(['runCommand', 'execScript'])],
+]);
 
 const imageCountOf = (message: Message) =>
   (message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0;
@@ -346,11 +346,29 @@ const readRangeLabel = (identifier: string | undefined, [start, end]: [number, n
 };
 
 /**
- * A read the service cut at its char cap never delivered the tail of its
- * window, so it cannot stand in for an earlier read of that range.
+ * Footers appended when an outer layer (tool-result archival, `truncateToolResult`,
+ * or `formatFileContent`'s post-gutter char cap) cuts a `readFile` body below its
+ * requested line range without setting `pluginState.truncated`. Anchored at EOF
+ * after a newline so normal bounded reads (whose notice says `To continue, call
+ * readFile again ...`) and file bodies mentioning these phrases stay untouched.
  */
-const isTruncatedRead = (message: Message): boolean =>
-  (message.pluginState as { truncated?: unknown } | undefined)?.truncated === true;
+const OUTER_TRUNCATION_TAIL_PATTERNS = [
+  /\nFull content archived to the agent-document VFS\.\nPath: [\s\S]+Do NOT activate cloud-sandbox or local-system file tools — this archive exists only inside the agent document tree\.$/,
+  /\n\[Archive failed: [^\]]+\. Full content was not persisted\.]$/,
+  /\n\[Showing lines 1-\d+ of \d+ lines, \d+ characters\. (?:Lines \d+-\d+ were left out\.|Line \d+ is \d+ characters long and was cut at \d+; the rest of that line cannot be paged\.(?: Lines \d+-\d+ were left out\.)?)]$/,
+  /\n\[output truncated at \d+ chars after adding line numbers\. Use a smaller line range or grep to narrow down\.]$/,
+];
+
+/**
+ * A read cut by the service char cap or by the outer tool-result limit never
+ * delivered the tail of its window, so it cannot stand in for an earlier read
+ * of that range.
+ */
+const isTruncatedRead = (message: Message): boolean => {
+  if ((message.pluginState as { truncated?: unknown } | undefined)?.truncated === true) return true;
+  if (typeof message.content !== 'string') return false;
+  return OUTER_TRUNCATION_TAIL_PATTERNS.some((pattern) => pattern.test(message.content as string));
+};
 
 /**
  * `UIChatMessage.createdAt` is an epoch-milliseconds number on the canonical
@@ -861,7 +879,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
     if (
       identifier &&
-      COMMAND_APIS_BY_IDENTIFIER[identifier]?.has(apiName) &&
+      COMMAND_APIS_BY_IDENTIFIER.get(identifier)?.has(apiName) &&
       content.length > this.config.commandKeepChars * 2
     ) {
       const head = content.slice(0, this.config.commandKeepChars);

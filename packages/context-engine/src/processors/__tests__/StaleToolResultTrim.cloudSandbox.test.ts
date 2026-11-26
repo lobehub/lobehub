@@ -1,3 +1,5 @@
+import { formatFileContent } from '@lobechat/prompts/fileSystem';
+import { truncateToolResult } from '@lobechat/prompts/toolResult';
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
@@ -217,6 +219,81 @@ describe('StaleToolResultTrimProcessor — cloud sandbox and skills tools', () =
 
       expect(result.messages[0].content).toContain('superseded by a later write');
     });
+
+    it('labels whole-file and open-ended sandbox ranges in readSupersededByRead placeholders', async () => {
+      const messages = [
+        sandboxRead('/whole.ts', 'w'.repeat(3000)),
+        sandboxRead('/whole.ts', 'w'.repeat(4000)),
+        toolMessage(
+          SANDBOX,
+          'readFile',
+          'e'.repeat(3000),
+          { path: '/tail.ts', startLine: 50 },
+          { pluginState: { path: '/tail.ts' } },
+        ),
+        sandboxRead('/tail.ts', 'e'.repeat(4000), { startLine: 10 }),
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('/whole.ts (whole file)');
+      expect(result.messages[2].content).toContain('/tail.ts (lines 50-EOF)');
+    });
+
+    it('never treats a re-read cut by the outer tool-result limit as covering earlier reads', async () => {
+      const multiLine = Array.from({ length: 100 }, (_, i) => `${i + 1} ${'x'.repeat(20)}`).join(
+        '\n',
+      );
+      const cutMultiLine = truncateToolResult(multiLine, 500);
+      const cutSingleLine = truncateToolResult('x'.repeat(2000), 500);
+      const archived = `${cutMultiLine}\nFull content archived to the agent-document VFS.\nPath: ./.tool-results/abc.txt\nAgent Document ID: doc-1\nRead it with the lobe-agent-documents tool: apiName=readDocument, id=<Agent Document ID above>, format="markdown", and offset/limit to page by line. Do NOT activate cloud-sandbox or local-system file tools — this archive exists only inside the agent document tree.`;
+      const archiveFailed = `${cutMultiLine}\n[Archive failed: disk full. Full content was not persisted.]`;
+      const gutterCapped = `${'x'.repeat(500)}\n[output truncated at 500000 chars after adding line numbers. Use a smaller line range or grep to narrow down.]`;
+
+      for (const reReadContent of [
+        cutMultiLine,
+        cutSingleLine,
+        archived,
+        archiveFailed,
+        gutterCapped,
+      ]) {
+        const messages = [
+          sandboxRead('/big.ts', 'y'.repeat(3000), { endLine: 900, startLine: 800 }),
+          sandboxRead('/big.ts', reReadContent),
+          ...recencyPadding(3),
+        ];
+
+        const result = await createProcessor().process(createContext(messages));
+
+        expect(result.messages[0].content).toBe('y'.repeat(3000));
+        expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+      }
+    });
+
+    it('still lets a normal bounded readFile with a continuation notice cover an earlier sub-range', async () => {
+      const bounded = formatFileContent({
+        content: Array.from({ length: 200 }, (_, i) => `line ${i + 1} ${'z'.repeat(20)}`).join(
+          '\n',
+        ),
+        continueFrom: (line) =>
+          `call readFile again with path="/a.ts", startLine=${line} and endLine=${line + 199}`,
+        firstLineNumber: 1,
+        lineRange: [0, 200],
+        totalLines: 500,
+      });
+
+      const messages = [
+        sandboxRead('/a.ts', 'y'.repeat(3000), { endLine: 100, startLine: 1 }),
+        sandboxRead('/a.ts', bounded, { endLine: 200, startLine: 1 }),
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('(lines 1-100)');
+      expect(result.messages[0].content).toContain('the same range was read again later');
+    });
   });
 
   describe('old command output', () => {
@@ -260,6 +337,18 @@ describe('StaleToolResultTrimProcessor — cloud sandbox and skills tools', () =
 
       expect(result.messages[0].content).toBe(output);
     });
+
+    it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+      'does not throw or trim for Object.prototype identifier %s',
+      async (identifier) => {
+        const messages = [toolMessage(identifier, 'runCommand', output), ...recencyPadding(3)];
+
+        const result = await createProcessor().process(createContext(messages));
+
+        expect(result.messages[0].content).toBe(output);
+        expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+      },
+    );
   });
 
   it('trims a realistic cloud sandbox coding history at a cold boundary', async () => {
