@@ -7,6 +7,12 @@ import {
   isMcpToolVisibleTo,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import { mcpVersionNegotiation } from '@lobechat/utils/mcpConnectError';
+import {
+  installMcpResultCompat,
+  type McpResultCompat,
+  withMcpRawResult,
+} from '@lobechat/utils/mcpResultCompat';
 import { toRecord } from '@lobechat/utils/object';
 import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
@@ -371,6 +377,8 @@ export class MCPClient {
   private readonly mcp: Client;
 
   private transport: Transport;
+  /** Tolerates a 2026-07-28 server's missing caching hints (HTTP only) */
+  private resultCompat?: McpResultCompat;
   private stderrLogs: string[] = [];
   private isStdio: boolean = false;
   /**
@@ -415,7 +423,8 @@ export class MCPClient {
           },
         }),
         // Do not add a probe subprocess/timeout to stdio installations or calls.
-        versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+        // HTTP probes are bounded (MCP_CONNECT_PROBE_TIMEOUT_MS), not the SDK's 60 s default.
+        versionNegotiation: mcpVersionNegotiation(params.type),
         inputRequired: { autoFulfill: false },
       },
     );
@@ -445,6 +454,9 @@ export class MCPClient {
 
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
           requestInit: { headers },
+        });
+        this.resultCompat = installMcpResultCompat(this.transport, {
+          onWarning: (message) => console.warn(`[device-mcp] ${message}`),
         });
         break;
       }
@@ -783,7 +795,12 @@ export class MCPClient {
   }
 
   async listTools() {
-    const { tools } = await this.mcp.listTools();
+    let tools: Awaited<ReturnType<Client['listTools']>>['tools'];
+    try {
+      ({ tools } = await this.mcp.listTools());
+    } catch (error) {
+      throw withMcpRawResult(error, this.resultCompat, 'tools/list');
+    }
     this.toolUiMeta = this.mcpApps
       ? new Map(tools.map((tool) => [tool.name, resolveMcpUiToolMeta(tool._meta)]))
       : undefined;

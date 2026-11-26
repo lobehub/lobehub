@@ -5,7 +5,7 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import type { MarketService } from '@/server/services/market';
+import { MarketService } from '@/server/services/market';
 import {
   getSandboxProviderKind,
   MarketSandboxProvider,
@@ -40,6 +40,7 @@ export interface CredsSandboxTarget {
  */
 export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
+  private personalMarketService?: Pick<MarketService, 'market'>;
   private workspaceId?: string;
 
   private isShareVisitor: boolean;
@@ -61,6 +62,13 @@ export class ServerCredsService implements ICredsService {
        */
       isShareVisitor?: boolean;
       /**
+       * Acts for the caller's personal Market account. Inside a workspace, a
+       * LobeHub Skill call runs off the personal connection or, without one,
+       * the workspace's (`BuiltinToolsExecutor`), so the OAuth status check
+       * reads both to agree with what a call will find.
+       */
+      personalMarketService?: Pick<MarketService, 'market'>;
+      /**
        * The Market sandbox the injection lands in. When set, `~/.creds/env` is
        * merged after each injection so earlier injections stay listed.
        */
@@ -71,6 +79,7 @@ export class ServerCredsService implements ICredsService {
     } = {},
   ) {
     this.marketService = marketService;
+    this.personalMarketService = options.personalMarketService;
     this.workspaceId = options.workspaceId;
     this.isShareVisitor = options.isShareVisitor ?? false;
     this.sandboxProvider = options.sandboxProvider;
@@ -142,10 +151,15 @@ export class ServerCredsService implements ICredsService {
     log('getOAuthConnectionStatus: provider=%s', provider);
 
     const response = await this.marketService.market.connect.getStatus(provider);
+    if (response.connected || !this.workspaceId || !this.personalMarketService) {
+      return { connected: response.connected };
+    }
 
-    return {
-      connected: response.connected,
-    };
+    // Not connected in the workspace: a skill call still runs off the caller's
+    // personal connection, so "connected" must count it too.
+    const personal = await this.personalMarketService.market.connect.getStatus(provider);
+    log('getOAuthConnectionStatus: provider=%s personal fallback=%s', provider, personal.connected);
+    return { connected: personal.connected };
   }
 
   async injectCreds(params: {
@@ -329,6 +343,9 @@ export const credsRuntime: ServerRuntimeRegistration = {
 
     const credsService = new ServerCredsService(marketService, {
       isShareVisitor: Boolean(context.agentShareVisitor),
+      personalMarketService: workspaceId
+        ? new MarketService({ accessToken, userInfo: { userId: context.userId } })
+        : undefined,
       sandboxProvider,
       sandboxTarget: { instanceId: sandbox.environment, mode: sandbox.mode },
       workspaceId,

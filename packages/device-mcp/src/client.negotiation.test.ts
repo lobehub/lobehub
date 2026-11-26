@@ -43,6 +43,43 @@ describe('desktop transport protocol policy', () => {
     }
   });
 
+  it('lists the tools of a modern server that omits the caching hints', async () => {
+    const servers = await startNegotiationServers();
+    const client = new MCPClient({
+      name: 'desktop',
+      type: 'http',
+      url: servers.url + '/modern-no-cache-hints',
+    });
+    clients.push(client);
+    try {
+      await client.initialize();
+      expect(client.getProtocolEra()).toBe('modern');
+      expect((await client.listTools()).map((tool) => tool.name)).toEqual(['echo', 'needs_input']);
+    } finally {
+      await client.disconnect();
+      await servers.close();
+    }
+  });
+
+  it('quotes the raw tools/list result when the listing is still invalid', async () => {
+    const servers = await startNegotiationServers();
+    const client = new MCPClient({
+      name: 'desktop',
+      type: 'http',
+      url: servers.url + '/modern-broken-tools',
+    });
+    clients.push(client);
+    try {
+      await client.initialize();
+      await expect(client.listTools()).rejects.toThrow(
+        /Invalid result for tools\/list[\s\S]*Server response \(truncated\): \{.*"name":"echo"/,
+      );
+    } finally {
+      await client.disconnect();
+      await servers.close();
+    }
+  });
+
   it('starts one stdio child and sends initialize directly, without a discovery probe', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'mcp-stdio-negotiation-'));
     const trace = path.join(dir, 'wire.txt');

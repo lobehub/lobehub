@@ -280,6 +280,50 @@ describe('MCPService log redaction', () => {
     expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
   });
 
+  it('retries an unreachable endpoint once on a fresh session, then reports it without a 500 (T-14043)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+    // What MCPClient.initialize throws for a refused probe: CONNECTION_FAILED,
+    // with the SDK error and its system cause kept on the chain
+    const refused = () =>
+      Object.assign(
+        actual.createMCPError(
+          'CONNECTION_FAILED',
+          'Could not negotiate the MCP server protocol: Version negotiation probe failed: fetch failed',
+        ),
+        {
+          cause: Object.assign(
+            new Error('Version negotiation probe failed: fetch failed', {
+              cause: new TypeError('fetch failed', {
+                cause: Object.assign(new Error('connect ECONNREFUSED 203.0.113.7:443'), {
+                  code: 'ECONNREFUSED',
+                }),
+              }),
+            }),
+            { code: 'ERA_NEGOTIATION_FAILED' },
+          ),
+        },
+      );
+    vi.mocked(MCPClient.prototype.initialize)
+      .mockRejectedValueOnce(refused())
+      .mockRejectedValueOnce(refused());
+
+    const error = await new MCPService().listRawTools(sensitiveHttpParams).catch((e) => e);
+
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledTimes(2);
+    expect(error).toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    expect(error.cause.details).toMatchObject({
+      attempts: 2,
+      causeCode: 'ECONNREFUSED',
+      code: 'MCP_ENDPOINT_UNREACHABLE',
+      reason: 'refused',
+      retryable: true,
+      via: 'the LobeHub server',
+    });
+    expect(error.message).toContain('MCP server unreachable at https://mcp.example.com');
+    expect(error.message).not.toContain('secret');
+  });
+
   it('redacts stdio environment variables from rejected server operations', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

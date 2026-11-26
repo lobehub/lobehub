@@ -5,6 +5,7 @@ import {
   connectorIdentifierCandidates,
   type DeviceClient,
 } from '@lobechat/types';
+import { findMcpEndpointUnreachableError } from '@lobechat/utils/mcpConnectError';
 import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
@@ -24,6 +25,7 @@ import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveMcpClientKinds } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import { mcpDeviceCallError } from '@/server/services/deviceGateway/mcpCallReply';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { type MCPService } from '../mcp';
@@ -530,6 +532,21 @@ export class ToolExecutionService {
           success: false,
         };
       }
+      // The server could not reach the endpoint: a network verdict with its own
+      // code, cause, endpoint and retryability (not a routing one such as
+      // MCP_DEVICE_UNAVAILABLE, where no connection was attempted at all).
+      // `kind: 'stop'`: the client already retried once on a fresh session, so
+      // the runtime does not replay the call on its own (a probe timeout would
+      // double the wait); `retryable` and the content tell the model whether a
+      // later retry can help.
+      const unreachable = findMcpEndpointUnreachableError(error);
+      if (unreachable) {
+        return {
+          content: unreachable.message,
+          error: { ...unreachable.details, kind: 'stop', message: unreachable.message },
+          success: false,
+        };
+      }
       return {
         content: (error as Error).message,
         error: {
@@ -689,10 +706,7 @@ export class ToolExecutionService {
       // classifier replay it (see withoutDeviceReplay).
       return withoutDeviceReplay({
         content: result.content,
-        error: result.errorData ?? {
-          code: 'MCP_DEVICE_EXECUTION_ERROR',
-          message: result.error || result.content,
-        },
+        error: result.errorData ?? mcpDeviceCallError(result),
         errorData: result.errorData,
         success: false,
       });
