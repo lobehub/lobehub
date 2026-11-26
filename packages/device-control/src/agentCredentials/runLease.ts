@@ -53,6 +53,8 @@ const GRACE_MS = 6000;
 /** Time a killed run gets to disappear before the replacement gives up. */
 const FORCE_MS = 2000;
 const POLL_MS = 100;
+/** Time an agent's app-server gets to exit after the run ends, before it is killed. */
+const SETTLE_MS = 3000;
 /** A replacement marker older than this belongs to an installer that died. */
 const REPLACING_STALE_MS = 30_000;
 
@@ -67,6 +69,12 @@ export interface AgentCredentialRunLease {
   admitted: Promise<void>;
   /** Drop the lease once the agent has exited; idempotent. */
   release: () => void;
+  /**
+   * Drop the lease once the agent's recorded groups have exited too, killing
+   * them after `graceMs`: a closed app-server only got SIGTERM, and until it
+   * exits it can still write the old login back.
+   */
+  releaseAfterProcessGroups: (graceMs?: number) => Promise<void>;
   /**
    * Record a detached process group the agent started (`running`), or drop it
    * once its leader exited, so stopping the run also covers it.
@@ -95,6 +103,7 @@ export interface TrackAgentCredentialRunOptions {
 const NO_LEASE: AgentCredentialRunLease = {
   admitted: Promise.resolve(),
   release: () => {},
+  releaseAfterProcessGroups: async () => {},
   setProcessGroup: () => {},
 };
 
@@ -181,7 +190,7 @@ export const trackAgentCredentialRun = ({
       new Error(`Could not register this run on the installed credential: ${message}`),
     );
     admitted.catch(() => {});
-    return { admitted, release: () => {}, setProcessGroup: () => {} };
+    return { ...NO_LEASE, admitted };
   }
 
   let stopped = false;
@@ -229,7 +238,28 @@ export const trackAgentCredentialRun = ({
   };
   // Many exit paths call `process.exit` directly; the lease must not outlive them.
   process.once('exit', release);
-  return { admitted, release, setProcessGroup };
+  const releaseAfterProcessGroups = async (graceMs = SETTLE_MS) => {
+    if (released) return;
+    // The run is over: a replacement arriving now only waits for the lease,
+    // and must not turn the finished run into a failed one.
+    stopped = true;
+    const alive = () => record.processGroups.filter(isGroupAlive);
+    const settled = async (timeoutMs: number) => {
+      const deadline = Date.now() + timeoutMs;
+      while (alive().length > 0 && Date.now() < deadline) await sleep(POLL_MS);
+    };
+    await settled(graceMs);
+    for (const pgid of alive()) {
+      try {
+        process.kill(-pgid, 'SIGKILL');
+      } catch {
+        // Already gone.
+      }
+    }
+    await settled(FORCE_MS);
+    release();
+  };
+  return { admitted, release, releaseAfterProcessGroups, setProcessGroup };
 };
 
 /**

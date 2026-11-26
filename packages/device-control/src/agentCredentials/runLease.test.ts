@@ -81,6 +81,39 @@ describe('trackAgentCredentialRun', () => {
     expect(await readdir(runDir)).toEqual([]);
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'holds the lease after the run until its app-server group exits',
+    async () => {
+      // An app-server that ignores the SIGTERM a normal close sends.
+      const appServer = spawn(
+        process.execPath,
+        ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"],
+        { detached: true, stdio: 'ignore' },
+      );
+      const exited = new Promise((resolve) => appServer.once('exit', resolve));
+      const onStop = vi.fn();
+      const lease = trackAgentCredentialRun({ env: env(), heartbeatMs: 10, onStop, pid: 4242 });
+      lease.setProcessGroup(appServer.pid!, true);
+
+      try {
+        const released = lease.releaseAfterProcessGroups(200);
+        // A replacement arriving now still sees the run, but the finished run
+        // is not reported as stopped.
+        await writeFile(path.join(runDir, '4242.stop'), 'replaced');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(await readdir(runDir)).toContain('4242.json');
+
+        await released;
+        expect(await exited).toBeDefined();
+        expect(await readdir(runDir)).toEqual([]);
+        expect(onStop).not.toHaveBeenCalled();
+      } finally {
+        lease.release();
+        appServer.kill('SIGKILL');
+      }
+    },
+  );
+
   it('ignores a stop request left for an earlier process with the same pid', async () => {
     await mkdir(runDir, { recursive: true });
     await writeFile(path.join(runDir, '4242.stop'), 'old');

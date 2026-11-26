@@ -1101,8 +1101,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
 
   // ─── Drain + finish ───────────────────────────────────────────────────────
-  // The agent has exited; a replacement still waits out its app-server group.
-  credentialRun.release();
+  // The agent has exited; hold the lease until its app-server group has too.
+  await credentialRun.releaseAfterProcessGroups();
 
   const { code, signal, sessionId } = result;
 
