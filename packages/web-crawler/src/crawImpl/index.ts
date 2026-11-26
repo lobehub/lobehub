@@ -1,4 +1,5 @@
 import { browserless } from './browserless';
+import { clawifi } from './clawifi';
 import { deepseek } from './deepseek';
 import { exa } from './exa';
 import { firecrawl } from './firecrawl';
@@ -9,6 +10,7 @@ import { tavily } from './tavily';
 
 export const crawlImpls = {
   browserless,
+  clawifi,
   deepseek,
   exa,
   firecrawl,

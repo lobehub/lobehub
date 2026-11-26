@@ -59,6 +59,7 @@ export const searchRouter = router({
         impls: z
           .enum([
             'browserless',
+            'clawifi',
             'deepseek',
             'exa',
             'firecrawl',
