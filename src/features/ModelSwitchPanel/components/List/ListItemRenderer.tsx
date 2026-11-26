@@ -183,9 +183,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               >
                 <ModelRowRender
                   activeEffortLabel={activeSecondaryText}
+                  badge={item.type === 'featured-model-item' ? item.badge : undefined}
                   isActive={isActive}
                   model={item.model}
                   newLabel={newLabel}
+                  pricePlaceholder={item.type === 'featured-model-item' ? '—' : undefined}
                   provider={item.provider.id}
                   proBadgeLabel={
                     restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined

@@ -202,7 +202,13 @@ describe('buildListItems', () => {
 });
 
 describe('buildListItems featured and hidden models', () => {
-  const featuredModels = [{ modelId: 'auto', providerId: 'lobehub' }];
+  const featuredModels = [
+    {
+      badge: 'Own quota',
+      modelId: 'auto',
+      providerId: 'lobehub',
+    },
+  ];
 
   it('lists a featured model first, out of its provider list', () => {
     const items = buildListItems(
@@ -214,6 +220,7 @@ describe('buildListItems featured and hidden models', () => {
     );
 
     expect(items[0]).toMatchObject({
+      badge: 'Own quota',
       model: { id: 'auto' },
       type: 'featured-model-item',
     });
