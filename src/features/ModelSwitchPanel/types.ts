@@ -8,6 +8,17 @@ export type GroupMode = 'byModel' | 'byProvider';
 
 export type PricingMode = 'image' | 'video';
 
+/**
+ * A model listed in its own section above the provider list. Declared here rather than imported
+ * from the business guard, because a host overriding that module may not export the type.
+ */
+export interface FeaturedModel {
+  /** One line under the model name saying what it is for. */
+  description?: string;
+  modelId: string;
+  providerId: string;
+}
+
 export interface ModelWithProviders {
   displayName: string;
   model: AiModelForSelect;
@@ -36,6 +47,12 @@ export type ListItem =
       model: AiModelForSelect;
       provider: EnabledProviderWithModels;
       type: 'provider-model-item';
+    }
+  | {
+      description?: string;
+      model: AiModelForSelect;
+      provider: EnabledProviderWithModels;
+      type: 'featured-model-item';
     }
   | {
       provider: EnabledProviderWithModels;

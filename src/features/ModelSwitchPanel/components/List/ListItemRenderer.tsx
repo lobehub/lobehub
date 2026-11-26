@@ -42,7 +42,7 @@ interface ListItemRendererProps {
   onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
-  onRestrictedModelClick?: () => void;
+  onRestrictedModelClick?: (modelId: string, providerId: string) => void;
   subscribeScroll?: (cb: () => void) => () => void;
 }
 
@@ -155,8 +155,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         );
       }
 
+      case 'featured-model-item':
       case 'provider-model-item': {
         const key = menuKey(item.provider.id, item.model.id);
+        const description = item.type === 'featured-model-item' ? item.description : undefined;
         const isActive = key === activeKey;
         const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
@@ -173,23 +175,26 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.model.id, item.provider.id);
                     onClose();
                     return;
                   }
                   void selectModel(item.model.id, item.provider.id);
                 }}
               >
-                <ModelRowRender
-                  activeEffortLabel={activeSecondaryText}
-                  isActive={isActive}
-                  model={item.model}
-                  newLabel={newLabel}
-                  provider={item.provider.id}
-                  proBadgeLabel={
-                    restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
-                  }
-                />
+                <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                  <ModelRowRender
+                    activeEffortLabel={activeSecondaryText}
+                    isActive={isActive}
+                    model={item.model}
+                    newLabel={newLabel}
+                    provider={item.provider.id}
+                    proBadgeLabel={
+                      restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
+                    }
+                  />
+                  {description && <div className={styles.featuredDescription}>{description}</div>}
+                </Flexbox>
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
@@ -222,7 +227,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   e.preventDefault();
                   setDetailOpen(false);
                   if (restricted) {
-                    onRestrictedModelClick?.();
+                    onRestrictedModelClick?.(item.data.model.id, singleProvider.id);
                     onClose();
                     return;
                   }
