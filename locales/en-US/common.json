@@ -211,6 +211,7 @@
   "downloadingUpdate": "Downloading {{percent}}%",
   "duplicate": "Duplicate",
   "edit": "Edit",
+  "editInNewTopic": "Edit in new topic",
   "errors.invalidFileFormat": "Invalid file format",
   "errors.unimplementedType": "Unimplemented type. Please check the reducer.",
   "export": "Export Configuration",

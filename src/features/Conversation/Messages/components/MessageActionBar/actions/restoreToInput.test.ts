@@ -99,7 +99,9 @@ describe('restoreToInputAction', () => {
     });
 
     const [, { files }] = dispatchChatUploadFileList.mock.calls[0];
-    expect(files[0].file.type).toBe('image/*');
+    // A concrete image mime, so the optimistic bubble renders it as an image.
+    expect(files[0].file.type).toBe('image/png');
+    expect(files[0].fileType).toBe('image/png');
     expect(files[1].file).toMatchObject({ name: 'a.pdf', size: 100, type: 'application/pdf' });
   });
 

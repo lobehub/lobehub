@@ -211,6 +211,7 @@
   "downloadingUpdate": "正在下载 {{percent}}%",
   "duplicate": "创建副本",
   "edit": "编辑",
+  "editInNewTopic": "在新会话中编辑",
   "errors.invalidFileFormat": "文件格式错误",
   "errors.unimplementedType": "暂未实现的 type，请检查 reducer",
   "export": "导出配置",
