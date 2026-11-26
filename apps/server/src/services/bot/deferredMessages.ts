@@ -1,5 +1,6 @@
 import type { Message } from 'chat';
 import debug from 'debug';
+import type { ChainableCommander, Redis } from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { redisService } from '@/server/services/redis';
@@ -108,24 +109,55 @@ export async function deferBotMessages(
   }
 }
 
+/**
+ * How long one replay may hold an entry before another replay takes it over.
+ * Handing a message to the SDK in queue mode returns at the job handoff, so
+ * this only expires when the replaying process died mid-dispatch.
+ */
+const REPLAY_CLAIM_TTL_SECONDS = 5 * 60;
+
+const REPLAY_PENDING = 'pending';
+const REPLAY_DONE = 'done';
+
+/**
+ * Per-entry replay marker: `pending` while a replay dispatches the entry,
+ * `done` once the SDK accepted it. Lives as long as the deferred list itself.
+ * It sits on the list's own client so `done` and the entry's removal commit in
+ * one transaction.
+ */
+export const buildDeferredReplayMarkerKey = (
+  applicationId: string,
+  platformThreadId: string,
+  messageId: string,
+): string => `bot:deferred-replayed:${applicationId}:${platformThreadId}:${messageId}`;
+
 interface DeferredSnapshotEntry {
+  marker: string;
   message: DeferredBotMessage;
   /** The stored string, acknowledged as is: re-serializing a parsed entry may not match it. */
   payload: string;
 }
 
+const execOrThrow = async (transaction: ChainableCommander, action: string) => {
+  const results = await transaction.exec();
+  const failure = results?.find(([error]) => error)?.[0];
+  if (!results || failure) throw failure ?? new Error(`${action} aborted`);
+  return results;
+};
+
 const readSnapshot = async (
+  redis: Redis,
   applicationId: string,
   platformThreadId: string,
 ): Promise<DeferredSnapshotEntry[]> => {
-  const redis = getAgentRuntimeRedisClient();
-  if (!redis) return [];
   const key = buildDeferredMessagesKey(applicationId, platformThreadId);
   const payloads = await redis.lrange(key, 0, -1);
   const entries: DeferredSnapshotEntry[] = [];
   for (const payload of payloads) {
     try {
-      entries.push({ message: JSON.parse(payload) as DeferredBotMessage, payload });
+      const message = JSON.parse(payload) as DeferredBotMessage;
+      const marker = buildDeferredReplayMarkerKey(applicationId, platformThreadId, message.id);
+      entries.push({ marker, message, payload });
     } catch (error) {
       log('Invalid deferred payload for thread=%s: %O', platformThreadId, error);
     }
@@ -138,8 +170,36 @@ export async function readDeferredBotMessages(
   applicationId: string,
   platformThreadId: string,
 ): Promise<DeferredBotMessage[]> {
-  const entries = await readSnapshot(applicationId, platformThreadId);
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return [];
+  const entries = await readSnapshot(redis, applicationId, platformThreadId);
   return entries.map((entry) => entry.message);
+}
+
+/**
+ * Split a snapshot into entries this replay now owns, entries an earlier
+ * replay already handed to the SDK, and (implicitly) entries another replay
+ * is still dispatching — those stay queued for their owner to acknowledge.
+ */
+async function claimSnapshotEntries(redis: Redis, snapshot: DeferredSnapshotEntry[]) {
+  const claims = redis.multi();
+  for (const entry of snapshot) {
+    claims.set(entry.marker, REPLAY_PENDING, 'EX', REPLAY_CLAIM_TTL_SECONDS, 'NX');
+  }
+  const claimResults = await execOrThrow(claims, 'Deferred replay claim');
+
+  const claimed: DeferredSnapshotEntry[] = [];
+  const taken: DeferredSnapshotEntry[] = [];
+  snapshot.forEach((entry, index) => {
+    (claimResults[index]?.[1] === 'OK' ? claimed : taken).push(entry);
+  });
+  if (taken.length === 0) return { claimed, replayed: [] };
+
+  const lookups = redis.multi();
+  for (const entry of taken) lookups.get(entry.marker);
+  const states = await execOrThrow(lookups, 'Deferred replay lookup');
+  const replayed = taken.filter((_, index) => states[index]?.[1] === REPLAY_DONE);
+  return { claimed, replayed };
 }
 
 /**
@@ -184,27 +244,61 @@ const withinReplayBudget = async (
 };
 
 /**
- * Acknowledge only the snapshot successfully handed to the SDK. New arrivals
- * remain queued. A failure (including process/Redis failure) leaves the original
- * entries available for retry. Delivery is at-least-once if a batch partially
- * succeeds or completion callbacks overlap; copies of one message are replayed
- * once, and a message is delivered at most {@link MAX_REPLAYS_PER_MESSAGE} times
- * (failed deliveries and replays parked again while the topic is busy do not count).
+ * Replay a snapshot of the parked messages, each entry at most once.
+ *
+ * Every entry is claimed before dispatch and marked `done` in the same
+ * transaction that removes it, so a later pass (a completion callback, a
+ * retried replay job, or the post-enqueue recheck) never hands an entry the
+ * SDK already accepted to the agent again. A replayed message gets a fresh id
+ * (see `buildReplayMessages`), so the SDK's own inbound dedupe cannot catch
+ * this. An entry another replay is still dispatching is left to that replay.
+ *
+ * Of the claimed entries, copies of one message are replayed once, and a
+ * message is delivered at most {@link MAX_REPLAYS_PER_MESSAGE} times (failed
+ * deliveries and replays parked again while the topic is busy do not count).
+ * New arrivals remain queued. A failed replay releases its claims and leaves
+ * the batch queued for retry, so a batch that partially succeeds is still
+ * delivered at least once.
  */
 export async function replayDeferredBotMessages(
   applicationId: string,
   platformThreadId: string,
   replay: (entries: DeferredBotMessage[]) => Promise<void>,
 ): Promise<void> {
-  const snapshot = await readSnapshot(applicationId, platformThreadId);
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return;
+  const snapshot = await readSnapshot(redis, applicationId, platformThreadId);
   if (snapshot.length === 0) return;
+
+  const { claimed, replayed } = await claimSnapshotEntries(redis, snapshot);
+  if (claimed.length === 0 && replayed.length === 0) return;
+  if (replayed.length > 0) {
+    console.warn(
+      `[bot:deferred-messages] skipped ${replayed.length} already-replayed deferred message(s)`,
+      {
+        applicationId,
+        messageIds: replayed.map((entry) => entry.message.id),
+        platformThreadId,
+      },
+    );
+  }
+
   const due = await withinReplayBudget(
     applicationId,
     platformThreadId,
-    latestPerOrigin(snapshot.map((entry) => entry.message)),
+    latestPerOrigin(claimed.map((entry) => entry.message)),
   );
   if (due.length > 0) {
-    await replay(due);
+    try {
+      await replay(due);
+    } catch (error) {
+      try {
+        await redis.del(...claimed.map((entry) => entry.marker));
+      } catch (releaseError) {
+        log('Could not release replay claims for thread=%s: %O', platformThreadId, releaseError);
+      }
+      throw error;
+    }
     await redisService.botDeferred.countReplays(
       applicationId,
       platformThreadId,
@@ -212,12 +306,9 @@ export async function replayDeferredBotMessages(
     );
   }
 
-  const redis = getAgentRuntimeRedisClient();
-  if (!redis) throw new Error('Redis unavailable while acknowledging deferred messages');
   const key = buildDeferredMessagesKey(applicationId, platformThreadId);
   const transaction = redis.multi();
-  for (const entry of snapshot) transaction.lrem(key, 1, entry.payload);
-  const results = await transaction.exec();
-  const failure = results?.find(([error]) => error)?.[0];
-  if (!results || failure) throw failure ?? new Error('Deferred replay acknowledgement aborted');
+  for (const entry of claimed) transaction.set(entry.marker, REPLAY_DONE, 'EX', TTL_SECONDS);
+  for (const entry of [...claimed, ...replayed]) transaction.lrem(key, 1, entry.payload);
+  await execOrThrow(transaction, 'Deferred replay acknowledgement');
 }

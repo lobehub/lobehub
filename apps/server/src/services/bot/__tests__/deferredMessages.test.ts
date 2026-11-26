@@ -38,6 +38,86 @@ function createRedis(execResult: unknown = []) {
 
 const makeMessage = (id: string) => ({ id, toJSON: () => ({ _type: 'chat:Message', id }) }) as any;
 
+/**
+ * Stateful in-memory stand-in for the ioredis subset the deferred queue uses
+ * (lists, `SET … NX`, `GET`, `DEL`, and `MULTI` that applies queued commands
+ * in order), so a test can follow an entry across several replays.
+ */
+function createStatefulRedis() {
+  const lists = new Map<string, string[]>();
+  const strings = new Map<string, string>();
+  const ops: Record<string, (...args: any[]) => unknown> = {
+    del: (...keys: string[]) => keys.filter((key) => strings.delete(key)).length,
+    expire: () => 1,
+    get: (key: string) => strings.get(key) ?? null,
+    lrange: (key: string) => [...(lists.get(key) ?? [])],
+    lrem: (key: string, count: number, value: string) => {
+      const list = lists.get(key) ?? [];
+      let removed = 0;
+      lists.set(
+        key,
+        list.filter((item) => {
+          if (removed < count && item === value) {
+            removed += 1;
+            return false;
+          }
+          return true;
+        }),
+      );
+      return removed;
+    },
+    ltrim: (key: string, start: number) => {
+      lists.set(key, (lists.get(key) ?? []).slice(start));
+      return 'OK';
+    },
+    rpush: (key: string, ...values: string[]) => {
+      const list = [...(lists.get(key) ?? []), ...values];
+      lists.set(key, list);
+      return list.length;
+    },
+    set: (key: string, value: string, ...flags: unknown[]) => {
+      if (flags.includes('NX') && strings.has(key)) return null;
+      strings.set(key, value);
+      return 'OK';
+    },
+  };
+  const multi = () => {
+    const queued: Array<() => unknown> = [];
+    const chain: any = {
+      exec: vi.fn(async () => queued.map((run) => [null, run()])),
+    };
+    for (const [name, op] of Object.entries(ops)) {
+      chain[name] = (...args: unknown[]) => {
+        queued.push(() => op(...args));
+        return chain;
+      };
+    }
+    return chain;
+  };
+  const client: any = { multi: vi.fn(multi) };
+  for (const [name, op] of Object.entries(ops))
+    client[name] = vi.fn(async (...args) => op(...args));
+  return { client, lists, strings };
+}
+
+/**
+ * Mirrors what the Feishu client's `extractFiles` does to a reply: it writes
+ * the quoted message onto `message.raw.referenced_message` in place.
+ */
+const resolveQuoteInPlace = (entries: any[]) => {
+  for (const entry of entries) {
+    entry.raw.referenced_message = { author: { username: 'Calvin' }, content: 'sheet link' };
+  }
+};
+
+const QUOTED_REPLY = {
+  _type: 'chat:Message',
+  author: { userId: 'ou_1', userName: 'Wenbing' },
+  id: 'om_reply',
+  raw: { message_id: 'om_reply', parent_id: 'om_parent' },
+  text: 'can you create the tasks?',
+};
+
 describe('deferredMessages', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -91,24 +171,108 @@ describe('deferredMessages', () => {
   });
 
   it('retains the full batch when replay fails, then acknowledges only those entries on retry', async () => {
-    const redis = createRedis();
-    const payloads = ['{"id":"1"}', '{"id":"2"}'];
-    redis.lrange.mockResolvedValue(payloads);
-    mockGetAgentRuntimeRedisClient.mockReturnValue(redis);
+    const redis = createStatefulRedis();
+    const key = 'bot:deferred-messages:app-1:t';
+    redis.lists.set(key, ['{"id":"1"}', '{"id":"2"}']);
+    mockGetAgentRuntimeRedisClient.mockReturnValue(redis.client);
     const replay = vi
       .fn()
       .mockRejectedValueOnce(new Error('adapter unavailable'))
-      .mockResolvedValueOnce(undefined);
-    const acknowledged = () => redis.calls.filter(([cmd]) => cmd === 'lrem');
+      .mockImplementationOnce(async () => {
+        // A follow-up parked while the retry dispatches belongs to the next pass.
+        redis.lists.get(key)!.push('{"id":"3"}');
+      });
     await expect(replayDeferredBotMessages('app-1', 't', replay)).rejects.toThrow(
       'adapter unavailable',
     );
-    expect(acknowledged()).toEqual([]);
+    expect(redis.lists.get(key)).toEqual(['{"id":"1"}', '{"id":"2"}']);
     await replayDeferredBotMessages('app-1', 't', replay);
     expect(replay).toHaveBeenNthCalledWith(2, [{ id: '1' }, { id: '2' }]);
-    expect(acknowledged()).toEqual(
-      payloads.map((payload) => ['lrem', 'bot:deferred-messages:app-1:t', 1, payload]),
-    );
+    expect(redis.lists.get(key)).toEqual(['{"id":"3"}']);
+  });
+
+  describe('replay idempotency', () => {
+    const KEY = 'bot:deferred-messages:app-1:t';
+
+    const parkQuotedReply = async (redis: ReturnType<typeof createStatefulRedis>) => {
+      mockGetAgentRuntimeRedisClient.mockReturnValue(redis.client);
+      await deferBotMessages('app-1', 't', [
+        { id: QUOTED_REPLY.id, toJSON: () => QUOTED_REPLY },
+      ] as any);
+    };
+
+    it('removes an entry the replay mutated in place, so the next completion does not replay it again', async () => {
+      const redis = createStatefulRedis();
+      await parkQuotedReply(redis);
+      const replay = vi.fn(async (entries: any[]) => resolveQuoteInPlace(entries));
+
+      await replayDeferredBotMessages('app-1', 't', replay);
+      // The run started by that replay completes and its callback replays again.
+      await replayDeferredBotMessages('app-1', 't', replay);
+
+      expect(replay).toHaveBeenCalledTimes(1);
+      expect(redis.lists.get(KEY)).toEqual([]);
+    });
+
+    it('skips and removes an entry that was already replayed when its acknowledgement was lost', async () => {
+      const redis = createStatefulRedis();
+      await parkQuotedReply(redis);
+      const parked = [...redis.lists.get(KEY)!];
+      const replay = vi.fn().mockResolvedValue(undefined);
+      await replayDeferredBotMessages('app-1', 't', replay);
+      // Simulate the ack never reaching Redis (crash, or a retried replay job).
+      redis.lists.set(KEY, parked);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await replayDeferredBotMessages('app-1', 't', replay);
+
+      expect(replay).toHaveBeenCalledTimes(1);
+      expect(redis.lists.get(KEY)).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('skipped 1 already-replayed deferred message(s)'),
+        expect.objectContaining({ applicationId: 'app-1', messageIds: ['om_reply'] }),
+      );
+      warn.mockRestore();
+    });
+
+    it('leaves an entry that another replay is still dispatching to that replay', async () => {
+      const redis = createStatefulRedis();
+      await parkQuotedReply(redis);
+      let releaseFirst!: () => void;
+      const firstDispatch = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      const replay = vi.fn().mockReturnValueOnce(firstDispatch).mockResolvedValue(undefined);
+
+      const first = replayDeferredBotMessages('app-1', 't', replay);
+      await vi.waitFor(() => expect(replay).toHaveBeenCalledTimes(1));
+      // The post-enqueue recheck in `deferWhileTopicBusy` can start a second
+      // replay while the completion callback's replay is still dispatching.
+      await replayDeferredBotMessages('app-1', 't', replay);
+      releaseFirst();
+      await first;
+
+      expect(replay).toHaveBeenCalledTimes(1);
+      expect(redis.lists.get(KEY)).toEqual([]);
+    });
+
+    it('releases the claim when replay fails so the retry dispatches the entry again', async () => {
+      const redis = createStatefulRedis();
+      await parkQuotedReply(redis);
+      const replay = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('adapter unavailable'))
+        .mockResolvedValueOnce(undefined);
+
+      await expect(replayDeferredBotMessages('app-1', 't', replay)).rejects.toThrow(
+        'adapter unavailable',
+      );
+      expect(redis.lists.get(KEY)).toHaveLength(1);
+      await replayDeferredBotMessages('app-1', 't', replay);
+
+      expect(replay).toHaveBeenCalledTimes(2);
+      expect(redis.lists.get(KEY)).toEqual([]);
+    });
   });
 
   it('reports Redis transaction errors as a failed write', async () => {

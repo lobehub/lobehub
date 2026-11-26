@@ -17,12 +17,17 @@ const { MAX_REPLAYS_PER_MESSAGE, deferBotMessages, replayDeferredBotMessages } =
 const { getOriginMessageId } = await import('../mergeMessages');
 
 /**
- * In-memory Redis: the list commands the deferred queue sends to the agent-runtime client, and
- * (as `service`) the counter commands `redisService.botDeferred` sends to its own client.
+ * In-memory Redis: the list and replay-marker commands the deferred queue sends to the
+ * agent-runtime client, and (as `service`) the counter commands `redisService.botDeferred` sends
+ * to its own client.
  */
 function createStatefulRedis() {
   const lists = new Map<string, string[]>();
-  /** Set to lose every acknowledgement, the way a crash between the run and the `LREM` would. */
+  const markers = new Map<string, string>();
+  /**
+   * Set to lose every acknowledgement transaction (`done` marker and `LREM` together), the way a
+   * crash between the run and the acknowledgement would.
+   */
   const faults = { loseAcks: false };
   const counters = new Map<string, number>();
   const ttls = new Map<string, number>();
@@ -31,11 +36,13 @@ function createStatefulRedis() {
     return lists.get(key)!;
   };
   const commands = {
+    del: (...keys: string[]) => keys.filter((key) => markers.delete(key)).length,
     expire: () => 1,
+    get: (key: string) => markers.get(key) ?? null,
     lrem: (key: string, count: number, value: string) => {
       const items = list(key);
       const index = items.indexOf(value);
-      if (faults.loseAcks || count !== 1 || index === -1) return 0;
+      if (count !== 1 || index === -1) return 0;
       items.splice(index, 1);
       return 1;
     },
@@ -48,11 +55,18 @@ function createStatefulRedis() {
       return 'OK';
     },
     rpush: (key: string, ...values: string[]) => list(key).push(...values),
+    set: (key: string, value: string, ...flags: unknown[]) => {
+      if (flags.includes('NX') && markers.has(key)) return null;
+      markers.set(key, value);
+      return 'OK';
+    },
   };
   return {
     counters,
+    del: async (...keys: string[]) => commands.del(...keys),
     faults,
     lists,
+    markers,
     service: {
       mget: async (...keys: string[]) =>
         keys.map((key) => (counters.has(key) ? String(counters.get(key)) : null)),
@@ -79,11 +93,16 @@ function createStatefulRedis() {
     lrange: async (key: string) => [...list(key)],
     multi: () => {
       const queued: Array<() => unknown> = [];
+      let acknowledges = false;
       const chain: any = {
-        exec: async () => queued.map((run) => [null, run()]),
+        exec: async () =>
+          faults.loseAcks && acknowledges
+            ? queued.map(() => [null, 0])
+            : queued.map((run) => [null, run()]),
       };
       for (const [name, run] of Object.entries(commands)) {
         chain[name] = (...args: any[]) => {
+          if (name === 'lrem') acknowledges = true;
           queued.push(() => (run as (...a: any[]) => unknown)(...args));
           return chain;
         };
@@ -162,13 +181,15 @@ describe('deferred replay loop', () => {
   });
 
   it('drops a message once it has been run the maximum number of times', async () => {
-    // A loop the collapse cannot see: every lap runs the message, and it is never removed.
+    // A loop neither the collapse nor the replay markers can see: every lap runs the message,
+    // its acknowledgement never commits, and its claim expires before the next pass.
     redis.faults.loseAcks = true;
     await deferBotMessages('app-1', 'feishu:group:oc_1', [asMessage('om_1')]);
     const replay = vi.fn().mockResolvedValue(undefined);
 
     for (let round = 0; round < MAX_REPLAYS_PER_MESSAGE + 2; round++) {
       await replayDeferredBotMessages('app-1', 'feishu:group:oc_1', replay);
+      redis.markers.clear();
     }
 
     expect(replay).toHaveBeenCalledTimes(MAX_REPLAYS_PER_MESSAGE);
