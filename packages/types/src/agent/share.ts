@@ -1,5 +1,35 @@
 import type { ShareVisibility } from '../topic';
-import type { WorkItem } from '../work';
+import type { CollectionWorkVersionMetadata, WorkItem } from '../work';
+
+/**
+ * An Agent share's reach. `private` pauses it for everyone but the owner. `card` admits only the
+ * people the owner granted it to by sharing the Agent's card into a Channel; its link page stays
+ * closed. `link` opens it to anyone signed in with the link, card grantees included.
+ */
+export type AgentShareVisibility = ShareVisibility | 'card';
+
+/** A share that admits someone besides its owner: by link, or by an owner's card. */
+export const isLiveAgentShareVisibility = (visibility: string | null | undefined) =>
+  visibility === 'link' || visibility === 'card';
+
+/**
+ * Where an Agent share grant came from: the owner's card message the grantee added it from, or
+ * the owner approving the grantee's request to use the Agent (`channel_agent_grants` row).
+ */
+export type AgentShareGrantSource =
+  | { channelId: string; messageId: string; type: 'card' }
+  | { channelId: string; grantId: string; type: 'request' };
+
+/** A person the owner granted a `card` share to, for the owner's share settings. */
+export interface AgentShareGrantItem {
+  createdAt: Date;
+  user: {
+    avatar: string | null;
+    fullName: string | null;
+    id: string;
+    username: string | null;
+  };
+}
 
 /** A creator-authored visitor task, independent of the agent's opening questions. */
 export interface AgentShareDemoCase {
@@ -21,7 +51,11 @@ export type SharedAgentWork = Pick<
   | 'type'
   | 'updatedAt'
   | 'url'
-> & { totalCost: number | null };
+> & {
+  /** A collection Work's images, so its card shows the count and opens the grid; `url` is the cover. */
+  collection?: CollectionWorkVersionMetadata;
+  totalCost: number | null;
+};
 
 /** Creator-side delivery aggregates; selection for the showcase does not change the sample. */
 export interface SharedAgentDeliveryStats {
@@ -47,10 +81,8 @@ export interface SharedAgentTerms {
    * this share; `0` means attachments are off and the composer hides them.
    */
   maxFileStorage: number;
-  /** Maximum conversations this visitor may open against the share. */
-  maxTopicsPerVisitor: number;
-  /** Maximum message turns allowed inside one shared conversation. */
-  maxTurnsPerTopic: number;
+  /** Messages this visitor may send to the share in total. */
+  maxMessagesPerVisitor: number;
 }
 
 /**
@@ -63,7 +95,7 @@ export interface SharedAgentStats extends SharedAgentDeliveryStats {
   visitors: number;
 }
 
-/** Agent metadata exposed to signed-in visitors of an agent share. */
+/** Agent metadata exposed to visitors of an agent share, including signed-out ones. */
 export interface SharedAgentUploadAbility {
   audio: boolean;
   image: boolean;
@@ -123,12 +155,12 @@ export interface SharedAgentData {
   toolGrants: string[];
   /**
    * Which media the visitor composer may attach, derived server-side from
-   * the agent's model abilities so the model itself stays hidden (it is
-   * owner-facing unless `showModelInfo` opts in). Documents are always
-   * allowed; these only gate direct media input.
+   * the agent's model abilities so the model itself, which is
+   * owner-facing, stays hidden. Documents are always allowed; these only gate
+   * direct media input.
    */
   uploadAbility: SharedAgentUploadAbility;
-  visibility: ShareVisibility;
+  visibility: AgentShareVisibility;
 }
 
 /**

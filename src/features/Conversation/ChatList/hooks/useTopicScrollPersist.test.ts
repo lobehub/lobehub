@@ -143,6 +143,38 @@ describe('useTopicScrollPersist', () => {
       expect(onHandled).toHaveBeenCalledTimes(1);
     });
 
+    it('opens on a deep link without jumping to the bottom while rows keep resizing', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const onHandled = vi.fn();
+
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          headerOffset: 1,
+          messageDeepLink: {
+            displayMessageId: 'm20',
+            id: 'm20',
+            index: 20,
+            navigationKey: 'navigation-1',
+            onHandled,
+          },
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      // A revalidation re-measures rows for a while after the list opens.
+      for (let frame = 0; frame < 40; frame += 1) {
+        handle.scrollSize += 100;
+        await advanceFrames(1);
+      }
+
+      expect(handle.scrollToIndex).toHaveBeenCalledWith(21, { align: 'center' });
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
+      expect(onHandled).toHaveBeenCalledWith(expect.objectContaining({ displayMessageId: 'm20' }));
+    });
+
     it('centers the exact nested message after its virtual row mounts', async () => {
       const handle = createFakeVList({ scrollSize: 6000 });
       const container = document.createElement('div');
@@ -214,6 +246,47 @@ describe('useTopicScrollPersist', () => {
 
         expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
         expect(onHandled).not.toHaveBeenCalled();
+      } finally {
+        container.remove();
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      }
+    });
+
+    it('settles on the owning row when the deep link allows it', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const container = document.createElement('div');
+      const taskGroup = document.createElement('div');
+      taskGroup.id = 'task-group';
+      container.append(taskGroup);
+      document.body.append(container);
+      const onHandled = vi.fn();
+      const originalScrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = vi.fn();
+
+      try {
+        renderHook(() =>
+          useTopicScrollPersist({
+            containerRef: { current: container },
+            contextKey: 'main_agt_1_tpc_a',
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
+            messageDeepLink: {
+              displayMessageId: 'task-group',
+              id: 'task-1',
+              index: 12,
+              navigationKey: 'navigation-1',
+              onHandled,
+              settleOnOwningRow: true,
+            },
+            virtuaRef: refOf(handle),
+          }),
+        );
+
+        await advanceFrames(40);
+
+        expect(onHandled).toHaveBeenCalledWith(
+          expect.objectContaining({ displayMessageId: 'task-group', id: 'task-1' }),
+        );
       } finally {
         container.remove();
         Element.prototype.scrollIntoView = originalScrollIntoView;

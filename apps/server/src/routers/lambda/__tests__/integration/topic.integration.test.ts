@@ -20,6 +20,8 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn(function (callback: () => void) {
     return callback();
   }),
+  // Trash / archive hand the worktree cleanup to the host; nothing to run here.
+  afterUnscoped: vi.fn(),
 }));
 
 const legacyInboxTopic = (userId: string): typeof topics.$inferInsert => ({
@@ -322,6 +324,49 @@ describe('Topic Router Integration Tests', () => {
   });
 
   describe('getTopics', () => {
+    it('lists the child topics of a parent across agents, leaving out unlinked ones', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const { agents } = await import('@/database/schemas');
+      const [otherAgent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Other Agent', userId })
+        .returning();
+      const link = (topicId: string, extra: Record<string, unknown> = {}) => ({
+        openedBy: { agentId: testAgentId, at: '2026-11-18T00:00:00.000Z', topicId, ...extra },
+      });
+      const [parent] = await serverDB
+        .insert(topics)
+        .values({ agentId: testAgentId, title: 'Parent', userId })
+        .returning();
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, metadata: link(parent.id), title: 'Same agent', userId },
+        { agentId: otherAgent.id, metadata: link(parent.id), title: 'Other agent', userId },
+        {
+          agentId: testAgentId,
+          metadata: link(parent.id, { detachedAt: '2026-11-18T01:00:00.000Z' }),
+          title: 'Unlinked',
+          userId,
+        },
+        { agentId: testAgentId, title: 'Unrelated', userId },
+      ]);
+
+      const result = await caller.getTopics({ openedByTopicId: parent.id });
+
+      expect(result.items.map((t: any) => t.title).sort()).toEqual(['Other agent', 'Same agent']);
+      expect(result.total).toBe(2);
+      // A child may run another agent: the row says which.
+      expect(result.items.find((t: any) => t.title === 'Other agent')).toMatchObject({
+        agentId: otherAgent.id,
+      });
+
+      // `agentId` still narrows it.
+      const narrowed = await caller.getTopics({
+        agentId: otherAgent.id,
+        openedByTopicId: parent.id,
+      });
+      expect(narrowed.items.map((t: any) => t.title)).toEqual(['Other agent']);
+    });
+
     it('should get topics by agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 

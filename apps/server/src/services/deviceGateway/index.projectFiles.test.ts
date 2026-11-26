@@ -19,8 +19,6 @@ const createReadProjectFileInput = () => ({
 
 const createProjectSkillItem = () => ({
   description: 'spa',
-  fileCount: 3,
-  files: ['SKILL.md'],
   name: 'spa-routes',
   path: '/proj/.agents/skills/spa-routes/SKILL.md',
   previewRoot: '/proj',
@@ -71,8 +69,7 @@ describe('DeviceGateway', () => {
             createProjectSkillItem(),
             {
               description: 'device',
-              fileCount: 2,
-              files: ['SKILL.md', 'refs.md'],
+              disableModelInvocation: true,
               name: 'device-writer',
               path: '/home/.agents/skills/device-writer/SKILL.md',
               previewRoot: '/home/.agents/skills',
@@ -99,6 +96,7 @@ describe('DeviceGateway', () => {
           },
           {
             description: 'device',
+            disableModelInvocation: true,
             name: 'device-writer',
             path: '/home/.agents/skills/device-writer/SKILL.md',
             scope: 'device',
@@ -108,6 +106,46 @@ describe('DeviceGateway', () => {
       expect(mockClient.invokeRpc).toHaveBeenCalledWith(
         { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
         { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+    });
+
+    it('supports a device-only scan without inventing a working directory', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: {
+          instructions: [],
+          skills: [
+            {
+              description: 'Device writing guidance',
+              name: 'writing',
+              path: '/home/user/.agents/skills/writing/SKILL.md',
+              scope: 'device',
+            },
+          ],
+        },
+        success: true,
+      });
+
+      const result = await new DeviceGateway().initWorkspace({
+        deviceId: 'dev-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      expect(result).toEqual({
+        instructions: [],
+        skills: [
+          {
+            description: 'Device writing guidance',
+            name: 'writing',
+            path: '/home/user/.agents/skills/writing/SKILL.md',
+            scope: 'device',
+          },
+        ],
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1', workspaceId: 'workspace-1' },
+        { method: 'initWorkspace', params: { scope: undefined } },
       );
     });
 

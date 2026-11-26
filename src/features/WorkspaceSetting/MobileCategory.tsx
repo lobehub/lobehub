@@ -9,6 +9,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import Cell from '@/components/Cell';
 import Divider from '@/components/Cell/Divider';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 import { useWorkspaceSettingCategory } from './hooks/useCategory';
@@ -19,9 +20,9 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     fontSize: 12,
     fontWeight: 500,
-    paddingBlockStart: '16px',
+    paddingBlockStart: densityTokens['--lobe-density-card-padding'],
     paddingBlockEnd: '4px',
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 
@@ -50,8 +51,14 @@ const MobileWorkspaceSettingCategory = memo(() => {
               icon={item.key === WorkspaceSettingsTabs.Profile ? UserCircle : item.icon}
               key={item.key}
               label={item.label}
-              // Same URL builder as the desktop sidebar and settings search.
-              onClick={() => navigate(getWorkspaceSettingsTabUrl(slug, item.key))}
+              // Same URL builder as the desktop sidebar and settings search; a
+              // personal-only account tab opens its personal page instead.
+              onClick={() =>
+                navigate(
+                  item.href ?? getWorkspaceSettingsTabUrl(slug, item.key as WorkspaceSettingsTabs),
+                  { escape: true },
+                )
+              }
             />
           ))}
         </Fragment>

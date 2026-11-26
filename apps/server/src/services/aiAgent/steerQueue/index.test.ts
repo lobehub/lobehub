@@ -33,6 +33,8 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { steerQueue: { boundOperations, drain, restore, settle } },
 }));
 vi.mock('./liveRuns', () => ({ findOwnLiveRuns, isRunAlive }));
+const { readFollowUpMode } = vi.hoisted(() => ({ readFollowUpMode: vi.fn() }));
+vi.mock('./followUpMode', () => ({ readFollowUpMode }));
 const { findMessageById } = vi.hoisted(() => ({ findMessageById: vi.fn() }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
@@ -177,6 +179,24 @@ describe('startQueuedFollowUp', () => {
     assertCanUseAgentRunConversation.mockResolvedValue(undefined);
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
     findMessageById.mockResolvedValue(undefined);
+    readFollowUpMode.mockResolvedValue('steer');
+  });
+
+  it('starts only the oldest follow-up in Queue mode; the rest wait for that turn to end', async () => {
+    readFollowUpMode.mockResolvedValue('queue');
+    drain.mockResolvedValue([followUp('b', 2, {}), followUp('a', 1, {})]);
+
+    await expect(startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }))).resolves.toEqual({
+      operationId: 'op-2',
+    });
+
+    expect(startComposerRun.mock.calls[0][1].prompt).toBe('a');
+    // `b` goes back to the head of the queue, unbound, for the run just started.
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'tpc-1' }),
+      expect.any(String),
+      ['b'],
+    );
   });
 
   it('starts the drained follow-ups as their own turn on the same surface', async () => {

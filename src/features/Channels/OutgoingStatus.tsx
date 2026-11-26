@@ -1,3 +1,4 @@
+import { ChatErrorType } from '@lobechat/types';
 import { Button, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { CircleAlert } from 'lucide-react';
@@ -5,9 +6,10 @@ import { useTranslation } from 'react-i18next';
 
 import { channelActions, type ChannelOutgoingMessage } from '@/store/channel';
 
+import { receiptErrorKey } from './MessageReceipts';
 import { statusStyles, toneStyles } from './styles';
 
-/** Below a message this tab sent that failed: retry and delete. */
+/** Below a message this tab sent that failed: why, when the server said, then retry and delete. */
 export function OutgoingStatus({
   message,
   onRetry,
@@ -19,15 +21,20 @@ export function OutgoingStatus({
   const { t } = useTranslation('channel');
   // A message still sending shows faded in place (`ChannelMessage` `pending`), with no line here.
   if (message.status !== 'failed') return null;
+  const reasonKey = receiptErrorKey(message.errorType);
+  // A retry resends the same files, so a refused attachment can only be deleted and reattached.
+  const canRetry = message.errorType !== ChatErrorType.ChannelAttachmentUnavailable;
   return (
     <span role="alert" {...stylex.props(statusStyles.receipts, statusStyles.state)}>
       <span {...stylex.props(statusStyles.state, toneStyles.error)}>
         <Icon icon={CircleAlert} size={12} />
-        {t('outgoing.failed')}
+        {reasonKey ? t(reasonKey) : t('outgoing.failed')}
       </span>
-      <Button size="small" type="text" onClick={() => onRetry(message)}>
-        {t('outgoing.retry')}
-      </Button>
+      {canRetry && (
+        <Button size="small" type="text" onClick={() => onRetry(message)}>
+          {t('outgoing.retry')}
+        </Button>
+      )}
       <Button size="small" type="text" onClick={() => channelActions.discardSend(message)}>
         {t('outgoing.discard')}
       </Button>

@@ -38,7 +38,7 @@ vi.mock('@/libs/trpc/client', () => ({
     connector: {
       callTool: { mutate: vi.fn() },
       getDeviceMcpManifest: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
+      getForRun: { query: vi.fn() },
       getLocalCallToken: { mutate: vi.fn() },
     },
   },
@@ -240,7 +240,7 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
       const { lambdaClient } = await import('@/libs/trpc/client');
       environment.isDesktop = true;
       useConnector({ connectVia: 'device' });
-      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+      vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
         ...connector,
         metadata: { connectVia: 'device' },
         tools: [{ permission: 'auto', toolName: 'list_files' }],
@@ -248,7 +248,11 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
 
       await mcpService.invokeMcpToolCall(payload as ChatToolPayload, {});
 
-      expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({ id: 'nas-id' });
+      expect(lambdaClient.connector.getForRun.query).toHaveBeenCalledWith({
+        agentId: undefined,
+        identifier: 'nas',
+        topicId: undefined,
+      });
       const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
       expect(sent).toMatchObject({
         args: { dir: '/' },
@@ -258,12 +262,12 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
       expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
     });
 
-    // `getForEdit` leaves OAuth tokens out; the call fetches the current one
+    // `getForRun` leaves OAuth tokens out; the call fetches the current one
     it("sends an OAuth connector's access token with a call it runs over IPC", async () => {
       const { lambdaClient } = await import('@/libs/trpc/client');
       environment.isDesktop = true;
       useConnector({ connectVia: 'device' });
-      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+      vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
         ...connector,
         credentials: null,
         metadata: { connectVia: 'device' },
@@ -279,11 +283,64 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
 
       expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({
         id: 'nas-id',
+        run: { agentId: undefined, identifier: 'nas', topicId: undefined },
       });
       const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
       expect(sent).toMatchObject({
         http: { auth: { accessToken: 'fresh-access', type: 'oauth2' }, url: TAILNET_URL },
       });
+    });
+
+    // The selector names the account whose token goes out; the server never sees it
+    it("sends the selected account's token and strips the selector for a connector holding several", async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      environment.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue({
+        connectors: [
+          {
+            ...connector,
+            links: [
+              { id: 'lnk_a', name: 'Alice' },
+              { id: 'lnk_b', name: 'Bob' },
+            ],
+            metadata: { connectVia: 'device' },
+          },
+        ],
+      });
+      vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
+        ...connector,
+        credentials: null,
+        metadata: { connectVia: 'device' },
+        oidcConfig: { clientId: 'cid', issuer: 'https://auth.example.com' },
+        tools: [
+          { inputSchema: { properties: { dir: {} } }, permission: 'auto', toolName: 'list_files' },
+        ],
+      } as never);
+      vi.mocked(lambdaClient.connector.getLocalCallToken.mutate).mockResolvedValue({
+        accessToken: 'bob-access',
+        type: 'oauth2',
+      } as never);
+
+      await mcpService.invokeMcpToolCall(
+        { ...payload, arguments: '{"dir":"/","link_id":"lnk_b"}' } as ChatToolPayload,
+        {},
+      );
+
+      expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({
+        id: 'nas-id',
+        linkId: 'lnk_b',
+        run: { agentId: undefined, identifier: 'nas', topicId: undefined },
+      });
+      const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
+      expect(sent).toMatchObject({
+        args: { dir: '/' },
+        http: { auth: { accessToken: 'bob-access', type: 'oauth2' } },
+      });
+      expect((sent as { args: Record<string, unknown> }).args).not.toHaveProperty('link_id');
+
+      await expect(mcpService.invokeMcpToolCall(payload as ChatToolPayload, {})).rejects.toThrow(
+        'link_id is required',
+      );
     });
 
     it('leaves one set to connect through the device to the server on the web', async () => {
@@ -316,7 +373,7 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
       await mcpService.invokeMcpToolCall(payload as ChatToolPayload, {});
 
       expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledOnce();
-      expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+      expect(lambdaClient.connector.getForRun.query).not.toHaveBeenCalled();
       expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
     });
   });

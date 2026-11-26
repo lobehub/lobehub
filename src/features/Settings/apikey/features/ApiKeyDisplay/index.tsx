@@ -13,6 +13,12 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  // A full key is wider than the list column; wrap it so revealing one row
+  // does not push the table's other columns and row actions out of view.
+  revealed: {
+    whiteSpace: 'normal',
+    wordBreak: 'break-all',
+  },
 });
 
 interface ApiKeyDisplayProps {
@@ -44,7 +50,7 @@ const ApiKeyDisplay: FC<ApiKeyDisplayProps> = ({ apiKey }) => {
 
   return (
     <Flexbox horizontal align={'center'} gap={4}>
-      <span {...stylex.props(styles.key)}>{displayValue}</span>
+      <span {...stylex.props(styles.key, isVisible && styles.revealed)}>{displayValue}</span>
       <ActionIcon
         icon={isVisible ? EyeOff : Eye}
         size={'small'}

@@ -81,6 +81,50 @@ describe('heterogeneous agent model discovery', () => {
     vi.resetModules();
   });
 
+  it('asks for Antigravity sign-in when the device model catalog is inaccessible', async () => {
+    rejectExecFile(
+      Object.assign(new Error('Command failed'), {
+        stderr: 'Error: Please sign in to view available models.',
+      }),
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/agy', type: 'antigravity' }),
+    ).resolves.toMatchObject({ error: { code: 'auth_required' }, status: 'error' });
+  });
+
+  it.each([
+    { agent: 'antigravity', service: '1', stripped: true },
+    { agent: 'antigravity', service: undefined, stripped: false },
+    { agent: 'opencode', service: '1', stripped: false },
+  ] as const)(
+    'passes the right SSH environment for $agent in service mode $service',
+    async ({ agent, service, stripped }) => {
+      const env = {
+        DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus',
+        ...(service ? { LOBEHUB_CONNECT_SERVICE: service } : {}),
+        SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
+        SSH_CLIENT: 'test-client',
+        SSH_CONNECTION: 'test-connection',
+        SSH_TTY: '/dev/pts/1',
+      };
+      resolveExecFile('gemini-test  Gemini Test');
+      const { listHeterogeneousAgentModels } = await importModule();
+
+      await listHeterogeneousAgentModels({ command: '/custom/agent-cli', env, type: agent });
+
+      const subprocessEnv = execFileMock.mock.calls[0][2]?.env;
+      expect(subprocessEnv).toMatchObject({
+        DBUS_SESSION_BUS_ADDRESS: env.DBUS_SESSION_BUS_ADDRESS,
+        SSH_AUTH_SOCK: env.SSH_AUTH_SOCK,
+      });
+      for (const key of ['SSH_CLIENT', 'SSH_CONNECTION', 'SSH_TTY'] as const) {
+        expect(subprocessEnv?.[key]).toBe(stripped ? undefined : env[key]);
+      }
+      expect(env.SSH_CONNECTION).toBe('test-connection');
+    },
+  );
+
   it('queries DeepSeek Harness through ACP instead of --list-models', async () => {
     const models = [{ id: '["gateway","model"]', modelId: 'model', providerId: 'gateway' }];
     listDshAcpModelsMock.mockResolvedValue(models);

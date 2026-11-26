@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertWatchKeywordsWritable,
@@ -317,14 +317,6 @@ describe('mergeBotSettingsForCreate', () => {
     expect(settings).toMatchObject({ botWakeDisabled: true, dmPolicy: 'open' });
   });
 
-  it('switches bot wake off for a heterogeneous agent created without settings', async () => {
-    const db = dbWith({ heterogeneousProvider: { type: 'claude-code' } });
-
-    expect(
-      (await mergeBotSettingsForCreate(db, 'agt', 'discord', undefined))?.botWakeDisabled,
-    ).toBe(true);
-  });
-
   it('writes the defaults for an ordinary agent created without settings, reactions off', async () => {
     const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined);
 
@@ -360,6 +352,46 @@ describe('mergeBotSettingsForCreate', () => {
     const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'wechat', {});
 
     expect(settings).not.toHaveProperty('reactionMode');
+  });
+
+  describe('DingTalk behind the message gateway', () => {
+    afterEach(() => {
+      gatewayState.useMessageGateway = true;
+    });
+
+    it('defaults a new bot to webhook mode when the gateway cannot host its Stream connection', async () => {
+      gatewayState.useMessageGateway = true;
+
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', undefined))?.connectionMode,
+      ).toBe('webhook');
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {}))?.connectionMode,
+      ).toBe('webhook');
+    });
+
+    it('keeps the mode the caller chose', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {
+        connectionMode: 'websocket',
+      });
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('keeps Stream mode without the gateway', async () => {
+      gatewayState.useMessageGateway = false;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {});
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('leaves platforms the gateway can host on their default', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {});
+
+      expect(settings?.connectionMode).not.toBe('webhook');
+    });
   });
 
   it('keeps a heterogeneous agent opted in when the caller turned it on', async () => {

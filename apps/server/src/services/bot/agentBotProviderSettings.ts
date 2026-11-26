@@ -10,6 +10,7 @@ import {
   hasPassiveListeningRule,
 } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
 import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 
 import { getBotMessageRouter } from './BotMessageRouter';
@@ -61,8 +62,33 @@ function withNewBotReactionMode(
   return { ...withDefaults, [REACTION_MODE_KEY]: NEW_BOT_REACTION_MODE };
 }
 
+const CONNECTION_MODE_KEY = 'connectionMode';
+
+/**
+ * Webhook mode for a new bot on a platform the external message gateway cannot host, when the
+ * gateway is on and the caller did not pick a mode. The settings form gets the same default from
+ * `restrictPlatformToWebhook`; this covers callers that skip the form (the Message tool), whose
+ * schema-default persistent mode would otherwise be refused on connect.
+ */
+function withGatewayConnectionMode(
+  platform: string | undefined,
+  requested: Record<string, unknown> | undefined,
+  merged: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!platform || requested?.[CONNECTION_MODE_KEY] !== undefined) return merged;
+  if (!isMessageGatewayHostingUnavailable(platformRegistry.getPlatform(platform))) return merged;
+  if (!new GatewayService().useMessageGateway) return merged;
+
+  return {
+    ...(merged ?? mergeBotSettingsForPersist(platform, {})),
+    [CONNECTION_MODE_KEY]: 'webhook',
+  };
+}
+
 /**
  * The settings to persist for a bot being created: {@link mergeBotSettingsForPersist}, with
+ * - webhook mode when the external message gateway is on and cannot host the platform's
+ *   persistent connection ({@link withGatewayConnectionMode}), unless the caller chose a mode.
  * - status reactions off ({@link NEW_BOT_REACTION_MODE}) when the platform offers them and the
  *   caller did not choose. The schema default stays on, since it is also what a bot saved before
  *   the field existed reads as; only a new bot starts quiet.
@@ -77,7 +103,11 @@ export async function mergeBotSettingsForCreate(
   platform: string | undefined,
   settings: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown> | undefined> {
-  const merged = withNewBotReactionMode(platform, settings);
+  const merged = withGatewayConnectionMode(
+    platform,
+    settings,
+    withNewBotReactionMode(platform, settings),
+  );
   const key = BOT_WAKE_SETTING_KEYS.disabled;
   if (settings?.[key] !== undefined) return merged;
   // Omitted settings persist as `{}`, where an absent switch reads as on: the defaults are written

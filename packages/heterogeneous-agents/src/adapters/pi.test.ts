@@ -7,6 +7,22 @@ const dataFor = (events: HeterogeneousAgentEvent[], type: HeterogeneousAgentEven
   events.filter((event) => event.type === type).map((event) => event.data);
 
 describe('PiAdapter', () => {
+  it('reports a user message read mid-run by its text, and ignores the prompt', () => {
+    const adapter = new PiAdapter();
+    const userEnd = (content: unknown) => ({
+      message: { content, role: 'user' },
+      type: 'message_end',
+    });
+
+    expect(adapter.adapt(userEnd('start'))).toEqual([]);
+    adapter.adapt({ type: 'turn_start' });
+
+    const steered = adapter.adapt(userEnd([{ text: 'also run the tests', type: 'text' }]));
+    expect(dataFor(steered, 'step_complete')).toEqual([
+      { phase: 'user_message', text: 'also run the tests' },
+    ]);
+  });
+
   it('captures the native session and maps streamed text, usage, and settlement', () => {
     const adapter = new PiAdapter();
     const events = [

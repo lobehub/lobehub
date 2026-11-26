@@ -2,10 +2,16 @@ import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lob
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileEnv } from '@/envs/file';
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, scopedLambdaClient } from '@/libs/trpc/client';
 
 import { hashFile } from '../hashFile';
-import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
+import {
+  UPLOAD_NETWORK_ERROR,
+  UPLOAD_STALL_TIMEOUT,
+  UPLOAD_STALLED_ERROR,
+  UploadRequestError,
+  uploadService,
+} from '../upload';
 
 const { mockHashHex, mockHashUpdate } = vi.hoisted(() => ({
   mockHashHex: vi.fn(() => 'streamed-hash'),
@@ -20,8 +26,8 @@ vi.mock('@lobechat/utils', () => ({
   uuid: () => 'mock-uuid',
 }));
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
+vi.mock('@/libs/trpc/client', () => {
+  const lambdaClient = {
     upload: {
       abortS3MultipartUpload: {
         mutate: vi.fn(),
@@ -42,8 +48,10 @@ vi.mock('@/libs/trpc/client', () => ({
         mutate: vi.fn(),
       },
     },
-  },
-}));
+  };
+  // Every scope shares one mock, so the assertions below see each call whichever scope made it.
+  return { lambdaClient, scopedLambdaClient: vi.fn(() => lambdaClient) };
+});
 
 vi.mock('js-sha256', () => ({
   sha256: {
@@ -375,6 +383,34 @@ describe('UploadService', () => {
       });
     });
 
+    it('should fail a PUT that stops sending bytes, but not one that keeps moving', async () => {
+      vi.useFakeTimers();
+      const xhr = new XMLHttpRequest();
+      Object.assign(xhr, { abort: vi.fn() });
+      let progress: ((event: Partial<ProgressEvent>) => void) | undefined;
+      vi.spyOn(xhr.upload, 'addEventListener').mockImplementation((event, handler) => {
+        // @ts-expect-error - mock implementation
+        if (event === 'progress') progress = handler;
+      });
+      vi.spyOn(xhr, 'addEventListener').mockImplementation(() => {});
+
+      try {
+        const result = uploadService.uploadToServerS3(mockFile, {});
+        const settled = expect(result).rejects.toThrow(UPLOAD_STALLED_ERROR);
+        await vi.advanceTimersByTimeAsync(UPLOAD_STALL_TIMEOUT - 1000);
+        progress?.({ lengthComputable: true, loaded: 2, total: 4 });
+        await vi.advanceTimersByTimeAsync(UPLOAD_STALL_TIMEOUT - 1000);
+        expect(xhr.abort).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1000);
+        await settled;
+        expect(xhr.abort).toHaveBeenCalled();
+        expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should handle upload error', async () => {
       const xhr = new XMLHttpRequest();
 
@@ -388,7 +424,32 @@ describe('UploadService', () => {
         }
       });
 
-      await expect(uploadService.uploadToServerS3(mockFile, {})).rejects.toBe('Bad Request');
+      await expect(uploadService.uploadToServerS3(mockFile, {})).rejects.toMatchObject({
+        name: 'UploadRequestError',
+        status: 400,
+      });
+    });
+
+    it('should keep the status and storage code when HTTP/2 leaves statusText empty', async () => {
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event === 'load') {
+          Object.assign(xhr, {
+            responseText:
+              '<?xml version="1.0"?><Error><Code>SignatureDoesNotMatch</Code><Message>The request signature we calculated does not match</Message></Error>',
+            status: 403,
+            statusText: '',
+          });
+          // @ts-expect-error - mock implementation
+          handler({});
+        }
+      });
+
+      const error = await uploadService.uploadToServerS3(mockFile, {}).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(UploadRequestError);
+      expect(error).toMatchObject({ code: 'SignatureDoesNotMatch', retryable: false, status: 403 });
+      expect((error as Error).message).toContain('HTTP 403 SignatureDoesNotMatch');
     });
 
     it('should use custom directory when provided', async () => {
@@ -422,6 +483,22 @@ describe('UploadService', () => {
       });
 
       expect(result.path).toBe(customPath);
+    });
+
+    it('reserves the upload in the pinned workspace instead of the active one', async () => {
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event === 'load') {
+          // @ts-expect-error - mock implementation
+          handler({ target: { status: 200 } });
+        }
+      });
+      vi.mocked(scopedLambdaClient).mockClear();
+
+      await uploadService.uploadToServerS3(mockFile, { workspaceId: 'ws-channel' });
+
+      expect(scopedLambdaClient).toHaveBeenCalledWith('ws-channel');
+      expect(scopedLambdaClient).not.toHaveBeenCalledWith(undefined);
     });
 
     it('should upload large files as sequential S3 parts without buffering the whole file', async () => {
@@ -461,16 +538,105 @@ describe('UploadService', () => {
       expect(slice).toHaveBeenCalledTimes(2);
       expect(xhr.send).toHaveBeenCalledTimes(2);
       expect(arrayBuffer).not.toHaveBeenCalled();
-      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith({
-        partCount: 2,
-        parts: [
-          { etag: 'etag-value', partNumber: 1 },
-          { etag: 'etag-value', partNumber: 2 },
-        ],
-        pathname: expect.stringContaining('mock-uuid.bin'),
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith(
+        {
+          partCount: 2,
+          parts: [
+            { etag: 'etag-value', partNumber: 1 },
+            { etag: 'etag-value', partNumber: 2 },
+          ],
+          pathname: expect.stringContaining('mock-uuid.bin'),
+          uploadId: 'upload-1',
+        },
+        { signal: undefined },
+      );
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should resend a multipart part that storage failed transiently', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const largeFile = new File(['small fixture'], 'large.bin');
+        Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 });
+        Object.defineProperty(largeFile, 'slice', {
+          value: vi.fn(() => new Blob(['part'])),
+        });
+        vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
+          uploadId: 'upload-1',
+        });
+        vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
+          'https://example.com/part',
+        );
+        vi.mocked(lambdaClient.upload.completeS3MultipartUpload.mutate).mockResolvedValue({
+          success: true,
+        });
+
+        let attempts = 0;
+        const xhr = new XMLHttpRequest();
+        vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+          if (event !== 'load') return;
+          attempts += 1;
+          // The last part fails once with S3's idle-socket timeout, then succeeds.
+          Object.assign(
+            xhr,
+            attempts === 2
+              ? {
+                  responseText: '<Error><Code>RequestTimeout</Code></Error>',
+                  status: 400,
+                  statusText: '',
+                }
+              : { responseText: '', status: 200, statusText: '' },
+          );
+          // @ts-expect-error - mock implementation
+          handler({});
+        });
+
+        const upload = uploadService.uploadToServerS3(largeFile, {});
+        await vi.runAllTimersAsync();
+        await upload;
+
+        expect(xhr.send).toHaveBeenCalledTimes(3);
+        expect(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).toHaveBeenCalledTimes(3);
+        expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledOnce();
+        expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not resend a multipart part that storage refused outright', async () => {
+      const largeFile = new File(['small fixture'], 'large.bin');
+      Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 });
+      Object.defineProperty(largeFile, 'slice', { value: vi.fn(() => new Blob(['part'])) });
+      vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
         uploadId: 'upload-1',
       });
-      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+      vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
+        'https://example.com/part',
+      );
+      vi.mocked(lambdaClient.upload.abortS3MultipartUpload.mutate).mockResolvedValue({
+        success: true,
+      });
+
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event !== 'load') return;
+        Object.assign(xhr, {
+          responseText: '<Error><Code>AccessDenied</Code></Error>',
+          status: 403,
+          statusText: '',
+        });
+        // @ts-expect-error - mock implementation
+        handler({});
+      });
+
+      await expect(uploadService.uploadToServerS3(largeFile, {})).rejects.toMatchObject({
+        code: 'AccessDenied',
+        status: 403,
+      });
+      expect(xhr.send).toHaveBeenCalledOnce();
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).toHaveBeenCalledOnce();
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).not.toHaveBeenCalled();
     });
 
     it('should abort the S3 multipart upload when a part cannot be signed', async () => {
@@ -493,6 +659,55 @@ describe('UploadService', () => {
         uploadId: 'upload-1',
       });
       expect(lambdaClient.upload.completeS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signUpload', () => {
+    it('should PUT to the URL signed ahead, under the signed key, without signing again', async () => {
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
+      const xhrMock = {
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'load') handler();
+        }),
+        getResponseHeader: vi.fn(),
+        open: vi.fn(),
+        send: vi.fn(),
+        setRequestHeader: vi.fn(),
+        status: 200,
+        upload: { addEventListener: vi.fn() },
+      };
+      global.XMLHttpRequest = vi.fn(function () {
+        return xhrMock;
+      }) as unknown as typeof XMLHttpRequest;
+
+      const signed = uploadService.signUpload(mockFile)!;
+      const result = await uploadService.uploadToServerS3(mockFile, { signed });
+
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).toHaveBeenCalledOnce();
+      expect(xhrMock.open).toHaveBeenCalledWith('PUT', mockPreSignUrl);
+      expect(result.path).toBe(signed.metadata.pathname);
+    });
+
+    it('should leave multipart-sized files unsigned', () => {
+      const largeFile = new File(['x'], 'large.bin');
+      Object.defineProperty(largeFile, 'size', { value: 65 * 1024 * 1024 });
+
+      expect(uploadService.signUpload(largeFile)).toBeUndefined();
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should release a skipped signed upload, but not one that never signed', async () => {
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValueOnce(
+        mockPreSignUrl,
+      );
+      await uploadService.releaseSignedUpload(uploadService.signUpload(mockFile)!);
+      expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalledOnce();
+
+      vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockRejectedValueOnce(
+        new Error('quota exceeded'),
+      );
+      await uploadService.releaseSignedUpload(uploadService.signUpload(mockFile)!);
+      expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalledOnce();
     });
   });
 

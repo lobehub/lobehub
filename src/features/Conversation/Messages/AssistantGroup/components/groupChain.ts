@@ -12,7 +12,7 @@ import type {
 } from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
-import { isBreakoutTool, isImageBearingTool } from '../toolRenderRules';
+import { getBreakoutPredicate } from '../toolRenderRules';
 import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 
@@ -301,10 +301,16 @@ export const buildChainView = (
     enableMcpApps?: boolean;
     hasActiveOperation: boolean;
     isGenerating: boolean;
+    /**
+     * User setting `showImageReadPreview`: off folds tools that only read an
+     * image into the run instead of breaking them out on their own row.
+     * @default true
+     */
+    showImageReads?: boolean;
   },
 ): GroupChainView => {
   const { isGenerating } = state;
-  const isBreakout = state.enableMcpApps ? isBreakoutTool : isImageBearingTool;
+  const isBreakout = getBreakoutPredicate(state);
   const partitioned = partitionAssistantGroupBlocks(chain.blocks, {
     isBreakoutTool: isBreakout,
     isGenerating,

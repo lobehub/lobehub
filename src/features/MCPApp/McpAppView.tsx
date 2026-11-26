@@ -54,8 +54,18 @@ export interface McpAppViewProps {
   arguments?: string;
   /** Rendered instead when the view can't be loaded. */
   fallback: ReactNode;
-  host: Pick<AppViewContext, 'agentId' | 'sendMessage' | 'canSendMessage'>;
+  /**
+   * `topicId`: the conversation the result belongs to. The view is read, and
+   * calls, with the same run scope the producing tool call had (a private
+   * agent's own topic can reach its owner's private connectors).
+   */
+  host: Pick<AppViewContext, 'agentId' | 'sendMessage' | 'canSendMessage' | 'topicId'>;
   identifier: string;
+  /**
+   * The connector account the view acts as, when its arguments cannot name
+   * one: an entrypoint opens with `{}`.
+   */
+  linkId?: string;
   /** The message carrying the result; its agent is the one the view acts as. */
   messageId?: string;
   /** This desktop's own MCP process produced the result: the view is read, and calls, there. */
@@ -91,6 +101,7 @@ const McpAppView = memo<McpAppViewProps>(
     fallback,
     identifier,
     host,
+    linkId,
     presentation,
     onThisDevice = false,
     resourceUri,
@@ -103,7 +114,7 @@ const McpAppView = memo<McpAppViewProps>(
     // This view's requests still waiting for the user's answer
     const [waitingApprovals, setWaitingApprovals] = useState(0);
     const isDark = useIsDark();
-    const { agentId, sendMessage, canSendMessage } = host;
+    const { agentId, sendMessage, canSendMessage, topicId } = host;
     const containerRef = useRef<HTMLDivElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [appModes, setAppModes] = useState<McpAppDisplayMode[]>();
@@ -112,8 +123,11 @@ const McpAppView = memo<McpAppViewProps>(
     const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
     const { data, error, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
       agentId,
+      linkId,
       onThisDevice,
       server,
+      toolArguments: args,
+      topicId,
     });
 
     const resource = pickAppResource(data, resourceUri);
@@ -170,11 +184,13 @@ const McpAppView = memo<McpAppViewProps>(
       canSendMessage,
       identifier,
       isDark,
+      linkId,
       onThisDevice,
       result,
       sendMessage,
       server,
       t,
+      topicId,
     });
     const bridgeRef = useRef<AppBridge>(undefined);
     // The session of the view now in the frame

@@ -20,6 +20,7 @@ import {
 import { experimentCaseProgress, overviewAttention } from '@/features/LobeBench/overviewResults';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import RunRow from '@/routes/(main)/eval/features/Experiments/RunRow';
+import { densityTokens } from '@/styles/density.stylex';
 
 // The Evaluation Lab's dashboard cards (features/BenchmarkCard, Experiments/SummaryCard),
 // drawn for Lobe Bench: its pages, its leaderboard rule.
@@ -62,7 +63,7 @@ const styles = stylex.create({
   },
   // The headline band: the leader's pass rate, as the Evaluation Lab shows a best pass rate.
   metricBand: {
-    padding: 16,
+    padding: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorFillQuaternary,
   },
@@ -75,7 +76,7 @@ const styles = stylex.create({
   },
   ctaBand: {
     paddingBlock: 24,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: cssVar.colorBorderSecondary,

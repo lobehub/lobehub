@@ -21,6 +21,22 @@ import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
+import { getEventsCapability } from './events/capability';
+import { createMcpEventError } from './events/errors';
+import { nameHeaderFetch } from './events/nameHeaderFetch';
+import type {
+  McpEventType,
+  McpSubscribeEventParams,
+  McpUnsubscribeEventParams,
+} from './events/schema';
+import {
+  MCP_EVENTS_EXTENSION_ID,
+  McpListEventsResultSchema,
+  McpSubscribeEventParamsSchema,
+  McpSubscribeEventResultSchema,
+  McpUnsubscribeEventParamsSchema,
+  McpUnsubscribeEventResultSchema,
+} from './events/schema';
 import { getToolUiResourceUri, isToolVisibleToApp, MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
 import { createMCPSSRFBlockedError, isMCPSSRFBlockedError, mcpSsrfSafeFetch } from './ssrf';
 import {
@@ -191,12 +207,16 @@ export interface MCPClientOptions {
    * Apps, and servers answer as they would any other client.
    */
   mcpApps?: boolean;
+  /** Advertise SEP-3415 and enable webhook subscription requests. */
+  mcpEvents?: boolean;
 }
 
 export class MCPClient {
   private mcp: Client;
   private transport: Transport;
   private params: MCPClientParams;
+  private mcpEvents: boolean;
+  private rawDiscoverCapabilities?: unknown;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
   private readonly mcpApps: boolean;
@@ -211,13 +231,26 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
+  constructor(
+    params: MCPClientParams,
+    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
+  ) {
     this.mcpApps = mcpApps;
     this.params = params;
+    this.mcpEvents = mcpEvents;
     this.mcp = new Client(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
       {
-        ...(mcpApps ? { capabilities: MCP_APPS_CLIENT_CAPABILITIES } : {}),
+        ...(mcpApps || mcpEvents
+          ? {
+              capabilities: {
+                extensions: {
+                  ...(mcpApps ? MCP_APPS_CLIENT_CAPABILITIES.extensions : {}),
+                  ...(mcpEvents ? { [MCP_EVENTS_EXTENSION_ID]: {} } : {}),
+                },
+              },
+            }
+          : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
@@ -269,8 +302,14 @@ export class MCPClient {
         // Create StreamableHTTPClientTransport and pass headers. Every request
         // it makes (including redirects and OAuth) goes through the SSRF-safe
         // fetch: this client runs on the server, never on the user's device.
+        // MCP Events wraps that same fetch to add the Mcp-Name header, so it never
+        // trades the SSRF guard for the header.
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
-          fetch: mcpSsrfSafeFetch,
+          fetch: mcpEvents
+            ? nameHeaderFetch(mcpSsrfSafeFetch, (capabilities) => {
+                this.rawDiscoverCapabilities = capabilities;
+              })
+            : mcpSsrfSafeFetch,
           requestInit: { headers },
         });
 
@@ -401,6 +440,81 @@ export class MCPClient {
 
   getProtocolEra() {
     return this.mcp.getProtocolEra();
+  }
+
+  getEventsCapability() {
+    if (!this.mcpEvents) return { supported: false };
+    return getEventsCapability(
+      this.rawDiscoverCapabilities ?? this.mcp.getServerCapabilities(),
+      this.getProtocolEra(),
+    );
+  }
+
+  private assertEventsCapability() {
+    if (!this.getEventsCapability().supported) {
+      throw createMCPError(
+        'VALIDATION_ERROR',
+        'MCP Events Unsupported: this connection does not support events',
+      );
+    }
+  }
+
+  async listEvents(): Promise<McpEventType[]> {
+    this.assertEventsCapability();
+    const events: McpEventType[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    try {
+      do {
+        const page = await this.mcp.request(
+          { method: 'events/list', params: cursor ? { cursor } : {} },
+          McpListEventsResultSchema,
+          { timeout: MCP_TOOL_TIMEOUT },
+        );
+        events.push(...page.events);
+        cursor = page.nextCursor;
+        if (cursor) {
+          if (cursors.has(cursor))
+            throw createMCPError(
+              'VALIDATION_ERROR',
+              'MCP events/list returned a repeated pagination cursor',
+            );
+          cursors.add(cursor);
+        }
+      } while (cursor);
+      return events;
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
+  }
+
+  async subscribeEvent(input: McpSubscribeEventParams) {
+    this.assertEventsCapability();
+    try {
+      return await this.mcp.request(
+        { method: 'events/subscribe', params: McpSubscribeEventParamsSchema.parse(input) },
+        McpSubscribeEventResultSchema,
+        { timeout: MCP_TOOL_TIMEOUT },
+      );
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
+  }
+
+  async unsubscribeEvent(input: McpUnsubscribeEventParams) {
+    this.assertEventsCapability();
+    try {
+      return await this.mcp.request(
+        { method: 'events/unsubscribe', params: McpUnsubscribeEventParamsSchema.parse(input) },
+        McpUnsubscribeEventResultSchema,
+        { timeout: MCP_TOOL_TIMEOUT },
+      );
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
   }
 
   /**

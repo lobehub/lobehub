@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { dateTimeSchema, jsonObjectSchema } from './common.type';
+
 const HttpMcpServerUrlSchema = z
   .url()
   .max(2048)
@@ -79,3 +81,53 @@ export interface McpServerResponse {
   tools: McpServerToolResponse[];
   updatedAt: Date;
 }
+
+// ==================== Response Schemas ====================
+
+/** Connector and tool ids are Postgres `uuid` columns. */
+const uuidSchema = z.string().meta({ format: 'uuid' });
+
+/** Values of `ConnectorToolPermission`, the only ones the column ever stores. */
+const MCP_TOOL_PERMISSIONS = ['auto', 'disabled', 'needs_approval'] as const;
+
+/** Values of `ConnectorStatus`, the only ones the connector column ever stores. */
+const MCP_SERVER_STATUSES = ['connected', 'disconnected', 'error'] as const;
+
+export const McpServerToolSchema = z
+  .object({
+    description: z.string().nullable(),
+    id: uuidSchema,
+    /** The JSON Schema the MCP server advertised for the tool's input. */
+    inputSchema: jsonObjectSchema.nullable(),
+    name: z.string(),
+    permission: z.enum(MCP_TOOL_PERMISSIONS),
+  })
+  .strict()
+  .meta({ id: 'McpServerTool' });
+
+/** Credentials are write-only: only `hasCredentials` is ever returned. */
+export const McpServerSchema = z
+  .object({
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    hasCredentials: z.boolean(),
+    id: uuidSchema,
+    identifier: z.string(),
+    isEnabled: z.boolean(),
+    name: z.string(),
+    serverUrl: z.url(),
+    status: z.enum(MCP_SERVER_STATUSES),
+    tools: z.array(McpServerToolSchema),
+    updatedAt: dateTimeSchema,
+  })
+  .strict()
+  .meta({ id: 'McpServer' });
+
+export const McpServerSyncResultSchema = z
+  .object({
+    id: uuidSchema,
+    status: z.literal('connected'),
+    toolCount: z.number().int().min(0),
+  })
+  .strict()
+  .meta({ id: 'McpServerSyncResult' });

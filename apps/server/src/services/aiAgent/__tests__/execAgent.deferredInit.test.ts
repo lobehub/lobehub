@@ -51,6 +51,12 @@ vi.mock('@/server/featureFlags', () => ({
 
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
+    // A `card` share admits only `card-grantee`; the grant lookup itself is the model's test.
+    admitsVisitor: vi.fn(
+      async (_db: unknown, share: { visibility: string }, visitorUserId: string) =>
+        share.visibility === 'link' ||
+        (share.visibility === 'card' && visitorUserId === 'card-grantee'),
+    ),
     findByShareId: mockFindShareById,
     isRunStillAuthorized: vi.fn().mockResolvedValue(true),
   },
@@ -440,6 +446,7 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
   describe('a share visitor run', () => {
     const shareGate = {
       agentId: 'agent-1',
+      canUseDevice: false,
       shareConfig: { toolGrants: [] },
       shareId: 'share-1',
       visitorUserId: 'visitor-1',
@@ -467,6 +474,7 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
     it.each([
       ['gone', null],
       ['no longer public', { ...liveShare, visibility: 'private' }],
+      ['card-only, without the visitor’s grant', { ...liveShare, visibility: 'card' }],
       ['moved to another agent', { ...liveShare, agentId: 'agent-2' }],
     ])('refuses to initialize when the share is %s', async (_label, share) => {
       mockFindShareById.mockResolvedValue(liveShare);

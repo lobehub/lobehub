@@ -4,18 +4,20 @@ import { PassThrough } from 'node:stream';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { resolveHeterogeneousAgentCommand } from '../config';
+import { AntigravityAcpSession, buildAntigravityAcpPrompt } from './antigravityAcpSession';
 import { isPathLikeCommand } from './cliSpawn';
 import { buildCopilotAcpPrompt, CopilotAcpSession } from './copilotAcpSession';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
 import { buildDevinAcpPrompt, DevinAcpSession } from './devinAcpSession';
 import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
+import { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 import type { SpawnAgentHandle, SpawnAgentOptions } from './spawnAgent';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 /**
- * ACP runtimes (Cursor, Devin, Droid, Grok, TRAE) behind the ordinary
+ * ACP runtimes (Antigravity, Cursor, Devin, Droid, Grok, TRAE) behind the ordinary
  * `SpawnAgentHandle` contract returned by `spawnAgent`.
  */
 
@@ -140,10 +142,12 @@ const createAcpSpawnHandle = (
   bridge: ReturnType<typeof createAcpSpawnBridge>,
   session: AcpSpawnSession,
   getSessionId: () => string | undefined = () => session.sessionId,
+  extra: Pick<SpawnAgentHandle, 'sendUserMessage' | 'supportsSteerImageAttachments'> = {},
 ): SpawnAgentHandle => {
   const { exit, interrupt, kill } = bridge.attach(session);
 
   return {
+    ...extra,
     events: bridge.events,
     exit,
     interrupt,
@@ -156,6 +160,46 @@ const createAcpSpawnHandle = (
     },
     stderr: bridge.stderr,
   };
+};
+
+/**
+ * Antigravity (`agy acp`): the handle also takes follow-ups mid-run
+ * (`sendUserMessage`), which the session steers into the running turn.
+ */
+export const spawnAntigravityAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildAntigravityAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new AntigravityAcpSession({
+    args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    detached: options.detached,
+    env: getHeterogeneousAgentSpawnEnv('antigravity', options.env, process.env),
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  return createAcpSpawnHandle(bridge, session, undefined, {
+    sendUserMessage: async (followUp, sendOptions) => {
+      if (!sendOptions?.uuid) return false;
+      const blocks = await buildAntigravityAcpPrompt(followUp, options.inputOptions);
+      return session.steer(blocks, sendOptions.uuid);
+    },
+    // Uploaded images go in as image blocks of the steered prompt.
+    supportsSteerImageAttachments: true,
+  });
 };
 
 export const spawnGrokAcpAgent = async (

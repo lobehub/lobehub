@@ -73,11 +73,15 @@ describe('asynchronous Channel routing', () => {
     });
     const [firstJob] = await jobsOf(db, root.id);
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
+    // Once routed, the earlier request runs first and answers the same person's follow-up with it.
     const first = await execution.claim(channel.id, firstJob.id, lease);
-    expect(first).not.toBeNull();
+    expect(first?.job.manifest).toMatchObject({
+      requestMessageId: next.id,
+      requestMessageIds: [root.id, next.id],
+    });
+    expect(await jobById(db, nextJob.id)).toMatchObject({ status: 'merged' });
     await finish(channel.id, firstJob.id);
-    const second = await execution.claim(channel.id, nextJob.id, lease);
-    expect(second?.topic.id).toBe(first?.topic.id);
+    expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
   });
 
   it.each(['skipped', 'unassigned'] as const)(
@@ -120,7 +124,7 @@ describe('asynchronous Channel routing', () => {
     expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
   });
 
-  it('waits for an earlier branch decision for a following Agent without blocking other channels', async () => {
+  it('waits for an earlier decision in its own branch only', async () => {
     const { agent, asMember, channel, root } = await setup();
     await execution.resolveRouting(channel.id, root.id, 1, {
       memberIds: [agent.id],
@@ -136,14 +140,26 @@ describe('asynchronous Channel routing', () => {
       requestKey: 'branch',
       routing: 'decision',
     });
-    const next = await asMember.send(channel.id, {
+    // The main timeline is another branch: the Thread's pending decision never holds it.
+    const main = await asMember.send(channel.id, {
       content: 'Later main',
       mentions: [agent.id],
       requestKey: 'main',
       routing: 'fallback',
     });
-    const [job] = await jobsOf(db, next.id);
+    const [mainJob] = await jobsOf(db, main.id);
+    expect(await execution.claim(channel.id, mainJob.id, lease)).not.toBeNull();
+
+    const later = await asMember.send(channel.id, {
+      content: 'Later in the branch',
+      mentions: [agent.id],
+      requestKey: 'later',
+      routing: 'fallback',
+      threadId: branch.threadId,
+    });
+    const [job] = await jobsOf(db, later.id);
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    expect(await jobById(db, job.id)).toMatchObject({ blockedCode: 'member_busy' });
     const otherChannel = await fixture.createTeamChannel('Unrelated');
     const otherAgent = await fixture.addAgent(otherChannel.channel.id, 'Other channel Agent');
     const unrelated = await otherChannel.asMember.send(otherChannel.channel.id, {

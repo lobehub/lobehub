@@ -37,21 +37,119 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A new PR push supersedes the run in progress. A canary/main push is never
+  # cancelled midway: the next push waits (replacing any older waiting one), so
+  # every push run that starts also finishes and the full suite keeps covering
+  # canary. PR runs only test what they changed and rely on that.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Package tests - all packages in single job to save runner resources
+  # Decides what this run tests (see .github/scripts/ci-scope.mjs). Pushes,
+  # release branches, the `trigger:full-ci` label and changes that can move any test run
+  # everything; other PRs run only the jobs for the areas they touched, and the
+  # vitest shards narrow further to the tests that import a changed file.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.scope.outputs.mode }}
+      app: ${{ steps.scope.outputs.app }}
+      server: ${{ steps.scope.outputs.server }}
+      packages: ${{ steps.scope.outputs.packages }}
+      database: ${{ steps.scope.outputs.database }}
+      windows_shell: ${{ steps.scope.outputs.windows_shell }}
+      coverage_packages: ${{ steps.scope.outputs.coverage_packages }}
+      plain_packages: ${{ steps.scope.outputs.plain_packages }}
+      durations: ${{ steps.durations.outputs.cache-matched-key != '' }}
+    steps:
+      - name: Checkout
+        env:
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Decide what to test
+        id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node .github/scripts/ci-scope.mjs
+
+      # Per-file durations recorded by the last canary run. Restored once here
+      # and handed to every shard, so all shards balance on the same numbers.
+      - name: Restore recorded test durations
+        id: durations
+        uses: actions/cache/restore@v4
+        with:
+          path: .vitest-durations/durations.json
+          key: vitest-durations-v1-${{ github.sha }}
+          restore-keys: |
+            vitest-durations-v1-
+
+      - name: Share the durations with the shards
+        if: steps.durations.outputs.cache-matched-key != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: vitest-durations
+          path: .vitest-durations/durations.json
+          retention-days: 1
+
+  # oxlint, stylelint, type-check and circular imports: whole-repo, every run.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        env:
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Lint
+        run: bun run lint
+
+  # Every workspace package with a `test` script, several at a time. A PR runs
+  # the packages it changed and their dependents, without coverage.
   test-packages:
+    needs: scope
+    if: needs.scope.outputs.packages == 'true'
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/editor-runtime @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/device-mcp @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/chat-adapter-wecom'
+      COVERAGE_PACKAGES: ${{ needs.scope.outputs.coverage_packages }}
+      PLAIN_PACKAGES: ${{ needs.scope.outputs.plain_packages }}
 
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -61,11 +159,13 @@ jobs:
       - name: Verify CI scripts
         run: |
           node --test \
+            .github/scripts/ci-scope.test.mjs \
             .github/scripts/vercel-ignored-build-step.test.cjs \
             .github/scripts/bundle-size-gate.test.cjs \
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/testCheckout.test.mjs \
             .github/scripts/desktopRelease*.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
@@ -86,22 +186,39 @@ jobs:
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Verify desktop release workflows
-        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs
+        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs .github/scripts/desktop-overlay-type-check.test.mjs .github/scripts/overlayTypeErrors.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
         working-directory: apps/cli
 
-      - name: Test packages with coverage
+      # Each package runs its own vitest. Two at a time with two workers each
+      # fills the 4 vCPUs instead of paying every small package's startup one
+      # after another; three at a time with Vitest's default 3 workers
+      # oversubscribed the runner and timing-sensitive tests timed out. A full
+      # runner still slows the heaviest tests (budget-error spreadsheets, large
+      # tRPC payloads, token counting: 3.5–4.8 s on canary) to the 5 s default,
+      # so per-test timeouts are 20 s here; a hung test still fails.
+      - name: Test packages
+        env:
+          VITEST_MAX_WORKERS: '2'
         run: |
-          for package in $PACKAGES; do
-            echo "::group::Testing $package"
-            bun run --filter $package test:coverage
-            echo "::endgroup::"
-          done
+          run_packages() {
+            local script="$1"; shift
+            [ "$#" -gt 0 ] || return 0
+            local filters=()
+            for package in "$@"; do filters+=(--filter "$package"); done
+            pnpm "${filters[@]}" --workspace-concurrency=2 --no-sort --no-bail run "$script" --testTimeout=20000
+          }
+          status=0
+          # shellcheck disable=SC2086
+          run_packages test:coverage $COVERAGE_PACKAGES || status=1
+          # shellcheck disable=SC2086
+          run_packages test $PLAIN_PACKAGES || status=1
+          exit $status
 
       - name: Upload coverage to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.scope.outputs.mode == 'full' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
@@ -161,8 +278,10 @@ jobs:
             labels=("${labels[@]:1}")
           }
 
-          for package in $PACKAGES; do
-            dir="${package#@lobechat/}"
+          for lcov in packages/*/coverage/lcov.info packages/*/*/coverage/lcov.info; do
+            [ -f "$lcov" ] || continue
+            dir="${lcov#packages/}"
+            dir="${dir%/coverage/lcov.info}"
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
               flag="packages/$dir"
 
@@ -196,7 +315,10 @@ jobs:
 
   # App tests - run sharded tests
   test-app:
+    needs: scope
+    if: needs.scope.outputs.app == 'true'
     strategy:
+      fail-fast: false
       matrix:
         shard: [1, 2, 3]
     name: Test App (shard ${{ matrix.shard }}/3)
@@ -204,12 +326,14 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
 
       - name: Setup environment
@@ -218,18 +342,44 @@ jobs:
       - name: Install deps
         run: pnpm install
 
+      - name: Download recorded test durations
+        if: needs.scope.outputs.durations == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: vitest-durations
+          path: .vitest-durations
+
+      # Full runs collect coverage. A PR in affected mode runs only the tests
+      # that import a changed file (`--changed` against the base tip, the merge
+      # commit's first parent) and skips coverage. Shards split by the recorded
+      # durations when there are any (tests/ci/shardByDuration.ts).
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --project app --shard=${{ matrix.shard }}/3
+        env:
+          MODE: ${{ needs.scope.outputs.mode }}
+          VITEST_SHARD_DURATIONS: ${{ needs.scope.outputs.durations == 'true' && '.vitest-durations/durations.json' || '' }}
+          VITEST_DURATIONS_OUT: .vitest-durations/app-${{ matrix.shard }}.json
+        run: |
+          args=(--silent='passed-only' --reporter=default --reporter=./tests/ci/durationReporter.ts --project app --shard=${{ matrix.shard }}/3)
+          if [ "$MODE" = "full" ]; then args+=(--coverage); else args+=(--changed=HEAD^1 --passWithNoTests); fi
+          bunx vitest "${args[@]}"
 
       # Codecov scores a flag on whatever uploads it has, so a shard uploading
       # alone reports a fraction of the coverage as a drop. Hand the report to
       # `upload-sharded-coverage`, which uploads all shards together.
       - name: Save App Coverage shard
-        if: success()
+        if: success() && needs.scope.outputs.mode == 'full'
         uses: actions/upload-artifact@v6
         with:
           name: coverage-app-${{ matrix.shard }}
           path: ./coverage/app/lcov.info
+          retention-days: 1
+
+      - name: Save test durations
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: actions/upload-artifact@v6
+        with:
+          name: vitest-durations-app-${{ matrix.shard }}
+          path: .vitest-durations/app-${{ matrix.shard }}.json
           retention-days: 1
 
   # Windows-only verification of the local shell execution strategy.
@@ -239,6 +389,8 @@ jobs:
   # detection cascade against real install paths. The driver script only needs
   # node builtins, so this job skips the monorepo install entirely.
   test-windows-shell:
+    needs: scope
+    if: needs.scope.outputs.windows_shell == 'true'
     name: Test Windows Shell
 
     runs-on: windows-latest
@@ -280,8 +432,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -337,6 +491,7 @@ jobs:
         run: echo "::notice::ALint skipped for this ${ALINT_SKIP_REASON}"
 
       - name: alint · expose the diff against the base as dirty changes
+        id: alint_diff
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         env:
@@ -344,6 +499,10 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'canary' }}
           HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
+          # Tests use the merge commit, but inline lint findings must describe
+          # only the PR head. Preserve installed dependencies for alint below.
+          git fetch --no-tags --depth=1 origin "${HEAD_SHA}"
+          git checkout --force --detach "${HEAD_SHA}"
           MERGE_BASE=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE}...${HEAD_SHA}" --jq .merge_base_commit.sha)
           echo "merge base: ${MERGE_BASE}"
           git fetch --no-tags --depth=1 origin "${MERGE_BASE}"
@@ -354,7 +513,7 @@ jobs:
           git status --short | head -50
 
       - name: alint · restore cache
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         uses: actions/cache@v4
         with:
@@ -367,7 +526,7 @@ jobs:
             alint-
 
       - name: alint · lint changed files
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -385,7 +544,7 @@ jobs:
           bun packages/alint/report.ts alint-output.json
 
       - name: alint · calibrate rule fixtures (when rules or fixtures changed)
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         run: |
           if git status --porcelain -- alint.config.toml packages/alint ':(glob)packages/*/alint/**' | grep -q .; then
@@ -394,11 +553,13 @@ jobs:
             echo "rules and fixtures unchanged; skipping calibration"
           fi
 
-  # Test Server is usually the last Test CI job to finish. A 2 vs 3 shard run on the
-  # same commit cut its slowest shard from 17-19 to 12-13 min; a 4th shard would only
-  # wait on Test App instead.
+  # Test Server is usually the last Test CI job to finish; its shards split by
+  # recorded duration (tests/ci/shardByDuration.ts) so none trails the others.
   test-server:
+    needs: scope
+    if: needs.scope.outputs.server == 'true'
     strategy:
+      fail-fast: false
       matrix:
         shard: [1, 2, 3]
     name: Test Server (shard ${{ matrix.shard }}/3)
@@ -408,12 +569,14 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
 
       - name: Setup environment
@@ -422,32 +585,58 @@ jobs:
       - name: Install deps
         run: pnpm install
 
-      - name: Test Server Coverage
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/3
+      - name: Download recorded test durations
+        if: needs.scope.outputs.durations == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: vitest-durations
+          path: .vitest-durations
+
+      # See Test App: coverage on full runs, `--changed` on PRs in affected mode.
+      - name: Test Server
+        env:
+          MODE: ${{ needs.scope.outputs.mode }}
+          VITEST_SHARD_DURATIONS: ${{ needs.scope.outputs.durations == 'true' && '.vitest-durations/durations.json' || '' }}
+          VITEST_DURATIONS_OUT: .vitest-durations/server-${{ matrix.shard }}.json
+        run: |
+          args=(--silent='passed-only' --reporter=default --reporter=./tests/ci/durationReporter.ts --project server --shard=${{ matrix.shard }}/3)
+          if [ "$MODE" = "full" ]; then args+=(--coverage --coverage.reportsDirectory=./apps/server/coverage); else args+=(--changed=HEAD^1 --passWithNoTests); fi
+          bunx vitest "${args[@]}"
 
       # See the App shard above: uploaded together by `upload-sharded-coverage`.
       - name: Save Server Coverage shard
-        if: success()
+        if: success() && needs.scope.outputs.mode == 'full'
         uses: actions/upload-artifact@v6
         with:
           name: coverage-server-${{ matrix.shard }}
           path: ./apps/server/coverage/lcov.info
           retention-days: 1
 
+      - name: Save test durations
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: actions/upload-artifact@v6
+        with:
+          name: vitest-durations-server-${{ matrix.shard }}
+          path: .vitest-durations/server-${{ matrix.shard }}.json
+          retention-days: 1
+
   # One Codecov upload per sharded flag, sent only once every shard of that
   # flag has passed. Uploading each shard as it finished let Codecov score a
   # flag on a partial report and fail its project status with a false drop
   # (e.g. -25% after 1/3 app shards) until the remaining shards landed.
+  # Canary pushes also publish the merged per-file durations for the shards.
   upload-sharded-coverage:
     name: Upload Sharded Coverage
-    needs: [test-app, test-server]
-    if: ${{ !cancelled() }}
+    needs: [scope, test-app, test-server]
+    if: ${{ !cancelled() && needs.scope.outputs.mode == 'full' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -488,7 +677,44 @@ jobs:
           flags: server
           name: server
 
+      - name: Download test durations
+        id: durations
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary' && needs.test-app.result == 'success' && needs.test-server.result == 'success'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: vitest-durations-*
+          path: ./duration-shards
+          merge-multiple: true
+
+      - name: Merge test durations
+        if: steps.durations.outcome == 'success'
+        run: |
+          mkdir -p .vitest-durations
+          node -e '
+            const fs = require("node:fs");
+            const dir = "duration-shards";
+            const merged = {};
+            for (const file of fs.readdirSync(dir)) Object.assign(merged, JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8")));
+            fs.writeFileSync(".vitest-durations/durations.json", JSON.stringify(merged));
+            console.log(`${Object.keys(merged).length} test files`);
+          '
+
+      - name: Publish test durations
+        if: steps.durations.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: .vitest-durations/durations.json
+          key: vitest-durations-v1-${{ github.run_id }}
+
+  # The server-DB suite against Postgres. Full runs run all of it with coverage;
+  # a PR in affected mode runs the DB tests that import a changed file
+  # (`--changed`, which follows the package's `@/` and `@/server/*` aliases into
+  # src/ and apps/server/). Migrations and fixtures are read from disk, so
+  # changing them makes the whole run full (ci-scope.mjs). Three workers, each
+  # with its own database (DATABASE_TEST_WORKERS, see getTestDB).
   test-databsae:
+    needs: scope
+    if: needs.scope.outputs.database == 'true'
     name: Test Database
 
     runs-on: ubuntu-latest
@@ -507,12 +733,14 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
 
       - name: Setup environment
@@ -521,21 +749,48 @@ jobs:
       - name: Install deps
         run: pnpm i
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Test Coverage
-        run: pnpm --filter @lobechat/database test:coverage
+      - name: Test
+        run: |
+          if [ "$MODE" = "full" ]; then
+            pnpm --filter @lobechat/database test:coverage
+          else
+            cd packages/database
+            bunx vitest run --config vitest.config.server.mts --silent='passed-only' --changed=HEAD^1 --passWithNoTests
+          fi
         env:
+          MODE: ${{ needs.scope.outputs.mode }}
           DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          DATABASE_TEST_WORKERS: '3'
           DATABASE_DRIVER: node
           KEY_VAULTS_SECRET: Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=
           S3_PUBLIC_DOMAIN: https://example.com
           APP_URL: https://home.com
 
       - name: Upload Database coverage to Codecov
+        if: needs.scope.outputs.mode == 'full'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/database/coverage/lcov.info
           flags: database
+
+  # The one check to require: green when every job this run needed passed,
+  # skipped jobs included. Codecov uploads are reporting, not a gate.
+  gate:
+    name: Test CI Gate
+    if: always()
+    needs:
+      [scope, lint, test-packages, test-app, test-windows-shell, test-desktop, test-server, test-databsae]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.NEEDS);
+            const bad = Object.entries(needs).filter(([, job]) => !["success", "skipped"].includes(job.result));
+            for (const [name, job] of Object.entries(needs)) console.log(`${name}: ${job.result}`);
+            if (needs.scope.result !== "success") bad.push(["scope", needs.scope]);
+            if (bad.length > 0) { console.log(`::error::${bad.map(([name]) => name).join(", ")} did not pass`); process.exit(1); }
+          '

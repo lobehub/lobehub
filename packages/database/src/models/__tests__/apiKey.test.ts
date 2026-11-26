@@ -1,8 +1,13 @@
 // @vitest-environment node
-import { API_KEY_PREFIX, validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import {
+  API_KEY_PREFIX,
+  MAX_API_KEY_PREFIX_BYTES,
+  validateApiKeyFormat,
+} from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { hashApiKey, hashApiKeyWithSecret } from '@/utils/server/apiKeyHash';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -80,11 +85,29 @@ describe('ApiKeyModel', () => {
       const created = await apiKeyModel.createWithPlaintext({ name: 'One-time Key' });
 
       expect(created.key.startsWith(API_KEY_PREFIX)).toBe(true);
-      expect(created.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+      expect(created.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{58}$/);
 
       const stored = await apiKeyModel.findById(created.id);
       expect(stored?.key).not.toBe(created.key);
       expect(stored?.key).toContain(':');
+    });
+
+    it.each([
+      ['ascii', 'p'.repeat(MAX_API_KEY_PREFIX_BYTES)],
+      ['multibyte', `${'界'.repeat(22)}p`],
+    ])('stores the longest supported %s-prefixed key in the key column', async (_, prefix) => {
+      const key = `${prefix}${'a'.repeat(32)}`;
+      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      const encrypted = await gateKeeper.encrypt(key);
+
+      expect(encrypted).toHaveLength(256);
+
+      const [row] = await serverDB
+        .insert(apiKeys)
+        .values({ key: encrypted, keyHash: hashApiKey(key), name: 'Longest Key', userId })
+        .returning();
+
+      expect(row.key).toBe(encrypted);
     });
   });
 
@@ -164,7 +187,7 @@ describe('ApiKeyModel', () => {
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
       expect(keys[0].key.startsWith(API_KEY_PREFIX)).toBe(true);
-      expect(keys[0].key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+      expect(keys[0].key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{58}$/);
     });
 
     it('keeps metadata queries free of decrypted plaintext', async () => {
@@ -213,7 +236,7 @@ describe('ApiKeyModel', () => {
       expect(staleResult).toMatchObject({ key: '', keyDecryptionFailed: true });
       expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
       expect(freshResult?.key.startsWith(API_KEY_PREFIX)).toBe(true);
-      expect(freshResult?.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+      expect(freshResult?.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{58}$/);
     });
 
     it('lets workspace admins list all keys while members only see their own', async () => {

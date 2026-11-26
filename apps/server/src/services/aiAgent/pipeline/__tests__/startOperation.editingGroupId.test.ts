@@ -15,6 +15,7 @@ describe('startOperation › group builder editing target inheritance', () => {
   const setup = (durableEditingGroupId?: string) => {
     const calls: string[] = [];
     const agentRuntimeService = {
+      acceptsArtboardWorks: vi.fn(async () => true),
       acceptsFileWorks: vi.fn(async () => true),
       acceptsMemberRuntimeEnd: vi.fn(async () => true),
       createOperation: vi.fn(async () => ({ autoStarted: true, messageId: 'msg-assistant' })),

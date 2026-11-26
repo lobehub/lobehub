@@ -3,6 +3,7 @@ import { createTimingHelpers } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import type { WorkTypeOptIn } from '@/database/models/work/registry';
 import { FileService } from '@/server/services/file';
 
 const { createPrefixedTimingContext, runTimedStage, toTimingContext } = createTimingHelpers(
@@ -33,8 +34,15 @@ export class AiChatService {
   private messageModel: MessageModel;
   private fileService: FileService;
   private topicModel: TopicModel;
+  private workTypeOptIn: WorkTypeOptIn;
 
-  constructor(serverDB: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    serverDB: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: { workTypeOptIn?: WorkTypeOptIn } = {},
+  ) {
+    this.workTypeOptIn = options.workTypeOptIn ?? {};
     this.messageModel = new MessageModel(serverDB, userId, workspaceId);
     this.topicModel = new TopicModel(serverDB, userId, workspaceId);
     this.fileService = new FileService(serverDB, userId, workspaceId);
@@ -56,11 +64,14 @@ export class AiChatService {
       timingContext,
       'lambda.aiChat.messagesAndTopics.messageModel.query',
       () =>
-        this.messageModel.query(messageParams, {
-          postProcessUrl: (path, file) =>
-            this.fileService.getFileAccessUrl({ id: file.id, url: path }),
-          ...(messageTiming ? { timing: messageTiming } : {}),
-        }),
+        this.messageModel.query(
+          { ...messageParams, ...this.workTypeOptIn },
+          {
+            postProcessUrl: (path, file) =>
+              this.fileService.getFileAccessUrl({ id: file.id, url: path }),
+            ...(messageTiming ? { timing: messageTiming } : {}),
+          },
+        ),
       {
         hasAgentId: !!params.agentId,
         hasThreadId: !!params.threadId,

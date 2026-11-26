@@ -91,12 +91,6 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   associateTopic: (
     ...args: ServiceParams<'associateTopic'>
   ) => Promise<ServiceData<'associateTopic'>>;
-  /** Link an environment to a project. */
-  attachEnvironment: (...args: ServiceParams<'attachEnvironment'>) => Promise<void>;
-  /** Link a GitHub repository to a project, making its environment when needed. */
-  attachRepository: (
-    ...args: ServiceParams<'attachRepository'>
-  ) => Promise<ServiceData<'attachRepository'>>;
   /** Register a working directory, absorbing the conversations it covers. */
   bind: (...args: ServiceParams<'bind'>) => Promise<ServiceData<'bind'>>;
   /** Open a project conversation outside any directory binding. */
@@ -105,6 +99,12 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   ) => Promise<ServiceData<'createProjectTopic'>>;
   /** Move a directory conversation to its project's directory on another device. */
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
+  /**
+   * Refetch every environment and directory projection after an environment
+   * was edited elsewhere (the shared settings panel): directory rows carry its
+   * name denormalized.
+   */
+  refreshEnvironments: () => Promise<void>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
   refreshProjectTopics: (projectId: string) => Promise<void>;
   /** Repoint a directory at another device location; its conversations follow it. */
@@ -117,12 +117,20 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   ) => Promise<ServiceData<'saveEnvironment'>>;
   /** Start a conversation inside one directory. */
   startTopic: (id: string, agentId: string, title: string) => Promise<ServiceData<'startTopic'>>;
+  /**
+   * Edit the project's environment — its repositories, setup and variables.
+   * The project's environment list and its folders (which carry the
+   * environment's definition) follow.
+   */
+  updateProjectEnvironment: (
+    ...args: ServiceParams<'updateEnvironment'>
+  ) => Promise<ServiceData<'updateEnvironment'>>;
   /** Fetch orchestration only; read the rows with `useProjectDirectories`. */
   useFetchDirectories: (projectId?: string, enabled?: boolean) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useDirectoryTopics`. */
   useFetchDirectoryTopics: (id?: string) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useProjectEnvironments`. */
-  useFetchEnvironments: (projectId?: string) => ProjectListSyncResult;
+  useFetchEnvironments: (projectId?: string, enabled?: boolean) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useEnvironmentTopics`. */
   useFetchEnvironmentTopics: (directoryIds: string[]) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useProjectTopics`. */
@@ -231,6 +239,9 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       ]);
       return result.data;
     },
+    refreshEnvironments: async () => {
+      await Promise.all([environments.revalidate(), directories.revalidate()]);
+    },
     refreshProjectTopics: async (projectId) => {
       // Directory and environment rows carry the same topics with their agent
       // denormalized, so every projection that lists them is stale too.
@@ -273,19 +284,11 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       await Promise.all([environments.revalidate(), directories.revalidate()]);
       return result.data;
     },
-    attachEnvironment: async (projectId, environmentId) => {
-      await projectWorkingDirectoryService.attachEnvironment(projectId, environmentId);
-      await Promise.all([
-        environments.revalidate(projectId),
-        // The scope-wide list gained the environment instanced by the attach.
-        environments.revalidate(ALL_PROJECTS_KEY),
-      ]);
-    },
-    attachRepository: async (input) => {
-      const result = await projectWorkingDirectoryService.attachRepository(input);
+    updateProjectEnvironment: async (input) => {
+      const result = await projectWorkingDirectoryService.updateEnvironment(input);
       await Promise.all([
         environments.revalidate(input.projectId),
-        environments.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(input.projectId),
       ]);
       return result.data;
     },
@@ -335,9 +338,9 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       const hasData = useProjectDirectoryStore((state) => state.directoriesMap[key] !== undefined);
       return { ...sync, hasData };
     },
-    useFetchEnvironments: (projectId) => {
+    useFetchEnvironments: (projectId, enabled = true) => {
       const key = projectId ?? ALL_PROJECTS_KEY;
-      const sync = environments.useSync(key);
+      const sync = environments.useSync(key, { enabled });
       const hasData = useProjectDirectoryStore((state) => state.environmentsMap[key] !== undefined);
       return { ...sync, hasData };
     },

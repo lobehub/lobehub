@@ -22,6 +22,8 @@ interface OpenMenuOptions {
   scope?: string;
   terminalAvailable: boolean;
   toggleTerminalPanel: (open: boolean) => void;
+  /** The conversation an app opened from the menu runs in. */
+  topicId?: string;
 }
 export const useOpenMenuItems = ({
   availableTabs,
@@ -35,9 +37,10 @@ export const useOpenMenuItems = ({
   scope,
   terminalAvailable,
   toggleTerminalPanel,
+  topicId,
 }: OpenMenuOptions) => {
   const { t } = useTranslation(['chat', 'setting', 'plugin']);
-  const entries = useMcpAppEntrypoints(agentId);
+  const entries = useMcpAppEntrypoints(agentId, topicId);
   return useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -81,6 +84,7 @@ export const useOpenMenuItems = ({
       'works',
       'comments',
       'skills',
+      'tools',
       'documents',
       'web',
       ...extraTabs.map((tab) => tab.key),
@@ -113,10 +117,10 @@ export const useOpenMenuItems = ({
             key: 'mcp-apps',
             label: groupLabel(t('mcpApp.entrypoints', { ns: 'plugin' })),
             children: entries.map((entry) => {
-              const key = mcpEntryTabKey(entry.identifier, entry.toolName);
+              const key = mcpEntryTabKey(entry.identifier, entry.toolName, entry.linkId);
               return {
                 key,
-                label: entry.title,
+                label: entry.accountName ? `${entry.title} · ${entry.accountName}` : entry.title,
                 icon: entry.icon ? (
                   <img alt={''} height={14} src={entry.icon} width={14} />
                 ) : (
@@ -135,7 +139,9 @@ export const useOpenMenuItems = ({
                             agentId,
                             id,
                             identifier: entry.identifier,
+                            linkId: entry.linkId,
                             toolName: entry.toolName,
+                            topicId,
                           }),
                       );
                   }
@@ -165,5 +171,6 @@ export const useOpenMenuItems = ({
     t,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId,
   ]);
 };

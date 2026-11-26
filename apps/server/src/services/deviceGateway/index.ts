@@ -11,6 +11,7 @@ import debug from 'debug';
 import { gatewayEnv } from '@/envs/gateway';
 import { redisService } from '@/server/services/redis';
 
+import * as agentCredentials from './agentCredentials';
 import * as agents from './agents';
 import { resolveDeviceClientKinds } from './clientKinds';
 import * as clientUpdate from './clientUpdate';
@@ -24,6 +25,7 @@ import * as workspace from './workspace';
 
 const log = debug('lobe-server:device-gateway');
 
+export type { AgentCredentialRpcAddress, AgentCredentialRpcResult } from './agentCredentials';
 export { isPathWithinRoot, joinDevicePath } from './paths';
 export { isValidDirectoryName } from '@lobechat/utils/directoryName';
 
@@ -347,6 +349,14 @@ export class DeviceGateway {
     return gitWrite.addGitWorktree(this.clientGetter, ...args);
   }
 
+  cleanupOwnedWorktree(...args: DeviceRpcArgs<typeof gitWrite.cleanupOwnedWorktree>) {
+    return gitWrite.cleanupOwnedWorktree(this.clientGetter, ...args);
+  }
+
+  restoreOwnedWorktree(...args: DeviceRpcArgs<typeof gitWrite.restoreOwnedWorktree>) {
+    return gitWrite.restoreOwnedWorktree(this.clientGetter, ...args);
+  }
+
   pullGitBranch(...args: DeviceRpcArgs<typeof gitWrite.pullGitBranch>) {
     return gitWrite.pullGitBranch(this.clientGetter, ...args);
   }
@@ -521,6 +531,18 @@ export class DeviceGateway {
 
   restartCli(...args: DeviceRpcArgs<typeof clientUpdate.restartCli>) {
     return clientUpdate.restartCli(this.clientGetter, ...args);
+  }
+
+  installAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.installAgentCredential>) {
+    return agentCredentials.installAgentCredential(this.clientGetter, ...args);
+  }
+
+  removeAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.removeAgentCredential>) {
+    return agentCredentials.removeAgentCredential(this.clientGetter, ...args);
+  }
+
+  checkAgentCredential(...args: DeviceRpcArgs<typeof agentCredentials.checkAgentCredential>) {
+    return agentCredentials.checkAgentCredential(this.clientGetter, ...args);
   }
 
   private getClient(): GatewayHttpClient | null {

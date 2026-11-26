@@ -2,6 +2,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { sha256 } from 'js-sha256';
 
 import { AgentDocumentModel, PolicyLoad } from '@/database/models/agentDocuments';
+import { isUuid } from '@/database/utils/uuid';
 
 import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
 import { createMarkdownEditorSnapshot as createDefaultMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
@@ -14,6 +15,7 @@ import {
   SKILL_MANAGEMENT_SOURCE,
   SKILL_MANAGEMENT_SOURCE_TYPE,
 } from './constants';
+import type { SkillFrontmatter } from './frontmatter';
 import {
   normalizeSkillIndexContent,
   parseSkillFrontmatter,
@@ -76,6 +78,38 @@ const buildSkillMetadata = (
 ): Record<string, unknown> => ({
   skill: { frontmatter },
 });
+
+const readSavedDescription = (index: SkillAgentDocument): string => {
+  const saved = (index.metadata as { skill?: { frontmatter?: { description?: unknown } } } | null)
+    ?.skill?.frontmatter?.description;
+
+  return typeof saved === 'string' ? saved : '';
+};
+
+// A SKILL.md edited outside this service can hold frontmatter no write here
+// would accept. Reads answer from the bundle name and the last saved metadata
+// instead of failing, so one broken index cannot take down the skill list.
+const readIndexFrontmatter = (
+  bundle: SkillAgentDocument,
+  index: SkillAgentDocument,
+): { frontmatter: SkillFrontmatter; frontmatterError?: string } => {
+  try {
+    return { frontmatter: parseSkillFrontmatter(index.content) };
+  } catch (error) {
+    const frontmatterError = error instanceof Error ? error.message : String(error);
+    console.warn(
+      '[skill-management] unreadable SKILL.md frontmatter for skill %s of agent %s: %s',
+      bundle.filename,
+      bundle.agentId,
+      frontmatterError,
+    );
+
+    return {
+      frontmatter: { description: readSavedDescription(index), name: bundle.filename },
+      frontmatterError,
+    };
+  }
+};
 
 /**
  * Owns managed skill bundle and index document invariants.
@@ -156,9 +190,10 @@ export class SkillManagementDocumentService {
     // Direct Agent Document VFS writes, including `lb agent space fs`, can create skill-shaped
     // bundle/index documents without going through this service. Should we support importing or
     // normalizing those compatibility documents here so they become first-class managed skills?
-    const sourceDocument = input.sourceAgentDocumentId
-      ? await this.agentDocumentModel.findById(input.sourceAgentDocumentId)
-      : undefined;
+    const sourceDocument =
+      input.sourceAgentDocumentId && isUuid(input.sourceAgentDocumentId)
+        ? await this.agentDocumentModel.findById(input.sourceAgentDocumentId)
+        : undefined;
 
     if (input.sourceAgentDocumentId && !sourceDocument) {
       throw new Error(`Source agent document not found: ${input.sourceAgentDocumentId}`);
@@ -456,7 +491,7 @@ export class SkillManagementDocumentService {
     agentId: string,
     target: SkillTargetInput,
   ): Promise<SkillAgentDocument | undefined> {
-    if (target.agentDocumentId) {
+    if (target.agentDocumentId && isUuid(target.agentDocumentId)) {
       const doc = await this.agentDocumentModel.findById(target.agentDocumentId);
       if (doc && doc.agentId === agentId) {
         if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
@@ -510,12 +545,15 @@ export class SkillManagementDocumentService {
     return indexes[0]!;
   }
 
-  private toSkillSummary(bundle: SkillAgentDocument, index: SkillAgentDocument): SkillSummary {
-    const frontmatter = parseSkillFrontmatter(index.content);
-
+  private toSkillSummary(
+    bundle: SkillAgentDocument,
+    index: SkillAgentDocument,
+    read = readIndexFrontmatter(bundle, index),
+  ): SkillSummary {
     return {
       bundle: toDocumentRef(bundle),
-      description: frontmatter.description,
+      description: read.frontmatter.description,
+      ...(read.frontmatterError && { frontmatterError: read.frontmatterError }),
       index: toDocumentRef(index),
       name: bundle.filename,
       title: bundle.title,
@@ -527,12 +565,12 @@ export class SkillManagementDocumentService {
     index: SkillAgentDocument,
     options?: { includeContent?: boolean },
   ): SkillDetail {
-    const frontmatter = parseSkillFrontmatter(index.content);
+    const read = readIndexFrontmatter(bundle, index);
 
     return {
-      ...this.toSkillSummary(bundle, index),
+      ...this.toSkillSummary(bundle, index, read),
       ...(options?.includeContent && { content: index.content }),
-      frontmatter,
+      frontmatter: read.frontmatter,
     };
   }
 }

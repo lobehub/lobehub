@@ -396,6 +396,17 @@ describe('GoalAction', () => {
     });
   });
 
+  it('restarts the page window when the search keyword changes', () => {
+    useGoalStore.getState().loadMoreGoals();
+    useGoalStore.getState().setGoalListKeyword('live2d');
+
+    expect(useGoalStore.getState()).toMatchObject({
+      goalListKeyword: 'live2d',
+      goalListVisibleLimit: 10,
+    });
+    useGoalStore.getState().setGoalListKeyword('');
+  });
+
   it('deletes a goal through the goal endpoint and drops it from the loaded list', async () => {
     useGoalStore.setState({
       goalListByAgentId: {

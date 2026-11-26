@@ -1,7 +1,7 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
 import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
-import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
+import { type AgentShareVisitorContext, getOptedInPluginIds } from '@lobechat/types';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -80,6 +80,9 @@ const toIsoString = (value: Date | string | null | undefined): string =>
  * stores do not hold; which facts a turn needs is decided by
  * `gatherContextFacts` in `@lobechat/mecha`, the same way as on the server.
  */
+/** Matches the `.max()` of `agentDocument.listRevokedDocumentReads`. */
+const REVOKED_READS_BATCH = 500;
+
 export const createBrowserContextFactProviders = ({
   agentId,
   groupId,
@@ -88,6 +91,26 @@ export const createBrowserContextFactProviders = ({
   findAgentDocument: async (targetAgentId, documentId) => {
     const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
     return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
+  findRevokedDocumentReads: async (targetAgentId, documentIds) => {
+    // The endpoint takes at most REVOKED_READS_BATCH ids per call.
+    const batches: string[][] = [];
+    for (let i = 0; i < documentIds.length; i += REVOKED_READS_BATCH) {
+      batches.push(documentIds.slice(i, i + REVOKED_READS_BATCH));
+    }
+    const results = await Promise.all(
+      batches.map((batch) =>
+        agentDocumentService.listRevokedDocumentReads({
+          agentId: targetAgentId,
+          documentIds: batch,
+        }),
+      ),
+    );
+    return {
+      agentDocumentReadIds: results.flatMap((result) => result.agentDocumentReadIds),
+      documentIds: results.flatMap((result) => result.documentIds),
+    };
   },
 
   findTopic: async (topicId) => {
@@ -123,7 +146,7 @@ export const createBrowserContextFactProviders = ({
       openingMessage: config.openingMessage,
       openingQuestions: config.openingQuestions,
       params: config.params as Record<string, unknown> | undefined,
-      plugins: getActivePluginIds(config.plugins),
+      plugins: getOptedInPluginIds(config.plugins),
       provider: config.provider,
       systemRole: config.systemRole,
       tags: meta?.tags,

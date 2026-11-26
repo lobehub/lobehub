@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Materyal uzun; yalnızca başlangıcı okundu.",
   "rules.distill.untitled": "Başlıksız",
   "rules.distill.upload": "Bir dosya yükle",
-  "rules.distill.uploadFailed": "Dosya yüklenemedi.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint veya düz metin",
   "rules.enforcement.block": "Engelle",
   "rules.enforcement.blockDesc": "Teslimatı siz onaylayana kadar durdurur. Henüz etkili değil: şimdilik sadece hatırlatır",

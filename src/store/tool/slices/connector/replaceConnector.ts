@@ -33,7 +33,7 @@ export const snapshotReplacedConnector = async (
   get: () => ToolStore,
 ): Promise<ConnectorSnapshot | undefined> => {
   await get().fetchConnectors();
-  const existing = connectorSelectors.connectorByIdentifier(identifier)(get());
+  const existing = connectorSelectors.sharedConnectorByIdentifier(identifier)(get());
   if (!existing) return;
   if (!isReplaceableBy(existing, sourceType)) {
     throw new Error(

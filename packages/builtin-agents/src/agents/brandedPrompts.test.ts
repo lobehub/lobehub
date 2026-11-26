@@ -29,7 +29,7 @@ const loadPrompts = async (branding?: Partial<typeof BusinessConst>) => {
   return {
     agentBuilder: agentBuilder.systemRoleTemplate,
     inbox: inbox.createSystemRole(),
-    inboxNamed: inbox.createSystemRole(undefined, { name: 'Mia' }),
+    inboxNamed: inbox.createSystemRole({ name: 'Mia' }),
     supervisor: supervisor.supervisorSystemRole,
   };
 };

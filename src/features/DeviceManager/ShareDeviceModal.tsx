@@ -12,7 +12,6 @@ import {
   Select,
   Tag,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -22,15 +21,17 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import InlineErrorText from '@/components/InlineErrorText';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 
 import { refreshDeviceList } from './const';
-import { getDeviceActionErrorMessage } from './deviceActionError';
+import { type DeviceShareErrorView, getDeviceShareErrorView } from './deviceActionError';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 24px;
   `,
   optionHint: css`
@@ -82,6 +83,8 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
   const [targetId, setTargetId] = useState<string>();
   const [visibility, setVisibility] = useState<DeviceVisibility>('private');
   const [sharing, setSharing] = useState(false);
+  /** Share failure, shown above the footer buttons: the modal stays open with the chosen workspace and scope. */
+  const [shareError, setShareError] = useState<DeviceShareErrorView>();
   const [step, setStep] = useState<'done' | 'select-target'>('select-target');
   const [completion, setCompletion] = useState<CompletionState>();
 
@@ -164,6 +167,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
     const target = workspaces.find((w) => w.id === effectiveTargetId);
     if (!target) return;
 
+    setShareError(undefined);
     setSharing(true);
     // Lock dismissal so the mutation can't be interrupted mid-flight.
     setCanDismissByClickOutside?.(false);
@@ -196,9 +200,8 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
       setCompletion({ name: target.name, slug: target.slug });
       setStep('done');
     } catch (error) {
-      // Server messages (e.g. PRECONDITION_FAILED when the device dropped
-      // offline mid-flow) are user-facing; known refusals get localized copy.
-      toast.error(`${target.name}: ${getDeviceActionErrorMessage(error)}`);
+      console.error('[ShareDeviceModal] share failed:', error);
+      setShareError(getDeviceShareErrorView(error, target.name));
     } finally {
       setSharing(false);
       setCanDismissByClickOutside?.(true);
@@ -257,7 +260,10 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 placeholder={tSetting('devices.share.selectPlaceholder')}
                 style={{ width: '100%' }}
                 value={effectiveTargetId}
-                onChange={(value) => setTargetId(value as string)}
+                onChange={(value) => {
+                  setTargetId(value as string);
+                  setShareError(undefined);
+                }}
               />
             </Flexbox>
 
@@ -276,6 +282,12 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
           </>
         )}
       </Flexbox>
+
+      {shareError && (
+        <Flexbox paddingBlock={'0 12px'} paddingInline={24}>
+          <InlineErrorText detail={shareError.detail}>{shareError.summary}</InlineErrorText>
+        </Flexbox>
+      )}
 
       <Flexbox horizontal className={styles.footer} gap={8} justify={'space-between'}>
         <Button disabled={sharing} onClick={close}>

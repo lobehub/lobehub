@@ -19,6 +19,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProviderItemRender } from '@/components/ModelSelect';
+import { useDensityTokens } from '@/styles/density';
 
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
@@ -56,6 +57,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     onRestrictedModelClick,
   }) => {
     const { t } = useTranslation('components');
+    const { iconSize } = useDensityTokens();
     const [submenuOpen, setSubmenuOpen] = useState(false);
 
     const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
@@ -87,8 +89,11 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         }}
       >
         <DropdownMenuSubmenuTrigger
-          className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-          style={{ paddingBlock: 8, paddingInline: 8 }}
+          className={cx(
+            menuSharedStyles.item,
+            styles.rowTrigger,
+            isActive && styles.menuItemActive,
+          )}
           onClick={() => {
             if (defaultProviderRestricted) {
               onRestrictedModelClick?.();
@@ -153,7 +158,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                               logo={p.logo}
                               name={p.name}
                               provider={p.id}
-                              size={20}
+                              size={iconSize}
                               source={p.source}
                               type={'avatar'}
                             />

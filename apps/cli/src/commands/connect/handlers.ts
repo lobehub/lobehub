@@ -22,6 +22,7 @@ import { executeToolCall } from '../../tools';
 import { executeBrowserCall, type resolveBrowserDevice } from '../../tools/browser';
 import { executeComputerUseCall, type resolveComputerUseDevice } from '../../tools/computerUse';
 import { log } from '../../utils/logger';
+import { prepareCompletionReply } from './completionWatch';
 
 /** Everything a gateway connection's request handlers need from the host process. */
 export interface GatewayHandlerContext {
@@ -150,16 +151,27 @@ export function bindGatewayClientHandlers(
       log.toolResult(requestId, result.success, result.content, operationId);
     }
 
-    client.sendToolCallResponse({
-      requestId,
-      result: {
+    const reply = prepareCompletionReply(
+      request,
+      {
         content: result.content,
         error: result.error,
         executionTimeMs,
         state: result.state,
         success: result.success,
       },
-    });
+      {
+        getReporter: () => client,
+        getToolAuth,
+        logger: {
+          error: (...args) => error(args.join(' ')),
+          info: (...args) =>
+            isDaemonChild ? appendLog(`[COMPLETION] ${args.join(' ')}`) : info(args.join(' ')),
+          warn: (...args) => error(args.join(' ')),
+        },
+      },
+    );
+    client.sendToolCallResponse({ requestId, result: reply });
   });
 
   // Handle generic server-internal device RPCs (git / workspace / file ops).
@@ -209,10 +221,12 @@ export function bindGatewayClientHandlers(
             args: request.args,
             claudeAccountRouting: request.claudeAccountRouting,
             claudeCodeEntrypoint: request.claudeCodeEntrypoint,
+            collaborationMode: request.collaborationMode,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,
             operationId: request.operationId,
+            permissionMode: request.permissionMode,
             prompt: request.prompt,
             resumeFallbackSystemContext: request.resumeFallbackSystemContext,
             resumeSessionId: request.resumeSessionId,

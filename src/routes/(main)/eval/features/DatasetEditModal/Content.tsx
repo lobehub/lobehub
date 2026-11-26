@@ -18,7 +18,10 @@ import { CheckIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
+import { densityVars } from '@/styles/densityVars';
 
 import { getPresetsByCategory } from '../../config/datasetPresets';
 
@@ -41,7 +44,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: relative;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -130,7 +133,11 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
     ([, presets]) => presets.length > 0,
   );
 
+  /** Submit failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | undefined>();
+
   const handleFinish = async (values: any) => {
+    setError(undefined);
     onLoadingChange?.(true);
     try {
       await agentEvalService.updateDataset({
@@ -153,8 +160,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       toast.success(t('dataset.edit.success'));
       close();
       onSuccess?.();
-    } catch {
-      toast.error(t('dataset.edit.error'));
+    } catch (cause) {
+      console.error('Failed to update eval dataset:', cause);
+      setError(toInlineError(t('dataset.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -175,6 +183,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       name: dataset.name,
     },
     onSubmit: handleFinish,
+    onValuesChange: () => setError(undefined),
   });
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -288,6 +297,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
           </Flexbox>
         ))}
       </Flexbox>
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

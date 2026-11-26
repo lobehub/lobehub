@@ -114,19 +114,14 @@ describe('project directory queries', () => {
     expect(await runnable()).toBe(true);
     await expect(model.resolve(directory.id)).resolves.toBeTruthy();
 
-    // A disabled project-environment link keeps the directory listed, but a
-    // start there would be refused, so the row is not runnable.
-    await db
-      .update(projectEnvironments)
-      .set({ enabled: false })
-      .where(eq(projectEnvironments.projectId, base.projectId));
+    // A disabled environment keeps the directory listed, but a start there
+    // would be refused, so the row is not runnable.
+    const { environmentId } = await model.resolve(directory.id);
+    await db.update(environments).set({ enabled: false }).where(eq(environments.id, environmentId));
     expect(await runnable()).toBe(false);
     await expect(model.resolve(directory.id)).rejects.toThrow('disabled');
 
-    await db
-      .update(projectEnvironments)
-      .set({ enabled: true })
-      .where(eq(projectEnvironments.projectId, base.projectId));
+    await db.update(environments).set({ enabled: true }).where(eq(environments.id, environmentId));
     await db
       .update(projectWorkingDirectories)
       .set({ permission: 'readOnly' })

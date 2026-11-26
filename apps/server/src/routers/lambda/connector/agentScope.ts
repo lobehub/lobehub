@@ -5,6 +5,7 @@ import { AgentModel } from '@/database/models/agent';
 import { router } from '@/libs/trpc/lambda';
 
 import { assertConnectorCredentialsManageable } from '../_helpers/connectorManagePolicy';
+import { assertPrivateConnectorTarget } from '../_helpers/connectorVisibility';
 import { connectorWriteProcedure } from './procedures';
 
 /**
@@ -34,6 +35,7 @@ export const connectorAgentScopeRouter = router({
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Rebinding routes the connector's credentials to the agent — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
 
       const existingAgentRow = await ctx.connectorModel.findScopedByIdentifier(
         connector.identifier,
@@ -64,15 +66,19 @@ export const connectorAgentScopeRouter = router({
       await assertConnectorCredentialsManageable(ctx, connector);
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
-      const existingBase = await ctx.connectorModel.findScopedByIdentifier(connector.identifier);
-      if (existingBase) {
+      // The base slot it returns to is its own visibility's: a private row and a
+      // shared row of one identifier live side by side in the base scope. The
+      // lookup and the move are one step under the identifier lock.
+      const moved = await ctx.connectorModel.moveToBaseUnlessIdentifierHeld(
+        input.connectorId,
+        connector.identifier,
+      );
+      if ('holder' in moved) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: `A personal "${connector.identifier}" connector already exists; delete the agent connector instead`,
         });
       }
-
-      await ctx.connectorModel.update(input.connectorId, { agentId: null });
       return { id: input.connectorId };
     }),
 
@@ -92,8 +98,10 @@ export const connectorAgentScopeRouter = router({
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Cloning duplicates the source's encrypted credentials into a row the
-      // agent owner controls — creator/owner only.
+      // agent owner controls — creator/owner only. The copy keeps the source's
+      // visibility, so a private connector stays private on the agent.
       await assertConnectorCredentialsManageable(ctx, source);
+      await assertPrivateConnectorTarget(ctx, source, input.agentId);
 
       const existing = await ctx.connectorModel.findScopedByIdentifier(
         source.identifier,
@@ -129,6 +137,7 @@ export const connectorAgentScopeRouter = router({
       // Mounting routes the source's credentials to the agent and locks the
       // row (metadata.mountedByAgentId) — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
       if (connector.agentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

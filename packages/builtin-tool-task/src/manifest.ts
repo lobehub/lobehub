@@ -370,7 +370,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. Will fail with a CONFLICT-style error if the task already has a running topic (cancel it first or pass continueTopicId).',
+        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. If the task already has a live run, this fails with a CONFLICT error naming the operation behind that run, its status and the next step; a run whose operation ended long ago is cleaned up and no longer blocks. Running a scheduled task by hand works as a test tick: it does not count toward maxExecutions, and the task returns to scheduled afterwards.',
       name: TaskApiName.runTask,
       parameters: {
         properties: {
@@ -433,10 +433,19 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
+        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). channelDelivery also posts each run answer to a Channel or Thread, e.g. a daily report for a team. Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
       name: TaskApiName.setTaskSchedule,
       parameters: {
         properties: {
+          channelDelivery: {
+            description:
+              "Post each run's final answer (text and any cards it draws) to a Channel as the assignee Agent's message, besides returning it here. Pass {} for where you are answering now (this Channel, and this Thread if you are in one); give channelId (from lobe-channel listChannels) for another Channel, and threadId for one of its Threads, else its main timeline. The assignee Agent must be an active member there. Pass null to stop posting.",
+            properties: {
+              channelId: { type: 'string' },
+              threadId: { type: 'string' },
+            },
+            type: ['object', 'null'],
+          },
           automationMode: {
             description:
               'Enables periodic execution. "schedule" fires on the cron `schedulePattern`; "heartbeat" ticks every `heartbeatInterval` seconds. Pass null to disable automation entirely.',

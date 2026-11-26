@@ -9,6 +9,8 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
@@ -16,7 +18,7 @@ const styles = stylex.create({
   actions: { justifyContent: 'flex-end' },
   editor: { fontFamily: cssVar.fontFamilyCode },
   item: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -25,7 +27,12 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   itemDesc: { margin: '0', fontSize: '13px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
-  itemTitle: { margin: '0', fontSize: '14px', fontWeight: 600, color: cssVar.colorText },
+  itemTitle: {
+    margin: '0',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
 });
 
 const formatGraph = (graph?: AgentGraph | null) => (graph ? JSON.stringify(graph, null, 2) : '');

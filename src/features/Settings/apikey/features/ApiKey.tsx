@@ -33,6 +33,7 @@ import { apiKeyKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
@@ -43,7 +44,7 @@ import { ApiKeyDisplay, createApiKeyModal } from './index';
 const styles = stylex.create({
   container: {
     overflow: 'hidden',
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
@@ -53,10 +54,10 @@ const styles = stylex.create({
   },
   header: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
   },
   // Dates and "never used / never expires" placeholders read as metadata, not

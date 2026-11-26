@@ -7,6 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
+// No router is mounted here; the task-list origin reads the history state.
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useLocation: () => ({ state: locationMock.state }),
+}));
+
 const state = vi.hoisted(() => ({
   createTask: vi.fn(async () => ({ id: 't1', identifier: 'T-1' })),
   markdown: 'Ship it',
@@ -72,7 +80,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGoals: () => false, enableProjects: () => true },
+  labPreferSelectors: { enableProjects: () => true },
   userProfileSelectors: { userId: () => 'u1' },
 }));
 vi.mock('@/styles', () => ({ shinyTextStyles: {} }));

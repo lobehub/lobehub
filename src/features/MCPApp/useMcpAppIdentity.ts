@@ -1,10 +1,11 @@
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
+
+import { connectorForTool } from './connectorForTool';
 
 export const useMcpAppIdentity = (identifier: string, agentId?: string) =>
   useToolStore((s) => {
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const connector = connectorForTool(identifier, agentId)(s);
     const plugin = toolSelectors.getMetaById(identifier)(s);
     return [
       connector?.name || plugin?.title || identifier,

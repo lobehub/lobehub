@@ -40,10 +40,10 @@ const commandExitedCleanly = (state: unknown): boolean =>
  * The package's own executor handles invocation; this adds the renderer-side
  * `onAfterCall` hook the dispatcher (`gatewayEventHandler.dispatchOnAfterCall`)
  * resolves by identifier, so a native agent's `runCommand` calls get the same
- * git/gh side-effect tracking (`git worktree add` / `git switch` / `git push` /
- * `gh pr create` → topic metadata) heterogeneous CLI shell calls already have.
- * Without this hook the topic's branch/PR binding silently misses every worktree
- * or PR created inside a native-agent run.
+ * git side-effect tracking (`git worktree add` / `git switch` / `git push` →
+ * topic metadata, a push's PR → Work rows) heterogeneous CLI shell calls
+ * already have. Without this hook the topic's branch binding silently misses
+ * every worktree or push made inside a native-agent run.
  */
 class LocalSystemExecutorWithGitEffects {
   readonly identifier = localSystemExecutor.identifier;
@@ -58,6 +58,7 @@ class LocalSystemExecutorWithGitEffects {
     apiName,
     params,
     result,
+    toolCallId,
     topicId,
   }: ToolAfterCallContext): Promise<void> => {
     // Constrain to a `runCommand` bound to a run topic whose command is KNOWN to
@@ -71,7 +72,12 @@ class LocalSystemExecutorWithGitEffects {
     const command = readShellCommand(params);
     if (command === undefined) return;
 
-    await recordGitCommandEffects({ command, resultContent: result.content, topicId });
+    await recordGitCommandEffects({
+      command,
+      resultContent: result.content,
+      toolCallId,
+      topicId,
+    });
   };
 }
 

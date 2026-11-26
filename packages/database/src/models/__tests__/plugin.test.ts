@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewInstalledPlugin } from '../../schemas';
-import { userInstalledPlugins, users, workspaces } from '../../schemas';
+import { userConnectors, userInstalledPlugins, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { PluginModel } from '../plugin';
 
@@ -192,6 +192,115 @@ describe('PluginModel', () => {
 
       expect(result?.userId).toBe(userId);
       expect(result?.identifier).toBe('test-plugin-1');
+    });
+  });
+
+  describe('Composio projection in a workspace', () => {
+    const workspaceId = 'plugin-composio-ws';
+    const composio = (connectedAccountId: string) => ({
+      composio: { appSlug: 'GMAIL', authConfigId: 'cfg', connectedAccountId, status: 'ACTIVE' },
+    });
+
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: workspaceId });
+      // One projection row per member for the same app, plus a non-Composio plugin.
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        customParams: composio('acc-legacy'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, '456', workspaceId).create({
+        customParams: composio('acc-private'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        identifier: 'search',
+        type: 'plugin',
+      });
+    });
+
+    it('lists every member’s Composio rows with who wrote them', async () => {
+      const rows = await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([
+        'gmail',
+        'search',
+      ]);
+
+      expect(
+        rows.map((row) => [row.userId, row.customParams?.composio?.connectedAccountId]).sort(),
+      ).toEqual([
+        ['456', 'acc-private'],
+        [userId, 'acc-legacy'],
+      ]);
+      expect(await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([])).toEqual(
+        [],
+      );
+    });
+
+    it('removes only the rows mirroring one account', async () => {
+      await new PluginModel(serverDB, '456', workspaceId).deleteComposioMirrors(
+        'gmail',
+        'acc-private',
+      );
+
+      const rows = await new PluginModel(serverDB, userId, workspaceId).queryComposioMirrors();
+      expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
+        'acc-legacy',
+      ]);
+    });
+
+    it("leaves a teammate's private connection out of a client listing", async () => {
+      // 456's projection mirrors its private connection of the app; the
+      // caller's legacy-only connection has no connection row
+      await serverDB.insert(userConnectors).values({
+        identifier: 'gmail',
+        metadata: { composio: { connectedAccountId: 'acc-private' } },
+        name: 'Gmail',
+        sourceType: 'composio',
+        status: 'connected',
+        userId: '456',
+        visibility: 'private',
+        workspaceId,
+      } as any);
+      const accounts = (rows: { customParams?: any }[]) =>
+        rows.map((row) => row.customParams?.composio?.connectedAccountId).filter(Boolean);
+
+      const caller = new PluginModel(serverDB, userId, workspaceId);
+      expect(accounts(await caller.query({ forClient: true }))).toEqual(['acc-legacy']);
+      // Server runs keep reading every projection row
+      expect(accounts(await caller.query()).sort()).toEqual(['acc-legacy', 'acc-private']);
+      // The owner still lists their own
+      expect(
+        accounts(
+          await new PluginModel(serverDB, '456', workspaceId).query({ forClient: true }),
+        ).sort(),
+      ).toEqual(['acc-legacy', 'acc-private']);
+    });
+
+    it("removes a shared connection's projection but keeps a member's private connection", async () => {
+      // 456's projection mirrors its private connection of the app
+      await serverDB.insert(userConnectors).values({
+        identifier: 'gmail',
+        metadata: { composio: { connectedAccountId: 'acc-private' } },
+        name: 'Gmail',
+        sourceType: 'composio',
+        status: 'connected',
+        userId: '456',
+        visibility: 'private',
+        workspaceId,
+      } as any);
+
+      await new PluginModel(serverDB, userId, workspaceId).deleteComposioProjectionKeepingPrivate(
+        'gmail',
+      );
+
+      const rows = await new PluginModel(serverDB, userId, workspaceId).queryComposioMirrors();
+      expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
+        'acc-private',
+      ]);
+      expect(await new PluginModel(serverDB, userId, workspaceId).findById('search')).toBeDefined();
     });
   });
 

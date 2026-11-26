@@ -38,7 +38,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PR pushes supersede each other; canary/main push runs always finish (they
+  # publish the size baselines), a newer push waits instead.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Size gates run on every PR. Main/canary pushes run the full E2E job and publish
@@ -57,8 +59,45 @@ env:
   S3_ENDPOINT: https://e2e-mock-s3.localhost
 
 jobs:
+  # Same decision as Test CI (.github/scripts/ci-scope.mjs): a PR that changes
+  # nothing the deployed app is built from (tests only, desktop, CLI, docs, CI
+  # scripts) skips the build and the browser tests. Render Budget runs for UI
+  # changes only.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      e2e: ${{ steps.scope.outputs.e2e }}
+      render_budget: ${{ steps.scope.outputs.render_budget }}
+    steps:
+      - name: Checkout
+        env:
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Decide what to test
+        id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node .github/scripts/ci-scope.mjs
+
   e2e:
     name: Test Web App
+    needs: scope
+    if: needs.scope.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -75,8 +114,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -100,10 +141,35 @@ jobs:
       - name: Run database migrations
         run: bun run db:migrate
 
+      # Turbopack's persistent cache: with a warm cache the Next.js compile of
+      # the same tree took 2.2 s instead of 2.1 min. It is 1.1 GB and the repo's
+      # Actions cache is full, so only the first canary push of each day saves
+      # one; every run restores the newest.
+      - name: Restore the Next.js build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .next/cache
+          key: next-build-v1-${{ github.sha }}
+          restore-keys: |
+            next-build-v1-
+
       - name: Build application
         run: bun run build
         env:
           SKIP_LINT: '1'
+
+      - name: Name today's Next.js build cache
+        id: next_cache_day
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the Next.js build cache (first canary push of the day)
+        if: steps.next_cache_day.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .next/cache
+          key: next-build-v1-${{ steps.next_cache_day.outputs.day }}
 
       # ===== Bundle size gate (web dist) =====
       # Baseline: artifact from the latest successful canary commit in the tested SHA's lineage.
@@ -121,7 +187,7 @@ jobs:
               context,
               workflowId: 'e2e.yml',
               artifactName: 'bundle-size-baseline-web',
-              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+              targetSha: context.sha,
             });
 
       - name: Download web dist size baseline
@@ -165,7 +231,7 @@ jobs:
               context,
               workflowId: 'e2e.yml',
               artifactName: 'bundle-size-baseline-entry-graph',
-              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+              targetSha: context.sha,
             });
 
       - name: Download entry-graph baseline
@@ -268,6 +334,8 @@ jobs:
 
   render-budget:
     name: Render Budget
+    needs: scope
+    if: needs.scope.outputs.render_budget == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -284,8 +352,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -347,3 +417,22 @@ jobs:
             e2e/screenshots
           retention-days: 30
           if-no-files-found: ignore
+
+  # The one check to require: green when every job this run needed passed.
+  gate:
+    name: E2E CI Gate
+    if: always()
+    needs: [scope, e2e, render-budget]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.NEEDS);
+            const bad = Object.entries(needs).filter(([, job]) => !["success", "skipped"].includes(job.result));
+            for (const [name, job] of Object.entries(needs)) console.log(`${name}: ${job.result}`);
+            if (needs.scope.result !== "success") bad.push(["scope", needs.scope]);
+            if (bad.length > 0) { console.log(`::error::${bad.map(([name]) => name).join(", ")} did not pass`); process.exit(1); }
+          '

@@ -2,6 +2,7 @@ import { MARKETPLACE_INSTALL_COMPLETED_KEY } from '@lobechat/const';
 import type { ToolManifest } from '@lobechat/types';
 import debug from 'debug';
 
+import { cloudManifestTools } from '@/libs/mcp/cloudManifest';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type ConnectorSnapshot,
@@ -10,8 +11,6 @@ import {
 } from '@/store/tool/slices/connector/replaceConnector';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
-
-import { cloudManifestTools } from './cloudManifest';
 
 const log = debug('lobe-mcp:store:installMarketplaceConnector');
 
@@ -125,7 +124,7 @@ export const installMarketplaceConnector = async (
   let snapshot: ConnectorSnapshot | undefined;
 
   if (isOAuth) {
-    const connector = connectorSelectors.connectorByIdentifier(identifier)(get());
+    const connector = connectorSelectors.sharedConnectorByIdentifier(identifier)(get());
     if (!connector) throw new Error('The MCP connector did not finish authorization');
     connectorId = connector.id;
     // Authorization already wrote the row: a cancel while finishing removes the

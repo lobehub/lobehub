@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  Flexbox,
-  Freeze,
-  Icon,
-  Popover,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheckIcon,
@@ -23,9 +14,11 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import type { EntityPreview } from '@/store/entityPreview';
+import { densityVars } from '@/styles/densityVars';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
@@ -35,7 +28,7 @@ import { useEntityPreview } from './useEntityPreview';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     width: 320px;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   description: css`
     overflow: hidden;

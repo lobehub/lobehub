@@ -10,8 +10,15 @@ const itemDate = (item: TimelineItem) =>
 const sameAuthor = (a: ChannelPublicMessage, b: ChannelPublicMessage) =>
   !!a.author.id && a.author.id === b.author.id && a.author.type === b.author.type;
 
-/** Group only adjacent speech; system events, dates and reply contexts break a group. */
-export const presentChannelTimeline = (items: TimelineItem[]) =>
+/**
+ * Group only adjacent speech; system events, dates and reply contexts break a group. So does a
+ * row shown between two messages (`breaksAfter`, by the message it follows), or the second one
+ * would read as said by whoever wrote that row.
+ */
+export const presentChannelTimeline = (
+  items: TimelineItem[],
+  breaksAfter: ReadonlySet<string> = new Set(),
+) =>
   items.map((item, index) => {
     const previous = items[index - 1];
     const date = itemDate(item);
@@ -24,6 +31,7 @@ export const presentChannelTimeline = (items: TimelineItem[]) =>
       elapsed <= GROUP_WINDOW_MS &&
       item.kind === 'message' &&
       previous?.kind === 'message' &&
+      !breaksAfter.has(previous.message.id) &&
       sameAuthor(item.message, previous.message) &&
       item.message.threadId === previous.message.threadId &&
       item.message.replyToId === previous.message.replyToId;

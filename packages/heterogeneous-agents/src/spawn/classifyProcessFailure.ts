@@ -9,7 +9,7 @@ import type { HeterogeneousTerminalErrorData } from '../types';
 /**
  * Process-level failure classification for `lh hetero exec` runs.
  *
- * The stream adapters (`adapters/claudeCode.ts`, `adapters/codex.ts`) classify
+ * The stream adapters (`adapters/claudeCode.ts`, `adapters/codex/`) classify
  * failures the CLI reports in-stream (overloaded / rate-limit / auth relayed
  * via a `result` event), but a run that dies BEFORE the agent CLI produces any
  * stream — `spawn claude ENOENT`, an auth failure printed straight to stderr —

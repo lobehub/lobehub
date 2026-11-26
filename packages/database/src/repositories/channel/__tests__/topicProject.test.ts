@@ -61,11 +61,16 @@ const transaction = (rows: unknown[], returned: Record<string, unknown[]>) => {
   const update = vi.fn(() => ({ set: updateSet }));
   const insert = vi.fn(() => ({ values: insertValues }));
 
+  // The check for a run still writing into the topic selects only an id; nothing holds it here.
+  const select = vi.fn((fields?: Record<string, unknown>) =>
+    chain(fields && Object.keys(fields).join() === 'id' ? [] : rows),
+  );
+
   return {
     insert,
     insertValues,
-    select: vi.fn(() => chain(rows)),
-    tx: { insert, select: vi.fn(() => chain(rows)), update } as never,
+    select,
+    tx: { insert, select, update } as never,
     update,
     updateReturning,
     updateSet,
@@ -83,7 +88,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -104,7 +109,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -121,7 +126,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -138,7 +143,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel(null),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );

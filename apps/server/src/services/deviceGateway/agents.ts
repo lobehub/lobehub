@@ -7,6 +7,7 @@ import {
   type DeviceMessageApiResult,
   type DeviceToolCallResult,
   type GatewayMcpParams,
+  type GatewayToolCallCompletion,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
@@ -18,9 +19,11 @@ import type {
   KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  CodexCollaborationMode,
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -178,12 +181,15 @@ export async function dispatchAgentRun(
     claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch, forwarded into the `lh hetero exec` envelope. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded to the device as fetchable (signed) URLs. */
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
@@ -211,6 +217,8 @@ export async function executeToolCall(
   getClient: DeviceClientGetter,
   params: {
     clientKinds?: DeviceClient[];
+    /** Lets the device report this call's final result later; see `buildShellCompletion`. */
+    completion?: GatewayToolCallCompletion;
     deviceId: string;
     operationId?: string;
     userId: string;

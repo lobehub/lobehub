@@ -29,6 +29,32 @@ const loadParityFixture = async () => {
 };
 
 describe('CodexAppServerAdapter', () => {
+  it('reports a steered user message and answers it in a step of its own', () => {
+    const adapter = new CodexAppServerAdapter({ sessionId: 'thread-1' });
+    const item = (type: string, extra: Record<string, unknown>) => ({
+      item: { id: `${type}-1`, type, ...extra },
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    adapter.adapt('turn/started', { threadId: 'thread-1', turn: { id: 'turn-1' } });
+    adapter.adapt('item/agentMessage/delta', { delta: 'Working on it', itemId: 'm1' });
+
+    // The prompt that started the turn carries no client id: not a steer.
+    expect(adapter.adapt('item/started', item('userMessage', { clientId: null }))).toEqual([]);
+
+    const steered = adapter.adapt('item/started', item('userMessage', { clientId: 'steer-1' }));
+    expect(steered).toEqual([
+      expect.objectContaining({
+        data: { phase: 'user_message', uuid: 'steer-1' },
+        type: 'step_complete',
+      }),
+    ]);
+
+    const answer = adapter.adapt('item/agentMessage/delta', { delta: 'Sure', itemId: 'm2' });
+    expect(answer.map(({ type }) => type)).toEqual(['stream_end', 'stream_start', 'stream_chunk']);
+    expect(answer[1].data).toMatchObject({ newStep: true });
+  });
+
   it('carries the native turn boundary across tool-separated steps', async () => {
     const adapter = new CodexAppServerAdapter({ sessionId: 'native-thread' });
     const events = (await loadFixture()).flatMap(({ method, params }) =>
@@ -169,8 +195,37 @@ describe('CodexAppServerAdapter', () => {
       outputTruncated: true,
     });
     expect(result.content).toHaveLength(25_078);
-    expect(result.pluginState.output).toBe(result.content);
+    expect(result.pluginState).not.toHaveProperty('output');
     expect(result.pluginState.stdout).toBe(result.content);
+  });
+
+  it('streams command output into stdout only', () => {
+    const adapter = new CodexAppServerAdapter();
+    adapter.adapt('item/started', {
+      item: {
+        aggregatedOutput: null,
+        command: 'echo hello',
+        durationMs: null,
+        exitCode: null,
+        id: 'command-stream',
+        status: 'inProgress',
+        type: 'commandExecution',
+      },
+      startedAtMs: 1,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+
+    const events = adapter.adapt('item/commandExecution/outputDelta', {
+      delta: 'hello',
+      itemId: 'command-stream',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const state = events.find(({ data }) => data?.chunkType === 'tool_state')?.data.pluginState;
+
+    expect(state).toMatchObject({ isBackground: false, stdout: 'hello' });
+    expect(state).not.toHaveProperty('output');
   });
 
   it('normalizes native file changes into complete single-file patches', () => {

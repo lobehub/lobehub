@@ -5,7 +5,6 @@ import { Hash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import type { ChannelPersonOption } from '@/services/channel';
 import { channelActions } from '@/store/channel';
@@ -27,8 +26,8 @@ interface ExistingChannel {
    */
   directAgentName?: string;
   id: string;
-  /** People can be invited only into workspace Channels. */
-  workspaceId: string | null;
+  /** The project a project Channel belongs to: it seats only that project's Agents. */
+  projectId: string | null;
 }
 
 interface CreateChannelProps {
@@ -57,7 +56,8 @@ export const openInviteMembers = (existing: ExistingChannel, onCreated?: (id: st
 /**
  * Like starting a group chat: choose members first. The name is optional and defaults to the
  * members' names; the sidebar renames it later. Inviting into an existing Channel uses the
- * same picker without a name. Workspace Channels, new or existing, also list workspace members.
+ * same picker without a name. It also lists the people who can join: workspace members in a
+ * workspace, mutual contacts in the personal space.
  */
 function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const { t } = useTranslation('channel');
@@ -67,12 +67,9 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const [people, setPeople] = useState<ChannelPersonOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const options = useChannelAgentOptions(existing ? undefined : projectId);
+  const options = useChannelAgentOptions((existing ? existing.projectId : projectId) ?? undefined);
   const direct = existing?.directAgentName !== undefined;
   const nameOf = usePersonName();
-  const activeWorkspaceId = useActiveWorkspaceId();
-  // People join only workspace Channels: a new one is created in the active workspace.
-  const canPickPeople = existing ? !!existing.workspaceId : !!activeWorkspaceId;
   const dirty = !!title.trim() || agents.length > 0 || people.length > 0;
 
   // A mask click must not drop what the user typed or picked; ✕ and Esc still close.
@@ -98,6 +95,10 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       },
       CHANNEL_LIMITS.titleLength,
     ) || t('autoTitle.empty');
+  // Agents from outside the project join it first; say so before anyone submits.
+  const joiningProject = options.project
+    ? agentNames.filter((_, index) => !options.project!.memberIds.includes(agents[index].agentId))
+    : [];
   const canSubmit = canSubmitChannelMembers(agents, {
     creating: !existing,
     people: people.length,
@@ -127,6 +128,8 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       } else {
         const id = await channelActions.create({
           agents: selections,
+          // The notice above the buttons names who joins the project.
+          joinProject: true,
           projectId,
           title: title.trim() || autoTitle,
           userIds: people.map((person) => person.userId),
@@ -154,12 +157,8 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           emptyHint={existing ? undefined : t('create.onlyYou')}
           exclude={existing?.agentIds}
           options={options}
+          people={{ channelId: existing?.id, onChange: setPeople, value: people }}
           value={agents}
-          people={
-            canPickPeople
-              ? { channelId: existing?.id, onChange: setPeople, value: people }
-              : undefined
-          }
           onChange={setAgents}
         />
       </Flexbox>
@@ -178,6 +177,18 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
             onPressEnter={() => void submit()}
           />
         </Flexbox>
+      )}
+      {joiningProject.length > 0 && (
+        <Text fontSize={12} type="secondary">
+          {options.project?.name
+            ? t('invite.joinProjectNotice', {
+                names: joiningProject.join(t('autoTitle.separator')),
+                project: options.project.name,
+              })
+            : t('invite.joinProjectNoticeUnnamed', {
+                names: joiningProject.join(t('autoTitle.separator')),
+              })}
+        </Text>
       )}
       {error !== undefined && (
         <AsyncError error={error} title={t(getChannelSaveErrorKey(error))} variant="inline" />

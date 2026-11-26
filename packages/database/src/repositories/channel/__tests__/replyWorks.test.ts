@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { WorkModel } from '../../../models/work';
-import { works, workVersions } from '../../../schemas';
+import { works, workspaceMembers, workVersions } from '../../../schemas';
 import { ChannelExecutionRepository } from '..';
 import { createChannelFixture, jobById, jobsOf, lease } from './testUtils';
 
@@ -50,8 +50,9 @@ interface WorkFixture {
   share?: boolean;
   tokens?: number;
   trashed?: boolean;
-  type?: 'document' | 'external';
+  type?: 'canvas' | 'collection' | 'document' | 'external' | 'file';
   url?: string | null;
+  visibility?: 'private' | 'public';
 }
 
 const addWork = async ({
@@ -66,6 +67,7 @@ const addWork = async ({
   tokens,
   type = 'external',
   url = 'https://github.com/lobehub/lobehub/pull/1',
+  visibility = 'private',
 }: WorkFixture) => {
   const [work] = await db
     .insert(works)
@@ -88,7 +90,7 @@ const addWork = async ({
       type,
       url,
       userId: ownerId,
-      visibility: 'private',
+      visibility,
       workspaceId: fixture.workspaceId,
     })
     .returning();
@@ -227,5 +229,94 @@ describe('Channel reply works', () => {
     expect((await state.reply(state.asOwner, thread.id)).works).toEqual([
       expect.objectContaining({ url: 'https://github.com/lobehub/lobehub/pull/1' }),
     ]);
+  });
+
+  describe('canvases', () => {
+    const addCanvas = (rootOperationId: string, visibility: 'private' | 'public' = 'private') =>
+      addWork({
+        resourceType: 'canvas',
+        rootOperationId,
+        type: 'canvas',
+        url: null,
+        visibility,
+      });
+    const joinWorkspace = (userId: string) =>
+      db
+        .insert(workspaceMembers)
+        .values({ role: 'member', userId, workspaceId: fixture.workspaceId });
+    const cardsOf = async (
+      state: Awaited<ReturnType<typeof publishedReply>>,
+      repo: typeof state.asOwner,
+      includeCanvasWorks = true,
+    ) => {
+      const view = await repo.detail(state.channel.id, { includeCanvasWorks });
+      return view.messages.find((message) => message.routingStatus === 'reply')!.works!;
+    };
+
+    it('shows the requester the canvas their run saved, with what opens it', async () => {
+      const state = await publishedReply();
+      const canvas = await addCanvas(state.operationId);
+
+      expect(await cardsOf(state, state.asMember)).toEqual([
+        expect.objectContaining({ id: canvas.id, resourceId: canvas.resourceId, type: 'canvas' }),
+      ]);
+    });
+
+    it('keeps canvases off the cards of clients that cannot open them', async () => {
+      const state = await publishedReply();
+      await addCanvas(state.operationId, 'public');
+
+      expect(await cardsOf(state, state.asMember, false)).toEqual([]);
+    });
+
+    it('shows workspace members a public canvas, never a private one', async () => {
+      const state = await publishedReply();
+      await addCanvas(state.operationId);
+      expect(await cardsOf(state, state.asOwner)).toEqual([]);
+
+      const shared = await addCanvas(state.operationId, 'public');
+      // Outside the workspace (an external contact) the canvas API cannot read it either.
+      expect(await cardsOf(state, state.asOwner)).toEqual([]);
+
+      await joinWorkspace(fixture.ownerId);
+      expect(await cardsOf(state, state.asOwner)).toEqual([
+        expect.objectContaining({ id: shared.id, type: 'canvas' }),
+      ]);
+    });
+
+    it('keeps the link and the canvas when the run saved many newer files', async () => {
+      const state = await publishedReply();
+      const link = await addWork({
+        at: new Date('2026-11-12T09:00:00Z'),
+        rootOperationId: state.operationId,
+      });
+      const canvas = await addWork({
+        at: new Date('2026-11-12T09:10:00Z'),
+        resourceType: 'canvas',
+        rootOperationId: state.operationId,
+        type: 'canvas',
+        url: null,
+      });
+      // Opting into canvases also enables `file` and `collection`: 25 newer files must not spend
+      // the card's summary slots, or the older link and canvas are dropped before the card is built.
+      for (let index = 0; index < 25; index++) {
+        await addWork({
+          at: new Date(Date.parse('2026-11-12T10:00:00Z') + index * 1000),
+          resourceType: 'file',
+          rootOperationId: state.operationId,
+          type: 'file',
+          url: null,
+        });
+      }
+
+      const cards = await cardsOf(state, state.asMember);
+      expect(cards.map((card) => card.type).sort()).toEqual(['canvas', 'external']);
+      expect(cards).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: canvas.id, type: 'canvas' }),
+          expect.objectContaining({ id: link.url, type: 'external' }),
+        ]),
+      );
+    });
   });
 });

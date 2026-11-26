@@ -687,6 +687,15 @@ export interface PlatformDefinition {
   name: string;
 
   /**
+   * Only the Node message gateway has a handler for this platform's persistent connection. With
+   * the gateway enabled, persistent modes work only while the platform is routed to the Node host
+   * (`MESSAGE_GATEWAY_NODE_PLATFORMS`); otherwise only webhook mode works and persistent modes are
+   * refused with an actionable error. See `isMessageGatewayHostingUnavailable`. In-process
+   * connections (gateway disabled) are unaffected.
+   */
+  nodeMessageGatewayOnly?: boolean;
+
+  /**
    * Credential keys that are identifiers rather than secrets, for platforms
    * whose credentials never come from the form schema and so have no
    * `type: 'password'` marking to read. WeChat's QR handshake writes `botId`

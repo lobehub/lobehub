@@ -13,6 +13,8 @@ interface MemberProfilePopupProps extends PropsWithChildren {
   /** Rendered instead of the children when there is no member card to show. */
   fallback?: ReactNode;
   placement?: 'top' | 'right' | 'bottom' | 'left';
+  /** `click` for touch surfaces, where nothing hovers. */
+  trigger?: 'click' | 'hover';
   userId?: string | null;
 }
 
@@ -24,7 +26,7 @@ interface MemberProfilePopupProps extends PropsWithChildren {
  * long list of avatars does not refetch it per row.
  */
 const MemberProfilePopup = memo<MemberProfilePopupProps>(
-  ({ children, fallback, placement = 'top', userId }) => {
+  ({ children, fallback, placement = 'top', trigger = 'hover', userId }) => {
     const member = useWorkspaceMemberProfile(userId);
 
     if (!member) return fallback ?? children;
@@ -34,7 +36,7 @@ const MemberProfilePopup = memo<MemberProfilePopupProps>(
         nativeButton={false}
         placement={placement}
         styles={POPOVER_STYLES}
-        trigger={'hover'}
+        trigger={trigger}
         content={
           <div role="presentation" onClick={stopCardClick}>
             <MemberProfileCard member={member} />

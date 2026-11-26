@@ -202,6 +202,38 @@ export class WeComLongConnection {
     this.options.log('WeCom bot %s: connection stopped', this.botId);
   }
 
+  /**
+   * Finish every open stream, then stop. `stop()` alone drops them: the socket closes with the
+   * "replying" bubble still spinning on the user's side, and nothing can finish it later because
+   * a stream only lives on the connection that opened it. The answer itself still arrives — as a
+   * proactive push once a connection is back. The finish frames go out at once; waiting for their
+   * receipts is capped at `maxWaitMs`, so a shutdown is not held up by a slow server.
+   */
+  async drain(maxWaitMs = 3000): Promise<void> {
+    if (!this.stopped && this.isConnected && this.streams.size > 0) {
+      const open = [...this.streams.values()];
+      this.streams.clear();
+      const finishes = open.map((stream) => {
+        clearTimeout(stream.timer);
+        return this.respond(stream.reqId, {
+          msgtype: 'stream',
+          stream: { content: stream.content || '…', finish: true, id: stream.streamId },
+        }).catch((error) => {
+          this.options.log('WeCom bot %s: finishing stream on drain failed: %O', this.botId, error);
+        });
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        Promise.all(finishes),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, maxWaitMs);
+        }),
+      ]);
+      clearTimeout(timer);
+    }
+    this.stop();
+  }
+
   // ------------------------------------------------------------------
   // Outbound
   // ------------------------------------------------------------------

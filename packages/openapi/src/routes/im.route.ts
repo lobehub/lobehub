@@ -1,16 +1,19 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ImController } from '../controllers/im.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
   ImReadRequestSchema,
+  ImReadResultSchema,
   ImSendRequestSchema,
+  ImSendResultSchema,
   ImSyncQuerySchema,
+  ImSyncResultSchema,
   ImTopicParamSchema,
 } from '../types/im.type';
 
@@ -37,8 +40,10 @@ const messageWrite = requireAnyPermission(
  */
 ImRoutes.post(
   '/messages',
-  describeRoute({
-    operationId: 'sendImMessage',
+  routeDoc({
+    data: ImSendResultSchema,
+    errors: [404, 409],
+    operationId: 'im.send',
     summary: 'Send a message to an agent; the reply arrives asynchronously via sync',
     tags: ['im'],
   }),
@@ -54,8 +59,10 @@ ImRoutes.post(
 /** GET /api/v1/im/topics/:topicId/sync — whole new messages, typing and read state (long-poll). */
 ImRoutes.get(
   '/topics/:topicId/sync',
-  describeRoute({
-    operationId: 'syncImTopic',
+  routeDoc({
+    data: ImSyncResultSchema,
+    errors: [404],
+    operationId: 'im.sync',
     summary: 'Long-poll a conversation for whole new messages, typing and read receipts',
     tags: ['im'],
   }),
@@ -70,8 +77,10 @@ ImRoutes.get(
 /** POST /api/v1/im/topics/:topicId/read — move the user's read cursor forward. */
 ImRoutes.post(
   '/topics/:topicId/read',
-  describeRoute({
-    operationId: 'markImTopicRead',
+  routeDoc({
+    data: ImReadResultSchema,
+    errors: [404],
+    operationId: 'im.markRead',
     summary: "Mark the agent's messages read up to a message",
     tags: ['im'],
   }),

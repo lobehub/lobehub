@@ -8,6 +8,14 @@ const resolvePlugins = (plugins?: string[]) =>
   getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.agentBuilder, { plugins })?.plugins ?? [];
 
 describe('AGENT_BUILDER runtime plugins', () => {
+  it('adds a reply-language instruction only for an explicit preference', () => {
+    const slug = BUILTIN_AGENT_SLUGS.agentBuilder;
+    expect(getAgentRuntimeConfig(slug, {})?.systemRole).not.toMatch(/reply in|reply language/i);
+    expect(getAgentRuntimeConfig(slug, { userLocale: 'ja-JP' })?.systemRole).toContain(
+      'Preferred reply language: ja-JP.',
+    );
+  });
+
   it('always includes the Agent Builder tool', () => {
     expect(resolvePlugins()).toEqual([AgentBuilderIdentifier]);
   });

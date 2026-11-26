@@ -105,6 +105,7 @@ describe('parseSearchQuery', () => {
       'communityAgent',
       'knowledgeBase',
       'task',
+      'goal',
     ];
 
     for (const type of types) {

@@ -19,6 +19,8 @@ export interface SandboxEnvironmentSpecification {
   internetAccess?: boolean;
   kind?: EnvironmentKind;
   maintenanceCommand?: string;
+  /** Free-text notes on what a run needs; read by whoever picks the machine, never enforced. */
+  notes?: string;
   sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
 }
 

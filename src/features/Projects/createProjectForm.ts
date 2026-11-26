@@ -116,10 +116,11 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
 export type MainAgentMode = 'dedicated' | 'existing';
 
 /**
- * Every new project starts with an agent of its own. Reusing an agent is an
- * explicit pick in the modal and is not carried over to the next project.
+ * A new project is led by an agent the workspace already has, LobeAI unless
+ * another one is picked. Creating an agent for it is an explicit choice in the
+ * modal and is not carried over to the next project.
  */
-export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'dedicated';
+export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'existing';
 
 export interface ReservedProjectIds {
   /** Id of the dedicated main agent, used only when the project creates one. */

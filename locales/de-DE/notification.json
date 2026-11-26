@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Bonusguthaben hinzugefügt",
   "storage_overage_cap_reached": "Ihr monatliches Speicher-Limit von ${{monthlyCap}} für die nutzungsbasierte Abrechnung wurde erreicht. Die geschätzten Kosten für diesen Abrechnungszeitraum betragen ${{estimatedCycleCharge}}. Neue Uploads, die über Ihren enthaltenen Speicher hinausgehen, werden bis zum nächsten Abrechnungszeitraum oder bis zur Erhöhung des Limits blockiert.",
   "storage_overage_cap_reached_title": "Speicher-Limit für nutzungsbasierte Abrechnung erreicht",
-  "subscription_one_time_expired": "Ihr einmaliger {{plan}}-Plan ist abgelaufen und Ihr Konto befindet sich jetzt im kostenlosen Plan. Erneuern Sie {{plan}}, um Ihre Vorteile zurückzubekommen.",
   "subscription_one_time_expired_action": "{{plan}} erneuern",
   "subscription_one_time_expired_title": "Ihr {{plan}}-Plan ist abgelaufen",
   "subscription_payment_failed": "Die Zahlung für die Verlängerung Ihres Abonnements ist fehlgeschlagen. Bitte aktualisieren Sie Ihre Zahlungsmethode, um Ihr Abonnement aktiv zu halten.",

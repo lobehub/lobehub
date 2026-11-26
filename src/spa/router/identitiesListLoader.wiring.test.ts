@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { desktopRoutes } from './desktopRouter.config';
 import { identitiesListLoader } from './identitiesListLoader';
+import { LegacyMemoryRedirect } from './legacyPathRedirect';
 
 const loaderModule = vi.hoisted(() => ({ evaluated: false }));
 
@@ -23,7 +24,12 @@ describe('identities list loader wiring', () => {
   });
 
   it('pre-hydrates the identity list on the desktop identities route', () => {
-    const routes = flatten(desktopRoutes).filter((r) => r.path === 'identities');
+    const routes = flatten(desktopRoutes).filter(
+      (r) =>
+        r.path === 'identities' &&
+        // The old `/memory/identities` URLs only forward to Settings.
+        (r.element as { type?: unknown } | undefined)?.type !== LegacyMemoryRedirect,
+    );
 
     expect(routes.length).toBeGreaterThan(0);
 

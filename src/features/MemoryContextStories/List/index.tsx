@@ -5,6 +5,8 @@ import * as stylex from '@stylexjs/stylex';
 import { ArchiveIcon, ChevronDownIcon, ChevronRightIcon, SearchXIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { groupStories } from '../derive';
 import { useStoryFormat } from '../format';
 import ListItem from './ListItem';
@@ -23,13 +25,17 @@ const styles = stylex.create({
   head: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlockEnd: '8px',
     paddingBlockStart: '20px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   heading: { alignItems: 'baseline', display: 'flex', gap: '8px' },
-  title: { fontSize: '16px', fontWeight: 600, margin: 0 },
+  title: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    margin: 0,
+  },
   count: { color: cssVar.colorTextTertiary, fontSize: '12px', fontVariantNumeric: 'tabular-nums' },
   scroll: {
     display: 'flex',
@@ -68,8 +74,8 @@ const styles = stylex.create({
     flexShrink: 0,
     fontSize: '12px',
     gap: '8px',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   legacyText: { flex: '1', minWidth: 0 },
 });

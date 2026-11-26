@@ -25,6 +25,7 @@ import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
+import { CompressedHistoryInlineContext } from '../Messages/Contexts/CompressedHistoryInlineContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import {
   dataSelectors,
@@ -33,6 +34,8 @@ import {
   useConversationStoreApi,
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import CompressedHistoryGap from './components/CompressedHistoryGap';
+import CompressedMemberRow from './components/CompressedMemberRow';
 import PreviewTail from './components/PreviewTail';
 import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
 import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
@@ -48,6 +51,8 @@ import { type InitialScrollPosition } from './hooks/useTopicScrollPersist';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import { hoistCompressedGroups } from './utils/compressedGroupOrder';
+import { expandCompressedRows } from './utils/compressedHistory';
+import { keepRowInPlace } from './utils/keepRowInPlace';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 import { resolveRefreshingRowId } from './utils/refreshingRow';
@@ -219,20 +224,63 @@ const ChatList = memo<ChatListProps>(
       [orderedMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
-    // Steered follow-up turns fold into the turn they interrupted. Custom item
-    // renderers address messages by id, so they keep the flat list.
-    const rows = useMemo(
-      () => (itemContent ? undefined : buildChatRows(displayMessages)),
-      [displayMessages, itemContent],
+    const compressedHistoryPages = useConversationStore((s) => s.compressedHistoryPages);
+    // Share views cannot page a group's older members (owner-only endpoint).
+    const canPageCompressedHistory = !context.agentShareId && !context.topicShareId;
+    // A compression group's original conversation unfolds into rows above the
+    // group on every surface; this list renders those rows itself. Steered
+    // follow-up turns fold into the turn they interrupted only for the default
+    // renderer: custom ones render each message on its own.
+    const expandedRows = useMemo(
+      () =>
+        expandCompressedRows(
+          itemContent
+            ? displayMessages.map((message) => ({ id: message.id }))
+            : buildChatRows(displayMessages),
+          displayMessages,
+          compressedHistoryPages,
+          { pageable: canPageCompressedHistory },
+        ),
+      [canPageCompressedHistory, compressedHistoryPages, displayMessages, itemContent],
     );
-    const rowIds = useMemo(
-      () => rows?.map((row) => row.id) ?? displayMessageIds,
-      [displayMessageIds, rows],
-    );
-    const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
+    const rows = expandedRows.rows;
+    const rowIds = useMemo(() => rows.map((row) => row.id), [rows]);
+    const rowById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () => resolveMessageDeepLink(displayMessages, rowIds, messageDeepLink),
-      [displayMessages, messageDeepLink, rowIds],
+      () => resolveMessageDeepLink(expandedRows.messages, rowIds, messageDeepLink),
+      [expandedRows, messageDeepLink, rowIds],
+    );
+    const resolveMessageRow = useCallback(
+      (messageId: string) =>
+        resolveMessageDeepLink(expandedRows.messages, rowIds, {
+          id: messageId,
+          navigationKey: messageId,
+        })?.index ?? -1,
+      [expandedRows, rowIds],
+    );
+    const storeApi = useConversationStoreApi();
+    const rowIdsRef = useRef(rowIds);
+    useEffect(() => {
+      rowIdsRef.current = rowIds;
+    });
+    // A later group's gap loads members above the row the reader is on.
+    const loadCompressedGap = useCallback(
+      (groupId: string, anchorId: string | undefined, retry: boolean) => {
+        const run = () => storeApi.getState().loadCompressedGroupHistory(groupId, { retry });
+        if (!anchorId) return run();
+        return keepRowInPlace({
+          anchorId,
+          getRowIds: () => rowIdsRef.current,
+          getScrollMethods: () => storeApi.getState().virtuaScrollMethods,
+          // One frame commits the new rows, the next lets virtua lay them out.
+          nextRender: () =>
+            new Promise((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            }),
+          run,
+        });
+      },
+      [storeApi],
     );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
@@ -305,7 +353,26 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+      [rowIds, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
+    );
+    // Compressed-history rows are this list's own, whichever renderer draws the
+    // messages: custom renderers only know message ids.
+    const renderItem = useCallback(
+      (index: number, id: string) => {
+        const row = rowById.get(id);
+        if (row?.compressedMember) return <CompressedMemberRow id={id} index={index} />;
+        if (row?.compressedGap)
+          return (
+            <CompressedHistoryGap
+              anchorId={rowIds[index + 1]}
+              groupId={row.compressedGap}
+              onLoad={loadCompressedGap}
+            />
+          );
+
+        return (itemContent ?? defaultItemContent)(index, id);
+      },
+      [defaultItemContent, itemContent, loadCompressedGap, rowById, rowIds],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -371,7 +438,6 @@ const ChatList = memo<ChatListProps>(
         feedback.showRefreshing ? resolveRefreshingRowId(displayMessages, !itemContent) : undefined,
       [displayMessages, feedback.showRefreshing, itemContent],
     );
-    const storeApi = useConversationStoreApi();
     useEffect(() => {
       storeApi.setState({ refreshingRowId });
     }, [refreshingRowId, storeApi]);
@@ -425,17 +491,20 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <BackgroundRunHintContext value={!hideBackgroundRunHint}>
-            <VirtualizedList
-              dataSource={rowIds}
-              footerSlot={footerSlot}
-              headerSlot={headerSlot}
-              initialScrollPosition={initialScrollPosition}
-              itemContent={itemContent ?? defaultItemContent}
-              messageDeepLink={resolvedMessageDeepLink}
-              paging={paging}
-              printable={printable}
-              rememberReadingPosition={rememberReadingPosition}
-            />
+            <CompressedHistoryInlineContext value>
+              <VirtualizedList
+                dataSource={rowIds}
+                footerSlot={footerSlot}
+                headerSlot={headerSlot}
+                initialScrollPosition={initialScrollPosition}
+                itemContent={renderItem}
+                messageDeepLink={resolvedMessageDeepLink}
+                paging={paging}
+                printable={printable}
+                rememberReadingPosition={rememberReadingPosition}
+                resolveMessageRow={resolveMessageRow}
+              />
+            </CompressedHistoryInlineContext>
           </BackgroundRunHintContext>
         </MessageActionProvider>
       );

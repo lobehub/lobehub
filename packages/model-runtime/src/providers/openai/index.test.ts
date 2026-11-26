@@ -490,26 +490,27 @@ describe('LobeOpenAI', () => {
       expect(createCall.top_p).toBeUndefined();
     });
 
-    it('should prune the params GPT-6 Astra rejects and keep xhigh reasoning effort', async () => {
-      const payload = {
-        messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-6-astra',
-        reasoning_effort: 'xhigh' as const,
-        temperature: 0.7,
-        top_p: 0.9,
-      };
+    it.each(['gpt-6-astra', 'gpt-6.2-astra', 'gpt-6.2-sol'])(
+      'should prune unsupported params and keep xhigh reasoning effort for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          reasoning_effort: 'xhigh',
+          temperature: 0.7,
+          top_p: 0.9,
+        });
 
-      await instance.chat(payload);
-
-      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
-      expect(createCall).toMatchObject({
-        model: 'gpt-6-astra',
-        reasoning: { effort: 'xhigh', summary: 'auto' },
-      });
-      expect(createCall.temperature).toBeUndefined();
-      expect(createCall.top_logprobs).toBeUndefined();
-      expect(createCall.top_p).toBeUndefined();
-    });
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+        expect(createCall).toMatchObject({
+          model,
+          reasoning: { effort: 'xhigh', summary: 'auto' },
+        });
+        expect(createCall.temperature).toBeUndefined();
+        expect(createCall.top_logprobs).toBeUndefined();
+        expect(createCall.top_p).toBeUndefined();
+      },
+    );
 
     it('should add search_context_size to web_search tool when OPENAI_SEARCH_CONTEXT_SIZE is set', async () => {
       // Note: oaiSearchContextSize is read at module load time, not runtime

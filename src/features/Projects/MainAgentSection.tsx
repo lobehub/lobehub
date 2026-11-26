@@ -38,8 +38,8 @@ interface MainAgentSectionProps {
 }
 
 /**
- * Lead the project with an agent created for it, or pick one the workspace
- * already has. The dedicated agent does not exist until the project is
+ * Lead the project with an agent the workspace already has (the default,
+ * listed first), or with one created for it. The dedicated agent does not exist until the project is
  * created, so its row previews the agent the server will create.
  */
 const MainAgentSection = memo<MainAgentSectionProps>(
@@ -67,8 +67,8 @@ const MainAgentSection = memo<MainAgentSectionProps>(
           disabled={disabled}
           value={mode}
           options={[
-            { label: t('create.mainAgentMode.dedicated'), value: 'dedicated' },
             { label: t('create.mainAgentMode.existing'), value: 'existing' },
+            { label: t('create.mainAgentMode.dedicated'), value: 'dedicated' },
           ]}
           onChange={(value) => onModeChange(value as MainAgentMode)}
         />

@@ -569,29 +569,30 @@ describe('skillsRuntime', () => {
   });
 
   describe('disabled skill enforcement', () => {
-    it('refuses to activate a DB skill the agent has disabled, even though it exists', async () => {
-      mocks.getAgentConfigById.mockResolvedValue({
+    it.each([
+      {
+        expected: false,
         plugins: [{ identifier: 'user-skill-identifier', mode: 'disabled' }],
-      });
-      mocks.findByName.mockImplementation(async (name: string) =>
-        name === 'user-skill'
-          ? { id: 'user-skill-id', identifier: 'user-skill-identifier', name: 'user-skill' }
-          : undefined,
-      );
-
-      const { skillsRuntime } = await import('../skills');
-      const runtime = await skillsRuntime.factory({
-        agentId: 'agent-1',
-        ...createRuntimeContext(),
-      });
-
-      const result = await runtime.activateSkill({ name: 'user-skill' });
-
-      expect(result.success).toBe(false);
-    });
-
-    it('still activates the skill when it is not disabled', async () => {
-      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+        title: 'refuses to activate a DB skill the agent has disabled, even though it exists',
+      },
+      {
+        expected: false,
+        plugins: [],
+        title: 'refuses to activate a library skill the agent never turned on',
+      },
+      {
+        expected: true,
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'auto' }],
+        title: 'still activates the skill when the agent turned it on',
+      },
+      {
+        expected: true,
+        plugins: [],
+        runSkillIds: ['user-skill-identifier'],
+        title: 'activates a skill the operation pool offers, such as one selected this turn',
+      },
+    ])('$title', async ({ expected, plugins, runSkillIds }) => {
+      mocks.getAgentConfigById.mockResolvedValue({ plugins });
       mocks.findByName.mockImplementation(async (name: string) =>
         name === 'user-skill'
           ? {
@@ -606,12 +607,11 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         agentId: 'agent-1',
+        runSkillIds,
         ...createRuntimeContext(),
       });
 
-      const result = await runtime.activateSkill({ name: 'user-skill' });
-
-      expect(result.success).toBe(true);
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(expected);
     });
   });
 
@@ -743,9 +743,9 @@ describe('skillsRuntime', () => {
       expect((await runtime.activateSkill({ name: 'secret-bundle' })).success).toBe(false);
     });
 
-    it('leaves a non-share run completely unfiltered', async () => {
-      // No `agentShareVisitor` means no per-skill allowlist at all: the creator's
-      // own run must keep reaching every skill it owns.
+    it('leaves a non-share run to the agent’s own config, with no per-skill allowlist', async () => {
+      // No `agentShareVisitor`, no share allowlist: the run reaches what the agent turned on.
+      mocks.getAgentConfigById.mockResolvedValue({ plugins: ['user-skill-identifier'] });
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         agentId: 'agent-1',

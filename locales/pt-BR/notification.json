@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Saldo de bônus adicionado",
   "storage_overage_cap_reached": "O limite mensal de pagamento por uso do armazenamento de ${{monthlyCap}} foi atingido. As cobranças estimadas neste ciclo são de ${{estimatedCycleCharge}}. Novos uploads além do armazenamento incluído serão bloqueados até o próximo ciclo de faturamento ou até que você aumente o limite.",
   "storage_overage_cap_reached_title": "Limite de pagamento por uso do armazenamento atingido",
-  "subscription_one_time_expired": "Seu plano único {{plan}} terminou e sua conta agora está no plano Gratuito. Renove {{plan}} para recuperar seus benefícios.",
   "subscription_one_time_expired_action": "Renovar {{plan}}",
   "subscription_one_time_expired_title": "Seu plano {{plan}} terminou",
   "subscription_payment_failed": "O pagamento da renovação da sua assinatura falhou. Por favor, atualize seu método de pagamento para manter sua assinatura ativa.",

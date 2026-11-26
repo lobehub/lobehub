@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/builtin-tool-a2ui",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./executor": "./src/client/executor/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/shared-tool-ui": "workspace:*",
+    "@lobehub/a2ui": "^1.0.1"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.21.0",
+    "react": "^19",
+    "react-i18next": "*"
+  }
+}

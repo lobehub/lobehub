@@ -1,4 +1,9 @@
-import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
+import type {
+  CodexCollaborationMode,
+  DeviceClient,
+  DeviceMetricSample,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -11,6 +16,7 @@ import type {
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
+  GatewayToolCallCompletion,
   GatewayToolCallType,
   GatewayTunnelRegistration,
 } from './types';
@@ -151,6 +157,12 @@ export class GatewayHttpClient {
        * knows; otherwise `resolveClientKinds` decides from the tool identifier.
        */
       clientKinds?: DeviceClient[];
+      /**
+       * Lets the device deliver this call's final result later. The gateway
+       * keeps `callbackUrl` for `ttlMs` and posts the device's
+       * `tool_call_completion` there; the device only learns `toolCallId`.
+       */
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -193,6 +205,7 @@ export class GatewayHttpClient {
   private async postToolCall(
     params: {
       clientKinds?: DeviceClient[];
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -223,6 +236,7 @@ export class GatewayHttpClient {
                 kind: 'tool',
                 type: toolCall.type ?? 'tool',
               }),
+          completion: params.completion,
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -324,12 +338,16 @@ export class GatewayHttpClient {
     claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch; see `AgentRunRequestMessage.collaborationMode`. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    /** Claude Code permission mode; see `AgentRunRequestMessage.permissionMode`. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;

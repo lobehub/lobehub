@@ -1,7 +1,8 @@
 import { getJinaReaderBaseUrl } from '@lobechat/utils';
 
 import type { CrawlImpl } from '../type';
-import { toFetchError } from '../utils/errorType';
+import { assertNotChallengePage, CHALLENGE_PAGE_MAX_LENGTH } from '../utils/challengePage';
+import { BlockedPageError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { withTimeout } from '../utils/withTimeout';
 
@@ -35,10 +36,11 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   const json = await parseJSONResponse<{
     code: number;
     data: {
-      content: string;
+      content?: string;
       description?: string;
       siteName?: string;
       title?: string;
+      warning?: string;
     };
     message?: string;
   }>(res, 'Jina');
@@ -52,6 +54,21 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   }
 
   const result = json.data;
+
+  // Jina still answers 200 for a page that asks for a CAPTCHA and only says so in
+  // `warning`. The warning can also sit on a real page that embeds a captcha widget,
+  // so it counts as blocked only when the body is as short as a challenge page. That
+  // includes an empty body (the challenge often lives in an iframe), so this runs
+  // before the minimum-length check below.
+  if (
+    result?.warning?.includes('CAPTCHA') &&
+    (result.content?.length ?? 0) <= CHALLENGE_PAGE_MAX_LENGTH
+  ) {
+    throw new BlockedPageError(result.warning);
+  }
+
+  assertNotChallengePage({ content: result?.content, title: result?.title });
+
   if (!result?.content || result.content.length < 100) {
     return;
   }

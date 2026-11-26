@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { fstatSync, readFileSync } from 'node:fs';
 import { text } from 'node:stream/consumers';
 
 import type { Command } from 'commander';
@@ -279,11 +279,24 @@ async function readFsContentInput(options: { content?: string; contentFile?: str
 
   // NOTICE:
   // CLI write commands should compose with shell pipelines without blocking interactive runs.
-  // Node marks piped stdin with `isTTY === false`, while normal terminals are `true` or undefined in tests.
+  // `isTTY` cannot tell a pipe apart: Node leaves it undefined for pipes, files and /dev/null alike.
   // Remove this branch only if Commander gains first-class stdin option support for these commands.
-  if (process.stdin.isTTY === false) return text(process.stdin);
+  if (isStdinRedirected()) return text(process.stdin);
 
   return '';
+}
+
+/**
+ * Whether stdin was piped (`echo x | lh …`) or redirected from a file (`< x`).
+ * A terminal, a closed stdin or `/dev/null` (an agent shell) is not input.
+ */
+function isStdinRedirected(): boolean {
+  try {
+    const stat = fstatSync(0);
+    return stat.isFIFO() || stat.isFile();
+  } catch {
+    return false;
+  }
 }
 
 async function resolveAgentFsContext(client: AgentFsClient, options: AgentFsOptions) {

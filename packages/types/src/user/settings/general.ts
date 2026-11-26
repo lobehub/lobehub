@@ -4,11 +4,20 @@ import type { ResponseAnimationStyle } from '../../aiProvider';
 
 export type AnimationMode = 'disabled' | 'agile' | 'elegant';
 
-export type ContextMenuMode = 'disabled' | 'default';
+export type InterfaceDensity = 'compact' | 'loose';
+
+/**
+ * What a message sent while the agent runs does: `queue` waits for the run to
+ * end and sends one message per turn; `steer` joins the running turn at a
+ * point the agent picks.
+ */
+export type FollowUpBehavior = 'queue' | 'steer';
+
+/** The Follow-up behavior of a user who never picked one. */
+export const DEFAULT_FOLLOW_UP_BEHAVIOR: FollowUpBehavior = 'steer';
 
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
-  contextMenuMode?: ContextMenuMode;
   costEstimateWarningThreshold?: number;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -28,11 +37,21 @@ export interface UserGeneralConfig {
    */
   enablePasteAutoConvert?: boolean;
   /**
+   * Whether to show the voice message button in the chat input bar.
+   * @default false
+   */
+  enableVoiceMessage?: boolean;
+  /**
    * Whether a turn's tool workflow starts expanded while the agent is still
    * running. Off keeps the running turn to a single live headline row.
    * @default false
    */
   expandWorkflowWhileStreaming?: boolean;
+  /**
+   * Messages sent while the agent runs.
+   * @default 'steer'
+   */
+  followUpBehavior?: FollowUpBehavior;
   /**
    * Grayscale font antialiasing on macOS. Off falls back to the system default rendering.
    * @default true
@@ -40,12 +59,27 @@ export interface UserGeneralConfig {
   fontAntialiasing?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
-  isDevMode: boolean;
+  interfaceDensity?: InterfaceDensity;
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
   primaryColor?: LobePrimaryColor;
+  /** A locale chosen by the user. An empty string records an explicit Automatic choice. */
   responseLanguage?: string;
+  /**
+   * Whether a tool call that only reads an image (e.g. Claude Code `Read` of a
+   * PNG) gets its own row with the image expanded. Off folds it into the
+   * "N calls" collapse like any other call, collapsed until clicked.
+   * @default true
+   */
+  showImageReadPreview?: boolean;
+  /**
+   * Whether each answer shows the model that produced it and its token usage.
+   * Unset falls back to the retired `isDevMode` switch, so people who had
+   * Advanced Tools on keep seeing it.
+   * @default false
+   */
+  showMessageUsage?: boolean;
   telemetry: boolean;
   timezone?: string;
   transitionMode?: ResponseAnimationStyle;

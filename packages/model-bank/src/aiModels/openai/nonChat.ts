@@ -14,6 +14,8 @@ import type {
   AIVideoModelCard,
 } from '../../types/aiModel';
 
+import { gptImage26Schema } from './gptImage26Parameters';
+
 /** OpenAI cards for endpoints other than chat and decisions; `allModels` lives in `./index`. */
 
 export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
@@ -152,6 +154,50 @@ export const openaiASRModels: AIASRModelCard[] = [
 
 // Image generation models
 export const openaiImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'GPT Image 2.6 Sunburst generates and edits images from text and image inputs for detailed compositions and precise visual editing.',
+    displayName: 'GPT Image 2.6 Sunburst',
+    enabled: true,
+    id: 'gpt-image-2.6-sunburst',
+    isOfficial: true,
+    parameters: gptImage26Schema,
+    // https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst
+    pricing: {
+      // Token rates match GPT Image 2.5; a GIF bills its frames as image output tokens.
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-04',
+    type: 'image',
+  },
+  {
+    description:
+      'GPT Image 2.6 Flare generates and edits images from text and image inputs for fast, interactive visual workflows.',
+    displayName: 'GPT Image 2.6 Flare',
+    enabled: true,
+    id: 'gpt-image-2.6-flare',
+    isOfficial: true,
+    parameters: gptImage26Schema,
+    // https://developers.openai.com/api/docs/models/gpt-image-2.6-flare
+    pricing: {
+      // Token rates match GPT Image 2.5; a GIF bills its frames as image output tokens.
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-04',
+    type: 'image',
+  },
   {
     description:
       "OpenAI's most capable image generation and editing model, built for workflows where editing precision matters most, with quality up to max and up to 4K output.",

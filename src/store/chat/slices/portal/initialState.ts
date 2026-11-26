@@ -80,6 +80,8 @@ export interface OpenLocalFileParams {
 
 export interface OpenLocalFileEntry extends OpenLocalFileParams {
   id: string;
+  /** The topic the device file was opened from. */
+  topicId?: string;
 }
 
 /**
@@ -121,7 +123,16 @@ export type PortalViewData =
   | { runId?: string; type: PortalViewType.DashboardWidget; widgetId: string }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }
-  | { file: PortalFile; type: PortalViewType.FilePreview }
+  | {
+      file: PortalFile;
+      /**
+       * The isolated conversation Topic whose message opened this preview. A
+       * floating host (the Task run drawer) shows its own previews in place
+       * instead of in a page portal it would cover.
+       */
+      sourceTopicId?: string;
+      type: PortalViewType.FilePreview;
+    }
   | { type: PortalViewType.LocalFile }
   /** `id` is the layer-specific row id (e.g. a preference id), not the base memory id. */
   | { id: string; layer: LayersEnum; type: PortalViewType.MemoryDetail }

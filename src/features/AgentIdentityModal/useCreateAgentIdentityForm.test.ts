@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
   refreshAgentConfig: vi.fn(),
   refreshAgentList: vi.fn(),
+  setAgentVisibility: vi.fn(),
   updateAgentMeta: vi.fn(),
   updateAgentSlug: vi.fn(),
   uploadWithProgress: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('@/store/file', () => ({
 
 vi.mock('@/services/agent', () => ({
   agentService: {
+    setAgentVisibility: (...args: unknown[]) => mocks.setAgentVisibility(...args),
     updateAgentSlug: (...args: unknown[]) => mocks.updateAgentSlug(...args),
   },
 }));
@@ -153,6 +155,36 @@ describe('useCreateAgentIdentityForm', () => {
     expect(onCreated).toHaveBeenCalledExactlyOnceWith('agent-new');
   });
 
+  it('applies a visibility changed while the form stayed open for a rejected slug', async () => {
+    mocks.updateAgentSlug
+      .mockResolvedValueOnce({ reason: 'taken', success: false })
+      .mockResolvedValueOnce({ success: true });
+    let visibility: 'private' | 'public' = 'public';
+    const onCreated = vi.fn();
+    const { result, rerender } = renderHook(() =>
+      useCreateAgentIdentityForm({ onCreated, visibility }),
+    );
+
+    act(() => result.current.setSlug('taken'));
+    await act(async () => {
+      await result.current.submit();
+    });
+    expect(mocks.createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'public' }),
+    );
+
+    visibility = 'private';
+    rerender();
+    act(() => result.current.setSlug('free'));
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    expect(mocks.createAgent).toHaveBeenCalledTimes(1);
+    expect(mocks.setAgentVisibility).toHaveBeenCalledWith('agent-new', 'private');
+    expect(onCreated).toHaveBeenCalledWith('agent-new');
+  });
+
   it('shows a reason instead of closing when the create fails', async () => {
     mocks.createAgent.mockRejectedValueOnce(new Error('boom'));
     const { result, onCreated } = setup();
@@ -175,6 +207,24 @@ describe('useCreateAgentIdentityForm', () => {
     });
 
     expect(result.current.avatar).toBe('https://cdn/avatar.png');
+    expect(result.current.uploading).toBe(false);
+  });
+
+  it('reports a failed upload and keeps the previous avatar', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.uploadWithProgress.mockRejectedValueOnce(new Error('network'));
+    mocks.uploadWithProgress.mockResolvedValueOnce(undefined);
+    const { result } = setup();
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+
+    const outcomes: unknown[] = [];
+    await act(async () => {
+      outcomes.push(await result.current.uploadAvatar(file));
+      outcomes.push(await result.current.uploadAvatar(file));
+    });
+
+    expect(outcomes).toEqual(['failed', 'failed']);
+    expect(result.current.avatar).toBeUndefined();
     expect(result.current.uploading).toBe(false);
   });
 

@@ -1,5 +1,6 @@
 import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
+import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -42,9 +43,15 @@ const DIRECT_MENU_KEYS = new Set(['copyId', 'unarchive']);
 export function MemberStatus({
   detail,
   memberPanel,
+  threadMenu,
 }: {
   detail: ChannelDetail;
   memberPanel?: { id: string; open: boolean; onToggle: () => void };
+  /**
+   * The open thread page's actions. They join the Channel's in one menu, titled by what each
+   * group acts on, so the header keeps a single `…`.
+   */
+  threadMenu?: DropdownItem[];
 }) {
   const { t } = useTranslation('channel');
   const [open, setOpen] = useState(false);
@@ -61,15 +68,20 @@ export function MemberStatus({
   const direct = !!channel.agentId;
   // A direct conversation is a chat with one Agent: no roster to show, only its actions, like an
   // IM header. Its title is the Agent's name, so it cannot be renamed here.
-  const directMenu = () => [
-    ...(directAgent
+  const directAgentMenu = () =>
+    directAgent
       ? [
-          {
-            icon: Bot,
-            key: 'openAgent',
-            label: t('openAgentNamed', { name: directAgent.name }),
-            onClick: () => navigate(`/agent/${channel.agentId}`),
-          },
+          // A colleague's private Agent can be chatted with here, but its page is not theirs to open.
+          ...(directAgent.member.canOpenAgent
+            ? [
+                {
+                  icon: Bot,
+                  key: 'openAgent',
+                  label: t('openAgentNamed', { name: directAgent.name }),
+                  onClick: () => navigate(`/agent/${channel.agentId}`),
+                },
+              ]
+            : []),
           // The member list is hidden here, so its device and directory setup lives in this menu.
           ...(directAgent.member.status === 'active' &&
           channel.canDelete &&
@@ -83,14 +95,18 @@ export function MemberStatus({
                 },
               ]
             : []),
-          { type: 'divider' as const },
         ]
-      : []),
-    // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
-    ...channelMenu(channel).filter(
-      (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
-    ),
-  ];
+      : [];
+  const directMenu = () => {
+    const agentItems = directAgentMenu();
+    return [
+      ...(agentItems.length > 0 ? [...agentItems, { type: 'divider' as const }] : []),
+      // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
+      ...channelMenu(channel).filter(
+        (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
+      ),
+    ];
+  };
 
   // Managing a group lives on its settings page; deleting it is not one click from the header.
   const groupMenu = () => [
@@ -107,6 +123,15 @@ export function MemberStatus({
         ]
       : []),
   ];
+
+  const ownMenu = direct ? directMenu() : groupMenu();
+  const menuItems: DropdownItem[] = threadMenu?.length
+    ? [
+        { children: threadMenu, key: 'threadGroup', label: t('thread'), type: 'group' },
+        { type: 'divider' },
+        { children: ownMenu, key: 'channelGroup', label: t('channel'), type: 'group' },
+      ]
+    : ownMenu;
 
   return (
     <Flexbox horizontal align="center" gap={4}>
@@ -186,7 +211,7 @@ export function MemberStatus({
                 ),
                 directAgentName: channel.agentId ? (directAgent?.name ?? '') : undefined,
                 id: channel.id,
-                workspaceId: channel.workspaceId,
+                projectId: channel.projectId,
               },
               // Inviting from a direct conversation opens the group it starts.
               (id) => navigate(CHANNEL_URL(id)),
@@ -194,7 +219,7 @@ export function MemberStatus({
           }
         />
       )}
-      <DropdownMenu items={direct ? directMenu() : groupMenu()}>
+      <DropdownMenu items={menuItems}>
         <ActionIcon
           aria-label={t('more', { ns: 'common' })}
           icon={MoreHorizontal}

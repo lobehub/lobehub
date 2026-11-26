@@ -27,6 +27,11 @@ export interface HeteroDispatchDeps {
   getMarketService: (options?: {
     sandboxStorage: NonNullable<SandboxSessionConfig['claim']>;
   }) => Promise<MarketService>;
+  /**
+   * A share visitor run: its topic and messages are visitor rows, which the
+   * models hide unless opted in, so settling the run must opt in too.
+   */
+  includeShareVisitor?: boolean;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
   topicModel: TopicModel;
@@ -45,6 +50,8 @@ export interface HeteroDispatchInput {
   hooks?: AgentHook[];
   isPublicWorkspaceAgent: boolean;
   localDeviceId?: string;
+  /** Server-only topic-status opt-in, propagated by the event waker. */
+  markTopicRunning?: boolean;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];

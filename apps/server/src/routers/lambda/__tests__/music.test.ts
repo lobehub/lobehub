@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@trpc/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chargeAfterGenerate } from '@/business/server/music-generation/chargeAfterGenerate';
@@ -350,5 +351,42 @@ describe('musicRouter.createMusic (lambda)', () => {
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
       expect.objectContaining({ isError: true, prechargeResult: { key: 'brk-1' } }),
     );
+  });
+  it('fails every task and refunds when the async router refuses the call', async () => {
+    setupTransaction();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(chargeBeforeGenerate).mockResolvedValue({ prechargeResult: { key: 'brk-1' } });
+    // An internal JWT that expired before the async function verified it
+    mockAsyncCreateMusic.mockRejectedValue(
+      new TRPCClientError('Invalid JWT token', {
+        result: { error: { code: -32001, data: { code: 'UNAUTHORIZED' }, message: '' } },
+      } as any),
+    );
+
+    const result = await musicRouter.createCaller(ctx as any).createMusic(defaultInput);
+    await vi.waitFor(() => expect(chargeAfterGenerate).toHaveBeenCalled());
+
+    expect(result.success).toBe(true);
+    for (const taskId of ['task-1', 'task-2'])
+      expect(asyncTaskUpdate).toHaveBeenCalledWith(
+        taskId,
+        expect.objectContaining({ status: AsyncTaskStatus.Error }),
+      );
+    expect(chargeAfterGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ isError: true, prechargeResult: { key: 'brk-1' } }),
+    );
+  });
+
+  it('leaves the tasks to the async router when only the response fails', async () => {
+    setupTransaction();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A proxy timing out a long generation: the async router may still be running it
+    mockAsyncCreateMusic.mockRejectedValue(new Error('fetch failed'));
+
+    await musicRouter.createCaller(ctx as any).createMusic(defaultInput);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(asyncTaskUpdate).not.toHaveBeenCalled();
+    expect(chargeAfterGenerate).not.toHaveBeenCalled();
   });
 });

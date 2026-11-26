@@ -1,7 +1,17 @@
-import type { StepCompleteData, SubAgentProgressData } from '@lobechat/agent-gateway-client';
+import type {
+  AgentStreamEvent,
+  StepCompleteData,
+  SubAgentProgressData,
+} from '@lobechat/agent-gateway-client';
+import type { BackgroundTaskEventData } from '@lobechat/heterogeneous-agents';
+import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import { isCollaborationModeReport } from '@lobechat/heterogeneous-agents/codexPlanMode';
 import type { ConversationContext } from '@lobechat/types';
 
+import { applyPermissionModeReport } from '@/store/chat/heteroPermissionMode';
+import { applyCollaborationModeReport } from '@/store/chat/heteroPlanMode';
 import type { ChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { insertSteerMessage } from './streamStartSeed';
 
@@ -10,6 +20,36 @@ import { insertSteerMessage } from './streamStartSeed';
  * boundary. `apply` is the store update it asks for (none when it carries
  * nothing to show); the caller enqueues it behind pending refetches.
  */
+/**
+ * A heterogeneous run's background task snapshot, published by the server after
+ * it persisted the same value on the tool message. Applied in memory to the
+ * starting tool row; a row not loaded yet gets it from the DB on its refetch.
+ */
+const applyBackgroundTaskSnapshot = (
+  get: () => ChatStore,
+  { task, toolCallId }: BackgroundTaskEventData,
+  target: {
+    context: ConversationContext;
+    dispatchContext: { operationId: string };
+    operationId: string | undefined;
+  },
+) => {
+  const { context, dispatchContext, operationId } = target;
+  const messages = get().dbMessagesMap[messageMapKey(context)] ?? [];
+  const toolMessage = messages.find((m) => m.role === 'tool' && m.tool_call_id === toolCallId);
+  if (!toolMessage) return;
+
+  get().internal_dispatchMessage(
+    {
+      id: toolMessage.id,
+      key: 'backgroundTask',
+      type: 'updatePluginState',
+      value: { ...task, ...(operationId && { operationId }) },
+    },
+    dispatchContext,
+  );
+};
+
 export interface StepSideEvent {
   apply?: () => void;
 }
@@ -34,10 +74,22 @@ export interface StepSideEvent {
  */
 export const resolveStepSideEvent = (
   get: () => ChatStore,
-  data: StepCompleteData | undefined,
+  event: Pick<AgentStreamEvent, 'data' | 'operationId' | 'type'>,
   context: ConversationContext,
   dispatchContext: { operationId: string },
 ): StepSideEvent | undefined => {
+  if (event.type === 'background_task') {
+    const snapshot = event.data as BackgroundTaskEventData | undefined;
+    if (!snapshot?.toolCallId || !snapshot.task) return {};
+    // The server run's operation id: what a stop is routed to.
+    const operationId = event.operationId || snapshot.task.operationId;
+    return {
+      apply: () =>
+        applyBackgroundTaskSnapshot(get, snapshot, { context, dispatchContext, operationId }),
+    };
+  }
+
+  const data = event.data as StepCompleteData | undefined;
   if (data?.phase === 'subagent_progress') {
     const progress = data as SubAgentProgressData;
     if (!progress.toolMessageId) return {};
@@ -60,6 +112,21 @@ export const resolveStepSideEvent = (
           },
           dispatchContext,
         ),
+    };
+  }
+
+  // The server already wrote Claude Code's mode onto the topic; the chip follows.
+  if (isPermissionModeReport(data)) {
+    return {
+      apply: () => void applyPermissionModeReport(get, context.topicId, data, { persist: false }),
+    };
+  }
+
+  // Codex Plan switch: the server already wrote the report; the topic follows.
+  if (isCollaborationModeReport(data)) {
+    return {
+      apply: () =>
+        void applyCollaborationModeReport(get, context.topicId, data, { persist: false }),
     };
   }
 

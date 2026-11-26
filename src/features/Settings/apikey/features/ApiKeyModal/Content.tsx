@@ -20,6 +20,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { API_KEY_FULL_ACCESS_SCOPE, type ApiKeyScope } from '@/const/apiKeyScope';
+import { densityTokens } from '@/styles/density.stylex';
 import { type CreateApiKeyParams } from '@/types/apiKey';
 
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
@@ -28,7 +29,7 @@ import ScopeSelector from './ScopeSelector';
 const styles = stylex.create({
   keyBlock: {
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -40,6 +41,7 @@ const styles = stylex.create({
     flex: '1',
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
+    textWrap: 'balance',
     wordBreak: 'break-all',
   },
   successIcon: { color: cssVar.colorSuccess },

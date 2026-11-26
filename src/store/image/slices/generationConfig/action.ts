@@ -13,6 +13,7 @@ import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
+import { isAutomaticGifSize } from '@/utils/normalizeImageGenerationParams';
 
 import {
   normalizeImageInputOnSchemaSwitch,
@@ -348,7 +349,17 @@ export class GenerationConfigActionImpl {
     settings: Partial<RuntimeImageGenParams>,
   ): void => {
     const { defaultValues, parametersSchema } = getModelAndDefaults(model, provider);
-    const parameters = preserveReusableSettings(settings, defaultValues, parametersSchema);
+    const current = this.#get();
+    // A GIF batch has no manual size to reuse. Keep the current static size when staying on
+    // the same model, so switching back to PNG restores the user's choice.
+    const reusableSettings =
+      current.model === model &&
+      current.provider === provider &&
+      settings.size === undefined &&
+      isAutomaticGifSize(model, settings.outputFormat)
+        ? { ...settings, size: current.parameters.size }
+        : settings;
+    const parameters = preserveReusableSettings(reusableSettings, defaultValues, parametersSchema);
 
     this.#set(
       () => ({

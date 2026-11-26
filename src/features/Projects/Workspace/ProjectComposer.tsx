@@ -17,8 +17,10 @@ import {
   type SendButtonHandler,
 } from '@/features/ChatInput';
 import FileUpload from '@/features/ChatInput/ActionBar/Upload';
+import ProjectDeviceSwitcher from '@/features/ChatInput/ControlBar/ProjectDeviceSwitcher';
 import InputDragUpload from '@/features/Home/InputArea/InputDragUpload';
 import ModeSelect from '@/features/Home/InputArea/ModeSelect';
+import { SANDBOX_EXECUTION_ENVIRONMENT } from '@/features/Projects/WorkingDirectories/executionEnvironmentOrder';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -36,6 +38,7 @@ import {
   useProjectComposer,
 } from './useProjectComposer';
 import { useProjectDirectory } from './useProjectDirectory';
+import { useProjectHomeEnvironment } from './useProjectHomeEnvironment';
 import { useProjectRepository } from './useProjectRepository';
 import { useProjectWorkLocation } from './useProjectWorkLocation';
 
@@ -64,6 +67,13 @@ const TRAY_OVERLAP = CONTAINER_RADIUS;
  */
 const COMPACT_TRAY_WIDTH = 500;
 
+/**
+ * Visible breathing room above and below the tray's controls. The tray also
+ * carries `TRAY_OVERLAP` at its block-end, but the composer card covers that
+ * band, so this is the padding that actually shows on both sides of the row.
+ */
+const TRAY_PADDING_BLOCK = 5;
+
 const styles = stylex.create({
   // The composer sits in front of the tray. The tray is inset by more than the
   // composer's corner radius on each side, so it only ever meets the
@@ -89,8 +99,8 @@ const styles = stylex.create({
   },
   tray: {
     gap: '8px',
-    paddingBlockStart: '8px',
-    paddingBlockEnd: `${TRAY_OVERLAP + 8}px`,
+    paddingBlockStart: `${TRAY_PADDING_BLOCK}px`,
+    paddingBlockEnd: `${TRAY_OVERLAP + TRAY_PADDING_BLOCK}px`,
     paddingInline: '10px',
     borderStartStartRadius: '20px',
     borderStartEndRadius: '20px',
@@ -152,13 +162,20 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   const canManageProject = useCanManageProject();
   const location = useProjectWorkLocation(agentId);
   const directoryState = useProjectDirectory(project.id, location.machineDeviceId);
+  // A conversation starts in one of the project's execution environments, picked
+  // as a project conversation's own picker offers them.
+  const environment = useProjectHomeEnvironment(project.id, agentId);
   // A task is not started in a conversation, so it has no repository or folder to pick.
   const place =
     mode !== 'chat'
       ? {}
-      : location.target === 'sandbox'
-        ? { environmentId: repositoryState.repository?.id }
-        : { directoryId: directoryState.directory?.id };
+      : environment.onSandbox
+        ? {
+            environmentId: repositoryState.repository?.id,
+            withoutEnvironment: repositoryState.withoutEnvironment,
+          }
+        : { directoryId: environment.directoryId };
+  const canPickSandbox = location.switchable && location.sandboxAvailable;
   const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
   useInitAgentConfig(agentId);
@@ -232,17 +249,41 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             className={stylex.props(styles.trayTrailing).className}
             gap={2}
           >
-            <ProjectWorkLocationPicker
-              canManage={canManageProject}
-              compact={compact}
-              directoryState={directoryState}
-              disabled={sending}
-              location={location}
-              projectId={project.id}
-              publish={sharedAgent}
-              showRepositories={mode === 'chat'}
-              state={repositoryState}
-            />
+            {mode === 'chat' ? (
+              <ProjectDeviceSwitcher
+                agentId={agentId}
+                auto={{ active: environment.auto, onSelect: environment.pickAuto }}
+                directories={environment.directories}
+                directoryId={environment.directoryId}
+                placement={'bottomRight'}
+                projectId={project.id}
+                sandbox={{
+                  active: environment.onSandbox,
+                  // Same as a blank project conversation: the sandbox run also
+                  // takes the agent there, so the first send does not land on a device.
+                  onSelect:
+                    canPickSandbox || location.target === 'sandbox'
+                      ? () => {
+                          environment.pick(SANDBOX_EXECUTION_ENVIRONMENT);
+                          if (location.target !== 'sandbox') void location.select('sandbox');
+                        }
+                      : undefined,
+                }}
+                onSelect={({ directory }) => environment.pick(directory.id)}
+              />
+            ) : (
+              // A task has no conversation to place: it keeps the agent's own target.
+              <ProjectWorkLocationPicker
+                canManage={canManageProject}
+                compact={compact}
+                directoryState={directoryState}
+                disabled={sending}
+                location={location}
+                projectId={project.id}
+                showRepositories={false}
+                state={repositoryState}
+              />
+            )}
           </Flexbox>
         </Flexbox>
       </div>

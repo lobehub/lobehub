@@ -17,8 +17,8 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/video?model=video-model', 'acme')).toBe(
       '/acme/video?model=video-model',
     );
-    expect(buildWorkspaceAwarePath('/community/agent/jailbreak', 'acme')).toBe(
-      '/acme/community/agent/jailbreak',
+    expect(buildWorkspaceAwarePath('/marketplace/agent/jailbreak', 'acme')).toBe(
+      '/acme/marketplace/agent/jailbreak',
     );
     expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
     expect(buildWorkspaceAwarePath('/project/project-1', 'acme')).toBe('/acme/project/project-1');
@@ -101,6 +101,13 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
     expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
+    // Their new Marketplace homes follow the active workspace the same way.
+    expect(buildWorkspaceAwarePath('/marketplace/skill/installed', 'acme')).toBe(
+      '/acme/marketplace/skill/installed',
+    );
+    expect(buildWorkspaceAwarePath('/marketplace/connector?open=mcp-connector%3Amwe', 'acme')).toBe(
+      '/acme/marketplace/connector?open=mcp-connector%3Amwe',
+    );
     expect(buildWorkspaceAwarePath('/settings/devices', 'acme')).toBe('/acme/settings/devices');
     expect(buildWorkspaceAwarePath('/settings/labels', 'acme')).toBe('/acme/settings/labels');
     expect(buildWorkspaceAwarePath('/settings/audit-log', 'acme')).toBe('/acme/settings/audit-log');

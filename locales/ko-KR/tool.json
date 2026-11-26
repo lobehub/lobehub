@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "사용 가능한 템플릿이 없습니다.",
   "agentMarketplace.picker.failedToLoad": "템플릿을 불러오지 못했습니다. 나중에 다시 시도해 주세요.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}}개의 템플릿이 사용 가능합니다.",
-  "agentMarketplace.render.alreadyInLibraryTag": "이미 라이브러리에 있음",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}}개가 이미 라이브러리에 있음",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}}개가 이미 라이브러리에 있음",
   "askUserQuestion.checkStatus": "제출 상태 확인",
   "askUserQuestion.checking": "제출 상태 확인 중…",
   "askUserQuestion.customOption.placeholder": "또는 직접 작성하세요…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio 커넥터는 데스크톱 앱에서만 동기화할 수 있습니다. LobeHub 데스크톱을 열어 이 커넥터를 동기화하세요.",
   "connector.kind.agent": "에이전트 커넥터",
   "connector.kind.builtin": "내장 도구",
-  "connector.kind.community": "커뮤니티 도구",
+  "connector.kind.community": "마켓플레이스 도구",
   "connector.kind.custom": "사용자 정의 커넥터",
   "connector.kind.oauth": "OAuth 커넥터",
   "connector.manageOnlyCreator": "이 커넥터는 생성자 또는 워크스페이스 소유자만 관리할 수 있습니다.",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "항목 추가",
   "updateArgs.form.key": "필드 키",
   "updateArgs.form.value": "필드 값",
-  "updateArgs.formValidationFailed": "양식 검증에 실패했습니다. 매개변수 형식을 확인하세요.",
   "updateArgs.keyRequired": "필드 키는 비워둘 수 없습니다.",
   "updateArgs.stringifyError": "매개변수를 직렬화할 수 없습니다. 형식을 확인하세요."
 }

@@ -220,7 +220,6 @@
   "verify.error.generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
   "verify.error.missingToken": "Geçersiz bağlantı. Bu sayfayı bottan açın.",
   "verify.error.title": "Bağlantı onaylanamıyor",
-  "verify.error.unlinkBeforeRelink": "Bu LobeHub hesabı zaten başka bir Telegram hesabıyla bağlantılı. Yeni bir hesap bağlamadan önce Ayarlar → Messenger bölümünden bağlantıyı kesin.",
   "verify.signInCta": "Devam etmek için giriş yapın",
   "verify.signInRequired": "Bağlantıyı onaylamak için LobeHub'a giriş yapın.",
   "verify.success.backToLobeHub": "LobeHub'a Dön",

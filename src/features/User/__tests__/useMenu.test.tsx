@@ -37,15 +37,6 @@ vi.mock('react-i18next', () => ({
   })),
 }));
 
-vi.mock('@/services/config', () => ({
-  configService: {
-    exportAgents: vi.fn(),
-    exportAll: vi.fn(),
-    exportSessions: vi.fn(),
-    exportSettings: vi.fn(),
-  },
-}));
-
 vi.mock('./useNewVersion', () => ({
   useNewVersion: vi.fn(() => false),
 }));
@@ -118,7 +109,7 @@ describe('useMenu', () => {
       result.current.mainItems?.find((item: any) => item?.key === key) as any;
 
     findItem('setting').onClick();
-    expect(mockNavigate).toHaveBeenLastCalledWith('/settings');
+    expect(mockNavigate).toHaveBeenLastCalledWith('/settings/profile');
 
     findItem('get-app').onClick();
     expect(mockNavigate).toHaveBeenLastCalledWith('/apps');

@@ -1,6 +1,5 @@
 import {
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   SHARE_VISITOR_MAX_FILES_PER_TURN,
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
@@ -177,55 +176,39 @@ export const execRouter = router({
       // Runtime-normalized (findByShareIdWithAccessCheck fills defaults), but
       // the config TYPE keeps every field optional — re-apply the same default
       // constants rather than asserting non-null.
-      const maxTopicsPerVisitor =
-        share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
-      const maxTurnsPerTopic =
-        share.shareConfig.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
+      const maxMessagesPerVisitor =
+        share.shareConfig.maxMessagesPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR;
       const { aiAgentService, dispatchContext, messageModel, shareGate, topicModel } =
         await createShareRunScope(ctx.serverDB, share, ctx.userId);
 
-      // Fast, UX-only pre-check for both caps: reject an obviously-over-cap
-      // request BEFORE paying for agent-config/tool resolution, instead of only
-      // at dispatch. This is NOT the enforcement: it is a plain unlocked count,
-      // so a burst of concurrent requests can all read the same pre-insert
-      // count and all pass. The atomic, authoritative gate is
-      // `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
-      // (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`), which
-      // locks and re-checks the same counters immediately around the real
-      // topic/message INSERT inside `AiAgentService.execAgent`.
       if (input.topicId) {
         await findVisitorTopicOrThrow(topicModel, {
           agentId: share.agentId,
           topicId: input.topicId,
           visitorUserId: ctx.userId,
         });
+      }
 
-        // A resume continues the turn the visitor already spent — it adds no
-        // user message (`reserveShareVisitorTurn` skips it too), so a visitor
-        // on their last allowed turn can still answer that turn's approval.
-        const turnCount = isResume
-          ? 0
-          : await messageModel.countByTopic({
-              role: 'user',
-              topicId: input.topicId,
-            });
-        if (turnCount >= maxTurnsPerTopic) {
-          throw new TRPCError({
-            code: 'TOO_MANY_REQUESTS',
-            message: ChatErrorType.ShareTurnLimitExceeded,
-          });
-        }
-      } else {
-        const topicCount = await topicModel.countBySender({
+      // Fast, UX-only pre-check: reject an obviously-over-cap request BEFORE
+      // paying for agent-config/tool resolution. This is NOT the enforcement:
+      // a plain unlocked count lets concurrent requests all pass. The atomic
+      // gate is `reserveShareVisitorTurnOrThrow`
+      // (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`), which
+      // locks and recounts around the real message INSERT. A resume continues
+      // the turn the visitor already spent and adds no user message
+      // (`reserveShareVisitorTurn` skips it too), so a visitor on their last
+      // allowed message can still answer that turn's approval.
+      if (
+        !isResume &&
+        (await topicModel.countMessagesBySender({
           agentId: share.agentId,
           senderId: ctx.userId,
+        })) >= maxMessagesPerVisitor
+      ) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: ChatErrorType.ShareMessageLimitExceeded,
         });
-        if (topicCount >= maxTopicsPerVisitor) {
-          throw new TRPCError({
-            code: 'TOO_MANY_REQUESTS',
-            message: ChatErrorType.ShareTopicLimitExceeded,
-          });
-        }
       }
 
       log('execAgent: share=%s visitor=%s topic=%s', input.shareId, ctx.userId, input.topicId);
@@ -320,11 +303,7 @@ export const execRouter = router({
         // still be consumed as if the run started, opening a WebSocket for an
         // operation that never began.
         if (!result.success) {
-          throw toVisitorSafeStartupError(
-            'execAgent',
-            { message: result.error },
-            { showErrorDetails: share.shareConfig.showErrorDetails },
-          );
+          throw toVisitorSafeStartupError('execAgent', { message: result.error });
         }
 
         return result;
@@ -338,9 +317,7 @@ export const execRouter = router({
           });
         }
 
-        throw toVisitorSafeStartupError('execAgent', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('execAgent', error);
       }
     }),
 });

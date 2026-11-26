@@ -1,8 +1,7 @@
 import { Blocks } from 'lucide-react';
-import { memo, Suspense, useCallback } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createSkillStoreModal } from '@/features/SkillStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -13,36 +12,36 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
+  const { marketItems, marketHeader, autoCount, isPolicyMenuOpen } = useControls();
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
 
   const enableFC = useModelSupportToolUse(model, provider);
 
-  const handleOpenStore = useCallback(() => {
-    createSkillStoreModal();
-  }, []);
-
   if (!enableFC)
     return (
-      <ChatInputAction disabled icon={Blocks} showTooltip={true} title={t('tools.disabled')} />
+      <ChatInputAction
+        disabled
+        icon={Blocks}
+        showTooltip={true}
+        title={t('tools.picker.disabled')}
+      />
     );
 
   return (
-    <Suspense fallback={<ChatInputAction disabled icon={Blocks} title={t('tools.title')} />}>
+    <Suspense fallback={<ChatInputAction disabled icon={Blocks} title={t('tools.picker.title')} />}>
       <ChatInputAction
         icon={Blocks}
         showTooltip={false}
-        title={t('tools.title')}
+        title={t('tools.picker.title')}
         popover={{
           content: (
             <PopoverContent
               autoCount={autoCount}
               detailPopoverDisabled={isPolicyMenuOpen}
+              header={marketHeader}
               items={marketItems}
-              pinnedCount={pinnedCount}
-              onOpenStore={handleOpenStore}
             />
           ),
           maxWidth: 320,

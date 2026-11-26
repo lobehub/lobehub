@@ -5,10 +5,11 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Menu from '@/components/Menu';
+import { MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { DiscoverTab } from '@/types/discover';
 
 import { useNav } from '../../../../(main)/community/features/useNav';
 
@@ -30,6 +31,7 @@ const styles = stylex.create({
 });
 
 const Nav = memo(() => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const { items, activeKey, activeItem } = useNav();
   const navigate = useWorkspaceAwareNavigate();
@@ -38,6 +40,7 @@ const Nav = memo(() => {
     <>
       <Flexbox horizontal align={'center'} className={stylex.props(styles.title).className} gap={4}>
         <ActionIcon
+          aria-label={t('navPanel.openMenu')}
           color={cssVar.colorText}
           icon={MenuIcon}
           size={{ blockSize: 32, size: 18 }}
@@ -72,11 +75,7 @@ const Nav = memo(() => {
           items={items}
           onClick={({ key }) => {
             scrollToTop();
-            if (key === DiscoverTab.Home) {
-              navigate('/community');
-            } else {
-              navigate(`/community/${key}`);
-            }
+            navigate(`${MARKETPLACE_PATH}/${key}`);
             setOpen(false);
           }}
         />

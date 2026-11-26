@@ -65,6 +65,14 @@ class DeviceService {
    * `statPath` RPC). Returns `null` when the device is unreachable — callers
    * treat "can't verify" as non-blocking.
    */
+  /**
+   * Conversations running in `path` on `deviceId` (every member's, in a
+   * workspace). Read from the database, so an offline device still answers.
+   */
+  countRunningTopicsInDirectory(deviceId: string, path: string): Promise<number> {
+    return lambdaClient.device.countRunningTopicsInDirectory.query({ deviceId, path });
+  }
+
   statPath(deviceId: string, path: string) {
     return lambdaClient.device.statPath.query({ deviceId, path });
   }
@@ -143,6 +151,11 @@ class DeviceService {
   /** The device's reported paths and runtime info (home, desktop, shell, ...). */
   getDeviceSystemInfo(input: Parameters<DeviceClient['getDeviceSystemInfo']['query']>[0]) {
     return lambdaClient.device.getDeviceSystemInfo.query(input);
+  }
+
+  /** Native runtimes of the connection an agent run on the device reaches. */
+  getAgentRunRuntimes(input: Parameters<DeviceClient['getAgentRunRuntimes']['query']>[0]) {
+    return lambdaClient.device.getAgentRunRuntimes.query(input);
   }
 
   /** Where the device's desktop app update stands; never starts a check. */
