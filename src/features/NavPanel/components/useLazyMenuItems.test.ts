@@ -21,6 +21,17 @@ describe('useLazyMenuItems', () => {
     expect(result.current.items).toBe(items);
   });
 
+  it('renders the row actions once armed from outside NavItem', () => {
+    const { result } = renderHook(() => useLazyMenuItems());
+    const render = () => 'actions';
+
+    expect(result.current.lazyActions(render)).toBe(render);
+
+    act(() => result.current.arm());
+
+    expect(result.current.lazyActions(render)).toBe('actions');
+  });
+
   it('serves the latest builder the host published', () => {
     const { result } = renderHook(() => useLazyMenuItems());
     const { rerender } = renderHook(

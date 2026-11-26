@@ -1,7 +1,9 @@
 'use client';
 
 import { type DropdownItem } from '@lobehub/ui';
-import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+
+import { type LazyActions } from './useLazyActions';
 
 export type BuildMenuItems = () => DropdownItem[];
 
@@ -26,7 +28,18 @@ export const useLazyMenuItems = () => {
   const arm = useCallback(() => setArmed(true), []);
   const items = useCallback<BuildMenuItems>(() => builderRef.current?.() ?? [], []);
 
-  return { arm, armed, builderRef, items };
+  /**
+   * The row's NavItem `actions`: NavItem's own lazy thunk until armed, then the
+   * rendered node. A row can be armed from an element NavItem never sees, such
+   * as a wrapping link that takes the keyboard focus; its actions must then
+   * join the tab order without waiting for NavItem's own focus or pointer.
+   */
+  const lazyActions = useCallback(
+    (render: () => ReactNode): LazyActions => (armed ? render() : render),
+    [armed],
+  );
+
+  return { arm, armed, builderRef, items, lazyActions };
 };
 
 /** Publishes the latest menu builder from a host mounted by {@link useLazyMenuItems}. */

@@ -258,10 +258,10 @@ const AgentItemBody = memo<AgentItemBodyProps>(
     });
     const showVisibilityLock = isPrivate && canChangeVisibility;
 
-    const { arm, armed, builderRef, items: dropdownMenu } = useLazyMenuItems();
+    const { arm, armed, builderRef, items: dropdownMenu, lazyActions } = useLazyMenuItems();
     // Two direct children widen the hover overlay (NavItem counts them), so the
     // resting lock fades under the clickable one.
-    const actions = useCallback(
+    const renderActions = useCallback(
       () =>
         showVisibilityLock ? (
           <>
@@ -294,11 +294,14 @@ const AgentItemBody = memo<AgentItemBodyProps>(
           aria-label={displayTitle}
           to={agentUrl}
           onClick={onNavigate}
+          // The link, not NavItem, takes the keyboard focus; see `lazyActions`.
+          onFocus={arm}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={rowHover.onMouseLeave}
+          onPointerEnter={arm}
         >
           <NavItem
-            actions={actions}
+            actions={lazyActions(renderActions)}
             className={className}
             contextMenuItems={dropdownMenu}
             disabled={isUpdating}
@@ -322,8 +325,6 @@ const AgentItemBody = memo<AgentItemBodyProps>(
             onDoubleClick={handleDoubleClick}
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
-            onFocus={arm}
-            onPointerEnter={arm}
           />
         </WorkspaceLink>
       </>
