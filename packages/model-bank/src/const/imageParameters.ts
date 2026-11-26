@@ -67,6 +67,10 @@ export const nanoBananaProParameters: ModelParamsSchema = {
     default: '1K',
     enum: ['1K', '2K', '4K'],
   },
+  thinkingLevel: {
+    default: 'medium',
+    enum: ['minimal', 'low', 'medium', 'high'],
+  },
 };
 
 // Nano Banana 2 Lite has no resolution control (fixed 1K output)
@@ -79,6 +83,10 @@ export const nanoBanana2LiteParameters: ModelParamsSchema = {
     default: [],
   },
   prompt: { default: '' },
+  thinkingLevel: {
+    default: 'minimal',
+    enum: ['minimal', 'high'],
+  },
 };
 
 export const nanoBanana2Parameters: ModelParamsSchema = {
@@ -95,5 +103,9 @@ export const nanoBanana2Parameters: ModelParamsSchema = {
     // Gemini image generation API accepts `"512" | "1K" | "2K" | "4K"`.
     // See https://ai.google.dev/gemini-api/docs/image-generation
     enum: ['512', '1K', '2K', '4K'],
+  },
+  thinkingLevel: {
+    default: 'minimal',
+    enum: ['minimal', 'high'],
   },
 };
