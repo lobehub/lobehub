@@ -276,22 +276,25 @@ describe('compressImageFile', () => {
 
   it('should compress images exceeding max file size even if dimensions are small', async () => {
     const file = createMockFile('heavy.png', 'image/png', 6 * 1024 * 1024);
+    // Encoding a real 1800×1800 canvas takes seconds, enough to time out on a
+    // busy runner; this test is about taking the size branch, not the encoder.
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback, type) =>
+        setTimeout(() => callback(new Blob([new Uint8Array(10)], { type })), 0),
+      );
+    const restoreImage = mockImageLoad(1800, 1800);
 
-    const originalImage = global.Image;
-    global.Image = class MockImage extends originalImage {
-      constructor() {
-        super();
-        Object.defineProperty(this, 'width', { value: 1800, writable: false });
-        Object.defineProperty(this, 'height', { value: 1800, writable: false });
-        setTimeout(() => this.dispatchEvent(new Event('load')), 0);
-      }
-    } as any;
+    try {
+      const result = await compressImageFile(file);
 
-    const result = await compressImageFile(file);
-
-    expect(result).not.toBe(file);
-    expect(result.type).toBe('image/png');
-    global.Image = originalImage;
+      expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/png', undefined);
+      expect(result).not.toBe(file);
+      expect(result.type).toBe('image/png');
+    } finally {
+      toBlobSpy.mockRestore();
+      restoreImage();
+    }
   });
 
   describe('webp', () => {
