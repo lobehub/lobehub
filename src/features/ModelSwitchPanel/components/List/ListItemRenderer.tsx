@@ -21,7 +21,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { ProviderItemRender } from '@/components/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import { styles } from '../../styles';
 import { type ListItem } from '../../types';
@@ -64,6 +64,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     const navigate = useWorkspaceAwareNavigate();
     const activeSlug = useActiveWorkspaceSlug();
     const compact = useInterfaceDensity() === 'compact';
+    const { iconSize } = useDensityTokens();
     const [detailOpen, setDetailOpen] = useState(false);
 
     const selectModel = async (modelId: string, providerId: string) => {
@@ -193,7 +194,15 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                       restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
                     }
                   />
-                  {description && <div className={styles.featuredDescription}>{description}</div>}
+                  {description && (
+                    <div
+                      className={styles.featuredDescription}
+                      // Align with the model name: ModelItemRender's icon (density-sized only in compact) + 8px gap
+                      style={{ paddingInlineStart: (compact ? iconSize : 20) + 8 }}
+                    >
+                      {description}
+                    </div>
+                  )}
                 </Flexbox>
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
