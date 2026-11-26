@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { isResponsesAPIModel } from '../../providers/openai/modelId';
+import { resolvePromptCacheKey as resolveBoundedPromptCacheKey } from './promptCacheKey';
 
 export interface ShouldUseResponsesAPIParams {
   /** Context for logging (e.g., 'chat', 'generateObject', 'tool calling') */
@@ -106,22 +107,4 @@ export const resolvePromptCacheKey = (
   model: string | undefined,
   user: string | undefined,
   promptCacheKeyModels: Array<string | RegExp> | undefined,
-) => {
-  if (!user) return;
-
-  // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
-  if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
-    return `lobe:${user}:${model}`;
-  }
-
-  const matchesProviderPromptCacheModel = promptCacheKeyModels?.some((item) => {
-    if (!model) return false;
-    if (typeof item === 'string') return model.includes(item);
-
-    item.lastIndex = 0;
-    return item.test(model);
-  });
-  if (matchesProviderPromptCacheModel) {
-    return `lobe:${user}:${model}`;
-  }
-};
+) => resolveBoundedPromptCacheKey(model, user, promptCacheKeyModels);
