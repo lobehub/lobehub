@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicPermission, PublicRole } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, PaginationQuerySchema } from './common.type';
 
 // ==================== Role Query Types ====================
 
@@ -104,3 +105,58 @@ export const RoleIdParamSchema = z.object({
 });
 
 export { PaginationQuerySchema as RolePermissionsListQuerySchema } from './common.type';
+
+// ==================== Response Schemas ====================
+
+/** `PUBLIC_ROLE_FIELDS` projection of an `rbac_roles` row. */
+export const RoleSchema = z
+  .object({
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    displayName: z.string(),
+    id: z.string(),
+    isActive: z.boolean(),
+    isSystem: z.boolean(),
+    name: z.string(),
+    updatedAt: dateTimeSchema,
+  })
+  .strict()
+  .meta({ id: 'Role' });
+
+export const RoleListSchema = z
+  .object({ ...pageInfoShape, roles: z.array(RoleSchema), ...totalShape })
+  .strict()
+  .meta({ id: 'RoleList' });
+
+/** The permission columns `GET /roles/:id/permissions` selects (no timestamps). */
+export const RolePermissionSchema = z
+  .object({
+    category: z.string(),
+    code: z.string(),
+    description: z.string().nullable(),
+    id: z.string(),
+    isActive: z.boolean(),
+    name: z.string(),
+  })
+  .strict()
+  .meta({ id: 'RolePermission' });
+
+export const RolePermissionListSchema = z
+  .object({
+    ...pageInfoShape,
+    permissions: z.array(RolePermissionSchema),
+    ...totalShape,
+  })
+  .strict()
+  .meta({ id: 'RolePermissionList' });
+
+export const RolePermissionsUpdateResultSchema = z
+  .object({
+    /** Mappings newly inserted (already-granted ids are not counted). */
+    granted: z.number().int().min(0),
+    /** Mappings actually removed. */
+    revoked: z.number().int().min(0),
+    roleId: z.string(),
+  })
+  .strict()
+  .meta({ id: 'RolePermissionsUpdateResult' });

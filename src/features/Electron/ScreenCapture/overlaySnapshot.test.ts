@@ -1,4 +1,4 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import { resolveOverlayAgentOptions, resolveOverlayDefaultAgentId } from './overlaySnapshot';
@@ -25,6 +25,18 @@ describe('overlaySnapshot', () => {
         title: 'Agent 1',
       },
     ]);
+  });
+
+  // The overlay draws emoji and images only; it showed the picked value's first letter.
+  it('hands the overlay no picked Agent character', () => {
+    const [inbox, agent] = resolveOverlayAgentOptions({
+      agents: [{ avatar: 'agent-avatar:cat:green', id: 'agent-1', title: 'Agent 1' }],
+      inboxAgentId: 'inbox-agent',
+      inboxMeta: { avatar: 'agent-avatar:rocket:cyan', title: null },
+    });
+
+    expect(inbox.avatar).toBe(DEFAULT_INBOX_AVATAR);
+    expect(agent.avatar).toBeUndefined();
   });
 
   it('falls back to inbox when the active agent is not selectable in overlay', () => {
@@ -68,7 +80,7 @@ describe('overlaySnapshot', () => {
 
     expect(agentOptions).toEqual([
       {
-        avatar: DEFAULT_AVATAR,
+        avatar: undefined,
         backgroundColor: undefined,
         id: 'agent-1',
         title: 'Untitled Agent',

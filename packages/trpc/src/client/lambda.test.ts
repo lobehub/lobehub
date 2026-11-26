@@ -65,6 +65,25 @@ describe('lambdaClient large-input query transport', () => {
       'agentIds',
       100,
     ],
+    [
+      'agentDocument.listRevokedDocumentReads',
+      () =>
+        lambdaClient.agentDocument.listRevokedDocumentReads.query({
+          agentId: 'agt_000000000000',
+          documentIds: Array.from({ length: 100 }, (_, i) => `docs_${String(i).padStart(16, '0')}`),
+        }),
+      'documentIds',
+      100,
+    ],
+    [
+      'work.listTopicsPullRequests',
+      () =>
+        lambdaClient.work.listTopicsPullRequests.query({
+          topicIds: Array.from({ length: 100 }, (_, i) => `tpc_${String(i).padStart(16, '0')}`),
+        }),
+      'topicIds',
+      100,
+    ],
   ] as const)(
     'sends %s with a large path/id array as a POST request',
     async (path, call, arrayField, expectedLength) => {

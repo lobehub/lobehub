@@ -2,14 +2,18 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ProviderController } from '../controllers/provider.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   CreateProviderRequestSchema,
   ProviderIdParamSchema,
   ProviderListQuerySchema,
+  ProviderListSchema,
+  ProviderSchema,
   UpdateProviderRequestSchema,
 } from '../types/provider.type';
 
@@ -17,6 +21,7 @@ const ProviderRoutes = new Hono();
 
 ProviderRoutes.get(
   '/',
+  routeDoc({ data: ProviderListSchema, summary: 'List providers', tags: ['providers'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_PROVIDER_READ'),
@@ -31,6 +36,7 @@ ProviderRoutes.get(
 
 ProviderRoutes.get(
   '/:id',
+  routeDoc({ data: ProviderSchema, errors: [404], summary: 'Get a provider', tags: ['providers'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_PROVIDER_READ'),
@@ -45,6 +51,7 @@ ProviderRoutes.get(
 
 ProviderRoutes.post(
   '/',
+  routeDoc({ data: ProviderSchema, summary: 'Create a provider', tags: ['providers'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_PROVIDER_CREATE'),
@@ -59,6 +66,12 @@ ProviderRoutes.post(
 
 ProviderRoutes.patch(
   '/:id',
+  routeDoc({
+    data: ProviderSchema,
+    errors: [404],
+    summary: 'Update a provider',
+    tags: ['providers'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_PROVIDER_UPDATE'),
@@ -74,6 +87,13 @@ ProviderRoutes.patch(
 
 ProviderRoutes.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: 'Also removes the models configured under the provider.',
+    errors: [404],
+    summary: 'Delete a provider',
+    tags: ['providers'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_PROVIDER_DELETE'),

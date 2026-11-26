@@ -15,6 +15,27 @@ import {
   resetGatewayServiceMocks,
 } from './testUtils';
 
+const createWechatProvider = () => ({
+  applicationId: 'wechat-app',
+  credentials: { botToken: 'token' },
+  id: 'wechat-provider',
+  settings: {},
+  userId: 'u1',
+});
+
+const createConnectedWechatStats = (connectionId: string) => ({
+  byPlatform: { wechat: 1 },
+  connections: [
+    {
+      connectionId,
+      platform: 'wechat',
+      state: { status: 'connected' },
+      userId: 'u1',
+    },
+  ],
+  total: 1,
+});
+
 vi.mock('@/envs/gateway', () => import('./testUtils').then((m) => m.envsGatewayModule()));
 vi.mock('./MessageGatewayClient', () =>
   import('./testUtils').then((m) => m.messageGatewayClientModule()),
@@ -66,17 +87,7 @@ describe('GatewayService', () => {
 
     it('moves a bot provider to the node host: stale-disconnects on default, connects on node', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider()] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       // Provider row is enabled+polling, but routed to node — the TOCTOU
@@ -218,17 +229,7 @@ describe('GatewayService', () => {
 
     it('defers a cross-host move while the destination host has no usable snapshot', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider()] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindByIds.mockResolvedValue([
@@ -316,17 +317,7 @@ describe('GatewayService', () => {
       // drain the source second, and never revisit the destination.
       mockNodeGateway.platforms = [];
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider()] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       mockFindByIds.mockResolvedValue([
@@ -429,18 +420,7 @@ describe('GatewayService', () => {
 
     /** The default host is holding the WeChat poller; routing says it moves. */
     const defaultHostHoldsIt = () => {
-      mockGatewayClient.getStats.mockResolvedValue({
-        byPlatform: { wechat: 1 },
-        connections: [
-          {
-            connectionId: CONNECTION_ID,
-            platform: 'wechat',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
-        total: 1,
-      });
+      mockGatewayClient.getStats.mockResolvedValue(createConnectedWechatStats(CONNECTION_ID));
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
     };
 
@@ -480,18 +460,7 @@ describe('GatewayService', () => {
       mockNodeGateway.platforms = [];
       mockGatewayClient.getCapabilities.mockResolvedValue(null);
       // The node host is the one still holding it — this is the rollback.
-      mockNodeGatewayClient.getStats.mockResolvedValue({
-        byPlatform: { wechat: 1 },
-        connections: [
-          {
-            connectionId: CONNECTION_ID,
-            platform: 'wechat',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
-        total: 1,
-      });
+      mockNodeGatewayClient.getStats.mockResolvedValue(createConnectedWechatStats(CONNECTION_ID));
       mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
       mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
 

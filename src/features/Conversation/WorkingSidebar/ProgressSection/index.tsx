@@ -1,127 +1,69 @@
-import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
-import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';
+import { Checkbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { CircleArrowRight } from 'lucide-react';
+import { memo, useCallback, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useAgentContext } from '../../useAgentContext';
+import { SectionHeader } from '../Overview/SectionHeader';
 import { normalizeTaskProgress } from './taskProgressAdapter';
 
-const RING_SIZE = 14;
+const RING_SIZE = 12;
 const RING_STROKE = 2;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapsed: css`
-    grid-template-rows: 0fr;
-    margin-block-start: 0 !important;
-    padding-block: 0 !important;
-    opacity: 0;
-  `,
-  count: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  expanded: css`
-    grid-template-rows: 1fr;
-    opacity: 1;
-  `,
-  header: css`
-    font-size: 10.5px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  headerRow: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 4px 6px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    transition: background-color 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-  itemRow: css`
-    padding-block: 6px;
-    padding-inline: 4px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-    font-size: 13px;
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  listContainer: css`
-    display: grid;
-    padding-block: 4px;
-    padding-inline: 10px;
-    transition:
-      grid-template-rows 0.25s ${cssVar.motionEaseInOut},
-      opacity 0.2s ${cssVar.motionEaseInOut},
-      padding 0.2s ${cssVar.motionEaseInOut};
-  `,
-  listInner: css`
-    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
-       rows flow inline and wrap several per line. */
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  `,
-  processingRow: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  `,
-  ring: css`
-    transform: rotate(-90deg);
-    flex-shrink: 0;
-  `,
-  ringProgress: css`
-    transition:
-      stroke-dashoffset 240ms ease,
-      stroke 240ms ease;
-  `,
-  ringTrack: css`
-    stroke: ${cssVar.colorFillSecondary};
-  `,
-  textCompleted: css`
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: line-through;
-  `,
-  textProcessing: css`
-    color: ${cssVar.colorText};
-  `,
-  textTodo: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  collapsed: {
+    gridTemplateRows: '0fr',
+    marginBlockStart: 0,
+    paddingBlockStart: 0,
+    paddingBlockEnd: 0,
+    opacity: 0,
+  },
+  expanded: { gridTemplateRows: '1fr', opacity: 1 },
+  itemRow: {
+    gap: sidebarRow.gap,
+    alignItems: 'center',
+    minHeight: sidebarRow.height,
+    paddingInline: '8px',
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+  },
+  listContainer: {
+    display: 'grid',
+    paddingBlock: 0,
+    paddingInline: 0,
+    transition: `grid-template-rows 0.25s ${cssVar.motionEaseInOut}, opacity 0.2s ${cssVar.motionEaseInOut}, padding 0.2s ${cssVar.motionEaseInOut}`,
+  },
+  listInner: {
+    // Blockify the inline-flex Base UI Checkbox labels — without this the todo
+    // rows flow inline and wrap several per line.
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  processingRow: { display: 'flex' },
+  ring: { flexShrink: 0, transform: 'rotate(-90deg)' },
+  ringProgress: { transition: 'stroke-dashoffset 240ms ease, stroke 240ms ease' },
+  ringTrack: { stroke: cssVar.colorFillSecondary },
+  textCompleted: { color: cssVar.colorTextQuaternary, textDecoration: 'line-through' },
+  textProcessing: { color: cssVar.colorText },
+  textTodo: { color: cssVar.colorTextSecondary },
+});
 
 const ProgressSection = memo<{ className?: string }>(({ className }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(true);
+  const { iconSize } = useDensityTokens();
   const context = useAgentContext();
   const chatKey = messageMapKey(context);
   const dbMessages = useChatStore((s) => s.dbMessagesMap[chatKey]);
@@ -137,15 +79,6 @@ const ProgressSection = memo<{ className?: string }>(({ className }) => {
   const completed = items.filter((item) => item.status === 'completed').length;
 
   const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
-  const handleHeaderKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        toggleExpanded();
-      }
-    },
-    [toggleExpanded],
-  );
 
   if (total === 0) return null;
 
@@ -155,23 +88,15 @@ const ProgressSection = memo<{ className?: string }>(({ className }) => {
 
   return (
     <div className={className} data-testid="workspace-progress">
-      <Flexbox
-        horizontal
-        align="center"
-        aria-controls={listId}
-        aria-expanded={expanded}
-        className={styles.headerRow}
-        gap={8}
-        justify="space-between"
-        role="button"
-        tabIndex={0}
-        onClick={toggleExpanded}
-        onKeyDown={handleHeaderKeyDown}
-      >
-        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
-          <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+      <SectionHeader
+        collapsed={!expanded}
+        controls={listId}
+        count={`${completed}/${total}`}
+        title={t('workingPanel.progress')}
+        meta={
+          <svg {...stylex.props(styles.ring)} height={RING_SIZE} width={RING_SIZE}>
             <circle
-              className={styles.ringTrack}
+              {...stylex.props(styles.ringTrack)}
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               fill="none"
@@ -179,7 +104,7 @@ const ProgressSection = memo<{ className?: string }>(({ className }) => {
               strokeWidth={RING_STROKE}
             />
             <circle
-              className={styles.ringProgress}
+              {...stylex.props(styles.ringProgress)}
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               fill="none"
@@ -191,36 +116,28 @@ const ProgressSection = memo<{ className?: string }>(({ className }) => {
               strokeWidth={RING_STROKE}
             />
           </svg>
-          <span className={styles.header}>{t('workingPanel.progress')}</span>
-          <span className={styles.count}>
-            {completed}/{total}
-          </span>
-        </Flexbox>
-        <Icon
-          icon={expanded ? ChevronUp : ChevronDown}
-          size={14}
-          style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
-        />
-      </Flexbox>
+        }
+        onToggle={toggleExpanded}
+      />
 
       <div
-        className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}
+        {...stylex.props(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}
         id={listId}
       >
-        <div className={styles.listInner}>
+        <div {...stylex.props(styles.listInner)}>
           {items.map((item, index) => {
             const isCompleted = item.status === 'completed';
             const isProcessing = item.status === 'processing';
 
             if (isProcessing) {
               return (
-                <div className={cx(styles.itemRow, styles.processingRow)} key={item.id ?? index}>
+                <div {...stylex.props(styles.itemRow, styles.processingRow)} key={item.id ?? index}>
                   <Icon
                     icon={CircleArrowRight}
-                    size={17}
+                    size={iconSize}
                     style={{ color: cssVar.colorTextSecondary }}
                   />
-                  <span className={styles.textProcessing}>{item.text}</span>
+                  <span {...stylex.props(styles.textProcessing)}>{item.text}</span>
                 </div>
               );
             }
@@ -233,8 +150,9 @@ const ProgressSection = memo<{ className?: string }>(({ className }) => {
                 shape="circle"
                 style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
                 classNames={{
-                  text: cx(styles.textTodo, isCompleted && styles.textCompleted),
-                  wrapper: styles.itemRow,
+                  text: stylex.props(styles.textTodo, isCompleted && styles.textCompleted)
+                    .className,
+                  wrapper: stylex.props(styles.itemRow).className,
                 }}
                 textProps={{
                   type: isCompleted ? 'secondary' : undefined,

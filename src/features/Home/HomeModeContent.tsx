@@ -2,21 +2,11 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Segmented,
-  Skeleton,
-  Text,
-} from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
-import { memo, type ReactNode, useMemo, useState } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
@@ -28,25 +18,26 @@ import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDispla
 // HomeInbox, and this surface must not pull it into its own chunk.
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 import HomeInbox from '@/features/HomeInbox';
-import AuthorChip from '@/features/HomeInbox/AuthorChip';
-import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
+import { filterMyInboxTopics } from '@/features/HomeInbox/scopeTogglePlacement';
 import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { recentService } from '@/services/recent';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { HOME_TOPIC_RECENTS_PARAMS } from '@/store/home/slices/recent/action';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
+import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { useDensity, useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { HOME_ENTITY_PORTAL_SCOPE } from './acceptancePortalView';
@@ -56,7 +47,8 @@ import RunningGlyph from './components/RunningGlyph';
 import Time from './components/Time';
 import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
-import { resolveHomeChatContentState } from './homeChatContentState';
+import { isRecentsSnapshotSettled, resolveHomeChatContentState } from './homeChatContentState';
+import { useHomeSpacing } from './homeDensity';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -66,7 +58,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   empty: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     color: ${cssVar.colorTextTertiary};
   `,
   blockAction: css`
@@ -101,6 +93,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline: -10px;
     padding-block: 9px;
     padding-inline: 10px;
+
+    html[data-density='compact'] & {
+      padding-block: 6px;
+    }
   `,
   rowText: css`
     flex: 1;
@@ -144,7 +140,13 @@ export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
   (status) => status !== 'completed',
 );
 
-export const HOME_TOPIC_RECENT_LIMIT = 15;
+export { HOME_TOPIC_RECENT_LIMIT } from '@/store/home/slices/recent/action';
+
+const HOME_TOPIC_RECENTS_KEY = createRecentQueryKey(HOME_TOPIC_RECENTS_PARAMS.limit, {
+  types: HOME_TOPIC_RECENTS_PARAMS.types,
+  view: HOME_TOPIC_RECENTS_PARAMS.view,
+});
+const EMPTY_RECENTS: RecentItem[] = [];
 
 const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
 
@@ -184,71 +186,73 @@ const normalizeTaskStatus = (status: string): TaskStatus =>
  */
 const TIME_COLUMN_WIDTH = 56;
 
-const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
-  <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
-    <Flexbox horizontal align={'flex-start'} gap={12}>
-      <Flexbox flex={'none'} paddingBlock={3}>
-        {icon}
-      </Flexbox>
-      <Flexbox className={styles.rowText} gap={3}>
-        {/* The name takes the space and truncates; anything after it keeps its
-            full width, so an identifier stays readable however long the name is. */}
-        <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
-          <Text ellipsis className={homeType.itemTitle}>
-            {title}
-          </Text>
-          {titleExtra}
+const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => {
+  const { contentGap } = useDensityTokens();
+
+  return (
+    <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
+      <Flexbox horizontal align={'flex-start'} gap={contentGap}>
+        <Flexbox flex={'none'} paddingBlock={3}>
+          {icon}
         </Flexbox>
-        {description && (
-          <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
-        )}
-      </Flexbox>
-      {trailing}
-    </Flexbox>
-  </WorkspaceLink>
-));
-
-const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
-  ({ showAuthor, topic }) => {
-    const agent = useAgentDisplayMeta(topic.agentId);
-    const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
-    // The snippet is raw markdown (a user note or the last assistant reply);
-    // rendered as one plain line, its syntax markers are just noise.
-    const description = useMemo(
-      () => (raw ? markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim() : undefined),
-      [raw],
-    );
-
-    return (
-      <Row
-        description={description}
-        href={topic.routePath}
-        title={topic.title}
-        icon={
-          agent ? (
-            <AgentAvatar
-              agentId={topic.agentId}
-              avatar={agent.avatar}
-              background={agent.backgroundColor}
-              className={styles.topicAvatar}
-              shape={'circle'}
-              size={22}
-              title={agentDisplayName(agent)}
-            />
-          ) : (
-            <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
-          )
-        }
-        trailing={
-          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-            {showAuthor && <AuthorChip userId={topic.userId} />}
-            <Time date={topic.updatedAt} minWidth={TIME_COLUMN_WIDTH} />
+        <Flexbox className={styles.rowText} gap={3}>
+          {/* The name takes the space and truncates; anything after it keeps its
+              full width, so an identifier stays readable however long the name is. */}
+          <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
+            <Text ellipsis className={homeType.itemTitle}>
+              {title}
+            </Text>
+            {titleExtra}
           </Flexbox>
-        }
-      />
-    );
-  },
-);
+          {description && (
+            <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
+          )}
+        </Flexbox>
+        {trailing}
+      </Flexbox>
+    </WorkspaceLink>
+  );
+});
+
+const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
+  const { largeIconSize } = useDensityTokens();
+  const agent = useAgentDisplayMeta(topic.agentId);
+  const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
+  // The snippet is raw markdown (a user note or the last assistant reply);
+  // rendered as one plain line, its syntax markers are just noise.
+  const description = useMemo(
+    () => (raw ? markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim() : undefined),
+    [raw],
+  );
+
+  return (
+    <Row
+      description={description}
+      href={topic.routePath}
+      title={topic.title}
+      icon={
+        agent ? (
+          <AgentAvatar
+            agentId={topic.agentId}
+            avatar={agent.avatar}
+            background={agent.backgroundColor}
+            className={styles.topicAvatar}
+            shape={'circle'}
+            size={largeIconSize}
+            title={agentDisplayName(agent)}
+          />
+        ) : (
+          <Icon color={cssVar.colorTextDescription} icon={HashIcon} size={16} />
+        )
+      }
+      trailing={
+        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+          <Time date={topic.updatedAt} minWidth={TIME_COLUMN_WIDTH} />
+        </Flexbox>
+      }
+    />
+  );
+});
 
 interface SkeletonLineProps {
   /** Height of the painted band inside the line box. */
@@ -285,23 +289,43 @@ const SKELETON_ROWS = [
  * skeleton: a concrete leading icon would read as already-loaded content and
  * then be swapped for an avatar, which is precisely the wrong promise to make.
  */
+const SKELETON_LINES = {
+  compact: { meta: 16, supporting: 18, title: 20 },
+  loose: { meta: 18, supporting: 20, title: 22 },
+} as const;
+
 const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
-  ({ avatarSize = 22, withTime }) => (
-    <Flexbox aria-hidden gap={4}>
-      {SKELETON_ROWS.map(({ description, title }, index) => (
-        <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
-          <Flexbox flex={'none'} paddingBlock={3}>
-            <Skeleton.Avatar className={styles.topicAvatar} shape={'circle'} size={avatarSize} />
+  ({ avatarSize, withTime }) => {
+    const { density, tokens } = useDensity();
+    const lines = SKELETON_LINES[density];
+
+    return (
+      <Flexbox aria-hidden gap={4}>
+        {SKELETON_ROWS.map(({ description, title }, index) => (
+          <Flexbox
+            horizontal
+            align={'flex-start'}
+            className={styles.rowBox}
+            gap={tokens.contentGap}
+            key={index}
+          >
+            <Flexbox flex={'none'} paddingBlock={3}>
+              <Skeleton.Avatar
+                className={styles.topicAvatar}
+                shape={'circle'}
+                size={avatarSize ?? tokens.largeIconSize}
+              />
+            </Flexbox>
+            <Flexbox className={styles.rowText} gap={3}>
+              <SkeletonLine bar={14} line={lines.title} width={title} />
+              <SkeletonLine bar={12} line={lines.supporting} width={description} />
+            </Flexbox>
+            {withTime && <SkeletonLine bar={10} flex={'none'} line={lines.meta} width={52} />}
           </Flexbox>
-          <Flexbox className={styles.rowText} gap={3}>
-            <SkeletonLine bar={14} line={22} width={title} />
-            <SkeletonLine bar={12} line={20} width={description} />
-          </Flexbox>
-          {withTime && <SkeletonLine bar={10} flex={'none'} line={18} width={52} />}
-        </Flexbox>
-      ))}
-    </Flexbox>
-  ),
+        ))}
+      </Flexbox>
+    );
+  },
 );
 
 /**
@@ -474,6 +498,7 @@ const ScheduledTaskContent = memo(() => {
 
 const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
+  const { blockGap } = useHomeSpacing();
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -482,34 +507,23 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const recentsHidden = hiddenWidgets.includes('recents');
   const tasksHidden = hiddenWidgets.includes('tasks');
   const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
-  const cacheScope = useCacheScope();
-
-  // One page-level mine/team scope, shared by the inbox sections and Recent
-  // topics. In personal mode the member map is empty, `isTeam` stays false and
-  // the whole layer is inert.
-  const memberProfiles = useWorkspaceMemberProfiles();
-  const isTeam = memberProfiles.size > 1;
-  const [scope, setScope] = useState<'mine' | 'team'>('mine');
-  const teamView = isTeam && scope === 'team';
-
-  // Workspace topics are shared, so "mine" must be narrowed server-side —
-  // client-filtering the top N of a team-wide feed could starve out the
-  // viewer's own topics entirely.
-  const recentsSWR = useClientDataSWR(
-    isLogin && !recentsHidden
-      ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
-      : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView, teamView),
-    { revalidateOnFocus: false },
+  // The `recentList` replica paints the last rows on a cold start and
+  // revalidates in the background. Workspace topics are shared, so "mine" is
+  // narrowed server-side (see `HOME_TOPIC_RECENTS_PARAMS`).
+  const useFetchHomeTopicRecents = useHomeStore((s) => s.useFetchHomeTopicRecents);
+  const recentsSync = useFetchHomeTopicRecents(!!isLogin && !recentsHidden);
+  const storedTopicRecents = useHomeStore(homeRecentSelectors.query(HOME_TOPIC_RECENTS_KEY));
+  const topicRecentsConfirmed = useHomeStore(
+    homeRecentSelectors.isQueryConfirmed(HOME_TOPIC_RECENTS_KEY),
   );
 
   const inboxTopics = useHomeInboxTopics(isLogin);
   const mineUnreadCount = useMemo(
-    () => filterTopicsForInboxScope(inboxTopics.unread, myId, false).length,
+    () => filterMyInboxTopics(inboxTopics.unread, myId).length,
     [inboxTopics.unread, myId],
   );
   const mineRunningCount = useMemo(
-    () => filterTopicsForInboxScope(inboxTopics.running, myId, false).length,
+    () => filterMyInboxTopics(inboxTopics.running, myId).length,
     [inboxTopics.running, myId],
   );
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
@@ -517,7 +531,8 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const briefs = useBriefStore(briefListSelectors.briefs);
   const briefsInit = useBriefStore(briefListSelectors.isBriefsInit);
   const needsYouCount = useMemo(() => splitBriefs(briefs).needsYou.length, [briefs]);
-  const topicRecents = recentsSWR.data ?? [];
+  const topicRecents = storedTopicRecents ?? EMPTY_RECENTS;
+  const recentsInit = isRecentsSnapshotSettled(storedTopicRecents, topicRecentsConfirmed);
 
   if (mode === 'chat') {
     // With the recents section switched off nothing is fetched, so it reports as
@@ -525,10 +540,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // activity alone decides what this column is.
     const state = resolveHomeChatContentState({
       authLoaded: !!authLoaded,
-      hasError: !recentsHidden && !!recentsSWR.error,
+      hasError: !recentsHidden && !!recentsSync.error,
       isLogin: !!isLogin,
       recentsCount: topicRecents.length,
-      recentsInit: recentsHidden || recentsSWR.data !== undefined,
+      recentsInit: recentsHidden || recentsInit,
       activityCount: mineRunningCount + mineUnreadCount + needsYouCount,
       activityError: Boolean(inboxTopics.error || briefsSWR.error),
       activityResolved:
@@ -549,7 +564,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
       if (!inlineRail) return starters;
 
       return (
-        <Flexbox gap={32}>
+        <Flexbox gap={blockGap}>
           {starters}
           <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
             <HomeInbox inlineRail variant={'main'} />
@@ -560,42 +575,27 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     }
 
     return (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-          <HomeInbox
-            inlineRail={inlineRail}
-            scope={scope}
-            variant={'main'}
-            onScopeChange={setScope}
-          />
+          <HomeInbox inlineRail={inlineRail} variant={'main'} />
         </EntityLinkHostProvider>
         {!recentsHidden && (state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock
-            actionAlwaysVisible
             count={resolveRecentsBadgeCount(topicRecents.length, recentsCount)}
             title={t('dashboard.chat.recents')}
-            action={
-              isTeam ? (
-                <Segmented
-                  size={'small'}
-                  value={scope}
-                  options={[
-                    { label: t('inbox.scope.mine'), value: 'mine' },
-                    { label: t('inbox.scope.team'), value: 'team' },
-                  ]}
-                  onChange={(value) => setScope(value as 'mine' | 'team')}
-                />
-              ) : undefined
-            }
           >
             {state === 'error' ? (
-              <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
+              <AsyncError
+                error={recentsSync.error}
+                variant={'inline'}
+                onRetry={() => void recentsSync.revalidate()}
+              />
             ) : state === 'loading' ? (
               <LoadingRows withTime />
             ) : (
               <Flexbox gap={4}>
                 {topicRecents.slice(0, recentsCount).map((item) => (
-                  <RecentTopicRow key={item.id} showAuthor={teamView} topic={item} />
+                  <RecentTopicRow key={item.id} topic={item} />
                 ))}
               </Flexbox>
             )}
@@ -617,7 +617,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // folded-in inbox sections above, exactly like chat mode — row hover pills
     // overhang by design (see `rowBox`).
     const taskBlocks = (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         {!tasksHidden && <TaskContent />}
         {!scheduledTasksHidden && <ScheduledTaskContent />}
       </Flexbox>
@@ -630,7 +630,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // task list, suggestions after it. Unread and needs-you stay
     // hidden — task mode never surfaces them, folded or not.
     return (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
           <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
         </EntityLinkHostProvider>

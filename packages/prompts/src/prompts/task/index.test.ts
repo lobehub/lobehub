@@ -130,6 +130,7 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).toContain('Automation: heartbeat, every 4h');
+    expect(result).not.toContain('When all deliverables are ready, request completion');
     expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
     // A tick may retire the loop only when the instruction's own end condition is met.
     expect(result).toContain('when the Instruction defines an end condition');
@@ -170,6 +171,7 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).not.toContain('Automation:');
+    expect(result).toContain('When all deliverables are ready, request completion');
   });
 
   it('should prioritize user feedback at the top', () => {
@@ -460,6 +462,7 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('console is clean');
     expect(result).toContain('include artifact paths, commands, and observed results');
     expect(result).toContain('an independent verifier decides whether this Task is complete');
+    expect(result).not.toContain('When all deliverables are ready, request completion');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
     expect(result).toMatch(/`lh acceptance install`.*plan path.*chapters on every recording/);
     expect(result).not.toContain('lh acceptance run result submit'); // the skill owns publishing
@@ -779,6 +782,27 @@ describe('buildTaskRunPrompt', () => {
 
     expect(result).not.toContain('Questions earlier rounds already asked');
     expect(result).toContain('Do not ask the owner again');
+  });
+
+  it('offers a missed-evidence dispute next to rejection feedback and lists prior rulings', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          automaticReviewFeedback: 'The export button is not visible.',
+          disputeRulings: [
+            { outcome: 'upheld', title: 'Exports a PDF' },
+            { outcome: 'overruled', title: 'Shows totals' },
+          ],
+          round: 2,
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: 'Finish.', name: 'Report' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('dispute the criterion with kind `missed_evidence`');
+    expect(result).toContain('Exports a PDF — upheld. File the same `invalid_criterion` dispute');
+    expect(result).toContain('Shows totals — overruled. It stands; satisfy it.');
   });
 
   it('omits the round budget suffix for uncapped goals', () => {

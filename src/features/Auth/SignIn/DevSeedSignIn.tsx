@@ -5,6 +5,15 @@ import { memo, useEffect, useState } from 'react';
 
 const SEED_SIGN_IN_PATH = '/api/dev/seed-sign-in';
 
+/** Seeded runtime accounts, one per plan, in the order the buttons render. */
+const SEED_ACCOUNTS = [
+  { account: 'ultimate', label: 'Ultimate' },
+  { account: 'free', label: 'Free' },
+  { account: 'plus', label: 'Plus' },
+  { account: 'pro', label: 'Pro' },
+  { account: 'max', label: 'Max' },
+] as const;
+
 /**
  * Dev-only quick login for the seeded runtime accounts (see the cloud
  * `dev:runtime` tooling). Renders nothing unless the backend exposes the
@@ -33,8 +42,8 @@ const DevSeedSignIn = memo(() => {
       <Text fontSize={12} type={'secondary'}>
         Dev quick login
       </Text>
-      <Flexbox horizontal gap={8}>
-        {(['ultimate', 'free'] as const).map((account) => (
+      <Flexbox horizontal gap={8} justify={'center'} wrap={'wrap'}>
+        {SEED_ACCOUNTS.map(({ account, label }) => (
           <Button
             key={account}
             size={'small'}
@@ -51,7 +60,7 @@ const DevSeedSignIn = memo(() => {
               window.location.assign(target.href);
             }}
           >
-            {account === 'ultimate' ? 'Ultimate' : 'Free'}
+            {label}
           </Button>
         ))}
       </Flexbox>

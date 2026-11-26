@@ -1,7 +1,15 @@
+import type { Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TaskResult } from './asyncifyPolling';
 import { asyncifyPolling } from './asyncifyPolling';
+
+const createErrorOptions = (mockTask: Mock, mockCheckStatus: Mock, onPollingError: Mock) => ({
+  pollingQuery: mockTask,
+  checkStatus: mockCheckStatus,
+  onPollingError,
+  initialInterval: 1,
+});
 
 describe('asyncifyPolling', () => {
   describe('basic functionality', () => {
@@ -357,12 +365,9 @@ describe('asyncifyPolling', () => {
         isContinuePolling: true,
       });
 
-      const result = await asyncifyPolling({
-        pollingQuery: mockTask,
-        checkStatus: mockCheckStatus,
-        onPollingError,
-        initialInterval: 1,
-      });
+      const result = await asyncifyPolling(
+        createErrorOptions(mockTask, mockCheckStatus, onPollingError),
+      );
 
       expect(result).toBe('final-result');
       expect(mockTask).toHaveBeenCalledTimes(3);
@@ -385,12 +390,7 @@ describe('asyncifyPolling', () => {
       });
 
       await expect(
-        asyncifyPolling({
-          pollingQuery: mockTask,
-          checkStatus: mockCheckStatus,
-          onPollingError,
-          initialInterval: 1,
-        }),
+        asyncifyPolling(createErrorOptions(mockTask, mockCheckStatus, onPollingError)),
       ).rejects.toThrow('Fatal error');
 
       expect(mockTask).toHaveBeenCalledTimes(1);
@@ -409,12 +409,7 @@ describe('asyncifyPolling', () => {
       });
 
       await expect(
-        asyncifyPolling({
-          pollingQuery: mockTask,
-          checkStatus: mockCheckStatus,
-          onPollingError,
-          initialInterval: 1,
-        }),
+        asyncifyPolling(createErrorOptions(mockTask, mockCheckStatus, onPollingError)),
       ).rejects.toThrow('Custom error message');
 
       expect(onPollingError).toHaveBeenCalledWith({
@@ -440,12 +435,7 @@ describe('asyncifyPolling', () => {
         .mockReturnValueOnce({ isContinuePolling: false });
 
       await expect(
-        asyncifyPolling({
-          pollingQuery: mockTask,
-          checkStatus: mockCheckStatus,
-          onPollingError,
-          initialInterval: 1,
-        }),
+        asyncifyPolling(createErrorOptions(mockTask, mockCheckStatus, onPollingError)),
       ).rejects.toThrow('Error 3');
 
       // Verify context progression

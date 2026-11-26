@@ -1,3 +1,4 @@
+import { parseCronWeekdays } from '@lobechat/utils/cronEval';
 import { type Dayjs } from 'dayjs';
 
 export type ScheduleType = 'daily' | 'hourly' | 'weekly';
@@ -76,6 +77,20 @@ export const WEEKDAYS = [
   { key: 0, label: 'taskSchedule.weekdays.sun' },
 ] as const;
 
+/** Minutes every plan can pick; any other exact minute is the gated custom time. */
+export const STANDARD_MINUTES = [0, 30] as const;
+
+/**
+ * The minutes a picker offers. Without custom-time access it stays on the
+ * standard ones plus the value already stored, so a schedule set before a
+ * downgrade (or by an agent) still reads back as it runs.
+ */
+export const getMinuteChoices = (canUseCustomMinute: boolean, currentMinute: number): number[] => {
+  if (canUseCustomMinute) return Array.from({ length: 60 }, (_, minute) => minute);
+
+  return [...new Set<number>([...STANDARD_MINUTES, currentMinute])].sort((a, b) => a - b);
+};
+
 /**
  * Parse cron pattern (minute hour day month weekday) into editable schedule info.
  */
@@ -88,14 +103,15 @@ export const parseCronPattern = (
   triggerMinute: number;
   weekdays?: number[];
 } => {
-  const parts = cronPattern.split(' ');
+  const parts = cronPattern.trim().split(/\s+/);
   if (parts.length !== 5) {
     return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
   }
 
   const [minute, hour, , , weekday] = parts;
   const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
-  const triggerMinute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  // Interval minutes such as `*/15` pin no clock minute.
+  const triggerMinute = Number.isNaN(rawMinute) ? 0 : rawMinute;
 
   if (hour.startsWith('*/')) {
     const interval = Number.parseInt(hour.slice(2));
@@ -108,11 +124,31 @@ export const parseCronPattern = (
   const triggerHour = Number.parseInt(hour);
 
   if (weekday !== '*') {
-    const weekdays = weekday.split(',').map((d) => Number.parseInt(d));
-    return { scheduleType: 'weekly', triggerHour, triggerMinute, weekdays };
+    return {
+      scheduleType: 'weekly',
+      triggerHour,
+      triggerMinute,
+      weekdays: parseCronWeekdays(cronPattern),
+    };
   }
 
   return { scheduleType: 'daily', triggerHour, triggerMinute };
+};
+
+/**
+ * Replace a single field in a standard 5-field cron expression while preserving
+ * all other fields (for example, weekday qualifiers such as `FRI#2` or `5L`).
+ * Returns `null` when the pattern is not a 5-field expression.
+ */
+export const updateCronPatternField = (
+  cronPattern: string,
+  fieldIndex: 0 | 1 | 2 | 3 | 4,
+  value: string,
+): string | null => {
+  const parts = cronPattern.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  parts[fieldIndex] = value;
+  return parts.join(' ');
 };
 
 /**
@@ -124,8 +160,7 @@ export const buildCronPattern = (
   hourlyInterval?: number,
   weekdays?: number[],
 ): string => {
-  const rawMinute = triggerTime.minute();
-  const minute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  const minute = triggerTime.minute();
   const hour = triggerTime.hour();
 
   switch (scheduleType) {
@@ -138,7 +173,10 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : '0,1,2,3,4,5,6';
+      const days =
+        weekdays && weekdays.length > 0
+          ? [...weekdays].sort((a, b) => a - b).join(',')
+          : '0,1,2,3,4,5,6';
       return `${minute} ${hour} * * ${days}`;
     }
   }

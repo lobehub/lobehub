@@ -3,6 +3,7 @@ import {
   buildDiscordInviteUrl,
   buildSlackAppPageUrl,
   buildSlackCreateAppUrl,
+  DINGTALK_CONSOLE_URL,
   DISCORD_DEVELOPER_PORTAL_URL,
   FEISHU_CONSOLE_URL,
   LINE_ACCOUNT_ENTRY_URL,
@@ -11,6 +12,7 @@ import {
   QQ_BOT_CONSOLE_URL,
   SLACK_APPS_URL,
   TELEGRAM_BOTFATHER_URL,
+  WECOM_ADMIN_CONSOLE_URL,
 } from './links';
 
 export type SetupLinkLabel =
@@ -19,6 +21,7 @@ export type SetupLinkLabel =
   | 'inviteBot'
   | 'openBotFather'
   | 'openBotSettings'
+  | 'openAdminConsole'
   | 'openLineAccountManager'
   | 'openConsole'
   | 'openSlackApp';
@@ -56,6 +59,8 @@ export interface SetupGuideContext {
   /** Application ID already in the form, unlocking deep links into that app. */
   applicationId?: string;
   appName: string;
+  /** Connection mode selected in the form, for steps that differ between modes. */
+  connectionMode?: string;
 }
 
 /**
@@ -64,7 +69,7 @@ export interface SetupGuideContext {
  */
 export const getSetupGuide = (
   platformId: string,
-  { applicationId, appDescription, appName }: SetupGuideContext,
+  { applicationId, appDescription, appName, connectionMode }: SetupGuideContext,
 ): SetupGuide | undefined => {
   const appId = applicationId?.trim() || undefined;
 
@@ -113,19 +118,19 @@ export const getSetupGuide = (
       };
     }
     case 'discord': {
+      const botSettingsLink = {
+        href: appId ? buildDiscordBotPageUrl(appId) : DISCORD_DEVELOPER_PORTAL_URL,
+        label: 'openBotSettings',
+      } as const;
       return {
         guide: 'discord',
         steps: [
           { key: 'create', link: { href: DISCORD_DEVELOPER_PORTAL_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'publicKey'] },
-          {
-            key: 'bot',
-            fields: ['botToken'],
-            link: {
-              href: appId ? buildDiscordBotPageUrl(appId) : DISCORD_DEVELOPER_PORTAL_URL,
-              label: 'openBotSettings',
-            },
-          },
+          { key: 'bot', fields: ['botToken'], link: botSettingsLink },
+          // Without Message Content Intent the bot connects but reads empty messages, so it
+          // gets its own step instead of trailing the token copy.
+          { key: 'intent', link: botSettingsLink },
           {
             beforeConnect: true,
             key: 'invite',
@@ -151,6 +156,44 @@ export const getSetupGuide = (
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'appSecret'] },
+        ],
+      };
+    }
+    case 'wecom': {
+      // Long-connection bots can only be created by an admin until the admin grants members
+      // the right, and the bot reaches only the people in its visible range. Admins skip the
+      // permission step, so the admin-console link sits on the create step. The API settings
+      // page generates the BotID and Secret; they are copied before the bot settings are saved
+      // so the Secret is not lost. Using the bot (direct chat, internal groups) needs it
+      // connected, so that step follows the save.
+      return {
+        guide: 'wecom',
+        steps: [
+          { key: 'access' },
+          { key: 'create', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openAdminConsole' } },
+          { key: 'connection' },
+          { key: 'credentials', fields: ['applicationId', 'secret'] },
+          { key: 'usage' },
+        ],
+      };
+    }
+    case 'dingtalk': {
+      // The robot, its receiving mode and the send permission only take effect once a
+      // version is published. In Stream mode the connection opens on save, so the whole
+      // console setup comes first; in webhook mode the save is what produces the
+      // callback URL the robot step asks for, so those steps follow it.
+      const beforeConnect = connectionMode !== 'webhook';
+      return {
+        guide: 'dingtalk',
+        steps: [
+          {
+            key: 'create',
+            fields: ['applicationId', 'clientSecret'],
+            link: { href: DINGTALK_CONSOLE_URL, label: 'openConsole' },
+          },
+          { beforeConnect, key: beforeConnect ? 'robot' : 'robotWebhook' },
+          { beforeConnect, key: 'permissions' },
+          { beforeConnect, key: 'publish' },
         ],
       };
     }

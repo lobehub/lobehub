@@ -31,7 +31,9 @@ import {
   useTopicListFilter,
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
+import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useDeviceList } from '@/store/device';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -39,8 +41,13 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
+import { pickExecutionEnvironment } from './executionEnvironmentOrder';
 import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
+import {
+  isExecutionDirectoryAvailable,
+  useProjectExecutionEnvironments,
+} from './useProjectExecutionEnvironments';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
 import { useStartProjectTopic } from './useStartProjectTopic';
 
@@ -77,6 +84,7 @@ export function ProjectDirectoryTopics(props: ProjectDirectoryTopicsProps) {
 }
 
 function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDirectoryTopicsProps) {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('project');
   const { t: tTopic } = useTranslation('topic');
   const { topicGroupMode } = useAgentTopicGroupMode();
@@ -97,10 +105,12 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   );
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
+  const { ordered } = useProjectExecutionEnvironments(projectId);
+  const { data: devices } = useDeviceList();
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Text ellipsis fontSize={12} type="secondary" weight={500}>
             {t('topics.title')}
           </Text>
@@ -123,14 +133,22 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
             icon={PlusIcon}
             size="small"
             title={t('sidebar.newConversation')}
-            onClick={() =>
+            onClick={() => {
               // Same habit as an agent's "+": straight into the coordinator's
-              // conversation, on the first directory it can run in when there is one.
+              // conversation, in the project's first execution environment that
+              // can take it now — a ready folder on an online device the agent
+              // may use — or the cloud sandbox.
+              const picked = pickExecutionEnvironment(
+                ordered,
+                (directory) =>
+                  canStageDraftOn(directory, fixedDeviceId) &&
+                  isExecutionDirectoryAvailable(directory, devices),
+              );
               startTopic({
                 agentId: coordinatorAgentId,
-                directoryId: directories.find((d) => canStageDraftOn(d, fixedDeviceId))?.id,
-              })
-            }
+                directoryId: picked.kind === 'directory' ? picked.id : undefined,
+              });
+            }}
           />
         </Flexbox>
       </AccordionHeader>

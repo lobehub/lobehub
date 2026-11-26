@@ -1,4 +1,4 @@
-import type { OperationMetadata } from '@/store/chat/slices/operation/types';
+import type { Operation, OperationMetadata } from '@/store/chat/slices/operation/types';
 
 /**
  * Builds the metadata a local operation mirroring a top-level Gateway run starts with.
@@ -27,3 +27,28 @@ export const gatewayRunOperationMetadata = ({
   heteroType,
   serverOperationId: operationId,
 });
+
+/**
+ * Whether a hub `op_lifecycle` notice reports the end of a run the user stopped in this tab.
+ *
+ * Use when:
+ * - Deciding whether such a notice should refetch the conversation. It is forwarded
+ *   asynchronously and can land after the run's socket closed on the terminal frame, yet before
+ *   the server's in-flight step persisted the partial reply: a refetch then replaces the
+ *   streamed text with the step's empty placeholder, which the terminal handler kept on purpose.
+ *
+ * Returns:
+ * - `true` for an `interrupted` notice whose run a cancelled local `execServerAgentRuntime` op
+ *   mirrors.
+ */
+export const isLocalStopNotice = (
+  operations: Record<string, Operation> | undefined,
+  notice: { operationId: string; status: string },
+): boolean =>
+  notice.status === 'interrupted' &&
+  Object.values(operations ?? {}).some(
+    (op) =>
+      op.type === 'execServerAgentRuntime' &&
+      op.status === 'cancelled' &&
+      op.metadata.serverOperationId === notice.operationId,
+  );

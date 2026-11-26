@@ -10,6 +10,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import UserAvatar from '@/components/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useInterfaceDensity } from '@/styles/density';
 
 export interface ProjectCreatorProps {
   createdAt: Date | string;
@@ -23,6 +24,7 @@ export interface ProjectCreatorProps {
  */
 const ProjectCreator = memo<ProjectCreatorProps>(({ createdAt, userId }) => {
   const { t } = useTranslation('project');
+  const compact = useInterfaceDensity() === 'compact';
   const hasActiveWorkspace = useHasActiveWorkspace();
   const member = useAuthorInfo(userId);
   const currentUserId = useUserStore(userProfileSelectors.userId);
@@ -36,7 +38,7 @@ const ProjectCreator = memo<ProjectCreatorProps>(({ createdAt, userId }) => {
   const name = creator?.fullName || t('settings.creatorUnknown');
 
   return (
-    <Flexbox horizontal align="center" gap={12} paddingBlock={12} paddingInline={16}>
+    <Flexbox horizontal align="center" gap={12} paddingBlock={compact ? 8 : 12} paddingInline={16}>
       <UserAvatar avatar={creator?.avatar} name={name} size={28} />
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Text ellipsis>{name}</Text>

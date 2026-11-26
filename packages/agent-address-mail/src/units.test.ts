@@ -55,6 +55,39 @@ describe('LobeMailApiClient', () => {
     await expect(client.getInbox('inb_missing')).rejects.toThrow(/404 — Inbox not found/);
   });
 
+  it('names the failing fields of a validation error', async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json(
+        {
+          error: {
+            code: 'validation_error',
+            issues: [{ message: 'Invalid input: expected array, received string', path: 'to' }],
+            message: 'Invalid request',
+          },
+        },
+        { status: 422 },
+      ),
+    ) as unknown as typeof fetch;
+
+    const client = new LobeMailApiClient({ apiKey: 'am_x', fetchImpl });
+    await expect(client.getInbox('inb_1')).rejects.toThrow(
+      /422 — Invalid request \(to: Invalid input: expected array, received string\)/,
+    );
+  });
+
+  it('sends the recipient as the list the send route requires', async () => {
+    let body = '';
+    const fetchImpl = vi.fn(async (_input: any, init: any) => {
+      body = init?.body;
+      return Response.json({ id: 'msg_1' }, { status: 201 });
+    }) as unknown as typeof fetch;
+
+    const client = new LobeMailApiClient({ apiKey: 'am_x', fetchImpl });
+    await client.sendMessage('inb_1', { subject: 'Hi', text: 'Hello', to: 'i@innei.in' });
+
+    expect(JSON.parse(body)).toEqual({ subject: 'Hi', text: 'Hello', to: ['i@innei.in'] });
+  });
+
   it('creates an inbox and registers a webhook with the bearer key', async () => {
     const calls: Array<{ body?: string; url: string }> = [];
     const fetchImpl = vi.fn(async (input: any, init: any) => {
@@ -148,6 +181,16 @@ describe('markdown rendering', () => {
 
   it('renders ordered lists as <ol>', () => {
     expect(markdownToHtml('1. a\n2. b')).toContain('<ol><li>a</li><li>b</li></ol>');
+  });
+
+  it('renders a line that only starts or ends with a rule marker as text, without hanging', () => {
+    // Each of these once matched a block start that no branch consumed, so the
+    // tokenizer spun forever on the first line of the reply.
+    expect(markdownToHtml('--- note')).toBe('<p>--- note</p>');
+    expect(markdownToHtml('***Important***')).toBe('<p><em><strong>Important</strong></em></p>');
+    expect(markdownToPlainText('intro\n--- note\nmore')).toBe('intro\n--- note\nmore');
+
+    expect(markdownToHtml('above\n\n---\n\nbelow')).toBe('<p>above</p>\n<hr />\n<p>below</p>');
   });
 });
 

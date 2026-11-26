@@ -15,17 +15,18 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
+  | 'agentIdentity'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
   | 'deviceTunnel'
   | 'evalCapture'
-  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
   | 'messageTextSelectionActions'
   | 'oauthApps'
+  | 'pageCollab'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
@@ -65,6 +66,12 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableAgentIdentity',
+    i18nKey: 'agentIdentity',
+    searchKeywords: ['agent identity', 'agent mail', 'inbox', 'address'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableMessageTextSelectionActions',
     i18nKey: 'messageTextSelectionActions',
     searchKeywords: ['text selection', 'quote'],
@@ -99,12 +106,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableGoals',
-    i18nKey: 'goals',
-    searchKeywords: ['goal', 'goals', 'objective'],
-    stage: 'beta',
-  },
-  {
     flag: 'enableDeviceTunnel',
     i18nKey: 'deviceTunnel',
     searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
@@ -129,6 +130,14 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'beta',
   },
   {
+    businessOnly: true,
+    flag: 'enablePageCollab',
+    i18nKey: 'pageCollab',
+    searchKeywords: ['collaboration', 'co-editing', 'realtime', 'live editing', 'page'],
+    stage: 'alpha',
+    workspaceOnly: true,
+  },
+  {
     desktopOnly: true,
     flag: 'enableDesktopSplitView',
     i18nKey: 'desktopSplitView',
@@ -150,7 +159,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    desktopOnly: true,
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
     searchKeywords: ['codex', 'app server'],

@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Ollama service is unavailable. Please check if Ollama is running properly or if the cross-origin configuration of Ollama is set correctly.",
   "OperationInactivityTimeout": "The agent operation was idle for too long and was terminated. Please retry the request.",
   "PermissionDenied": "Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.",
+  "ProviderBaseURLBlocked": "The {{provider}} endpoint points to a private or local network address, which the server is not allowed to reach for security reasons. This address only works from your own device — use a publicly reachable endpoint instead.",
   "ProviderBizError": "Error requesting {{provider}} service, please troubleshoot or retry based on the following information",
   "ProviderContentPolicyViolation": "The provider blocked this request or its output due to content policy. Please revise your prompt and try again.",
   "ProviderNetworkError": "Connection to the provider timed out or was dropped. Please check your network and try again.",
   "ProviderNoImageGenerated": "The provider returned no image for this request. Try rephrasing the request, or choose a model that supports image generation.",
   "ProviderServiceUnavailable": "The provider is temporarily overloaded or unavailable. Please try again shortly.",
+  "ProviderStreamInterrupted": "The provider closed the connection before finishing the response. This is usually temporary, please try again.",
   "QuotaLimitReached": "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   "RateLimitExceeded": "Sorry, the token usage or request count has reached the rate limit for this key. Please try again later or increase the key's quota.",
   "RemoteMediaDownloadTimeout": "The provider timed out while downloading an attached image or file. Please try again.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "The upstream gateway or proxy returned an error. Please try again shortly; if it persists, check your proxy / endpoint configuration.",
   "UpstreamHttpError": "The provider returned an HTTP error without further detail. Please try again, or check your request and model configuration.",
   "UpstreamMalformedResponse": "The provider returned a malformed response that could not be parsed. Please retry; if it persists, try a different model or provider.",
-  "UserConfigError": "Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings."
+  "UserConfigError": "Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.",
+  "WorkspaceModelRestricted": "This model is above the highest tier your workspace admin allows you. Pick a lower-tier model, or ask a workspace admin to raise your tier."
 }

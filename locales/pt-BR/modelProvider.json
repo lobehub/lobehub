@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Suporta Reconhecimento de Vídeo",
   "providerModels.item.modelConfig.vision.extra": "Esta configuração habilita apenas o upload de imagens no aplicativo. O suporte ao reconhecimento depende do modelo. Teste as capacidades visuais do modelo.",
   "providerModels.item.modelConfig.vision.title": "Suporte a Visão",
+  "providerModels.item.pricing.audioOutputTokens": "Saída de áudio ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/Imagem",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M Caracteres",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Minutos",

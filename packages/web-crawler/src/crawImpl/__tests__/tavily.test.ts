@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  BlockedPageError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import { tavily } from '../tavily';
 
 // Mock dependencies
@@ -117,6 +122,21 @@ describe('tavily crawler', () => {
     );
 
     consoleSpy.mockRestore();
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    process.env.TAVILY_API_KEY = 'test-api-key';
+
+    const mockResponse = createMockResponse({
+      results: [{ url: 'https://example.com', raw_content: 'Verifying you are human.' }],
+    });
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
+
+    await expect(tavily('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should return undefined for short content', async () => {

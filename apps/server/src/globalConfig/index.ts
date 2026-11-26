@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { isDesktop } from '@/const/version';
+import { agentIdentityEnv } from '@/envs/agentIdentity';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
@@ -18,7 +19,10 @@ import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 import { isLlmRelayDeploymentReady } from '@/server/modules/AgentRuntime/llmRelay/deployment';
-import { isPageCollabEnabled } from '@/server/services/pageCollab/config';
+import {
+  isLegacyPageCollabEnabled,
+  isWorkspacePageCollabEnabled,
+} from '@/server/services/pageCollab/config';
 import { getSandboxDeployment } from '@/server/services/sandbox/deployment';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
@@ -147,6 +151,19 @@ export const getServerAiProviderConfig = async (provider: ModelProvider) => {
   };
 };
 
+/**
+ * The model an unset file embedding slot runs, for Service Model to show. An
+ * invalid `DEFAULT_FILES_CONFIG` still fails where embedding runs, as before;
+ * it must not take the whole client config down with it.
+ */
+const getDeploymentFileEmbeddingModel = () => {
+  try {
+    return parseFilesConfig(knowledgeEnv.DEFAULT_FILES_CONFIG).embeddingModel;
+  } catch {
+    return undefined;
+  }
+};
+
 export const getServerGlobalConfig = async () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
@@ -154,6 +171,16 @@ export const getServerGlobalConfig = async () => {
     ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL);
 
   const config: GlobalServerConfig = {
+    agentIdentityProviders:
+      // A key alone cannot receive: the account secret is minted when
+      // provisioning registers a webhook, so without either a public webhook
+      // endpoint or a shared signing secret every inbound delivery is rejected
+      // as unsigned and a fresh mailbox would look active but never fill.
+      // Addresses that already exist stay reachable through the identity tab.
+      agentIdentityEnv.ENABLED_AGENT_MAIL &&
+      !!(agentIdentityEnv.AGENT_MAIL_WEBHOOK_URL || agentIdentityEnv.AGENT_MAIL_WEBHOOK_SECRET)
+        ? ['agent-mail']
+        : [],
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
@@ -173,8 +200,9 @@ export const getServerGlobalConfig = async () => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    enablePageCollab: enableGatewayMode && isPageCollabEnabled(),
+    enablePageCollab: enableGatewayMode && isLegacyPageCollabEnabled(),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
+    enableWorkspacePageCollab: enableGatewayMode && isWorkspacePageCollabEnabled(),
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
     ),
@@ -204,7 +232,10 @@ export const getServerGlobalConfig = async () => {
     // Same derivation as the provider's own issuer (`libs/oidc-provider/provider.ts`).
     ...(appEnv.APP_URL ? { oidcIssuer: urlJoin(appEnv.APP_URL, OIDC_ISSUER_PATH) } : undefined),
     sandbox: getSandboxDeployment(),
-    systemAgent: parseSystemAgent(appEnv.SYSTEM_AGENT),
+    systemAgent: {
+      ...parseSystemAgent(appEnv.SYSTEM_AGENT),
+      fileEmbedding: getDeploymentFileEmbeddingModel(),
+    },
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
     },

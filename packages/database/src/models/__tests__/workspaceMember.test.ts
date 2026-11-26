@@ -268,12 +268,50 @@ describe('WorkspaceMemberModel', () => {
       expect(await ids('_')).toEqual([]);
     });
 
+    it('matches and orders by the workspace nickname, scoped to this workspace', async () => {
+      const model = await seedDirectory();
+      await model.addMember({ userId: otherUserId, workspaceId: otherWorkspaceId });
+      // Bob goes by "Aaron" here, so he now sorts ahead of Alice.
+      await model.updateMemberProfile(workspaceId, otherUserId, { nickname: 'Aaron' });
+      await model.updateMemberProfile(otherWorkspaceId, otherUserId, { nickname: 'Zed' });
+
+      const { rows } = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+      expect(rows.map((r) => r.userId)).toEqual([otherUserId, memberId, inviterId]);
+      expect(rows[0].nickname).toBe('Aaron');
+
+      // A blank nickname is unset: Bob sorts by his full name again.
+      await serverDB
+        .update(workspaceMembers)
+        .set({ config: { nickname: '   ' } })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, otherUserId),
+          ),
+        );
+      const reordered = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+      expect(reordered.rows.map((r) => [r.userId, r.nickname])).toEqual([
+        [memberId, null],
+        [otherUserId, null],
+        [inviterId, null],
+      ]);
+      await model.updateMemberProfile(workspaceId, otherUserId, { nickname: 'Aaron' });
+
+      const ids = async (query: string) =>
+        (await model.searchAssignableMembers(workspaceId, { limit: 50, query })).rows.map(
+          (r) => r.userId,
+        );
+      expect(await ids('aaron')).toEqual([otherUserId]);
+      // Another workspace's nickname does not match here.
+      expect(await ids('zed')).toEqual([]);
+    });
+
     it('caps the page with limit and reports the total before the cap', async () => {
       const model = await seedDirectory();
 
       const { rows, total } = await model.searchAssignableMembers(workspaceId, { limit: 1 });
 
-      expect(rows).toEqual([{ role: 'member', userId: memberId }]);
+      expect(rows).toEqual([{ nickname: null, role: 'member', userId: memberId }]);
       expect(total).toBe(3);
     });
 
@@ -286,6 +324,31 @@ describe('WorkspaceMemberModel', () => {
 
       expect(rows.map((r) => r.userId)).toEqual([memberId, inviterId]);
       expect(total).toBe(2);
+    });
+  });
+
+  describe('getNicknames', () => {
+    it('maps active members of this workspace to their nickname', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId: otherWorkspaceId });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Kuro' });
+      await model.updateMemberProfile(otherWorkspaceId, otherUserId, { nickname: 'Elsewhere' });
+
+      const nicknames = await model.getNicknames(workspaceId, [memberId, otherUserId, 'nobody']);
+
+      expect([...nicknames]).toEqual([[memberId, 'Kuro']]);
+      expect(await model.getNicknames(workspaceId, [])).toEqual(new Map());
+    });
+
+    it('drops a removed member', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Kuro' });
+      await model.removeMember(workspaceId, memberId);
+
+      expect((await model.getNicknames(workspaceId, [memberId])).size).toBe(0);
     });
   });
 
@@ -305,10 +368,12 @@ describe('WorkspaceMemberModel', () => {
       expect(row.deletedAt).not.toBeNull();
     });
 
-    it('clears their job title and responsibilities so a re-invite starts without them', async () => {
+    it('clears their job title, responsibilities and config (nickname included) so a re-invite starts without them', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ userId: memberId, workspaceId });
       await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#1f8a5b',
+        nickname: 'Ally',
         title: 'Designer',
         responsibilities: 'Design system',
       });
@@ -318,6 +383,7 @@ describe('WorkspaceMemberModel', () => {
 
       expect(revived.title).toBeNull();
       expect(revived.responsibilities).toBeNull();
+      expect(revived.config).toEqual({});
     });
 
     it('drops their team memberships so a re-invite does not restore them', async () => {
@@ -589,10 +655,55 @@ describe('WorkspaceMemberModel', () => {
       expect(updated?.title).toBe('Product Manager');
       expect(updated?.responsibilities).toBe('Owns the mobile roadmap');
 
-      const cleared = await model.updateMemberProfile(workspaceId, memberId, { title: null });
+      const nicknamed = await model.updateMemberProfile(workspaceId, memberId, {
+        nickname: 'Kuro',
+      });
+      expect(nicknamed?.config).toEqual({ nickname: 'Kuro' });
+      expect(nicknamed?.title).toBe('Product Manager');
+
+      const cleared = await model.updateMemberProfile(workspaceId, memberId, {
+        nickname: null,
+        title: null,
+      });
       expect(cleared?.title).toBeNull();
       // an omitted field is left untouched
       expect(cleared?.responsibilities).toBe('Owns the mobile roadmap');
+      expect(cleared?.config).toEqual({});
+    });
+
+    it('keeps the badge color in config, leaving other config keys and fields alone', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB
+        .update(workspaceMembers)
+        .set({ config: { other: 1 } as never })
+        .where(
+          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, memberId)),
+        );
+
+      const colored = await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#1f8a5b',
+        title: 'Designer',
+      });
+      expect(colored?.config).toEqual({ badgeColor: '#1f8a5b', other: 1 });
+      expect(colored?.title).toBe('Designer');
+
+      const recolored = await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#123456',
+      });
+      expect(recolored?.config).toEqual({ badgeColor: '#123456', other: 1 });
+      expect(recolored?.title).toBe('Designer');
+
+      const reset = await model.updateMemberProfile(workspaceId, memberId, { badgeColor: null });
+      expect(reset?.config).toEqual({ other: 1 });
+
+      // One edit can set one config key and clear another.
+      await model.updateMemberProfile(workspaceId, memberId, { badgeColor: '#abcdef' });
+      const swapped = await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: null,
+        nickname: 'Kuro',
+      });
+      expect(swapped?.config).toEqual({ nickname: 'Kuro', other: 1 });
     });
 
     it('keeps the profile per workspace', async () => {
@@ -600,11 +711,13 @@ describe('WorkspaceMemberModel', () => {
       await model.addMember({ userId: memberId, workspaceId });
       await model.addMember({ userId: memberId, workspaceId: otherWorkspaceId });
 
-      await model.updateMemberProfile(workspaceId, memberId, { title: 'Engineer' });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Al', title: 'Engineer' });
       await model.updateMemberProfile(otherWorkspaceId, memberId, { title: 'Advisor' });
 
       expect((await model.getMember(workspaceId, memberId))?.title).toBe('Engineer');
       expect((await model.getMember(otherWorkspaceId, memberId))?.title).toBe('Advisor');
+      expect((await model.getMember(workspaceId, memberId))?.config.nickname).toBe('Al');
+      expect((await model.getMember(otherWorkspaceId, memberId))?.config.nickname).toBeUndefined();
     });
 
     it('does not update a soft-deleted member', async () => {

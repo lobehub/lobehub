@@ -21,6 +21,27 @@ import { TaskRecoveryCoordinator } from '../../taskRecoveryCoordinator';
 import { registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
 
+const deliveredTopic = (taskId: string, userId: string): typeof taskTopics.$inferInsert => ({
+  handoff: { summary: 'Delivered', title: 'Delivered title' },
+  operationId: 'op-delivered',
+  seq: 1,
+  status: 'completed',
+  taskId,
+  userId,
+});
+
+const sharedBacklog = (userId: string): typeof documents.$inferInsert => ({
+  content: 'Shared backlog body',
+  fileType: 'markdown',
+  filename: 'Shared backlog',
+  source: 'notebook',
+  sourceType: 'api',
+  title: 'Shared backlog',
+  totalCharCount: 19,
+  totalLineCount: 1,
+  userId,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'goal-service-test-user';
 
@@ -412,14 +433,7 @@ describe('GoalService', () => {
     const workModel = new WorkModel(serverDB, userId);
     const graph = await service.create({ tasks: ['Deliver me'], title: 'Harvest deliverables' });
     const created = await service.tick(graph.goal.id);
-    await serverDB.insert(taskTopics).values({
-      handoff: { summary: 'Delivered', title: 'Delivered title' },
-      operationId: 'op-delivered',
-      seq: 1,
-      status: 'completed',
-      taskId: created.taskId!,
-      userId,
-    });
+    await serverDB.insert(taskTopics).values(deliveredTopic(created.taskId!, userId));
     await workModel.registerExternal({
       changeType: 'created',
       identifier: 'ENG-7',
@@ -448,14 +462,7 @@ describe('GoalService', () => {
     const workModel = new WorkModel(serverDB, userId);
     const graph = await service.create({ tasks: ['Deliver me'], title: 'Idempotent harvest' });
     const created = await service.tick(graph.goal.id);
-    await serverDB.insert(taskTopics).values({
-      handoff: { summary: 'Delivered', title: 'Delivered title' },
-      operationId: 'op-delivered',
-      seq: 1,
-      status: 'completed',
-      taskId: created.taskId!,
-      userId,
-    });
+    await serverDB.insert(taskTopics).values(deliveredTopic(created.taskId!, userId));
     await workModel.registerExternal({
       changeType: 'created',
       resourceId: 'lobehub/lobehub#8',
@@ -498,20 +505,7 @@ describe('GoalService', () => {
       title: 'Revisions are not deliveries',
     });
     const created = await service.tick(graph.goal.id);
-    const [backlog] = await serverDB
-      .insert(documents)
-      .values({
-        content: 'Shared backlog body',
-        fileType: 'markdown',
-        filename: 'Shared backlog',
-        source: 'notebook',
-        sourceType: 'api',
-        title: 'Shared backlog',
-        totalCharCount: 19,
-        totalLineCount: 1,
-        userId,
-      })
-      .returning();
+    const [backlog] = await serverDB.insert(documents).values(sharedBacklog(userId)).returning();
     // Written by an earlier task's run; this task only appends to it.
     await workModel.registerDocument({
       changeType: 'created',
@@ -520,14 +514,7 @@ describe('GoalService', () => {
       toolIdentifier: 'lobehub-notebook',
       toolName: 'createDocument',
     });
-    await serverDB.insert(taskTopics).values({
-      handoff: { summary: 'Delivered', title: 'Delivered title' },
-      operationId: 'op-delivered',
-      seq: 1,
-      status: 'completed',
-      taskId: created.taskId!,
-      userId,
-    });
+    await serverDB.insert(taskTopics).values(deliveredTopic(created.taskId!, userId));
     await workModel.registerDocument({
       changeType: 'updated',
       documentId: backlog.id,
@@ -558,20 +545,7 @@ describe('GoalService', () => {
       tasks: ['First delivery', 'Second delivery'],
       title: 'One claim per deliverable',
     });
-    const [backlog] = await serverDB
-      .insert(documents)
-      .values({
-        content: 'Shared backlog body',
-        fileType: 'markdown',
-        filename: 'Shared backlog',
-        source: 'notebook',
-        sourceType: 'api',
-        title: 'Shared backlog',
-        totalCharCount: 19,
-        totalLineCount: 1,
-        userId,
-      })
-      .returning();
+    const [backlog] = await serverDB.insert(documents).values(sharedBacklog(userId)).returning();
 
     const first = await service.tick(graph.goal.id);
     await serverDB.insert(taskTopics).values({

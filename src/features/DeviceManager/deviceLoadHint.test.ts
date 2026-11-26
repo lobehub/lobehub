@@ -38,6 +38,13 @@ describe('loadHint', () => {
     });
   });
 
+  it('keeps load above the core count yellow until it doubles', () => {
+    expect(loadHint({ cpuPercent: 55, loadPercent: 129, memoryPercent: 62 })).toMatchObject({
+      level: 'high',
+      lit: 5,
+    });
+  });
+
   it('ignores a reading the platform does not have', () => {
     const hint = loadHint({ cpuPercent: 10, loadPercent: null, memoryPercent: 20 });
     expect(hint?.readings.map((r) => r.metric)).toEqual(['cpu', 'memory']);

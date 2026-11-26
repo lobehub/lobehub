@@ -45,7 +45,6 @@ describe('OIDC Provider - Market Client Integration', () => {
       const { defaultClients } = await import('./config');
       const marketClient = defaultClients.find((c) => c.client_id === MARKET_CLIENT_ID);
 
-      expect(marketClient).toBeDefined();
       expect(marketClient?.client_id).toBe('lobehub-market');
       expect(marketClient?.client_name).toBe('LobeHub Marketplace');
 
@@ -94,7 +93,7 @@ describe('OIDC Provider - Market Client Integration', () => {
       vi.doUnmock('@/envs/app');
     });
 
-    it('should register toby as a public native client with an https callback only', async () => {
+    it('should register lobot-mobile as a public native client with an https callback only', async () => {
       vi.doMock('@/envs/app', () => ({
         appEnv: {
           APP_URL: 'https://app.lobehub.com',
@@ -105,17 +104,22 @@ describe('OIDC Provider - Market Client Integration', () => {
       const { default: Provider } = await import('oidc-provider');
       const { defaultClients } = await import('./config');
       const provider = new Provider('https://app.lobehub.com/oidc', { clients: defaultClients });
-      const tobyClient = await provider.Client.find('toby');
+      const lobotClient = await provider.Client.find('lobot-mobile');
 
-      expect(tobyClient?.applicationType).toBe('native');
-      expect(tobyClient?.tokenEndpointAuthMethod).toBe('none');
-      expect(tobyClient?.grantTypes).toEqual(['authorization_code', 'refresh_token']);
-      expect(tobyClient?.redirectUriAllowed('https://app.lobehub.com/oidc/callback/toby')).toBe(
-        true,
-      );
-      expect(tobyClient?.redirectUriAllowed('https://lobehub.com/oidc/callback/toby')).toBe(true);
-      expect(tobyClient?.redirectUriAllowed('com.lobehub.toby://auth/callback')).toBe(false);
-      expect(tobyClient?.redirectUriAllowed('https://example.com/oidc/callback/toby')).toBe(false);
+      expect(await provider.Client.find('toby')).toBeUndefined();
+      expect(lobotClient?.applicationType).toBe('native');
+      expect(lobotClient?.tokenEndpointAuthMethod).toBe('none');
+      expect(lobotClient?.grantTypes).toEqual(['authorization_code', 'refresh_token']);
+      expect(
+        lobotClient?.redirectUriAllowed('https://app.lobehub.com/oidc/callback/lobot-mobile'),
+      ).toBe(true);
+      expect(
+        lobotClient?.redirectUriAllowed('https://lobehub.com/oidc/callback/lobot-mobile'),
+      ).toBe(true);
+      expect(lobotClient?.redirectUriAllowed('com.lobehub.lobot://auth/callback')).toBe(false);
+      expect(
+        lobotClient?.redirectUriAllowed('https://example.com/oidc/callback/lobot-mobile'),
+      ).toBe(false);
 
       vi.doUnmock('@/envs/app');
     });
@@ -198,7 +202,6 @@ describe('OIDC Provider - Market Client Integration', () => {
       }));
 
       const module = await import('./provider');
-      expect(module.createOIDCProvider).toBeDefined();
       expect(typeof module.createOIDCProvider).toBe('function');
 
       vi.doUnmock('@/envs/app');

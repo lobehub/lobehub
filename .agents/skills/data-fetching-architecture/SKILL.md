@@ -7,20 +7,24 @@ user-invocable: false
 # LobeHub Data Fetching Architecture
 
 ```text
-Component → Store useFetchXxx hook → Service → lambdaClient
-          ← SWR request state + store data ← response
+Component → Store useFetchXxx hook → replica slice → Service → lambdaClient
+          ← sync flags + store data (selectors) ← response
 ```
+
+New server data the UI paints goes through `local-replica` (`@/libs/replica`), not a
+new SWR key. `src/libs/swr/keys.ts` is frozen: `src/libs/swr/keys.frozen.test.ts`
+fails on any added key, and its legacy list only shrinks.
 
 ## Layer boundaries
 
 - Services in `src/services/` own API calls: `.query()` for reads, `.mutate()` for writes.
   Export a service instance per domain; components and stores do not call `lambdaClient` directly.
-- Store read hooks use `useClientDataSWR` and return its SWR response, including `error`
-  and `mutate`. Sync successful results into the store through the wrapper's supported
-  callback (`onSuccess`, or `onData` for the sync wrapper).
-- Server lists and details that paint from a local copy go through `@/libs/replica`
-  instead: the store's `useFetchXxx` returns `slice.useSync(params)` (flags only) and
-  the engine writes the store. See the Replica section of [zustand](../zustand/SKILL.md).
+- Server lists and details go through `@/libs/replica`: the store's `useFetchXxx`
+  returns `slice.useSync(params)` (flags only) and the engine writes the store. See
+  the Replica section of [zustand](../zustand/SKILL.md).
+- `useClientDataSWR` + `onSuccess` syncing into the store is the legacy layout. Keep
+  it only inside an existing hook whose key is already in `src/libs/swr/keys.ts`; do
+  not add keys or new SWR-backed store hooks for server data.
 - Components call these hooks and read store data through selectors. Do not fetch in
   `useEffect` or duplicate server data in component `useState`.
 - Use `useFetchXxx` for read hooks and `refreshXxx` for cache invalidation.
@@ -36,37 +40,35 @@ avoiding flicker, reusing persistence, and the user `displaySnapshot.ts` boundar
 
 ## Cache keys and refresh
 
-Reuse the domain key factory in `src/libs/swr/keys.ts`; define a shared key if the
-domain has none. Include every parameter that changes the response: entity or parent
-id, filters, sort, and pagination. Read and refresh must construct the same key.
-
-Import `useClientDataSWR` and `mutate` from `@/libs/swr`, keeping the application's
-workspace/cache handling. Return a `null` key when a required id is absent; passing
-`undefined` to a store hook only disables fetching if that hook maps it to `null`.
+Do not add SWR keys. A resource that needs a new key gets a replica instead
+(`defineReplica` / `definePagedReplica` in the store's `projection.ts`). The replica
+params replace the key, so include every parameter that changes the response:
+entity or parent id, filters, sort, and pagination. Refresh with
+`slice.fetch(params, { fresh: true })` or `revalidate()` from `useSync`; read and
+refresh must use the same params. Disable a sync whose required id is absent with
+`useSync(params, { enabled: false })`.
 
 For example, inside an action class:
 
 ```typescript
-useFetchBenchmarks = () =>
-  useClientDataSWR(evalKeys.benchmarks(), () => agentEvalService.listBenchmarks(), {
-    onSuccess: (data) => {
-      this.#set({ benchmarkList: data, benchmarkListInit: true });
-    },
-  });
+useFetchAgentLabels = (isLogin: boolean | undefined): ReplicaSyncResult =>
+  this.#labels.useSync(LIST_PARAMS, { enabled: isLogin === true });
 
-refreshBenchmarks = async () => {
-  await mutate(evalKeys.benchmarks());
+refreshAgentLabels = async () => {
+  await this.#labels.revalidate();
 };
 ```
 
-Read the current [benchmark action](../../../src/store/eval/slices/benchmark/action.ts)
-for store wiring and the [SWR wrappers](../../../src/libs/swr/index.ts) for their
-actual options. These links locate implementation; they do not make every existing
+Read the current [label action](../../../src/store/home/slices/label/action.ts) for
+store wiring. These links locate implementation; they do not make every existing
 call site a template to copy unchanged.
 
+Legacy SWR hooks keep their existing key from `src/libs/swr/keys.ts` and import
+`useClientDataSWR` and `mutate` from `@/libs/swr`. When you migrate one to a replica,
+delete its key and its entry in `keys.frozen.test.ts`.
+
 Hooks that share a known parent id can run together. If one request needs a value
-returned by another, keep its key `null` until that value exists. Do not assume the
-application wrapper uses upstream SWR's default deduplication interval.
+returned by another, keep it disabled until that value exists.
 
 For lists cached separately under multiple parents, see
 [parent-keyed lists](references/walkthrough.md). Ordinary flat lists need no extra layer.
@@ -89,33 +91,33 @@ For lists cached separately under multiple parents, see
 
 ## Render loading, errors, and settled data
 
-Consume the read hook's SWR response. Success-only flags such as `isInit`, missing
-map entries, and `data ?? []` cannot distinguish an initial request failure from
-loading or empty results.
+Success-only flags such as `isInit`, missing map entries, and `data ?? []` cannot
+distinguish an initial request failure from loading or empty results.
 
 Use `AsyncBoundary` for standard loading/error/empty/data surfaces; use `AsyncError`
-for custom layouts and inline failures. Pass the original SWR `data` to the boundary:
-`undefined` means no successful result, whereas `[]` is a settled empty result.
+for custom layouts and inline failures. `undefined` data means no successful result,
+whereas `[]` is a settled empty result.
 
 Replica `useSync` returns no `data`. Feed `AsyncBoundary` its `error` and a settled
 signal from the store entry (`data={isListInit || undefined}`, where the selector is
-`entry !== undefined`); see `src/features/Pages/PageLayout/Body/index.tsx`.
+`entry !== undefined`); see `src/features/Pages/PageLayout/Body/index.tsx`. Legacy
+SWR hooks pass the original SWR `data` instead.
 
 ```tsx
 const BenchmarkList = () => {
-  const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
-  const benchmarks = useEvalStore((s) => s.benchmarkList);
-  const { data, error, isLoading, mutate } = useFetchBenchmarks();
+  const { error, revalidate } = benchmarkActions.useFetchBenchmarks();
+  const isListInit = useEvalStore(benchmarkSelectors.isBenchmarkListInit);
+  const benchmarks = useEvalStore(benchmarkSelectors.benchmarkList);
 
   return (
     <AsyncBoundary
-      data={data}
+      data={isListInit || undefined}
       empty={<EmptyState />}
       error={error}
-      isEmpty={data?.length === 0}
-      isLoading={isLoading}
+      isEmpty={benchmarks.length === 0}
+      isLoading={!isListInit && !error}
       onRetry={() => {
-        void mutate();
+        void revalidate();
       }}
     >
       <BenchmarkCards items={benchmarks} />
@@ -139,12 +141,13 @@ renderers. Follow these distinctions when adapting it:
 
 ## Migrating an existing fetch
 
-Move the API call into its service and the request into a store SWR hook. Reuse the
-existing state shape and action organization unless they need to change for the task.
+Move the API call into its service and the request into a replica-backed store hook.
+Reuse the existing action organization unless it needs to change for the task.
 Replace the component's effect/local fetch state with that hook and selectors, then
-connect `error`, retry, and pending feedback. Refresh the same cache key after writes.
+connect `error`, retry, and pending feedback. Refresh the same replica params after
+writes.
 
 Check initial failure, retry, settled-empty results, background failure, and switching
-ids against the surface being changed. For stale data, compare read/refresh keys and
-the store bucket they update; for stuck loading, inspect rejected requests as well as
+ids against the surface being changed. For stale data, compare read/refresh params (or
+legacy keys) and the store bucket they update; for stuck loading, inspect rejected requests as well as
 success callbacks. Do not add a second fetch or another loading flag to mask the cause.

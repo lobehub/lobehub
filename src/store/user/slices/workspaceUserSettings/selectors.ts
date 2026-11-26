@@ -1,5 +1,6 @@
 import type { AgentDeviceOverride, AgentModelOverride } from '@lobechat/types';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { type UserStore } from '@/store/user';
 
 /**
@@ -47,6 +48,41 @@ const isAgentHiddenFromSidebar =
   (s: UserStore): boolean =>
     !!s.workspaceUserPreference.sidebarHiddenAgentIds?.includes(agentId);
 
+/**
+ * Agents / chat groups pinned in the caller's merged Agents section of the
+ * active workspace, in their own order (seeded from the workspace's default
+ * pins).
+ */
+const sidebarPinnedItemIds = (s: UserStore): string[] =>
+  s.workspaceUserPreference.sidebarPinnedItemIds ?? EMPTY_HIDDEN;
+
+/**
+ * How the server is about to set the caller's sidebar up from the workspace
+ * (`sidebarInitialized`), so the sidebar can show it before the first
+ * response arrives:
+ *
+ * - `teamPins` — saved choices from an earlier visit: a member who joined
+ *   while team pins were shown, whose team pins will follow their own pins.
+ * - `recommended` — nothing saved: a new member, whose recommended Agents
+ *   will be listed, unpinned.
+ * - `null` — already set up, or the server has answered: it sets the sidebar
+ *   up in that same response whenever there is something to add, so an
+ *   answer without the flag means there is nothing to preview.
+ *
+ * The server decides by join date; this guess only bridges the cached state
+ * shown before its answer.
+ */
+const sidebarSetupPreview = (s: UserStore): 'recommended' | 'teamPins' | null => {
+  const preference = s.workspaceUserPreference;
+  if (preference.sidebarInitialized) return null;
+
+  const workspaceId = getActiveWorkspaceId();
+  if (!workspaceId || s.workspaceUserPreferenceReplica.entries[workspaceId]?.source === 'server')
+    return null;
+
+  return Object.keys(preference).length > 0 ? 'teamPins' : 'recommended';
+};
+
 /** Per-member sidebar sections layout for the active workspace. */
 const sidebarLayout = (s: UserStore) => s.workspaceUserPreference.sidebar;
 
@@ -62,4 +98,6 @@ export const workspaceUserSettingsSelectors = {
   sidebarHiddenAgentIds,
   sidebarHiddenGroupIds,
   sidebarLayout,
+  sidebarPinnedItemIds,
+  sidebarSetupPreview,
 };

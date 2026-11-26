@@ -13,6 +13,7 @@ import {
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
+import type { WorkTypeOptIn } from '@/database/models/work/registry';
 
 import { FileService } from '../file';
 import { TrashService } from '../trash';
@@ -109,8 +110,15 @@ export class MessageService {
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
   private trashService: TrashService;
+  private workTypeOptIn: WorkTypeOptIn;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: { workTypeOptIn?: WorkTypeOptIn } = {},
+  ) {
+    this.workTypeOptIn = options.workTypeOptIn ?? {};
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
@@ -135,6 +143,10 @@ export class MessageService {
     };
   }
 
+  private withWorkTypes<T extends object>(params: T): T & WorkTypeOptIn {
+    return { ...params, ...this.workTypeOptIn };
+  }
+
   /**
    * Query messages and return response with success status (used after mutations)
    * Prioritize agentId, fallback to sessionId if not provided (for backwards compatibility)
@@ -157,7 +169,7 @@ export class MessageService {
     const queryStartedAt = Date.now();
     const modelTiming = createModelTiming(options, 'lambda.message.update.queryMessages');
     const messages = await this.messageModel.query(
-      { agentId, groupId, sessionId, threadId, topicId },
+      this.withWorkTypes({ agentId, groupId, sessionId, threadId, topicId }),
       {
         ...this.getQueryOptions(),
         ...(modelTiming ? { timing: modelTiming } : {}),
@@ -334,14 +346,14 @@ export class MessageService {
     // 2. Query all messages for this agent/topic
     // Use agentId field for query
     const messages = await this.messageModel.query(
-      {
+      this.withWorkTypes({
         agentId: params.agentId,
         current: 0,
         groupId: params.groupId,
         pageSize: 9999,
         threadId: params.threadId,
         topicId: params.topicId,
-      },
+      }),
       {
         postProcessUrl: this.postProcessUrl,
       },
@@ -544,24 +556,34 @@ export class MessageService {
   }> {
     // 1. Get messages that need to be summarized (before marking them as compressed)
     const allMessages = await this.messageModel.query(
-      { topicId, ...options },
+      this.withWorkTypes({ topicId, ...options }),
       this.getQueryOptions(),
     );
 
-    const messagesToSummarize = allMessages.filter((msg) => messageIds.includes(msg.id));
+    // A thread page also shows the main-conversation rows it branched from. Those
+    // belong to the main conversation, so compressing them from the thread would
+    // hide them there too: only the thread's own rows go into its group.
+    const threadId = options?.threadId;
+    const messagesToSummarize = allMessages.filter(
+      (msg) => messageIds.includes(msg.id) && (!threadId || msg.threadId === threadId),
+    );
+    const scopedMessageIds = threadId ? messagesToSummarize.map((msg) => msg.id) : messageIds;
 
     // 2. Create compression group with placeholder content
     const messageGroupId = await this.compressionRepository.createCompressionGroup({
       content: '...', // Placeholder content
-      messageIds,
+      messageIds: scopedMessageIds,
       metadata: {
-        originalMessageCount: messageIds.length,
+        originalMessageCount: scopedMessageIds.length,
       },
       topicId,
     });
 
     // 3. Query updated messages (compressed messages will be grouped)
-    const messages = await this.messageModel.query({ topicId, ...options }, this.getQueryOptions());
+    const messages = await this.messageModel.query(
+      this.withWorkTypes({ topicId, ...options }),
+      this.getQueryOptions(),
+    );
 
     return {
       messageGroupId,
@@ -596,12 +618,16 @@ export class MessageService {
       content,
       groupId: messageGroupId,
       sourceGroupIds,
+      threadId: threadId ?? null,
       topicId,
     });
 
     // 2. Query final messages
     const queryOptions = { agentId, groupId, threadId, topicId };
-    const finalMessages = await this.messageModel.query(queryOptions, this.getQueryOptions());
+    const finalMessages = await this.messageModel.query(
+      this.withWorkTypes(queryOptions),
+      this.getQueryOptions(),
+    );
 
     return {
       messages: finalMessages,
@@ -619,7 +645,10 @@ export class MessageService {
   ): Promise<{ messages: UIChatMessage[] }> {
     await this.compressionRepository.updateMetadata(messageGroupId, metadata);
 
-    const messages = await this.messageModel.query(context, this.getQueryOptions());
+    const messages = await this.messageModel.query(
+      this.withWorkTypes(context),
+      this.getQueryOptions(),
+    );
 
     return { messages };
   }
@@ -638,7 +667,10 @@ export class MessageService {
     await this.compressionRepository.deleteCompressionGroup(messageGroupId);
 
     // Query updated messages
-    const messages = await this.messageModel.query(context, this.getQueryOptions());
+    const messages = await this.messageModel.query(
+      this.withWorkTypes(context),
+      this.getQueryOptions(),
+    );
 
     return { messages, success: true };
   }

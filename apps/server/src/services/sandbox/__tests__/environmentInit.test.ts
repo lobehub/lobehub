@@ -62,6 +62,24 @@ describe('toSandboxInitialization', () => {
     });
   });
 
+  it('lays several repositories out side by side, never one inside another', () => {
+    expect(
+      toSandboxInitialization({
+        configuration: {
+          sources: [
+            { kind: 'git', url: 'https://github.com/lobehub/lobehub' },
+            { kind: 'git', path: 'lobe-ui', url: 'https://github.com/lobehub/lobe-ui' },
+          ],
+        },
+        id: 'env-1',
+        name: 'Two',
+      })?.sources,
+    ).toEqual([
+      { path: 'lobehub', url: 'https://github.com/lobehub/lobehub' },
+      { path: 'lobe-ui', url: 'https://github.com/lobehub/lobe-ui' },
+    ]);
+  });
+
   it('asks for nothing when the environment has neither a repository nor setup', () => {
     expect(
       toSandboxInitialization({
@@ -206,6 +224,29 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     expect(existsSync(join(work, 'setup.txt'))).toBe(false);
   });
 
+  // A project checkout removed while its sandbox lived on is made again empty;
+  // the record of the first clone used to keep it empty for good.
+  it('clones again into a checkout folder that was emptied after it was initialized', () => {
+    const command = buildSandboxEnvironmentInitCommand(init());
+    run(command, work);
+    rmSync(work, { force: true, recursive: true });
+    mkdirSync(work);
+
+    const again = run(command, work);
+
+    expect(environmentInitRan(again.stdout)).toBe(true);
+    expect(readFileSync(join(work, 'README.md'), 'utf8')).toBe('hello');
+  });
+
+  it('does not retry a failed clone just because its folder is still empty', () => {
+    const command = buildSandboxEnvironmentInitCommand(
+      init({ bootstrapCommand: undefined, sources: [{ url: `file://${root}/missing` }] }),
+    );
+
+    expect(environmentInitReport(run(command, work).stdout)).toContain('failed');
+    expect(run(command, work).stdout).toBe('');
+  });
+
   it('leaves a folder that already holds files alone, silently', () => {
     writeFileSync(join(work, 'mine.txt'), 'work');
 
@@ -276,6 +317,24 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     expect(readFileSync(join(work, 'seen.txt'), 'utf8').trim()).toBe('[]');
     expect(readFileSync(join(work, '.git', 'config'), 'utf8')).not.toContain('c2VjcmV0');
     expect(result.stdout).not.toContain('c2VjcmV0');
+  });
+
+  it('gives git one credential per repository when there are several, and unsets them all', () => {
+    const command = buildSandboxEnvironmentInitCommand(
+      init({
+        bootstrapCommand: 'echo "[$GIT_CONFIG_COUNT$GIT_CONFIG_VALUE_1]" > seen.txt',
+        cloneCredentials: [
+          { header: 'Authorization: Basic b25l', urlPrefix: 'https://github.com/acme/one' },
+          { header: 'Authorization: Basic dHdv', urlPrefix: 'https://github.com/acme/two' },
+        ],
+      }),
+    );
+
+    expect(command).toContain('GIT_CONFIG_COUNT=2');
+    expect(command).toContain('http.https://github.com/acme/two.extraHeader');
+    const result = run(command, work);
+    expect(environmentInitReport(result.stdout)).toContain('Initialized');
+    expect(readFileSync(join(work, 'seen.txt'), 'utf8').trim()).toBe('[]');
   });
 
   it('keeps the variables out of the shell that runs afterwards', () => {

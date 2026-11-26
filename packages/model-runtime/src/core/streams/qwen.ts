@@ -7,6 +7,11 @@ import type { Stream } from 'openai/streaming';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from './events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -16,8 +21,6 @@ import type {
 } from './protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   generateToolCallId,
 } from './protocol';
@@ -219,6 +222,7 @@ export const QwenAIStream = (
         streamStack: streamContext,
       }),
     )
-    .pipeThrough(createSSEProtocolTransformer((c) => c, streamContext))
-    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack: streamContext }));
+    .pipeThrough(createModelEventTransformer((c) => c, streamContext))
+    .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack: streamContext }))
+    .pipeThrough(createSSEEncoder());
 };

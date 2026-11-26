@@ -39,5 +39,6 @@ function expected(): Array<
     ['resolveInterventionBySource', 'mutation', 11],
     ['setQueuedMessages', 'mutation', 11],
     ['stopPendingApproval', 'mutation', 11],
+    ['submitHeteroIntervention', 'mutation', 11],
   ];
 }

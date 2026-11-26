@@ -132,7 +132,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
   // Health monitoring and the directory settings are separate jobs; a tab each
   // keeps the charts from pushing the directories below the fold. The active
   // tab lives in `?tab=` so a view can be linked, reloaded and reached with
-  // Back; other params (the workspace `?visibility=`) are kept.
+  // Back; other params are kept.
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: DetailTab = isDetailTab(tabParam) ? tabParam : 'overview';

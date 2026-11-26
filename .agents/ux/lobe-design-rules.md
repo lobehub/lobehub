@@ -110,9 +110,13 @@ Source: user clarification during acceptance round 6 (2026-10-27).
 
 An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
 
+Platform visibility follows where the user can use the setting, not where its implementation process runs. A runtime available to Web conversations through a connected device belongs in General Labs; reserve `desktopOnly` for capabilities that require the Electron shell. Codex App Server dispatch reads the same user preference on Web and Desktop. Verify the Web toggle, persistence after refresh, and the selected runtime on the receiving device; a merged adapter or a successful native probe alone does not prove that conversations use it.
+
 Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
 
 Source: user correction about the unreleased Channel feature (2026-10-28).
+
+Additional source: Codex question-flow reproduction (2026-11-17): the CLI contained the native question bridge and advertised support, but the user's unset Lab flag selected `codex exec`; `desktopOnly` hid the enabling control on Web.
 
 ## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
 
@@ -137,3 +141,111 @@ Source: the Channel composer audit checked internal asymmetry and button weight 
 Reply is the primary Channel message action. Replying to a person only posts a quoted message in the current feed, with no Agent dispatch or new thread, even if the text mentions Agents. Replying to an Agent on the main feed atomically creates/reuses a thread rooted at that Agent's answer and sends the continuation there. The target Agent and explicitly mentioned Agents participate; unrelated Agents do not join. Inside a thread, keep replies in that thread and retain existing participants. Opening or cancelling reply mode never persists an empty thread.
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
+
+- Long-running experiment startup belongs to the experiment page. Do not trap users in a blocking modal; route navigation must not own or cancel launch orchestration. A short pre-launch cost confirmation may remain.
+
+## LOBE-UX-020 — Conversation times follow Discord: date dividers, dated headers
+
+A Channel day divider is the full date alone ("2026 年 6 月 22 日"), not a day label with a time. Each message header carries its own day, so a message read away from its divider still says when it was sent: today is the time alone ("16:29"), not "今天"; yesterday is "昨天 16:29"; anything earlier is the numeric date and time ("2026/6/22 01:33"), never a weekday or a year-less date. Days are calendar days in local time, not 24-hour spans. A grouped continuation's hover stamp is the time alone, and every stamp keeps the full date and time in its hover title.
+
+Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelMessageTime`) covers today, the yesterday boundary, and earlier dates in this and previous years in zh-CN and en-US.
+
+Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled message had no visible date — "应该得是像 discord 这样改". This replaces the WeChat-style divider from PR #22556 (2026-11-08), which kept today as the time alone ("今天应该显示时间").
+
+## LOBE-UX-021 — Timeout copy follows the form's actual answer policy
+
+Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
+
+Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.
+
+## LOBE-UX-022 — Check icon–label optical alignment, not only bounding boxes
+
+For an icon beside a text label, equal CSS centerlines do not prove visual centering: the font's visible glyphs can sit above the line-box center. Inspect a tight rendered crop, including the hover background, before declaring alignment fixed. Use the shared component's flex alignment first and inspect its line height, font metrics, and SVG viewBox before changing it. Do not compensate with per-instance pixel translations or relative positioning; resolve an established typography or icon issue at its owning layer instead.
+
+Enforcement: visual review of the actual icon and localized label at the target scale, alongside the row's computed geometry; reject unexplained positioning offsets in icon–label alignment changes. Source: user corrections on the Agent profile return row: geometry checks missed the perceived misalignment, and a subsequent 1px icon translation was correctly rejected as a hack.
+
+## LOBE-UX-023 — Keep page editor modes outside the writing surface
+
+On a dedicated instruction-editing page, place view-mode switches alongside the page title, not in an extra toolbar row inside the input boundary. The editor's boundary should identify where to type without becoming the page's strongest visual element on focus. Use the neutral outlined surface; do not turn its entire perimeter into a primary-colored focus frame. Preserve the editor caret and the mode buttons' keyboard focus indicators.
+
+Enforcement: `EditorCanvas/index.test.tsx` checks that both mode controls remain outside the outlined input surface. Inspect the page at rest and while editing. Source: user correction on the Agent instruction editor: moving mode switches into the frame wasted a writing row, and a black focus border was too prominent.
+
+## LOBE-UX-024 — Conversation skill lists are invocation pickers
+
+User, device, project and Agent skill rows share the default skill glyph, not marketplace/custom avatars. This applies to conversation invocation lists; the agent's skill configuration page may show community skills' publisher icons via `MarketSkillIcon`, with the default skill glyph as fallback. Clicking a row in a conversation inserts the skill into the composer. Do not add per-row file counts or view/rename/delete actions, including right-click equivalents; section totals may remain.
+
+The conversation sidebar is not a full capability inventory: do not automatically add builtin instruction bundles when removing them from the Tools picker. Preserve their runtime configuration and existing slash/profile entry points where available; exposing them here is a separate product decision.
+
+Enforcement: `SkillsList` owns the glyph and exposes neither custom icons, file counts nor management-action props. `AgentDocumentsGroup.test.tsx` checks the real list's click/keyboard behavior and the absence of hover/context-menu management controls; `UserLevelSkills.test.ts` guards source-independent row data.
+
+User-skill enablement belongs in a separate management view entered through the section's settings icon (with a tooltip and accessible name). Keep the section collapsible when adding that action: use the Accordion action slot outside its trigger, and keep settings reachable while collapsed. `AgentDocumentsGroup.test.tsx` exercises the real section's collapse/expand and independent settings entry. In that view, checkboxes represent the pending enabled set: keep search, scoped bulk selection, and Save/Cancel; do not add saved-state Enabled/Disabled tabs that duplicate or conflict with the draft. `useUserSkillsManagement.test.ts` guards selection visibility and persistence across search.
+
+The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
+
+Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.
+
+## LOBE-UX-025 — Chat tools show existing connector records
+
+The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
+
+Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.
+
+## LOBE-UX-028 — Recover GitHub skill imports in the import dialog
+
+Show GitHub authorization guidance when an import encounters an access error. Keep the source URL in the dialog while the user connects. Offer technical details only when they add diagnostic information beyond the recovery message.
+
+Enforcement: `useGithubSkillImport.test.ts` covers the single access message, retrying discovery after authorization, and retaining the user's selection when an import needs reconnection.
+
+## LOBE-UX-029 — Let success stay quiet; mark only the exceptions
+
+On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
+
+Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.
+
+## LOBE-UX-030 — Skill updates use visible status and action labels
+
+In installed skill navigation, show “Update available” as passive text. In the list and detail views, label the action “Update” or “Update skill”. Reserve the refresh icon for checking the source again. A standalone upward arrow in these rows reads as uploading a skill.
+
+In the skill detail header, put the repository, tracking ref, routine sync status and manual check in the GitHub source popover. Keep an available update actionable in the header.
+
+Verify the pending state with tooltips closed. The sidebar should communicate availability, and the list should identify the update action alongside the manage menu. Source: user feedback on the skill update preview.
+
+## LOBE-UX-031 — Share the Marketplace catalog spacing
+
+Use the same centered content column, toolbar spacing, and grid for Agents, Skills, and Connectors. When changing the catalog density, measure the rendered column width, the gap from the toolbar to the first section, and the column gutter in the desktop window at the reference scale. Keep the loading layouts aligned with the catalog.
+
+Enforcement: both catalogs and their loading skeleton use the shared frame and grid in `src/features/Marketplace/Catalog/styles.ts`.
+
+Source: user correction comparing the Marketplace desktop layout with Open Bot (2026-11-20).
+
+## LOBE-UX-032 — Show installed skill rows in the main pane
+
+Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list visible across Marketplace sections. Make its section title a link to the installed connector manager so workspace users can reach their private connectors even when the shared list is empty. The section label already identifies installed connectors, so omit the connected check mark from those rows.
+
+Source: user correction comparing the Skills sidebar and main pane with Open Bot (2026-11-20).
+
+## LOBE-UX-033 — Use one icon action per Marketplace connector row
+
+Use the settings list’s trailing controls in both Verified and Public. Show a plus to connect, an ellipsis to manage an existing connection, and a rotating-arrow icon to reauthorize. Give each icon a localized accessible name and tooltip. Show a loading indicator while authorization is underway.
+
+Source: user correction on the Marketplace connector list (2026-11-21).
+
+## LOBE-UX-034 — Preserve app brand colors in Marketplace navigation
+
+Within each theme, show the same brand colors for an app in its sidebar link, catalog row, and detail header. Let the shared `AppIcon` select the brand mark and its light or dark appearance independently of the surrounding link color.
+
+## LOBE-UX-035 — Start Marketplace connections at the appropriate step
+
+A chat channel opens its setup page from the catalog. A tool-only app starts its connector authorization from the catalog’s plus button. Use the capabilities available on the current deployment to choose the action, including for apps such as Slack that support both.

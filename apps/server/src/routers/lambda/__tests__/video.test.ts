@@ -121,9 +121,6 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 vi.mock('@/server/services/generation/videoPricingDefaults', () => ({
   fillVideoPricingDefaults: mockFillVideoPricingDefaults,
 }));
-vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
-  getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
-}));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: (cb: () => void) => mockAfter(cb),
 }));
@@ -207,6 +204,15 @@ function setupMocks() {
 // ---- import router AFTER mocks are set up ----
 
 const { videoRouter } = await import('../video');
+
+const compatibleVideoEditInput = (): Parameters<
+  ReturnType<typeof videoRouter.createCaller>['createVideo']
+>[0] => ({
+  ...defaultInput,
+  model: 'gemini-omni-1.1-flash',
+  previousGenerationId: 'source-generation',
+  provider: 'google',
+});
 
 // ---- tests ----
 
@@ -379,12 +385,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockCreateVideo).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -429,12 +430,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockFindTask).toHaveBeenCalledWith('source-task');
       expect(mockCreateVideo).toHaveBeenCalledWith(
@@ -477,14 +473,7 @@ describe('videoRouter', () => {
 
       const caller = videoRouter.createCaller(mockCtx);
 
-      await expect(
-        caller.createVideo({
-          ...defaultInput,
-          model: 'gemini-omni-1.1-flash',
-          previousGenerationId: 'source-generation',
-          provider: 'google',
-        }),
-      ).rejects.toMatchObject({
+      await expect(caller.createVideo(compatibleVideoEditInput())).rejects.toMatchObject({
         code: 'BAD_REQUEST',
         message: 'Previous video generation cannot be edited with the selected model',
       });
@@ -784,6 +773,14 @@ describe('videoRouter', () => {
       ]);
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledOnce();
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledWith(models);
+    });
+  });
+
+  describe('getVideoFreeQuota', () => {
+    it('reports no free quota for released clients that still query it', async () => {
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(caller.getVideoFreeQuota({ model: 'model-1' })).resolves.toBeNull();
     });
   });
 });

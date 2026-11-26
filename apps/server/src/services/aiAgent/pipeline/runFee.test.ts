@@ -1,8 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfigWithId } from '@/server/services/agent';
-
 import type { InternalExecAgentParams } from '../types';
 import {
   bindRunFee,
@@ -20,7 +18,6 @@ const fees = vi.hoisted(() => ({
 
 vi.mock('@/business/server/agent-run/runFee', () => fees);
 
-const agentConfig = { id: 'agt_1', model: 'gpt-4o' } as AgentConfigWithId;
 const composerSend = {
   agentId: 'agt_1',
   interactiveStart: true,
@@ -28,10 +25,7 @@ const composerSend = {
 } as InternalExecAgentParams;
 
 const holds = (params: Partial<InternalExecAgentParams>, workspaceId?: string) =>
-  shouldHoldRunFee({ ...composerSend, ...params } as InternalExecAgentParams, {
-    agentConfig,
-    workspaceId,
-  });
+  shouldHoldRunFee({ ...composerSend, ...params } as InternalExecAgentParams, { workspaceId });
 
 describe('shouldHoldRunFee', () => {
   it('holds a fee for every run the user starts, foreground or background', () => {
@@ -55,17 +49,6 @@ describe('shouldHoldRunFee', () => {
     expect(holds({ appContext: { isSubAgent: true } as any })).toBe(false);
     expect(holds({ appContext: { orchestrationRole: 'member' } as any })).toBe(false);
     expect(holds({}, 'ws_1')).toBe(false);
-  });
-
-  it('holds no fee for external agents', () => {
-    expect(
-      shouldHoldRunFee(composerSend, {
-        agentConfig: {
-          ...agentConfig,
-          agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
-        } as AgentConfigWithId,
-      }),
-    ).toBe(false);
   });
 });
 

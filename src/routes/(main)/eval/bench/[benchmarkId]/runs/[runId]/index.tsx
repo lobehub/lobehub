@@ -17,6 +17,7 @@ import { useParams } from 'react-router';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { runSelectors, useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { createBatchResumeModal } from './features/BatchResumeModal';
 import CaseResultsTable from './features/CaseResultsTable';
@@ -45,11 +46,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   panelHeader: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -134,7 +135,7 @@ const RunDetail = memo(() => {
                 <span className={styles.panelLabel}>{t('run.detail.report')}</span>
               </header>
               <div className={styles.panelBody}>
-                <StatsCards metrics={runDetail.metrics ?? undefined} />
+                <StatsCards k={k} metrics={runDetail.metrics ?? undefined} />
                 {hasResults && (
                   <BenchmarkCharts
                     benchmarkId={benchmarkId!}

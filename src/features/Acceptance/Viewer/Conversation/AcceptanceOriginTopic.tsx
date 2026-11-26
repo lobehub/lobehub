@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessagesSquare } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,24 +11,18 @@ import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useOriginConversation } from './originConversation';
 
-const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: 0;
-
-    font: inherit;
-    color: ${cssVar.colorTextSecondary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    cursor: 'pointer',
+    padding: '0',
+    borderStyle: 'none',
+    font: 'inherit',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    textDecoration: { 'default': null, ':hover': 'underline' },
+  },
+});
 
 const AcceptanceOriginTopic = () => {
   const { t } = useTranslation('verify');
@@ -59,7 +55,7 @@ const AcceptanceOriginTopic = () => {
 
   return (
     <button
-      className={cx(styles.chip)}
+      {...stylex.props(styles.chip)}
       title={t('acceptance.origin.openTopic')}
       type={'button'}
       onClick={openTopic}

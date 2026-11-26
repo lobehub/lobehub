@@ -2,9 +2,10 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
-  mockConnectorQueryByIdentifiers,
+  mockResolveAllConnectors,
   mockConnectorToolQueryAll,
   mockCreateOperation,
   mockCreateServerAgentToolsEngine,
@@ -12,7 +13,7 @@ const {
   mockMessageCreate,
   mockPluginQuery,
 } = vi.hoisted(() => ({
-  mockConnectorQueryByIdentifiers: vi.fn().mockResolvedValue([]),
+  mockResolveAllConnectors: vi.fn().mockResolvedValue([]),
   mockConnectorToolQueryAll: vi.fn().mockResolvedValue([]),
   mockCreateOperation: vi.fn(),
   mockCreateServerAgentToolsEngine: vi.fn().mockReturnValue({
@@ -72,8 +73,9 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
-      queryByIdentifiers: mockConnectorQueryByIdentifiers,
-      resolveByIdentifiers: mockConnectorQueryByIdentifiers,
+      resolveAll: mockResolveAllConnectors,
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([]), mockResolveAllConnectors),
     };
   }),
 }));
@@ -177,6 +179,7 @@ const connectorOf = (over: Record<string, unknown>) => ({
   mcpServerUrl: 'https://mcp.example.com',
   mcpStdioConfig: null,
   name: 'Plugin A connector',
+  status: 'connected',
   ...over,
 });
 
@@ -199,7 +202,7 @@ describe('AiAgentService.execAgent - connector/plugin overlap', () => {
       chatConfig: {},
       id: 'agent-1',
       model: 'gpt-4',
-      plugins: ['plugin-a'],
+      plugins: [],
       provider: 'openai',
       systemRole: 'You are a helper',
     });
@@ -208,7 +211,7 @@ describe('AiAgentService.execAgent - connector/plugin overlap', () => {
   });
 
   it('keeps a same-named plugin when the connector is disabled', async () => {
-    mockConnectorQueryByIdentifiers.mockResolvedValue([connectorOf({ isEnabled: false })]);
+    mockResolveAllConnectors.mockResolvedValue([connectorOf({ isEnabled: false })]);
     mockConnectorToolQueryAll.mockResolvedValue([
       { permission: 'auto', toolName: 'x', userConnectorId: 'c1' },
     ]);
@@ -219,7 +222,7 @@ describe('AiAgentService.execAgent - connector/plugin overlap', () => {
   });
 
   it('keeps a same-named plugin when the connector has no synced tools', async () => {
-    mockConnectorQueryByIdentifiers.mockResolvedValue([connectorOf({ isEnabled: true })]);
+    mockResolveAllConnectors.mockResolvedValue([connectorOf({ isEnabled: true })]);
     mockConnectorToolQueryAll.mockResolvedValue([]);
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
@@ -228,7 +231,7 @@ describe('AiAgentService.execAgent - connector/plugin overlap', () => {
   });
 
   it('replaces the plugin when the connector actually produces tools', async () => {
-    mockConnectorQueryByIdentifiers.mockResolvedValue([connectorOf({ isEnabled: true })]);
+    mockResolveAllConnectors.mockResolvedValue([connectorOf({ isEnabled: true })]);
     mockConnectorToolQueryAll.mockResolvedValue([
       { permission: 'auto', toolName: 'x', userConnectorId: 'c1' },
     ]);

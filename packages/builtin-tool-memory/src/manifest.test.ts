@@ -35,4 +35,39 @@ describe('MemoryManifest', () => {
     expect(Object.keys(params.properties.topK.properties)).not.toContain('experiences');
     expect(systemPrompt).not.toMatch(/experience layer/i);
   });
+
+  /**
+   * @example
+   * "你是我的文案助理，以后你负责帮我整理文案" configures the current agent. User memory is
+   * shared by every agent of the user, so the role must go to the agent's own config.
+   */
+  it('routes agent self-configuration to agent management instead of user memory', () => {
+    const boundaries = systemPrompt.slice(
+      systemPrompt.indexOf('<routing_boundaries>'),
+      systemPrompt.indexOf('</routing_boundaries>'),
+    );
+
+    expect(boundaries).toContain('configure the current agent itself');
+    expect(boundaries).toContain('你是我的文案助理');
+    expect(boundaries).toContain('你的工作空间/工作目录');
+    expect(boundaries).toContain('lobe-agent-management');
+    expect(boundaries).toContain('**updatePrompt**');
+    expect(boundaries).toContain('**updateAgent**');
+    expect(boundaries).toContain('activateTools (lobe-activator)');
+    // genuine user facts inside an assignment can still become memory
+    expect(boundaries).toContain('genuine facts about the user');
+  });
+
+  /**
+   * @example
+   * One reply ran 500 memory searches, a rephrased query each time, and never
+   * answered. The search API carries a per-operation budget so the runtime
+   * rejects the calls past it, and the system role names the way out.
+   */
+  it('bounds how many memory searches one operation may run', () => {
+    const search = MemoryManifest.api.find((api) => api.name === MemoryApiName.searchUserMemory);
+
+    expect(search?.maxCallsPerOperation).toBe(20);
+    expect(systemPrompt).toContain('Stop searching once two or three focused searches');
+  });
 });

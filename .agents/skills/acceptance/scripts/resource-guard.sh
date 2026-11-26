@@ -18,15 +18,16 @@
 #                          counts as owned even when it predates the guard
 #   --interval SECONDS     sampling interval for start (default 10)
 #   --group NAME=PATTERN   repeatable; an ERE matched against each process command line
-#   --yellow SPEC          yellow-tier thresholds (default swap=70,free=25)
-#   --red SPEC             red-tier thresholds (default swap=85,free=10)
+#   --yellow SPEC          yellow-tier thresholds (default free=25)
+#   --red SPEC             red-tier thresholds (default free=10)
 #   --on-red ACTION        warn (default) | stop-owned
 #   --grace SECONDS        TERM to KILL grace for stop-owned (default 5)
 #   --json                 (check/status) emit JSON instead of a human line
 #
 # Spec: comma-separated KEY=VALUE, any subset of
-#   swap=PCT   free=PCT   total.rss=MB   group.NAME.rss=MB   group.NAME.count=N
-# swap/free thresholds apply on Linux only. On macOS these remain diagnostics;
+#   free=PCT   total.rss=MB   group.NAME.rss=MB   group.NAME.count=N
+# free thresholds use MemAvailable / MemTotal on Linux. Swap is diagnostic only.
+# On macOS free memory also remains diagnostic;
 # kern.memorystatus_vm_pressure_level supplies normal/warning/critical instead.
 # A macOS watcher requires three consecutive red samples before stop-owned.
 # total.rss is the summed RSS of the declared groups, so it stays 0 without --group.
@@ -58,8 +59,8 @@ INTERVAL=10
 ON_RED=warn
 GRACE=5
 JSON=0
-YELLOW="swap=70,free=25"
-RED="swap=85,free=10"
+YELLOW="free=25"
+RED="free=10"
 GROUP_SPECS=""
 
 while [ $# -gt 0 ]; do
@@ -203,15 +204,8 @@ emit_sample() {
 
   # macOS swap allocation grows dynamically, and free+speculative pages exclude
   # reclaimable memory. Neither ratio is a destructive-action pressure signal.
-  if [ "$platform" = Linux ] && [ -n "$swap_pct" ]; then
-    yv="$(spec_value "$yellow" swap)"; rv="$(spec_value "$red" swap)"
-    if ge "$swap_pct" "$rv"; then
-      tier="red"; breaches="${breaches}{\"metric\":\"swap\",\"value\":${swap_pct},\"threshold\":${rv},\"tier\":\"red\"},"
-    elif ge "$swap_pct" "$yv"; then
-      [ "$tier" = red ] || tier="yellow"
-      breaches="${breaches}{\"metric\":\"swap\",\"value\":${swap_pct},\"threshold\":${yv},\"tier\":\"yellow\"},"
-    fi
-  fi
+  # Swap occupancy can remain high after pressure has subsided. Linux tiers
+  # on available RAM; keep swap measurements in the sample for diagnostics.
   if [ "$platform" = Linux ] && [ -n "$free_pct" ]; then
     yv="$(spec_value "$yellow" free)"; rv="$(spec_value "$red" free)"
     if [ -n "$rv" ] && awk -v v="$free_pct" -v t="$rv" 'BEGIN{ exit !(v+0<=t+0) }'; then
@@ -299,7 +293,7 @@ write_config() {
 
 load_config() {
   RUN_TAG=""; INTERVAL=10; ON_RED=warn; GRACE=5
-  YELLOW="swap=70,free=25"; RED="swap=85,free=10"; GROUP_SPECS=""
+  YELLOW="free=25"; RED="free=10"; GROUP_SPECS=""
   local line key value
   while IFS= read -r line; do
     key="${line%%=*}"; value="${line#*=}"

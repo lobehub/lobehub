@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, CircleAlert, CircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,40 +12,41 @@ import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import type { GoalListItem } from '@/services/goal';
 import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
 import { useMarkSidebarTopicGoal } from './useMarkSidebarTopicGoal';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-block-end: none;
-    border-start-start-radius: 12px;
-    border-start-end-radius: 12px;
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  containerTopAttached: css`
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 6px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorFillTertiary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
+    borderStartStartRadius: '12px',
+    borderStartEndRadius: '12px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  containerTopAttached: { borderStartStartRadius: 0, borderStartEndRadius: 0 },
+  // Rows carry the default marker so each one can see the row before it.
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorFillTertiary,
+    },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /**
  * `confirmed` is false while the row is still the persisted copy: its status,
@@ -70,7 +73,7 @@ const LinkedGoalRow = memo<{
       horizontal
       align={'center'}
       aria-label={t(failed ? 'goalProcess.linked.retry' : 'goalProcess.linked.open')}
-      className={styles.row}
+      {...stylex.props(styles.row, stylex.defaultMarker())}
       gap={8}
       role={'button'}
       tabIndex={0}
@@ -130,12 +133,11 @@ interface LinkedGoalTrayProps {
 
 /**
  * The goals this conversation planned, floating above the composer with their
- * live status (behind the `enableGoals` lab). The conversation is the
+ * live status. The conversation is the
  * goal's planning conversation, so its progress belongs here — clicking a row
  * opens the whole goal in the Portal, beside the chat that shaped it.
  */
 const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
-  const enabled = useUserStore(labPreferSelectors.enableGoals);
   const topicId = useConversationStore((s) => s.context.topicId);
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);
@@ -147,30 +149,24 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
       messageStateSelectors.isAIGenerating(s),
     ),
   );
-  const { error, revalidate } = useFetchTopicGoals(
-    enabled ? topicId : undefined,
-    goalRequestGenerating,
-  );
+  const { error, revalidate } = useFetchTopicGoals(topicId, goalRequestGenerating);
   const topicGoals = useGoalStore(goalSelectors.topicGoals(topicId));
   const confirmed = useGoalStore(goalSelectors.topicGoalsConfirmed(topicId));
   const confirmState = linkedGoalConfirmState(confirmed, error);
   const retry = useCallback(() => void revalidate(), [revalidate]);
   // Server-confirmed rows only, in both directions: a goal still pending in a
   // tool result may not exist yet, and a cached empty list proves nothing.
-  useMarkSidebarTopicGoal(
-    enabled ? topicId : undefined,
-    confirmed ? !!topicGoals?.length : undefined,
-  );
+  useMarkSidebarTopicGoal(topicId, confirmed ? !!topicGoals?.length : undefined);
 
   const goals = useMemo(
     () => selectLinkedGoals(topicGoals, displayMessages),
     [topicGoals, displayMessages],
   );
 
-  if (!enabled || !topicId || goals.length === 0) return null;
+  if (!topicId || goals.length === 0) return null;
 
   return (
-    <Flexbox className={cx(styles.container, topAttached && styles.containerTopAttached)}>
+    <Flexbox {...stylex.props(styles.container, topAttached && styles.containerTopAttached)}>
       {goals.map((item) => (
         <LinkedGoalRow
           confirmed={confirmed}

@@ -1,10 +1,18 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
-import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../../schemas';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  agentDocuments,
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  knowledgeBaseFiles,
+} from '../../../schemas';
+import { isUuid } from '../../../utils/uuid';
 import { deriveAgentDocumentFields } from '../deriveFields';
-import { parseLoadRules } from '../policy';
+import { canReadDocument, parseLoadRules } from '../policy';
 import {
   type AgentDocument,
+  type AgentDocumentContextQueryOptions,
   type AgentDocumentContextRow,
   type AgentDocumentListItem,
   type AgentDocumentListSourceType,
@@ -142,6 +150,7 @@ export async function findSkillDocsByAgent(
 export async function findContextByAgent(
   ctx: AgentDocumentContext,
   agentId: string,
+  options?: AgentDocumentContextQueryOptions,
 ): Promise<AgentDocumentContextRow[]> {
   const results = await ctx.db
     .select({
@@ -153,7 +162,14 @@ export async function findContextByAgent(
             ELSE ''
           END
         `.as('content'),
-        description: documents.description,
+        // Context rendering never reads `description`, and across thousands of
+        // progressive rows it is a large share of the bytes; keep it on `always` rows.
+        description: sql<string | null>`
+          CASE
+            WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.description}
+            ELSE NULL
+          END
+        `.as('description'),
         editorData: sql<Record<string, any> | null>`
           CASE
             WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.editorData}
@@ -188,6 +204,14 @@ export async function findContextByAgent(
         agentDocOwnership(ctx),
         eq(agentDocuments.agentId, agentId),
         isNull(agentDocuments.deletedAt),
+        ...(options?.excludeProgressive
+          ? [
+              or(
+                eq(agentDocuments.policyLoad, PolicyLoad.ALWAYS),
+                eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+              ),
+            ]
+          : []),
       ),
     )
     .orderBy(desc(agentDocuments.updatedAt));
@@ -255,6 +279,144 @@ export async function findByDocumentIds(
       loadRules: parseLoadRules(item),
     };
   });
+}
+
+/**
+ * Every binding of `agentId` matching the given references, deleted ones included.
+ *
+ * Use when:
+ * - Deciding whether a historical document read in a conversation still refers to a live
+ *   binding, so a deleted or disabled document's old content can be withheld from the model.
+ *
+ * Expects:
+ * - `refs` mixes `documents.id` values (`docs_*`) and `agent_documents.id` UUIDs; any other
+ *   value is ignored, so a malformed id never reaches the UUID column.
+ *
+ * Returns:
+ * - The matching rows' identity, soft-delete marker and owner access bitmask.
+ */
+export async function listBindingStatesByRefs(
+  ctx: AgentDocumentContext,
+  agentId: string,
+  refs: string[],
+): Promise<{ accessSelf: number; deletedAt: Date | null; documentId: string; id: string }[]> {
+  const bindingIds = [...new Set(refs.filter(isUuid))];
+  const documentIds = [...new Set(refs.filter((ref) => !isUuid(ref) && ref.length > 0))];
+  if (bindingIds.length === 0 && documentIds.length === 0) return [];
+
+  const matchesRef = or(
+    ...(documentIds.length > 0 ? [inArray(agentDocuments.documentId, documentIds)] : []),
+    ...(bindingIds.length > 0 ? [inArray(agentDocuments.id, bindingIds)] : []),
+  );
+
+  return ctx.db
+    .select({
+      accessSelf: agentDocuments.accessSelf,
+      deletedAt: agentDocuments.deletedAt,
+      documentId: agentDocuments.documentId,
+      id: agentDocuments.id,
+    })
+    .from(agentDocuments)
+    .where(and(agentDocOwnership(ctx), eq(agentDocuments.agentId, agentId), matchesRef));
+}
+
+/**
+ * Which of the given backing document ids still have a `documents` row, in any scope.
+ *
+ * Use when:
+ * - Telling a permanently deleted document (row gone, nothing left to tombstone it) apart from
+ *   one that exists but is out of the caller's scope, e.g. another owner's knowledge-base page.
+ *
+ * Returns:
+ * - The existing subset of `documentIds`. Only existence is exposed, never content.
+ */
+export async function listExistingDocumentIds(
+  ctx: AgentDocumentContext,
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
+
+  const rows = await ctx.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(inArray(documents.id, ids));
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Which backing documents are knowledge-base items: filed directly under a knowledge base or
+ * backed by a file added to one.
+ *
+ * Use when:
+ * - Removing a document from an agent must not revoke the same document where it is still a
+ *   live knowledge-base page.
+ *
+ * Returns:
+ * - The subset of `documentIds` that belong to a knowledge base, in one query.
+ */
+export async function listKnowledgeBaseMemberIds(
+  ctx: AgentDocumentContext,
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
+
+  const rows = await ctx.db
+    .selectDistinct({ id: documents.id })
+    .from(documents)
+    .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
+    .where(
+      and(
+        documentOwnership(ctx),
+        inArray(documents.id, ids),
+        or(isNotNull(documents.knowledgeBaseId), isNotNull(knowledgeBaseFiles.fileId)),
+      ),
+    );
+
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Which backing documents were agent documents that no agent may read any more — every
+ * binding is soft-deleted or lost read access (disabled) — and that are not knowledge-base
+ * items either.
+ *
+ * Use when:
+ * - A generic document read (e.g. the knowledge-base `readKnowledge` tool on `docs_*` ids)
+ *   must not resurrect a document the user deleted or disabled on every agent, while
+ *   documents that were never agent documents, or that are still knowledge-base pages, stay
+ *   readable.
+ *
+ * Returns:
+ * - The matching subset of `documentIds`, resolved with a constant number of queries.
+ */
+export async function listRevokedFromAllAgents(
+  ctx: AgentDocumentContext,
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
+
+  const bindings = await ctx.db
+    .select({
+      accessSelf: agentDocuments.accessSelf,
+      deletedAt: agentDocuments.deletedAt,
+      documentId: agentDocuments.documentId,
+    })
+    .from(agentDocuments)
+    .where(and(agentDocOwnership(ctx), inArray(agentDocuments.documentId, ids)));
+
+  const live = new Set(
+    bindings.filter((row) => !row.deletedAt && canReadDocument(row)).map((row) => row.documentId),
+  );
+  const candidates = [
+    ...new Set(bindings.map((row) => row.documentId).filter((id) => !live.has(id))),
+  ];
+  if (candidates.length === 0) return [];
+
+  const knowledgeBaseMembers = new Set(await listKnowledgeBaseMemberIds(ctx, candidates));
+  return candidates.filter((id) => !knowledgeBaseMembers.has(id));
 }
 
 export async function listByDocumentIds(

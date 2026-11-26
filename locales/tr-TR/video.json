@@ -40,7 +40,6 @@
   "generation.editing.hint": "Değiştirilecek şeyi açıklayın; diğer her şey aynı kalır",
   "generation.editing.modelLocked": "Düzenlemeler orijinal videonun modelini korur",
   "generation.editing.title": "V{{version}} Düzenleniyor",
-  "generation.freeQuota.remaining": "🎁 Bugün {{remaining}} ücretsiz video kaldı",
   "generation.status.editing": "Düzenleme Oluşturuluyor...",
   "generation.status.failed": "Oluşturma Başarısız",
   "generation.status.generating": "Oluşturuluyor...",

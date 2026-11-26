@@ -4,10 +4,23 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
-import { AgentEvalRunService } from '@/server/services/agentEvalRun';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
+import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
+import { CASE_AGENT_MODEL_REQUIRED } from '@/server/services/agentEvalRun/caseAgent';
+import {
+  assertRunCaseCompatibility,
+  EvalCaseCompatibilityError,
+} from '@/server/services/agentEvalRun/caseCompatibility';
+import {
+  RUN_DATASET_NOT_FOUND,
+  RUN_EMPTY_SELECTION,
+} from '@/server/services/agentEvalRun/createRun';
+import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { evalRunInputConfigSchema } from '../evalRunConfig.schema';
+import { assertRunFollowsBenchmark } from './benchmarkStandard';
 import { RUN_ENRICHMENT_CONCURRENCY } from './constants';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 
@@ -17,12 +30,48 @@ const log = debug('lobe-lambda-router:agent-eval');
 const BATCH_RESUME_CONCURRENCY = 5;
 
 export const runRouter = router({
+  /**
+   * Whether this server can call each provider for the current user: the same
+   * runtime construction an eval run performs before its first model call, so
+   * a missing key (account or server) is caught before an experiment spends
+   * attempts on `InvalidProviderAPIKey` errors.
+   */
+  checkProviders: agentEvalProcedure
+    .input(z.object({ providers: z.array(z.string().trim().min(1)).max(20) }))
+    .query(async ({ input, ctx }) => {
+      const providers = [...new Set(input.providers)];
+      return pMap(
+        providers,
+        async (provider) => {
+          try {
+            await initModelRuntimeFromDB(
+              ctx.serverDB,
+              ctx.userId,
+              provider,
+              ctx.workspaceId ?? undefined,
+            );
+            return { ok: true as const, provider };
+          } catch (error) {
+            const detail = error as { errorType?: string; message?: string } | undefined;
+            return {
+              error: detail?.errorType ?? detail?.message ?? 'Provider unavailable',
+              ok: false as const,
+              provider,
+            };
+          }
+        },
+        { concurrency: 4 },
+      );
+    }),
   // ============================================
   // Run Operations
   // ============================================
   createRun: agentEvalProcedureWrite
     .input(
       z.object({
+        // Optional caller-supplied id: a client that checkpoints its launch can
+        // retry the same create after a lost response without making a second run.
+        id: z.string().trim().min(1).max(64).optional(),
         datasetId: z.string(),
         targetAgentId: z.string().optional(),
         name: z.string().optional(),
@@ -34,6 +83,11 @@ export const runRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const dataset = await ctx.datasetModel.findById(input.datasetId);
+      const benchmark = dataset?.benchmarkId
+        ? await ctx.benchmarkModel.findById(dataset.benchmarkId)
+        : undefined;
+      assertRunFollowsBenchmark(input.config, benchmark?.metadata);
       try {
         const result = await ctx.runService.createRun(input);
         if (!result) {
@@ -51,6 +105,20 @@ export const runRouter = router({
         }
         if (pgError?.message === 'Parent run not found') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Parent run not found' });
+        }
+        if (pgError?.message === CASE_AGENT_MODEL_REQUIRED) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: CASE_AGENT_MODEL_REQUIRED });
+        }
+        if (pgError?.message === RUN_EMPTY_SELECTION) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: RUN_EMPTY_SELECTION });
+        }
+        if (pgError?.message === RUN_DATASET_NOT_FOUND) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: RUN_DATASET_NOT_FOUND });
+        }
+        // The id is taken by a run this caller cannot see, or by one created with
+        // other parameters: say so without describing the other run.
+        if (pgError?.message === RUN_CREATE_ID_CONFLICT) {
+          throw new TRPCError({ code: 'CONFLICT', message: RUN_CREATE_ID_CONFLICT });
         }
 
         // Check for foreign key violation (dataset not found)
@@ -173,6 +241,19 @@ export const runRouter = router({
         });
       }
 
+      try {
+        await assertRunCaseCompatibility(ctx, run);
+        await ctx.runService.assertConnectorBindings(run);
+      } catch (error) {
+        if (error instanceof EvalConnectorBindingError) {
+          throw new TRPCError({ code: error.code, message: error.message });
+        }
+        if (error instanceof EvalCaseCompatibilityError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
+
       // Set status to pending immediately so frontend gets feedback
       await ctx.runModel.update(runId, { status: 'pending' });
 
@@ -208,6 +289,42 @@ export const runRouter = router({
 
       return { success: true };
     }),
+  /**
+   * Run again every case of a finished run that has an attempt without a
+   * verdict (error, timeout, judge failure), with the run's own settings.
+   */
+  rerunRunUnverified: agentEvalProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const run = await ctx.runModel.findById(input.id);
+      if (!run) throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
+
+      if (!['completed', 'failed', 'aborted'].includes(run.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot rerun: status=${run.status}`,
+        });
+      }
+
+      let rerunCount: number;
+      try {
+        ({ rerunCount } = await ctx.runService.rerunUnverifiedCases(input.id));
+      } catch (error) {
+        if (error instanceof EvalCaseCompatibilityError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
+      if (rerunCount > 0) {
+        await AgentEvalRunWorkflow.triggerRunBenchmark({
+          force: true,
+          runId: input.id,
+          userId: ctx.userId,
+        });
+      }
+
+      return { rerunCount, runId: input.id, success: true };
+    }),
   retryRunErrors: agentEvalProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -221,7 +338,15 @@ export const runRouter = router({
         });
       }
 
-      const { retryCount } = await ctx.runService.retryErrorCases(input.id);
+      let retryCount: number;
+      try {
+        ({ retryCount } = await ctx.runService.retryErrorCases(input.id));
+      } catch (error) {
+        if (error instanceof EvalCaseCompatibilityError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
 
       await AgentEvalRunWorkflow.triggerRunBenchmark({
         force: true,
@@ -230,6 +355,32 @@ export const runRouter = router({
       });
 
       return { retryCount, runId: input.id, success: true };
+    }),
+  /**
+   * Grade a finished run again with the dataset's current judge setup, from
+   * the trajectories it recorded. Only the judge runs; no case is executed.
+   */
+  rejudgeRun: agentEvalProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const run = await ctx.runModel.findById(input.id);
+      if (!run) throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
+
+      if (!['completed', 'failed', 'aborted'].includes(run.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot re-judge: status=${run.status}`,
+        });
+      }
+
+      try {
+        return await ctx.runService.rejudgeRun(input.id);
+      } catch (error) {
+        if (error instanceof EvalCaseCompatibilityError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
     }),
   retryRunCase: agentEvalProcedureWrite
     .input(z.object({ runId: z.string(), testCaseId: z.string() }))
@@ -247,6 +398,9 @@ export const runRouter = router({
       try {
         await ctx.runService.retrySingleCase(input.runId, input.testCaseId);
       } catch (error) {
+        if (error instanceof EvalCaseCompatibilityError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
         const message = error instanceof Error ? error.message : 'Cannot retry case';
         if (message.startsWith('Cannot retry: case is')) {
           throw new TRPCError({ code: 'CONFLICT', message });
@@ -274,11 +428,20 @@ export const runRouter = router({
         input.testCaseId,
         input.threadId,
       );
-      const result = await ctx.runService.resumeTrajectory({
-        runId: input.runId,
-        testCaseId: input.testCaseId,
-        threadId: input.threadId,
-      });
+      const result = await ctx.runService
+        .resumeTrajectory({
+          runId: input.runId,
+          testCaseId: input.testCaseId,
+          threadId: input.threadId,
+        })
+        .catch((error) => {
+          if (
+            error instanceof EvalResumeConflictError ||
+            error instanceof EvalCaseCompatibilityError
+          )
+            throw new TRPCError({ code: 'CONFLICT', message: error.message });
+          throw error;
+        });
       log('resumeRunCase: result %O', result);
       return result;
     }),
@@ -326,7 +489,7 @@ export const runRouter = router({
   getRunProgress: agentEvalProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
-      let run = await ctx.runModel.findById(input.id);
+      let run = await ctx.runModel.findSummaryById(input.id);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }
@@ -335,7 +498,7 @@ export const runRouter = router({
       if (run.status === 'running') {
         const timedOut = await ctx.runService.checkAndHandleRunTimeout(run);
         if (timedOut) {
-          run = (await ctx.runModel.findById(input.id))!;
+          run = (await ctx.runModel.findSummaryById(input.id))!;
         }
       }
 
@@ -356,7 +519,7 @@ export const runRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const run = await ctx.runModel.findById(input.id);
+      const run = await ctx.runModel.findSummaryById(input.id);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }

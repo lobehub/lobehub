@@ -1,17 +1,23 @@
 import { Hono, type MiddlewareHandler } from 'hono';
-import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { NotificationController } from '../controllers/notification.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
   MarkNotificationsReadRequestSchema,
+  NotificationAcknowledgementSchema,
+  NotificationCategoryCountSchema,
   NotificationIdParamSchema,
   NotificationListQuerySchema,
+  NotificationSchema,
   NotificationSettingsQuerySchema,
+  NotificationSettingsResponseSchema,
+  NotificationUnreadCountSchema,
   UpdateNotificationSettingsRequestSchema,
 } from '../types/notification.type';
 
@@ -37,6 +43,13 @@ const notificationWrite = requireAnyPermission(
 /** GET /api/v1/notifications */
 NotificationRoutes.get(
   '/',
+  routeDoc({
+    data: z.array(NotificationSchema),
+    description:
+      'Unarchived notifications, newest first; pass the last `id` as `cursor` for the next page.',
+    summary: 'List notifications',
+    tags: ['notifications'],
+  }),
   requireAuth,
   zValidator('query', NotificationListQuerySchema),
   async (c) => new NotificationController().listNotifications(c),
@@ -52,8 +65,8 @@ const settingsApiKeyScope =
 /** GET /api/v1/notifications/settings */
 NotificationRoutes.get(
   '/settings',
-  describeRoute({
-    operationId: 'getNotificationSettings',
+  routeDoc({
+    data: NotificationSettingsResponseSchema,
     summary: 'Get notification delivery settings',
     tags: ['notifications'],
   }),
@@ -66,8 +79,9 @@ NotificationRoutes.get(
 /** PATCH /api/v1/notifications/settings — merges the patch; untouched switches keep their value. */
 NotificationRoutes.patch(
   '/settings',
-  describeRoute({
-    operationId: 'updateNotificationSettings',
+  routeDoc({
+    data: NotificationSettingsResponseSchema,
+    description: 'Answers with the merged settings now stored for the scope.',
     summary: 'Update notification delivery settings',
     tags: ['notifications'],
   }),
@@ -81,8 +95,8 @@ NotificationRoutes.patch(
 /** GET /api/v1/notifications/unread-count */
 NotificationRoutes.get(
   '/unread-count',
-  describeRoute({
-    operationId: 'getUnreadNotificationCount',
+  routeDoc({
+    data: NotificationUnreadCountSchema,
     summary: 'Get the unread notification count',
     tags: ['notifications'],
   }),
@@ -93,8 +107,9 @@ NotificationRoutes.get(
 /** GET /api/v1/notifications/counts — per-category read/unread/total tallies. */
 NotificationRoutes.get(
   '/counts',
-  describeRoute({
-    operationId: 'getNotificationCounts',
+  routeDoc({
+    data: z.array(NotificationCategoryCountSchema),
+    operationId: 'notifications.getCounts',
     summary: 'Get per-category notification counts',
     tags: ['notifications'],
   }),
@@ -105,7 +120,14 @@ NotificationRoutes.get(
 /** POST /api/v1/notifications/read */
 NotificationRoutes.post(
   '/read',
-  describeRoute({ operationId: 'markNotificationsRead', tags: ['notifications'] }),
+  routeDoc({
+    data: NotificationAcknowledgementSchema,
+    // Nothing to report back: the body is the success envelope without `data`.
+    envelope: false,
+    operationId: 'notifications.markRead',
+    summary: 'Mark notifications as read',
+    tags: ['notifications'],
+  }),
   requireAuth,
   notificationWrite,
   zValidator('json', MarkNotificationsReadRequestSchema),
@@ -115,8 +137,11 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/read-all */
 NotificationRoutes.post(
   '/read-all',
-  describeRoute({
-    operationId: 'markAllNotificationsRead',
+  routeDoc({
+    data: NotificationAcknowledgementSchema,
+    // Nothing to report back: the body is the success envelope without `data`.
+    envelope: false,
+    operationId: 'notifications.markAllRead',
     summary: 'Mark every notification as read',
     tags: ['notifications'],
   }),
@@ -128,8 +153,11 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/archive-all */
 NotificationRoutes.post(
   '/archive-all',
-  describeRoute({
-    operationId: 'archiveAllNotifications',
+  routeDoc({
+    data: NotificationAcknowledgementSchema,
+    // Nothing to report back: the body is the success envelope without `data`.
+    envelope: false,
+    operationId: 'notifications.archiveAll',
     summary: 'Archive every notification',
     tags: ['notifications'],
   }),
@@ -141,7 +169,14 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/:id/archive */
 NotificationRoutes.post(
   '/:id/archive',
-  describeRoute({ operationId: 'archiveNotification', tags: ['notifications'] }),
+  routeDoc({
+    data: NotificationAcknowledgementSchema,
+    // Nothing to report back: the body is the success envelope without `data`.
+    envelope: false,
+    operationId: 'notifications.archive',
+    summary: 'Archive a notification',
+    tags: ['notifications'],
+  }),
   requireAuth,
   notificationWrite,
   zValidator('param', NotificationIdParamSchema),

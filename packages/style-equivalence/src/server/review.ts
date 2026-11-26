@@ -1,9 +1,10 @@
 import type { StyleElement } from '../extract';
 import type { Combo } from '../plan/combos';
-import { isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
+import { chainOf, type FilePlan, isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
 import { askSentence, comboLabel, differenceSummary } from '../report/plain';
 import { defaultReworkNote } from '../report/review';
 import { declarationBlocks } from '../review/declarations';
+import { type MovedRule, movedRules } from '../review/moved';
 import {
   elementSignature,
   passRecord,
@@ -46,6 +47,7 @@ interface CaseEntry {
 }
 
 interface CaseEvidence {
+  counterpart?: Sides<string>;
   declarations?: Partial<Record<'base' | 'head', Record<string, string>>>;
   elements?: Partial<
     Record<
@@ -71,10 +73,37 @@ const standIns = (evidence: CaseEvidence | undefined, layout: Set<string>) => {
   return tags;
 };
 
+interface MovedSlot {
+  selectors: string[];
+  slot: string;
+  tags: string[];
+  text: string;
+}
+
+const groupMoved = (moved: Record<string, MovedRule[]>) =>
+  Object.fromEntries(
+    Object.entries(moved).map(([baseSlot, rules]) => {
+      const bySlot = new Map<string, MovedSlot>();
+      for (const rule of rules) {
+        const group = bySlot.get(rule.slot) ?? {
+          selectors: [],
+          slot: rule.slot,
+          tags: [],
+          text: rule.text,
+        };
+        group.selectors = [...new Set([...group.selectors, rule.selector])];
+        group.tags = [...new Set([...group.tags, ...rule.tags])];
+        bySlot.set(rule.slot, group);
+      }
+      return [baseSlot, [...bySlot.values()]];
+    }),
+  );
+
 const stylesOf = (
   entry: CaseEntry | undefined,
   evidence: CaseEvidence | undefined,
   layout: Set<string>,
+  moved: Record<string, MovedRule[]> = {},
 ) => {
   const causes = [
     ...(entry?.result?.rootCauses ?? []),
@@ -92,13 +121,20 @@ const stylesOf = (
           evidence.declarations.base,
           evidence.declarations.head,
           causes.map((cause) => cause.property),
+          moved,
         ).map(({ key, ...block }) => ({ ...block, standIn: standIns(evidence, layout).get(key) }))
       : [],
+    counterpart: (['base', 'head'] as const).find(
+      (side) => !evidence?.elements?.[side]?.length && evidence?.counterpart?.[side],
+    ),
+    moved: groupMoved(moved),
     source,
     usage: Object.fromEntries(
       (['base', 'head'] as const).flatMap((side) => {
         const chain = evidence?.elements?.[side];
-        return chain?.length ? [[side, chain.map(usageOf)]] : [];
+        if (chain?.length) return [[side, chain.map(usageOf)]];
+        const counterpart = evidence?.counterpart?.[side];
+        return counterpart ? [[side, [counterpart]]] : [];
       }),
     ),
   };
@@ -109,13 +145,18 @@ type Extractions = Record<string, Partial<Record<'base' | 'head', { elements: St
 export const standInsFor = (
   key: string,
   entry: Pick<CaseEntry, 'plan'> | undefined,
-  plans: Array<{ file: string; standIns?: Record<string, string[]> }>,
+  plans: Array<Pick<FilePlan, 'file' | 'standIns'> & Partial<Pick<FilePlan, 'unpaired'>>>,
 ): Sides<string[]> => {
   const unpaired = /^(.*)\|unpaired:(base|head):(.+)$/.exec(key);
   if (!unpaired) return entry?.plan.standIns ?? {};
   const [, file, side, id] = unpaired;
-  const tags = plans.find((plan) => plan.file === file)?.standIns?.[`${side}:${id}`];
-  return tags ? { [side]: tags } : {};
+  const plan = plans.find((item) => item.file === file);
+  const tags = plan?.standIns?.[`${side}:${id}`];
+  if (!tags) return {};
+  const mirrored = plan?.unpaired?.some(
+    (item) => item.side === side && item.elementId === id && item.counterpart,
+  );
+  return mirrored ? { base: tags, head: tags } : { [side]: tags };
 };
 
 const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined) => {
@@ -125,6 +166,36 @@ const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined
     ? [unpaired[1], unpaired[2] as 'base' | 'head', unpaired[3]]
     : [entry?.plan.file ?? '', 'head' as const, entry?.plan.elementIds?.head];
   return extractions[file]?.[side]?.elements.find((element) => element.id === id);
+};
+
+const headTextsOf = (stored: StoredRun, file: string) => {
+  const texts: Record<string, string> = {};
+  for (const [key, value] of Object.entries(stored.evidence))
+    if (key.startsWith(`${file}|`))
+      Object.assign(texts, (value as CaseEvidence | undefined)?.declarations?.head);
+  return texts;
+};
+
+const movedOf = (
+  stored: StoredRun,
+  entry: CaseEntry | undefined,
+  evidence: CaseEvidence | undefined,
+) => {
+  const base = evidence?.declarations?.base;
+  const file = entry?.plan.file;
+  const headId = entry?.plan.elementIds?.head;
+  if (!base || !file || !headId) return {};
+  const elements = (stored.extractions as Extractions)[file]?.head?.elements ?? [];
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const element = byId.get(headId);
+  if (!element) return {};
+  const baseSlots = (stored.extractions as Extractions)[file]?.base?.elements.flatMap(
+    (element) => element.slots,
+  );
+  return movedRules({
+    base: { declarations: base, slots: baseSlots },
+    head: { chain: chainOf(element, byId), elements, texts: headTextsOf(stored, file) },
+  });
 };
 
 const titleOf = (key: string, element: StyleElement | undefined) => {
@@ -154,6 +225,7 @@ const describe = (
   evidence?: CaseEvidence,
   layout: Set<string> = new Set(),
   standIns: Sides<string[]> = {},
+  moved: Record<string, MovedRule[]> = {},
 ) => {
   const component = element && !isIntrinsicTag(element.tag) ? element.tag : undefined;
   const binding = element?.bindings[0];
@@ -184,7 +256,7 @@ const describe = (
     differingConditions: entry?.result?.differingConditions ?? [],
     errors: entry?.result?.errors ?? [],
     standIns,
-    styles: stylesOf(entry, evidence, layout),
+    styles: stylesOf(entry, evidence, layout, moved),
     summary: differenceSummary(entry?.result?.rootCauses ?? []),
     title: titleOf(item.key, element),
   };
@@ -221,6 +293,11 @@ export const reviewPayload = async (stored: StoredRun, layoutComponents: string[
       stored.evidence[item.key] as CaseEvidence | undefined,
       layout,
       standInsFor(item.key, context.cases.get(item.key), stored.plans ?? []),
+      movedOf(
+        stored,
+        context.cases.get(item.key),
+        stored.evidence[item.key] as CaseEvidence | undefined,
+      ),
     ),
   );
   const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);
@@ -269,6 +346,7 @@ export const caseReview = async (
       stored.evidence[key] as CaseEvidence | undefined,
       new Set(layoutComponents),
       standInsFor(key, caseEntry, stored.plans ?? []),
+      movedOf(stored, caseEntry, stored.evidence[key] as CaseEvidence | undefined),
     ),
     queued: Boolean(queued),
   };

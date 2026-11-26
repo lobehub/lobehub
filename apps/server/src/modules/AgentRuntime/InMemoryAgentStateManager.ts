@@ -50,6 +50,10 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     return normalizeAgentState(structuredClone(state));
   }
 
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    return this.states.get(operationId)?.status ?? null;
+  }
+
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
     // Save latest state
     // Use JSON round-trip instead of structuredClone to safely handle
@@ -110,7 +114,6 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;
@@ -121,7 +124,6 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     const metadata: AgentOperationMetadata = {
       acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
       agentConfig: data.agentConfig,
-      visitorRedaction: data.visitorRedaction,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
       mirrorToOperationId: data.mirrorToOperationId,

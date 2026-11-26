@@ -1,3 +1,4 @@
+import { SHARE_VISITOR_MAX_FILE_SIZE, SHARE_VISITOR_MAX_FILES_PER_TURN } from '@lobechat/const';
 import type { ChannelListItem, ChannelPublicMember } from '@lobechat/types';
 import type { ISlashOption } from '@lobehub/editor';
 import {
@@ -9,6 +10,7 @@ import {
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
 import { Reply, X } from 'lucide-react';
@@ -17,10 +19,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
-import DraftFile from '@/features/ChatInput/Mobile/FilePreview/FileItem/File';
-import DraftImage from '@/features/ChatInput/Mobile/FilePreview/FileItem/Image';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
@@ -34,6 +35,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { ComposerActions } from './ComposerActions';
+import { ComposerAttachments } from './ComposerAttachments';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
 import { getMentionGroups, mentionDescription } from './mentionGroups';
@@ -45,10 +47,16 @@ import {
 } from './mentions';
 import { createChannelSendRequest } from './sendRequest';
 import { styles } from './styles';
-import { useAttachments } from './useAttachments';
+import { type AttachmentLimits, useAttachments } from './useAttachments';
 import { useComposerDraft } from './useComposerDraft';
 import { useMentionInvites } from './useMentionInvites';
 import type { ChannelReplyTarget } from './useReplyTarget';
+
+/** A shared Agent's share bounds a visitor's message as its own share page does. */
+const SHARE_ATTACHMENT_LIMITS: AttachmentLimits = {
+  maxFileSize: SHARE_VISITOR_MAX_FILE_SIZE,
+  maxFiles: SHARE_VISITOR_MAX_FILES_PER_TURN,
+};
 
 export type ChannelComposerMessage = Omit<ChannelQueuedSendInput, 'channelId' | 'threadId'>;
 
@@ -76,7 +84,11 @@ type ComposerDelivery =
       onSend: ChannelComposerSend;
     };
 
-const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin];
+
+/** Highlighted text like the rest of the line, not the editor's default boxed tag. */
+const mentionTheme = { mention: stylex.props(styles.composerMention).className };
+const writeMention = (node: { label: string }) => `@${node.label}`;
 
 /** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
 const inputShell = { borderRadius: 12 };
@@ -85,28 +97,34 @@ export function Composer({
   activity,
   channel,
   draftKey,
+  maxWidth,
   members,
   onQueue,
   onSend,
   placeholder,
   replyTarget,
+  starter,
   onCancelReply,
 }: {
-  /** Who is replying right now; shown on the line above the input. */
+  /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
   activity?: ReactNode;
   /** Lets an @mention invite people and Agents from outside the Channel. */
   channel?: ChannelListItem;
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
+  /** Caps the composer column width, centered; spans the full width when omitted. */
+  maxWidth?: number;
   members: ChannelPublicMember[];
   placeholder: string;
   replyTarget?: ChannelReplyTarget | null;
+  /** Markdown filling an empty composer when no draft is saved; see {@link useComposerDraft}. */
+  starter?: string;
   onCancelReply?: () => void;
 } & ComposerDelivery) {
   const { t } = useTranslation('channel');
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
-  const draft = useComposerDraft(editor, draftKey);
+  const draft = useComposerDraft(editor, draftKey, starter);
   useEffect(() => {
     if (replyTarget) editor.focus();
   }, [editor, replyTarget]);
@@ -120,9 +138,28 @@ export function Composer({
   /** The card the mention picker docks to, full width above the input like an IM. */
   const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments();
+  const workspaces = useWorkspaces();
+  /**
+   * Files upload into the Channel's own scope, not whichever one the app has active: the send
+   * accepts a member's files only from the Channel's workspace. An external contact, not a member
+   * there, attaches files from their personal space.
+   */
+  const channelWorkspaceId = channel?.workspaceId;
+  const uploadWorkspaceId = !channel
+    ? undefined
+    : channelWorkspaceId &&
+        (channelWorkspaceId === workspaceId ||
+          workspaces.some((workspace) => workspace.id === channelWorkspaceId))
+      ? channelWorkspaceId
+      : null;
+  const attachments = useAttachments(
+    draftKey,
+    uploadWorkspaceId,
+    channel?.sharedAgent ? SHARE_ATTACHMENT_LIMITS : undefined,
+  );
   const { allowed } = usePermission('create_content');
-  const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  const enableUpload = knowledgeBase;
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
     if (!sending.current && canUpload) return attachments.upload(files);
@@ -156,7 +193,7 @@ export function Composer({
     );
   };
   const send = async () => {
-    const value = String(editor.getDocument('markdown') || '').trim();
+    const value = String(editor.getDocument('markdown', { format: false }) || '').trim();
     const fileIds = attachments.readyFileIds();
     if (sending.current || !fileIds || (!value && !fileIds.length)) return;
     const document = editor.getDocument('json');
@@ -220,34 +257,24 @@ export function Composer({
     }
   };
   const preview = attachments.items.length > 0 && (
-    <Flexbox horizontal gap={8} inert={busy} padding={8} wrap="wrap">
-      {attachments.items.map((item) =>
-        item.file.type.startsWith('image/') && item.status === 'success' ? (
-          <DraftImage
-            alt={item.file.name}
-            key={item.id}
-            src={item.fileUrl}
-            onRemove={() => attachments.remove(item.id)}
-          />
-        ) : (
-          <DraftFile
-            {...item}
-            key={item.id}
-            onRemove={() => attachments.remove(item.id)}
-            onRetry={() => attachments.retry(item.id)}
-          />
-        ),
-      )}
-    </Flexbox>
+    <ComposerAttachments
+      disabled={busy}
+      items={attachments.items}
+      onRemove={attachments.remove}
+      onRetry={attachments.retry}
+    />
   );
   return (
-    <WideScreenContainer fullWidth paddingInline={24}>
+    <WideScreenContainer fullWidth paddingInline={8} style={{ maxWidth }}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
-        <div {...stylex.props(styles.composerStatus)}>
-          <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
-            {activity}
-          </Flexbox>
-        </div>
+        {/* Without an activity line the input meets the feed directly, with no empty strip. */}
+        {activity != null && (
+          <div {...stylex.props(styles.composerStatus)}>
+            <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
+              {activity}
+            </Flexbox>
+          </div>
+        )}
         <ChatInput
           maxHeight={480}
           minHeight={0}
@@ -260,9 +287,9 @@ export function Composer({
               <Flexbox gap={4}>
                 {replyTarget && (
                   <Flexbox horizontal align="center" gap={8} padding={8}>
-                    <Reply size={14} />
+                    <Reply color={cssVar.colorTextTertiary} size={14} />
                     <Flexbox flex={1} style={{ minWidth: 0 }}>
-                      <Text ellipsis fontSize={12}>
+                      <Text ellipsis fontSize={12} type="secondary">
                         {t('reply.to', { name: replyTarget.author.name || t('deletedMember') })}
                         {' · '}
                         {replyTarget.content || t('reply.attachment')}
@@ -357,13 +384,13 @@ export function Composer({
                         ]
                       : options;
                   },
-                  markdownWriter: (node) => `@${node.label}`,
+                  markdownWriter: writeMention,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
                       label: String(option.label),
                       metadata: option.metadata,
                     });
-                    // Choosing someone outside the Channel brings them in right away.
+                    // Choosing someone outside the Channel asks, then brings them in right away.
                     if (option.metadata?.type === 'channel-invite')
                       invites.invite(option.metadata as ChannelMentionInvite);
                     // Leave the decorator's cursor node before the next @ is typed.
@@ -382,7 +409,7 @@ export function Composer({
                   const document = JSON.stringify(json);
                   if (document !== previousDocument.current) {
                     previousDocument.current = document;
-                    setContent(String(editor.getDocument('markdown') || ''));
+                    setContent(String(editor.getDocument('markdown', { format: false }) || ''));
                     draft.save();
                   }
                 }}
@@ -395,7 +422,11 @@ export function Composer({
                   void send();
                   return true;
                 }}
-              />
+              >
+                {/* <Editor> registers its own mention plugin after `plugins`, and a later
+                    registration replaces the config; a child registers last, so this theme wins. */}
+                <ReactMentionPlugin markdownWriter={writeMention} theme={mentionTheme} />
+              </Editor>
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             {/* Enter sends; like an IM, the button only appears once there is something to send. */}

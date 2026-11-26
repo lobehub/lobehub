@@ -57,9 +57,12 @@ export interface CreateReplyOpenerOptions {
 
 const oneLine = (text: string, max: number) => text.replaceAll(/\s+/g, ' ').trim().slice(0, max);
 
+/** An acknowledgement says something only with a letter or digit in it, in any script. */
+const HAS_WORDS = /[\p{L}\p{N}]/u;
+
 /**
  * Turns the model's answer into something safe to act on: a thread needs a title and a place to
- * open it, and an acknowledgement needs words.
+ * open it, and an acknowledgement needs words, not punctuation alone.
  */
 export const normalizeReplyOpening = (
   answer: z.infer<typeof OpenerSchema>,
@@ -71,7 +74,7 @@ export const normalizeReplyOpening = (
     canOpenThread && answer.placement === 'thread' && title ? 'thread' : 'channel';
 
   return {
-    ...(ack && { ack }),
+    ...(HAS_WORDS.test(ack) && { ack }),
     placement,
     ...(placement === 'thread' && { title }),
   };

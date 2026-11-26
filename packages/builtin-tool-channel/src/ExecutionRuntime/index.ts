@@ -1,19 +1,90 @@
 import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type {
   BuiltinServerRuntimeOutput,
+  ChannelAskedUser,
+  ChannelAskUserParams,
+  ChannelConnectorRequestResult,
+  ChannelCreatedThread,
+  ChannelCreateThreadParams,
+  ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
+  ChannelListChannelsParams,
+  ChannelListThreadsParams,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
+  ChannelRequestConnectorParams,
+  ChannelSendMessageParams,
+  ChannelSentMessage,
+  ChannelSteeredThread,
+  ChannelSteerThreadParams,
+  ChannelStoppedThread,
+  ChannelStopThreadParams,
+  ChannelThreadPage,
+  ChannelUnwatchThreadsParams,
+  ChannelWatchedThreads,
+  ChannelWatchThreadsParams,
 } from '@lobechat/types';
 
+import type { ChannelPostingService } from './posting';
+import { postChannelMessage } from './posting';
+
+export type { ChannelPostingService } from './posting';
+
 export interface ChannelHistoryService {
+  /** Holds the run's questions for its reply; see `ChannelHistoryRepository.ask`. */
+  askUser?: (params: ChannelAskUserParams) => Promise<ChannelAskedUser>;
+  /** Adds or removes the run's Agent's own reaction; the runtime binds the run. */
+  react?: (params: ChannelReactParams, add: boolean) => Promise<ChannelReacted>;
   readMessage: (params: ChannelReadMessageParams) => Promise<ChannelHistoryMessageDetail>;
   readMessages: (params: ChannelReadMessagesParams) => Promise<ChannelHistoryPage>;
+  /** Posts a card in the run's conversation; the runtime binds the run and tool call. */
+  requestConnector?: (
+    params: ChannelRequestConnectorParams,
+  ) => Promise<ChannelConnectorRequestResult>;
+}
+
+/** Reaching Agents in the requester's other Channels; the runtime binds the run and tool call. */
+export interface ChannelMessagingService {
+  listChannels: (params: ChannelListChannelsParams) => Promise<ChannelDirectoryPage>;
+  sendMessage: (params: ChannelSendMessageParams) => Promise<ChannelSentMessage>;
+}
+
+/**
+ * The calling Agent's own replies in the other Threads of its Channel; the runtime binds the run
+ * and tool call.
+ */
+export interface ChannelThreadService {
+  createThread: (params: ChannelCreateThreadParams) => Promise<ChannelCreatedThread>;
+  listThreads: (params: ChannelListThreadsParams) => Promise<ChannelThreadPage>;
+  steerThread: (params: ChannelSteerThreadParams) => Promise<ChannelSteeredThread>;
+  stopThread: (params: ChannelStopThreadParams) => Promise<ChannelStoppedThread>;
+  unwatchThreads: (params: ChannelUnwatchThreadsParams) => Promise<{ watchId: string }>;
+  watchThreads: (params: ChannelWatchThreadsParams) => Promise<ChannelWatchedThreads>;
 }
 
 export class ChannelExecutionRuntime {
-  constructor(private readonly service: ChannelHistoryService) {}
+  constructor(
+    private readonly service: ChannelHistoryService,
+    private readonly messaging?: ChannelMessagingService,
+    private readonly threads?: ChannelThreadService,
+    private readonly posting?: ChannelPostingService,
+  ) {}
+
+  private async thread(
+    run: (threads: ChannelThreadService) => Promise<unknown>,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.threads) throw new Error('Channel Threads are not available in this run');
+      const state = await run(this.threads);
+      return { content: JSON.stringify(state), state, success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not act on that Thread';
+      return { content: message, error: { type: 'ChannelThreadError', message }, success: false };
+    }
+  }
 
   private async result(
     read: () => Promise<ChannelHistoryMessageDetail | ChannelHistoryPage>,
@@ -27,8 +98,98 @@ export class ChannelExecutionRuntime {
     }
   }
 
+  private async message(
+    run: (messaging: ChannelMessagingService) => Promise<ChannelDirectoryPage | ChannelSentMessage>,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.messaging) throw new Error('Channel messaging is not available in this run');
+      const state = await run(this.messaging);
+      return { content: JSON.stringify(state), state, success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not reach that Channel';
+      return {
+        content: message,
+        error: { type: 'ChannelMessagingError', message },
+        success: false,
+      };
+    }
+  }
+
+  askUser = async (params: ChannelAskUserParams): Promise<BuiltinServerRuntimeOutput> => {
+    try {
+      if (!this.service.askUser) throw new Error('Asking is not available in this run');
+      const state = await this.service.askUser(params);
+      return {
+        content:
+          'The question will be posted as a card with your final answer. End your turn now with a short lead-in to it, without listing the options. The answer arrives later as a new request replying to your question.',
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not ask the question';
+      return { content: message, error: { type: 'ChannelAskError', message }, success: false };
+    }
+  };
+  requestConnector = async (
+    params: ChannelRequestConnectorParams,
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    try {
+      if (!this.service.requestConnector)
+        throw new Error('Connector requests are not available in this run');
+      const state = await this.service.requestConnector(params);
+      return {
+        content: `Posted a card asking the person to connect ${state.name}. They connect it from the card; it is usable from your next turn once connected.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not ask for that connector';
+      return {
+        content: message,
+        error: { type: 'ChannelConnectorError', message },
+        success: false,
+      };
+    }
+  };
+  private async react(params: ChannelReactParams, add: boolean) {
+    try {
+      if (!this.service.react) throw new Error('Reactions are not available in this run');
+      const state = await this.service.react(params, add);
+      return {
+        content: state.added
+          ? `Reacted with ${state.emoji}.`
+          : `Your ${state.emoji} reaction is not on that message.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not react to that message';
+      return { content: message, error: { type: 'ChannelReactionError', message }, success: false };
+    }
+  }
+
+  addReaction = (params: ChannelReactParams) => this.react(params, true);
+  removeReaction = (params: ChannelReactParams) => this.react(params, false);
   readMessages = (params: ChannelReadMessagesParams) =>
     this.result(() => this.service.readMessages(params));
   readMessage = (params: ChannelReadMessageParams) =>
     this.result(() => this.service.readMessage(params));
+  listChannels = (params: ChannelListChannelsParams = {}) =>
+    this.message((messaging) => messaging.listChannels(params));
+  sendMessage = (params: ChannelSendMessageParams) =>
+    this.message((messaging) => messaging.sendMessage(params));
+  listThreads = (params: ChannelListThreadsParams = {}) =>
+    this.thread((threads) => threads.listThreads(params));
+  createThread = (params: ChannelCreateThreadParams) =>
+    this.thread((threads) => threads.createThread(params));
+  stopThread = (params: ChannelStopThreadParams) =>
+    this.thread((threads) => threads.stopThread(params));
+  steerThread = (params: ChannelSteerThreadParams) =>
+    this.thread((threads) => threads.steerThread(params));
+  watchThreads = (params: ChannelWatchThreadsParams) =>
+    this.thread((threads) => threads.watchThreads(params));
+  unwatchThreads = (params: ChannelUnwatchThreadsParams) =>
+    this.thread((threads) => threads.unwatchThreads(params));
+  postMessage = (params: Parameters<ChannelPostingService['postMessage']>[0] = {}) =>
+    postChannelMessage(this.posting, params);
 }

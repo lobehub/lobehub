@@ -1,4 +1,5 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { layoutRepositorySources, withRepositorySetup } from '@lobechat/types';
 
 /** Long enough for a shallow clone and a dependency install. */
 export const SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS = 600_000;
@@ -26,6 +27,8 @@ export interface SandboxInitialization {
    * a build used to get. Resolved per run and never stored.
    */
   cloneCredential?: { header: string; urlPrefix: string };
+  /** One per repository when the environment checks out several GitHub repositories. */
+  cloneCredentials?: { header: string; urlPrefix: string }[];
   env?: Record<string, string>;
   environmentId: string;
   name: string;
@@ -50,8 +53,10 @@ export const toSandboxInitialization = (environment: {
   id: string;
   name: string;
 }): SandboxInitialization | undefined => {
-  const configuration = environment.configuration ?? {};
-  const sources = (configuration.sources ?? []).flatMap((source) =>
+  // Each repository's own setup folded into the one setup command.
+  const configuration = withRepositorySetup(environment.configuration ?? {});
+  // One repository at the top, several side by side — see `layoutRepositorySources`.
+  const sources = layoutRepositorySources(configuration.sources ?? []).flatMap((source) =>
     source.kind === 'git' && source.url
       ? [
           {
@@ -160,15 +165,26 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   // Given to git through its environment for the clones alone, and unset
   // before setup runs: nothing writes it to disk or into the checkout's
   // `.git/config`, and setup — or a command after it — cannot read it back.
+  // One entry per repository when there are several, each scoped to its url.
+  const cloneCredentials = [
+    ...(init.cloneCredentials ?? []),
+    ...(init.cloneCredential ? [init.cloneCredential] : []),
+  ];
   const credential =
-    init.cloneCredential && clones.length > 0
+    cloneCredentials.length > 0 && clones.length > 0
       ? {
           set: [
-            `export GIT_CONFIG_COUNT=1`,
-            `export GIT_CONFIG_KEY_0=${shellQuote(`http.${init.cloneCredential.urlPrefix}.extraHeader`)}`,
-            `export GIT_CONFIG_VALUE_0=${shellQuote(init.cloneCredential.header)}`,
+            `export GIT_CONFIG_COUNT=${cloneCredentials.length}`,
+            ...cloneCredentials.flatMap((item, index) => [
+              `export GIT_CONFIG_KEY_${index}=${shellQuote(`http.${item.urlPrefix}.extraHeader`)}`,
+              `export GIT_CONFIG_VALUE_${index}=${shellQuote(item.header)}`,
+            ]),
           ],
-          unset: [`unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0`],
+          unset: [
+            `unset GIT_CONFIG_COUNT ${cloneCredentials
+              .map((_, index) => `GIT_CONFIG_KEY_${index} GIT_CONFIG_VALUE_${index}`)
+              .join(' ')}`,
+          ],
         }
       : { set: [], unset: [] };
 
@@ -194,9 +210,18 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   const record = `"\${HOME:-/tmp}/${SANDBOX_ENVIRONMENT_STATE_DIR}"`;
   const key = `"$(printf '%s|%s' "$PWD" ${shellQuote(init.environmentId)} | cksum | cut -d ' ' -f 1)"`;
 
+  // A successful run that clones always leaves the checkout in the folder, so a
+  // `done` record beside an empty folder is stale: the folder was emptied or
+  // made again — a project checkout recreated after someone removed it — while
+  // the sandbox lived on. That folder is initialized again. A failed run's
+  // record still holds, so a broken clone is not retried on every call, and a
+  // setup with nothing to clone keeps relying on its record alone.
+  const staleWhenEmpty =
+    clones.length > 0 ? ` || [ "$(cat "$__lobe_state" 2>/dev/null)" = done ]` : '';
+
   return [
     `__lobe_state=${record}/${key}`,
-    `if [ ! -e "$__lobe_state" ] && [ -z "$(ls -A . 2>/dev/null)" ]; then`,
+    `if [ -z "$(ls -A . 2>/dev/null)" ] && { [ ! -e "$__lobe_state" ]${staleWhenEmpty}; }; then`,
     `  echo ${SANDBOX_ENVIRONMENT_RAN_LINE}`,
     `  mkdir -p ${record}`,
     `  if ${body}; then`,

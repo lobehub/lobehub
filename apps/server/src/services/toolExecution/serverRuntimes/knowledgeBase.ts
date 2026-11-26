@@ -2,14 +2,17 @@ import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { KnowledgeBaseExecutionRuntime } from '@lobechat/builtin-tool-knowledge-base/executionRuntime';
 
 import { AgentModel } from '@/database/models/agent';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
 import { resolveDocumentWrite } from '@/server/services/document/editorData';
+import { updateDocumentFromInput } from '@/server/services/document/writeFlow';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+import { getKnowledgeBaseIdsMountedByBrowsers } from '@/server/services/knowledgeBaseAccess';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -25,12 +28,15 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
     const projectModel = new ProjectModel(serverDB, userId, workspaceId);
     const knowledgeRepo = new KnowledgeRepo(serverDB, userId, workspaceId);
     const documentService = new DocumentService(serverDB, userId, workspaceId, agentVisibility);
+    const documentModel = new DocumentModel(serverDB, userId, workspaceId, agentVisibility);
     const fileService = new FileService(serverDB, userId, workspaceId);
     const searchService = new KnowledgeBaseSearchService(
       serverDB,
       userId,
       workspaceId,
       agentVisibility,
+      // A share visitor runs under the agent owner's scope but is not that owner.
+      context.agentShareVisitor ? null : userId,
     );
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 
@@ -57,7 +63,18 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
 
     return new KnowledgeBaseExecutionRuntime(
       {
-        getFileContents: (fileIds) => searchService.getFileContents(fileIds),
+        getFileContents: (fileIds) =>
+          searchService.getFileContents(fileIds, {
+            // "No access" keeps a knowledge base usable on the agents it is mounted on.
+            resolveUsableKnowledgeBaseIds: async (restrictedIds) => {
+              const mounted = new Set(await resolveAgentKnowledgeBaseIds());
+              return getKnowledgeBaseIdsMountedByBrowsers(
+                { serverDB, workspaceId },
+                { agentId, projectId, taskId },
+                restrictedIds.filter((id) => mounted.has(id)),
+              );
+            },
+          }),
         semanticSearchForChat: async ({ knowledgeIds, query, topK }) => {
           const effectiveKnowledgeIds = await resolveAgentKnowledgeBaseIds(knowledgeIds);
           // No enabled KB in scope (none attached, or all turned off) → both search paths would return nothing (BM25 is
@@ -177,6 +194,38 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
               : {}),
           });
           return { id: doc.id };
+        },
+        getDocumentById: async (id) => {
+          const doc = await documentService.getDocumentById(id);
+          if (!doc) return undefined;
+          return {
+            fileType: doc.fileType,
+            id: doc.id,
+            knowledgeBaseId: doc.knowledgeBaseId,
+            parentId: doc.parentId,
+            sourceType: doc.sourceType,
+            title: doc.title,
+          };
+        },
+        updateDocument: async ({ content, id, parentId, title }) => {
+          // Same write as the editor and `lh doc edit`: restricted-library and
+          // parent checks, Markdown → editor data, and an open page's live room.
+          const result = await updateDocumentFromInput(
+            { documentModel, documentService, serverDB, userId, workspaceId },
+            {
+              content,
+              history: {
+                agentId,
+                operationId: context.rootOperationId ?? context.operationId,
+              },
+              id,
+              parentId,
+              saveSource: 'llm_call',
+              title,
+              writeSource: 'agent',
+            },
+          );
+          return { id: result.id };
         },
       },
       {

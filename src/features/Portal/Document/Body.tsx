@@ -5,13 +5,14 @@ import {
   Button,
   createStaticStyles,
   cssVar,
+  cx,
   Flexbox,
   Text,
   TextArea,
 } from '@lobehub/ui';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -21,8 +22,10 @@ import Loading from '@/components/Loading/CircleLoading';
 import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import FileNotFound from '@/features/FileNotFound';
 import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
+import TableOfContents, { TOC_RAIL_GUTTER } from '@/features/PageEditor/TableOfContents';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useDocumentStore } from '@/store/document';
+import { densityVars } from '@/styles/densityVars';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
@@ -39,12 +42,21 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
     flex: 1;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   contentFull: css`
     /* Width is handled by WideScreenContainer; keep only the scroll host. */
     overflow: auto;
     flex: 1;
+  `,
+  contentWithToc: css`
+    /* The TOC rail is hidden at this width (see TableOfContents). */
+    @media (width > 1024px) {
+      /* The editor bleeds tables past the column, which would run under the rail. */
+      --lobe-table-bleed: 0px;
+
+      padding-inline-end: ${TOC_RAIL_GUTTER}px;
+    }
   `,
   textArea: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -233,6 +245,8 @@ const DocumentBody = memo(() => {
       : ['', undefined],
   );
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [tocVisible, setTocVisible] = useState(false);
 
   const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
   const beginDocumentDetailPatch = useDocumentStore((s) => s.beginDocumentDetailPatch);
@@ -300,20 +314,32 @@ const DocumentBody = memo(() => {
   if (!documentMeta) return <FileNotFound />;
 
   return (
-    <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+    <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden', position: 'relative' }}>
       {/* Above the scroll host, so the plan page-size notice stays in view. */}
       {(renderMode.mode === 'editor' || renderMode.mode === 'highlight') && (
         <Flexbox paddingInline={16}>
           <CharLimitBanner documentId={documentId} />
         </Flexbox>
       )}
-      <div className={fullPage ? styles.contentFull : styles.content}>
+      <div
+        ref={scrollRef}
+        className={
+          fullPage ? styles.contentFull : cx(styles.content, tocVisible && styles.contentWithToc)
+        }
+      >
         {fullPage && renderMode.mode !== 'file' ? (
           <WideScreenContainer>{editorContent}</WideScreenContainer>
         ) : (
           editorContent
         )}
       </div>
+      {renderMode.mode === 'editor' && (
+        <TableOfContents
+          contentRef={scrollRef}
+          scrollRef={scrollRef}
+          onVisibleChange={setTocVisible}
+        />
+      )}
       {renderMode.mode !== 'file' && <TodoList />}
     </Flexbox>
   );

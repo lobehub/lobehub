@@ -24,10 +24,14 @@ export async function isShareRunRevoked(
 ): Promise<boolean> {
   if (!verify) return false;
   const shareMarker = agentState.principal?.actor?.shareVisitor as
-    { agentId?: string; shareId?: string } | undefined;
+    { agentId?: string; shareId?: string; visitorUserId?: string } | undefined;
   if (!shareMarker?.agentId || !shareMarker.shareId) return false;
   try {
-    return !(await verify({ agentId: shareMarker.agentId, shareId: shareMarker.shareId }));
+    return !(await verify({
+      agentId: shareMarker.agentId,
+      shareId: shareMarker.shareId,
+      visitorUserId: shareMarker.visitorUserId,
+    }));
   } catch (error) {
     log('[%s][%d] Share run authorization re-check failed: %O', operationId, stepIndex, error);
     return true;

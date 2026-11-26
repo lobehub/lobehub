@@ -24,7 +24,7 @@ const log = debug('lobe-server:messenger:linq:binder');
 
 const settingsUrl = (): string | undefined => {
   if (!appEnv.APP_URL) return undefined;
-  return new URL('/settings/messenger/linq', appEnv.APP_URL).toString();
+  return new URL('/marketplace/app/linq', appEnv.APP_URL).toString();
 };
 
 /** Replies are deliberately short: they arrive as iMessage / SMS bubbles. */
@@ -32,7 +32,7 @@ export const LINQ_REPLY = {
   alreadyLinkedToOther:
     'This number is already connected to a different LobeHub account. Disconnect it there first, then send your code again.',
   codeInvalid:
-    'That link code has expired or was already used. Open LobeHub → Settings → Messenger → iMessage to get a fresh one.',
+    'That link code has expired or was already used. Open LobeHub → Marketplace → Apps → iMessage to get a fresh one.',
   linked: (agentName?: string) =>
     agentName
       ? `You're connected to LobeHub. Messages you send here go to ${agentName}.`
@@ -40,9 +40,9 @@ export const LINQ_REPLY = {
   needLink: (url?: string) =>
     url
       ? `Hi! This number isn't connected to LobeHub yet. Open ${url} and tap Connect — it will text us a one-time code from your phone.`
-      : "Hi! This number isn't connected to LobeHub yet. Open LobeHub → Settings → Messenger → iMessage and tap Connect.",
+      : "Hi! This number isn't connected to LobeHub yet. Open LobeHub → Marketplace → Apps → iMessage and tap Connect.",
   unlinkBeforeRelink:
-    'Your LobeHub account is already connected to another number. Disconnect it in Settings → Messenger first, then send your code again.',
+    'Your LobeHub account is already connected to another number. Disconnect it in Marketplace → Apps first, then send your code again.',
 } as const;
 
 type LinkOutcome =

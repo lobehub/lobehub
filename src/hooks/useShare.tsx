@@ -1,9 +1,7 @@
 import SiMastodon from '@icons-pack/react-simple-icons/icons/SiMastodon';
 import SiReddit from '@icons-pack/react-simple-icons/icons/SiReddit';
-import SiSinaweibo from '@icons-pack/react-simple-icons/icons/SiSinaweibo';
 import SiTelegram from '@icons-pack/react-simple-icons/icons/SiTelegram';
 import SiWhatsapp from '@icons-pack/react-simple-icons/icons/SiWhatsapp';
-import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 import { camelCase, identity, pickBy } from 'es-toolkit/compat';
 import qs from 'query-string';
 
@@ -12,6 +10,11 @@ const stringifyHashtags = (hashtags: string[], joinfix: string = ',', prefix?: s
   return hashtags.filter(Boolean).join(joinfix);
 };
 
+/**
+ * Share links for the channels outside the four-channel `SocialShare`
+ * (Reddit, Telegram, WhatsApp, Mastodon). X and Weibo live in
+ * `@/features/SocialShare` so every entry posts the same copy.
+ */
 export const useShare = ({
   url,
   title,
@@ -57,27 +60,7 @@ export const useShare = ({
     ) as any;
     return qs.stringifyUrl({
       query,
-      url: 'https://t.me/share/url"',
-    });
-  };
-
-  const genWeiboLink = () => {
-    const query = pickBy(
-      {
-        sharesource: 'weibo',
-        title: [
-          [title, desc].filter(Boolean).join(' - '),
-          hashtags && stringifyHashtags(hashtags, ' ', '#'),
-        ]
-          .filter(Boolean)
-          .join(' '),
-        url,
-      },
-      identity,
-    ) as any;
-    return qs.stringifyUrl({
-      query,
-      url: 'http://service.weibo.com/share/share.php',
+      url: 'https://t.me/share/url',
     });
   };
 
@@ -97,34 +80,6 @@ export const useShare = ({
     return qs.stringifyUrl({
       query,
       url: 'https://api.whatsapp.com/send',
-    });
-  };
-
-  const genXLink = () => {
-    const query = pickBy(
-      {
-        hashtags: hashtags && stringifyHashtags(hashtags),
-        text: [title, desc].filter(Boolean).join(' - '),
-        url,
-      },
-      identity,
-    ) as any;
-    return qs.stringifyUrl({
-      query,
-      url: 'https://x.com/intent/tweet',
-    });
-  };
-
-  const genLinkdinLink = () => {
-    const query = pickBy(
-      {
-        url,
-      },
-      identity,
-    ) as any;
-    return qs.stringifyUrl({
-      query,
-      url: 'https://www.linkedin.com/sharing/share-offsite/',
     });
   };
 
@@ -149,10 +104,6 @@ export const useShare = ({
   };
 
   return {
-    linkedin: {
-      link: genLinkdinLink(),
-      title: 'Linkedin',
-    },
     mastodon: {
       icon: SiMastodon,
       link: genMastodonLink(),
@@ -168,20 +119,10 @@ export const useShare = ({
       link: genTelegramLink(),
       title: 'Telegram',
     },
-    weibo: {
-      icon: SiSinaweibo,
-      link: genWeiboLink(),
-      title: 'Weibo',
-    },
     whatsapp: {
       icon: SiWhatsapp,
       link: genWhatsappLink(),
       title: 'WhatsApp',
-    },
-    x: {
-      icon: SiX,
-      link: genXLink(),
-      title: 'X',
     },
   };
 };

@@ -12,6 +12,7 @@ import { useUploadFilesValidation } from '@/routes/(main)/(create)/image/feature
 import { configPanelStyles } from '@/routes/(main)/(create)/image/features/ConfigPanel/style';
 import { type ImageConstraints } from '@/routes/(main)/(create)/image/features/ConfigPanel/utils/imageValidation';
 import { useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { type FileUploadStatus } from '@/types/files/upload';
 
 // ======== Business Types ======== //
@@ -52,7 +53,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       padding-block: 8px;
-      padding-inline: 16px;
+      padding-inline: ${densityVars.cardPadding};
       border: 1px solid ${cssVar.colorBorder};
       border-radius: ${cssVar.borderRadius};
 

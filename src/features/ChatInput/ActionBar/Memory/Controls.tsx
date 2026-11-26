@@ -1,6 +1,8 @@
 import { type UserMemoryEffort } from '@lobechat/types';
-import { Center, createStaticStyles, cssVar, cx, Divider, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Divider, Flexbox, Icon } from '@lobehub/ui';
 import { BrainOffIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type LucideIcon } from 'lucide-react';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
@@ -10,6 +12,7 @@ import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Lev
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -17,39 +20,33 @@ import { useMemoryEnabled } from './useMemoryEnabled';
 
 const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'high'];
 
-const styles = createStaticStyles(({ css }) => ({
-  active: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  description: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  icon: css`
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgElevated};
-  `,
-  option: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  description: { fontSize: '12px', color: cssVar.colorTextDescription },
+  icon: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  option: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 interface ToggleOption {
   description: string;
@@ -70,7 +67,7 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
     <Flexbox
       horizontal
       align={'flex-start'}
-      className={cx(styles.option, isActive && styles.active)}
+      className={stylex.props(styles.option, isActive && styles.active).className}
       gap={12}
       style={{
         cursor: canCreate ? undefined : 'not-allowed',
@@ -81,12 +78,12 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
         await updateAgentChatConfig({ memory: { enabled: value === 'on' } });
       }}
     >
-      <Center className={styles.icon} flex={'none'} height={32} width={32}>
+      <Center className={stylex.props(styles.icon).className} flex={'none'} height={32} width={32}>
         <Icon icon={icon} />
       </Center>
       <Flexbox flex={1}>
-        <div className={styles.title}>{label}</div>
-        <div className={styles.description}>{description}</div>
+        <div {...stylex.props(styles.title)}>{label}</div>
+        <div {...stylex.props(styles.description)}>{description}</div>
       </Flexbox>
     </Flexbox>
   );
@@ -99,7 +96,7 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
  * separator above itself and disappears entirely while memory is off, so a host
  * panel never ends up with a divider that separates nothing.
  */
-export const MemoryEffortControl = memo(() => {
+export const MemoryEffortControl = memo<{ showDivider?: boolean }>(({ showDivider = true }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -111,11 +108,11 @@ export const MemoryEffortControl = memo(() => {
 
   return (
     <>
-      <Divider style={{ margin: 0 }} />
+      {showDivider && <Divider style={{ margin: 0 }} />}
       <Flexbox horizontal align={'center'} gap={16} padding={8}>
         <Flexbox flex={1} gap={4} style={{ minWidth: 100 }}>
-          <div className={styles.title}>{t('memory.effort.title')}</div>
-          <div className={styles.description}>{t('memory.effort.desc')}</div>
+          <div {...stylex.props(styles.title)}>{t('memory.effort.title')}</div>
+          <div {...stylex.props(styles.description)}>{t('memory.effort.desc')}</div>
         </Flexbox>
         <Flexbox
           flex={1}

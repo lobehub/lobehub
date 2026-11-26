@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Ordner aktualisieren",
   "workingDirectory.refreshGitStatus": "Zweig- und PR-Status aktualisieren",
   "workingDirectory.removeRecent": "Aus Kürzlich entfernen",
+  "workingDirectory.removeRecentFailed": "Dieser Ordner konnte nicht entfernt werden. Bitte versuchen Sie es erneut.",
   "workingDirectory.removeWorktreeAction": "Worktree löschen",
   "workingDirectory.removeWorktreeConfirm": "Worktree „{{name}}“ löschen? Dies entfernt das Worktree-Verzeichnis, behält jedoch dessen Branch. Git verweigert dies, wenn es nicht eingereichte Änderungen gibt.",
   "workingDirectory.removeWorktreeFailed": "Worktree-Löschung fehlgeschlagen",

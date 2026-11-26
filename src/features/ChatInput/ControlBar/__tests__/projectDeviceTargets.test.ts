@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 
-import { listProjectDeviceTargets } from '../projectDeviceTargets';
+import { isProjectSandboxRowDisabled, listProjectDeviceTargets } from '../projectDeviceTargets';
 
 const directory = (id: string, deviceId: string, extra: Partial<ProjectDirectory> = {}) =>
   ({
@@ -92,5 +92,20 @@ describe('listProjectDeviceTargets', () => {
     );
     expect(known.device).toBe(devices[0]);
     expect(unknown.device).toBeUndefined();
+  });
+});
+
+describe('isProjectSandboxRowDisabled', () => {
+  it('keeps the sandbox in use selectable-looking even when the conversation cannot leave it', () => {
+    // A started sandbox conversation: the row is the current pick, not an unavailable one.
+    expect(isProjectSandboxRowDisabled({ active: true })).toBe(false);
+  });
+
+  it('keeps a sandbox the conversation can move to enabled', () => {
+    expect(isProjectSandboxRowDisabled({ active: false, onSelect: () => {} })).toBe(false);
+  });
+
+  it('greys out a sandbox the conversation neither uses nor can move to', () => {
+    expect(isProjectSandboxRowDisabled({ active: false })).toBe(true);
   });
 });

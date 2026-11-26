@@ -7,11 +7,11 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 export const TOGGLE_BUTTON_ID = 'toggle_right_panel_button';
 
@@ -31,6 +31,7 @@ interface ToggleRightPanelButtonProps {
 
 const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
   ({ title, showActive, icon, hideWhenExpanded, size, expand: expandProp, onToggle }) => {
+    const headerActionSize = useHeaderActionSize(true);
     const [globalExpand, globalToggle, isStatusInit] = useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.toggleRightPanel,
@@ -54,7 +55,7 @@ const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
         active={showActive ? expand : undefined}
         icon={icon || (expand ? PanelRightClose : PanelRightOpen)}
         id={TOGGLE_BUTTON_ID}
-        size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={size || headerActionSize}
         title={title || t('toggleRightPanel.title', { ns: 'hotkey' })}
         tooltipProps={{
           hotkey,

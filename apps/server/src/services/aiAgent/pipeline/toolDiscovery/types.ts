@@ -9,6 +9,7 @@ import type {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   FrozenCredentialFacts,
   FrozenModelFacts,
   RequestTrigger,
@@ -53,6 +54,7 @@ export interface ToolDiscoveryInput {
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
   discordContext?: any;
+  evalConnectorSnapshots?: EvalConnectorSnapshots;
   exclusivePluginIds?: string[];
   /**
    * Mime types of the raw bot/IM uploads. The stage only ever looked at the
@@ -103,6 +105,7 @@ export interface ToolDiscoveryResult {
   executionPlan?: ExecutionPlan;
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
+  implicitBuiltinSkillIds?: readonly string[];
   lobehubSkillManifests: LobeToolManifest[];
   /** Model facts read once for the whole operation; see {@link FrozenModelFacts}. */
   modelFacts: FrozenModelFacts;

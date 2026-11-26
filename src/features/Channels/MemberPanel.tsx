@@ -1,8 +1,10 @@
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import type { StyleXStyles } from '@stylexjs/stylex';
 import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
@@ -20,20 +22,29 @@ const panelStyles = stylex.create({
   },
 });
 
-/** Workspace roster: a single list, without online/offline groups. */
-export function MemberPanel({
+/** The Channel's right column: floats over a narrow conversation, sits beside a wide one. */
+export function ChannelSidePanel({
+  actions,
   availableWidth = 1000,
-  detail,
+  children,
+  closeLabel,
   id,
+  label,
   onClose,
+  title,
+  xstyle,
 }: {
+  /** Header actions, before the close button. */
+  actions?: ReactNode;
   availableWidth?: number;
-  detail: ChannelDetail;
+  children: ReactNode;
+  closeLabel: string;
   id: string;
+  label: string;
   onClose: () => void;
+  title: string;
+  xstyle?: StyleXStyles;
 }) {
-  const { t } = useTranslation('channel');
-  const entries = useMemberEntries(detail);
   const narrow = availableWidth < MEMBER_FLOAT_BREAKPOINT;
   const width = narrow ? availableWidth : MEMBER_PANEL_WIDTH;
 
@@ -54,10 +65,10 @@ export function MemberPanel({
       }}
     >
       <Flexbox
-        aria-label={t('membersTitle')}
+        aria-label={label}
         id={id}
         role="complementary"
-        {...stylex.props(styles.body, panelStyles.panel)}
+        {...stylex.props(styles.body, xstyle)}
       >
         <NavHeader
           paddingBlock={6}
@@ -65,23 +76,56 @@ export function MemberPanel({
           showTogglePanelButton={false}
           left={
             <Text fontSize={12} type="secondary" weight={500}>
-              {t('membersCount', { count: entries.length })}
+              {title}
             </Text>
           }
           right={
-            <ActionIcon
-              aria-label={t('members.hide')}
-              icon={X}
-              size="small"
-              title={t('members.hide')}
-              onClick={onClose}
-            />
+            <Flexbox horizontal align="center" gap={4}>
+              {actions}
+              <ActionIcon
+                aria-label={closeLabel}
+                icon={X}
+                size="small"
+                title={closeLabel}
+                onClick={onClose}
+              />
+            </Flexbox>
           }
         />
-        <Flexbox flex={1} padding={12} paddingBlock={4} style={{ minHeight: 0, overflowY: 'auto' }}>
-          <MemberList detail={detail} />
-        </Flexbox>
+        {children}
       </Flexbox>
     </RightPanel>
+  );
+}
+
+/** Workspace roster: a single list, without online/offline groups. */
+export function MemberPanel({
+  availableWidth,
+  detail,
+  id,
+  onClose,
+}: {
+  availableWidth?: number;
+  detail: ChannelDetail;
+  id: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('channel');
+  const entries = useMemberEntries(detail);
+
+  return (
+    <ChannelSidePanel
+      availableWidth={availableWidth}
+      closeLabel={t('members.hide')}
+      id={id}
+      label={t('membersTitle')}
+      title={t('membersCount', { count: entries.length })}
+      xstyle={panelStyles.panel}
+      onClose={onClose}
+    >
+      <Flexbox flex={1} padding={12} paddingBlock={4} style={{ minHeight: 0, overflowY: 'auto' }}>
+        <MemberList detail={detail} />
+      </Flexbox>
+    </ChannelSidePanel>
   );
 }

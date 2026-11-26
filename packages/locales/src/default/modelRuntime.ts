@@ -79,6 +79,8 @@ export default {
     'The agent operation was idle for too long and was terminated. Please retry the request.',
   PermissionDenied:
     'Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.',
+  ProviderBaseURLBlocked:
+    'The {{provider}} endpoint points to a private or local network address, which the server is not allowed to reach for security reasons. This address only works from your own device — use a publicly reachable endpoint instead.',
   ProviderBizError:
     'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
   ProviderContentPolicyViolation:
@@ -91,6 +93,8 @@ export default {
     'The provider timed out while downloading an attached image or file. Please try again.',
   ProviderServiceUnavailable:
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
+  ProviderStreamInterrupted:
+    'The provider closed the connection before finishing the response. This is usually temporary, please try again.',
   QuotaLimitReached:
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   RateLimitExceeded:
@@ -111,4 +115,6 @@ export default {
     'The provider returned a malformed response that could not be parsed. Please retry; if it persists, try a different model or provider.',
   UserConfigError:
     'Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.',
+  WorkspaceModelRestricted:
+    'This model is above the highest tier your workspace admin allows you. Pick a lower-tier model, or ask a workspace admin to raise your tier.',
 };

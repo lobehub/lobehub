@@ -77,6 +77,12 @@ export type TaskExternalProvider = 'linear';
 
 /** Facts about the linked Linear issue kept on the link row, for display only. */
 export interface LinearIssueLinkMetadata {
+  /**
+   * The Linear archive the task already took up. Each archive applies once, so
+   * a task restored in LobeHub stays restored while the issue stays archived.
+   * Gone once Linear restores the issue, so archiving it again applies again.
+   */
+  appliedArchivedAt?: string;
   assigneeName?: string;
   /**
    * The issue's comments were read and copied at least once. A closed task
@@ -93,6 +99,14 @@ export interface LinearIssueLinkMetadata {
    * new ones. Sync bookkeeping, not display: a display refresh keeps it.
    */
   syncedCommentIds?: string[];
+  /**
+   * The issue's Linear labels (lowercased names) when they were last applied to
+   * the task. A sync applies only what changed in Linear since, so a label removed
+   * from the task in LobeHub stays removed. One added there stays too, unless a
+   * grouped label Linear adds replaces it as its sibling. Sync bookkeeping, not
+   * display: a display refresh keeps it.
+   */
+  syncedLabels?: string[];
   teamKey?: string;
 }
 
@@ -138,6 +152,8 @@ export interface LinearIssueCount {
 
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
+  /** Linear archived it, but the task has a live schedule or heartbeat or an open Goal; a later run retries. */
+  | 'live'
   /** Linear closed it, but the task is running; it is not interrupted. */
   | 'running'
   /** The linked task is in the trash or no longer visible to the caller. */
@@ -148,10 +164,14 @@ export type LinearSyncSkipReason =
   | 'failed'
   /** The task was synced, but its Linear comments were not; the next sync retries them. */
   | 'commentsFailed'
+  /** The task was synced, but its Linear labels were not; the next sync retries them. */
+  | 'labelsFailed'
   /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
   | 'missing';
 
 export interface LinearSyncResult {
+  /** Tasks archived because their issue was archived in Linear. Absent in older results. */
+  archived?: number;
   /** Tasks closed because their issue was completed or canceled in Linear. */
   closed: number;
   /** Linear comments copied onto tasks as task comments. Absent in older results. */
@@ -159,6 +179,8 @@ export interface LinearSyncResult {
   created: number;
   /** Tasks edited in LobeHub, so their name, instruction and priority were kept. */
   keptLocalEdits: number;
+  /** Tasks whose labels changed to follow Linear. Absent in older results. */
+  labelsSynced?: number;
   /** The first skipped issues with why; `skippedCount` holds the full count. */
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
   /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
@@ -235,6 +257,8 @@ export interface LinearSyncJobMetadata {
   ruleId?: string;
   /** Copy each issue's Linear comments onto its task as task comments. */
   syncComments?: boolean;
+  /** Bring each issue's Linear labels onto its task, creating the missing ones. */
+  syncLabels?: boolean;
 }
 
 export interface LinearSyncJobView {

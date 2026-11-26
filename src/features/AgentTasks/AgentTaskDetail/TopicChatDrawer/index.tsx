@@ -28,6 +28,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import ChatList from '@/features/Conversation/ChatList';
 import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
@@ -36,18 +37,23 @@ import { PortalContent } from '@/features/Portal/router';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { electronStylish } from '@/styles/electron';
 import { isForbiddenError } from '@/utils/forbiddenError';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
@@ -169,13 +175,14 @@ export interface TopicChatDrawerProps {
 }
 
 const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false }) => {
-  const { t } = useTranslation(['chat', 'common']);
+  const { t } = useTranslation(['chat', 'common', 'verify']);
   const navigate = useWorkspaceAwareNavigate();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
   const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
+  const fallbackRunningOperation = useTaskStore((s) => s.activeTopicDrawerRunningOperation);
   const inputFocusRequest = useTaskStore(taskDetailSelectors.topicDrawerFocusRequest);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
@@ -183,14 +190,18 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const showArtifactPortal = useTopicDrawerArtifactPortal();
   const closeArtifact = useChatStore((s) => s.closeArtifact);
+  const closeFilePreview = useChatStore((s) => s.closeFilePreview);
+  const isFilePreview = useChatStore(chatPortalSelectors.showFilePreview);
+  // The drawer hosts either an artifact or a file preview opened from its run.
+  const closeHostedPortal = isFilePreview ? closeFilePreview : closeArtifact;
 
-  // The portal state is global: an artifact left open when this drawer closes
-  // would make the next opening of the same topic land on the artifact instead
-  // of the conversation, so the drawer takes its artifact down with it.
+  // The portal state is global: an artifact or preview left open when this
+  // drawer closes would make the next opening of the same topic land on it
+  // instead of the conversation, so the drawer takes it down with it.
   const handleClose = useCallback(() => {
-    if (showArtifactPortal) closeArtifact();
+    if (showArtifactPortal) closeHostedPortal();
     closeTopicDrawer();
-  }, [closeArtifact, closeTopicDrawer, showArtifactPortal]);
+  }, [closeHostedPortal, closeTopicDrawer, showArtifactPortal]);
 
   // A request to write ("Continue chat") needs the conversation and its
   // composer. Each request is handled once, so an artifact the user opens
@@ -199,11 +210,13 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   useEffect(() => {
     if (!inputFocusRequest || inputFocusRequest === handledFocusRequestRef.current) return;
     handledFocusRequestRef.current = inputFocusRequest;
-    if (showArtifactPortal) closeArtifact();
-  }, [closeArtifact, inputFocusRequest, showArtifactPortal]);
+    if (showArtifactPortal) closeHostedPortal();
+  }, [closeHostedPortal, inputFocusRequest, showArtifactPortal]);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const { allowed: canEditTask } = usePermission('create_content');
+  const appOrigin = useAppOrigin();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   // Hydrate task detail when the drawer is opened outside of TaskDetailPage
   // (e.g. from a brief on home) so the header has agentId / status / seq.
@@ -224,6 +237,13 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
     [agentId, topicId],
   );
   const { openShareModal } = useShareModal({ context: shareContext });
+
+  // Without an origin the URL is relative — the system browser has nothing to
+  // resolve it against.
+  const topicPageUrl =
+    appOrigin && agentId && topicId
+      ? `${appOrigin}${buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(agentId, topicId), activeWorkspaceSlug)}`
+      : undefined;
 
   const handleCopyTopicId = useCallback(() => {
     if (topicId) void copyToClipboard(topicId);
@@ -329,6 +349,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
     <Flexbox
       horizontal
       align={'center'}
+      className={electronStylish.nodrag}
       flex={1}
       gap={8}
       style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
@@ -370,7 +391,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   );
 
   const actions = !topicId ? null : (
-    <Flexbox horizontal align={'center'} gap={4}>
+    <Flexbox horizontal align={'center'} className={electronStylish.nodrag} gap={4}>
       <ActionIcon
         icon={expanded ? Minimize2 : Maximize2}
         size={SHARE_ICON_SIZE}
@@ -384,6 +405,16 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
       ) : (
         shareIcon
       )}
+      <ActionIcon
+        disabled={!topicPageUrl}
+        icon={ExternalLink}
+        size={SHARE_ICON_SIZE}
+        title={t('report.actions.openInBrowser', { ns: 'verify' })}
+        onClick={() => {
+          if (!topicPageUrl) return;
+          openTrustedExternalUrl(topicPageUrl);
+        }}
+      />
     </Flexbox>
   );
 
@@ -427,13 +458,13 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
         {open &&
           (showArtifactPortal ? (
             <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-              <PortalContent onClose={closeArtifact} />
+              <PortalContent onClose={closeHostedPortal} />
             </Flexbox>
           ) : (
             <TopicChatDrawerBody
               agentId={agentId!}
               inputFocusRequest={inputFocusRequest}
-              runningOperation={activity?.runningOperation}
+              runningOperation={activity?.runningOperation ?? fallbackRunningOperation}
               topicId={topicId!}
             />
           ))}

@@ -7,20 +7,28 @@ import {
   type DeviceMessageApiResult,
   type DeviceToolCallResult,
   type GatewayMcpParams,
+  type GatewayToolCallCompletion,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  AntigravityQuotaParams,
+  AntigravityQuotaSnapshot,
   ClaudeCodeAccountRouting,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  CodexCollaborationMode,
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
+  ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import debug from 'debug';
+
+import type { McpTool } from '@/libs/mcp/types';
 
 import { invokeDeviceRead } from './deviceRead';
 import type { DeviceClientGetter } from './types';
@@ -68,6 +76,27 @@ export function codexQuota(
   });
 }
 
+/** Native agy quota; relay only, without quota-history ingestion. */
+export function antigravityQuota(
+  getClient: DeviceClientGetter,
+  params: AntigravityQuotaParams & {
+    deviceId: string;
+    userId: string;
+    workspaceId?: string;
+  },
+) {
+  return invokeDeviceRead<AntigravityQuotaSnapshot>(
+    getClient,
+    'getAntigravityQuota',
+    { ...params, timeout: 30_000 },
+    {
+      command: params.command,
+      env: params.env,
+      force: params.force,
+    },
+  );
+}
+
 /** Kimi Code subscription quota sampled from the login on a remote device. */
 export function kimiCodeQuota(
   getClient: DeviceClientGetter,
@@ -95,19 +124,7 @@ export async function listHeterogeneousAgentModels(
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type:
-      | 'codebuddy'
-      | 'codex'
-      | 'copilot'
-      | 'cursor'
-      | 'devin'
-      | 'droid'
-      | 'grok-build'
-      | 'kimi-code'
-      | 'opencode'
-      | 'pi'
-      | 'qoder'
-      | 'trae';
+    type: ListHeterogeneousAgentModelsParams['type'];
     userId: string;
     workspaceId?: string;
   },
@@ -160,14 +177,19 @@ export async function dispatchAgentRun(
     args?: string[];
     /** Claude Code account the device must spawn on; see the request message. */
     claudeAccountRouting?: ClaudeCodeAccountRouting;
+    /** Entrypoint name the agent asked Claude Code to report; see the request message. */
+    claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch, forwarded into the `lh hetero exec` envelope. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded to the device as fetchable (signed) URLs. */
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
@@ -195,6 +217,8 @@ export async function executeToolCall(
   getClient: DeviceClientGetter,
   params: {
     clientKinds?: DeviceClient[];
+    /** Lets the device report this call's final result later; see `buildShellCompletion`. */
+    completion?: GatewayToolCallCompletion;
     deviceId: string;
     operationId?: string;
     userId: string;
@@ -245,6 +269,8 @@ export async function executeMcpCall(
   mcpCall: {
     apiName: string;
     arguments: string;
+    /** Which of the device's clients runs the call (see `resolveMcpClientKinds`). */
+    clientKinds?: DeviceClient[];
     deviceId: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -278,6 +304,71 @@ export async function executeMcpCall(
     const failure = describeGatewayRequestFailure(error, 'tool call');
     return { content: failure.content, error: failure.error, success: false };
   }
+}
+
+/**
+ * List an MCP server's tools on a connected device, for servers only the device
+ * can reach (stdio, its network, or set to connect through it): the cloud can't
+ * connect to them to install or refresh the tool list. The tools come back as
+ * the server's `tools/list` returned them.
+ *
+ * Throws with a reason the user can act on: no gateway, a client too old to
+ * list MCP tools, or the device's own error.
+ */
+export async function listMcpTools(
+  getClient: DeviceClientGetter,
+  params: {
+    /** Which of the device's clients lists them (see `resolveMcpClientKinds`). */
+    clientKinds?: DeviceClient[];
+    deviceId: string;
+    mcpApps?: boolean;
+    params: GatewayMcpParams;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  },
+): Promise<McpTool[]> {
+  const {
+    clientKinds,
+    deviceId,
+    mcpApps,
+    params: connection,
+    timeout = 30_000,
+    userId,
+    workspaceId,
+  } = params;
+  const client = getClient();
+  if (!client) throw new Error('Device gateway is not configured');
+
+  log('listMcpTools: userId=%s, deviceId=%s, mcp=%s', userId, deviceId, connection.name);
+
+  let result: Awaited<ReturnType<typeof client.invokeRpc<McpTool[]>>>;
+  try {
+    result = await client.invokeRpc<McpTool[]>(
+      { clientKinds, deviceId, timeout, userId, workspaceId },
+      { method: 'listMcpTools', params: { mcpApps, params: connection } },
+    );
+  } catch (error) {
+    log('listMcpTools: transport error for deviceId=%s — %O', deviceId, error);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Couldn't reach your device to list this MCP server's tools (${reason}). Make sure the desktop app or \`lh connect\` is running and connected, then try again.`,
+      { cause: error },
+    );
+  }
+
+  if (!result.success || !Array.isArray(result.data)) {
+    const message = result.error || 'The device did not return a tool list';
+    log('listMcpTools: failed for deviceId=%s — %s', deviceId, message);
+    if (message.includes('Unknown device RPC method')) {
+      throw new Error(
+        'The app on this device is too old to list MCP tools. Update the desktop app or the `lh` CLI, then try again.',
+      );
+    }
+    throw new Error(message);
+  }
+
+  return result.data;
 }
 
 export async function executeMessageApi(

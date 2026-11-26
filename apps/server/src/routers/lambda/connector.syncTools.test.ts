@@ -6,6 +6,7 @@ import superjson from 'superjson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { McpBoundDeviceUnavailableError } from '@/server/services/mcp/deviceTunnel';
 
 import { connectorRouter } from './connector';
 
@@ -101,6 +102,28 @@ describe('connectorRouter.syncTools', () => {
         errorData: { code: 'StdioDesktopOnly' },
         httpStatus: 400,
       },
+    });
+  });
+
+  it('drops the auto tools the server no longer lists only for an install', async () => {
+    sync.mockResolvedValue({ toolCount: 1 });
+
+    await caller().syncTools({ id, pruneMissingAutoTools: true });
+    await caller().syncTools({ id });
+
+    expect(sync).toHaveBeenNthCalledWith(1, id, expect.anything(), {
+      pruneMissingAutoTools: true,
+    });
+    expect(sync).toHaveBeenNthCalledWith(2, id, expect.anything(), {
+      pruneMissingAutoTools: undefined,
+    });
+  });
+
+  it('reports a bound device that cannot list the tools as a precondition, naming it', async () => {
+    sync.mockRejectedValue(new McpBoundDeviceUnavailableError('nas', 'offline', 'devbox-b'));
+    await expect(caller().syncTools({ id })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('"devbox-b", which is offline'),
     });
   });
 

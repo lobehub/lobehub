@@ -14,7 +14,7 @@ import { TaskRunnerService } from '../../../taskRunner';
 import { GoalCriteriaGeneratorService } from '../../criteriaGenerator';
 import { VERIFICATION_FAILED_ERROR } from '../../decideNextMove';
 import { uncoveredAxisValues } from '../../spec';
-import { registerGoalServiceTestCleanup } from '../../testUtils';
+import { createBatchDecomposition, registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -316,21 +316,9 @@ describe('GoalService', () => {
   });
 
   it('routes a batch unit out of verification retries through the batch gate', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({
@@ -368,21 +356,9 @@ describe('GoalService', () => {
     // A sleeping laptop is not the recipe's fault. Routed to the batch gate first,
     // one device the probe could not reach paused the whole rollout and asked the
     // owner to revise or fork the recipe.
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const runSpy = vi
       .spyOn(TaskRunnerService.prototype, 'runTask')
       .mockRejectedValueOnce(new Error('DEVICE_NOT_FOUND'))
@@ -408,21 +384,9 @@ describe('GoalService', () => {
   });
 
   it('stops the running Tasks of the members a restart retires', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });

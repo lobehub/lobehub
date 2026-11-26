@@ -34,6 +34,13 @@ import type {
   CreateImagePayload,
 } from '../types/image';
 import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+} from '../types/music';
+import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
@@ -315,6 +322,22 @@ export class ModelRuntime {
 
     try {
       const hooksStartedAt = Date.now();
+      // Messages carry the plan between the context engine and server. Keep it off
+      // vendor payloads, including when a hosted route retries another provider.
+      const plan = payload.messages?.find(
+        (message) => message.toolActivationPlan,
+      )?.toolActivationPlan;
+      if (plan) {
+        payload = {
+          ...payload,
+          messages: payload.messages.map((message) => {
+            if (!message.toolActivationPlan) return message;
+            const { toolActivationPlan: _plan, ...rest } = message;
+            return rest;
+          }),
+        };
+        options = { ...options, toolActivationPlan: plan };
+      }
       const finalOptions = await this.applyHooks(payload, options);
       if (metadata) {
         timing(
@@ -560,12 +583,41 @@ export class ModelRuntime {
     return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
   }
 
+  /**
+   * Generate music with the provider runtime. Returns `undefined` when the provider has no
+   * music support. Asynchronous providers return a `pending` result with a task id unless
+   * `options.waitForCompletion` is set; poll it with {@link handlePollMusicStatus}.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult | undefined> {
+    return this._runtime.createMusic?.(payload, options);
+  }
+
+  async handlePollMusicStatus(
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route, options);
+  }
+
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
   async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
     return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
+  }
+
+  /**
+   * Verify the provider key without a chat model. `undefined` when the runtime has no
+   * credential check, so callers can fall back to a chat check.
+   */
+  async checkCredentials() {
+    return this._runtime.checkCredentials?.();
   }
 
   async models() {
@@ -579,25 +631,33 @@ export class ModelRuntime {
 
       const startTime = Date.now();
 
+      let usage: ModelUsage | undefined;
+      let routeAttempt: UsageReportContext['routeAttempt'];
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
-              await hookOptions?.onUsage?.(usage, context);
-              try {
-                const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!(
-                  { latencyMs, routeAttempt: context?.routeAttempt, usage },
-                  { options, payload },
-                );
-              } catch (e) {
-                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-              }
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const result = await this._runtime.embeddings?.(payload, finalOptions);
+
+      if (this._hooks?.onEmbeddingsFinal) {
+        try {
+          await this._hooks.onEmbeddingsFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+        }
+      }
+
+      return result;
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {
@@ -827,13 +887,23 @@ export class ModelRuntime {
     >,
     hooks?: ModelRuntimeHooks,
   ) {
+    return new ModelRuntime(ModelRuntime.createProviderRuntime(provider, params), hooks);
+  }
+
+  /**
+   * Construct the bare provider implementation without wrapping it in a
+   * ModelRuntime, so callers can decorate it (e.g. the server's SSRF guard)
+   * before attaching hooks.
+   */
+  static createProviderRuntime(
+    provider: string,
+    params: Parameters<typeof ModelRuntime.initializeWithProvider>[1],
+  ): LobeRuntimeAI {
     // runtime map does not include every provider id (e.g. vertex), so index loosely
     const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
       providerRuntimeMap;
     const providerAI = runtimeMap[provider] ?? LobeOpenAI;
 
-    const runtimeModel: LobeRuntimeAI = new providerAI(params);
-
-    return new ModelRuntime(runtimeModel, hooks);
+    return new providerAI(params);
   }
 }

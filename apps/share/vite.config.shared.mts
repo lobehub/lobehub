@@ -60,6 +60,20 @@ export const createShareRrConfig = ({
     ...extraSsrStubs,
   };
 
+  // Artboards are private to signed-in projects, and their canvas frames need the
+  // main SPA's `virtual:canvas-runtime` plugin, which the Share build lacks.
+  const appOnlyStubs: Record<string, string> = {
+    '@/features/Artboard/Gallery/loader': stub('artboardLoader.ts'),
+  };
+
+  const shareAppOnlyStubs = (): Plugin => ({
+    enforce: 'pre',
+    name: 'share-app-only-stubs',
+    resolveId(source) {
+      return appOnlyStubs[source];
+    },
+  });
+
   const shareSsrStubs = (): Plugin => ({
     applyToEnvironment: (environment) => environment.name === 'ssr',
     enforce: 'pre',
@@ -177,6 +191,7 @@ export const createShareRrConfig = ({
     plugins: [
       process.env.SHARE_CHUNK_REPORT ? ssrChunkReport() : undefined,
       process.env.SHARE_TRACE_MODULE ? ssrModuleTrace(process.env.SHARE_TRACE_MODULE) : undefined,
+      shareAppOnlyStubs(),
       shareSsrStubs(),
       shareClientOnlyStub(),
       buildInputsManifest(),

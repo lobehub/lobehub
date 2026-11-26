@@ -1,9 +1,9 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
-  defaultChannelAgentDevice,
   defaultChannelAgentDirectory,
   isChannelRuntime,
+  isRemoteChannelRuntime,
 } from '@lobechat/types';
 
 import type { ChannelAgentSelection } from '@/services/channel';
@@ -18,7 +18,6 @@ export type ChannelAgentIssue =
   | 'configurationFailed'
   | 'configurationLoading'
   | 'deviceOffline'
-  | 'deviceRequired'
   | 'deviceUnavailable'
   | 'devicesFailed'
   | 'devicesLoading'
@@ -27,17 +26,14 @@ export type ChannelAgentIssue =
 
 export interface ChannelAgentEnvironment {
   agencyConfig?: LobeAgentAgencyConfig;
-  currentDeviceId?: string;
   devices?: DeviceListItem[];
   devicesConfirmed: boolean;
   devicesError?: unknown;
-  isDesktop: boolean;
   model?: string;
-  workspaceScoped?: boolean;
 }
 
 /** Device issues of an inherited environment are fixed in the Agent's settings, not here. */
-const INHERITED_ISSUES = ['deviceOffline', 'deviceRequired', 'deviceUnavailable'] as const;
+const INHERITED_ISSUES = ['deviceOffline', 'deviceUnavailable'] as const;
 
 const isInheritedIssue = (issue: ChannelAgentIssue): issue is (typeof INHERITED_ISSUES)[number] =>
   (INHERITED_ISSUES as readonly ChannelAgentIssue[]).includes(issue);
@@ -52,6 +48,10 @@ const getRuntime = ({ agencyConfig, model }: ChannelAgentEnvironment) =>
   agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(model) ? model! : 'native');
 
+/** A remote-task Agent runs on its own host; a Channel picks no device for it. */
+export const isRemoteChannelAgent = (environment: ChannelAgentEnvironment) =>
+  isRemoteChannelRuntime(getRuntime(environment));
+
 const getDeviceDirectory = (deviceId: string | undefined, environment: ChannelAgentEnvironment) => {
   if (!deviceId) return;
   return defaultChannelAgentDirectory(
@@ -63,21 +63,13 @@ const getDeviceDirectory = (deviceId: string | undefined, environment: ChannelAg
   );
 };
 
-/** Snapshot only the Agent's chosen machine, never another available/online device. */
-export const createChannelAgentSelection = (
-  agentId: string,
-  environment: ChannelAgentEnvironment,
-): ChannelAgentSelection => {
-  const { agencyConfig, currentDeviceId, isDesktop, workspaceScoped } = environment;
-  const deviceId = defaultChannelAgentDevice({
-    agencyConfig,
-    localDeviceId: isDesktop ? currentDeviceId : undefined,
-    runtime: getRuntime(environment),
-    workspaceScoped,
-  });
-  if (!deviceId) return { agentId };
-  return { agentId, deviceId, workingDirectory: getDeviceDirectory(deviceId, environment) };
-};
+/**
+ * A Channel binds no device by default: the Agent runs where its own settings say until a member
+ * picks a device for it here.
+ */
+export const createChannelAgentSelection = (agentId: string): ChannelAgentSelection => ({
+  agentId,
+});
 
 export interface ChannelAgentIssueOptions {
   /** Inherited defaults may omit the directory; the server then uses the device's home folder. */
@@ -91,7 +83,8 @@ export const getChannelAgentIssue = (
 ): ChannelAgentIssue | undefined => {
   const runtime = getRuntime(environment);
   if (!isChannelRuntime(runtime)) return 'unsupportedRuntime';
-  if (!selection.deviceId) return runtime === 'native' ? undefined : 'deviceRequired';
+  // No device picked: it follows the Agent's own settings, like an ordinary conversation.
+  if (!selection.deviceId) return;
   if (environment.devicesError) return 'devicesFailed';
   if (!environment.devicesConfirmed) return 'devicesLoading';
   const device = environment.devices?.find((item) => item.deviceId === selection.deviceId);
@@ -122,14 +115,8 @@ export const reconcileChannelAgentDraft = (
   let next = draft;
   let issue = sourceIssue;
   if (!issue) {
-    if (!draft.initialized) {
-      const selection = createChannelAgentSelection(draft.agentId, environment);
-      if (selection.deviceId && (environment.devicesError || !environment.devicesConfirmed)) {
-        issue = environment.devicesError ? 'devicesFailed' : 'devicesLoading';
-      } else {
-        next = { ...draft, ...selection, initialized: true };
-      }
-    }
+    if (!draft.initialized)
+      next = { ...draft, ...createChannelAgentSelection(draft.agentId), initialized: true };
     issue ??= getChannelAgentIssue(next, environment, options);
   }
   return next === draft && draft.issue === issue ? draft : { ...next, issue };

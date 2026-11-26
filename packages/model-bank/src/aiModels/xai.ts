@@ -17,6 +17,13 @@ const xaiChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'grok-4.7',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model (its release notes state no text output limit).
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.7
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     /** @see https://docs.x.ai/developers/models/grok-4.7 */
     pricing: {
       units: [
@@ -74,6 +81,13 @@ const xaiChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'grok-4.6',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model (its release notes state no text output limit).
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.6
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     /** @see https://docs.x.ai/developers/models/grok-4.6 */
     pricing: {
       units: [
@@ -133,6 +147,13 @@ const xaiChatModels: AIChatModelCard[] = [
     generation: 'grok-4.5',
     id: 'grok-4.5',
     isOfficial: true,
+    /**
+     * xAI publishes no output cap for this model.
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.5
+     * @see https://models.dev
+     */
+    maxOutput: 500_000,
     pricing: {
       units: [
         {
@@ -187,6 +208,13 @@ const xaiChatModels: AIChatModelCard[] = [
     id: 'grok-4.3',
     isOfficial: true,
     knowledgeCutoff: '2025-12',
+    /**
+     * xAI publishes no output cap for this model.
+     * Value matches public platform data (models.dev, AIHubMix, Vercel AI Gateway, Cloudflare).
+     * @see https://docs.x.ai/developers/models/grok-4.3
+     * @see https://models.dev
+     */
+    maxOutput: 30_000,
     pricing: {
       units: [
         {

@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "Oudere versie live",
   "artifacts.deploy.publish": "Publiceren",
   "artifacts.deploy.publishNewVersion": "Deze versie publiceren",
+  "artifacts.deploy.quotaUnavailable": "De limietcontrole voor implementaties is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
   "artifacts.deploy.serviceOverloaded": "De hosting van artefacten is tijdelijk overbelast. Probeer het publiceren binnenkort opnieuw.",
   "artifacts.deploy.success": "Gepubliceerd",
   "artifacts.deploy.writeInProgress": "Er wordt momenteel een andere implementatiewijziging uitgevoerd. Probeer het binnenkort opnieuw.",

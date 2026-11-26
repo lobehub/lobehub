@@ -1,0 +1,111 @@
+{
+  "$schema_comment": "Map npm @lobehub/* packages to their public skills.md entry. status=ok means installable; missing means skip+warn.",
+  "packages": {
+    "@lobehub/ui": {
+      "skill": "lobe-ui",
+      "url": "https://ui.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://ui.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-ui"
+    },
+    "@lobehub/lint": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://lint.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-lint"
+    },
+    "@lobehub/eslint-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/prettier-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/stylelint-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/commitlint-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/remarklint-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/semantic-release-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/oxlint-config": {
+      "skill": "lobe-lint",
+      "url": "https://lint.lobehub.com/skills.md",
+      "status": "ok",
+      "via": "@lobehub/lint"
+    },
+    "@lobehub/editor": {
+      "skill": "lobe-editor",
+      "url": "https://editor.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://editor.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-editor"
+    },
+    "@lobehub/icons": {
+      "skill": "lobe-icons",
+      "url": "https://icons.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://icons.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-icons"
+    },
+    "@lobehub/charts": {
+      "skill": "lobe-charts",
+      "url": "https://charts.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://charts.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-charts"
+    },
+    "@lobehub/tts": {
+      "skill": "lobe-tts",
+      "url": "https://tts.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://tts.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-tts"
+    },
+    "@lobehub/fluent-emoji": {
+      "skill": "fluent-emoji",
+      "url": "https://fluent-emoji.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://fluent-emoji.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-fluent-emoji"
+    },
+    "@lobehub/streamdown": {
+      "skill": "streamdown",
+      "url": "https://streamdown.lobehub.com/skills.md",
+      "status": "ok",
+      "docs": "https://streamdown.lobehub.com/",
+      "repo": "https://github.com/lobehub/lobe-streamdown"
+    },
+    "@lobehub/docs-kit": {
+      "status": "missing",
+      "note": "No public docs-site skills.md for consumers; using-docs-kit lives only in package repos' .agents/skills."
+    },
+    "@lobehub/ui-rn": {
+      "status": "missing",
+      "note": "ui-rn.lobehub.com/skills.md returns 404 (checked 2026-11-02)."
+    }
+  }
+}

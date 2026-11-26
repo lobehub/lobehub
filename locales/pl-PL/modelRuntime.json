@@ -1,5 +1,6 @@
 {
   "AccountDeactivated": "Twoje konto zostało dezaktywowane lub zawieszone. Może to być spowodowane naruszeniem zasad, względami bezpieczeństwa lub przeglądem konta. Skontaktuj się z pomocą techniczną dostawcy, aby uzyskać pomoc.",
+  "AgentRuntimeError": "Coś poszło nie tak podczas generowania odpowiedzi. Rozwiń szczegóły poniżej, aby poznać przyczynę, lub spróbuj ponownie.",
   "CapabilityNotSupported": "Przepraszamy, ten model nie obsługuje żądanej funkcji (takiej jak wejście wizualne lub wywoływanie narzędzi). Proszę przełączyć się na model, który to obsługuje.",
   "ClientLlmExecutorLost": "Urządzenie obsługujące {{provider}} dla tej rozmowy przestało odpowiadać przed zakończeniem odpowiedzi — mogło zostać zamknięte, odświeżone lub rozłączone. Pozostaw okno LobeHub otwarte i spróbuj ponownie.",
   "ClientLlmExecutorUnavailable": "{{provider}} można osiągnąć tylko z własnego urządzenia, ale żadne otwarte okno LobeHub nie odebrało żądania. Otwórz LobeHub na urządzeniu, na którym działa {{provider}}, a następnie spróbuj ponownie.",
@@ -31,6 +32,7 @@
   "LobeHubModelDeprecated": "Wybrany model nie jest już dostępny. Poproś bota lub właściciela agenta o wybranie dostępnego modelu, a następnie spróbuj ponownie.",
   "LocationNotSupportError": "Przepraszamy, Twoja obecna lokalizacja nie obsługuje tej usługi modelu. Może to być spowodowane ograniczeniami regionalnymi lub niedostępnością usługi. Proszę potwierdzić, czy obecna lokalizacja obsługuje korzystanie z tej usługi, lub spróbować użyć innej lokalizacji.",
   "ModelEmptyCompletion": "Dostawca modelu zwrócił pustą odpowiedź. Nawet bez widocznej treści, to żądanie może nadal generować koszty. Możesz spróbować ponownie lub zmienić model i spróbować jeszcze raz.",
+  "ModelEmptyCompletionWithCost": "Dostawca modelu zwrócił pustą odpowiedź. To żądanie kosztowało ${{credits}}. Ponowna próba może wiązać się z podobnym kosztem, albo możesz przełączyć się na inny model.",
   "ModelNotFound": "Przepraszamy, żądany model nie został znaleziony. Może nie istnieć lub możesz nie mieć odpowiednich uprawnień dostępu. Proszę spróbować ponownie po zmianie klucza API lub dostosowaniu uprawnień dostępu.",
   "ModelRefusal": "Model odmówił odpowiedzi na to zapytanie. Spróbuj sformułować je inaczej lub wybierz inny model.",
   "NoAvailableChannel": "Przepraszamy, proxy lub router nie ma dostępnego kanału dla żądanego modelu. Proszę przełączyć konfigurację kanału/klucza lub spróbować ponownie później.",

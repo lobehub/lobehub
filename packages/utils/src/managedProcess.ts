@@ -490,13 +490,31 @@ export const stopManagedProcess = (id: string) => enableManagedProcesses().stop(
 export const shutdownManagedProcesses = () => host[registryKey]?.shutdown() ?? Promise.resolve();
 
 /** Preserve Node's spawn overloads, including typed stdio. Cleanup helpers use raw spawn. */
+/**
+ * `cwd` changes the child's real directory but not the inherited `PWD`, which
+ * still names the parent's directory. Shells keep the two in sync on `cd`;
+ * spawned CLIs that trust `PWD` (OpenCode 2.x resolves its project from it)
+ * would otherwise run in the wrong directory.
+ */
+const alignPwdWithCwd = (options: SpawnOptions | undefined): SpawnOptions | undefined =>
+  typeof options?.cwd === 'string'
+    ? { ...options, env: { ...(options.env ?? process.env), PWD: path.resolve(options.cwd) } }
+    : options;
+
 export const spawnManaged: typeof spawn = ((...args: Parameters<typeof spawn>) => {
   const registry = host[registryKey];
   log('spawn managed=%s', !!registry);
   registry?.assertCanSpawn();
-  const child = spawn(...args);
-  const options = (Array.isArray(args[1]) ? args[2] : (args[1] ?? args[2])) as
-    SpawnOptions | undefined;
+  const [command, argsOrOptions, maybeOptions] = args;
+  const options = alignPwdWithCwd(
+    (Array.isArray(argsOrOptions) ? maybeOptions : (argsOrOptions ?? maybeOptions)) as
+      SpawnOptions | undefined,
+  );
+  const child = (
+    Array.isArray(argsOrOptions)
+      ? spawn(command, argsOrOptions, options ?? {})
+      : spawn(command, options ?? {})
+  ) as ReturnType<typeof spawn>;
   registry?.register(child, options?.detached ?? false, {
     topicId: options?.env?.LOBEHUB_PROCESS_TOPIC || undefined,
     agentId: options?.env?.LOBEHUB_PROCESS_AGENT || undefined,

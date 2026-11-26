@@ -3,6 +3,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useStoryFormat } from '../format';
 
 const styles = stylex.create({
@@ -14,7 +16,7 @@ const styles = stylex.create({
     color: cssVar.colorText,
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: '8px',
     paddingInline: '8px',
     textAlign: 'start',
@@ -38,7 +40,7 @@ const styles = stylex.create({
   titleLine: { alignItems: 'baseline', display: 'flex', gap: '8px' },
   title: {
     flex: '1',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     lineHeight: '20px',
     minWidth: 0,

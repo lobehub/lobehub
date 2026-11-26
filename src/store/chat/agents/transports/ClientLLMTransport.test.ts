@@ -6,6 +6,15 @@ import { chatService } from '@/services/chat';
 import type { ChatStore } from '../../store';
 import { ClientLLMTransport } from './ClientLLMTransport';
 
+const createContentPolicyFailure = () => ({
+  error: {
+    message: 'The content may contain prohibited content. Please adjust it and try again.',
+    type: 'ProviderContentPolicyViolation',
+  },
+  events: [],
+  interrupted: false,
+});
+
 // A grounding-only completion streams no text into `content`, but carries
 // citation metadata and burns real output tokens. The stream (driven via
 // `chatService.getChatCompletion`) finishes with `grounding` + `usage`, and the
@@ -210,14 +219,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
       scope: 'group',
     });
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.updateTopicStatus).toHaveBeenCalledWith({
       agentId: 'agent-1',
@@ -246,14 +248,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
     const { store, transport } = createTransport();
     store.operations['op-1'].status = 'cancelled';
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.internal_dispatchMessage).toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
@@ -263,14 +258,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
   it('does not reset topic status for nested sub-agent operations', () => {
     const { store, transport } = createTransport({ scope: 'sub_agent' });
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.failOperation).toHaveBeenCalled();
     expect(store.updateTopicStatus).not.toHaveBeenCalled();

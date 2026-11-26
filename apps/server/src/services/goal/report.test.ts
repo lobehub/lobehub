@@ -21,6 +21,25 @@ import {
   validateGoalReport,
 } from './report';
 
+const acceptanceChapter = (): GoalReportMetadata['chapters'][number] => ({
+  detours: [],
+  findingIds: [],
+  narrative: 'N',
+  nodeIds: ['acc'],
+  title: 'C2',
+  workVersionIds: [],
+});
+
+const submitTool = (): Parameters<typeof buildGoalReportInstruction>[2] => ({
+  kind: 'tool',
+  toolName: 'lobe-goal-report.submitGoalReport',
+});
+
+const mainlineInput = (): GoalReportMetadata['mainline'] => ({
+  edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
+  nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
+});
+
 const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode =>
   ({
     createdAt: new Date(1000),
@@ -377,10 +396,7 @@ describe('buildGoalReportSkeleton', () => {
   });
 
   it('asks for chapters, detour reasons and lessons, next steps and a submission', () => {
-    const text = buildGoalReportInstruction(snapshot, 'accepted', {
-      kind: 'tool',
-      toolName: 'lobe-goal-report.submitGoalReport',
-    });
+    const text = buildGoalReportInstruction(snapshot, 'accepted', submitTool());
     expect(text).toContain('Candidate main path');
     expect(text).toContain('t1b [task, resolved] t1b · superseded by t2 (revises) · fork: t2');
     expect(text).toContain('Goal-level acceptance passed');
@@ -402,10 +418,7 @@ describe('buildGoalReportSkeleton', () => {
    * skeleton found candidate detours, the contract must make one mandatory.
    */
   it('requires at least one detour when the skeleton offers candidate detours', () => {
-    const text = buildGoalReportInstruction(snapshot, 'accepted', {
-      kind: 'tool',
-      toolName: 'lobe-goal-report.submitGoalReport',
-    });
+    const text = buildGoalReportInstruction(snapshot, 'accepted', submitTool());
     expect(text).toContain('2 candidate detour');
     expect(text).toContain('at least one MUST appear in your report');
     expect(text).toContain('at least ONE of these must be told as a detour');
@@ -423,10 +436,7 @@ describe('buildGoalReportSkeleton', () => {
         ],
       }),
     );
-    const text = buildGoalReportInstruction(noDetours, 'accepted', {
-      kind: 'tool',
-      toolName: 'lobe-goal-report.submitGoalReport',
-    });
+    const text = buildGoalReportInstruction(noDetours, 'accepted', submitTool());
     expect(text).not.toContain('MUST appear in your report');
     expect(text).toContain('- none');
   });
@@ -446,10 +456,7 @@ describe('buildGoalReportSkeleton', () => {
   });
 
   it('asks for the report as one self-contained HTML page and submits it with the markdown', () => {
-    const tool = buildGoalReportInstruction(snapshot, 'accepted', {
-      kind: 'tool',
-      toolName: 'lobe-goal-report.submitGoalReport',
-    });
+    const tool = buildGoalReportInstruction(snapshot, 'accepted', submitTool());
     expect(tool).toContain('ONE HTML page');
     expect(tool).toContain('The page MUST be self-contained');
     expect(tool).toContain('all CSS in <style> and all JS in <script>');
@@ -475,22 +482,12 @@ describe('buildGoalReportSkeleton', () => {
           title: 'C1',
           workVersionIds: ['wv_doc'],
         },
-        {
-          detours: [],
-          findingIds: [],
-          narrative: 'N',
-          nodeIds: ['acc'],
-          title: 'C2',
-          workVersionIds: [],
-        },
+        acceptanceChapter(),
       ],
       deliverableWorkId: 'work_doc',
       graphCursor: 'evt_new',
       headline: 'H',
-      mainline: {
-        edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
-        nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
-      },
+      mainline: mainlineInput(),
       nextSteps: [{ nodeIds: ['t2'], reason: 'R', title: 'Next' }],
     };
 
@@ -675,22 +672,12 @@ describe('buildGoalReportSkeleton', () => {
           title: 'C1',
           workVersionIds: ['wv_doc'],
         },
-        {
-          detours: [],
-          findingIds: [],
-          narrative: 'N',
-          nodeIds: ['acc'],
-          title: 'C2',
-          workVersionIds: [],
-        },
+        acceptanceChapter(),
       ],
       deliverableWorkId: 'work_doc',
       graphCursor: 'evt_new',
       headline: 'H',
-      mainline: {
-        edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
-        nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
-      },
+      mainline: mainlineInput(),
       nextSteps: [{ nodeIds: ['t2'], reason: 'R', title: 'Next' }],
     };
 
@@ -848,10 +835,7 @@ describe('buildGoalReportSkeleton', () => {
             workVersionIds: [],
           },
         ],
-        mainline: {
-          edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
-          nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
-        },
+        mainline: mainlineInput(),
       };
 
       const aligned = alignGoalReportStoryline(snapshot, messy);
@@ -879,22 +863,12 @@ describe('buildGoalReportSkeleton', () => {
             title: 'C1',
             workVersionIds: ['wv_doc'],
           },
-          {
-            detours: [],
-            findingIds: [],
-            narrative: 'N',
-            nodeIds: ['acc'],
-            title: 'C2',
-            workVersionIds: [],
-          },
+          acceptanceChapter(),
         ],
         deliverableWorkId: 'work_doc',
         graphCursor: 'evt_new',
         headline: 'H',
-        mainline: {
-          edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
-          nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
-        },
+        mainline: mainlineInput(),
         nextSteps: [],
       };
       expect(alignGoalReportStoryline(snapshot, detached)).toEqual(detached);

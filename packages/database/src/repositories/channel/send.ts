@@ -1,13 +1,15 @@
-import type { ChannelRoutingMode } from '@lobechat/types';
-import { CHANNEL_LIMITS } from '@lobechat/types';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import type { ChannelMessageMetadata, ChannelRoutingMode, ContactCardInput } from '@lobechat/types';
+import { CHANNEL_LIMITS, ChatErrorType, contactCardOf, contactCardText } from '@lobechat/types';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
 import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
+import type { ChannelContacts } from './contacts';
 import {
   activeMembers,
   appendMessage,
@@ -18,16 +20,29 @@ import {
   pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
+import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
 
 export interface ChannelSendInput {
+  /**
+   * Server only: the Agent member that writes this request in a conversation between Agents
+   * (`channels.agentPairKey`). The caller stays the requester and execution identity.
+   */
+  authorAgentMemberId?: string;
+  /**
+   * Share a contact as a card. The server checks it may be shared, then writes the content (a text
+   * fallback) and `metadata.card` (a snapshot); a retry matches the original by this reference.
+   */
+  card?: ContactCardInput;
   content: string;
   fileIds?: string[];
-  /** Member ids. Human quotes retain mentions without dispatching them. */
+  /** Member ids. A human quote dispatches only its mentioned Agents. */
   mentions?: string[];
-  /** Quote a person without dispatch, or continue an Agent answer in its thread. */
+  /** Stored with the message, e.g. `via` for a request an Agent relayed for the caller. */
+  metadata?: ChannelMessageMetadata;
+  /** Quote a message in its own feed; @mentions dispatch, else a quoted Agent answers. */
   replyToId?: string;
   /** Client retry key; a retry with the same key returns the original message. */
   requestKey: string;
@@ -35,20 +50,38 @@ export interface ChannelSendInput {
   rootMessageId?: string;
   /** How to route a message without @mentioned Agents. */
   routing: ChannelRoutingMode;
+  /**
+   * Server only: post for the record without waking any Agent, e.g. the root of a Thread an Agent
+   * opens, or a correction it steered into a running reply.
+   */
+  silent?: boolean;
   threadId?: string | null;
 }
 
 const sameList = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
+/** Whether a stored message shares the same contact, by reference rather than its snapshot. */
+const sameCard = (metadata: ChannelMessageMetadata | null, input: ContactCardInput) => {
+  const card = contactCardOf(metadata);
+  if (!card || card.type !== input.type) return false;
+  return card.type === 'user'
+    ? card.userId === (input as { userId: string }).userId
+    : card.agentId === (input as { agentId: string }).agentId;
+};
+
 export const validateSendInput = (input: ChannelSendInput) => {
   if (input.replyToId && input.rootMessageId)
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
+  if (input.silent && input.mentions?.length)
+    throw new ChannelError('BAD_REQUEST', 'A message for the record mentions no one');
   const fileIds = [...new Set(input.fileIds ?? [])];
+  if (input.card && fileIds.length)
+    throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');
   if (
-    (!input.content.trim() && !fileIds.length) ||
+    (!input.card && !input.content.trim() && !fileIds.length) ||
     !input.requestKey ||
     input.content.length > CHANNEL_LIMITS.contentLength ||
     fileIds.length > CHANNEL_LIMITS.attachments
@@ -65,8 +98,10 @@ export const validateSendInput = (input: ChannelSendInput) => {
 /**
  * Posts a human message. The caller holds the channel lock and is `access.member`.
  *
- * - Human quotes stay in their feed without jobs; Agent replies continue in a thread.
- * - Outside human quotes, @mentioned Agents get jobs in this transaction (`directed`, source `explicit`).
+ * - A reply stays in the feed of the message it quotes; it never opens a Thread.
+ * - Quoting a person without mentions gets no jobs. Quoting an Agent without mentions asks that
+ *   Agent; with @mentions, only the mentioned Agents answer.
+ * - @mentioned Agents get jobs in this transaction (`directed`, source `explicit`), quoted or not.
  * - @mentioning only people wakes no Agent.
  * - Without mentions, `decision` leaves the message `pending` for the routing task, and
  *   `fallback` hands it to every candidate Agent at once.
@@ -77,8 +112,12 @@ export const sendMessage = async (
   tx: Transaction,
   { channel, member }: ChannelAccess,
   input: ChannelSendInput,
+  contacts: ChannelContacts,
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
+  const author = await requestAuthor(tx, channel, input.authorAgentMemberId);
+  if (author && (mentions.includes(author.id) || fileIds.length || input.card))
+    throw new ChannelError('BAD_REQUEST', 'An Agent asks the other Agent, without attachments');
   const [replyTo] = input.replyToId
     ? await tx
         .select()
@@ -96,9 +135,12 @@ export const sendMessage = async (
     replyTo.id !== sourceThread?.rootMessageId
   )
     throw new ChannelError('BAD_REQUEST', 'Reply message belongs to another conversation');
-  const quoteOnly = !!replyTo && replyTo.routingStatus !== 'reply';
+  const humanQuote = !!replyTo && replyTo.routingStatus !== 'reply';
+  // An explicit @mention still dispatches; the quote only adds context.
+  const quoteOnly = !!input.silent || (humanQuote && !mentions.length);
+  // Quoting an Agent asks it only when nobody is @mentioned: a mention names who should answer.
   const [replyAgent] =
-    replyTo && !quoteOnly
+    replyTo && !humanQuote && !mentions.length
       ? await tx
           .select()
           .from(channelMembers)
@@ -111,18 +153,14 @@ export const sendMessage = async (
             ),
           )
       : [];
-  if (replyTo && !quoteOnly && !replyAgent)
+  if (replyTo && !humanQuote && !mentions.length && !replyAgent)
     throw new ChannelError('BAD_REQUEST', 'The replying Agent is no longer available');
-  // A click is local. Create the Agent's thread atomically with the first sent reply.
+  // Replying to a muted Agent asks no one; only an @mention makes it answer.
+  const replyTarget = replyAgent?.config?.muted ? undefined : replyAgent;
   const thread = assertThreadOpen(
-    replyAgent && !sourceThread
-      ? await createChannelThread(tx, channel.id, {
-          rootMessageId: replyTo!.id,
-          followerMemberIds: [replyAgent.id],
-        })
-      : input.rootMessageId
-        ? await createChannelThread(tx, channel.id, { rootMessageId: input.rootMessageId })
-        : sourceThread,
+    input.rootMessageId
+      ? await createChannelThread(tx, channel.id, { rootMessageId: input.rootMessageId })
+      : sourceThread,
   );
   const threadId = thread?.id ?? null;
 
@@ -138,9 +176,11 @@ export const sendMessage = async (
   if (existing) {
     const existingFileIds = (await fileIdsByMessage(tx, [existing.id])).get(existing.id) ?? [];
     if (
-      existing.userId !== member.userId ||
-      existing.agentId !== null ||
-      existing.content !== input.content ||
+      existing.userId !== (author ? null : member.userId) ||
+      existing.agentId !== (author?.agentId ?? null) ||
+      !(input.card
+        ? sameCard(existing.metadata, input.card)
+        : existing.content === input.content) ||
       existing.replyToId !== (input.replyToId ?? null) ||
       existing.threadId !== threadId ||
       !sameList(existingFileIds, fileIds) ||
@@ -150,7 +190,29 @@ export const sendMessage = async (
     return existing;
   }
 
+  // Removing a contact, or either person leaving the workspace, silences the conversation for
+  // both people; its history stays.
+  if (channel.peerUserId && member.userId)
+    await requirePeerRelation(
+      tx,
+      contacts,
+      channel.workspaceId,
+      member.userId,
+      peerOf(channel, member.userId)!,
+    );
+
+  // A visitor attaches their own files to another person's shared Agent like anywhere else. The
+  // share's limits (prompt length, messages per visitor, attachment size and storage, monthly
+  // spend) never refuse the send: the reply fails with the limit's type when dispatched
+  // (`ChannelCoordinator.shareGate`), which also copies the files into the share for the run.
   if (fileIds.length) {
+    // A workspace's public files are its members'. An external contact talking in it attaches
+    // only files they uploaded themselves, never one of the workspace's by its id. So does a
+    // visitor of a shared Agent: the share copies only the visitor's own files for its run.
+    const ownOnly =
+      (!!channel.workspaceId &&
+        !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!))) ||
+      (!!channel.agentId && !!(await sharedAgentOwner(tx, channel, member.userId!)));
     // Lock in a stable order so concurrent sends and file cleanup cannot deadlock.
     const accessible = await tx
       .select({ id: files.id })
@@ -158,16 +220,18 @@ export const sendMessage = async (
       .where(
         and(
           inArray(files.id, fileIds),
-          buildWorkspaceWhere(
-            { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },
-            files,
-          ),
+          ownOnly
+            ? eq(files.userId, member.userId!)
+            : buildWorkspaceWhere(
+                { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },
+                files,
+              ),
         ),
       )
       .orderBy(asc(files.id))
       .for('update');
     if (accessible.length !== fileIds.length)
-      throw new ChannelError('BAD_REQUEST', 'One or more attachments are unavailable');
+      throw new ChannelError('BAD_REQUEST', ChatErrorType.ChannelAttachmentUnavailable);
   }
 
   const mentioned = quoteOnly ? [] : await activeMembers(tx, channel.id, mentions);
@@ -181,7 +245,7 @@ export const sendMessage = async (
     ? []
     : [
         ...mentions,
-        ...(replyAgent ? [replyAgent.id] : []),
+        ...(replyTarget ? [replyTarget.id] : []),
         ...(thread && paired ? [paired.id] : []),
       ];
   if (thread && followers.some((id) => !thread.followerMemberIds.includes(id))) {
@@ -208,39 +272,49 @@ export const sendMessage = async (
             ),
           )
       : [];
-  const routed = quoteOnly
-    ? ({ reason: 'Quoted human message', source: 'explicit', status: 'skipped' } as const)
-    : replyAgent
-      ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
-      : paired
-        ? ({ reason: 'Only Agent in the Channel', source: 'explicit', status: 'directed' } as const)
-        : mentions.length
-          ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
-          : pendingRoot
-            ? {
-                reason: 'Waiting for the root message routing decision',
-                source: input.routing === 'fallback' ? ('fallback' as const) : null,
-                status: 'pending' as const,
-              }
-            : !candidates.length
-              ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
-              : direct
-                ? ({
-                    reason: 'Direct conversation',
-                    source: 'explicit',
-                    status: 'directed',
-                  } as const)
-                : input.routing === 'decision'
-                  ? ({ reason: null, source: null, status: 'pending' } as const)
-                  : ({
-                      reason: 'No decision model configured',
-                      source: 'fallback',
-                      status: 'assigned',
-                    } as const);
+  const routed = input.silent
+    ? ({ reason: 'Posted for the record', source: 'explicit', status: 'skipped' } as const)
+    : quoteOnly
+      ? ({ reason: 'Quoted human message', source: 'explicit', status: 'skipped' } as const)
+      : replyAgent
+        ? replyTarget
+          ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
+          : ({ reason: 'The Agent is muted', source: 'explicit', status: 'skipped' } as const)
+        : paired
+          ? ({
+              reason: 'Only Agent in the Channel',
+              source: 'explicit',
+              status: 'directed',
+            } as const)
+          : mentions.length
+            ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
+            : pendingRoot
+              ? {
+                  reason: 'Waiting for the root message routing decision',
+                  source: input.routing === 'fallback' ? ('fallback' as const) : null,
+                  status: 'pending' as const,
+                }
+              : !candidates.length
+                ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
+                : direct
+                  ? ({
+                      reason: 'Direct conversation',
+                      source: 'explicit',
+                      status: 'directed',
+                    } as const)
+                  : input.routing === 'decision'
+                    ? ({ reason: null, source: null, status: 'pending' } as const)
+                    : ({
+                        reason: 'No decision model configured',
+                        source: 'fallback',
+                        status: 'assigned',
+                      } as const);
   const recipients = quoteOnly
     ? []
     : replyAgent
-      ? [...new Map([replyAgent, ...mentionedAgents].map((agent) => [agent.id, agent])).values()]
+      ? replyTarget
+        ? [replyTarget]
+        : []
       : paired
         ? [paired]
         : mentions.length
@@ -249,11 +323,18 @@ export const sendMessage = async (
             ? candidates
             : [];
 
+  // Resolved only for a new message: a retry returns the original card as it was sent.
+  const card =
+    input.card && (await contacts.resolveCard(tx, member.userId!, channel.workspaceId, input.card));
+  const metadata = card ? { ...input.metadata, card } : input.metadata;
+
   const message = await appendMessage(tx, {
-    userId: member.userId,
+    ...(author ? { agentId: author.agentId } : { userId: member.userId }),
     channelId: channel.id,
-    content: input.content,
+    content: card ? contactCardText(card) : input.content,
+    ...(card && { kind: 'contact' as const }),
     mentions,
+    ...(metadata && { metadata }),
     requestKey: input.requestKey,
     replyToId: input.replyToId,
     routingAttempt: routed.status === 'pending' ? 1 : 0,
@@ -263,6 +344,17 @@ export const sendMessage = async (
     threadId,
   });
   await attachFiles(tx, { fileIds, messageId: message.id });
+  // Like any chat app, sending reads the conversation up to the sender's own message, so it
+  // never counts as unread (or notifies) on the sender's other devices. An Agent's request, or a
+  // relay (`via`) posted for the person, is not the person reading: their unseen messages stay
+  // unread.
+  if (!author && !input.metadata?.via)
+    await tx
+      .update(channelMembers)
+      .set({
+        lastReadSequence: sql`greatest(coalesce(${channelMembers.lastReadSequence}, 0), ${message.sequence})`,
+      })
+      .where(eq(channelMembers.id, member.id));
   const delivered = await deliver(tx, message, recipients, member.id);
   if (delivered.length) {
     await tx
@@ -279,4 +371,25 @@ export const sendMessage = async (
   });
 
   return message;
+};
+
+/**
+ * The Agent member writing a request, which only a conversation between Agents accepts. Without
+ * one, the caller writes it.
+ */
+const requestAuthor = async (
+  tx: Transaction,
+  channel: ChannelAccess['channel'],
+  memberId: string | undefined,
+) => {
+  if (!memberId) return;
+  if (!channel.agentPairKey)
+    throw new ChannelError(
+      'BAD_REQUEST',
+      'Only a conversation between Agents takes Agent requests',
+    );
+  const [author] = await activeMembers(tx, channel.id, [memberId]);
+  if (author?.actorType !== 'agent' || !author.agentId)
+    throw new ChannelError('BAD_REQUEST', 'The asking Agent is not in this conversation');
+  return author;
 };

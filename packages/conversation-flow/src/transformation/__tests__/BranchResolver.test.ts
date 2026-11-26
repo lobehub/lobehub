@@ -3,39 +3,45 @@ import { describe, expect, it, vi } from 'vitest';
 import type { IdNode, Message } from '../../types';
 import { BranchResolver } from '../BranchResolver';
 
+const createUserMessage = (): Message => ({
+  content: 'test',
+  createdAt: 0,
+  id: 'msg-1',
+  role: 'user',
+  updatedAt: 0,
+});
+
+const createBranchNode = (): IdNode => ({
+  children: [
+    { children: [], id: 'msg-2' },
+    { children: [], id: 'msg-3' },
+  ],
+  id: 'msg-1',
+});
+
+const createMessageWithActiveBranch = (activeBranchIndex: number): Message => ({
+  content: 'test',
+  createdAt: 0,
+  id: 'msg-1',
+  metadata: { activeBranchIndex },
+  role: 'user',
+  updatedAt: 0,
+});
+
 describe('BranchResolver', () => {
   const resolver = new BranchResolver();
 
   describe('getActiveBranchId', () => {
     it('should return branch by activeBranchIndex from metadata when present', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        metadata: { activeBranchIndex: 1 },
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createMessageWithActiveBranch(1);
 
-      const idNode: IdNode = {
-        children: [
-          { children: [], id: 'msg-2' },
-          { children: [], id: 'msg-3' },
-        ],
-        id: 'msg-1',
-      };
+      const idNode: IdNode = createBranchNode();
 
       expect(resolver.getActiveBranchId(message, idNode)).toBe('msg-3');
     });
 
     it('should infer active branch from which branch has children', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createUserMessage();
 
       const idNode: IdNode = {
         children: [
@@ -49,21 +55,9 @@ describe('BranchResolver', () => {
     });
 
     it('should default to first branch when no hints available', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createUserMessage();
 
-      const idNode: IdNode = {
-        children: [
-          { children: [], id: 'msg-2' },
-          { children: [], id: 'msg-3' },
-        ],
-        id: 'msg-1',
-      };
+      const idNode: IdNode = createBranchNode();
 
       expect(resolver.getActiveBranchId(message, idNode)).toBe('msg-2');
     });
@@ -78,13 +72,7 @@ describe('BranchResolver', () => {
         updatedAt: 0,
       };
 
-      const idNode: IdNode = {
-        children: [
-          { children: [], id: 'msg-2' },
-          { children: [], id: 'msg-3' },
-        ],
-        id: 'msg-1',
-      };
+      const idNode: IdNode = createBranchNode();
 
       // When activeBranchIndex === children.length, it's an optimistic update
       // The branch hasn't been created yet, so return undefined
@@ -101,13 +89,7 @@ describe('BranchResolver', () => {
         updatedAt: 0,
       };
 
-      const idNode: IdNode = {
-        children: [
-          { children: [], id: 'msg-2' },
-          { children: [], id: 'msg-3' },
-        ],
-        id: 'msg-1',
-      };
+      const idNode: IdNode = createBranchNode();
 
       // activeBranchIndex > children.length should be ignored, fallback to default
       expect(resolver.getActiveBranchId(message, idNode)).toBe('msg-2');
@@ -116,14 +98,7 @@ describe('BranchResolver', () => {
 
   describe('getActiveBranchIdFromMetadata', () => {
     it('should return branch by activeBranchIndex from metadata', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        metadata: { activeBranchIndex: 1 },
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createMessageWithActiveBranch(1);
 
       const childIds = ['msg-2', 'msg-3'];
       const childrenMap = new Map<string | null, string[]>();
@@ -132,13 +107,7 @@ describe('BranchResolver', () => {
     });
 
     it('should infer active branch from which child has descendants', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createUserMessage();
 
       const childIds = ['msg-2', 'msg-3'];
       const childrenMap = new Map<string | null, string[]>([
@@ -151,13 +120,7 @@ describe('BranchResolver', () => {
 
     it('should ignore newer user descendants from threads when selecting the active branch', () => {
       const messages: Message[] = [
-        {
-          content: 'test',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createUserMessage(),
         {
           content: 'old branch',
           createdAt: 1,
@@ -210,13 +173,7 @@ describe('BranchResolver', () => {
     });
 
     it('should default to first child when no hints available', () => {
-      const message: Message = {
-        content: 'test',
-        createdAt: 0,
-        id: 'msg-1',
-        role: 'user',
-        updatedAt: 0,
-      };
+      const message: Message = createUserMessage();
 
       const childIds = ['msg-2', 'msg-3'];
       const childrenMap = new Map<string | null, string[]>();

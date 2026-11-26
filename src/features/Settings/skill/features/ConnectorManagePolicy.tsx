@@ -1,23 +1,35 @@
 'use client';
 
 import { type WorkspaceConnectorMemberManage } from '@lobechat/types';
-import { Block, Flexbox, Select, Text, toast } from '@lobehub/ui';
+import { Block, Flexbox, Select, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { UsersIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConnectorManagePolicy } from '@/hooks/useConnectorManagePolicy';
 import { updateConnectorManagePolicy } from '@/services/connectorManagePolicy';
+import { densityTokens } from '@/styles/density.stylex';
+
+import {
+  type ConnectorManagePolicyVariant,
+  resolveConnectorManagePolicyView,
+} from './connectorManagePolicyView';
 
 const styles = stylex.create({
+  // One line under the page header, aligned with the rows' 12px inset.
+  notice: { paddingBlockStart: '12px', paddingInline: '12px' },
+  // The Codex scope dropdown ("Local"): a filled pill in the header toolbar.
+  // No radius token reaches a pill.
+  pill: { flex: 'none', width: '200px', borderRadius: '999px' },
   root: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     flexShrink: 0,
     paddingBlock: 10,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 
@@ -27,11 +39,8 @@ const styles = stylex.create({
  * repeated label on every row, which only offers "Ask an admin".
  */
 interface ConnectorManagePolicyProps {
-  /**
-   * `column` is the bordered strip under the sidebar header; `page` is one
-   * settings row (label left, control right) above the full-width list.
-   */
-  variant?: 'column' | 'page';
+  /** See {@link ConnectorManagePolicyVariant}. */
+  variant?: ConnectorManagePolicyVariant;
 }
 
 const ConnectorManagePolicy = memo<ConnectorManagePolicyProps>(({ variant = 'column' }) => {
@@ -39,17 +48,15 @@ const ConnectorManagePolicy = memo<ConnectorManagePolicyProps>(({ variant = 'col
   const { data: policy } = useConnectorManagePolicy();
   const [updating, setUpdating] = useState(false);
 
-  if (!policy) return null;
+  const view = resolveConnectorManagePolicyView(policy, variant);
+  if (!policy || view === 'none') return null;
 
-  if (!policy.canEditPolicy) {
-    if (policy.canManage) return null;
+  if (view === 'notice') {
     if (variant === 'page')
       return (
-        <div style={{ paddingInline: 12 }}>
+        <div {...stylex.props(styles.notice)}>
           <Block paddingBlock={10} paddingInline={16} variant={'filled'}>
-            <Text fontSize={13} type={'secondary'}>
-              {t('tools.connectorFeedback.restricted')}
-            </Text>
+            <Text type={'secondary'}>{t('tools.connectorFeedback.restricted')}</Text>
           </Block>
         </div>
       );
@@ -71,44 +78,44 @@ const ConnectorManagePolicy = memo<ConnectorManagePolicyProps>(({ variant = 'col
     }
   };
 
+  const options = [
+    { label: t('tools.connectorPolicy.options.allMembers'), value: 'all_members' },
+    { label: t('tools.connectorPolicy.options.onlyAdmins'), value: 'admins_only' },
+  ];
+  const onChange = (value: unknown) => void handleChange(value as WorkspaceConnectorMemberManage);
+
+  if (variant === 'toolbar')
+    return (
+      // The pill only names the choice; its title and what it governs ride on the tooltip.
+      // `Select` forwards neither `aria-label` nor its trigger `id`, so a
+      // labelled group names the control for assistive tech.
+      <div aria-label={t('tools.connectorPolicy.title')} role={'group'}>
+        <Tooltip
+          placement={'bottom'}
+          title={`${t('tools.connectorPolicy.title')} · ${t('tools.connectorPolicy.desc')}`}
+        >
+          <Select
+            className={stylex.props(styles.pill).className}
+            disabled={updating}
+            options={options}
+            prefix={UsersIcon}
+            value={policy.memberManage}
+            variant={'filled'}
+            onChange={onChange}
+          />
+        </Tooltip>
+      </div>
+    );
+
   const select = (
     <Select
       disabled={updating}
-      size={variant === 'page' ? undefined : 'small'}
-      style={variant === 'page' ? { flex: 'none', width: 180 } : undefined}
+      options={options}
+      size={'small'}
       value={policy.memberManage}
-      options={[
-        { label: t('tools.connectorPolicy.options.allMembers'), value: 'all_members' },
-        { label: t('tools.connectorPolicy.options.onlyAdmins'), value: 'admins_only' },
-      ]}
-      onChange={(value) => void handleChange(value as WorkspaceConnectorMemberManage)}
+      onChange={onChange}
     />
   );
-
-  if (variant === 'page')
-    return (
-      <div style={{ paddingInline: 12 }}>
-        <Block
-          horizontal
-          align={'center'}
-          gap={16}
-          justify={'space-between'}
-          paddingBlock={12}
-          paddingInline={16}
-          variant={'filled'}
-        >
-          <Flexbox gap={2} style={{ minWidth: 0 }}>
-            <Text strong fontSize={13}>
-              {t('tools.connectorPolicy.title')}
-            </Text>
-            <Text fontSize={12} type={'secondary'}>
-              {t('tools.connectorPolicy.desc')}
-            </Text>
-          </Flexbox>
-          {select}
-        </Block>
-      </div>
-    );
 
   return (
     <Flexbox gap={8} {...stylex.props(styles.root)}>

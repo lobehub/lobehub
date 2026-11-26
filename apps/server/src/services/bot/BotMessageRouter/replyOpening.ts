@@ -1,8 +1,8 @@
 import type { BotWakeKind, SignalDecisionVerdict } from '@lobechat/types';
 import debug from 'debug';
 
-import { describeLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
-import type { WakeConversation } from '@/server/services/agentSignal/scenarios/botWake/types';
+import { describeLine } from '@/server/services/conversationWake/conversation';
+import type { WakeConversation } from '@/server/services/conversationWake/types';
 
 import type { BotReplyPlacementMode, PlatformClient, ReplyTargets } from '../platforms';
 import type { ReplyOpener, ReplyOpening } from '../wake/opener';

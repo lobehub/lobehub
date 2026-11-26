@@ -45,7 +45,7 @@ const TaskDetailAssignee = memo(() => {
           align="center"
           gap={8}
           paddingBlock={4}
-          paddingInline={11}
+          paddingInline={12}
           style={{ flex: 'none', maxWidth: '100%', minHeight: 32 }}
           variant={isDarkMode ? 'filled' : 'outlined'}
         >

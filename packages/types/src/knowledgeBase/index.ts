@@ -29,6 +29,17 @@ export interface KnowledgeBaseItem {
   visibility?: 'private' | 'public';
 }
 
+/** An agent's dedicated knowledge base, identified to the user by its agent. */
+export interface AgentKnowledgeSpaceItem {
+  agentId: string;
+  avatar: string | null;
+  backgroundColor: string | null;
+  description: string | null;
+  /** The knowledge base id. */
+  id: string;
+  title: string | null;
+}
+
 export interface CreateKnowledgeBaseParams {
   avatar?: string;
   /** Cover image: a preset key (`preset:<id>`) or an uploaded image URL. */
@@ -47,6 +58,8 @@ export enum KnowledgeType {
 export interface KnowledgeItem {
   avatar?: string | null;
   content?: string;
+  /** Creation time: one of the picker's sort orders. */
+  createdAt?: Date | string;
   description?: string | null;
   enabled?: boolean;
   fileType?: string;
@@ -60,7 +73,11 @@ export interface KnowledgeItem {
   name: string;
   /** Creator's user id — used by the picker to gate creator-only actions and identify ownership. */
   ownerUserId?: string;
+  /** File only: bytes, so the picker can tell two similar documents apart. */
+  size?: number;
   type: KnowledgeType;
+  /** Last change: sorts the picker, and is shown next to a file's size. */
+  updatedAt?: Date | string;
   /** Workspace-scoped visibility of the underlying resource (file or KB). */
   visibility?: 'private' | 'public';
 }

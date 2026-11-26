@@ -1,6 +1,5 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { LayoutDashboardIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -9,10 +8,12 @@ import { useLocation } from 'react-router';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 const WorkingPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
   const { pathname } = useLocation();
+  const headerActionSmallSize = useHeaderActionSize(true);
   const [
     showRightPanel,
     showWorkingOverview,
@@ -43,7 +44,7 @@ const WorkingPanelToggle = memo(() => {
         active={showWorkingOverview}
         aria-label={t('workingPanel.overview.title')}
         icon={LayoutDashboardIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('workingPanel.overview.title')}
         onClick={() => {
           if (showWorkingOverview) {
@@ -58,7 +59,7 @@ const WorkingPanelToggle = memo(() => {
         <ActionIcon
           aria-label={t('workingPanel.title')}
           icon={PanelRightOpenIcon}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSmallSize}
           title={t('workingPanel.title')}
           onClick={() => openWorkingSidebar()}
         />

@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import { getVideoReferenceImages } from '../../core/usageConverters/utils/computeVideoCost';
 import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';

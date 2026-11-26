@@ -1,3 +1,4 @@
+import type { ChannelJobWake } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type {
@@ -16,6 +17,14 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+import { unhideForActivity } from './sections';
+
+/** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
+export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
+
+/** An Agent member that is not muted; a muted one is reached only by an @mention. */
+export const memberNotMuted = () =>
+  sql`coalesce((${channelMembers.config}->>'muted')::boolean, false) = false`;
 
 /** The Thread a message belongs to, or null for the main channel. */
 export const findThread = async (
@@ -88,6 +97,7 @@ export const candidateAgents = async (
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.actorType, 'agent'),
         eq(channelMembers.status, 'active'),
+        memberNotMuted(),
       ),
     );
 
@@ -108,19 +118,27 @@ export const pairedAgent = async (
     .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
   const agents = members.filter((member) => member.actorType === 'agent');
 
-  return agents.length === 1 && members.length === 2 ? agents[0] : undefined;
+  // A muted one waits for an @mention like any other.
+  return agents.length === 1 && members.length === 2 && !agents[0].config?.muted
+    ? agents[0]
+    : undefined;
 };
 
 /**
  * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
+ *
+ * `wakes` records why each member was woken; a member without one owes an answer (`mention`).
+ * A wake deferred behind the message's primary responder (`afterMemberId`) is queued as
+ * `awaiting_primary` from the start, so it never reads as a reply in progress before it can run.
  */
 export const deliver = async (
   tx: Transaction,
   message: ChannelMessageItem,
   agents: ChannelMemberItem[],
   requesterMemberId: string,
+  wakes?: Readonly<Record<string, ChannelJobWake>>,
 ): Promise<string[]> => {
   const recipients = agents.filter((agent) => agent.actorType === 'agent');
   if (!recipients.length) return [];
@@ -134,6 +152,9 @@ export const deliver = async (
         messageId: message.id,
         requesterMemberId,
         threadId: message.threadId,
+        wake: wakes?.[agent.id] ?? null,
+        blockedCode: wakes?.[agent.id]?.afterMemberId ? ('awaiting_primary' as const) : null,
+        blockedReason: wakes?.[agent.id]?.afterMemberId ? AWAITING_PRIMARY_REASON : null,
       })),
     )
     .onConflictDoNothing();
@@ -141,26 +162,38 @@ export const deliver = async (
   return recipients.map((agent) => agent.id);
 };
 
+/** Reserves the channel's next message sequence. The caller holds the channel lock. */
+export const takeSequence = async (tx: Transaction, channelId: string): Promise<number> => {
+  const [{ sequence }] = await tx
+    .update(channels)
+    .set({ sequence: sql`${channels.sequence} + 1` })
+    .where(eq(channels.id, channelId))
+    .returning({ sequence: channels.sequence });
+  return sequence;
+};
+
 /** Appends a message at the next channel sequence. The caller holds the channel lock. */
 export const appendMessage = async (
   tx: Transaction,
   values: Omit<NewChannelMessage, 'sequence' | 'id'> & { id?: string },
 ): Promise<ChannelMessageItem> => {
+  // A reply is an Agent's; a request is a person's, or an Agent's in a conversation between Agents.
   const isReply = values.routingStatus === 'reply';
-  if (isReply ? !values.agentId || values.userId != null : !values.userId || values.agentId != null)
+  if (
+    isReply
+      ? !values.agentId || values.userId != null
+      : Boolean(values.userId) === Boolean(values.agentId)
+  )
     throw new ChannelError(
       'BAD_REQUEST',
       'A message requires exactly one sender of the correct type',
     );
-  const [{ sequence }] = await tx
-    .update(channels)
-    .set({ sequence: sql`${channels.sequence} + 1` })
-    .where(eq(channels.id, values.channelId))
-    .returning({ sequence: channels.sequence });
+  const sequence = await takeSequence(tx, values.channelId);
   const [message] = await tx
     .insert(channelMessages)
     .values({ ...values, sequence })
     .returning();
+  await unhideForActivity(tx, values.channelId);
 
   return message;
 };

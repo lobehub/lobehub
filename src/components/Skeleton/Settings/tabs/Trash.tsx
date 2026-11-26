@@ -56,7 +56,8 @@ const Body = () => {
           background: cssVar.colorBgContainer,
           borderRadius: cssVar.borderRadius,
           overflow: 'hidden',
-          paddingBlock: 16,
+          // Mirrors `TrashList`: no top inset, only the list keeps its block padding.
+          paddingBlockEnd: 16,
         }}
       >
         <Flexbox
@@ -64,7 +65,7 @@ const Body = () => {
           align={'center'}
           gap={12}
           justify={'space-between'}
-          style={{ paddingBlockEnd: 16, paddingInline: 24 }}
+          style={{ minHeight: 36, paddingInline: 24 }}
         >
           <SkeletonBar height={32} radius={8} width={56} />
           <SkeletonBar height={32} radius={8} width={112} />

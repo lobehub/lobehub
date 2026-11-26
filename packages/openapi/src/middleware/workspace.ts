@@ -7,6 +7,8 @@ import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { workspaceMembers, workspaces } from '@/database/schemas';
 
+import { ApiException } from '../common/errors';
+
 const log = debug('lobe-hono:workspace-middleware');
 
 export const OPENAPI_WORKSPACE_HEADER = 'X-Workspace-Id';
@@ -20,18 +22,22 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
 
   if (!apiKeyWorkspaceId) {
     if (requestedWorkspaceId) {
-      throw new HTTPException(403, {
-        message: 'Personal API Key cannot access workspace data',
-      });
+      throw new ApiException(
+        403,
+        'workspace_mismatch',
+        'Personal API Key cannot access workspace data',
+      );
     }
 
     return;
   }
 
   if (requestedWorkspaceId && requestedWorkspaceId !== apiKeyWorkspaceId) {
-    throw new HTTPException(403, {
-      message: 'Workspace API Key cannot access a different workspace',
-    });
+    throw new ApiException(
+      403,
+      'workspace_mismatch',
+      'Workspace API Key cannot access a different workspace',
+    );
   }
 
   return apiKeyWorkspaceId;
@@ -105,9 +111,7 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
 
   if (!membership) {
     log('Workspace membership check failed for user %s workspace %s', userId, workspaceId);
-    throw new HTTPException(403, {
-      message: 'Not a member of this workspace',
-    });
+    throw new ApiException(403, 'workspace_mismatch', 'Not a member of this workspace');
   }
 
   if (c.get('authType') === 'apikey' && !(await canUseWorkspaceApiKeys(workspaceId))) {

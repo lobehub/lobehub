@@ -16,7 +16,6 @@ const topicId = 'ahj-dispatch-topic';
 const createTransferJob = () =>
   AgentTransferJobModel.createJob(serverDB, {
     agentIds: [],
-    sessionIds: [],
     source: { userId, workspaceId: null },
     target: { userId, workspaceId: null },
     topics: [{ activityAt: new Date(), id: topicId }],

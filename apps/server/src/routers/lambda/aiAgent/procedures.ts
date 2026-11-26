@@ -41,7 +41,9 @@ export const aiAgentProcedure = aiAgentBaseProcedure.use(async (opts) => {
           ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
         workspaceId: wsId,
       }),
-      aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
+      aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId, {
+        workTypeOptIn: ctx.workTypeOptIn,
+      }),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),

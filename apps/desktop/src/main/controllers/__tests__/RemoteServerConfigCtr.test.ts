@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,7 +40,11 @@ vi.mock('electron', () => ({
 }));
 
 // Mock @/const/env
+const env = vi.hoisted(() => ({ isDev: false }));
 vi.mock('@/const/env', () => ({
+  get isDev() {
+    return env.isDev;
+  },
   OFFICIAL_CLOUD_SERVER: 'https://cloud.lobehub.com',
 }));
 
@@ -854,6 +862,61 @@ describe('RemoteServerConfigCtr', () => {
 
       // Verify lastRefreshAt was loaded
       expect(newController.getLastTokenRefreshAt()).toBe(lastRefreshTime);
+    });
+
+    describe('dev login file', () => {
+      let dir: string;
+      let file: string;
+
+      beforeEach(() => {
+        dir = mkdtempSync(path.join(tmpdir(), 'lobe-dev-login-'));
+        file = path.join(dir, 'login.json');
+        writeFileSync(
+          file,
+          JSON.stringify({
+            accessToken: 'dev-access',
+            expiresIn: 3600,
+            remoteServerUrl: 'http://localhost:3010',
+          }),
+        );
+        vi.stubEnv('LOBE_DESKTOP_DEV_REMOTE_LOGIN', file);
+      });
+
+      afterEach(() => {
+        vi.unstubAllEnvs();
+        env.isDev = false;
+        rmSync(dir, { force: true, recursive: true });
+      });
+
+      it('signs a dev build in to the local server from the launcher file', async () => {
+        env.isDev = true;
+        const stored = new Map<string, unknown>();
+        mockStoreManager.set.mockImplementation((key: string, value: unknown) => {
+          stored.set(key, value);
+        });
+        mockStoreManager.get.mockImplementation((key: string) => stored.get(key));
+
+        const newController = new RemoteServerConfigCtr(mockApp);
+        // Before windows open: the main window must start in the app, not the onboarding.
+        newController.beforeAppReady();
+        expect(stored.get('dataSyncConfig')).toEqual({
+          active: true,
+          remoteServerUrl: 'http://localhost:3010',
+          storageMode: 'selfHost',
+        });
+        expect(stored.get('desktopOnboardingCompleted')).toBe(true);
+
+        newController.afterAppReady();
+        expect(await newController.getAccessToken()).toBe('dev-access');
+      });
+
+      it('ignores the file outside a dev build', () => {
+        const newController = new RemoteServerConfigCtr(mockApp);
+        newController.beforeAppReady();
+        newController.afterAppReady();
+
+        expect(mockStoreManager.set).not.toHaveBeenCalledWith('dataSyncConfig', expect.anything());
+      });
     });
   });
 

@@ -41,6 +41,7 @@ import { type StoreSetter } from '@/store/types';
 import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 import { bucketOfKey, createTranscriptLens } from './lens';
 import { type HeadRequestBoundary, mergeFetchedMessagesWithLocalState } from './mergeFetched';
+import { applyStreamingWorks } from './streamingWorks';
 
 const log = debug('lobe-store:message-transcript');
 
@@ -386,7 +387,8 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     };
 
     // DB chunk writes can lag behind pushed content, even at an equal
-    // updatedAt. Keep streamed rows, but allow answers and unseen rows in.
+    // updatedAt. Keep streamed rows, but allow answers, Work summaries and
+    // unseen rows in.
     // A parked run must not block the first load of the conversation.
     const prevDbMessages = current?.items ?? [];
     const snapshot = snapshots.get(incoming);
@@ -411,7 +413,7 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     // as orphans until the next refresh (see reconcileAssistantToolLinks).
     const mergedMessages = reconcileAssistantToolLinks(
       isStreaming
-        ? reconcileStreamingInterventions(prevDbMessages, incoming)
+        ? applyStreamingWorks(reconcileStreamingInterventions(prevDbMessages, incoming), incoming)
         : mergeFetchedMessagesWithLocalState(
             incoming,
             prevDbMessages,
@@ -573,6 +575,7 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     forgetClientRows,
     remapClientRows,
     headResolutions,
+    isUnconfirmedClientRow: (id: string) => unconfirmedClientIds.has(id),
     keyOf,
     pendingInterventions,
     /** The entry's current value, as the replica sees it. */

@@ -3,7 +3,6 @@ import { useEditor } from '@lobehub/editor/react';
 import { LexicalRenderer } from '@lobehub/editor/renderer';
 import {
   ActionIcon,
-  Avatar,
   Block,
   Button,
   confirmModal,
@@ -19,6 +18,7 @@ import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';
@@ -36,6 +36,7 @@ import { useTaskStore } from '@/store/task';
 import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
 import { styles } from '../shared/style';
+import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { commentMarkdownProps } from './commentMarkdown';
 import { resolveMarkdownSnapshotContent } from './commentRenderSource';
 
@@ -172,14 +173,18 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     >
       <Flexbox horizontal align={'center'} gap={8}>
         {activity.author?.avatar ? (
-          <Avatar avatar={activity.author.avatar} size={24} />
+          <ActivityAuthorProfile author={activity.author}>
+            <Avatar avatar={activity.author.avatar} size={24} />
+          </ActivityAuthorProfile>
         ) : (
           <div className={styles.activityAvatar}>
             <MessageCircle size={12} />
           </div>
         )}
         <Text weight={500}>
-          {activity.author?.name || t('taskDetail.activities.fallback.comment')}
+          <ActivityAuthorProfile author={activity.author}>
+            {activity.author?.name || t('taskDetail.activities.fallback.comment')}
+          </ActivityAuthorProfile>
         </Text>
         {relTime && (
           <Text fontSize={12} title={relTimeTitle} type={'secondary'}>

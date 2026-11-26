@@ -1,9 +1,10 @@
 'use client';
 
-import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_INBOX_AVATAR } from '@/const/index';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import { type SuggestMode } from '@/features/SuggestQuestions';

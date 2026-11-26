@@ -13,7 +13,9 @@ import {
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-const Body = memo(() => {
+import ForeignTaskDetail from './ForeignTaskDetail';
+
+const ActiveScopeBody = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
   // Same data wiring as the full /task/[tid] page — owns activeTaskId + polling
@@ -49,6 +51,25 @@ const Body = memo(() => {
     >
       {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
       <TopicChatDrawer />
+    </Flexbox>
+  );
+});
+
+ActiveScopeBody.displayName = 'ActiveScopeTaskDetailBody';
+
+const Body = memo(() => {
+  const isForeign = useChatStore((s) => !!chatPortalSelectors.taskDetailWorkspace(s));
+
+  if (!isForeign) return <ActiveScopeBody />;
+
+  return (
+    <Flexbox
+      flex={1}
+      height={'100%'}
+      paddingInline={16}
+      style={{ minHeight: 0, overflowY: 'auto' }}
+    >
+      <ForeignTaskDetail />
     </Flexbox>
   );
 });

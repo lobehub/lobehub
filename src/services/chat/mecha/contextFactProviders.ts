@@ -1,6 +1,7 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
-import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
+import { type AgentShareVisitorContext, getOptedInPluginIds } from '@lobechat/types';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -27,6 +28,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { getUserStoreState } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -78,6 +80,9 @@ const toIsoString = (value: Date | string | null | undefined): string =>
  * stores do not hold; which facts a turn needs is decided by
  * `gatherContextFacts` in `@lobechat/mecha`, the same way as on the server.
  */
+/** Matches the `.max()` of `agentDocument.listRevokedDocumentReads`. */
+const REVOKED_READS_BATCH = 500;
+
 export const createBrowserContextFactProviders = ({
   agentId,
   groupId,
@@ -86,6 +91,26 @@ export const createBrowserContextFactProviders = ({
   findAgentDocument: async (targetAgentId, documentId) => {
     const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
     return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
+  findRevokedDocumentReads: async (targetAgentId, documentIds) => {
+    // The endpoint takes at most REVOKED_READS_BATCH ids per call.
+    const batches: string[][] = [];
+    for (let i = 0; i < documentIds.length; i += REVOKED_READS_BATCH) {
+      batches.push(documentIds.slice(i, i + REVOKED_READS_BATCH));
+    }
+    const results = await Promise.all(
+      batches.map((batch) =>
+        agentDocumentService.listRevokedDocumentReads({
+          agentId: targetAgentId,
+          documentIds: batch,
+        }),
+      ),
+    );
+    return {
+      agentDocumentReadIds: results.flatMap((result) => result.agentDocumentReadIds),
+      documentIds: results.flatMap((result) => result.documentIds),
+    };
   },
 
   findTopic: async (topicId) => {
@@ -121,7 +146,7 @@ export const createBrowserContextFactProviders = ({
       openingMessage: config.openingMessage,
       openingQuestions: config.openingQuestions,
       params: config.params as Record<string, unknown> | undefined,
-      plugins: getActivePluginIds(config.plugins),
+      plugins: getOptedInPluginIds(config.plugins),
       provider: config.provider,
       systemRole: config.systemRole,
       tags: meta?.tags,
@@ -199,13 +224,31 @@ export const createBrowserContextFactProviders = ({
     return result.data as CredentialSummary[];
   },
 
-  listCustomPlugins: async () =>
-    pluginSelectors.installedCustomPluginMetaList(getToolStoreState()).map((plugin) => ({
-      description: plugin.description,
-      identifier: plugin.identifier,
-      name: plugin.title || plugin.identifier,
-      type: 'custom' as const,
-    })),
+  // Custom connectors (every install now) and the custom plugin rows older
+  // installs left, one entry per identifier: the server provider's rule.
+  listCustomPlugins: async () => {
+    const toolState = getToolStoreState();
+    const plugins = new Map<string, AvailablePluginInfo>();
+    for (const connector of connectorSelectors.customConnectors(toolState)) {
+      const description = connector.metadata?.description;
+      plugins.set(connector.identifier, {
+        description: typeof description === 'string' ? description : undefined,
+        identifier: connector.identifier,
+        name: connector.name || connector.identifier,
+        type: 'custom',
+      });
+    }
+    for (const plugin of pluginSelectors.installedCustomPluginMetaList(toolState)) {
+      if (plugins.has(plugin.identifier)) continue;
+      plugins.set(plugin.identifier, {
+        description: plugin.description,
+        identifier: plugin.identifier,
+        name: plugin.title || plugin.identifier,
+        type: 'custom',
+      });
+    }
+    return [...plugins.values()];
+  },
 
   listEnabledProviders: async () =>
     (getAiInfraStoreState().enabledChatModelList || []).map((provider) => ({

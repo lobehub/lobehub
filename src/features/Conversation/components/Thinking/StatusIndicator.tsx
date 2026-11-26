@@ -1,6 +1,8 @@
-import { Block, cssVar, Icon, Spin } from '@lobehub/ui';
+import { cssVar, Icon, Spin } from '@lobehub/ui';
 import { AtomIcon } from 'lucide-react';
 import { memo } from 'react';
+
+import StepStatusBox from '../StepStatusBox';
 
 interface StatusIndicatorProps {
   showDetail?: boolean;
@@ -18,23 +20,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ thinking, showDetail }) =>
     );
   }
 
-  return (
-    <Block
-      horizontal
-      align={'center'}
-      flex={'none'}
-      gap={4}
-      height={24}
-      justify={'center'}
-      variant={'outlined'}
-      width={24}
-      style={{
-        fontSize: 12,
-      }}
-    >
-      {icon}
-    </Block>
-  );
+  return <StepStatusBox>{icon}</StepStatusBox>;
 });
 
 export default StatusIndicator;

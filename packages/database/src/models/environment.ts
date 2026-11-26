@@ -1,5 +1,5 @@
 import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/types';
-import { DEFAULT_REGENERABLE_PATHS } from '@lobechat/types';
+import { DEFAULT_REGENERABLE_PATHS, layoutRepositorySources } from '@lobechat/types';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
@@ -122,16 +122,27 @@ export class EnvironmentModel {
     return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
-  /** Enabled environments visible in the current workspace scope. */
+  /**
+   * Enabled standalone environments visible in the current workspace scope. A
+   * project's own environment is part of that project and is never offered
+   * anywhere else.
+   */
   async list() {
     return this.db
       .select({
         id: environments.id,
         name: environments.name,
         configuration: environments.configuration,
+        visibility: environments.visibility,
       })
       .from(environments)
-      .where(and(buildWorkspaceWhere(this.scope(), environments), eq(environments.enabled, true)));
+      .where(
+        and(
+          buildWorkspaceWhere(this.scope(), environments),
+          eq(environments.enabled, true),
+          isNull(environments.projectId),
+        ),
+      );
   }
 
   /** Enabled, workspace-visible lookup used when linking projects or binding directories. */
@@ -213,10 +224,60 @@ export class EnvironmentModel {
         and(
           eq(environments.name, name.trim()),
           eq(environments.userId, this.userId),
+          isNull(environments.projectId),
           buildWorkspaceWhere(this.scope(), environments),
         ),
       );
     return row;
+  }
+
+  /**
+   * The caller's enabled environment that checks out `repositoryUrl`, or a new
+   * `code` environment for it. Reused rather than duplicated so projects made
+   * from the same repository share one definition and its built instances.
+   * Only the caller's own rows match: a colleague's published environment is
+   * theirs to edit, so a project must not silently depend on it.
+   *
+   * A new one is named after the repository; when that name is already taken by
+   * another of the caller's environments, a numeric suffix keeps the
+   * `(user, scope, name)` unique indexes satisfied.
+   *
+   * Asked for a published one — for a workspace-public agent, which applies
+   * nothing else — only a published environment is reused or made.
+   */
+  async ensureForRepository(input: {
+    defaultBranch?: string;
+    name: string;
+    repositoryUrl: string;
+    visibility?: EnvironmentVisibility;
+  }): Promise<EnvironmentItem> {
+    const url = normalizeProjectRepository(input.repositoryUrl);
+    const [existing] = await this.db
+      .select()
+      .from(environments)
+      .where(
+        and(
+          this.ownership(),
+          eq(environments.enabled, true),
+          isNull(environments.projectId),
+          sql`${environments.configuration} -> 'sources' @> ${JSON.stringify([{ kind: 'git', url }])}::jsonb`,
+          input.visibility === 'public' ? eq(environments.visibility, 'public') : undefined,
+        ),
+      )
+      .orderBy(asc(environments.createdAt))
+      .limit(1);
+    if (existing) return existing;
+
+    const baseName = input.name.trim();
+    let name = baseName;
+    for (let suffix = 2; await this.findByName(name); suffix++) name = `${baseName} (${suffix})`;
+
+    const ref = input.defaultBranch?.trim();
+    return this.create({
+      configuration: { kind: 'code', sources: [{ kind: 'git', url, ...(ref ? { ref } : {}) }] },
+      name,
+      visibility: input.visibility,
+    });
   }
 
   private ownership = () => environmentOwnership(this.userId, this.workspaceId);
@@ -278,7 +339,8 @@ export class EnvironmentModel {
       })
       .from(environments)
       .leftJoin(users, eq(environments.userId, users.id))
-      .where(and(this.visible(), this.pool(visibility)))
+      // Standalone ones only: a project's environment is edited on the project.
+      .where(and(this.visible(), this.pool(visibility), isNull(environments.projectId)))
       .orderBy(asc(environments.createdAt));
 
     return rows.map(({ creatorAvatar, creatorFullName, creatorId, creatorUsername, ...row }) => ({
@@ -345,6 +407,9 @@ export class EnvironmentModel {
             // explicit empty list is a decision.
             configuration: {
               ...params.configuration,
+              ...(params.configuration?.sources && {
+                sources: layoutRepositorySources(params.configuration.sources),
+              }),
               excludePaths: params.configuration?.excludePaths ?? [...DEFAULT_REGENERABLE_PATHS],
             },
             description: params.description ?? null,
@@ -360,14 +425,25 @@ export class EnvironmentModel {
     return row;
   };
 
+  /**
+   * The writes below change standalone environments only. A project's
+   * environment is edited through the project (see
+   * `ProjectEnvironmentRepository`), by whoever may change the project, and
+   * removed with it — so here it answers as not found.
+   */
   update = async (
     id: string,
     params: Partial<Pick<NewEnvironment, 'configuration' | 'description' | 'enabled' | 'name'>>,
   ): Promise<EnvironmentItem | undefined> => {
+    // Stored with the folders it is checked out into, so what the form shows
+    // is what runs (see `layoutRepositorySources`).
+    const configuration = params.configuration?.sources
+      ? { ...params.configuration, sources: layoutRepositorySources(params.configuration.sources) }
+      : params.configuration;
     const [row] = await this.db
       .update(environments)
-      .set({ ...params, updatedAt: new Date() })
-      .where(and(eq(environments.id, id), this.ownership()))
+      .set({ ...params, ...(configuration && { configuration }), updatedAt: new Date() })
+      .where(and(eq(environments.id, id), this.ownership(), isNull(environments.projectId)))
       .returning();
 
     return row;
@@ -389,7 +465,7 @@ export class EnvironmentModel {
     const [row] = await this.db
       .update(environments)
       .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(environments.id, id), this.ownership()))
+      .where(and(eq(environments.id, id), this.ownership(), isNull(environments.projectId)))
       .returning();
 
     return row;
@@ -404,7 +480,7 @@ export class EnvironmentModel {
   delete = async (id: string): Promise<EnvironmentItem | undefined> => {
     const [row] = await this.db
       .delete(environments)
-      .where(and(eq(environments.id, id), this.ownership()))
+      .where(and(eq(environments.id, id), this.ownership(), isNull(environments.projectId)))
       .returning();
 
     return row;

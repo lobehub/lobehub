@@ -11,6 +11,7 @@ import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
 import { cacheScope } from '@/libs/replica';
 import { hashQuotaSourceKey, quotaPanelResource } from '@/store/agentQuota/projection';
 
+import { AntigravityQuotaMenu } from './AntigravityQuotaMenu';
 import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
 import KimiCodeQuotaMenu from './KimiCodeQuotaMenu';
@@ -18,6 +19,7 @@ import { createQuotaSourceKey } from './QuotaMenu';
 import { claudeSnapshot, codexSnapshot, isolateQuotaReplica, kimiCodeSnapshot } from './testUtils';
 
 const mockService = vi.hoisted(() => ({
+  getAntigravityQuota: vi.fn(),
   consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
   getCodexQuota: vi.fn(),
@@ -39,6 +41,9 @@ vi.mock('@/features/AgentQuotaCalendar', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+vi.mock('../../HeteroModel/useEffectiveHeteroProvider', () => ({
+  useSelectedHeteroModel: () => undefined,
+}));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   confirmModalMock: vi.fn(),
@@ -92,6 +97,7 @@ vi.mock('@/services/agentQuota', () => ({ agentQuotaService: mockQuotaService })
 // target the exact i18n key + params a snapshot should produce.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US' },
     t: translate,
   }),
 }));
@@ -106,15 +112,17 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         ...(await importOriginal<object>()),
         ActionIcon: ({
           disabled,
+          'aria-label': ariaLabel,
           onClick,
           title,
         }: {
-          disabled?: boolean;
-          onClick?: () => void;
-          title?: string;
+          'aria-label'?: string;
+          'disabled'?: boolean;
+          'onClick'?: () => void;
+          'title'?: string;
         }) => (
           <button
-            aria-label={title}
+            aria-label={ariaLabel ?? title}
             data-testid={title ? 'calendar' : 'refresh'}
             disabled={disabled}
             type="button"
@@ -151,16 +159,18 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     async (importOriginal) => ({
       ...((await importOriginal()) as Record<string, unknown>),
       ActionIcon: ({
+        'aria-label': ariaLabel,
         onClick,
         title,
         disabled,
       }: {
-        disabled?: boolean;
-        onClick?: (e: React.MouseEvent) => void;
-        title?: string;
+        'aria-label'?: string;
+        'disabled'?: boolean;
+        'onClick'?: (e: React.MouseEvent) => void;
+        'title'?: string;
       }) => (
         <button
-          aria-label={title}
+          aria-label={ariaLabel ?? title}
           data-testid={title ? 'calendar' : 'refresh'}
           disabled={disabled}
           type="button"
@@ -193,6 +203,7 @@ beforeEach(() => {
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
+  mockService.getAntigravityQuota.mockReset();
   mockService.getCodexQuota.mockReset();
   mockService.getKimiCodeQuota.mockReset();
   mockLambdaClaudeQuota.mockReset();
@@ -235,6 +246,56 @@ describe('quota panels sharing the account pool', () => {
 });
 
 describe('KimiCodeQuotaMenu', () => {
+  it('renders native Antigravity groups, unknown buckets and a reset that needs confirmation', async () => {
+    const sample = {
+      error: null,
+      provider: 'antigravity',
+      status: 'ok',
+      updatedAt: Date.now(),
+      groups: [
+        {
+          name: 'Gemini Models',
+          buckets: [
+            {
+              id: 'weekly',
+              name: 'Weekly',
+              remainingFraction: 0.939,
+              remainingAmount: null,
+              resetsAt: Date.now() - 1000,
+              disabled: false,
+              window: 'weekly',
+            },
+            {
+              id: 'future',
+              name: 'Dynamic limit',
+              remainingFraction: null,
+              remainingAmount: null,
+              resetsAt: null,
+              disabled: false,
+              window: 'dynamic',
+            },
+          ],
+        },
+      ],
+    };
+    mockService.getAntigravityQuota.mockResolvedValue(sample);
+    render(<AntigravityQuotaMenu command="/custom/agy" />);
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.antigravityQuota.tooltip' }));
+    expect(await screen.findByText('Gemini Models')).toBeTruthy();
+    expect(screen.getByText('93.9%')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.antigravityQuota.unknown')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.antigravityQuota.resetUnconfirmed')).toBeTruthy();
+    expect(mockService.getAntigravityQuota).toHaveBeenCalledWith({
+      command: '/custom/agy',
+      env: undefined,
+      force: undefined,
+    });
+    mockService.getAntigravityQuota.mockRejectedValue(new Error('offline'));
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.quota.refresh' }));
+    expect(await screen.findByText('heteroAgent.antigravityQuota.error')).toBeTruthy();
+    expect(screen.getByText('93.9%')).toBeTruthy();
+  });
+
   it('renders all four windows and the Extra Usage footer from the snapshot', async () => {
     mockService.getKimiCodeQuota.mockResolvedValue(
       kimiCodeSnapshot({
@@ -383,6 +444,44 @@ describe('KimiCodeQuotaMenu', () => {
 });
 
 describe('CodexQuotaMenu', () => {
+  it('shows a stale warning for the confirmed account and clears its quota when the login changes', async () => {
+    mockService.getCodexQuota
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          credits: { balance: '1250.75', unlimited: false },
+          identity: { externalAccountId: 'a' },
+          session: { resetsAt: null, usedPercent: 19, windowMinutes: 300 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          error: 'Codex RPC timed out',
+          identity: { externalAccountId: 'a' },
+          status: 'error',
+        }),
+      )
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          error: 'Codex RPC timed out',
+          identity: { externalAccountId: 'b' },
+          status: 'error',
+        }),
+      );
+
+    render(<CodexQuotaMenu />);
+    expect(await screen.findByText('1250.75')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.quota.refresh' }));
+    expect(await screen.findByText('heteroAgent.quota.refreshFailed')).toBeTruthy();
+    expect(screen.getByText('81%')).toBeTruthy();
+    expect(screen.getByText('1250.75')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.quota.refresh' }));
+    expect(await screen.findByText('heteroAgent.codexQuota.errorGeneric')).toBeTruthy();
+    expect(screen.queryByText('81%')).toBeNull();
+    expect(screen.queryByText('1250.75')).toBeNull();
+  });
+
   it('opens the usage calendar for the codex account from the header switcher', async () => {
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({

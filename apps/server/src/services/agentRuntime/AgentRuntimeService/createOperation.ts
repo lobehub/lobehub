@@ -26,6 +26,7 @@ const log = debug('lobe-server:agent-runtime-service');
 /** What this module reads off the service. */
 export type CreateOperationDeps = Pick<
   AgentRuntimeServiceContext,
+  | 'acceptsArtboardWorks'
   | 'acceptsFileWorks'
   | 'agentOperationModel'
   | 'baseURL'
@@ -45,6 +46,7 @@ export async function createOperation(
   params: OperationCreationParams,
 ): Promise<OperationCreationResult> {
   const {
+    acceptsArtboardWorks,
     acceptsFileWorks,
     acceptsMemberRuntimeEnd,
     operationId,
@@ -191,8 +193,23 @@ export async function createOperation(
         ? await deps.acceptsFileWorks(parentOperationId)
         : undefined);
 
-    const preInitState = buildPreInitState(params, { fileWorksAccepted, llmExecutor });
-    const initialState = applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
+    const artboardWorksAccepted =
+      acceptsArtboardWorks ??
+      (parentOperationId && appContext?.orchestrationRole === 'member'
+        ? await deps.acceptsArtboardWorks(parentOperationId)
+        : undefined);
+
+    const preInitState = buildPreInitState(params, {
+      artboardWorksAccepted,
+      fileWorksAccepted,
+      llmExecutor,
+    });
+    // A deferred init leaves the turn's request on the state: its presence is
+    // what tells the step-0 worker the init is still owed. The placeholder
+    // context is saved too, so the stale-run reaper can redrive step 0.
+    const initialState = params.pendingInitRequest
+      ? { ...preInitState, initialContext, messages: [], request: params.pendingInitRequest }
+      : applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
 
     // Use coordinator to create operation, automatically sends initialization event.
     // For an in-group broadcast/speak member, mirror its Gateway stream events
@@ -207,15 +224,6 @@ export async function createOperation(
         {
           acceptsMemberRuntimeEnd,
           agentConfig,
-          // Persisted so a queue worker that never ran this op's init still
-          // applies the owner-configured visitor redaction policy instead of the
-          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-          visitorRedaction: agentShareVisitor
-            ? {
-                showErrorDetails: agentShareVisitor.showErrorDetails,
-                showModelInfo: agentShareVisitor.showModelInfo,
-              }
-            : undefined,
           mirrorToOperationId,
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
           // Share-visitor runs execute as the creator (`userId`) but stream only
@@ -312,7 +320,22 @@ export async function createOperation(
           retries: queueRetries,
           stepIndex: initialStepCount,
         }),
-      );
+      ).catch(async (error: unknown) => {
+        // An intervention continuation keeps its own recovery: the prepared
+        // continuation republishes this same deterministic operation, so it
+        // must stay running for that retry to execute.
+        if (!interventionResolution) {
+          // A publish timeout may still have delivered the message. The durable
+          // terminal guard makes a late delivery ACK without executing, and the
+          // reaper's running-only CAS excludes this user-visible failed request.
+          // Await persistence before returning the startup error to the caller.
+          await deps.agentOperationModel.recordDispatchFailure(
+            operationId,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        throw error;
+      });
       if (interventionResolution && deduplicationId) {
         await deps.persistInterventionDispatchAck({
           deduplicationId,

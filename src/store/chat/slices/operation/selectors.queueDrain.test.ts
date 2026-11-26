@@ -48,6 +48,14 @@ describe('isQueueDrainedAtRunEnd', () => {
     expect(startQueuedRun('execServerAgentRuntime', { heteroType: 'claude-code' })).toBe(true);
   });
 
+  // A Claude Code producer that delivers queued follow-ups into its live
+  // session (`liveSteer` on its stream_start) hands them over at the next step.
+  it('hands back at the next step for a CLI run that takes steer messages', () => {
+    expect(
+      startQueuedRun('execServerAgentRuntime', { heteroType: 'claude-code', liveSteer: true }),
+    ).toBe(false);
+  });
+
   it('hands back at the next step for the native runtime', () => {
     expect(startQueuedRun('execServerAgentRuntime', { heteroType: null })).toBe(false);
     expect(startQueuedRun('execAgentRuntime')).toBe(false);

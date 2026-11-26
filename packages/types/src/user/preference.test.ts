@@ -17,4 +17,27 @@ describe('UserPreferenceSchema', () => {
       expect(parsed).toMatchObject({ [key]: ['id-1', 'id-2'] });
     },
   );
+
+  // The rail order is replaced as a whole on every write, so it must survive intact.
+  it('preserves the workspace rail order instead of stripping it', () => {
+    const parsed = UserPreferenceSchema.parse({
+      telemetry: null,
+      workspace: { order: ['ws-2', 'ws-1'] },
+    });
+
+    expect(parsed).toMatchObject({ workspace: { order: ['ws-2', 'ws-1'] } });
+  });
+
+  // Retired lab flags stay in stored preferences (no migration). A stored one
+  // must not fail the parse — the display snapshot and `updatePreference` both
+  // read the whole object — it is only dropped, with the live flags kept.
+  it('drops a retired lab flag without rejecting the preference', () => {
+    const result = UserPreferenceSchema.safeParse({
+      lab: { enableCodexAppServer: true, enableRetiredExperiment: true },
+      telemetry: null,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.lab).toEqual({ enableCodexAppServer: true });
+  });
 });

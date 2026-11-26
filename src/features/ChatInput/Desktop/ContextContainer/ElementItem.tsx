@@ -1,63 +1,55 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { createStaticStyles, cssVar, Tag, Tooltip } from '@lobehub/ui';
+import { Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
 
-const styles = createStaticStyles(({ css }) => ({
-  name: css`
-    overflow: hidden;
-    max-width: 200px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  selector: css`
-    overflow: hidden;
-
-    max-width: min(420px, 70vw);
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  tagBadge: css`
-    padding-block: 0;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  thumbnail: css`
-    display: block;
-
-    max-width: min(420px, 70vw);
-    max-height: 240px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
-
-    object-fit: contain;
-    background: ${cssVar.colorBgContainer};
-  `,
-  tooltip: css`
-    max-width: min(460px, 75vw);
-  `,
-  url: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  name: { overflow: 'hidden', maxWidth: '200px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  selector: {
+    overflow: 'hidden',
+    maxWidth: 'min(420px, 70vw)',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  tagBadge: {
+    paddingBlock: '0',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  thumbnail: {
+    display: 'block',
+    maxWidth: 'min(420px, 70vw)',
+    maxHeight: '240px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '6px',
+    objectFit: 'contain',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  tooltip: { maxWidth: 'min(460px, 75vw)' },
+  url: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /**
  * The chip for a DOM element picked from the in-app browser. Unlike a plain
@@ -70,17 +62,17 @@ const ElementItem = memo<ChatContextContent>(({ element, id, preview }) => {
   if (!element) return null;
 
   const tooltip = (
-    <div className={styles.tooltip}>
+    <div {...stylex.props(styles.tooltip)}>
       {element.thumbnailUrl && (
         <img
           alt={element.selector || element.tag}
-          className={styles.thumbnail}
+          {...stylex.props(styles.thumbnail)}
           src={element.thumbnailUrl}
         />
       )}
-      <div className={styles.selector}>{element.selector || `<${element.tag}>`}</div>
+      <div {...stylex.props(styles.selector)}>{element.selector || `<${element.tag}>`}</div>
       {(element.pageTitle || element.url) && (
-        <div className={styles.url}>{element.pageTitle || element.url}</div>
+        <div {...stylex.props(styles.url)}>{element.pageTitle || element.url}</div>
       )}
     </div>
   );
@@ -96,8 +88,8 @@ const ElementItem = memo<ChatContextContent>(({ element, id, preview }) => {
     >
       <Tooltip title={tooltip}>
         <span>
-          <span className={styles.tagBadge}>{`<${element.tag}>`}</span>{' '}
-          <span className={styles.name}>{preview}</span>
+          <span {...stylex.props(styles.tagBadge)}>{`<${element.tag}>`}</span>{' '}
+          <span {...stylex.props(styles.name)}>{preview}</span>
         </span>
       </Tooltip>
     </Tag>

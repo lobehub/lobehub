@@ -496,4 +496,26 @@ describe('tallyCheckUnion', () => {
 
     expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 1, total: 1, unjudged: 0 });
   });
+
+  it('leaves a dispute-waived verdict out of the tally', () => {
+    const union = buildAcceptanceCheckUnion([
+      {
+        results: [
+          result('c1', 'passed'),
+          result('c2', 'failed', {
+            metadata: {
+              dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' },
+            },
+          }),
+        ],
+        run: run('r1', 1, [planItem('c1'), planItem('c2')]),
+      },
+    ]);
+
+    // The row keeps the historical verdict for the timeline, but the summary
+    // drops it the same way the run rollups already do — otherwise the tally
+    // reports a failure that no longer gates the delivery.
+    expect(union.find((row) => row.id === 'c2')).toMatchObject({ state: 'failed', waived: true });
+    expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 1, total: 1, unjudged: 0 });
+  });
 });

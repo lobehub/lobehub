@@ -1,5 +1,5 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import { AGENT_PERMISSION_POLICY_KEYS } from '@lobechat/types';
+import { AGENT_PERMISSION_POLICY_KEYS, AgentPluginModeSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -110,12 +110,22 @@ export const configRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { agentId } = await resolveAgentReference(
-        input.agentId,
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
+      let agentId: string;
+      try {
+        ({ agentId } = await resolveAgentReference(
+          input.agentId,
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ));
+      } catch (error) {
+        // An id outside the caller's scope (deleted, or another member's
+        // private agent) settles as `null`, the same "not found or no access"
+        // answer `protectAgentConfig` gives. The client renders that as a
+        // terminal 404 instead of a retryable load failure.
+        if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null;
+        throw error;
+      }
       const config = await ctx.agentService.getAgentConfigById(agentId);
       return protectAgentConfig(ctx, agentId, config);
     }),
@@ -133,6 +143,35 @@ export const configRouter = router({
       const config = await ctx.agentService.getBuiltinAgent(input.slug);
       return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
     }),
+  /**
+   * Which of the caller's own agents carry a plugin or skill (`pinned` or
+   * `disabled`), in one query over `plugins` instead of a full config per agent.
+   */
+  getPluginAgentModes: agentProcedure
+    .input(z.object({ identifier: z.string().min(1) }))
+    .query(async ({ input, ctx }) => ctx.agentModel.listPluginModes(input.identifier)),
+  /**
+   * Sets a plugin or skill's mode on the caller's own agents in one atomic
+   * write. `auto` removes it; without `agentIds` it removes it from every own
+   * agent carrying it.
+   */
+  setPluginMode: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(
+      z
+        .object({
+          agentIds: z.array(z.string()).max(500).optional(),
+          identifier: z.string().min(1),
+          mode: AgentPluginModeSchema,
+        })
+        .refine((input) => input.mode === 'auto' || !!input.agentIds, {
+          message: 'agentIds is required unless removing',
+          path: ['agentIds'],
+        }),
+    )
+    .mutation(async ({ input, ctx }) =>
+      ctx.agentModel.setPluginMode(input.identifier, input.mode, input.agentIds),
+    ),
   updateAgentConfig: agentProcedure
     .use(withScopedPermission('agent:update'))
     .input(
@@ -180,6 +219,14 @@ export const configRouter = router({
             }));
 
           if (!canUpdatePolicies) safeValue = stripAgentPermissionPolicies(input.value);
+        }
+
+        // `pinned` is the team pin in a workspace and has its own owner/admin
+        // gated route (`updateAgentPinned`); a config patch must not set it.
+        // Applied last so no earlier rewrite of `safeValue` can restore it.
+        if ('pinned' in safeValue) {
+          const { pinned: _pinned, ...rest } = safeValue as Record<string, unknown>;
+          safeValue = rest;
         }
       }
 

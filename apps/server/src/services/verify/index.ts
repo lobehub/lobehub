@@ -22,6 +22,11 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export {
+  scheduleVerifyOnCompletion,
+  VERIFY_ON_OPERATION_COMPLETE_PATH,
+  type VerifyOnOperationCompletePayload,
+} from './completionDispatch';
 export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export {

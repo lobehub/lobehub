@@ -15,14 +15,22 @@ const mocks = vi.hoisted(() => ({
     agentMap: {},
     useHydrateAgentConfig: vi.fn(),
   },
+  appOrigin: 'https://app.example.com',
   chatState: {
     closeArtifact: vi.fn(),
+    closeFilePreview: vi.fn(),
     clearPortalStack: vi.fn(),
     dbMessagesMap: {
       'topic-chat-key': [{ id: 'message-1' }],
     } as Record<string, { id: string }[]>,
     messagesMap: {} as Record<string, { id: string }[]>,
-    portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
+    portalStack: [] as {
+      artifact?: { id: string };
+      file?: { fileId: string };
+      sourceTopicId?: string;
+      taskId?: string;
+      type: string;
+    }[],
     replaceMessages: vi.fn(),
     showPortal: false,
     topicDataMap: {},
@@ -33,6 +41,8 @@ const mocks = vi.hoisted(() => ({
     reason: 'requires member',
   },
   navigate: vi.fn(),
+  openTrustedExternalUrl: vi.fn(),
+  workspaceSlug: undefined as string | undefined,
   serverConfigState: {
     serverConfig: {
       enableBusinessFeatures: false,
@@ -207,6 +217,18 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => mocks.workspaceSlug,
+}));
+
+vi.mock('@/hooks/useAppOrigin', () => ({
+  useAppOrigin: () => mocks.appOrigin,
+}));
+
+vi.mock('@/utils/openTrustedExternalUrl', () => ({
+  openTrustedExternalUrl: mocks.openTrustedExternalUrl,
+}));
+
 vi.mock('@/hooks/useGatewayReconnect', () => ({
   useGatewayReconnect: vi.fn(),
 }));
@@ -277,12 +299,19 @@ describe('TopicChatDrawer', () => {
     mocks.chatState.closeArtifact.mockImplementation(() => {
       mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
     });
+    mocks.chatState.closeFilePreview.mockClear();
+    mocks.chatState.closeFilePreview.mockImplementation(() => {
+      mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
+    });
     mocks.chatState.clearPortalStack.mockClear();
     mocks.chatState.clearPortalStack.mockImplementation(() => {
       mocks.chatState.portalStack = [];
       mocks.chatState.showPortal = false;
     });
     mocks.navigate.mockClear();
+    mocks.openTrustedExternalUrl.mockClear();
+    mocks.appOrigin = 'https://app.example.com';
+    mocks.workspaceSlug = undefined;
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerFocusRequest = undefined;
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
@@ -571,6 +600,72 @@ describe('TopicChatDrawer', () => {
     expect(view.getByTestId('chat-list')).toBeInTheDocument();
     expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
     expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('shows a file preview opened from its run inside the drawer instead of behind it', () => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId: 'topic-1', type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+    expect(view.queryByTestId('chat-list')).not.toBeInTheDocument();
+
+    fireEvent.click(view.getByTestId('artifact-portal'));
+    expect(mocks.chatState.closeFilePreview).toHaveBeenCalledOnce();
+    expect(mocks.chatState.closeArtifact).not.toHaveBeenCalled();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('closes its file preview together with the drawer', () => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId: 'topic-1', type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+
+    expect(mocks.chatState.closeFilePreview).toHaveBeenCalledOnce();
+    expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['another topic', 'topic-2'],
+    ['no conversation', undefined],
+  ])('leaves a file preview opened from %s to the page portal', (_, sourceTopicId) => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId, type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('chat-list')).toBeInTheDocument();
+    expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+    expect(mocks.chatState.closeFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('opens the run conversation in the browser', () => {
+    mocks.workspaceSlug = 'acme';
+    const view = render(<TopicChatDrawer />);
+
+    fireEvent.click(view.getByTitle('report.actions.openInBrowser'));
+
+    expect(mocks.openTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.example.com/acme/agent/agt_assignee/topic-1',
+    );
+  });
+
+  it('disables open in browser without an app origin', () => {
+    mocks.appOrigin = '';
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTitle('report.actions.openInBrowser')).toBeDisabled();
   });
 
   it('uses a resizable bottom-right floating panel', () => {

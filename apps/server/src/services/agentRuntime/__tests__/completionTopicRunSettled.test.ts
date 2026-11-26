@@ -29,7 +29,7 @@ describe('CompletionLifecycle — topic run settled', () => {
     const lifecycle = new CompletionLifecycle({} as any, 'user-1', undefined, {
       onTopicRunSettled,
     });
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'notifyPendingAgentIntervention').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'registerFileWorks').mockResolvedValue(undefined);

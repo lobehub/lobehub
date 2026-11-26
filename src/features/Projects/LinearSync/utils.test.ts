@@ -31,6 +31,12 @@ const result = (overrides: Partial<LinearSyncResult>): LinearSyncResult => ({
 });
 
 describe('formatLinearSyncResult', () => {
+  it('says how many tasks were archived, so a created task missing from the list is explained', () => {
+    expect(formatLinearSyncResult(result({ archived: 1, created: 2 }), t)).toBe(
+      'linear.sync.result.created:2 · linear.sync.result.archived:1',
+    );
+  });
+
   it('lists only what changed, and says when more remain', () => {
     expect(
       formatLinearSyncResult(
@@ -50,6 +56,9 @@ describe('formatLinearSyncResult', () => {
   it('counts comments copied from Linear', () => {
     expect(formatLinearSyncResult(result({ commentsImported: 3, updated: 1 }), t)).toBe(
       'linear.sync.result.updated:1 · linear.sync.result.commentsImported:3',
+    );
+    expect(formatLinearSyncResult(result({ labelsSynced: 4 }), t)).toBe(
+      'linear.sync.result.labelsSynced:4',
     );
     expect(formatLinearSyncResult(result({ commentsImported: 2 }), t)).toBe(
       'linear.sync.result.commentsImported:2',

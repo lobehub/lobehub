@@ -24,6 +24,22 @@ import {
   TopicCommentModel,
 } from '../topicComment';
 
+const toolPlugin = (messageId: string, toolCallId: string): typeof messagePlugins.$inferInsert => ({
+  id: messageId,
+  toolCallId,
+  userId: authorId,
+  workspaceId: workspaceAId,
+});
+
+const issueMessage = (messageId: string): typeof messages.$inferInsert => ({
+  content: 'investigate and update this issue',
+  id: messageId,
+  role: 'user',
+  topicId: workspaceTopicId,
+  userId: authorId,
+  workspaceId: workspaceAId,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const authorId = 'tc-author';
@@ -225,12 +241,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-assistant-group-final',
@@ -345,12 +356,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-narrated-group-final',
@@ -369,14 +375,7 @@ describe('TopicCommentModel', () => {
       const toolMessageId = 'tc-trailing-status-tool';
       const toolCallId = 'tc-trailing-status-call';
       await serverDB.insert(messages).values([
-        {
-          content: 'investigate and update this issue',
-          id: userMessageId,
-          role: 'user',
-          topicId: workspaceTopicId,
-          userId: authorId,
-          workspaceId: workspaceAId,
-        },
+        issueMessage(userMessageId),
         {
           content: 'This is the actual answer.',
           id: rootAssistantId,
@@ -406,12 +405,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-trailing-status-preview',
@@ -430,14 +424,7 @@ describe('TopicCommentModel', () => {
       const toolMessageId = 'tc-single-mixed-tool';
       const toolCallId = 'tc-single-mixed-call';
       await serverDB.insert(messages).values([
-        {
-          content: 'investigate and update this issue',
-          id: userMessageId,
-          role: 'user',
-          topicId: workspaceTopicId,
-          userId: authorId,
-          workspaceId: workspaceAId,
-        },
+        issueMessage(userMessageId),
         {
           content: 'This is the answer outside the workflow.',
           id: rootAssistantId,
@@ -467,12 +454,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-single-mixed-preview',
@@ -495,14 +477,7 @@ describe('TopicCommentModel', () => {
       const erroredAnswer =
         'The operation failed after producing this answer. The details remain visible.';
       await serverDB.insert(messages).values([
-        {
-          content: 'investigate and update this issue',
-          id: userMessageId,
-          role: 'user',
-          topicId: workspaceTopicId,
-          userId: authorId,
-          workspaceId: workspaceAId,
-        },
+        issueMessage(userMessageId),
         {
           content: 'This is the earlier answer.',
           id: rootAssistantId,
@@ -536,12 +511,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-mixed-error-preview',
@@ -593,12 +563,7 @@ describe('TopicCommentModel', () => {
           workspaceId: workspaceAId,
         },
       ]);
-      await serverDB.insert(messagePlugins).values({
-        id: toolMessageId,
-        toolCallId,
-        userId: authorId,
-        workspaceId: workspaceAId,
-      });
+      await serverDB.insert(messagePlugins).values(toolPlugin(toolMessageId, toolCallId));
 
       const result = await authorModel.createWithMentions({
         clientId: 'client-task-completion-preview',

@@ -11,7 +11,6 @@ import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
   aiAgentService,
@@ -31,12 +30,13 @@ import { useUserStore } from '@/store/user';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { type RunScope } from '../lifecycle/types';
-import { readClientRunMessages } from './ensureFullHistoryForClientRun';
+import { readClientRunInputs } from './ensureFullHistoryForClientRun';
 import {
   shouldUseConfiguredGatewayResume as resolveConfiguredGatewayResume,
   shouldUseGatewayResume as resolveGatewayResume,
 } from './gatewayResume';
 import { createInterventionProjection } from './interventionProjection';
+import { submitRemoteHeteroIntervention } from './remoteHeteroIntervention';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling
@@ -782,15 +782,15 @@ export class ConversationControlActionImpl {
 
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
+    const runInputs = await readClientRunInputs(this.#get, effectiveContext, chatKey);
     const currentRequestMetadata = this.#getRequestMetadataFromMessageChain(
       toolMessageId,
-      currentMessages,
+      runInputs.messages,
     );
 
     // 4. Create agent state and context with user intervention config
     const { state, context: initialContext } = this.#get().internal_createAgentState({
-      messages: currentMessages,
+      ...runInputs,
       parentMessageId: toolMessageId,
       agentId,
       topicId,
@@ -813,7 +813,7 @@ export class ConversationControlActionImpl {
     try {
       await executeClientAgent({
         context: effectiveContext,
-        messages: currentMessages,
+        ...runInputs,
         parentMessageId: toolMessageId, // Start from tool message
         parentMessageType: 'tool', // Type is 'tool'
         initialState: state,
@@ -1162,14 +1162,14 @@ export class ConversationControlActionImpl {
 
     // A completed interaction result resumes without a synthetic user message or tool re-execution.
     if (!shouldCreateUserMessage) {
-      const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
+      const runInputs = await readClientRunInputs(this.#get, effectiveContext, chatKey);
       const requestMetadata = this.#getRequestMetadataFromMessageChain(
         toolMessageId,
-        currentMessages,
+        runInputs.messages,
       );
 
       const { state, context: initialContext } = this.#get().internal_createAgentState({
-        messages: currentMessages,
+        ...runInputs,
         parentMessageId: toolMessageId,
         agentId,
         topicId,
@@ -1189,7 +1189,7 @@ export class ConversationControlActionImpl {
       try {
         await executeClientAgent({
           context: effectiveContext,
-          messages: currentMessages,
+          ...runInputs,
           parentMessageId: toolMessageId,
           parentMessageType: 'tool',
           initialState: state,
@@ -1239,12 +1239,12 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the earlier
     // guard, and executeClientAgent would otherwise start a fresh child run that
     // wasn't present when the cancellation propagated.
-    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
+    const runInputs = await readClientRunInputs(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message (not tool re-execution)
     const { state, context: initialContext } = this.#get().internal_createAgentState({
-      messages: currentMessages,
+      ...runInputs,
       parentMessageId: userMsg.id,
       agentId,
       topicId,
@@ -1255,7 +1255,7 @@ export class ConversationControlActionImpl {
     try {
       await executeClientAgent({
         context: effectiveContext,
-        messages: currentMessages,
+        ...runInputs,
         parentMessageId: userMsg.id,
         parentMessageType: 'user',
         initialState: state,
@@ -1447,12 +1447,12 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the guard
     // before it, and executeClientAgent would otherwise start a fresh child run
     // that wasn't present when the cancellation propagated.
-    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
+    const runInputs = await readClientRunInputs(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message
     const { state, context: initialContext } = this.#get().internal_createAgentState({
-      messages: currentMessages,
+      ...runInputs,
       parentMessageId: userMsg.id,
       agentId,
       topicId,
@@ -1463,7 +1463,7 @@ export class ConversationControlActionImpl {
     try {
       await executeClientAgent({
         context: effectiveContext,
-        messages: currentMessages,
+        ...runInputs,
         parentMessageId: userMsg.id,
         parentMessageType: 'user',
         initialState: state,
@@ -1730,7 +1730,10 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
     if (actionType === 'submit') {
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      // A share visitor cannot write the creator's rows; the tool result persists it.
+      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext, {
+        persist: !effectiveContext.agentShareId,
+      });
     }
     if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
@@ -1770,22 +1773,13 @@ export class ConversationControlActionImpl {
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
-        await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
-          actionType === 'submit'
-            ? {
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                result: payload ?? {},
-                toolCallId,
-              }
-            : {
-                cancelReason: 'user_cancelled',
-                cancelled: true,
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                toolCallId,
-              },
-        );
+        await submitRemoteHeteroIntervention(effectiveContext, {
+          actionType,
+          operationId: remoteOperationId,
+          payload,
+          resolutionRequestId,
+          toolCallId,
+        });
       }
     } catch (err) {
       if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
@@ -1854,16 +1848,13 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     answers: Record<string, unknown>,
     context?: OptimisticUpdateContext,
+    { persist = true }: { persist?: boolean } = {},
   ): Promise<void> => {
     this.#get().internal_dispatchMessage(
-      {
-        id: toolMessageId,
-        key: 'askUserAnswers',
-        type: 'updatePluginState',
-        value: answers,
-      },
+      { id: toolMessageId, key: 'askUserAnswers', type: 'updatePluginState', value: answers },
       context,
     );
+    if (!persist) return;
     try {
       const { messageService } = await import('@/services/message');
       const ctx = this.#get().internal_getConversationContext(context);
@@ -2150,12 +2141,12 @@ export class ConversationControlActionImpl {
 
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
-    const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId, currentMessages);
+    const runInputs = await readClientRunInputs(this.#get, effectiveContext, chatKey);
+    const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId, runInputs.messages);
 
     // Create agent state and context to continue from rejected tool message
     const { state, context: initialContext } = this.#get().internal_createAgentState({
-      messages: currentMessages,
+      ...runInputs,
       parentMessageId: messageId,
       agentId,
       topicId,
@@ -2173,7 +2164,7 @@ export class ConversationControlActionImpl {
     try {
       await executeClientAgent({
         context: effectiveContext,
-        messages: currentMessages,
+        ...runInputs,
         parentMessageId: messageId,
         parentMessageType: 'tool',
         initialState: state,

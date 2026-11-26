@@ -2,63 +2,85 @@
 
 import { memo } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SafeBoundary from '@/components/ErrorBoundary';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useTopicId } from '../hooks/useTopicId';
-import SandboxDrivePicker from './SandboxDrivePicker';
-import SandboxEnvironmentPicker from './SandboxEnvironmentPicker';
+import { projectStartEnvironmentId } from './sandboxEnvironmentOptions';
+import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
+import { useFollowSandboxModePreference } from './useFollowSandboxModePreference';
+import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
 import { useSandboxPlacement } from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
-import { useSeedDefaultSelection } from './useSeedDefaultSelection';
+import { useSeedDefaultSelection, useSeedTemporaryRepository } from './useSeedDefaultSelection';
 
 interface SandboxStorageSectionProps {
   agentId: string;
 }
 
 /**
- * The working directory of a cloud-sandbox run — the counterpart of
- * `WorkingDirectorySection`, which covers runs on a machine, and shaped the
- * same way: one chip that always names the slot, whose menu holds every place
- * the run could work.
+ * Where a new conversation's cloud sandbox starts, kept in step while the run
+ * uses the sandbox. It renders nothing: the sandbox's options — the drive and
+ * the environment — are picked under the 云端沙箱 row of the
+ * execution-environment menu, whose chip is the only control under the input.
  *
- * Nothing chosen means a temporary sandbox, cleaned up with the session; a
- * folder on the drive keeps its files. A plan with a drive starts each new
- * conversation on its default folder rather than nothing. Beside it, the
- * environment the working directory is initialized from — a separate choice,
- * so a temporary sandbox can start from a checkout too.
- *
- * A plan without a drive still gets the chip: the temporary sandbox is
- * everyone's, and the way to a plan is a row in the same menu rather than a
- * different control.
+ * A plan with a drive starts each new conversation on it — in the folder the
+ * agent's last conversation was put in, or its default folder, with the
+ * environment picked together with that folder — unless the drive was
+ * switched off for this agent, which new conversations then keep, set up from
+ * the environment the last one used. A project conversation starts off the
+ * drive, in its project's environment, unless the person switches the drive
+ * on.
  */
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
   const { eligible, status } = useSandboxStorageAccess(agentId);
-  const { selection, setSelection, topicId } = useSandboxPlacement(agentId, useTopicId());
-  useSeedDefaultSelection(agentId, {
+  const scopeTopicId = useTopicId();
+  const { projectId, topicId } = useSandboxPlacement(agentId, scopeTopicId);
+  const workspaceId = useActiveWorkspaceId();
+  const sharedAgent = useIsSharedAgent(agentId);
+  // Only a run in the sandbox needs the project's environment.
+  const { environments: projectEnvironments } = useProjectSandboxEnvironments(
+    projectId,
+    sharedAgent,
     eligible,
-    entitled: status === 'ready',
+  );
+  const userId = useUserStore(userProfileSelectors.userId);
+  const prefersTemporary = usePrefersTemporarySandbox({ userId, workspaceId }, agentId);
+  // A project conversation starts off the drive, in its project's environment;
+  // the agent's drive preference is about its conversations elsewhere.
+  const temporary = prefersTemporary || !!projectId;
+  useFollowSandboxModePreference(agentId, {
+    enabled: !projectId,
+    hasTopic: !!topicId,
+    scopeKey: `${userId ?? ''}:${workspaceId ?? ''}:${agentId}`,
+    temporary: prefersTemporary,
+  });
+  useSeedDefaultSelection(agentId, {
+    eligible: eligible && !temporary,
+    entitled: status === 'ready' && !temporary,
     hasTopic: !!topicId,
   });
+  // Where new conversations start off the drive — switched off, a project's,
+  // or the only one a plan without a drive has — they start from the
+  // environment the last one used.
+  useSeedTemporaryRepository(agentId, {
+    eligible,
+    hasTopic: !!topicId,
+    project: projectId
+      ? { environmentId: projectStartEnvironmentId(projectEnvironments) }
+      : undefined,
+    temporary: eligible && (temporary || status === 'upgrade'),
+  });
 
-  if (status === 'hidden') return null;
-
-  return (
-    <>
-      <SandboxDrivePicker
-        entitled={status === 'ready'}
-        topicId={topicId}
-        value={selection}
-        onChange={setSelection}
-      />
-      <SandboxEnvironmentPicker value={selection} onChange={setSelection} />
-    </>
-  );
+  return null;
 });
 
 SandboxStorageSectionInner.displayName = 'SandboxStorageSectionInner';
 
 const SandboxStorageSection = memo<SandboxStorageSectionProps>(({ agentId }) => (
-  <SafeBoundary minHeight={22} resetKeys={[agentId]}>
+  <SafeBoundary minHeight={0} resetKeys={[agentId]}>
     <SandboxStorageSectionInner agentId={agentId} />
   </SafeBoundary>
 ));

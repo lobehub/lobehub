@@ -78,7 +78,7 @@ const SIDE_LABELS = { base: '改之前', head: '改之后' } as const;
 
 const sidesOf = (item: ReviewView) => {
   const unpaired = /\|unpaired:(base|head):/.exec(item.key)?.[1] as 'base' | 'head' | undefined;
-  return unpaired ? [unpaired] : (['base', 'head'] as const);
+  return unpaired && !item.styles.counterpart ? [unpaired] : (['base', 'head'] as const);
 };
 
 export const Pair = ({
@@ -96,7 +96,9 @@ export const Pair = ({
       return (
         <Flexbox gap={4} key={side} {...stylex.props(styles.side)}>
           <Text fontSize={12} type="secondary">
-            {SIDE_LABELS[side]}
+            {item.styles.counterpart === side
+              ? `${SIDE_LABELS[side]}：同一位置的元素，没有样式类`
+              : SIDE_LABELS[side]}
           </Text>
           {notes.map((note) => (
             <Text fontSize={12} key={note} type="warning" {...stylex.props(styles.standIn)}>
@@ -118,12 +120,14 @@ export const Pair = ({
 
 export const CellVerdict = ({
   cell,
+  counterpart,
   itemKey,
 }: {
   cell: { differs: boolean; summary: string[] };
+  counterpart?: 'base' | 'head';
   itemKey: string;
 }) => {
-  const verdict = cellVerdict(itemKey, cell);
+  const verdict = cellVerdict(itemKey, cell, counterpart);
   const type =
     verdict.tone === 'ok' ? 'success' : verdict.tone === 'error' ? 'danger' : 'secondary';
   return (
@@ -165,7 +169,7 @@ export const ShotGrid = ({
           {...stylex.props(styles.cell, cell.differs && styles.diff)}
         >
           <Pair combo={cell.combo} condition={cell.condition} item={item} />
-          <CellVerdict cell={cell} itemKey={item.key} />
+          <CellVerdict cell={cell} counterpart={item.styles.counterpart} itemKey={item.key} />
         </div>
       )),
     ])}

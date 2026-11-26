@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./agent-browser": "./src/agentBrowser.ts",
+    "./agent-credentials": "./src/agentCredentials/index.ts",
     "./browser-input": "./src/browserInput.ts",
     "./claude-code-account-routing": "./src/claudeCodeAccountRouting.ts",
     "./claude-code-memory": "./src/claudeCodeMemory.ts",
@@ -15,6 +16,7 @@
     "./project-file-index": "./src/projectFileIndex.ts",
     "./rpc-clients": "./src/rpcClients.ts",
     "./skill-directory": "./src/skillDirectory.ts",
+    "./terminal": "./src/terminal.ts",
     "./workspace": "./src/workspace.ts"
   },
   "main": "./src/index.ts",

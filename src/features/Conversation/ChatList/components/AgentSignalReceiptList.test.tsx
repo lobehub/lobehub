@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { agentSignalService } from '@/services/agentSignal';
 
+import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 import AgentSignalReceiptList from './AgentSignalReceiptList';
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +60,42 @@ vi.mock('@/services/agentSignal', () => ({
   },
 }));
 
+const createGatewayMemoryReceipt = (
+  target: AgentSignalReceiptView['target'],
+): AgentSignalReceiptView => ({
+  agentId: 'agent-1',
+  createdAt: 1,
+  detail: 'Saved this for future replies',
+  id: 'receipt-1',
+  kind: 'memory',
+  sourceId: 'source-1',
+  sourceType: 'client.gateway.runtime_end',
+  status: 'applied',
+  target,
+  title: 'Memory saved',
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
+const createGatewaySkillReceipt = (
+  target: AgentSignalReceiptView['target'],
+  metadata?: AgentSignalReceiptView['metadata'],
+): AgentSignalReceiptView => ({
+  agentId: 'agent-1',
+  createdAt: 1,
+  detail: 'Improved how this assistant handles similar requests',
+  id: 'receipt-1',
+  kind: 'skill',
+  ...(metadata === undefined ? {} : { metadata }),
+  sourceId: 'source-1',
+  sourceType: 'client.gateway.runtime_end',
+  status: 'updated',
+  target,
+  title: 'Skill updated',
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
 describe('AgentSignalReceiptList', () => {
   afterEach(() => {
     mocks.mutate.mockReset();
@@ -73,24 +110,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Saved this for future replies',
-            id: 'receipt-1',
-            kind: 'memory',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'applied',
-            target: {
-              summary: 'Use decision-first PR reviews in future chats',
-              title: 'Decision-first PR review preference',
-              type: 'memory',
-            },
-            title: 'Memory saved',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewayMemoryReceipt({
+            summary: 'Use decision-first PR reviews in future chats',
+            title: 'Decision-first PR review preference',
+            type: 'memory',
+          }),
           {
             agentId: 'agent-1',
             createdAt: 2,
@@ -126,24 +150,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Saved this for future replies',
-            id: 'receipt-1',
-            kind: 'memory',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'applied',
-            target: {
-              summary: 'Saved this for future replies',
-              title: 'Future reply preference',
-              type: 'memory',
-            },
-            title: 'Memory saved',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewayMemoryReceipt({
+            summary: 'Saved this for future replies',
+            title: 'Future reply preference',
+            type: 'memory',
+          }),
         ]}
       />,
     );
@@ -157,24 +168,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewaySkillReceipt({
+            id: 'document-1',
+            title: 'GitHub PR review workflow',
+            type: 'skill',
+          }),
         ]}
       />,
     );
@@ -220,24 +218,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewaySkillReceipt({
+            id: 'document-1',
+            title: 'GitHub PR review workflow',
+            type: 'skill',
+          }),
         ]}
       />,
     );
@@ -251,26 +236,13 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              agentDocumentId: 'index-agent-document-1',
-              documentId: 'index-document-1',
-              id: 'bundle-document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewaySkillReceipt({
+            agentDocumentId: 'index-agent-document-1',
+            documentId: 'index-document-1',
+            id: 'bundle-document-1',
+            title: 'GitHub PR review workflow',
+            type: 'skill',
+          }),
         ]}
       />,
     );
@@ -284,23 +256,10 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Saved this for future replies',
-            id: 'receipt-1',
-            kind: 'memory',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'applied',
-            target: {
-              title: 'Remember this PR review workflow',
-              type: 'memory',
-            },
-            title: 'Memory saved',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewayMemoryReceipt({
+            title: 'Remember this PR review workflow',
+            type: 'memory',
+          }),
         ]}
       />,
     );
@@ -314,24 +273,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Saved this for future replies',
-            id: 'receipt-1',
-            kind: 'memory',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'applied',
-            target: {
-              id: 'base-memory-1',
-              title: 'AmAzing- prefers the assistant to respond in Chinese.',
-              type: 'memory',
-            },
-            title: 'Memory saved',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewayMemoryReceipt({
+            id: 'base-memory-1',
+            title: 'AmAzing- prefers the assistant to respond in Chinese.',
+            type: 'memory',
+          }),
         ]}
       />,
     );
@@ -349,26 +295,13 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Saved this for future replies',
-            id: 'receipt-1',
-            kind: 'memory',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'applied',
-            target: {
-              id: 'preference-1',
-              memoryId: 'memory-1',
-              memoryLayer: LayersEnum.Preference,
-              title: 'Decision-first PR review preference',
-              type: 'memory',
-            },
-            title: 'Memory saved',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewayMemoryReceipt({
+            id: 'preference-1',
+            memoryId: 'memory-1',
+            memoryLayer: LayersEnum.Preference,
+            title: 'Decision-first PR review preference',
+            type: 'memory',
+          }),
         ]}
       />,
     );
@@ -530,30 +463,19 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            metadata: {
+          createGatewaySkillReceipt(
+            {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            {
               agentDocumentId: 'agent-document-1',
               documentId: 'document-1',
               historyId: 'history-1',
               rollbackStatus: 'available',
             },
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          ),
           {
             agentId: 'agent-1',
             createdAt: 2,
@@ -614,30 +536,19 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            metadata: {
+          createGatewaySkillReceipt(
+            {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            {
               agentDocumentId: 'agent-document-1',
               documentId: 'document-1',
               historyId: 'history-1',
               rollbackStatus: 'available',
             },
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          ),
         ]}
       />,
     );
@@ -673,30 +584,19 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            metadata: {
+          createGatewaySkillReceipt(
+            {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            {
               agentDocumentId: 'agent-document-1',
               documentId: 'document-1',
               historyId: 'history-1',
               rollbackStatus: 'available',
             },
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          ),
         ]}
       />,
     );
@@ -768,29 +668,18 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            metadata: {
-              documentId: 'document-1',
-              historyId: 'history-1',
-              rollbackStatus: 'not_found',
-            },
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
+          createGatewaySkillReceipt(
+            {
               id: 'document-1',
               title: 'GitHub PR review workflow',
               type: 'skill',
             },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+            {
+              documentId: 'document-1',
+              historyId: 'history-1',
+              rollbackStatus: 'not_found',
+            },
+          ),
         ]}
       />,
     );
@@ -803,24 +692,11 @@ describe('AgentSignalReceiptList', () => {
     render(
       <AgentSignalReceiptList
         receipts={[
-          {
-            agentId: 'agent-1',
-            createdAt: 1,
-            detail: 'Improved how this assistant handles similar requests',
-            id: 'receipt-1',
-            kind: 'skill',
-            sourceId: 'source-1',
-            sourceType: 'client.gateway.runtime_end',
-            status: 'updated',
-            target: {
-              id: 'document-1',
-              title: 'GitHub PR review workflow',
-              type: 'skill',
-            },
-            title: 'Skill updated',
-            topicId: 'topic-1',
-            userId: 'user-1',
-          },
+          createGatewaySkillReceipt({
+            id: 'document-1',
+            title: 'GitHub PR review workflow',
+            type: 'skill',
+          }),
         ]}
       />,
     );

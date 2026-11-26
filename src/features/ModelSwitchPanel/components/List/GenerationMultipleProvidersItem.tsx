@@ -47,8 +47,11 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
       <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
         <DropdownMenuSubmenuRoot open={subOpen} onOpenChange={setSubOpen}>
           <DropdownMenuSubmenuTrigger
-            className={cx(menuSharedStyles.item, isActive && modelSwitchPanelStyles.menuItemActive)}
-            style={{ paddingBlock: 8, paddingInline: 8 }}
+            className={cx(
+              menuSharedStyles.item,
+              modelSwitchPanelStyles.rowTrigger,
+              isActive && modelSwitchPanelStyles.menuItemActive,
+            )}
             onClick={() => {
               setSubOpen(false);
               onModelChange(item.data.model.id, (activeProvider ?? item.data.providers[0]).id);

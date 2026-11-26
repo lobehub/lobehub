@@ -20,7 +20,17 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn(function (callback: () => void) {
     return callback();
   }),
+  // Trash / archive hand the worktree cleanup to the host; nothing to run here.
+  afterUnscoped: vi.fn(),
 }));
+
+const legacyInboxTopic = (userId: string): typeof topics.$inferInsert => ({
+  title: 'Legacy Inbox Topic',
+  sessionId: null,
+  groupId: null,
+  agentId: null,
+  userId,
+});
 
 /**
  * Topic Router Integration Tests
@@ -314,6 +324,49 @@ describe('Topic Router Integration Tests', () => {
   });
 
   describe('getTopics', () => {
+    it('lists the child topics of a parent across agents, leaving out unlinked ones', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const { agents } = await import('@/database/schemas');
+      const [otherAgent] = await serverDB
+        .insert(agents)
+        .values({ title: 'Other Agent', userId })
+        .returning();
+      const link = (topicId: string, extra: Record<string, unknown> = {}) => ({
+        openedBy: { agentId: testAgentId, at: '2026-11-18T00:00:00.000Z', topicId, ...extra },
+      });
+      const [parent] = await serverDB
+        .insert(topics)
+        .values({ agentId: testAgentId, title: 'Parent', userId })
+        .returning();
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, metadata: link(parent.id), title: 'Same agent', userId },
+        { agentId: otherAgent.id, metadata: link(parent.id), title: 'Other agent', userId },
+        {
+          agentId: testAgentId,
+          metadata: link(parent.id, { detachedAt: '2026-11-18T01:00:00.000Z' }),
+          title: 'Unlinked',
+          userId,
+        },
+        { agentId: testAgentId, title: 'Unrelated', userId },
+      ]);
+
+      const result = await caller.getTopics({ openedByTopicId: parent.id });
+
+      expect(result.items.map((t: any) => t.title).sort()).toEqual(['Other agent', 'Same agent']);
+      expect(result.total).toBe(2);
+      // A child may run another agent: the row says which.
+      expect(result.items.find((t: any) => t.title === 'Other agent')).toMatchObject({
+        agentId: otherAgent.id,
+      });
+
+      // `agentId` still narrows it.
+      const narrowed = await caller.getTopics({
+        agentId: otherAgent.id,
+        openedByTopicId: parent.id,
+      });
+      expect(narrowed.items.map((t: any) => t.title)).toEqual(['Other agent']);
+    });
+
     it('should get topics by agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
@@ -685,13 +738,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic (sessionId IS NULL, groupId IS NULL, agentId IS NULL)
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Query with isInbox=true
       const result = await caller.getTopics({
@@ -707,13 +754,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Insert new inbox topic with agentId
       await serverDB.insert(topics).values({
@@ -762,13 +803,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Query without isInbox (default is false/undefined)
       // Using testAgentId instead since it has a proper session mapping

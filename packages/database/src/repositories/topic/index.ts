@@ -2,7 +2,7 @@ import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { CreateTopicParams, ModelTimingContext } from '../../models/topic';
-import { messageGroups, messages, topics } from '../../schemas';
+import { agentOperations, messageGroups, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { copyMessagesInDatabase } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
@@ -26,10 +26,11 @@ const BRANCH_TOPIC_METADATA_KEYS = [
   'workingDirectoryConfig',
 ] as const satisfies readonly (keyof ChatTopicMetadata)[];
 /**
- * Owns atomic writes spanning a topic and its copied conversation.
+ * Owns atomic writes spanning a topic and related conversation rows or run records.
  *
  * Use when:
  * - Edit/resend must create a topic and message ancestry together.
+ * - Cancelling a queued first send must retire both its schedule and its operation.
  *
  * Expects:
  * - The caller's database and workspace scope.
@@ -77,6 +78,40 @@ export class TopicRepository {
   /** Moves topics with their messages and threads to another owned agent atomically. */
   batchMoveToAgent = (topicIds: string[], targetAgentId: string) =>
     batchMoveToAgent(this.scope, topicIds, targetAgentId);
+
+  /** Withdraw a queued worktree send while preserving the conversation and its user message. */
+  cancelWorktreeStart = async (id: string) =>
+    this.db.transaction(async (tx) => {
+      const ownedTopic = and(eq(topics.id, id), eq(topics.userId, this.userId), this.ownership());
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(ownedTopic)
+        .for('update');
+
+      const run = row?.metadata?.scheduledRun;
+      if (row?.status !== 'scheduled' || run?.kind !== 'worktree_start')
+        return 'unchanged' as const;
+      // A worker holding a claim may already be touching Git or starting the agent.
+      if (run.claim) return 'busy' as const;
+
+      await tx
+        .update(agentOperations)
+        .set({ completedAt: new Date(), completionReason: 'interrupted', status: 'interrupted' })
+        .where(
+          and(
+            eq(agentOperations.id, run.operationId),
+            eq(agentOperations.topicId, id),
+            eq(agentOperations.userId, this.userId),
+            eq(agentOperations.status, 'idle'),
+          ),
+        );
+      await tx
+        .update(topics)
+        .set({ metadata: { ...row.metadata, scheduledRun: null }, status: 'active' })
+        .where(ownedTopic);
+      return 'cancelled' as const;
+    });
 
   private ownership = () => topicOwnership(this.scope);
 

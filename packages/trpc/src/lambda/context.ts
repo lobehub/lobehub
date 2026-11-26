@@ -1,3 +1,4 @@
+import { WORK_TYPES_HEADER } from '@lobechat/const';
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload, type SpendOrigin } from '@lobechat/types';
 import type { ClientMetadata } from '@lobechat/utils/server';
@@ -10,6 +11,7 @@ import { auth } from '@/auth';
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
+import type { WorkTypeOptIn } from '@/database/models/work/registry';
 import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
 import { normalizeWorkspaceId } from '@/database/utils/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
@@ -140,7 +142,18 @@ export interface AuthContext {
   userAgent?: string;
   userId?: string | null;
   workspaceId?: string | null;
+  workTypeOptIn?: WorkTypeOptIn;
 }
+
+const readWorkTypeOptIn = (headers: Headers): WorkTypeOptIn => {
+  const types = new Set(
+    (headers.get(WORK_TYPES_HEADER) ?? '').split(',').map((type) => type.trim()),
+  );
+  return {
+    ...(types.has('artboard') && { includeArtboardWorks: true }),
+    ...(types.has('file') && { includeFileWorks: true }),
+  };
+};
 
 /**
  * Inner function for `createContext` where we create the context.
@@ -162,6 +175,7 @@ export const createContextInner = async (params?: {
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
+  workTypeOptIn?: WorkTypeOptIn;
   workspaceId?: string | null;
 }): Promise<AuthContext> => {
   log('createContextInner called with params: %O', params);
@@ -184,6 +198,7 @@ export const createContextInner = async (params?: {
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
+    workTypeOptIn: params?.workTypeOptIn ?? {},
     // A blank scope is not a workspace. Callers that "resolve" one (an empty
     // header, a blank env var, a `?? ''` on the way through) would otherwise
     // hand `''` to every model, and each write would fail on the `workspaces`
@@ -201,6 +216,7 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
  */
 export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
   const clientMetadata = parseClientMetadata(request.headers);
+  const workTypeOptIn = readWorkTypeOptIn(request.headers);
 
   // we have a special header to debug the api endpoint in development mode
   // IT WON'T GO INTO PRODUCTION ANYMORE
@@ -211,6 +227,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     return createContextInner({
       clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
+      workTypeOptIn,
     });
   }
 
@@ -241,6 +258,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     llmRelay: isBatch ? undefined : readLlmRelayRequest(request.headers),
     marketAccessToken,
     userAgent,
+    workTypeOptIn,
     workspaceId,
   };
 

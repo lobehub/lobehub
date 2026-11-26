@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Обновяване на папките",
   "workingDirectory.refreshGitStatus": "Обновяване на статус на клона и PR",
   "workingDirectory.removeRecent": "Премахване от скорошни",
+  "workingDirectory.removeRecentFailed": "Не можа да се премахне тази папка. Моля, опитайте отново.",
   "workingDirectory.removeWorktreeAction": "Изтриване на работно дърво",
   "workingDirectory.removeWorktreeConfirm": "Да изтрия работното дърво „{{name}}“? Това ще премахне директорията на работното дърво, но ще запази клона му. Git ще откаже, ако има непотвърдени промени.",
   "workingDirectory.removeWorktreeFailed": "Неуспешно изтриване на работно дърво",

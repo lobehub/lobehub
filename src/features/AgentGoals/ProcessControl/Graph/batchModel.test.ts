@@ -14,12 +14,14 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
+import type { BatchCellState } from './batchModel';
 import {
   batchPlanTitleKey,
   buildBatchModel,
   findBatchGate,
   findBatchPlan,
   reopenedRows,
+  unitsPhase,
   verdictChecks,
 } from './batchModel';
 import {
@@ -692,6 +694,39 @@ describe('buildBatchModel roster', () => {
   });
 });
 
+describe('buildBatchModel acceptance', () => {
+  it('marks a done unit whose acceptance was signed off, and only that one', () => {
+    const graph = buildGoalGraphView(
+      {
+        ...batchSnapshot({
+          extraNodes: [
+            node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+            node('m4', 'task', 11, { status: 'resolved', title: 'U4' }),
+            node('m5', 'task', 12, { status: 'active', title: 'U5' }),
+          ],
+          state: { massNodeIds: ['m3', 'm4', 'm5'] },
+        }),
+        acceptances: {
+          m3: { id: 'acc-3', status: 'accepted' },
+          m4: { id: 'acc-4', status: 'passed' },
+          m5: { id: 'acc-5', status: 'accepted' },
+          p1: { id: 'acc-p1', status: 'accepted' },
+        },
+      },
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.waves[0][0]).toMatchObject({ accepted: true, state: 'done', title: 'U3' });
+    expect(model.waves[0][1]).not.toHaveProperty('accepted');
+    // Signed off ahead of its run settling is not a finished square.
+    expect(model.waves[0][2]).not.toHaveProperty('accepted');
+    expect(model.rounds[0].probes.find((probe) => probe.nodeId === 'p1')).toMatchObject({
+      accepted: true,
+    });
+  });
+});
+
 describe('batchPlanTitleKey', () => {
   const round = { forked: false, revision: 2 } as any;
 
@@ -791,5 +826,21 @@ describe('batchStages', () => {
       revision: 2,
     });
     expect(parseBatchStageId('batch-1')).toBeUndefined();
+  });
+});
+
+describe('unitsPhase', () => {
+  const cells = (...states: BatchCellState[]) => states.map((state) => ({ state }));
+
+  it('reads a round its gate holds for a person as waiting, not in progress', () => {
+    const roster = cells('done', 'backlog', 'backlog', 'backlog');
+    expect(unitsPhase(roster, true)).toBe('running');
+    expect(unitsPhase(roster, true, true)).toBe('held');
+  });
+
+  it('keeps live work, units needing a person and finished rounds ahead of the hold', () => {
+    expect(unitsPhase(cells('done', 'running', 'backlog'), true, true)).toBe('running');
+    expect(unitsPhase(cells('human', 'backlog'), true, true)).toBe('human');
+    expect(unitsPhase(cells('done', 'done'), true, true)).toBe('done');
   });
 });

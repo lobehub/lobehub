@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "Aucun modèle disponible.",
   "agentMarketplace.picker.failedToLoad": "Échec du chargement des modèles. Veuillez réessayer plus tard.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} modèles disponibles.",
-  "agentMarketplace.render.alreadyInLibraryTag": "Déjà dans la bibliothèque",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} déjà dans la bibliothèque",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} déjà dans la bibliothèque",
   "askUserQuestion.checkStatus": "Vérifier le statut de la soumission",
   "askUserQuestion.checking": "Vérification du statut de la soumission…",
   "askUserQuestion.customOption.placeholder": "Ou écrivez votre propre…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Les connecteurs Stdio peuvent uniquement se synchroniser dans l'application de bureau. Ouvrez LobeHub Desktop pour synchroniser ce connecteur.",
   "connector.kind.agent": "Connecteur d'agent",
   "connector.kind.builtin": "Outil intégré",
-  "connector.kind.community": "Outil communautaire",
+  "connector.kind.community": "Outil de la Place de marché",
   "connector.kind.custom": "Connecteur personnalisé",
   "connector.kind.oauth": "Connecteur OAuth",
   "connector.manageOnlyCreator": "Seul le créateur ou un propriétaire de l'espace de travail peut gérer ce connecteur",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "Ajouter un élément",
   "updateArgs.form.key": "Clé du champ",
   "updateArgs.form.value": "Valeur du champ",
-  "updateArgs.formValidationFailed": "Échec de la validation du formulaire, veuillez vérifier le format des paramètres",
   "updateArgs.keyRequired": "La clé du champ ne peut pas être vide",
   "updateArgs.stringifyError": "Impossible de sérialiser les paramètres, veuillez vérifier le format des paramètres"
 }

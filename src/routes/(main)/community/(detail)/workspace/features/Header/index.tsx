@@ -24,7 +24,7 @@ const normalizeUrl = (input?: string | null) => {
   return input;
 };
 
-const getWorkspacePublicProfileUrl = (username: string) => `/community/org/${username}`;
+const getWorkspacePublicProfileUrl = (username: string) => `/marketplace/org/${username}`;
 
 const WorkspaceHeader = memo(() => {
   const { t } = useTranslation('discover');

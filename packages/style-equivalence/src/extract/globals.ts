@@ -1,0 +1,16 @@
+export const GLOBALS = new Set([
+  'Array',
+  'Boolean',
+  'JSON',
+  'Math',
+  'Number',
+  'Object',
+  'String',
+  'console',
+  'document',
+  'false',
+  'null',
+  'true',
+  'undefined',
+  'window',
+]);

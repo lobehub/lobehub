@@ -177,6 +177,32 @@ describe('ApiKey', () => {
     expect(onSelectedChange).toHaveBeenCalledWith(['mcp:write', 'mcp:read']);
   });
 
+  it('offers the account-credential scope with the agent scopes it relies on, without inventing a read twin', () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <ScopeSelector
+        fullAccess={false}
+        selected={[]}
+        onFullAccessChange={vi.fn()}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+
+    const agentGroup = screen.getByText('apikey.scopes.groups.agent').parentElement!;
+    // read + write + the separate high-risk credential tier
+    expect(within(agentGroup).getAllByRole('checkbox')).toHaveLength(3);
+
+    fireEvent.click(
+      within(agentGroup).getByRole('checkbox', { name: 'apikey.scopes.agentCredential' }),
+    );
+
+    // A credential write is still an agent write, so ticking it brings
+    // `agent:write` (and its read) along — but it must NOT derive the
+    // non-existent `agent:credential:read`, which the API would reject.
+    const [selected] = onSelectedChange.mock.calls.at(-1)!;
+    expect([...selected].sort()).toEqual(['agent:credential:write', 'agent:read', 'agent:write']);
+  });
+
   it('shows loading, then empty state when the first fetch returns no keys', async () => {
     let resolveList!: (items: ApiKeyItem[]) => void;
     hoisted.trpc.getApiKeys.mockImplementation(
@@ -265,21 +291,6 @@ describe('ApiKey', () => {
         value: { enabled: false },
       }),
     );
-    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
-  });
-
-  it('deletes a key from the detail drawer after modal confirmation', async () => {
-    renderPage();
-    await screen.findByText('My Key');
-
-    const dialog = await openDetail('My Key');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }));
-
-    expect(hoisted.confirmModal).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'apikey.list.actions.deleteConfirm.title' }),
-    );
-
-    await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
     await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
   });
 
@@ -561,7 +572,7 @@ describe('ApiKey', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('deletes from the drawer and closes it', async () => {
+  it('deletes from the drawer, refreshes the list and closes it', async () => {
     renderPage();
     await screen.findByText('My Key');
 
@@ -573,6 +584,7 @@ describe('ApiKey', () => {
     );
 
     await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
+    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

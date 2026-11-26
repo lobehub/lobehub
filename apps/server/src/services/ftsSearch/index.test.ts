@@ -157,7 +157,7 @@ describe('full-text search provider selection', () => {
     );
 
     await expect(repo.search({ query: 'candidate' })).resolves.toEqual([]);
-    expect(elasticsearchSearch).toHaveBeenCalledTimes(9);
+    expect(elasticsearchSearch).toHaveBeenCalledTimes(10);
     expect(createPgSearchBackend).not.toHaveBeenCalled();
     expect(pgSearch).not.toHaveBeenCalled();
   });

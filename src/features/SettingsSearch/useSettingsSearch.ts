@@ -1,4 +1,4 @@
-import { isDesktop, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import type { IconProps } from '@lobehub/ui';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,6 +13,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { getPlatform } from '@/utils/platform';
 
 import {
@@ -69,6 +70,13 @@ export interface SettingsSearchScope {
    * found on the page that no longer renders it.
    */
   keywordOwnerTabs?: readonly SettingsSearchTab[];
+  /**
+   * Tabs whose page also holds other tabs' settings in this scope, mapped to
+   * the tabs they hold. The host tab answers those tabs' keywords too: personal
+   * Usage holds the balance, while the workspace keeps a separate Credits page.
+   * Keyed by `SettingsSearchTab` values, typed as `string` like the keyword tables.
+   */
+  mergedTabs?: Partial<Record<string, readonly SettingsSearchTab[]>>;
   /** Builtin provider detail URL; defaults to the personal provider page */
   providerUrl?: (providerId: string) => string;
 }
@@ -122,6 +130,7 @@ export const useSettingsSearch = (
     categoryGroups,
     itemTabs,
     keywordOwnerTabs,
+    mergedTabs,
     providerUrl = getPersonalProviderUrl,
   } = scope;
   const { hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
@@ -129,7 +138,6 @@ export const useSettingsSearch = (
   const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
-  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const isLogin = useUserStore(authSelectors.isLogin);
   const hasEmail = useUserStore((s) => !!userProfileSelectors.userProfile(s)?.email);
@@ -147,11 +155,11 @@ export const useSettingsSearch = (
       enableChannels,
       enableComposio: !!enableComposio,
       enableGatewayMode: !!enableGatewayMode,
-      enableWorkspace: !!enableWorkspace,
       hasEmail,
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
+      isMobile: isMobileSurface(),
       isWindows: getPlatform() === 'Windows',
       showAiImage: !!showAiImage,
     };
@@ -167,33 +175,41 @@ export const useSettingsSearch = (
       !itemTabs || itemTabs.has(tab) ? visibleTabs.get(tab) : undefined;
 
     // English floor + localized enrichment (deduped: on en-US they overlap)
-    const getTabKeywords = (tab: SettingsSearchTab) => {
+    const getOwnTabKeywords = (tab: SettingsSearchTab) => {
       const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[tab];
       return [
         ...(TAB_SEARCH_EN_KEYWORDS[tab] ?? []),
         ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
       ];
     };
+    const getTabKeywords = (tab: SettingsSearchTab) =>
+      [tab, ...(mergedTabs?.[tab] ?? [])].flatMap(getOwnTabKeywords);
     const ownerTabs = new Set(keywordOwnerTabs);
     const ownedKeywords = new Set(keywordOwnerTabs?.flatMap(getTabKeywords));
     const withoutOwnedKeywords = (tab: SettingsSearchTab, keywords: string[]) =>
       ownerTabs.has(tab) ? keywords : keywords.filter((keyword) => !ownedKeywords.has(keyword));
 
+    const indexedUrls = new Set<string>();
     for (const group of categoryGroups) {
       for (const item of group.items) {
-        // The same tab may appear in multiple groups (e.g. APIKey in Agent and
+        // The same page may appear in multiple groups (e.g. APIKey in Agent and
         // System when dev mode is on); index only the first occurrence,
         // matching the sidebar's top-to-bottom order — otherwise one query
-        // shows duplicate results pointing at the same page.
-        if (visibleTabs.has(item.key)) continue;
-
+        // shows duplicate results pointing at the same page. Dedupe by URL,
+        // not key: one key can name two pages (a workspace lists the personal
+        // Notifications page beside its own Notifications tab).
         const url = item.href ?? getTabUrl(item.key);
-        visibleTabs.set(item.key, {
-          groupTitle: group.title,
-          icon: item.icon,
-          label: item.label,
-          url,
-        });
+        if (indexedUrls.has(url)) continue;
+        indexedUrls.add(url);
+
+        // Item-level entries attach to the first page listed for their tab.
+        if (!visibleTabs.has(item.key))
+          visibleTabs.set(item.key, {
+            groupTitle: group.title,
+            icon: item.icon,
+            label: item.label,
+            url,
+          });
 
         const texts = Array.from(
           new Set([
@@ -262,26 +278,6 @@ export const useSettingsSearch = (
         });
       }
 
-    // Builtin OAuth connectors (Notion, GitHub, …): searching a connector name
-    // should land on the connector page. The page has no per-connector deep
-    // link, so these navigate to the tab itself. Availability ultimately
-    // depends on the Market API, but this static catalog is what the page
-    // renders from.
-    const connectorTab = getItemTab(SettingsTabs.Connector);
-    if (connectorTab)
-      for (const connector of LOBEHUB_SKILL_PROVIDERS) {
-        entries.push({
-          breadcrumb: `${connectorTab.groupTitle} › ${connectorTab.label}`,
-          haystack: [connector.label.toLowerCase(), connector.id.toLowerCase()],
-          icon: connectorTab.icon,
-          key: `connector-${connector.id}`,
-          label: connector.label,
-          pinyinBase: [],
-          tab: SettingsTabs.Connector,
-          url: connectorTab.url,
-        });
-      }
-
     // Model providers rank last: builtin names/ids (e.g. "OpenAI") link straight
     // to the provider detail page. Custom providers need an async store fetch and
     // are intentionally not indexed.
@@ -305,6 +301,7 @@ export const useSettingsSearch = (
     categoryGroups,
     itemTabs,
     keywordOwnerTabs,
+    mergedTabs,
     providerUrl,
     t,
     disableEmailPassword,
@@ -312,7 +309,6 @@ export const useSettingsSearch = (
     enableChannels,
     enableComposio,
     enableGatewayMode,
-    enableWorkspace,
     hasEmail,
     hideDocs,
     isLogin,

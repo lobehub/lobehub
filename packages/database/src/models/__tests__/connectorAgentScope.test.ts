@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, userConnectors, userConnectorTools, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import {
+  countAgentConnectorsAffected,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../../utils/agentConnectors';
 import { ConnectorModel } from '../connector';
+import { connectorAgentConfigScope } from '../connectorScope';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -58,6 +63,51 @@ afterEach(async () => {
 });
 
 describe('ConnectorModel agent-scoped resolution', () => {
+  it('keeps legacy eval rows and credentials out of normal Agent handovers', async () => {
+    const owned = await insertConnector({
+      agentId: agentA,
+      identifier: 'eval-owned',
+      name: 'Eval',
+      credentials: 'encrypted-owned',
+      metadata: { agentEval: { datasetId: 'dataset' } },
+    });
+    const mounted = await insertConnector({
+      identifier: 'eval-mounted',
+      name: 'Eval',
+      credentials: 'encrypted-mounted',
+      metadata: { agentEval: { datasetId: 'dataset' }, mountedByAgentId: agentA },
+    });
+    const ordinary = await insertConnector({
+      agentId: agentA,
+      identifier: 'ordinary',
+      name: 'Ordinary',
+      credentials: 'ordinary-auth',
+    });
+    expect(
+      await countAgentConnectorsAffected(serverDB, {
+        agentIds: [agentA],
+        recipientId: otherUserId,
+      }),
+    ).toBe(1);
+    await rehomeAgentConnectorsForScopeTransfer(serverDB, {
+      agentIds: [agentA],
+      targetUserId: otherUserId,
+      targetWorkspaceId: workspaceId,
+    });
+    for (const row of [owned, mounted]) {
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored).toEqual(row);
+    }
+    const [transferred] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, ordinary.id));
+    expect(transferred).toMatchObject({ credentials: null, userId: otherUserId, workspaceId });
+  });
+
   describe('resolveByIdentifiers (personal run)', () => {
     it('prefers the agent-owned row over the base personal row (Agent > Personal)', async () => {
       await insertConnector({ identifier: 'gmail', name: 'Personal Gmail' });
@@ -193,6 +243,15 @@ describe('ConnectorModel agent-scoped resolution', () => {
       expect(all).toHaveLength(2);
       expect(byIdentifier.gmail).toBe('Agent Gmail');
       expect(byIdentifier.notion).toBe('Personal Notion');
+    });
+
+    it('resolveToolSets skips the excluded identifiers', async () => {
+      await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'Agent Gmail' });
+      await insertConnector({ identifier: 'notion', name: 'Personal Notion' });
+
+      const model = new ConnectorModel(serverDB, userId);
+      const optedOut = await model.resolveToolSets(agentA, undefined, undefined, ['gmail']);
+      expect(optedOut.map((r) => r.identifier)).toEqual(['notion']);
     });
   });
 
@@ -443,5 +502,49 @@ describe('ConnectorModel.queryAllAgentScoped', () => {
     const rows = await wsModel.queryAllAgentScoped();
 
     expect(rows.map((r) => r.id)).toEqual([wsOwned.id]);
+  });
+});
+
+describe('connectorAgentConfigScope', () => {
+  it('keeps a personal Agent to the caller own rows outside a workspace', async () => {
+    const mine = await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'Mine' });
+    await insertConnector({ identifier: 'slack', name: 'Theirs', userId: otherUserId });
+
+    const rows = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(connectorAgentConfigScope(serverDB, { userId }, agentA));
+
+    expect(rows.map((row) => row.id)).toEqual([mine.id]);
+  });
+
+  it('keeps another member private row out of a workspace Agent config', async () => {
+    const shared = await insertConnector({
+      agentId: agentA,
+      identifier: 'gmail',
+      name: 'Shared',
+      workspaceId,
+    });
+    const [privateRow] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agentB,
+        identifier: 'slack',
+        name: 'Private',
+        sourceType: 'custom',
+        status: 'connected',
+        userId: otherUserId,
+        visibility: 'private',
+        workspaceId,
+      })
+      .returning();
+
+    const rows = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(connectorAgentConfigScope(serverDB, { userId, workspaceId }, agentA));
+
+    expect(rows.map((row) => row.id)).toEqual([shared.id]);
+    expect(rows.map((row) => row.id)).not.toContain(privateRow.id);
   });
 });

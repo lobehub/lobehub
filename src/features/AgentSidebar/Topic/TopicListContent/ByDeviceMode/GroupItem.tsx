@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import TailMarquee from '@/components/TailMarquee';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { startProjectTopicDraft } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -32,10 +33,12 @@ import { deviceSelectors } from '@/store/device/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useProjectDirectories } from '@/store/projectWorkingDirectory';
 
-import TopicItem from '../../List/Item';
 import { useTopicListScope } from '../../TopicListScope';
 import { deviceCategoryKey } from '../ByProjectMode/deviceIdentity';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import { renderSubGroupTopic } from '../TopicSubGroupItem';
+import { sectionsDeviceGroupByDirectory } from './directorySections';
+import DirectoryTopicList from './DirectoryTopicList';
 import {
   findDeviceTopicDirectory,
   hasNamesakeDevice,
@@ -45,6 +48,7 @@ import {
 const DEVICE_GROUP_PREFIX = 'device:';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('topic');
   const { t: tProject } = useTranslation('project');
   const { t: tChat } = useTranslation('chat');
@@ -102,10 +106,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     });
   };
 
+  const sectionByDirectory = sectionsDeviceGroupByDirectory(id, !!scope);
+
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center color={cssVar.colorTextTertiary} flex={'none'} height={18} width={18}>
               {device ? (
@@ -154,21 +160,13 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         )}
       </AccordionHeader>
       <AccordionPanel contentStyle={{ padding: 0 }}>
-        <Flexbox gap={1} paddingBlock={1}>
-          {children.map((topic) => (
-            <TopicItem
-              fav={topic.favorite}
-              hasGoal={topic.hasGoal}
-              id={topic.id}
-              key={topic.id}
-              metadata={topic.metadata}
-              runStartedAt={topic.runStartedAt}
-              status={topic.status}
-              title={topic.title}
-              userId={topic.userId}
-            />
-          ))}
-        </Flexbox>
+        {sectionByDirectory ? (
+          <DirectoryTopicList topics={children} />
+        ) : (
+          <Flexbox gap={1} paddingBlock={1}>
+            {children.map((topic) => renderSubGroupTopic(topic))}
+          </Flexbox>
+        )}
       </AccordionPanel>
     </AccordionItem>
   );

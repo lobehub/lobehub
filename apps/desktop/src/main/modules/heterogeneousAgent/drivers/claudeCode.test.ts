@@ -21,6 +21,34 @@ const buildParams = (
 });
 
 describe('claudeCodeDriver', () => {
+  it('keeps every run live, as `lh hetero exec` does: input stays open and each read message is replayed', async () => {
+    const plan = await claudeCodeDriver.buildSpawnPlan(buildParams());
+
+    expect(plan.args).toContain('--replay-user-messages');
+    expect(plan.liveInput).toBe(true);
+  });
+
+  it('allows every action without a mode, as before the lab', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams());
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');
+    expect(args).not.toContain('--permission-prompt-tool');
+  });
+
+  it('starts in the picked mode and lets the host answer prompts over stdio', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams({ permissionMode: 'plan' }));
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('plan');
+    expect(args[args.indexOf('--permission-prompt-tool') + 1]).toBe('stdio');
+    expect(args).toContain('--allow-dangerously-skip-permissions');
+  });
+
+  it('keeps a picked mode and fails closed when the card bridge is not up', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({ permissionMode: 'default', permissionPrompts: false }),
+    );
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('default');
+    expect(args).not.toContain('--permission-prompt-tool');
+  });
+
   it('prepares the namespaced server-default model without persisting the operation token', async () => {
     const plan = await claudeCodeDriver.prepareServerDefaultBinding!({
       args: [],

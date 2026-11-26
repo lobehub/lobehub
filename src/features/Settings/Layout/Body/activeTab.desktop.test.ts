@@ -23,6 +23,7 @@ vi.mock('../../hooks/useCategory', () => ({
         { icon: () => null, key: 'appearance', label: 'Appearance' },
       ],
       key: 'account',
+      scope: 'account',
       title: 'Account',
     },
   ],

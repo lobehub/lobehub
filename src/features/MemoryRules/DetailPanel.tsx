@@ -45,6 +45,8 @@ import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
 import RightPanel from '@/features/RightPanel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise';
+import { expertiseActions } from '@/store/expertise';
+import { densityVars } from '@/styles/densityVars';
 
 import { DIRECTION_ICON } from './DirectionToggle';
 import Field from './Field';
@@ -67,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   foot: css`
     flex: none;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 28px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -119,7 +121,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 2px;
 
     margin-block-start: 16px;
-    padding-block-end: 16px;
+    padding-block-end: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   property: css`
@@ -143,7 +145,7 @@ const styles = createStaticStyles(({ css }) => ({
   quote: css`
     margin-block: 6px 0;
     padding-block: 6px;
-    padding-inline: 12px 0;
+    padding-inline: ${densityVars.contentGap} 0;
     border-inline-start: 2px solid ${cssVar.colorBorder};
 
     font-size: 13px;
@@ -260,9 +262,9 @@ const RuleDocument = ({
     data: sources,
     error: sourcesError,
     isLoading: sourcesLoading,
-    mutate: retrySources,
+    revalidate: retrySources,
   } = useRuleSources(rule.id);
-  const { data: revisions, mutate: mutateRevisions } = useRuleRevisions(rule.id);
+  const { data: revisions } = useRuleRevisions(rule.id);
   const [exception, setException] = useState('');
   const [titleDraft, setTitleDraft] = useState(rule.title);
   const [busy, setBusy] = useState(false);
@@ -285,7 +287,7 @@ const RuleDocument = ({
     setBusy(true);
     try {
       const saved = await onUpdate(patch);
-      if (saved) await mutateRevisions();
+      if (saved) await expertiseActions.refreshRuleRevisions(rule.id);
       return saved;
     } finally {
       setBusy(false);
@@ -530,11 +532,12 @@ const RuleDocument = ({
         <div className={styles.heading}>
           <span>{t('rules.sources.title')}</span>
         </div>
-        {/* "No sources" is only said once the list has actually come back empty; loading and a
-            failed request each say what they are, so nothing reads as lost evidence. */}
-        {sourcesLoading && !sources ? (
+        {/* "No sources" is only said once the server has said the list is empty — a restored
+            empty copy is still loading; loading and a failed request each say what they are, so
+            nothing reads as lost evidence. */}
+        {sourcesLoading && !sources?.length ? (
           <SkeletonText rows={2} />
-        ) : sourcesError && !sources ? (
+        ) : sourcesError && !sources?.length ? (
           <Flexbox horizontal align={'center'} gap={8}>
             <span className={styles.muted}>{t('rules.sources.loadFailed')}</span>
             <Button size={'small'} type={'link'} onClick={() => void retrySources()}>

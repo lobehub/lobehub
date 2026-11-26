@@ -18,7 +18,11 @@ export type PortalMoreMenuLabelKey =
   | 'moreMenu.rename';
 
 interface BuildOptions {
-  copy: (value: string, successKey: PortalMoreMenuLabelKey) => void;
+  copy: (
+    value: string,
+    successKey: PortalMoreMenuLabelKey,
+    onCopied?: () => boolean | Promise<boolean>,
+  ) => void;
   t: (key: PortalMoreMenuLabelKey) => string;
 }
 
@@ -52,7 +56,7 @@ export const buildPortalMoreMenuItems = (
       icon: createElement(Icon, { icon: Link }),
       key: 'copyLink',
       label: t('moreMenu.copyLink'),
-      onClick: () => copy(copyLink, 'moreMenu.copyLinkSuccess'),
+      onClick: () => copy(copyLink, 'moreMenu.copyLinkSuccess', config.onLinkCopied),
     });
   if (copyId)
     share.push({

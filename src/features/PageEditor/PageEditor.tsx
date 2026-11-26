@@ -16,6 +16,7 @@ import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
 import { focusEditorAtBlankPoint } from './blankAreaClick';
+import CollabBlockedBanner from './collab/CollabBlockedBanner';
 import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
@@ -410,6 +411,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
               <LockedAlert />
               {/* Plan page-size limit: refused-save notice and near-limit warning. */}
               <CharLimitBanner sticky documentId={documentId} />
+              <CollabBlockedBanner />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}

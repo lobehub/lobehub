@@ -268,6 +268,40 @@ export const getDefaultRemote = async (dirPath: string): Promise<string | undefi
   return remotes[0];
 };
 
+/**
+ * git remote URL forms that name a GitHub repository: https (with or without
+ * credentials), ssh://, and scp-like `git@github.com:owner/repo.git`.
+ */
+const GITHUB_REMOTE_RE =
+  /^(?:https?:\/\/(?:[^@/\s]+@)?github\.com\/|ssh:\/\/(?:[^@/\s]+@)?github\.com(?::\d+)?\/|(?:[^@/\s]+@)?github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i;
+
+/**
+ * The remote a branch PUSHES to when it differs from where it pulls: a
+ * triangular workflow tracks `origin` but publishes to a fork. Git resolves it
+ * from `branch.<name>.pushRemote`, then `remote.pushDefault`; undefined when
+ * neither is set (the upstream remote is then the push remote too).
+ */
+export const getPushRemote = async (
+  dirPath: string,
+  branch?: string,
+): Promise<string | undefined> => {
+  const read = async (key: string) =>
+    (await runGit(['config', '--get', key], dirPath))?.trim() || undefined;
+  return (
+    (branch ? await read(`branch.${branch}.pushRemote`) : undefined) ?? read('remote.pushDefault')
+  );
+};
+
+/** `owner/repo` of a remote's GitHub push URL; undefined for any other host. */
+export const getRemoteGithubRepo = async (
+  dirPath: string,
+  remote: string,
+): Promise<string | undefined> => {
+  const url = (await runGit(['remote', 'get-url', '--push', remote], dirPath))?.trim();
+  const match = url ? GITHUB_REMOTE_RE.exec(url) : null;
+  return match ? `${match[1]}/${match[2]}` : undefined;
+};
+
 /** Exit-status-only probe — `runGit` cannot tell success-with-no-output from failure. */
 const gitSucceeds = async (args: string[], cwd: string): Promise<boolean> => {
   try {

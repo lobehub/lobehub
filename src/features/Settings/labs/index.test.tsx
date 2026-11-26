@@ -40,17 +40,12 @@ vi.mock('@/features/Settings/features/SettingHeader', () => ({
   ),
 }));
 
-const createWrapper = (enableWorkspace = false) => {
+const createWrapper = (enableBusinessFeatures = false) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <Provider
       createStore={() =>
         initServerConfigStore(
-          enableWorkspace
-            ? {
-                featureFlags: { enableWorkspace: true } as any,
-                serverConfig: { enableBusinessFeatures: true } as any,
-              }
-            : {},
+          enableBusinessFeatures ? { serverConfig: { enableBusinessFeatures: true } as any } : {},
         )
       }
     >
@@ -63,13 +58,13 @@ const createWrapper = (enableWorkspace = false) => {
 
 const initialUserStoreState = useUserStore.getState();
 
-const renderPage = (options: { enableWorkspace?: boolean } = {}) => {
+const renderPage = (options: { enableBusinessFeatures?: boolean } = {}) => {
   useUserStore.setState({
     isUserStateInit: true,
     updateLab: vi.fn(),
   });
 
-  return render(<Page />, { wrapper: createWrapper(options.enableWorkspace) });
+  return render(<Page />, { wrapper: createWrapper(options.enableBusinessFeatures) });
 };
 
 afterEach(() => {
@@ -136,12 +131,6 @@ describe('Labs settings page', () => {
     expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
-  it('renders the topic acceptance (tray) lab toggle', () => {
-    renderPage();
-
-    expect(screen.getByText('features.goals.title')).toBeDefined();
-  });
-
   it('does not render released task verify as a lab toggle', () => {
     renderPage();
 
@@ -174,7 +163,7 @@ describe('Labs settings page', () => {
   });
 
   it('does not render an empty workspace group', () => {
-    renderPage({ enableWorkspace: true });
+    renderPage({ enableBusinessFeatures: true });
     expect(screen.queryByText('group.workspace')).toBeNull();
   });
 
@@ -184,8 +173,8 @@ describe('Labs settings page', () => {
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
 
-    const goals = screen.getByText('features.goals.title');
-    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
+    const oauthApps = screen.getByText('features.oauthApps.title');
+    expect(within(oauthApps).getByText('stage.beta.label')).toBeDefined();
   });
 
   it('explains what each stage means via the tag tooltip', () => {

@@ -5,14 +5,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TaskListOriginContext } from '../shared/taskListOrigin';
 import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: 'workspace-1' as string | undefined,
   fetchTaskDetail: vi.fn(),
+  memberDirectory: [] as string[],
   navigate: vi.fn(),
+  projects: undefined as { id: string; name: string }[] | undefined,
+  projectsEnabled: true,
   taskDetailMap: {} as Record<string, unknown>,
 }));
+
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -22,6 +28,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('react-router', () => ({
+  useLocation: () => ({ state: locationMock.state }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -42,6 +49,29 @@ vi.mock('@/store/task', () => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
+vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
+  default: ({ agentId, children }: { agentId: string; children: ReactNode }) => (
+    <span data-agent-card={agentId}>{children}</span>
+  ),
+}));
+
+vi.mock('@/features/MemberProfileCard/MemberProfilePopup', () => ({
+  default: ({
+    children,
+    fallback,
+    userId,
+  }: {
+    children: ReactNode;
+    fallback?: ReactNode;
+    userId: string;
+  }) =>
+    mocks.memberDirectory.includes(userId) ? (
+      <span data-member-card={userId}>{children}</span>
+    ) : (
+      (fallback ?? children)
+    ),
 }));
 
 vi.mock('./AssigneeAgentSelector', () => ({
@@ -103,6 +133,25 @@ vi.mock('./TaskTriggerTag', () => ({
   ),
 }));
 
+vi.mock('@/store/project', () => ({
+  projectListItemSelector: (id?: string | null) => (s: { projects?: { id: string }[] }) =>
+    id ? s.projects?.find((project) => project.id === id) : undefined,
+  useProjectStore: (selector: (s: unknown) => unknown) => selector({ projects: mocks.projects }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableProjects: () => mocks.projectsEnabled },
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
+}));
+
+vi.mock('@/features/Projects/ProjectAvatar', () => ({
+  default: () => <i data-testid="project-avatar" />,
+}));
+
 vi.mock('./useTaskItemContextMenu', () => ({
   useTaskItemContextMenu: () => ({ items: [], onContextMenu: vi.fn() }),
 }));
@@ -121,9 +170,13 @@ const createTask = (assigneeAgentId?: string | null) =>
 
 describe('AgentTaskItem', () => {
   beforeEach(() => {
+    locationMock.state = undefined;
     mocks.activeWorkspaceId = 'workspace-1';
+    mocks.memberDirectory = [];
     mocks.fetchTaskDetail.mockReset();
     mocks.navigate.mockClear();
+    mocks.projects = [{ id: 'proj_a', name: 'Alpha' }];
+    mocks.projectsEnabled = true;
     mocks.taskDetailMap = {};
   });
 
@@ -136,7 +189,9 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
   it('opens an assigned task on the global detail route in global scope', () => {
@@ -144,7 +199,9 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
   it('falls back to the global task detail route when the task has no assignee', () => {
@@ -152,18 +209,83 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
-  it('shows the assigned agent and member names in tooltips', () => {
+  describe('project badge', () => {
+    const withProject = (projectId?: string | null) => ({
+      ...createTask('agt_owner'),
+      projectId,
+    });
+
+    it.each([['default'], ['compact']] as const)(
+      'shows the project icon and name on a %s row, unless the surface hides it',
+      (variant) => {
+        const { rerender } = render(
+          <AgentTaskItem task={withProject('proj_a')} variant={variant} />,
+        );
+        expect(screen.getByTestId('task-project-chip')).toHaveTextContent('Alpha');
+        expect(screen.getByTestId('project-avatar')).toBeInTheDocument();
+
+        rerender(<AgentTaskItem hideProject task={withProject('proj_a')} variant={variant} />);
+        expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+      },
+    );
+
+    it.each([
+      ['no project', null],
+      ['an undefined project', undefined],
+      ['a project outside the list', 'proj_gone'],
+    ])('renders no badge for %s', (_, projectId) => {
+      render(<AgentTaskItem task={withProject(projectId)} />);
+
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+      expect(screen.queryByText('proj_gone')).not.toBeInTheDocument();
+      expect(screen.getByText('Hourly trend update')).toBeInTheDocument();
+    });
+
+    it('renders no badge until the list loads, or while the Projects lab is off', () => {
+      mocks.projects = undefined;
+      const { rerender } = render(<AgentTaskItem task={withProject('proj_a')} />);
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+
+      mocks.projects = [{ id: 'proj_a', name: 'Alpha' }];
+      mocks.projectsEnabled = false;
+      rerender(<AgentTaskItem task={withProject('proj_a')} variant="compact" />);
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the agent profile card and keeps a name tooltip for a member outside the directory', () => {
     const { container } = render(
       <AgentTaskItem
         task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1', automationMode: 'schedule' }}
       />,
     );
 
-    expect(container.querySelector('[data-tooltip="Ryan"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-agent-card="agt_owner"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-member-card]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
+  });
+
+  it('shows the member profile card for a workspace member assignee', () => {
+    mocks.memberDirectory = ['user-1'];
+    const { container } = render(
+      <AgentTaskItem task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1' }} />,
+    );
+
+    expect(container.querySelector('[data-member-card="user-1"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).not.toBeInTheDocument();
+  });
+
+  it('drops the agent profile card while the task is running', () => {
+    const { container } = render(
+      <AgentTaskItem task={{ ...createTask('agt_owner'), status: 'running' }} />,
+    );
+
+    expect(container.querySelector('[data-agent-card]')).not.toBeInTheDocument();
   });
 
   it('locks only the agent assignee while the task is running', () => {
@@ -262,5 +384,31 @@ describe('AgentTaskItem', () => {
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
     await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
+  });
+
+  it('carries the list it was opened from into the task detail', () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(<AgentTaskItem routeScope="global" task={createTask('agt_owner')} />);
+
+    fireEvent.click(screen.getByText('Hourly trend update'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
+  });
+
+  it('prefers the surrounding task list URL over a carried origin', () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(
+      <TaskListOriginContext value={'/agent/agt_owner/tasks?scope=created'}>
+        <AgentTaskItem task={createTask('agt_owner')} />
+      </TaskListOriginContext>,
+    );
+
+    fireEvent.click(screen.getByText('Hourly trend update'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update', {
+      state: { taskListOrigin: '/agent/agt_owner/tasks?scope=created' },
+    });
   });
 });

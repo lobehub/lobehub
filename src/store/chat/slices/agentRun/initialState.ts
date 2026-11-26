@@ -1,8 +1,8 @@
 import { type ChatInputEditor } from '@/features/ChatInput';
 import type { GatewayConnection } from '@/store/chat/slices/agentRun/actions/transports/gateway/gateway';
 
-export type MainConversationScrollToIndex = (
-  index: number,
+export type MainConversationScrollToMessage = (
+  messageId: string,
   options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
 ) => void;
 
@@ -38,7 +38,7 @@ export interface ChatAIChatState {
   /**
    * Virtual-list navigation exposed by the main conversation for sibling UI such as Portal.
    */
-  mainConversationScrollToIndex: MainConversationScrollToIndex | null;
+  mainConversationScrollToMessage: MainConversationScrollToMessage | null;
   mainInputEditor: ChatInputEditor | null;
   /**
    * Tool calls currently being executed locally on this client in response to
@@ -62,7 +62,7 @@ export const initialAiChatState: ChatAIChatState = {
   gatewayFeed: {},
   inputFiles: [],
   inputMessage: '',
-  mainConversationScrollToIndex: null,
+  mainConversationScrollToMessage: null,
   mainInputEditor: null,
   pendingClientToolExecutions: {},
   questionSubmissions: {},

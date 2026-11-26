@@ -1,8 +1,5 @@
-import type {
-  DeviceGitLinkedPullRequest,
-  DeviceGitUpstreamRef,
-  WorkingDirConfig,
-} from '@lobechat/types';
+import type { DeviceGitUpstreamRef, WorkingDirConfig } from '@lobechat/types';
+import { dropStaleAutoCreated } from '@lobechat/types';
 
 /**
  * How each detected git / gh side effect rewrites a topic's working-directory
@@ -13,11 +10,6 @@ import type {
 export interface WorktreeAddInfo {
   branch?: string;
   path: string;
-}
-
-export interface PullRequestCreateInfo {
-  branch?: string;
-  pullRequest: DeviceGitLinkedPullRequest;
 }
 
 export const applyBranchToConfig = (
@@ -68,31 +60,6 @@ export const applyDetachedToConfig = (
   };
 };
 
-export const applyPullRequestToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  info: PullRequestCreateInfo,
-): WorkingDirConfig => {
-  const branch = info.branch ?? currentConfig?.git?.branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    ...(branch ? { branch } : {}),
-    github: {
-      pullRequest: info.pullRequest,
-      pullRequestStatus: 'ok',
-    },
-  };
-
-  delete git.detached;
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    repoType: 'github',
-  };
-};
-
 /**
  * Record where the branch now publishes to. This is what makes the PR lookup work at
  * all for a worktree: its local branch name (`worktree-feat+x`) never exists on the
@@ -109,9 +76,8 @@ export const applyPushToConfig = (
     upstream,
   };
 
-  // Re-pointing the branch at a DIFFERENT remote ref orphans the PR bound to the old
-  // one. Only a change invalidates it — a first push must not drop a PR that a
-  // preceding `gh pr create` in the same run just recorded.
+  // Re-pointing the branch at a DIFFERENT remote ref orphans a PR an older client
+  // recorded for the old one. Only a change invalidates it.
   if (previous && previous !== upstream.branch) delete git.github;
 
   return {
@@ -140,6 +106,7 @@ export const applyWorktreeAddToConfig = (
     delete git.github;
     delete git.upstream;
   }
+  dropStaleAutoCreated(git, currentConfig?.git?.activeWorktree);
 
   return {
     ...currentConfig,
@@ -159,6 +126,7 @@ export const applyWorktreeAddToConfig = (
 export const applyWorktreeExitToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
+  { removed = false }: { removed?: boolean } = {},
 ): WorkingDirConfig => {
   const git: NonNullable<WorkingDirConfig['git']> = {
     ...currentConfig?.git,
@@ -171,16 +139,28 @@ export const applyWorktreeExitToConfig = (
   const leftWorktree =
     !!currentConfig?.git?.isWorktree || (!!activeWorktree && activeWorktree !== source);
   delete git.activeWorktree;
+  dropStaleAutoCreated(git, activeWorktree);
   if (leftWorktree) {
     delete git.branch;
     delete git.github;
     delete git.upstream;
   }
 
+  // A topic born in the app's worktree runs its CLI there (`sessionPath`), not
+  // in the source. Leaving ANOTHER worktree returns it there; removing that very
+  // worktree leaves nothing to start in, so the session falls back to the source.
+  const { sessionPath, ...rest } = currentConfig ?? ({} as Partial<WorkingDirConfig>);
+  const sessionGone = !!sessionPath && removed && sessionPath === activeWorktree;
+  if (sessionPath && !sessionGone && sessionPath !== activeWorktree) {
+    git.activeWorktree = sessionPath;
+    git.isWorktree = true;
+  }
+
   return {
-    ...currentConfig,
+    ...rest,
     git,
     path: source,
     ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+    ...(sessionPath && !sessionGone ? { sessionPath } : {}),
   };
 };

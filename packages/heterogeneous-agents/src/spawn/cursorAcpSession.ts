@@ -87,7 +87,18 @@ export interface CursorAcpSessionOptions extends AcpAgentSessionOptions {
   prompt: CursorAcpTextPromptBlock[];
 }
 
-export const buildCursorAcpArgs = (extraArgs: string[] = []): string[] => [...extraArgs, 'acp'];
+const CURSOR_FORCE_FLAGS = new Set(['--force', '-f']);
+
+/**
+ * LobeHub runs local coding agents with full access (see `heteroAgent.fullAccess`). Cursor's
+ * ACP server only reads the root `--force` option to skip `session/request_permission` (it does
+ * not resolve the `--yolo` alias there), so `--force` is added before the `acp` subcommand.
+ */
+export const buildCursorAcpArgs = (extraArgs: string[] = []): string[] => [
+  ...extraArgs,
+  ...(extraArgs.some((arg) => CURSOR_FORCE_FLAGS.has(arg)) ? [] : ['--force']),
+  'acp',
+];
 
 /** Cursor ACP currently accepts the same text-only prompt surface as its former print mode. */
 export const buildCursorAcpPrompt = (prompt: AgentPromptInput): CursorAcpTextPromptBlock[] => {

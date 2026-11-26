@@ -6,6 +6,7 @@ import { messageService } from '@/services/message';
 import { clearMessageListClientCacheState } from '@/services/message/cache';
 import { useChatStore } from '@/store/chat';
 import { getMessageTranscript } from '@/store/chat/slices/message/transcript';
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { resetTranscripts, rowsOf, seedRows, syncMessages } from './testUtils';
 
@@ -74,6 +75,24 @@ describe('quietly persisted client rows', () => {
     vi.clearAllMocks();
     clearMessageListClientCacheState();
     resetTranscripts();
+  });
+
+  it('keeps a pending local user bubble until the same ID comes back from the server', () => {
+    seedRows(context, [previousReply]);
+    const chat = useChatStore.getState();
+    const sent = { ...created, content: 'Follow-up', role: 'user' as const };
+    chat.internal_createClientMessage(
+      sent.id,
+      { ...sent, metadata: { scope: LOCAL_MESSAGE_SCOPE, steer: true } },
+      { conversationContext: context },
+    );
+
+    chat.replaceMessages([previousReply], { context });
+    expect(rowsOf(context)?.map(({ id }) => id)).toEqual([previousReply.id, sent.id]);
+
+    const persisted = { ...sent, metadata: { steer: true }, parentId: previousReply.id };
+    chat.replaceMessages([previousReply, persisted], { context });
+    expect(rowsOf(context)).toEqual([previousReply, persisted]);
   });
 
   it('drops a persisted row omitted by a read issued after the acknowledgement', async () => {

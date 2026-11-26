@@ -64,6 +64,36 @@ export const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortB
     ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topicActivityAt)]
     : [desc(topics.favorite), desc(topicActivityAt)];
 
+/** The condition a topic's child rows match (see `QueryTopicParams.openedByTopicId`). */
+const childOfCondition = (openedByTopicId: string) =>
+  and(
+    sql`${topics.metadata} -> 'openedBy' ->> 'topicId' = ${openedByTopicId}`,
+    // Never a jsonb null test in a qual — see the note on `TopicModel`.
+    sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+  );
+
+/**
+ * The distinct agents a topic's child topics run, so a caller can decide which
+ * it may show before paging through them.
+ */
+export const listChildTopicAgentIds = async (
+  ctx: TopicModelContext,
+  openedByTopicId: string,
+): Promise<string[]> => {
+  const rows = await ctx.db
+    .selectDistinct({ agentId: topics.agentId })
+    .from(topics)
+    .where(
+      and(
+        ctx.ownership(),
+        ctx.notShareVisitor(),
+        notChannelTopic(),
+        childOfCondition(openedByTopicId),
+      ),
+    );
+  return rows.map((row) => row.agentId).filter(Boolean) as string[];
+};
+
 export const query = async (
   ctx: TopicModelContext,
   {
@@ -80,6 +110,8 @@ export const query = async (
     isInbox,
     legacySessionId,
     onlyMine,
+    openedByAgentIds,
+    openedByTopicId,
     sortBy,
     timing,
     triggers,
@@ -101,9 +133,8 @@ export const query = async (
   // Heavier columns gated behind `withDetails` and used by the per-agent
   // Topics management page: real aggregates from the `messages` table
   // (firstUserMessage + messageCount), plus the `description` / `trigger`
-  // columns that sidebar paths don't consume. `cost` and `tokenUsage`
-  // intentionally stay undefined here — they need their own schema
-  // migration before they can be backed by real numbers.
+  // columns that sidebar paths don't consume, and the topic's `cost` /
+  // `tokenUsage` totals.
   //
   // The two correlated subqueries are built with Drizzle's query builder
   // (not a raw `sql` template) so the inner `eq(messages.topicId,
@@ -139,11 +170,14 @@ export const query = async (
 
   const detailColumns = withDetails
     ? {
+        // Rolled up on the topic by `recomputeTopicUsage` as messages and runs settle.
+        cost: topics.totalCost,
         description: topics.description,
         firstUserMessage: sql<string | null>`(${firstUserMessageSubquery})`.as(
           'first_user_message',
         ),
         messageCount: sql<number>`(${messageCountSubquery})`.as('message_count'),
+        tokenUsage: topics.totalTokens,
         trigger: topics.trigger,
       }
     : {};
@@ -174,6 +208,79 @@ export const query = async (
     editingAgentId ? sql`${topics.metadata}->>'editingAgentId' = ${editingAgentId}` : undefined,
     editingGroupId ? sql`${topics.metadata}->>'editingGroupId' = ${editingGroupId}` : undefined,
   );
+
+  // Child topics of one topic, across agents. `ownership()` (the user /
+  // workspace index) narrows the rows before the unindexed jsonb comparison.
+  // Never a jsonb null test in a qual — see the note on `TopicModel`.
+  if (openedByTopicId) {
+    const childWhere = and(
+      ctx.ownership(),
+      ctx.notShareVisitor(),
+      notChannelTopic(),
+      childOfCondition(openedByTopicId),
+      agentId ? eq(topics.agentId, agentId) : undefined,
+      openedByAgentIds
+        ? or(
+            isNull(topics.agentId),
+            openedByAgentIds.length > 0 ? inArray(topics.agentId, openedByAgentIds) : undefined,
+          )
+        : undefined,
+      includeTriggerCondition,
+      excludeTriggerCondition,
+      triggerCondition,
+      excludeStatusCondition,
+      onlyMineCondition,
+    );
+
+    const [items, totalResult] = await Promise.all([
+      runTimedStage(
+        timing,
+        'db.topic.query.children.items.select',
+        () =>
+          ctx.db
+            // See note on the group-branch select above re: `as any` cast.
+            .select({
+              // A child may run another agent: callers need to know which.
+              agentId: topics.agentId,
+              completedAt: topics.completedAt,
+              createdAt: topics.createdAt,
+              favorite: topics.favorite,
+              historySummary: topics.historySummary,
+              id: topics.id,
+              metadata: topicMetadataWithCreator(ctx.db, ctx.messageOwnership()),
+              model: topics.model,
+              provider: topics.provider,
+              runStartedAt: runStartedAtColumn,
+              sortUpdatedAt: topicActivityAt,
+              status: topics.status,
+              title: topics.title,
+              trigger: topics.trigger,
+              updatedAt: topics.updatedAt,
+              userId: topics.userId,
+              ...detailColumns,
+            } as any)
+            .from(topics)
+            .where(childWhere)
+            .orderBy(...orderBy)
+            .limit(pageSize)
+            .offset(offset),
+        { current, pageSize },
+      ),
+      runTimedStage(timing, 'db.topic.query.children.count.select', () =>
+        ctx.db
+          .select({ count: count(topics.id) })
+          .from(topics)
+          .where(childWhere),
+      ),
+    ]);
+
+    logTiming(timing, 'db.topic.query:done', {
+      itemCount: items.length,
+      stageMs: getDurationMs(queryStartedAt),
+      total: totalResult[0].count,
+    });
+    return { items, total: totalResult[0].count };
+  }
 
   if (groupId) {
     const whereCondition = and(

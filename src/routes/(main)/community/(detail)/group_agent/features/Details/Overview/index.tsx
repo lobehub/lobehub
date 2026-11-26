@@ -1,21 +1,23 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Accordion, Avatar, Block, Flexbox, Grid, Text, useTheme } from '@lobehub/ui';
+import { Accordion, Block, Flexbox, Grid, Text, useTheme } from '@lobehub/ui';
 import { ChatList } from '@lobehub/ui/chat';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = stylex.create({
   desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
-  title: { margin: '0', fontSize: '14px', fontWeight: 500 },
+  title: { margin: '0', fontSize: densityTokens['--lobe-density-font-size'], fontWeight: 500 },
 });
 
 const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion: any }) => {

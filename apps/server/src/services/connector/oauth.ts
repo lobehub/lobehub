@@ -1,7 +1,4 @@
-import { isIP } from 'node:net';
-
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
   AuthorizationServerMetadata,
   FetchLike,
@@ -14,8 +11,7 @@ import {
   discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,
   exchangeAuthorization,
-  extractResourceMetadataUrl,
-  isHttpsUrl,
+  extractWWWAuthenticateParams,
   IssuerMismatchError,
   OAuthError,
   OAuthErrorCode,
@@ -27,6 +23,8 @@ import debug from 'debug';
 
 import type { OIDCConfig } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
+import { mcpSsrfSafeFetch } from '@/libs/mcp/ssrf';
+import { isPublicHttpsUrl } from '@/server/utils/publicHttpsUrl';
 
 const log = debug('lobe-server:connector:oauth');
 
@@ -73,14 +71,8 @@ export const buildConnectorClientMetadata = (): OAuthClientMetadata & { client_i
  * It must be HTTPS with a path (SEP-991); local and IP-literal hosts mean a
  * private deployment the server cannot reach, where DCR still works.
  */
-const isClientMetadataUrlReachable = (url: string): boolean => {
-  if (!isHttpsUrl(url)) return false;
-  const host = new URL(url).hostname.replaceAll(/^\[|\]$/g, '');
-  if (isIP(host)) return false;
-  return !['localhost', '.localhost', '.local', '.internal'].some((suffix) =>
-    suffix.startsWith('.') ? host.endsWith(suffix) : host === suffix,
-  );
-};
+const isClientMetadataUrlReachable = (url: string) =>
+  isPublicHttpsUrl(url) && new URL(url).pathname !== '/';
 
 /**
  * The MCP server URL and every endpoint its metadata advertises (authorization
@@ -88,17 +80,22 @@ const isClientMetadataUrlReachable = (url: string): boolean => {
  * the connector, so all connector OAuth requests go through the SSRF-safe
  * transport. The SDK helpers take it as `fetchFn`.
  */
-const connectorFetch: FetchLike = (url, init) => ssrfSafeFetch(url.toString(), init);
+const connectorFetch: FetchLike = mcpSsrfSafeFetch;
 
 /** RFC 8414 / OIDC discovery for a connector's authorization server. */
 export const discoverConnectorAuthorizationServerMetadata = (
   authorizationServerUrl: string,
+  signal?: AbortSignal,
 ): Promise<AuthorizationServerMetadata | undefined> =>
-  discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: connectorFetch });
+  discoverAuthorizationServerMetadata(authorizationServerUrl, {
+    fetchFn: signal ? (url, init) => connectorFetch(url, { ...init, signal }) : connectorFetch,
+  });
 
 export interface DiscoveredOAuth {
   authorizationServerUrl: string;
   metadata: AuthorizationServerMetadata;
+  /** Resource-required scopes: challenge first, then protected resource metadata. */
+  scopes?: string[];
 }
 
 /**
@@ -115,6 +112,7 @@ export interface DiscoveredOAuth {
  */
 export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<DiscoveredOAuth> => {
   let resourceMetadataUrl: URL | undefined;
+  let scopes: string[] | undefined;
   try {
     const res = await connectorFetch(mcpServerUrl, {
       headers: { accept: 'application/json, text/event-stream' },
@@ -123,7 +121,11 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
     // Only the status and `WWW-Authenticate` header matter. Release the body: a server
     // may answer this GET with an SSE stream that never ends.
     await res.body?.cancel().catch(() => {});
-    if (res.status === 401) resourceMetadataUrl = extractResourceMetadataUrl(res);
+    if (res.status === 401) {
+      const challenge = extractWWWAuthenticateParams(res);
+      resourceMetadataUrl = challenge.resourceMetadataUrl;
+      scopes = challenge.scope?.split(' ').filter(Boolean);
+    }
   } catch (err) {
     log('probe request failed, falling back to well-known discovery: %O', err);
   }
@@ -136,6 +138,7 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
       connectorFetch,
     );
     authorizationServerUrl = prm?.authorization_servers?.[0]?.toString();
+    if (!scopes?.length) scopes = prm?.scopes_supported;
   } catch (err) {
     log('protected-resource-metadata discovery failed: %O', err);
   }
@@ -159,7 +162,37 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
     throw new Error(`Failed to discover OAuth metadata for ${authorizationServerUrl}`);
   }
 
-  return { authorizationServerUrl, metadata };
+  return { authorizationServerUrl, metadata, ...(scopes?.length ? { scopes } : {}) };
+};
+
+/**
+ * Keep configured scopes unchanged. Otherwise select resource scopes before the
+ * legacy AS fallback and match the SDK's refresh-token scope augmentation.
+ */
+export const resolveConnectorOAuthScopes = (params: {
+  discovery: DiscoveredOAuth;
+  existingScopes?: string[];
+  preRegistered?: boolean;
+}): string[] | undefined => {
+  if (params.existingScopes?.length) return params.existingScopes;
+  const { metadata, scopes: resourceScopes } = params.discovery;
+  const selected = resourceScopes ?? metadata.scopes_supported;
+  const scopes = selected?.length ? [...new Set(selected)] : undefined;
+  if (
+    scopes?.length &&
+    metadata.scopes_supported?.includes('offline_access') &&
+    buildConnectorClientMetadata().grant_types?.includes('refresh_token') &&
+    !scopes.includes('offline_access')
+  ) {
+    scopes.push('offline_access');
+  }
+  if (scopes?.length && !params.preRegistered) {
+    for (const identityScope of ['openid', 'profile', 'email']) {
+      if (metadata.scopes_supported?.includes(identityScope) && !scopes.includes(identityScope))
+        scopes.push(identityScope);
+    }
+  }
+  return scopes;
 };
 
 type RegistrationAuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none';
@@ -303,6 +336,7 @@ export const buildAuthorizationUrl = async (params: {
   clientInformation: OAuthClientInformationMixed;
   metadata: AuthorizationServerMetadata;
   redirectUri: string;
+  prompt?: string;
   resource?: string;
   scopes?: string[];
   state: string;
@@ -318,6 +352,17 @@ export const buildAuthorizationUrl = async (params: {
       state: params.state,
     },
   );
+  if (params.prompt) {
+    const prompts = authorizationUrl.searchParams
+      .getAll('prompt')
+      .join(' ')
+      .split(/\s+/)
+      .filter(Boolean);
+    authorizationUrl.searchParams.set(
+      'prompt',
+      [...new Set([...prompts, ...params.prompt.split(/\s+/)])].join(' '),
+    );
+  }
   return { authorizationUrl: authorizationUrl.toString(), codeVerifier };
 };
 
@@ -416,11 +461,14 @@ export const refreshConnectorToken = async (params: {
   metadata: AuthorizationServerMetadata;
   refreshToken: string;
   resource?: string;
+  signal?: AbortSignal;
 }): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
   withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
     refreshAuthorization(params.authorizationServerUrl, {
       clientInformation,
-      fetchFn: connectorFetch,
+      fetchFn: params.signal
+        ? (url, init) => connectorFetch(url, { ...init, signal: params.signal })
+        : connectorFetch,
       metadata: params.metadata,
       refreshToken: params.refreshToken,
       resource: params.resource ? new URL(params.resource) : undefined,

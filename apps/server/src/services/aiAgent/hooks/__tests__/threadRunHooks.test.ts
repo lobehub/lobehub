@@ -32,9 +32,15 @@ describe('createThreadHooks thread-completion', () => {
     operationId: 'child-op',
   };
 
-  const runCompletion = async (options?: { updateSourceMessage?: boolean }) => {
+  const runCompletion = async (
+    options?: { updateSourceMessage?: boolean },
+    liveMetadata?: Record<string, unknown>,
+  ) => {
     const messageModel = { update: vi.fn().mockResolvedValue(undefined) };
-    const threadModel = { update: vi.fn().mockResolvedValue(undefined) };
+    const threadModel = {
+      findById: vi.fn().mockResolvedValue(liveMetadata ? { metadata: liveMetadata } : undefined),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
     const hooks = createThreadHooks(
       {} as any,
       threadModel as any,
@@ -76,6 +82,20 @@ describe('createThreadHooks thread-completion', () => {
       'thread-1',
       expect.objectContaining({
         metadata: expect.objectContaining({ sourceToolCallId: 'call-1' }),
+      }),
+    );
+  });
+
+  // An external sub-agent binds its native session to the thread while it
+  // runs; a run ended by the watchdog never reaches heteroFinish, so this
+  // write must not put back the session the run was claimed with.
+  it('keeps the live external-agent session instead of the claim-time one', async () => {
+    const { threadModel } = await runCompletion(undefined, { heteroSessionId: 'cc-live' });
+
+    expect(threadModel.update).toHaveBeenCalledWith(
+      'thread-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ heteroSessionId: 'cc-live' }),
       }),
     );
   });

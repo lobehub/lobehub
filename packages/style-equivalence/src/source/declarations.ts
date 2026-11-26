@@ -4,6 +4,7 @@ import path from 'node:path';
 import postcss from 'postcss';
 import ts from 'typescript';
 
+import { cssTemplatesOf } from '../extract/cssConstants';
 import { NAMESPACE } from '../extract/importedClasses';
 import { classNamesIn } from '../extract/selectors';
 import { aliasCandidates } from './aliases';
@@ -21,21 +22,25 @@ export const parseSource = (code: string, file = 'source.tsx') =>
   ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
 export const findStyleMember = (sf: ts.SourceFile, symbol: string, member: string) => {
-  let call: ts.CallExpression | undefined;
+  let declaration: ts.VariableDeclaration | undefined;
   const visit = (node: ts.Node) => {
     if (
-      !call &&
+      !declaration &&
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.name.text === symbol &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
+      node.initializer
     )
-      call = node.initializer;
+      declaration = node;
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  if (!call) return undefined;
+  const initializer = declaration?.initializer;
+  if (!initializer) return undefined;
+  if (member === symbol && cssTemplatesOf(initializer, (name) => name === 'css'))
+    return declaration;
+  if (!ts.isCallExpression(initializer)) return undefined;
+  const call = initializer;
   let queue: ts.Node[] = [...call.arguments];
   while (queue.length) {
     const next: ts.Node[] = [];

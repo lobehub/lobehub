@@ -226,6 +226,77 @@ describe('resolveMimeType', () => {
     );
   });
 
+  describe('UTF-16 text with a byte order mark', () => {
+    // Windows PowerShell 5.1 `Tee-Object` / `Out-File` write UTF-16LE with a
+    // BOM. Its leading 0xFF 0xFE matches file-type's MPEG audio frame sync, so
+    // CLI evidence uploads were stored as audio/mpeg and sent to the model as
+    // audio.
+    const utf16le = (text: string) => Buffer.from(`\uFEFF${text}`, 'utf16le');
+    const utf16be = (text: string) => utf16le(text).swap16();
+    const output = 'PS C:\\> backup compare: OK\r\nsqlite integrity_check: ok\r\n';
+
+    it('resolves UTF-16LE text as text instead of audio/mpeg', async () => {
+      await expect(resolveMimeType('backup_compare.txt', utf16le(output))).resolves.toBe(
+        'text/plain; charset=utf-16le',
+      );
+      await expect(resolveMimeType('out.txt', utf16le('ok'))).resolves.toBe(
+        'text/plain; charset=utf-16le',
+      );
+    });
+
+    it('keeps text whose surrogate pair straddles the sniff window', async () => {
+      // BOM + 4094 code units fill bytes 0-8189; the emoji's high surrogate takes
+      // 8190-8191 and its low surrogate falls outside the 8192-byte sample.
+      const text = `${'a'.repeat(4094)}😀`;
+      await expect(resolveMimeType('emoji.txt', utf16le(text))).resolves.toBe(
+        'text/plain; charset=utf-16le',
+      );
+    });
+
+    it('resolves UTF-16BE text with its own charset', async () => {
+      await expect(resolveMimeType('backup_compare.txt', utf16be(output))).resolves.toBe(
+        'text/plain; charset=utf-16be',
+      );
+    });
+
+    it('keeps the extension text mime and downgrades binary extension mimes', async () => {
+      await expect(resolveMimeType('result.json', utf16le('{"ok":true}'))).resolves.toBe(
+        'application/json; charset=utf-16le',
+      );
+      await expect(resolveMimeType('module.ts', utf16le('export {};\n'))).resolves.toBe(
+        'text/plain; charset=utf-16le',
+      );
+      await expect(resolveMimeType('no-extension', utf16le(output))).resolves.toBe(
+        'text/plain; charset=utf-16le',
+      );
+    });
+
+    it('keeps MPEG audio whose frame header starts with the same bytes', async () => {
+      // MPEG-1 Layer I frame header (0xFF 0xFE ...) followed by a silent payload.
+      const mpegFrame = Buffer.alloc(1024);
+      mpegFrame.set([0xff, 0xfe, 0x90, 0x00]);
+      await expect(resolveMimeType('clip.mp1', mpegFrame)).resolves.toBe('audio/mpeg');
+
+      // Non-silent frames: a lenient UTF-16 decode reads compressed audio as
+      // mostly printable text, so the strict decode must reject it.
+      let seed = 1;
+      const noisyMpeg = Buffer.alloc(3 * 384);
+      for (let i = 0; i < noisyMpeg.length; i++) {
+        seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
+        noisyMpeg[i] = (seed >> 16) & 0xff;
+      }
+      for (let frame = 0; frame < 3; frame++) {
+        noisyMpeg.set([0xff, 0xfe, 0x90, 0x00], frame * 384);
+      }
+      await expect(resolveMimeType('clip.mp1', noisyMpeg)).resolves.toBe('audio/mpeg');
+
+      // A regular MP3 frame (Layer III) never starts with a BOM.
+      const mp3Frame = Buffer.alloc(1024);
+      mp3Frame.set([0xff, 0xfb, 0x90, 0x64]);
+      await expect(resolveMimeType('song.mp3', mp3Frame)).resolves.toBe('audio/mpeg');
+    });
+  });
+
   it('falls back to application/octet-stream when the sniff detects binary data', async () => {
     // No known extension and no recognisable magic bytes — the sniff sees
     // embedded null bytes and classifies as binary.

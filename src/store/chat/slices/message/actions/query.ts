@@ -84,9 +84,9 @@ export class MessageQueryActionImpl {
    * (every one when `predicate` is omitted). Nothing is refetched: the
    * conversation is gone.
    *
-   * Installs upgraded from before the replica still hold `message:list` rows
-   * in the SWR IndexedDB tier, which never expires them; those are purged too
-   * until the SWR persistence layer is removed.
+   * In-memory SWR `message:list` entries are dropped too. Rows the removed SWR
+   * persistence layer left behind are deleted once at boot
+   * (`purgeLegacySWRCache`).
    */
   evictConversationMessages = async (
     predicate?: (context: ConversationContext) => boolean,
@@ -192,15 +192,14 @@ export class MessageQueryActionImpl {
     const currentMessages = this.#get().dbMessagesMap[messagesKey] ?? [];
     const voiceMessageUploadMap = this.#get().voiceMessageUploadMap;
     const activeLocalMessagesById = new Map<string, UIChatMessage>();
+    const transcript = getMessageTranscript(this.#set, this.#get);
 
-    // Server snapshots never contain the local voice placeholder. Keep it in the in-memory
-    // transcript only while the owning upload transaction is still active. Consider both the
-    // existing ChatStore bucket and the incoming ConversationStore snapshot: the latter can carry
-    // the placeholder after another server replacement briefly removed it from ChatStore.
+    // Keep active voice uploads and pending client sends across unrelated server snapshots.
+    // The persisted row takes over as soon as a snapshot includes its ID.
     for (const message of [...currentMessages, ...incoming]) {
       if (
         isLocalOnlyMessage(message) &&
-        voiceMessageUploadMap[message.id] &&
+        (voiceMessageUploadMap[message.id] || transcript.isUnconfirmedClientRow(message.id)) &&
         !persistedIds.has(message.id) &&
         !activeLocalMessagesById.has(message.id)
       ) {
@@ -213,7 +212,6 @@ export class MessageQueryActionImpl {
       mergeLocalMessagesByCreatedAt(persistedReconciled, [...activeLocalMessagesById.values()]),
     );
 
-    const transcript = getMessageTranscript(this.#set, this.#get);
     // The server returned these rows, so their optimistic mark is settled even
     // when the bucket already holds the same list (the commit below is skipped).
     transcript.confirmServerRows(persistedIncoming);

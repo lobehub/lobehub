@@ -31,6 +31,8 @@ interface UsePullRequestActionsParams {
    * refuse policy-driven mutations, but let comments through.
    */
   policyLocked?: boolean;
+  repositoryPath?: string;
+  url?: string;
   workingDirectory: string;
 }
 
@@ -40,6 +42,8 @@ export const usePullRequestActions = ({
   mutateDetail,
   policyLocked = false,
   number,
+  repositoryPath,
+  url,
   workingDirectory,
 }: UsePullRequestActionsParams) => {
   const [busy, setBusy] = useState<PullRequestBusy>();
@@ -72,22 +76,18 @@ export const usePullRequestActions = ({
         const result = await request();
         if (!result.success) return fail(result.error || 'unknown error');
         const cacheDeviceId = deviceId ?? 'local';
-        await Promise.all([
+        const readPath = repositoryPath ?? workingDirectory;
+        // The mutation already succeeded. A failed refresh, including a Git
+        // status read for a removed worktree, must not make Retry repeat it.
+        await Promise.allSettled([
           mutateDetail(),
-          mutate(deviceKeys.gitPullRequestActivity(cacheDeviceId, workingDirectory, number)),
-          mutate(
-            (key: unknown) =>
-              Array.isArray(key) &&
-              key[0] === deviceKeys.gitLinkedPR.root &&
-              key[1] === cacheDeviceId &&
-              key[2] === workingDirectory,
-          ),
+          mutate(deviceKeys.gitPullRequestActivity(cacheDeviceId, readPath, number)),
           mutate(
             (key: unknown) =>
               Array.isArray(key) &&
               key[0] === deviceKeys.gitPullRequestMergeContext.root &&
               key[1] === cacheDeviceId &&
-              key[2] === workingDirectory &&
+              key[2] === readPath &&
               key[3] === number,
           ),
           useGitStatusStore
@@ -102,15 +102,21 @@ export const usePullRequestActions = ({
         setBusy(undefined);
       }
     },
-    [deviceId, mutateDetail, number, workingDirectory],
+    [deviceId, mutateDetail, number, repositoryPath, workingDirectory],
   );
 
   const run = useCallback(
     (action: DeviceGitPullRequestAction) =>
       perform(action.type, () =>
-        gitService.runPullRequestAction({ action, deviceId, number, path: workingDirectory }),
+        gitService.runPullRequestAction({
+          action,
+          deviceId,
+          number,
+          path: workingDirectory,
+          ...(repositoryPath && url ? { repository: { path: repositoryPath, url } } : {}),
+        }),
       ),
-    [deviceId, number, perform, workingDirectory],
+    [deviceId, number, perform, repositoryPath, url, workingDirectory],
   );
 
   const push = useCallback(
