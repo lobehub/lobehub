@@ -1,6 +1,8 @@
 import { ReactBlockPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 
+import type { EditorCanvasProps } from '@/features/EditorCanvas';
+
 /**
  * Extra editor plugins for the task instruction. The block drag handle (same
  * as the page editor) lets an image or paragraph be dragged to a new position
@@ -10,3 +12,16 @@ import { Editor } from '@lobehub/editor/react';
 export const TASK_INSTRUCTION_EXTRA_PLUGINS = [
   Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }),
 ];
+
+/**
+ * Editor configuration of the task instruction.
+ *
+ * Inline `$…$` math is off, as in PageEditor: task descriptions quote prices
+ * (`Plus $30 / Pro $150`) far more often than inline formulas, and the Markdown
+ * import would otherwise turn the text between two prices into one formula.
+ * Block `$$` math and formula nodes already in a saved instruction still render.
+ */
+export const TASK_INSTRUCTION_EDITOR_PROPS = {
+  enableInlineMath: false,
+  extraPlugins: TASK_INSTRUCTION_EXTRA_PLUGINS,
+} satisfies Partial<EditorCanvasProps>;
