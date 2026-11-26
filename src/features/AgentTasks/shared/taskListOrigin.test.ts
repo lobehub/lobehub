@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveTaskListCrumbTarget } from './taskListOrigin';
+import { resolveTaskListCrumbTarget, resolveTaskListRootCrumb } from './taskListOrigin';
 
 describe('resolveTaskListCrumbTarget', () => {
   it('returns the origin, filters included, when it is the crumb list', () => {
@@ -60,5 +60,35 @@ describe('resolveTaskListCrumbTarget', () => {
     expect(resolveTaskListCrumbTarget('/tasks?collection=mine#top', '/tasks', null)).toBe(
       '/tasks?collection=mine#top',
     );
+  });
+});
+
+describe('resolveTaskListRootCrumb', () => {
+  it('reads the tab from the carried origin of the global list', () => {
+    expect(
+      resolveTaskListRootCrumb('/acme/tasks?scope=created', 'acme', { allowMine: true }),
+    ).toEqual({ collection: 'mine', escape: true, to: '/acme/tasks?scope=created' });
+  });
+
+  it('falls back to "All tasks" for an origin that is not the global list', () => {
+    for (const origin of [undefined, '/acme/agent/a1/tasks', '//evil.example/acme/tasks']) {
+      expect(resolveTaskListRootCrumb(origin, 'acme', { allowMine: true })).toEqual({
+        collection: 'tasks',
+        escape: false,
+        to: '/tasks?collection=all',
+      });
+    }
+  });
+
+  it('keeps the bare list as "All tasks" where there is no "My tasks" tab', () => {
+    expect(resolveTaskListRootCrumb(undefined, null, { allowMine: false })).toEqual({
+      collection: 'tasks',
+      escape: false,
+      to: '/tasks',
+    });
+    expect(resolveTaskListRootCrumb('/tasks', null, { allowMine: false })).toMatchObject({
+      collection: 'tasks',
+      to: '/tasks',
+    });
   });
 });
