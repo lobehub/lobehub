@@ -11,4 +11,6 @@ ALTER TABLE "message_context_snapshots" ADD CONSTRAINT "message_context_snapshot
 ALTER TABLE "message_context_snapshots" DROP CONSTRAINT IF EXISTS "message_context_snapshots_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "message_context_snapshots" ADD CONSTRAINT "message_context_snapshots_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_context_snapshots" DROP CONSTRAINT IF EXISTS "message_context_snapshots_workspace_id_workspaces_id_fk";--> statement-breakpoint
-ALTER TABLE "message_context_snapshots" ADD CONSTRAINT "message_context_snapshots_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "message_context_snapshots" ADD CONSTRAINT "message_context_snapshots_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "message_context_snapshots_user_id_idx" ON "message_context_snapshots" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "message_context_snapshots_workspace_id_idx" ON "message_context_snapshots" USING btree ("workspace_id");
