@@ -51,6 +51,7 @@ import {
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
 import { disposeDeviceMcp, listDeviceMcpTools } from '../../device/mcp';
+import { resolveDevicePlatform } from '../../device/platform';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -487,6 +488,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Freeform channel label (`cli` by default); `LOBEHUB_CLI_CHANNEL` lets a
   // dev build tag itself `cli-dev` so the gateway can prioritise / display it.
   const channel = process.env.LOBEHUB_CLI_CHANNEL || 'cli';
+  // Android hosts report `linux` from the kernel; hand the gateway the resolved
+  // platform so presence (and ghost rows) don't show the device as a Linux desktop.
+  const { platform: devicePlatform } = resolveDevicePlatform();
 
   const client = new GatewayClient({
     channel,
@@ -494,6 +498,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
+    platform: devicePlatform,
     serverUrl: auth.serverUrl,
     token: connectToken,
     tokenType: connectTokenType,
@@ -517,7 +522,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`─── ${CLI_DISPLAY_NAME} ───`);
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
-  info(`  Platform  : ${process.platform}`);
+  info(`  Platform  : ${devicePlatform}`);
   info(`  Gateway   : ${gatewayDescription}`);
   info(`  Auth      : ${managed ? 'managed device token' : auth.tokenType}`);
   if (managed) {
@@ -752,6 +757,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       deviceId: wsIdentity.deviceId,
       gatewayUrl: resolvedGatewayUrl,
       logger: isDaemonChild ? createDaemonLogger() : log,
+      platform: devicePlatform,
       serverUrl: auth.serverUrl,
       token: initialToken,
       tokenType: 'jwt',
@@ -909,6 +915,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
           removeWorkspaceEnrollment(wsId);
           continue;
         }
+        // The workspace row copied platform / metadata from the personal row at
+        // share time and nothing else refreshes it (e.g. an Android device shared
+        // while it still registered as `linux`). Best-effort: never block restore.
+        await registerWorkspaceDevice(auth, wsIdentity, wsId).catch((err) =>
+          error(`Failed to refresh workspace device info for ${wsId}: ${(err as Error).message}`),
+        );
         const minted = await mintWorkspaceConnectToken(auth, wsId);
         await openWorkspaceConnection(wsId, minted.token);
         info(`Restored workspace share connection: ${wsId}`);

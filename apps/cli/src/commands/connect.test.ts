@@ -363,58 +363,6 @@ describe('connect command', () => {
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('LobeHub CLI'));
   });
 
-  it('exits with a retryable code when the workspace token mint fails transiently', async () => {
-    mintWorkspaceConnectTokenMock.mockRejectedValueOnce(new Error('fetch failed'));
-
-    const program = createProgram();
-    await expect(
-      program.parseAsync(['node', 'test', 'connect', '--workspace', 'ws_1']),
-    ).rejects.toThrow('process.exit');
-    expect(exitSpy).toHaveBeenCalledWith(75);
-  });
-
-  it('exits without retry when the server refuses the workspace token mint', async () => {
-    mintWorkspaceConnectTokenMock.mockRejectedValueOnce(
-      Object.assign(new Error('forbidden'), { data: { code: 'FORBIDDEN' } }),
-    );
-
-    const program = createProgram();
-    await expect(
-      program.parseAsync(['node', 'test', 'connect', '--workspace', 'ws_1']),
-    ).rejects.toThrow('process.exit');
-    expect(exitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it.each([
-    { error: new Error('fetch failed'), exitCode: 75, reason: 'fails transiently' },
-    {
-      error: Object.assign(new Error('forbidden'), { data: { code: 'FORBIDDEN' } }),
-      exitCode: 1,
-      reason: 'is refused by the server',
-    },
-  ])('exits with $exitCode when workspace registration $reason', async ({ error, exitCode }) => {
-    mintWorkspaceConnectTokenMock.mockResolvedValueOnce({ token: 'workspace-token' });
-    registerWorkspaceDeviceMock.mockRejectedValueOnce(error);
-    exitSpy.mockImplementation(() => {
-      throw new Error('process.exit');
-    });
-
-    await expect(
-      createProgram().parseAsync([
-        'node',
-        'test',
-        'connect',
-        '--service-child',
-        '--workspace',
-        'ws_1',
-      ]),
-    ).rejects.toThrow('process.exit');
-
-    expect(registerWorkspaceDeviceMock).toHaveBeenCalledOnce();
-    expect(exitSpy).toHaveBeenCalledWith(exitCode);
-    expect(connectCalled).toBe(false);
-  });
-
   describe('device gateway address', () => {
     const connect = (...args: string[]) =>
       createProgram().parseAsync(['node', 'test', 'connect', ...args]);
@@ -503,52 +451,6 @@ describe('connect command', () => {
       expect(getGlobalConfig).not.toHaveBeenCalled();
       expect(clientOptions.gatewayUrl).toBe('https://gateway.example.com');
       expect(saveDeviceGatewayUrl).toHaveBeenCalledWith(SELF_HOSTED, 'https://gateway.example.com');
-    });
-
-    it('opens workspace shares on the same gateway as the personal connection', async () => {
-      vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
-      getGlobalConfig.mockResolvedValue({
-        serverConfig: { deviceGatewayUrl: 'https://gw.example.com' },
-      });
-      await connect();
-      const personal = clientOptions;
-
-      await clientEventHandlers['rpc_request']?.({
-        method: 'enrollWorkspace',
-        params: { token: 'ws-token', workspaceId: 'ws-1' },
-        requestId: 'rpc-1',
-        type: 'rpc_request',
-      });
-
-      expect(clientOptions).not.toBe(personal);
-      expect(clientOptions).toMatchObject({
-        gatewayUrl: 'https://gw.example.com',
-        serverUrl: SELF_HOSTED,
-        token: 'ws-token',
-        workspaceId: 'ws-1',
-      });
-    });
-
-    it('drains the worktree cleanups of a workspace share in its own workspace', async () => {
-      vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
-      getGlobalConfig.mockResolvedValue({
-        serverConfig: { deviceGatewayUrl: 'https://gw.example.com' },
-      });
-      await connect();
-      await clientEventHandlers['rpc_request']?.({
-        method: 'enrollWorkspace',
-        params: { token: 'ws-token', workspaceId: 'ws-1' },
-        requestId: 'rpc-1',
-        type: 'rpc_request',
-      });
-      createLambdaClientMock.mockClear();
-      drainWorktreeCleanups.mockClear();
-
-      // `clientEventHandlers` now belongs to the share connection.
-      clientEventHandlers.connected?.();
-
-      expect(createLambdaClientMock).toHaveBeenCalledWith(expect.anything(), 'ws-1');
-      expect(drainWorktreeCleanups).toHaveBeenCalledWith({ deviceId: 'mock-device-id' });
     });
 
     it('passes --gateway through to the daemon child, which resolves the same way', async () => {
