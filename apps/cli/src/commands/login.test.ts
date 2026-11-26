@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 
 import { Command } from 'commander';
@@ -24,18 +26,18 @@ vi.mock('../settings', async (importOriginal) => ({
 
 // Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
-  default: {
-    exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
-    execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
-  },
-  exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
-  execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
+  spawn: vi.fn(),
 }));
+
+function createFakeChild() {
+  return Object.assign(new EventEmitter(), { unref: vi.fn() });
+}
 
 describe('login command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
   const originalPath = process.env.PATH;
+  const originalPlatform = process.platform;
   const originalPathext = process.env.PATHEXT;
   const originalSystemRoot = process.env.SystemRoot;
 
@@ -47,6 +49,12 @@ describe('login command', () => {
     vi.mocked(log.info).mockClear();
     vi.mocked(log.error).mockClear();
     vi.mocked(log.warn).mockClear();
+    vi.mocked(spawn).mockReset();
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = createFakeChild();
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child as any;
+    });
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn());
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -58,6 +66,8 @@ describe('login command', () => {
     vi.useRealTimers();
     exitSpy.mockRestore();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
     restoreEnv('LOBEHUB_CLI_API_KEY', originalApiKey);
     restoreEnv('PATH', originalPath);
     restoreEnv('PATHEXT', originalPathext);
@@ -407,6 +417,127 @@ describe('login command', () => {
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  describe('browser opening', () => {
+    function stubPlatform(platform: NodeJS.Platform) {
+      Object.defineProperty(process, 'platform', { value: platform });
+      process.env.PATH = '/fake/bin';
+      process.env.SystemRoot = 'C:\\Windows';
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    }
+
+    function stubDeviceAuthOnly() {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(deviceAuthResponse())
+        .mockResolvedValue(tokenSuccessResponse());
+    }
+
+    it('should poll and complete login while the opener never exits', async () => {
+      stubPlatform('linux');
+      const child = createFakeChild();
+      vi.mocked(spawn).mockReturnValue(child as any);
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(log.info).toHaveBeenCalledWith('Waiting for authorization...');
+      expect(saveCredentials).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
+      expect(child.unref).toHaveBeenCalled();
+    });
+
+    it('should detach the POSIX opener from the terminal', async () => {
+      stubPlatform('linux');
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.stringMatching(/xdg-open$/),
+        ['https://app.lobehub.com/verify?code=USER-CODE'],
+        { detached: true, stdio: 'ignore' },
+      );
+    });
+
+    it('should warn when the opener times out', async () => {
+      stubPlatform('linux');
+      vi.mocked(spawn).mockReturnValue(createFakeChild() as any);
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(deviceAuthResponse())
+        .mockResolvedValue(tokenErrorResponse('authorization_pending'));
+
+      const login = runLogin(createProgram());
+      await vi.advanceTimersByTimeAsync(4999);
+      expect(log.warn).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Open the URL above manually'));
+
+      vi.mocked(fetch).mockResolvedValue(tokenSuccessResponse());
+      await vi.advanceTimersByTimeAsync(2000);
+      await login;
+      expect(saveCredentials).toHaveBeenCalled();
+    });
+
+    it('should warn without failing when the opener command is missing', async () => {
+      Object.defineProperty(process, 'platform', { value: 'linux' });
+      process.env.PATH = '/fake/bin';
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(spawn).not.toHaveBeenCalled();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+      expect(saveCredentials).toHaveBeenCalled();
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['spawn error', (child: EventEmitter) => child.emit('error', new Error('EACCES'))],
+      ['non-zero exit', (child: EventEmitter) => child.emit('exit', 3, null)],
+    ])('should warn on %s', async (_name, fail) => {
+      stubPlatform('linux');
+      vi.mocked(spawn).mockImplementation(() => {
+        const child = createFakeChild();
+        queueMicrotask(() => fail(child));
+        return child as any;
+      });
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+      expect(saveCredentials).toHaveBeenCalled();
+    });
+
+    it('should keep the macOS opener', async () => {
+      stubPlatform('darwin');
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.stringMatching(/open$/),
+        ['https://app.lobehub.com/verify?code=USER-CODE'],
+        { detached: true, stdio: 'ignore' },
+      );
+      expect(log.warn).not.toHaveBeenCalled();
+    });
+
+    it('should keep the Windows opener without detaching', async () => {
+      stubPlatform('win32');
+      stubDeviceAuthOnly();
+
+      await runLoginAndAdvanceTimers(createProgram());
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.stringMatching(/rundll32/),
+        ['url.dll,FileProtocolHandler', 'https://app.lobehub.com/verify?code=USER-CODE'],
+        { detached: false, stdio: 'ignore' },
+      );
+    });
   });
 
   it('should resolve Windows executable via PATHEXT', () => {

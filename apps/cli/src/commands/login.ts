@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -16,6 +16,7 @@ import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
 const SCOPES = 'openid profile email offline_access';
+const OPEN_BROWSER_TIMEOUT_MS = 5000;
 
 interface LoginOptions {
   server: string;
@@ -120,11 +121,13 @@ export function registerLoginCommand(program: Command) {
       log.info(`  Enter code: ${deviceAuth.user_code}`);
       log.info('');
 
-      // Try to open browser automatically
-      const opened = await openBrowser(verifyUrl);
-      if (!opened) {
-        log.warn('Could not open browser automatically.');
-      }
+      // Try to open browser automatically. The opener may never return (xdg-open
+      // over SSH, for example), so it must not hold up polling.
+      void openBrowser(verifyUrl).then((opened) => {
+        if (!opened) {
+          log.warn('Could not open browser automatically. Open the URL above manually.');
+        }
+      });
 
       log.info('Waiting for authorization...');
 
@@ -289,14 +292,31 @@ async function openBrowser(url: string): Promise<boolean> {
       }
 
       try {
-        execFile(executable, args, (err) => {
-          if (err) {
-            log.debug(`Could not open browser automatically: ${err.message}`);
-            resolve(false);
-            return;
-          }
-          resolve(true);
+        // Detach and unref so a long-lived opener neither holds the terminal nor
+        // keeps the CLI alive. It is left running on timeout because it may be
+        // the browser itself. Windows skips `detached`, which would open a console.
+        const child = spawn(executable, args, {
+          detached: process.platform !== 'win32',
+          stdio: 'ignore',
         });
+
+        const settle = (opened: boolean, reason?: string) => {
+          clearTimeout(timer);
+          if (reason) log.debug(`Could not open browser automatically: ${reason}`);
+          resolve(opened);
+        };
+        const timer = setTimeout(
+          () => settle(false, `${cmd} did not exit within ${OPEN_BROWSER_TIMEOUT_MS}ms`),
+          OPEN_BROWSER_TIMEOUT_MS,
+        );
+        timer.unref();
+
+        child.once('error', (err) => settle(false, err.message));
+        child.once('exit', (code, signal) => {
+          if (code === 0) settle(true);
+          else settle(false, `${cmd} exited with ${signal ?? `code ${code}`}`);
+        });
+        child.unref();
       } catch (error: any) {
         log.debug(`Could not open browser automatically: ${error?.message || String(error)}`);
         resolve(false);
