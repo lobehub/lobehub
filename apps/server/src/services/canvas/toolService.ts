@@ -21,8 +21,6 @@ import type { WorkModel } from '@/database/models/work';
 import type { CanvasFileRefResolution, CanvasFileRefResolver } from './fileRefs';
 import type { CanvasStorageService } from './storage';
 
-const READ_TEXT_CHAR_BUDGET = 60_000;
-
 interface CanvasToolServiceDeps {
   agentId?: string | null;
   findGuideState: () => Promise<unknown>;
@@ -121,20 +119,15 @@ export class CanvasToolServiceImpl implements CanvasToolService {
     const manifest = await storage.readManifest(manifestKey);
     const requested = params.paths?.map((path) => normalizeCanvasPath(path));
     const texts: CanvasReadOutcome['texts'] = [];
-    let budget = READ_TEXT_CHAR_BUDGET;
 
+    // Return whole files: the Canvas execution runtime pages them into tool-result-sized windows.
+    // Cutting a file here left no way to read one that was over the budget on its own.
     for (const path of Object.keys(manifest.files)) {
       if (!isCanvasTextPath(path)) continue;
       if (requested && !requested.includes(path)) continue;
       const file = await storage.readFile(manifest, path);
       if (!file) continue;
-      const content = new TextDecoder().decode(file.bytes);
-      if (content.length > budget) {
-        texts.push({ content: `[${content.length} characters; read this file on its own]`, path });
-        continue;
-      }
-      budget -= content.length;
-      texts.push({ content, path });
+      texts.push({ content: new TextDecoder().decode(file.bytes), path });
     }
 
     return {
