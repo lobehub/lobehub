@@ -212,7 +212,7 @@ describe('naive crawler', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should return undefined when blocked by Cloudflare', async () => {
+  it('should leave a Cloudflare challenge page for the Crawler to reject', async () => {
     const mockResponse = {
       status: 200,
       ok: true,
@@ -234,7 +234,8 @@ describe('naive crawler', () => {
 
     const result = await naive('https://example.com', { filterOptions: {} });
 
-    expect(result).toBeUndefined();
+    // Challenge pages are rejected once, in Crawler.crawl, for every impl
+    expect(result).toMatchObject({ title: 'Just a moment...' });
   });
 
   it('should throw error for non-ok status codes', async () => {

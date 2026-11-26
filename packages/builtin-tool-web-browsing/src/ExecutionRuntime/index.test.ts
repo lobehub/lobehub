@@ -302,6 +302,38 @@ describe('WebBrowsingExecutionRuntime', () => {
       expect(response.results[1].data.content).not.toContain('agent-browser');
     });
 
+    it('appends browser escalation guidance for a page blocked by anti-bot verification and saves nothing', async () => {
+      const documentService = { associateDocument: vi.fn(), createDocument: vi.fn() };
+      const runtime = new WebBrowsingExecutionRuntime({
+        canUseBrowserSkill: true,
+        documentService,
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                crawler: 'jina',
+                data: {
+                  content:
+                    'Blocked by anti-bot verification: the site answered with a challenge page instead of its content, so nothing was read. Crawling this URL again will meet the same wall.',
+                  errorMessage: 'The site served an anti-bot verification page',
+                  errorType: 'BlockedPageError',
+                  retryable: false,
+                },
+                originalUrl: 'https://blocked.example.com',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        },
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://blocked.example.com'] });
+
+      expect(result.content).toContain('Blocked by anti-bot verification');
+      expect(result.content).toContain('activate the `agent-browser` skill');
+      expect(documentService.createDocument).not.toHaveBeenCalled();
+    });
+
     it('omits agent-browser guidance when canUseBrowserSkill is false', async () => {
       const runtime = new WebBrowsingExecutionRuntime({
         canUseBrowserSkill: false,

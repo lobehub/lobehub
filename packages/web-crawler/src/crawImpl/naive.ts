@@ -111,11 +111,6 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
       return;
     }
 
-    // It's blocked by Cloudflare.
-    if (result.title === 'Just a moment...') {
-      return;
-    }
-
     // just return
     return {
       content: result.content,

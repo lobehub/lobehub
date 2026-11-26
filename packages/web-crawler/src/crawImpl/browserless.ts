@@ -74,13 +74,7 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
   const html = await res.text();
   const result = htmlToMarkdown(html, { filterOptions, url });
 
-  if (
-    !!result.content &&
-    result.content.length > 100 &&
-    result.title &&
-    // "Just a moment..." indicates being blocked by CloudFlare
-    result.title.trim() !== 'Just a moment...'
-  ) {
+  if (!!result.content && result.content.length > 100 && result.title) {
     return {
       content: result.content,
       contentType: 'text',

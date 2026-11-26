@@ -1,0 +1,64 @@
+/**
+ * Challenge and block pages are a few lines of text. A longer body is a real page
+ * that merely mentions one (an article about Cloudflare, a support thread), so the
+ * checks below only apply up to this length.
+ */
+export const CHALLENGE_PAGE_MAX_LENGTH = 2000;
+
+/** Page titles of anti-bot walls, lower-cased and without trailing dots. */
+const CHALLENGE_TITLES = new Set([
+  // Cloudflare (interstitial, zh-CN interstitial, block page)
+  'just a moment',
+  '请稍候',
+  'attention required! | cloudflare',
+  // Akamai
+  'access denied',
+  // PerimeterX / HUMAN
+  'access to this page has been denied',
+  // Imperva
+  'pardon our interruption',
+  // Amazon, Bloomberg
+  'robot check',
+  'are you a robot?',
+]);
+
+/** Body text of anti-bot walls, lower-cased. Needed when the provider drops or rewrites the title. */
+const CHALLENGE_PHRASES = [
+  'performing security verification',
+  'verifying you are human',
+  'verify you are human',
+  'checking your browser before accessing',
+  'checking if the site connection is secure',
+  'enable javascript and cookies to continue',
+  'needs to review the security of your connection',
+  'sorry, you have been blocked',
+  'made us think you were a bot',
+  'unusual traffic from your computer network',
+];
+
+const normalizeTitle = (title: string) =>
+  title
+    .trim()
+    .toLowerCase()
+    .replace(/[\s.…]+$/, '');
+
+/**
+ * Whether a fetched page is an anti-bot challenge / block page rather than the
+ * document. Crawl providers answer such a page with a normal success response, so
+ * it can only be recognized from the page itself.
+ */
+export const isChallengePage = ({
+  content,
+  title,
+}: {
+  content?: string;
+  title?: string;
+}): boolean => {
+  if (!content || content.length > CHALLENGE_PAGE_MAX_LENGTH) return false;
+
+  if (title && CHALLENGE_TITLES.has(normalizeTitle(title))) return true;
+
+  const body = content.toLowerCase();
+
+  return CHALLENGE_PHRASES.some((phrase) => body.includes(phrase));
+};
