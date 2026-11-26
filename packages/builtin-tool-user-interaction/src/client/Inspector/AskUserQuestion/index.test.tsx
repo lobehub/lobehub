@@ -17,9 +17,9 @@ vi.mock('@lobechat/shared-tool-ui/styles', () => ({
   shinyTextStyles: { shinyText: 'shiny-text' },
 }));
 
-vi.mock('@lobehub/ui', () => ({}));
-
-vi.mock('@lobehub/ui', () => ({}));
+vi.mock('@lobehub/ui', () => ({
+  cx: (...names: unknown[]) => names.filter(Boolean).join(' '),
+}));
 
 describe('AskUserQuestionInspector', () => {
   afterEach(cleanup);
@@ -102,5 +102,25 @@ describe('AskUserQuestionInspector', () => {
 
     expect(screen.getByText('Scope +2')).toBeTruthy();
     expect(screen.queryByText('Tone')).toBeNull();
+  });
+
+  it('summarizes the submitted answers once the question is answered', () => {
+    render(
+      <AskUserQuestionInspector
+        apiName="askUserQuestion"
+        identifier="lobe-user-interaction"
+        pluginState={{ askUserAnswers: { 'Who should receive it?': 'Workspace owners' } }}
+        args={{
+          questions: [
+            { header: 'Audience', options: [], question: 'Who should receive it?' },
+            { header: 'Content', options: [], question: 'What goes in?' },
+            { header: 'Schedule', options: [], question: 'When?' },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Workspace owners +2')).toBeTruthy();
+    expect(screen.queryByText('Audience +2')).toBeNull();
   });
 });
