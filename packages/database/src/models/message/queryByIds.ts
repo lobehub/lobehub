@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/types';
 import { MessageGroupType } from '@lobechat/types';
 import { logTimingSink as logTiming, runTimedSinkStage as runTimedStage } from '@lobechat/utils';
+import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
@@ -44,6 +45,7 @@ import {
   buildMessageGroupNode,
   compressedBranchMarkerColumns,
   compressedStateMarkerColumns,
+  filterGroupsByMemberScope,
   loadCompressedStateRows,
   MAX_COMPRESSED_GROUP_MEMBERS,
   planMessageGroupHydration,
@@ -404,6 +406,8 @@ export class MessageByIdsQueries extends MessageScope {
     timing?: ModelTimingContext,
     options: {
       allowShareVisitor?: boolean;
+      /** See `QueryMessagesOptions.groupMemberScope`. */
+      memberScope?: SQL;
       /** See `QueryMessageParams.skipCompressedMembers`. */
       skipCompressedMembers?: boolean;
       /**
@@ -473,8 +477,12 @@ export class MessageByIdsQueries extends MessageScope {
             id: messages.id,
             messageGroupId: messages.messageGroupId,
             ...compressedStateMarkerColumns,
+            ...(options.memberScope && {
+              inScope: sql<boolean>`coalesce((${options.memberScope}), false)`,
+            }),
             ...(options.skipCompressedMembers && compressedBranchMarkerColumns),
             role: messages.role,
+            threadId: messages.threadId,
           })
           .from(messages)
           .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
@@ -498,11 +506,19 @@ export class MessageByIdsQueries extends MessageScope {
       rowCount: groupMessageRecords.length,
     });
 
+    // MessageGroups are stored per topic, but the main conversation and each
+    // thread are separate conversations inside it: keep only the groups whose
+    // members belong to this page.
+    const scopedGroups = options.memberScope
+      ? filterGroupsByMemberScope(groups, groupMessageRecords)
+      : groups;
+    if (scopedGroups.length === 0) return [];
+
     // A compression group only hydrates its newest members (see
     // `MAX_COMPRESSED_GROUP_MEMBERS`) plus the pinned ones, or none at all
     // with `skipCompressedMembers`.
     const plan = planMessageGroupHydration(
-      groups,
+      scopedGroups,
       groupMessageRecords,
       options.skipCompressedMembers,
     );
@@ -526,7 +542,7 @@ export class MessageByIdsQueries extends MessageScope {
 
     // 4. Build MessageGroup nodes
     const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
-    return groups.map((group) => buildMessageGroupNode(group, plan, messageMap, stateRows));
+    return scopedGroups.map((group) => buildMessageGroupNode(group, plan, messageMap, stateRows));
   };
 
   /**

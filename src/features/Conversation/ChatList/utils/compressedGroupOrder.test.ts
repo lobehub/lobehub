@@ -47,6 +47,28 @@ describe('hoistCompressedGroups', () => {
     expect(ids(hoistCompressedGroups(messages))).toEqual(['u1', 'a1', 'c1']);
   });
 
+  it('keeps a thread summary below the main-conversation turn the thread branched from', () => {
+    const messages = [
+      { ...msg('u1', 'user'), threadId: null },
+      { ...msg('a1', 'assistant'), threadId: null },
+      { ...msg('c1', 'compressedGroup'), threadId: 'thread-1' },
+    ];
+
+    expect(ids(hoistCompressedGroups(messages))).toEqual(['u1', 'a1', 'c1']);
+  });
+
+  it('still lifts a thread summary above the thread turn that triggered it', () => {
+    const messages = [
+      { ...msg('u1', 'user'), threadId: null },
+      { ...msg('a1', 'assistant'), threadId: null },
+      { ...msg('tu1', 'user'), threadId: 'thread-1' },
+      { ...msg('c1', 'compressedGroup'), threadId: 'thread-1' },
+      { ...msg('ta1', 'assistantGroup'), threadId: 'thread-1' },
+    ];
+
+    expect(ids(hoistCompressedGroups(messages))).toEqual(['u1', 'a1', 'c1', 'tu1', 'ta1']);
+  });
+
   it('keeps the group at the tail when there is no user message to anchor it to', () => {
     const messages = [msg('a1', 'assistantGroup'), msg('c1', 'compressedGroup')];
 

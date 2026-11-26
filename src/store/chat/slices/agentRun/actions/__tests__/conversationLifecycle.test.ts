@@ -378,11 +378,9 @@ describe('ConversationLifecycle actions', () => {
           expect.any(Object),
           { creationOrigin: 'client' },
         );
-        expect(createCompressionGroupSpy).toHaveBeenCalledWith({
-          agentId,
-          messageIds: ['user-1', 'assistant-1'],
-          topicId,
-        });
+        expect(createCompressionGroupSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ agentId, messageIds: ['user-1', 'assistant-1'], topicId }),
+        );
       });
 
       it('should not process AI when onlyAddUserMessage is true', async () => {
