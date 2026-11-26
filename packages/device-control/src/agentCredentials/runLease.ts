@@ -195,7 +195,19 @@ export const trackAgentCredentialRun = ({
 
   let stopped = false;
   let released = false;
+  /** The lease on disk lags `record` after a failed write; retried on each heartbeat. */
+  let dirty = false;
+  const persist = () => {
+    try {
+      writeLease(lease, record);
+      dirty = false;
+    } catch {
+      dirty = true;
+    }
+    return !dirty;
+  };
   const timer = setInterval(() => {
+    if (dirty) persist();
     try {
       const now = new Date();
       utimesSync(lease, now, now);
@@ -230,11 +242,11 @@ export const trackAgentCredentialRun = ({
     if (released || !Number.isInteger(pgid) || pgid <= 1) return;
     const groups = record.processGroups.filter((group) => group !== pgid);
     record.processGroups = running ? [...groups, pgid] : groups;
-    try {
-      writeLease(lease, record);
-    } catch {
-      // The lease still stands; only this group goes unrecorded.
-    }
+    if (persist() || !running || stopped) return;
+    // A group the lease does not list would outlive a forced stop and could
+    // write the old login back: stop the run rather than trust the lease.
+    stopped = true;
+    onStop('Could not record the agent process on the installed credential.');
   };
   // Many exit paths call `process.exit` directly; the lease must not outlive them.
   process.once('exit', release);

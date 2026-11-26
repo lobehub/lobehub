@@ -114,6 +114,33 @@ describe('trackAgentCredentialRun', () => {
     },
   );
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'stops the run when an agent group cannot be recorded, and records it once it can',
+    async () => {
+      const onStop = vi.fn();
+      const lease = trackAgentCredentialRun({ env: env(), heartbeatMs: 10, onStop, pid: 4242 });
+      const record = async () =>
+        JSON.parse(await readFile(path.join(runDir, '4242.json'), 'utf8')).processGroups;
+
+      try {
+        // The lease file stays, but no replacement can be written next to it.
+        await chmod(runDir, 0o500);
+        lease.setProcessGroup(5001, true);
+        expect(onStop).toHaveBeenCalledWith(
+          'Could not record the agent process on the installed credential.',
+        );
+        expect(await record()).toEqual([]);
+
+        await chmod(runDir, 0o700);
+        await vi.waitFor(async () => expect(await record()).toEqual([5001]));
+        expect(onStop).toHaveBeenCalledTimes(1);
+      } finally {
+        await chmod(runDir, 0o700);
+        lease.release();
+      }
+    },
+  );
+
   it('ignores a stop request left for an earlier process with the same pid', async () => {
     await mkdir(runDir, { recursive: true });
     await writeFile(path.join(runDir, '4242.stop'), 'old');
