@@ -59,12 +59,17 @@ export interface RunFeeClaim {
 /** Holds the run's fee under a provisional id. */
 export const claimRunFee = async (
   claim: RunFeeClaim,
-  { hold, userId }: { hold: boolean; userId: string },
+  {
+    hold,
+    model,
+    provider,
+    userId,
+  }: { hold: boolean; model?: string; provider?: string; userId: string },
 ): Promise<void> => {
   if (!hold) return;
 
   const holderId = `pending_${nanoid()}`;
-  await holdAgentRunFee({ holderId, userId });
+  await holdAgentRunFee({ holderId, model, provider, userId });
   claim.holderId = holderId;
 };
 

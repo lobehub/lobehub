@@ -1,6 +1,5 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_AGENT_BUILDER_AVATAR, DEFAULT_MODEL } from '@lobechat/const';
+import { DEFAULT_AGENT_BUILDER_AVATAR } from '@lobechat/const';
 
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
@@ -43,11 +42,7 @@ const AGENT_BUILDER_CONFLICTING_TOOLS = new Set<string>([
 export const AGENT_BUILDER: BuiltinAgentDefinition = {
   avatar: DEFAULT_AGENT_BUILDER_AVATAR,
 
-  // Persist config - stored in database
-  persist: {
-    model: DEFAULT_MODEL,
-    provider: DEFAULT_PROVIDER,
-  },
+  // No persisted model: the agent follows the account default model (see mergeAgentDefaultConfig).
 
   // Runtime config - static systemRole
   runtime: (ctx) => ({

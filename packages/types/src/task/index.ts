@@ -1,5 +1,6 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { TaskChannelDelivery, TaskDeliveryContext } from './delivery';
 import type { TaskLabelRef } from './label';
 
 export * from './archive';
@@ -333,6 +334,8 @@ export interface TaskContext {
      * finalizes the task only after that operation has finished cleanly. */
     requestedByOperationId?: string;
   };
+  /** How the task's Channel delivery last went (`TaskDeliveryContext`). */
+  delivery?: TaskDeliveryContext;
   lifecycle?: TaskLifecycleAudit;
   origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
@@ -678,6 +681,11 @@ export interface TaskDetailData {
   archivedAt?: string | null;
   // null/undefined = no automation configured
   automationMode?: TaskAutomationMode | null;
+  /**
+   * Where each run's answer is posted (`config.delivery`), with the refusal of the latest post
+   * when the Channel stopped taking them.
+   */
+  channelDelivery?: TaskChannelDelivery & { lastError?: TaskDeliveryContext['lastError'] };
   checkpoint?: CheckpointConfig;
   config?: Record<string, unknown>;
   createdAt?: string;

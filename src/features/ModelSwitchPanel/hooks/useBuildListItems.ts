@@ -5,7 +5,12 @@ import { useMemo } from 'react';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 import { isNewReleaseDate } from '@/utils/time';
 
-import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
+import {
+  type FeaturedModel,
+  type GroupMode,
+  type ListItem,
+  type ModelWithProviders,
+} from '../types';
 
 /**
  * Shares the exact rule behind `NewModelBadge`. Every renderer of this list must keep the badge
@@ -83,13 +88,19 @@ const sortWithPinnedNewModels = <T>(
   ];
 };
 
+export interface BuildListItemsOptions {
+  /** Models listed first in their own section and left out of their provider's list. */
+  featuredModels?: FeaturedModel[];
+}
+
 export const buildListItems = (
-  enabledList: EnabledProviderWithModels[],
+  sourceList: EnabledProviderWithModels[],
   groupMode: GroupMode,
   searchKeyword: string = '',
   sortModelLast?: (modelId: string, providerId: string) => boolean,
+  { featuredModels = [] }: BuildListItemsOptions = {},
 ): ListItem[] => {
-  if (enabledList.length === 0) {
+  if (sourceList.length === 0) {
     return [{ type: 'no-provider' }] as ListItem[];
   }
 
@@ -98,6 +109,24 @@ export const buildListItems = (
     const keyword = searchKeyword.toLowerCase().trim();
     return text.toLowerCase().includes(keyword);
   };
+
+  const isFeatured = (modelId: string, providerId: string) =>
+    featuredModels.some((item) => item.modelId === modelId && item.providerId === providerId);
+  const featuredItems: ListItem[] = featuredModels.flatMap((featured) => {
+    const provider = sourceList.find((item) => item.id === featured.providerId);
+    const model = provider?.children.find((item) => item.id === featured.modelId);
+    if (!provider || !model) return [];
+    if (!matchesSearch(model.displayName || model.id) && !matchesSearch(provider.name)) return [];
+
+    return [{ description: featured.description, model, provider, type: 'featured-model-item' }];
+  });
+  const enabledList =
+    featuredModels.length > 0
+      ? sourceList.map((provider) => ({
+          ...provider,
+          children: provider.children.filter((model) => !isFeatured(model.id, provider.id)),
+        }))
+      : sourceList;
 
   // lobehub first, then others
   const sortedProviders = [...enabledList].sort((a, b) => {
@@ -156,15 +185,18 @@ export const buildListItems = (
         ((item) => item.providers.every((provider) => sortModelLast(item.model.id, provider.id))),
     );
 
-    return sortedModels.map((data) => ({
-      data,
-      type:
-        data.providers.length === 1
-          ? ('model-item-single' as const)
-          : ('model-item-multiple' as const),
-    }));
+    return [
+      ...featuredItems,
+      ...sortedModels.map((data) => ({
+        data,
+        type:
+          data.providers.length === 1
+            ? ('model-item-single' as const)
+            : ('model-item-multiple' as const),
+      })),
+    ];
   } else {
-    const items: ListItem[] = [];
+    const items: ListItem[] = [...featuredItems];
 
     for (const providerItem of sortedProviders) {
       const filteredModels = providerItem.children.filter(
@@ -176,6 +208,13 @@ export const buildListItems = (
         (item) => item,
         sortModelLast && ((item) => sortModelLast(item.id, providerItem.id)),
       );
+
+      // A provider whose only models moved to the featured section or were hidden
+      // has nothing left to list under its header.
+      const emptiedByGuard =
+        sortedModels.length === 0 &&
+        (sourceList.find((item) => item.id === providerItem.id)?.children.length ?? 0) > 0;
+      if (emptiedByGuard) continue;
 
       if (sortedModels.length > 0 || !searchKeyword.trim()) {
         items.push({ provider: providerItem, type: 'group-header' });
@@ -198,13 +237,24 @@ export const buildListItems = (
   }
 };
 
+/**
+ * The guard's featured models describe chat models only. Any chat list applies them,
+ * including one a host narrows (a shared agent's picker); a generation list (image, video,
+ * music) keeps its models as given.
+ */
+export const resolveListGuardOptions = (
+  isGenerationList: boolean,
+  { featuredModels }: BuildListItemsOptions,
+): BuildListItemsOptions | undefined => (isGenerationList ? undefined : { featuredModels });
+
 export const useBuildListItems = (
   enabledList: EnabledProviderWithModels[],
   groupMode: GroupMode,
   searchKeyword: string = '',
   sortModelLast?: (modelId: string, providerId: string) => boolean,
+  { featuredModels }: BuildListItemsOptions = {},
 ): ListItem[] =>
   useMemo(
-    () => buildListItems(enabledList, groupMode, searchKeyword, sortModelLast),
-    [enabledList, groupMode, searchKeyword, sortModelLast],
+    () => buildListItems(enabledList, groupMode, searchKeyword, sortModelLast, { featuredModels }),
+    [enabledList, featuredModels, groupMode, searchKeyword, sortModelLast],
   );

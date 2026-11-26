@@ -23,6 +23,7 @@ const toModelCard = (item: LobeDefaultAiModelListItem): ModelCardFacts => ({
       : undefined,
   id: item.id,
   knowledgeCutoff: item.knowledgeCutoff,
+  maxOutput: 'maxOutput' in item ? item.maxOutput : undefined,
   providerId: item.providerId,
 });
 

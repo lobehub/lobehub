@@ -1,7 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { cx, Flexbox } from '@lobehub/ui';
+import { Center, cx, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
@@ -91,6 +91,7 @@ const ChatItem = memo<ChatItemProps>(
     time,
     editing,
     messageExtra,
+    messageLeading,
     children,
     customErrorRender,
     onDoubleClick,
@@ -122,6 +123,28 @@ const ChatItem = memo<ChatItemProps>(
     const errorContent = error && (
       <ErrorContent customErrorRender={customErrorRender} error={error} id={id} />
     );
+
+    const messageNode =
+      error && isEmptyMessage ? (
+        errorContent
+      ) : (
+        <MessageContent
+          disabled={disabled}
+          editing={editing}
+          id={id!}
+          message={message}
+          variant={isUser ? 'bubble' : undefined}
+          messageExtra={
+            <>
+              {errorContent}
+              {messageExtra}
+            </>
+          }
+          onDoubleClick={onDoubleClick}
+        >
+          {children}
+        </MessageContent>
+      );
 
     const avatarContent = (
       <Avatar
@@ -184,25 +207,18 @@ const ChatItem = memo<ChatItemProps>(
           }}
         >
           {aboveMessage}
-          {error && isEmptyMessage ? (
-            errorContent
+          {messageLeading ? (
+            <Flexbox horizontal align={'flex-start'} gap={spacing} style={{ maxWidth: '100%' }}>
+              {/* The bubble's block padding puts its first line this far down; `1lh`
+                  then centers the marker on that line however long the message is. */}
+              <Center flex={'none'} style={{ blockSize: '1lh', marginBlockStart: compact ? 6 : 8 }}>
+                {messageLeading}
+              </Center>
+              {/* min-width 0 lets a long message wrap instead of pushing the row past its lane. */}
+              <Flexbox style={{ minWidth: 0 }}>{messageNode}</Flexbox>
+            </Flexbox>
           ) : (
-            <MessageContent
-              disabled={disabled}
-              editing={editing}
-              id={id!}
-              message={message}
-              variant={isUser ? 'bubble' : undefined}
-              messageExtra={
-                <>
-                  {errorContent}
-                  {messageExtra}
-                </>
-              }
-              onDoubleClick={onDoubleClick}
-            >
-              {children}
-            </MessageContent>
+            messageNode
           )}
           {belowMessage}
         </Flexbox>

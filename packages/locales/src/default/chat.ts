@@ -5,25 +5,6 @@ export default {
   'directMention.progress.usingTool': 'Using {{name}}…',
   'directMention.progress.viewFullRecord': 'View full record',
   'sharePage.app.linkCopied': 'Link copied',
-  'heteroAgent.antigravityQuota.title': 'Antigravity quota',
-  'heteroAgent.antigravityQuota.tooltip': 'View Antigravity model quotas',
-  'heteroAgent.antigravityQuota.fiveHour': '5 hours',
-  'heteroAgent.antigravityQuota.remainingAmount': '{{amount}} remaining',
-  'heteroAgent.antigravityQuota.unknown': 'Unknown',
-  'heteroAgent.antigravityQuota.disabled': 'Unavailable',
-  'heteroAgent.antigravityQuota.resetUnconfirmed':
-    'Reset time reached. Refresh to check the latest quota.',
-  'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
-  'heteroAgent.antigravityQuota.authRequired':
-    'Sign in with agy on the execution device, then try again.',
-  'heteroAgent.antigravityQuota.cliNotFound':
-    'Antigravity CLI was not found on this device. Install agy, then refresh.',
-  'heteroAgent.antigravityQuota.unsupported':
-    'Update agy to a version that supports structured quota queries, then refresh.',
-  'heteroAgent.antigravityQuota.timeout':
-    'The quota query timed out. Check the device connection and try again.',
-  'heteroAgent.antigravityQuota.error':
-    'Could not query Antigravity quota. Check the device and try again.',
 
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
@@ -917,6 +898,8 @@ export default {
   'heteroAgent.modelSelector.speed.unavailable':
     'Unavailable for this model on the execution device',
   'heteroAgent.modelSelector.speed': 'Speed',
+  'heteroAgent.cliModel.antigravityAuthRequired':
+    'Sign in with agy on the execution device, then try again.',
   'heteroAgent.cliModel.ariaLabel': '{{name}} model: {{model}}',
   'heteroAgent.cliModel.cliNotFound': 'The CLI is not installed on the target device.',
   'heteroAgent.cliModel.defaultDesc': 'Use the default model configured in {{name}}',
@@ -1074,6 +1057,8 @@ export default {
   'input.agentRunFeeUnfunded.free.title': 'You’ve used your trial credits',
   'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
+  'input.agentRunFeeUnfunded.titleSwitchToAuto':
+    'Usage is used up. Switch to Auto Model to continue',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':

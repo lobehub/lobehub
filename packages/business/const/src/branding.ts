@@ -48,6 +48,12 @@ export const BRANDING_EMAIL = {
 
 export const BRANDING_PROVIDER = 'lobehub';
 
+/**
+ * Model ids the product provides itself rather than a model vendor. Model icons show the inbox
+ * agent's avatar (`DEFAULT_INBOX_AVATAR`) for them instead of a vendor mark. None by default.
+ */
+export const BRANDING_MODEL_IDS: readonly string[] = [];
+
 export const APPLE_APP_STORE_ID = '';
 
 export const COPYRIGHT = `© ${new Date().getFullYear()} ${ORG_NAME}`;

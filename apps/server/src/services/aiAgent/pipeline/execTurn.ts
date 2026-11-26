@@ -49,6 +49,7 @@ import { resolveRunSettings } from './runSettings';
 import { bindRunSlot, claimRunSlot, resolveRunSlotPolicy, type RunSlotClaim } from './runSlot';
 import { traceSendStage } from './sendTracing';
 import { startOperation, type StartOperationInit } from './startOperation';
+import { resolveRunStartingModel } from './topicModelPin';
 import { bindTopicWorkingDirectory } from './topicWorkingDirectory';
 import { setupTurn } from './turnSetup';
 
@@ -325,8 +326,19 @@ export const execAgentTurn = async (
     policy: resolveRunSlotPolicy(params, { agentConfig, workspaceId: deps.workspaceId }),
     userId: deps.userId,
   });
+  // The fee is judged on the model this turn runs on, which a reused topic may pin
+  // over the agent's default; turn setup reuses the topic read here.
+  const startingModel = await resolveRunStartingModel(deps, {
+    agentConfig,
+    modelOverride,
+    providerOverride,
+    resolvedAgentId,
+    topicId: appContext?.topicId,
+  });
   await claimRunFee(runFee, {
     hold: shouldHoldRunFee(params, { workspaceId: deps.workspaceId }),
+    model: startingModel.model,
+    provider: startingModel.provider,
     userId: deps.userId,
   });
 
@@ -497,6 +509,7 @@ export const execAgentTurn = async (
         reservedOperationId: params.reservedOperationId,
         resolvedAgentId,
         resume,
+        reusedTopic: startingModel.topic,
         runFromHistory,
         selectedSkillIds,
         selectedToolIds,

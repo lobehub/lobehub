@@ -1,6 +1,8 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Tag } from '@lobehub/ui';
+import { Icon, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import isEqual from 'fast-deep-equal';
+import { CornerDownRight } from 'lucide-react';
 import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -181,6 +183,21 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           <WebhookEventSenderTitle source={webhookSource} />
         ) : undefined
       }
+      messageLeading={
+        // A steered instruction joined a run already in progress; the arrow marks
+        // it as a follow-up to that run, the way a reply indents under its thread.
+        metadata?.steer ? (
+          <Tooltip title={t('steer.tag')}>
+            <Icon
+              aria-label={t('steer.tag')}
+              color={cssVar.colorTextTertiary}
+              icon={CornerDownRight}
+              role={'img'}
+              size={16}
+            />
+          </Tooltip>
+        ) : undefined
+      }
       titleAddon={
         subAgentCallback ? (
           <SubAgentSenderTags callback={subAgentCallback} />
@@ -202,16 +219,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
     >
-      {metadata?.steer ? (
-        // The steer tag labels the instruction itself, so it sits inside the
-        // bubble rather than in the sender header.
-        <Flexbox align={'flex-start'} gap={4}>
-          <Tag>{t('steer.tag')}</Tag>
-          <UserMessageContent {...item} />
-        </Flexbox>
-      ) : (
-        <UserMessageContent {...item} />
-      )}
+      <UserMessageContent {...item} />
     </ChatItem>
   );
 }, isEqual);

@@ -6,12 +6,44 @@ import { z } from 'zod';
  * `lh generate json` do. For agents, tools and history use `/responses`.
  */
 
-const MessageSchema = z
-  .object({
-    content: z.string().describe('Plain-text message content.'),
-    role: z.enum(['system', 'user', 'assistant']),
-  })
-  .strict();
+/** An image the model fetches (http/https) or an inline base64 image data URL. */
+const IMAGE_URL = /^(?:https?:\/\/\S+|data:image\/[\w.+-]+;base64,[\d+/=a-z]+)$/i;
+
+const ContentPartSchema = z.discriminatedUnion('type', [
+  z.object({ text: z.string(), type: z.literal('text') }).strict(),
+  z
+    .object({
+      image_url: z
+        .object({
+          detail: z.enum(['auto', 'low', 'high']).optional(),
+          url: z
+            .string()
+            .regex(IMAGE_URL, 'Must be an http(s) URL or a base64 `data:image/...` URL'),
+        })
+        .strict(),
+      type: z.literal('image_url'),
+    })
+    .strict(),
+]);
+
+const MessageSchema = z.union([
+  z
+    .object({
+      content: z
+        .union([z.string(), z.array(ContentPartSchema).min(1).max(50)])
+        .describe(
+          'Plain text, or text and image parts (OpenAI chat format) for a model that takes images. An image is an http(s) URL or a base64 `data:image/...` URL.',
+        ),
+      role: z.literal('user'),
+    })
+    .strict(),
+  z
+    .object({
+      content: z.string().describe('Plain-text message content.'),
+      role: z.enum(['system', 'assistant']),
+    })
+    .strict(),
+]);
 
 const TextGenerationInputSchema = z
   .object({

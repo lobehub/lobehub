@@ -6,6 +6,8 @@ import { memo, useCallback } from 'react';
 import { electronBrowserControlService } from '@/services/electron/browserControl';
 import { invokeExecutor } from '@/store/tool/slices/builtin/executors';
 
+import { toGatewayToolState } from './toGatewayToolState';
+
 const BROWSER_IDENTIFIER = 'lobe-browser';
 
 /**
@@ -46,7 +48,7 @@ const DesktopBrowserGatewayBridge = memo(() => {
           result: {
             content: result.content,
             error: result.error,
-            state: result.state,
+            state: toGatewayToolState(apiName, result.state),
             success: result.success,
           },
         });

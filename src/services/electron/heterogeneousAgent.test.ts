@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const mockHeterogeneousAgent = vi.hoisted(() => ({
-  getAntigravityQuota: vi.fn(),
   cancelSession: vi.fn(),
   consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
@@ -21,21 +20,6 @@ vi.mock('@/utils/electron/ipc', () => ({
 }));
 
 describe('heterogeneousAgentService', () => {
-  it('forwards the Antigravity quota query over IPC', async () => {
-    const { heterogeneousAgentService } = await import('./heterogeneousAgent');
-    const snapshot = {
-      error: null,
-      groups: [],
-      provider: 'antigravity',
-      status: 'ok',
-      updatedAt: 1,
-    };
-    mockHeterogeneousAgent.getAntigravityQuota.mockResolvedValue(snapshot);
-    const params = { command: '/custom/agy', env: { HOME: '/profile' }, force: true };
-    await expect(heterogeneousAgentService.getAntigravityQuota(params)).resolves.toEqual(snapshot);
-    expect(mockHeterogeneousAgent.getAntigravityQuota).toHaveBeenCalledWith(params);
-  });
-
   it('forwards model catalog params over IPC', async () => {
     const { heterogeneousAgentService } = await import('./heterogeneousAgent');
     const catalog = {

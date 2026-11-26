@@ -53,7 +53,6 @@ function expected(): Array<
     ['getAgentDeviceBindings', 'query', 12],
     ['getAgentProfile', 'query', 12],
     ['getAgentRunRuntimes', 'query', 12],
-    ['getAntigravityQuota', 'query', 12],
     ['getAppUpdateState', 'query', 12],
     ['getClaudeCodeQuota', 'query', 12],
     ['getCliUpdateState', 'query', 12],

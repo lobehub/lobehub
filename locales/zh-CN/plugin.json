@@ -150,6 +150,7 @@
   "builtins.goalCommand.plan.loading": "正在规划目标任务",
   "builtins.linear.render.empty": "没有找到 {{collection}}",
   "builtins.linear.render.updatedAt": "更新于 {{time}}",
+  "builtins.lobe-a2ui.apiName.readCardDocs": "查阅卡片组件",
   "builtins.lobe-a2ui.apiName.renderUI": "绘制卡片",
   "builtins.lobe-a2ui.title": "卡片",
   "builtins.lobe-activator.apiName.activateTools": "激活工具",

@@ -58,13 +58,18 @@ export const DRAFT_PLUGIN_STATE_KEY = 'askUserDraft';
 /** Coerce a persisted (possibly partial / legacy) blob into a full draft. */
 export const readDraft = (raw: unknown): AskUserDraft => {
   const d = (raw ?? {}) as Partial<AskUserDraft>;
+  const escapeText = typeof d.escapeText === 'string' ? d.escapeText.trim() : '';
+  const supplementText = typeof d.supplementText === 'string' ? d.supplementText : '';
+  // Drafts saved before Replace all merged into the note keep their text: the
+  // note now carries a whole-form answer when nothing is picked.
+  const migrateEscape = !!d.escapeActive && !!escapeText && !supplementText.trim();
   return {
     custom: d.custom ?? {},
-    escapeActive: !!d.escapeActive,
-    escapeText: typeof d.escapeText === 'string' ? d.escapeText : '',
+    escapeActive: false,
+    escapeText: '',
     picks: d.picks ?? {},
-    supplementActive: !!d.supplementActive,
-    supplementText: typeof d.supplementText === 'string' ? d.supplementText : '',
+    supplementActive: migrateEscape || !!d.supplementActive,
+    supplementText: migrateEscape ? escapeText : supplementText,
   };
 };
 
@@ -104,6 +109,44 @@ export const buildSubmitPayload = (
     }
   }
   return payload;
+};
+
+export type AskUserPrimaryAction =
+  { kind: 'next'; index: number } | { kind: 'sendNote' } | { kind: 'submit' };
+
+export interface ResolvePrimaryActionParams {
+  activeIndex: number;
+  custom: Record<string, string>;
+  noteText: string;
+  picks: Record<string, string | string[]>;
+  questions: AskUserQuestionItem[];
+  requireAllAnswered: boolean;
+}
+
+export const resolvePrimaryAction = ({
+  activeIndex,
+  custom,
+  noteText,
+  picks,
+  questions,
+  requireAllAnswered,
+}: ResolvePrimaryActionParams): { action: AskUserPrimaryAction; enabled: boolean } => {
+  const answered = questions.map((q) => isQuestionAnswered(q, picks, custom));
+  const answeredCount = answered.filter(Boolean).length;
+  const complete = requireAllAnswered
+    ? questions.length > 0 && answeredCount === questions.length
+    : answeredCount > 0;
+  if (complete) return { action: { kind: 'submit' }, enabled: true };
+
+  if (answeredCount === 0 && noteText.trim())
+    return { action: { kind: 'sendNote' }, enabled: true };
+
+  for (let step = 1; step < questions.length; step++) {
+    const index = (activeIndex + step) % questions.length;
+    if (!answered[index])
+      return { action: { index, kind: 'next' }, enabled: !!answered[activeIndex] };
+  }
+  return { action: { kind: 'submit' }, enabled: false };
 };
 
 export const formatRemaining = (msLeft: number): string => {
