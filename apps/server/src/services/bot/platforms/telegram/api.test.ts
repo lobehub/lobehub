@@ -115,6 +115,29 @@ describe('TelegramApi HTML parse fallback', () => {
     expect(retryBody.caption).toContain('the answer is 42');
   });
 
+  it('sends message_thread_id on the HTML retry and on multipart uploads', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(
+        telegramErrorResponse(400, "Bad Request: can't parse entities: Unsupported start tag"),
+      )
+      .mockImplementation(async () => okResponse({ message_id: 5 }));
+    const api = new TelegramApi(BOT_TOKEN);
+
+    await api.sendMessage('chat-1', '<foo> reply', 42);
+    const first = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    const retry = JSON.parse((fetchSpy.mock.calls[1][1] as RequestInit).body as string);
+    expect(first.message_thread_id).toBe(42);
+    expect(retry.message_thread_id).toBe(42);
+
+    await api.sendDocument({
+      chatId: 'chat-1',
+      messageThreadId: 42,
+      source: { buffer: Buffer.from('x'), filename: 'a.txt' },
+    });
+    const form = (fetchSpy.mock.calls[2][1] as RequestInit).body as FormData;
+    expect(form.get('message_thread_id')).toBe('42');
+  });
+
   it('sendVideo asks for a streaming-capable player on both source shapes', async () => {
     // Without `supports_streaming` clients render a download-then-play blob
     // instead of a seekable player. It does NOT prevent Telegram from badging
