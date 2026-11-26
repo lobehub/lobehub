@@ -3,27 +3,29 @@
 import { memo } from 'react';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
-import { useSettingsScopeTitle } from '@/features/SettingsSwitch/useSettingsScopeTitle';
+import { useSettingsBreadcrumb } from '@/features/SettingsSwitch/useSettingsBreadcrumb';
 
-import { usePersonalSettingsScope } from '../hooks/usePersonalSettingsScope';
+import {
+  PERSONAL_SETTINGS_SPACE_KEY,
+  usePersonalSettingsScope,
+} from '../hooks/usePersonalSettingsScope';
 
 const PERSONAL_SPACE = { kind: 'personal' } as const;
 
 const Header = memo(() => {
-  const { categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
-  const title = useSettingsScopeTitle(scope, PERSONAL_SPACE);
-  const firstTab = categoryGroups.find((group) => group.scope === scope)?.items[0]?.key;
+  const { activeTab, categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
+  // "Personal Space Settings", then "› Account Settings" in the account set.
+  const breadcrumb = useSettingsBreadcrumb({
+    activeTab,
+    fallbackHref: '/settings',
+    groups: categoryGroups,
+    scope,
+    space: PERSONAL_SPACE,
+    spaceKey: PERSONAL_SETTINGS_SPACE_KEY,
+    tabUrl,
+  });
 
-  return (
-    <SideBarHeaderLayout
-      breadcrumb={[
-        {
-          href: firstTab ? tabUrl(firstTab) : '/settings',
-          title,
-        },
-      ]}
-    />
-  );
+  return <SideBarHeaderLayout breadcrumb={breadcrumb} />;
 });
 
 export default Header;

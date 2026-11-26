@@ -1,4 +1,3 @@
-export * from './antigravity';
 export * from './calibration';
 export * from './claudeCodeRouting';
 export * from './codex';

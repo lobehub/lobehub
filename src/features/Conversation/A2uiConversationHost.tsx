@@ -1,4 +1,4 @@
-import { actionToMessage } from '@lobehub/a2ui';
+import { actionToMessage } from '@lobehub/a2ui/action';
 import { type A2uiHost, A2uiHostProvider } from '@lobehub/a2ui/react';
 import { memo, type ReactNode, useMemo } from 'react';
 

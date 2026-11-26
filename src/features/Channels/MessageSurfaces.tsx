@@ -1,5 +1,5 @@
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { actionToMessage } from '@lobehub/a2ui';
+import { actionToMessage } from '@lobehub/a2ui/action';
 import { type A2uiHost, A2uiHostProvider, SurfaceList } from '@lobehub/a2ui/react';
 import { memo, useMemo } from 'react';
 

@@ -1,19 +1,20 @@
 import { type BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import { type DeviceAttachment } from './types';
+import { type DeviceAttachment, toAvailableDevices } from './types';
 
 export interface RemoteDeviceRuntimeService {
   queryDeviceList: () => Promise<DeviceAttachment[]>;
   /**
    * Called when the model activates a device that is not online. A host that
    * can start the device (a managed cloud device) starts it, then returns
-   * `'online'` when it came online (the list is read again), or the result to
-   * report instead, such as a `DEVICE_WAKING` error that tells the model to
-   * retry. Returning `undefined` keeps the default offline answer.
+   * `'online'` when it came online (the list is read again), `'starting'` when
+   * it accepted the start (the device is activated now: it is always online
+   * for the model, and its tool calls wait for it), or the result to report
+   * instead. Returning `undefined` keeps the default offline answer.
    */
   resolveOfflineDevice?: (
     deviceId: string,
-  ) => Promise<BuiltinServerRuntimeOutput | 'online' | undefined>;
+  ) => Promise<BuiltinServerRuntimeOutput | 'online' | 'starting' | undefined>;
 }
 
 export class RemoteDeviceExecutionRuntime {
@@ -25,8 +26,8 @@ export class RemoteDeviceExecutionRuntime {
 
   async listOnlineDevices(): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const devices = await this.service.queryDeviceList();
-      const onlineDevices = devices.filter((d) => d.online);
+      // Managed cloud devices are always online for the model, even asleep.
+      const onlineDevices = toAvailableDevices(await this.service.queryDeviceList());
 
       return {
         content:
@@ -47,16 +48,22 @@ export class RemoteDeviceExecutionRuntime {
 
   async activateDevice(args: { deviceId: string }): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const findOnline = async () =>
-        (await this.service.queryDeviceList()).find(
-          (d) => d.deviceId === args.deviceId && d.online,
-        );
-      let target = await findOnline();
+      const findDevice = async () =>
+        (await this.service.queryDeviceList()).find((d) => d.deviceId === args.deviceId);
+      const device = await findDevice();
+      let target = device?.online ? device : undefined;
+      let starting = false;
 
       if (!target) {
         const resolved = await this.service.resolveOfflineDevice?.(args.deviceId);
-        if (resolved === 'online') target = await findOnline();
-        else if (resolved) return resolved;
+        if (resolved === 'online') {
+          const fresh = await findDevice();
+          target = fresh?.online ? fresh : undefined;
+        } else if (resolved === 'starting') {
+          // Report the cloud device as online, the way the device list does.
+          target = device && { ...device, online: true };
+          starting = !!target;
+        } else if (resolved) return resolved;
       }
 
       if (!target) {
@@ -71,8 +78,11 @@ export class RemoteDeviceExecutionRuntime {
         };
       }
 
+      const name = target.friendlyName || target.hostname;
       return {
-        content: `Device "${target.friendlyName || target.hostname}" (${target.platform}) activated successfully. Local System tools are now available.`,
+        content: starting
+          ? `Device "${name}" (${target.platform}) activated successfully. It is a cloud device that is starting now; Local System tools are available, and the first call may take a little longer while it starts.`
+          : `Device "${name}" (${target.platform}) activated successfully. Local System tools are now available.`,
         state: {
           activatedDevice: target,
           metadata: { activeDeviceId: args.deviceId },

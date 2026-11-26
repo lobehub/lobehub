@@ -372,12 +372,24 @@ const readLobehubSkillManifests = async (
   }
 };
 
+/** The devices a run reads at discovery. */
+export interface DevicePool {
+  /** Live devices: the online set routing (`onlineDeviceIds`) reads. */
+  online: DeviceAttachment[];
+  /**
+   * Managed cloud devices of this run's pool with no live connection. They are
+   * always online for the model (the device tool's prompt lists them), but not
+   * for routing, which wakes a bound one on its own.
+   */
+  sleepingCloud: DeviceAttachment[];
+}
+
 const readDevicePool = async (
   deps: ToolDiscoveryDeps,
   ctx: ToolReadsContext,
-): Promise<DeviceAttachment[]> => {
+): Promise<DevicePool> => {
   const { agentConfig, requestedDeviceId } = ctx;
-  if (!deviceGateway.isConfigured) return [];
+  if (!deviceGateway.isConfigured) return { online: [], sleepingCloud: [] };
   try {
     // Personal pool ∪ the current workspace pool, DB rows ⊕ gateway online,
     // tagged with `scope` and the user-set `friendlyName` alias (see
@@ -386,11 +398,11 @@ const readDevicePool = async (
     // (same physical machine under both principals). Keep only live devices:
     // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
     // online set.
-    let devices = (
-      await traceDiscoveryStage('online_devices', () =>
-        getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId),
-      )
-    ).filter((d) => d.online);
+    const scopedDevices = await traceDiscoveryStage('online_devices', () =>
+      getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId),
+    );
+    let devices = scopedDevices.filter((d) => d.online);
+    const sleepingCloud = scopedDevices.filter((d) => d.managed && !d.online);
 
     // A workspace run that targets one of the caller's PERSONAL devices
     // needs that device visible in this run's pool — otherwise
@@ -433,11 +445,15 @@ const readDevicePool = async (
         );
       }
     }
-    log('execAgent: found %d online device(s)', devices.length);
-    return devices;
+    log(
+      'execAgent: found %d online device(s), %d sleeping cloud device(s)',
+      devices.length,
+      sleepingCloud.length,
+    );
+    return { online: devices, sleepingCloud };
   } catch (error) {
     log('execAgent: failed to query device list: %O', error);
-    return [];
+    return { online: [], sleepingCloud: [] };
   }
 };
 

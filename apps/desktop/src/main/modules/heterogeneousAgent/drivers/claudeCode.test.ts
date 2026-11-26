@@ -115,14 +115,14 @@ describe('claudeCodeDriver', () => {
 
   it('still pins shared --disallowedTools alongside --mcp-config', async () => {
     // Even with our local MCP replacement available, CC's built-in stays
-    // disabled. Monitor/ScheduleWakeup stay disabled through the same shared
-    // base args because they can hit the stuck wakeup path in desktop mode.
+    // disabled. The other built-ins in CLAUDE_CODE_DISALLOWED_TOOLS stay
+    // disabled through the same shared base args.
     const { args } = await claudeCodeDriver.buildSpawnPlan(
       buildParams({ mcpConfigPath: '/tmp/x.json' }),
     );
     const disallowedIdx = args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
+    expect(args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup,CronCreate');
   });
 
   it('--mcp-config goes before --resume so user --args can still override the resume id', async () => {

@@ -32,8 +32,17 @@ export const resolveProjectDirectoryRun = async <T extends DeviceRouting>(params
   const directoryId = boundDirectoryId ?? stagedDirectoryId;
   if (!directoryId) {
     const stagedProjectId = staged?.projectId;
+    // Auto put this draft in the project's sandbox: this send runs there,
+    // without rewriting the agent's own target (a draft-local choice must not
+    // outlive the draft). A hand-picked sandbox already set the target.
+    const autoSandbox =
+      !!staged?.auto &&
+      !!stagedProjectId &&
+      agencyConfig?.executionTargetSelectionPolicy !== 'fixed';
     return {
-      agencyConfig,
+      agencyConfig: autoSandbox
+        ? ({ ...agencyConfig, executionTarget: 'sandbox' } as T)
+        : agencyConfig,
       newTopicProject: stagedProjectId ? { projectId: stagedProjectId } : undefined,
       stagedDirectory: undefined,
       stagedProjectId,

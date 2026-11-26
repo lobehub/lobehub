@@ -37,8 +37,6 @@ interface QuestionPanelProps {
   disabled: boolean;
   /** 0-based keyboard cursor over the option rows (↑/↓ navigation), if any. */
   highlightedIndex?: number;
-  /** Tag shown next to the header when the question is multi-select. */
-  multiSelectTag: string;
   onCustomChange: (q: AskUserQuestionItem, value: string) => void;
   /**
    * Arrow-key hand-off from the free-text row back into the option list:
@@ -73,7 +71,6 @@ export const QuestionPanel = memo<QuestionPanelProps>(
     customPlaceholder,
     disabled,
     highlightedIndex,
-    multiSelectTag,
     onToggle,
     onCustomChange,
     onCustomNavigate,
@@ -85,14 +82,6 @@ export const QuestionPanel = memo<QuestionPanelProps>(
 
     return (
       <Flexbox gap={10}>
-        <Flexbox horizontal align="center" gap={8}>
-          {question.header && <Text type="secondary">{question.header}</Text>}
-          {question.multiSelect && (
-            <Text fontSize={12} type="secondary">
-              {multiSelectTag}
-            </Text>
-          )}
-        </Flexbox>
         <Flexbox gap={2}>
           <Text strong>{question.question}</Text>
           {question.description && (
@@ -102,7 +91,7 @@ export const QuestionPanel = memo<QuestionPanelProps>(
           )}
         </Flexbox>
 
-        <Flexbox gap={4} role="listbox">
+        <Flexbox aria-multiselectable={!!question.multiSelect} gap={4} role="listbox">
           {question.options.map((opt, optIdx) => {
             const value = opt.id ?? opt.label;
             return (
@@ -113,6 +102,7 @@ export const QuestionPanel = memo<QuestionPanelProps>(
                 index={optIdx + 1}
                 key={value}
                 label={opt.label}
+                multiSelect={!!question.multiSelect}
                 recommendedText={opt.recommended ? recommendedTag : undefined}
                 selected={isOptionSelected(value)}
                 onToggle={() => onToggle(question, value)}
