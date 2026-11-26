@@ -1,24 +1,38 @@
-import { media } from '@lobehub/ui/stylex/media.stylex';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-/**
- * The Codex catalog geometry, shared with the installed list
- * (`Settings/skill/features/SkillList` page groups): a 16px group heading, then
- * a two-column grid of borderless rows; groups are separated by 32px of
- * whitespace, not rules.
- */
 export const catalogStyles = stylex.create({
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.lg]: 'minmax(0, 1fr)' },
-    columnGap: '16px',
-    rowGap: '4px',
+  frame: {
+    alignSelf: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 32,
+    maxWidth: 880,
+    minWidth: 0,
+    width: { 'default': 'calc(100% - 16px)', '@media (max-width: 860px)': '100%' },
   },
-  section: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  groupFrame: { gap: 16 },
+  /** A page without the catalog header starts as far down as that header does. */
+  pageTop: { paddingBlockStart: 24 },
+  pageTopMobile: { paddingBlockStart: 4 },
+  grid: {
+    columnGap: 24,
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+    rowGap: 4,
+  },
+  section: {
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    paddingBlockStart: 16,
+  },
   sections: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '32px',
-    paddingBlockStart: '8px',
+    gap: 24,
   },
 });

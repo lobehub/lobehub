@@ -81,6 +81,26 @@ describe('canonical task cache', () => {
     expect(useTaskStore.getState().activeTaskId).toBe('task_1');
     expect(useTaskStore.getState().activeTaskRef).toBe('T-1');
     expect(useTaskStore.getState().taskRefIndex['T-1']).toBe('task_1');
+    // The detail read resolves the reference too: one round trip, not `find`
+    // followed by `detail`.
+    expect(taskService.find).not.toHaveBeenCalled();
+    expect(taskService.getDetail).toHaveBeenCalledTimes(1);
+    expect(taskService.getDetail).toHaveBeenCalledWith('T-1');
+  });
+
+  it('hands the resolving read to one fetch only', async () => {
+    vi.mocked(taskService.getDetail)
+      .mockResolvedValueOnce({ data: detail, success: true } as never)
+      .mockResolvedValueOnce({ data: { ...detail, name: 'Fresh' }, success: true } as never);
+    await useTaskStore.getState().fetchTaskDetail('T-1');
+
+    // The next read of the same task asks the server again instead of being
+    // answered by the snapshot parked while resolving the reference.
+    await expect(useTaskStore.getState().fetchTaskDetail('task_1')).resolves.toMatchObject({
+      name: 'Fresh',
+    });
+    expect(taskService.getDetail).toHaveBeenCalledTimes(2);
+    expect(taskService.getDetail).toHaveBeenLastCalledWith('task_1');
   });
 
   it('updates loaded list and board rows when an id route changes status or name', async () => {

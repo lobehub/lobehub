@@ -65,6 +65,58 @@ describe('adding an Agent to a Channel', () => {
     expect(added).toMatchObject({ agentId: agent.id, config: {}, name: 'Current Agent name' });
   });
 
+  describe('the caller’s own private Agent in a workspace', () => {
+    const privateAgent = async (userId = fixture.ownerId) => {
+      const [agent] = await db
+        .insert(agents)
+        .values({ userId, visibility: 'private', workspaceId: fixture.workspaceId })
+        .returning();
+      return agent.id;
+    };
+    const agentMembers = (channelId: string) =>
+      db
+        .select()
+        .from(channelMembers)
+        .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.actorType, 'agent')));
+
+    it('cannot join a group, where every member would see it', async () => {
+      const team = await fixture.createTeamChannel();
+      const agentId = await privateAgent();
+      await expect(team.asOwner.addAgent(team.channel.id, { agentId })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(await agentMembers(team.channel.id)).toHaveLength(0);
+    });
+
+    it('cannot start a group, from scratch or from its direct conversation', async () => {
+      const agentId = await privateAgent();
+      const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      await expect(
+        repository.create({ agents: [{ agentId }], title: 'Group' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const direct = await repository.create({ agentId, title: 'Direct' });
+      await expect(
+        repository.createGroupFromDirect(direct.channel.id, {
+          title: 'Group',
+          userIds: [fixture.memberId],
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('still holds its direct conversation and conversations between the owner’s Agents', async () => {
+      const agentId = await privateAgent();
+      const other = await privateAgent();
+      const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      const direct = await repository.create({ agentId, title: 'Direct' });
+      expect(await agentMembers(direct.channel.id)).toHaveLength(1);
+      const pair = await repository.openAgentPair({
+        agents: [{ agentId }, { agentId: other }],
+        title: 'Pair',
+      });
+      expect(pair.agents).toHaveLength(2);
+    });
+  });
+
   it('labels LobeAI by its product name, not the generic fallback', async () => {
     const team = await fixture.createTeamChannel();
     const [inbox] = await db
@@ -96,7 +148,8 @@ describe('adding an Agent to a Channel', () => {
     ).toHaveLength(1);
   });
 
-  it('permits an owner’s private Agent but checks the actual requester again at claim', async () => {
+  // Groups no longer take a private Agent, but ones that joined before still hold their members.
+  it('checks the actual requester at claim for a private Agent a group already holds', async () => {
     const team = await fixture.createTeamChannel();
     const [agent] = await db
       .insert(agents)
@@ -106,7 +159,16 @@ describe('adding an Agent to a Channel', () => {
         visibility: 'private',
       })
       .returning();
-    const added = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+    const [added] = await db
+      .insert(channelMembers)
+      .values({
+        actorType: 'agent',
+        agentId: agent.id,
+        channelId: team.channel.id,
+        config: {},
+        name: 'Private',
+      })
+      .returning();
     const message = await team.asMember.send(team.channel.id, {
       content: 'Request',
       mentions: [added.id],

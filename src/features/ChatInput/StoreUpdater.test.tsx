@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type PropsWithChildren, useEffect } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getConversationSendButtonProps } from '@/features/Conversation/ChatInput/utils';
 import { useSingleton } from '@/hooks/useSingleton';
+import { useUserStore } from '@/store/user';
 
 import SendButton from './SendArea/SendButton';
 import { createStore, Provider, useChatInputStore } from './store';
@@ -60,11 +61,17 @@ const TestHarness = ({ children }: PropsWithChildren) => {
   return <Provider createStore={() => store}>{children}</Provider>;
 };
 
+const initialUserState = useUserStore.getState();
+
 beforeEach(() => {
   voiceRecorder.status = 'idle';
   voiceRecorder.reset.mockReset();
   voiceRecorder.start.mockReset();
   voiceRecorder.stop.mockReset();
+});
+
+afterEach(() => {
+  useUserStore.setState(initialUserState, true);
 });
 
 describe('ChatInput StoreUpdater', () => {
@@ -172,7 +179,32 @@ describe('ChatInput StoreUpdater', () => {
     expect(onChange).toHaveBeenLastCalledWith(true);
   });
 
+  it('hides the voice message button by default until enabled in settings', () => {
+    const store = createStore({
+      agentId: 'voice-agent',
+      canRecordVoiceMessage: true,
+      leftActions: [],
+      onVoiceMessageSend: () => true,
+      rightActions: [],
+    });
+
+    render(
+      <Provider createStore={() => store}>
+        <VoiceMessage />
+      </Provider>,
+    );
+
+    expect(screen.queryByTestId('voice-message-action')).toBeNull();
+
+    act(() => {
+      useUserStore.setState({ settings: { general: { enableVoiceMessage: true } } } as any);
+    });
+
+    expect(screen.getByTestId('voice-message-action')).not.toBeDisabled();
+  });
+
   it('lets an injected capability override the fallback model capability', () => {
+    useUserStore.setState({ settings: { general: { enableVoiceMessage: true } } } as any);
     const store = createStore({
       agentId: 'voice-agent',
       canRecordVoiceMessage: true,
@@ -192,6 +224,7 @@ describe('ChatInput StoreUpdater', () => {
   });
 
   it('blocks a second voice recording while the current response is generating', () => {
+    useUserStore.setState({ settings: { general: { enableVoiceMessage: true } } } as any);
     const onStop = vi.fn();
     const store = createStore({
       agentId: 'voice-agent',
@@ -222,6 +255,7 @@ describe('ChatInput StoreUpdater', () => {
   });
 
   it('cancels an active recording when a response starts generating', async () => {
+    useUserStore.setState({ settings: { general: { enableVoiceMessage: true } } } as any);
     voiceRecorder.status = 'recording';
     voiceRecorder.reset.mockImplementation(() => {
       voiceRecorder.status = 'idle';

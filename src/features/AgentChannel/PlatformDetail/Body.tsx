@@ -70,6 +70,8 @@ const fallback = createStaticStyles(({ css }) => ({
  */
 export interface ModuleControls {
   dirty: readonly SaveModuleId[];
+  /** A block's failed Save, shown beside its Save button until the next save or discard. */
+  errors?: Partial<Record<SaveModuleId, string>>;
   ids: readonly SaveModuleId[];
   onDiscard: (id: SaveModuleId) => void;
   onSave: (id: SaveModuleId) => void;
@@ -248,6 +250,7 @@ const Body = memo<BodyProps>(
         <ModuleSaveBar
           dirty={moduleControls.dirty.includes(id)}
           disabled={disabled}
+          error={moduleControls.errors?.[id]}
           saving={moduleControls.saving === id}
           onDiscard={() => moduleControls.onDiscard(id)}
           onSave={() => moduleControls.onSave(id)}

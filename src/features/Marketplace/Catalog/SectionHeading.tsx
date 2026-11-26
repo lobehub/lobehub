@@ -1,60 +1,73 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
+import { Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronRightIcon } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = stylex.create({
-  // The Codex group heading (`Popular >`): 16px semibold, inset 12px so it
-  // shares a left edge with the rows' icon tiles.
   heading: {
+    alignItems: 'baseline',
+    color: cssVar.colorText,
     display: 'flex',
-    alignItems: 'center',
-    marginBlock: 0,
-    paddingInline: '12px',
+    flexWrap: 'wrap',
     fontSize: cssVar.fontSizeHeading5,
     fontWeight: 600,
-    color: cssVar.colorText,
+    gap: 8,
+    marginBlock: 0,
   },
   link: {
-    display: 'inline-flex',
-    gap: '4px',
     alignItems: 'center',
-    borderRadius: cssVar.borderRadiusSM,
-    color: { 'default': 'inherit', ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    display: 'inline-flex',
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 32,
+    minWidth: 32,
   },
-  chevron: {
-    transitionDuration: '150ms',
-    transitionProperty: 'transform',
-    color: cssVar.colorTextSecondary,
+  root: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 12,
+    justifyContent: 'space-between',
+    minHeight: 32,
   },
 });
 
 interface SectionHeadingProps {
+  count?: number;
+  id: string;
   label: string;
-  /** Accessible name for the link, e.g. "Developer · View all". */
-  linkLabel: string;
-  /** The full list behind the preview (a category or a sort of the catalog). */
-  to: string;
+  to?: string;
 }
 
-/**
- * A catalog group heading: like Codex's `Popular >`, the heading itself links
- * to every item of the group; the preview under it shows the first few.
- */
-const SectionHeading = memo<SectionHeadingProps>(({ label, linkLabel, to }) => (
-  <h3 {...stylex.props(styles.heading)}>
-    <WorkspaceLink aria-label={linkLabel} title={linkLabel} to={to} {...stylex.props(styles.link)}>
-      {label}
-      <Icon icon={ChevronRightIcon} size={16} {...stylex.props(styles.chevron)} />
-    </WorkspaceLink>
-  </h3>
-));
+const SectionHeading = ({ count, id, label, to }: SectionHeadingProps) => {
+  const { t, i18n } = useTranslation('discover');
 
-SectionHeading.displayName = 'MarketplaceCatalogSectionHeading';
+  return (
+    <div {...stylex.props(styles.root)}>
+      <h2 id={id} {...stylex.props(styles.heading)}>
+        {label}
+        {count !== undefined && (
+          <Text as={'span'} type={'secondary'} weight={400}>
+            {count.toLocaleString(i18n.language)}
+          </Text>
+        )}
+      </h2>
+      {to && (
+        <WorkspaceLink
+          aria-label={t('catalog.viewAllIn', { name: label })}
+          to={to}
+          {...stylex.props(styles.link)}
+        >
+          <Icon aria-hidden icon={ChevronRight} size={16} />
+        </WorkspaceLink>
+      )}
+    </div>
+  );
+};
 
 export default SectionHeading;

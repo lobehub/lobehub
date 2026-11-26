@@ -27,6 +27,7 @@
   "claimResources.claim": "Yêu cầu đã chọn",
   "claimResources.description": "Chúng tôi đã tìm thấy các tài nguyên liên kết với tài khoản của bạn mà bạn có thể yêu cầu:",
   "claimResources.error": "Không thể yêu cầu tài nguyên. Vui lòng thử lại.",
+  "claimResources.failedRetry": "Không thể yêu cầu các tài nguyên này. Hãy kiểm tra mạng và thử lại.",
   "claimResources.mcpSection": "Máy chủ MCP",
   "claimResources.selectedCount": "{{count}} mục đã chọn",
   "claimResources.skillSection": "Kỹ năng",

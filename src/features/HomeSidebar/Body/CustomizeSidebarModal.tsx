@@ -34,7 +34,7 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
-import { ArrowDownToLine, Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -49,12 +49,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import {
   DEFAULT_SIDEBAR_ITEMS,
   getDefaultHiddenSections,
+  setSidebarSectionHidden,
   SIDEBAR_ACCORDION_KEYS,
-  SIDEBAR_SPACER_ID,
 } from '@/store/global/selectors/systemStatus';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { densityTokens } from '@/styles/density.stylex';
 
 // ---------------------------------------------------------------------------
@@ -73,8 +71,7 @@ export interface SidebarItemConfig {
 }
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
-  { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
-  { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
+  { id: 'tasks', labelKey: 'tab.goalsAndTasks', labelNs: 'chat', routeId: 'tasks' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
   { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
@@ -84,31 +81,20 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
   { id: 'community', labelKey: 'tab.marketplace', routeId: 'community' },
   { id: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
-  { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
 interface SidebarItemAvailability {
   channelsEnabled?: boolean;
   dashboardEnabled?: boolean;
-  goalsEnabled?: boolean;
 }
 
-// Dashboards also stay out until the `dashboard` feature flag is on for the
-// user, Channels until Channels are enabled, and Goals until the user turns on
-// its lab; a dropped id is restored by `withAllKnownKeys` once it is.
 export const getAvailableSidebarItems = (
   isWorkspaceMode: boolean,
-  {
-    channelsEnabled = false,
-    dashboardEnabled = false,
-    goalsEnabled = false,
-  }: SidebarItemAvailability = {},
+  { channelsEnabled = false, dashboardEnabled = false }: SidebarItemAvailability = {},
 ): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
     if (item.id === 'channels' && !channelsEnabled) return false;
-    if (item.id === 'dashboard' && !dashboardEnabled) return false;
-    if (item.id === 'goals' && !goalsEnabled) return false;
-    if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
+    if (item.id === 'dashboard' && (!dashboardEnabled || isWorkspaceMode)) return false;
     return true;
   });
 
@@ -116,15 +102,11 @@ export const getSortableSidebarItemIds = (
   isWorkspaceMode: boolean,
   options?: SidebarItemAvailability,
 ): Set<string> =>
-  new Set([
-    ...getAvailableSidebarItems(isWorkspaceMode, options).map((item) => item.id),
-    SIDEBAR_SPACER_ID,
-  ]);
+  new Set(getAvailableSidebarItems(isWorkspaceMode, options).map((item) => item.id));
 
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
 const isAccordionKey = (id: string) => SIDEBAR_ACCORDION_KEYS.has(id);
-const isSpacer = (id: string) => id === SIDEBAR_SPACER_ID;
 
 const mergeAvailableSidebarItems = (
   currentItems: string[],
@@ -171,12 +153,6 @@ const styles = stylex.create({
     backgroundImage: 'none',
     boxShadow: cssVar.boxShadowSecondary,
   },
-  spacerLine: {
-    flex: '1',
-    blockSize: '1px',
-    backgroundColor: cssVar.colorBorderSecondary,
-    backgroundImage: 'none',
-  },
   footer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -194,7 +170,7 @@ const SortableItem = memo<{
   id: string;
   onToggle: (key: string) => void;
 }>(({ id, hiddenSections, onToggle }) => {
-  const { t } = useTranslation(['common', 'channel']);
+  const { t } = useTranslation(['common', 'channel', 'chat']);
   const item = ITEM_MAP.get(id);
   const labelKey = item?.labelKey;
   const {
@@ -256,72 +232,6 @@ const SortableItem = memo<{
 });
 
 // ---------------------------------------------------------------------------
-// SpacerSortableItem — represents the flex spacer slot when it is not bound to
-// the accordion group; draggable like any other item.
-// ---------------------------------------------------------------------------
-
-const SpacerSortableItem = memo(() => {
-  const { t } = useTranslation('common');
-  const {
-    attributes,
-    isDragging,
-    listeners,
-    setActivatorNodeRef,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: SIDEBAR_SPACER_ID });
-
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      ref={setNodeRef}
-      className={
-        isDragging
-          ? stylex.props(styles.item, styles.itemDragging).className
-          : stylex.props(styles.item).className
-      }
-      style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
-      }}
-      {...attributes}
-    >
-      <Flexbox
-        ref={setActivatorNodeRef}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none' }}
-        {...listeners}
-      >
-        <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      </Flexbox>
-      <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div {...stylex.props(styles.spacerLine)} />
-      <Text style={{ fontSize: 12 }} type={'secondary'}>
-        {t('navPanel.bottomDivider' as any)}
-      </Text>
-      <div {...stylex.props(styles.spacerLine)} />
-    </Flexbox>
-  );
-});
-
-const BoundSpacerItem = memo(() => {
-  const { t } = useTranslation('common');
-
-  return (
-    <Flexbox horizontal align={'center'} className={stylex.props(styles.item).className} gap={8}>
-      <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div {...stylex.props(styles.spacerLine)} />
-      <Text style={{ fontSize: 12 }} type={'secondary'}>
-        {t('navPanel.bottomDivider' as any)}
-      </Text>
-      <div {...stylex.props(styles.spacerLine)} />
-    </Flexbox>
-  );
-});
-
-// ---------------------------------------------------------------------------
 // AccordionGroup — a non-draggable slot at the outer level that wraps a nested
 // SortableContext for accordion items. Registers with useSortable so other outer
 // items can reorder relative to its position, but has no drag activator of its own.
@@ -349,7 +259,7 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 // ---------------------------------------------------------------------------
 
 const OverlayItem = memo<{ id: string }>(({ id }) => {
-  const { t } = useTranslation(['common', 'channel']);
+  const { t } = useTranslation(['common', 'channel', 'chat']);
   const agentLabelKey = 'navPanel.agent';
 
   // Accordion group overlay: render a compact representation
@@ -364,23 +274,6 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text>{t(agentLabelKey as any)}</Text>
         <Text type={'secondary'}>+ {t('recents' as any)}</Text>
-      </Flexbox>
-    );
-  }
-
-  if (isSpacer(id)) {
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={stylex.props(styles.overlay).className}
-        gap={8}
-      >
-        <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-        <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-        <Text style={{ fontSize: 12 }} type={'secondary'}>
-          {t('navPanel.bottomDivider' as any)}
-        </Text>
       </Flexbox>
     );
   }
@@ -405,12 +298,8 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
 // ---------------------------------------------------------------------------
 
 /** Flatten outer list (with ACCORDION_GROUP_ID placeholder) + inner accordion items → full list. */
-const flattenItems = (outer: string[], inner: string[], bindSpacerToAccordion: boolean): string[] =>
-  outer.flatMap((id) =>
-    id === ACCORDION_GROUP_ID
-      ? [...inner, ...(bindSpacerToAccordion ? [SIDEBAR_SPACER_ID] : [])]
-      : [id],
-  );
+const flattenItems = (outer: string[], inner: string[]): string[] =>
+  outer.flatMap((id) => (id === ACCORDION_GROUP_ID ? inner : [id]));
 
 const CustomizeSidebarContent = memo(() => {
   const { close } = useModalContext();
@@ -423,16 +312,14 @@ const CustomizeSidebarContent = memo(() => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const dashboardEnabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
-  const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
   const channelsEnabled = useChannelsEnabled();
   const sortableItemIds = useMemo(
     () =>
       getSortableSidebarItemIds(isWorkspaceMode, {
         channelsEnabled,
         dashboardEnabled,
-        goalsEnabled,
       }),
-    [isWorkspaceMode, channelsEnabled, dashboardEnabled, goalsEnabled],
+    [isWorkspaceMode, channelsEnabled, dashboardEnabled],
   );
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),
@@ -446,9 +333,7 @@ const CustomizeSidebarContent = memo(() => {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Derive outer (with group placeholder) and inner (accordion items)
-  const { bindSpacerToAccordion, innerItems, outerItems } = useMemo(() => {
-    const hasAccordion = items.some(isAccordionKey);
-    const shouldBindSpacer = hasAccordion && items.includes(SIDEBAR_SPACER_ID);
+  const { innerItems, outerItems } = useMemo(() => {
     const outer: string[] = [];
     const inner: string[] = [];
     let insertedGroup = false;
@@ -460,14 +345,12 @@ const CustomizeSidebarContent = memo(() => {
           outer.push(ACCORDION_GROUP_ID);
           insertedGroup = true;
         }
-      } else if (isSpacer(id) && shouldBindSpacer) {
-        continue;
       } else {
         outer.push(id);
       }
     }
 
-    return { bindSpacerToAccordion: shouldBindSpacer, innerItems: inner, outerItems: outer };
+    return { innerItems: inner, outerItems: outer };
   }, [items]);
 
   const sensors = useSensors(
@@ -478,9 +361,7 @@ const CustomizeSidebarContent = memo(() => {
   const toggleSection = useCallback(
     (key: string) => {
       const isHidden = hiddenSections.includes(key);
-      const newHidden = isHidden
-        ? hiddenSections.filter((k) => k !== key)
-        : [...hiddenSections, key];
+      const newHidden = setSidebarSectionHidden(hiddenSections, key, !isHidden);
       setHiddenSections(newHidden);
     },
     [hiddenSections],
@@ -549,38 +430,27 @@ const CustomizeSidebarContent = memo(() => {
         const oldIdx = innerItems.indexOf(activeKey);
         const newIdx = innerItems.indexOf(overKey);
         if (oldIdx === -1 || newIdx === -1) return;
-        next = flattenItems(
-          outerItems,
-          arrayMove(innerItems, oldIdx, newIdx),
-          bindSpacerToAccordion,
-        );
+        next = flattenItems(outerItems, arrayMove(innerItems, oldIdx, newIdx));
       } else {
         // Outer reorder (pages/community/... or the whole accordion group)
         const oldIdx = outerItems.indexOf(activeKey);
         const newIdx = outerItems.indexOf(overKey);
         if (oldIdx === -1 || newIdx === -1) return;
-        next = flattenItems(
-          arrayMove(outerItems, oldIdx, newIdx),
-          innerItems,
-          bindSpacerToAccordion,
-        );
+        next = flattenItems(arrayMove(outerItems, oldIdx, newIdx), innerItems);
       }
 
       setItems(next);
     },
-    [bindSpacerToAccordion, innerItems, outerItems],
+    [innerItems, outerItems],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
   }, []);
 
-  const renderItem = (id: string) =>
-    isSpacer(id) ? (
-      <SpacerSortableItem key={id} />
-    ) : (
-      <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
-    );
+  const renderItem = (id: string) => (
+    <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
+  );
 
   return (
     <>
@@ -599,7 +469,6 @@ const CustomizeSidebarContent = memo(() => {
                   <SortableContext items={innerItems} strategy={verticalListSortingStrategy}>
                     {innerItems.map(renderItem)}
                   </SortableContext>
-                  {bindSpacerToAccordion && <BoundSpacerItem />}
                 </AccordionGroup>
               ) : (
                 renderItem(id)

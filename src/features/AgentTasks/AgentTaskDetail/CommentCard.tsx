@@ -3,7 +3,6 @@ import { useEditor } from '@lobehub/editor/react';
 import { LexicalRenderer } from '@lobehub/editor/renderer';
 import {
   ActionIcon,
-  Avatar,
   Block,
   Button,
   confirmModal,
@@ -19,6 +18,7 @@ import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';

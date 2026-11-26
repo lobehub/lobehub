@@ -1,7 +1,7 @@
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getMarketplaceSubPath } from '@/features/Marketplace/paths';
@@ -19,7 +19,7 @@ import {
 
 import { MARKETPLACE_CONNECTOR_TAB } from '../../../features/useNav';
 
-const SortButton = memo(() => {
+const SortButton = memo<{ resetPage?: boolean }>(({ resetPage }) => {
   const { t } = useTranslation('discover');
   const pathname = usePathname();
   const { sort } = useQuery();
@@ -183,9 +183,12 @@ const SortButton = memo(() => {
     return items[0];
   }, [items, sort]);
 
-  const handleSort = (config: string) => {
-    router.push(pathname, { query: { sort: config } });
-  };
+  const handleSort = useCallback(
+    (config: string) => {
+      router.push(pathname, { query: { ...(resetPage ? { page: null } : {}), sort: config } });
+    },
+    [pathname, resetPage, router],
+  );
 
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>

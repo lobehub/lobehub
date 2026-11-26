@@ -1,14 +1,17 @@
 import type { ChannelDetail, ChannelPublicJob, ContactUserProfile } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { TRPCClientError } from '@trpc/client';
 
 /**
  * The share refusals a visitor reads beside their message instead of behind a failure mark,
  * since the reply will never come; each names what the visitor can do next. Running out of
- * messages or of the share's monthly usage is the owner's limit, so the visitor may ask the
- * owner directly: as a contact, they can message them in their own conversation.
+ * messages, of the share's attachment storage or of its monthly usage is the owner's limit, and running an Agent on the
+ * owner's own machine needs the owner's permission, so the visitor may ask the owner directly:
+ * as a contact, they can message them in their own conversation.
  */
 const SHARE_REFUSALS: Record<string, { addOwner: boolean }> = {
+  [ChatErrorType.ShareAttachmentTooLarge]: { addOwner: false },
+  [ChatErrorType.ShareFileStorageExceeded]: { addOwner: true },
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]: { addOwner: true },
   [ChatErrorType.ShareMessageLimitExceeded]: { addOwner: true },
   [ChatErrorType.SharePromptTooLong]: { addOwner: false },
   [ChatErrorType.ShareSpendLimitExceeded]: { addOwner: true },
@@ -45,18 +48,4 @@ export const shareRefusalOf = (
     errorType: job.errorType,
     ...(SHARE_REFUSALS[job.errorType].addOwner && { owner }),
   };
-};
-
-export type ContactRequestOutcome = 'added' | 'alreadyContact' | 'requestSent';
-
-/**
- * What asking the owner to be a contact settled as. Undefined for a failure the visitor should
- * see as an error; a conflict means they already reach the owner (a contact or a colleague).
- */
-export const contactRequestOutcome = (
-  settled: { result: { status: 'accepted' | 'pending' } } | { error: unknown },
-): ContactRequestOutcome | undefined => {
-  if ('result' in settled) return settled.result.status === 'accepted' ? 'added' : 'requestSent';
-  if (settled.error instanceof TRPCClientError && settled.error.data?.code === 'CONFLICT')
-    return 'alreadyContact';
 };

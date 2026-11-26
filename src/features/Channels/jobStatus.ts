@@ -50,12 +50,13 @@ export const replyActivityJobs = <T extends ChannelReplyJob>(jobs: T[]) =>
 
 /**
  * Each member's newest job when it failed. A later reply, stop or retry by the same member
- * settles the failure, so the header does not stay red forever. Jobs arrive newest first.
+ * settles the failure, so the header does not stay red forever. Jobs arrive newest first. A
+ * request merged into an earlier run settles with that run, so it settles nothing itself.
  */
 export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
   const seen = new Set<string>();
   return jobs.filter((job) => {
-    if (seen.has(job.memberId)) return false;
+    if (job.status === 'merged' || seen.has(job.memberId)) return false;
     seen.add(job.memberId);
     return job.status === 'failed';
   });

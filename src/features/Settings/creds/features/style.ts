@@ -4,6 +4,16 @@ import * as stylex from '@stylexjs/stylex';
 import { densityTokens } from '@/styles/density.stylex';
 
 export const styles = stylex.create({
+  // The row opens the item: a hover wash that reaches 8px past the content,
+  // inside the list card's own padding.
+  clickable: {
+    cursor: 'pointer',
+    marginInline: '-8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
   container: {
     paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
@@ -19,6 +29,7 @@ export const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  descriptionCompact: { lineHeight: '18px' },
   icon: {
     display: 'flex',
     flexShrink: 0,
@@ -35,15 +46,13 @@ export const styles = stylex.create({
     height: '36px',
     borderRadius: '10px',
   },
-  key: {
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
-  },
   title: {
+    overflow: 'hidden',
     fontSize: '15px',
     fontWeight: 500,
     color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   titleCompact: {
     fontSize: '14px',

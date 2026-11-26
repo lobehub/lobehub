@@ -25,7 +25,11 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
+import {
+  DEFAULT_BRIEF_ACTIONS,
+  RequestTrigger,
+  TASK_AUTOMATION_FAILURE_FUSE,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -46,6 +50,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
+import { postTaskRunToChannel } from '@/server/services/task/channelDelivery';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
@@ -74,12 +79,8 @@ const log = debug('task-lifecycle');
 const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
-// Consecutive automation-tick 'error' reasons after which we pause the task /
-// stop re-arming and let the urgent brief surface for human attention. A single
-// transient upstream hiccup (429 / network / upstream 500) must NOT permanently
-// stop a recurring task — only this many *consecutive* failures do. Hardcoded
-// for now; move to task.config later if it needs to be tunable per-task.
-const AUTOMATION_FAILURE_FUSE = 3;
+// Hardcoded for now; move to task.config later if it needs to be tunable per-task.
+const AUTOMATION_FAILURE_FUSE = TASK_AUTOMATION_FAILURE_FUSE;
 
 export interface TopicCompleteParams {
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
@@ -392,6 +393,23 @@ export class TaskLifecycleService {
           error,
         );
       }
+
+      // 8. A task with a Channel delivery posts the run's answer (text and cards) there as its
+      //    Agent's message, once per run. A Channel that refuses the post skips only this run.
+      //    A verify-bound run posts only once Verify accepts it (driveTaskFromVerify), so the
+      //    Channel never reads an output a later verdict rejects.
+      if (currentTask && !verifyBound)
+        await postTaskRunToChannel(this.db, {
+          operationId: params.operationId,
+          scope: { userId: this.userId, workspaceId: this.workspaceId },
+          task: currentTask,
+        }).catch((error) =>
+          console.error(
+            '[TaskLifecycle] Channel delivery failed for task=%s (non-fatal):',
+            taskIdentifier,
+            error,
+          ),
+        );
     } else if (reason === 'error') {
       if (
         topicId &&

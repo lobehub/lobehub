@@ -20,6 +20,11 @@ export interface DeviceAttachment {
   friendlyName?: string | null;
   hostname: string;
   lastSeen: string;
+  /**
+   * A managed cloud device. It counts as always online for the model: when it
+   * sleeps, activating it starts it, and its tool calls wait for it.
+   */
+  managed?: boolean;
   online: boolean;
   platform: string;
   /**
@@ -30,3 +35,14 @@ export interface DeviceAttachment {
    */
   scope?: DeviceScope;
 }
+
+/**
+ * The devices the model may pick: the live ones, plus managed cloud devices,
+ * which are always online from the model's side. A sleeping cloud device is
+ * reported online so the model activates it instead of telling the user to
+ * connect a machine.
+ */
+export const toAvailableDevices = (devices: DeviceAttachment[]): DeviceAttachment[] =>
+  devices
+    .filter((device) => device.online || device.managed)
+    .map((device) => (device.online ? device : { ...device, online: true }));

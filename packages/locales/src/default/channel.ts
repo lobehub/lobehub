@@ -5,7 +5,13 @@ export default {
   'people.noMatches': 'No matching workspace members',
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
+  'receipt.errorAttachmentUnavailable':
+    "One or more attachments can't be sent here, for example because they were uploaded in another workspace. Delete this message and attach them again.",
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareAttachmentTooLarge':
+    'A message to a shared Agent can carry up to 10 files of up to 32 MB each. Remove some attachments and send it again.',
+  'receipt.errorShareFileStorage':
+    'This shared Agent has no room for more attachments. Send your message without files, or ask its creator to raise the limit.',
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
@@ -78,6 +84,8 @@ export default {
     'Choose an online device and working directory for every coding Agent.',
   'environment.permissionRequired':
     'You do not have permission to save these members. Check channel and Agent access.',
+  'environment.privateAgent':
+    'A private Agent cannot join a group. Make it visible to the workspace first, or remove it.',
   'environment.resolveRequired': 'Resolve the issues shown under the selected Agents first.',
   'environment.saveFailed':
     'Could not save channel members. Your choices are preserved; try again.',
@@ -122,7 +130,20 @@ export default {
   'copyThreadIdSuccess': 'Thread ID copied',
   'copyThreadLink': 'Copy link',
   'copyThreadLinkSuccess': 'Thread link copied',
+  'ask.answeredBy': 'Answered by {{name}}',
+  'ask.closed': 'Closed: answered in the conversation, or the time to answer ran out',
+  'ask.failed': "Couldn't send your answer. Try again.",
+  'ask.multiSelect': 'Choose all that apply',
+  'ask.other': 'Other',
+  'ask.otherPlaceholder': 'Type your answer',
+  'ask.submit': 'Send answer',
+  'ask.waitingFor': 'Waiting for {{name}} to answer',
   'actionFailed': 'Something went wrong. Try again.',
+  'a2uiAction.empty': '—',
+  'a2uiAction.no': 'No',
+  'a2uiAction.submitted': 'Submitted',
+  'a2uiAction.submittedTitle': 'Submitted “{{title}}”',
+  'a2uiAction.yes': 'Yes',
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',
   'shareVisitorReadOnlyNotice':
@@ -146,6 +167,10 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  'collapseThreads': 'Collapse threads',
+  'expandThreads': 'Expand threads',
+  /** Heads the Channel's own actions in a menu that also holds a thread's. */
+  'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
   'followers': 'Replies from: {{names}}',
   'olderMessages': 'Older messages',
@@ -161,6 +186,7 @@ export default {
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
   'attachments.limit': 'Attach up to {{count}} files.',
+  'attachments.tooLarge': 'Each file must be {{size}} or smaller.',
   'attachments.failedShort': 'Upload failed',
   'attachments.remove': 'Remove {{name}}',
   'attachments.retry': 'Retry',
@@ -185,6 +211,9 @@ export default {
   'status.failed': 'Reply failed',
   'status.cancelled': 'Stopped',
   'status.silent': 'Stayed quiet',
+  'status.merged': 'Answered with an earlier message',
+  'blocked.access_denied': 'The Agent’s owner declined your request to use it',
+  'blocked.access_request_pending': 'Waiting for the Agent’s owner to allow you to use it',
   'blocked.awaiting_primary': 'Waiting for another Agent to reply first',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',
@@ -355,4 +384,5 @@ export default {
   'mentionInvite.confirmAgentProject':
     'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
   'mentionInvite.confirmOk': 'Invite and mention',
+  'openDirect.unavailable': "This Agent's conversation can't be opened right now.",
 };

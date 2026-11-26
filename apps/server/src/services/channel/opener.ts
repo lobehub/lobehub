@@ -63,6 +63,9 @@ const oneLine = (text: string, max: number) => text.replaceAll(/\s+/g, ' ').trim
 
 const NESTED_ACK = /"ack"\s*:\s*"((?:[^"\\]|\\.)*)"/;
 
+/** An acknowledgement says something only with a letter or digit in it, in any script. */
+const HAS_WORDS = /[\p{L}\p{N}]/u;
+
 /**
  * The sentence to post, from the model's `ack`. A model sometimes writes its whole answer, JSON and
  * all, into that one field, often with stray text after it; posting it would put raw JSON in the
@@ -83,8 +86,8 @@ const ackSentence = (ack: string) => {
 
 /**
  * Turns the model's answer into something safe to act on: a new Thread needs a title, an existing
- * one must be among those the opener was shown, and an acknowledgement needs words, not JSON.
- * Anything else answers in place.
+ * one must be among those the opener was shown, and an acknowledgement needs words, not JSON or
+ * punctuation alone. Anything else answers in place.
  */
 export const normalizeChannelReplyOpening = (
   answer: z.infer<typeof OpenerSchema>,
@@ -93,7 +96,8 @@ export const normalizeChannelReplyOpening = (
   const ack = answer.acknowledge
     ? oneLine(ackSentence(answer.ack), CHANNEL_REPLY_OPENER_MAX_ACK_LENGTH)
     : '';
-  const opening = { ...(ack && { ack }) };
+  // A lone ":" or "…" reads as a stray message, so an acknowledgement without words posts nothing.
+  const opening = { ...(HAS_WORDS.test(ack) && { ack }) };
   if (!input.canOpenThread) return { ...opening, placement: 'channel' };
 
   if (answer.placement === 'existing_thread' && !input.coAddressed?.length) {

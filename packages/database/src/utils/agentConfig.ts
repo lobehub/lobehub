@@ -23,10 +23,9 @@ export const getNewAgentPlugins = (
   )
     return config.plugins;
 
-  // Agent mode defers media pins too. Chat mode needs those pins when the user switches modes.
   return [
-    { identifier: 'lobe-image-generation', mode: 'pinned' },
-    { identifier: 'lobe-video-generation', mode: 'pinned' },
+    { identifier: 'lobe-image-generation', mode: 'auto' },
+    { identifier: 'lobe-video-generation', mode: 'auto' },
     { identifier: 'lobe-agent-documents', mode: 'auto' },
     { identifier: 'lobe-agent', mode: 'auto' },
   ];

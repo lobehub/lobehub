@@ -11,29 +11,30 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-001 @P1
   Scenario: Search for assistants
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I type "developer" in the search bar
     And I wait for the search results to load
-    Then I should see filtered assistant cards
+    Then I should see only "Code Assistant" in the assistant catalog
 
   @COMMUNITY-INTERACT-002 @P1
   Scenario: Filter assistants by category
-    Given I navigate to "/marketplace/agent"
-    When I click on a category in the category menu
+    Given I navigate to "/marketplace/agent?tab=public"
+    When I open the assistant category "programming"
     And I wait for the filtered results to load
-    Then I should see assistant cards filtered by the selected category
+    Then I should see only "Code Assistant" in the assistant catalog
     And the URL should contain the category parameter
 
   @COMMUNITY-INTERACT-003 @P1
   Scenario: Navigate to next page of assistants
-    Given I navigate to "/marketplace/agent"
-    When I click the next page button
-    Then I should be navigated to "/marketplace/agent?page=2"
+    Given I navigate to "/marketplace/agent?tab=public"
+    When I open the recommended assistants
+    And I click the next page button
+    Then I should be navigated to "/marketplace/agent?sort=recommended&page=2"
     And I should see the assistant cards for page two
 
   @COMMUNITY-INTERACT-004 @P1
   Scenario: Navigate to assistant detail page
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I click on the first assistant card
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content
@@ -73,15 +74,22 @@ Feature: Discover Interactions
   # ============================================
 
   @COMMUNITY-INTERACT-008 @P1
-  Scenario: Browse a category in Connectors Discover
-    Given I navigate to "/marketplace/connector"
+  Scenario: Browse an MCP category
+    Given I navigate to "/marketplace/mcp"
     When I open the MCP category "developer"
-    Then I should be navigated to "/marketplace/connector?category=developer"
-    And I should see only "File Manager" in the MCP catalog
+    Then I should be navigated to "/marketplace/mcp?category=developer"
+    And I should see only these MCP cards
+      | File Manager      |
+      | Build Runner      |
+      | Code Search       |
+      | Container Manager |
+      | Database Browser  |
+      | Git Client        |
+      | Log Viewer        |
 
   @COMMUNITY-INTERACT-009 @P1
   Scenario: Navigate to MCP detail page
-    Given I navigate to "/marketplace/connector"
+    Given I navigate to "/marketplace/mcp"
     When I click on the first MCP card
     Then I should be navigated to the MCP detail page
     And I should see the MCP detail content
@@ -89,5 +97,6 @@ Feature: Discover Interactions
   @COMMUNITY-INTERACT-010 @P1
   Scenario: Open an old marketplace bookmark with a search
     Given I navigate to "/community?q=developer"
-    Then I should see filtered assistant cards
-    And I should be navigated to "/marketplace/agent?q=developer"
+    Then I should be navigated to "/marketplace/app?q=developer"
+    And I should see the catalog titled "Apps"
+    And the catalog search bar should contain "developer"

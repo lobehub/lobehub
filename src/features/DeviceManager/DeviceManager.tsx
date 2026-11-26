@@ -2,7 +2,16 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import {
   ChevronRightIcon,
   FolderCogIcon,
@@ -343,23 +352,8 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   const renderActions = (size?: 'small') => (
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
       {showVisibilityFilter && (
-        <VisibilityFilter
-          value={visibilityFilter}
-          counts={{
-            all: devices.length,
-            private: devices.filter(isPrivateDevice).length,
-            workspace: devices.filter((d) => !isPrivateDevice(d)).length,
-          }}
-          onChange={setVisibilityFilter}
-        />
+        <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
       )}
-      <Button
-        icon={<Icon icon={RefreshCwIcon} />}
-        loading={isValidating}
-        size={size}
-        title={t('devices.actions.refresh')}
-        onClick={() => mutate()}
-      />
       {showManagedDeviceCreate && (
         <ManagedDeviceCreateEntry
           placement={'toolbar'}
@@ -386,11 +380,27 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
           {t('devices.connectWizard.button')}
         </Button>
       )}
+      {/* Last, as on the subscription accounts page: refreshing is secondary to
+          adding a device. */}
+      <ActionIcon
+        loading={isValidating}
+        size={size}
+        title={t('devices.actions.refresh')}
+        onClick={() => mutate()}
+        icon={RefreshCwIcon}
+        // A row that runs short of width shrinks its children; the icon keeps its square.
+        style={{ flex: 'none' }}
+      />
     </Flexbox>
   );
 
+  // How many devices the filter leaves, on the left of the toolbar, as the
+  // subscription accounts summary does.
   const toolbar = (
-    <Flexbox horizontal align={'center'} justify={'flex-end'}>
+    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
+      <Text fontSize={13} type={'secondary'}>
+        {devices.length > 0 && t('devices.summary', { count: visibleDevices.length })}
+      </Text>
       {renderActions()}
     </Flexbox>
   );

@@ -1,7 +1,5 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
-import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
-
 import type { SandboxSelection } from './useSandboxPlacement';
 
 /**
@@ -49,36 +47,6 @@ export const repositoriesLabel = (environment: {
 };
 
 /**
- * What the environment chip says. A list still loading, or one that failed to
- * load, says nothing about the topic's environment — so it is not reported as
- * "none", which would read as initialization being off.
- */
-export type EnvironmentChipState =
-  | { kind: 'loading' }
-  | { kind: 'loadFailed' }
-  | { kind: 'missing' }
-  | { kind: 'none' }
-  | { kind: 'picked'; name: string };
-
-export const environmentChipState = ({
-  current,
-  environmentId,
-  failed,
-  loaded,
-}: {
-  current?: { name: string };
-  environmentId?: string;
-  failed: boolean;
-  loaded: boolean;
-}): EnvironmentChipState => {
-  if (!environmentId) return { kind: 'none' };
-  if (current) return { kind: 'picked', name: current.name };
-  if (loaded) return { kind: 'missing' };
-
-  return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
-};
-
-/**
  * The environment the server applies to a project conversation nobody placed:
  * the project's, when it checks out a repository (see
  * `resolveProjectTopicSandbox`). Undefined while it loads, or when there is none.
@@ -94,19 +62,26 @@ export const projectStartEnvironmentId = (
   )?.id;
 
 /**
- * Where a conversation's environments are managed: a project's one on the
- * project's settings, anything else in the workspace's list.
+ * Whether a selection works in a folder of a workspace's public drive, which
+ * every member can browse. In a workspace a folder with no drive named is on
+ * the public one.
  */
-export const environmentSettingsPath = (projectId?: string) =>
-  projectId ? getProjectSettingsPath(projectId, 'environments') : '/settings/environments';
+export const isOnPublicDrive = (selection: SandboxSelection, workspaceId?: string | null) =>
+  !!workspaceId &&
+  !selection.instanceId &&
+  selection.workingDirectory !== undefined &&
+  selection.drive !== 'personal';
 
 /**
- * Where a conversation works once a repository is picked: a fresh temporary
- * sandbox the repository is cloned into. A repository is only cloned into an
- * empty folder, so it never inherits the folder the conversation was on, and
- * it is never checked out on the drive — the persistent sandbox is for keeping
- * a folder of the drive, not a repository.
+ * The selection once a folder of the drive is picked: a project's environment
+ * stays, and is set up there if the folder is empty. A legacy environment
+ * directory is replaced.
  */
-export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
-  environmentId: environment.id,
+export const selectionWithFolder = (
+  selection: SandboxSelection,
+  folder: Pick<SandboxSelection, 'drive' | 'workingDirectory'>,
+): SandboxSelection => ({
+  ...(folder.drive && { drive: folder.drive }),
+  ...(selection.environmentId && { environmentId: selection.environmentId }),
+  workingDirectory: folder.workingDirectory,
 });

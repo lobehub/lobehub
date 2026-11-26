@@ -1,5 +1,3 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-
 import { experiencePrompt } from '../prompts';
 import type { ExperienceMemory } from '../schemas';
 import { ExperienceMemorySchema } from '../schemas';
@@ -35,11 +33,10 @@ export class ExperienceExtractor extends BaseMemoryExtractor<ExperienceMemory> {
     };
   }
 
-  buildUserPrompt(options: ExtractorTemplateProps): string {
-    if (!this.promptTemplate) {
-      throw new Error('Prompt template not loaded');
-    }
-
-    return renderPlaceholderTemplate(this.promptTemplate!, this.getTemplateProps(options));
+  buildUserPrompt(): string {
+    return this.buildTaskPrompt(
+      'experience',
+      'Return `{ "memories": [] }` when nothing should be extracted.',
+    );
   }
 }

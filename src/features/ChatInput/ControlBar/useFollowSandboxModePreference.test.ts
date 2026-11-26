@@ -51,13 +51,23 @@ describe('useFollowSandboxModePreference', () => {
     expect(getPendingSandboxSelection(AGENT)).toEqual({ workingDirectory: 'notes' });
   });
 
-  it('drops a bare temporary sandbox when the agent turns persistent', () => {
-    setPendingSandboxSelection(AGENT, {});
+  // T-14791: the temporary default now carries the agent's environment too.
+  it('drops the seeded temporary default when the agent turns persistent', () => {
+    seedPendingSandboxSelection(AGENT, { environmentId: 'env-1' });
     const { rerender } = renderFollow(true);
 
     rerender({ hasTopic: false, temporary: false });
 
     expect(getPendingSandboxSelection(AGENT)).toBeUndefined();
+  });
+
+  it('keeps the drive switched off for this conversation', () => {
+    setPendingSandboxSelection(AGENT, {});
+    const { rerender } = renderFollow(true);
+
+    rerender({ hasTopic: false, temporary: false });
+
+    expect(getPendingSandboxSelection(AGENT)).toEqual({});
   });
 
   it('keeps a repository picked for this conversation', () => {

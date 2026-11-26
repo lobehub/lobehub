@@ -11,6 +11,7 @@ import { LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
 
 import type { ToolExecutionContext } from '../types';
+import { a2uiRuntime } from './a2ui';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
 import { agentAccountRuntime } from './agentAccount';
@@ -46,6 +47,7 @@ import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { pageAgentRuntime } from './pageAgent';
+import { projectRuntime } from './project';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
@@ -87,6 +89,7 @@ registerRuntimes([
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,
+  a2uiRuntime,
   calculatorRuntime,
   agentDocumentsRuntime,
   agentManagementRuntime,
@@ -105,6 +108,7 @@ registerRuntimes([
   userInteractionRuntime,
   credsRuntime,
   artboardRuntime,
+  projectRuntime,
   canvasRuntime,
   dashboardRuntime,
   groupAgentBuilderRuntime,

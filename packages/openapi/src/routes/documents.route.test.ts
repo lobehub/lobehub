@@ -49,6 +49,14 @@ const requestAs = (scopes: string[], path: string, init?: { body?: unknown; meth
   });
 };
 
+const editorData = {
+  root: {
+    children: [{ children: [], type: 'paragraph', version: 1 }],
+    type: 'root',
+    version: 1,
+  },
+};
+
 describe('POST /documents', () => {
   it('creates a page for a key that may write knowledge', async () => {
     const res = await requestAs(['knowledge:write'], '/', {
@@ -62,6 +70,15 @@ describe('POST /documents', () => {
   it('creates a folder inside a folder', async () => {
     const res = await requestAs(['knowledge:write'], '/', {
       body: { fileType: 'custom/folder', parentId: 'docs_root', title: 'Meeting minutes' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('creates a page from Lexical editor data', async () => {
+    const res = await requestAs(['knowledge:write'], '/', {
+      body: { editorData, title: 'Weekly sync' },
       method: 'POST',
     });
 
@@ -104,6 +121,42 @@ describe('PATCH /documents/:id', () => {
     });
 
     expect(res.status).toBe(200);
+  });
+
+  it('replaces the body with Lexical editor data, guarded by ifUpdatedAt', async () => {
+    const res = await requestAs(['knowledge:write'], '/doc-1', {
+      body: { editorData, ifUpdatedAt: '2026-11-19T02:00:00.000Z' },
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects editor data that is not a Lexical state', async () => {
+    const res = await requestAs(['knowledge:write'], '/doc-1', {
+      body: { editorData: { content: '# New body', type: 'doc' } },
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an ifUpdatedAt that is not a timestamp', async () => {
+    const res = await requestAs(['knowledge:write'], '/doc-1', {
+      body: { content: '# New body', ifUpdatedAt: 'yesterday' },
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an ifUpdatedAt with nothing to update', async () => {
+    const res = await requestAs(['knowledge:write'], '/doc-1', {
+      body: { ifUpdatedAt: '2026-11-19T02:00:00.000Z' },
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(400);
   });
 
   it('rejects an empty update', async () => {

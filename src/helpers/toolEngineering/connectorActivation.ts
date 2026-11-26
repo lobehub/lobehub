@@ -79,7 +79,7 @@ export interface AgentConnectorActivation {
 export const resolveAgentConnectorActivation = (
   agent: {
     id?: string;
-    chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'skillActivateMode' | 'toolMode'>;
+    chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'>;
     enabledPluginIds?: readonly string[];
     /** The raw `plugins` field, before it is collapsed to pinned identifiers. */
     plugins?: AgentPluginEntry[];

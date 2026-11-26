@@ -39,15 +39,22 @@ export const selectToolManifestMap = (state: Partial<ToolSetCarrier>): Record<st
  * tool exposed only through `activatedStepTools` has no entry in the static
  * map, and reading the static map alone silently degrades a pre-check to the
  * wrong branch.
+ *
+ * A tool the operation deferred (`deferredManifestMap`) resolves to its full
+ * manifest here even before it is promoted, so a call to an API that is not
+ * offered yet still answers to that API's own approval rule instead of looking
+ * like an API without one.
  */
 export const selectEffectiveToolManifestMap = (
   state: Partial<ToolSetCarrier>,
 ): Record<string, any> => {
   const staticMap = selectToolManifestMap(state);
   const activated = state.activatedStepTools ?? [];
-  if (activated.length === 0) return staticMap;
+  const deferredMap = state.operationToolSet?.deferredManifestMap;
+  if (activated.length === 0 && !deferredMap) return staticMap;
   return {
     ...staticMap,
+    ...deferredMap,
     ...Object.fromEntries(
       activated
         .filter((activation) => activation.manifest)

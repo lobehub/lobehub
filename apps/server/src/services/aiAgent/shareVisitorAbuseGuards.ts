@@ -32,10 +32,11 @@ const assertShareStillAuthorized = async (
   tx: LobeChatDatabase,
   agentId: string,
   expectedShareId: string,
+  visitorUserId: string,
   workspaceId?: string,
 ): Promise<void> => {
   const [share] = await tx
-    .select({ id: agentShares.id, visibility: agentShares.visibility })
+    .select({ id: agentShares.id })
     .from(agentShares)
     .innerJoin(agents, eq(agentShares.agentId, agents.id))
     .where(
@@ -43,10 +44,11 @@ const assertShareStillAuthorized = async (
         eq(agentShares.agentId, agentId),
         eq(agentShares.id, expectedShareId),
         workspaceId ? eq(agents.workspaceId, workspaceId) : isNull(agents.workspaceId),
+        AgentShareModel.admits(visitorUserId),
       ),
     );
 
-  if (!share || share.visibility !== 'link' || share.id !== expectedShareId) {
+  if (!share || share.id !== expectedShareId) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
   }
 };
@@ -74,9 +76,11 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
    */
   expectedShareId: string;
   ownerId: string;
+  /** The visitor the topic is for: a `card` share admits only its grantees. */
+  visitorUserId: string;
   workspaceId?: string;
 }): Promise<TopicItem> => {
-  const { agentId, create, db, expectedShareId, ownerId, workspaceId } = params;
+  const { agentId, create, db, expectedShareId, ownerId, visitorUserId, workspaceId } = params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -93,7 +97,7 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     }
 
     // Fail closed BEFORE any row is written.
-    await assertShareStillAuthorized(tx, agentId, expectedShareId, workspaceId);
+    await assertShareStillAuthorized(tx, agentId, expectedShareId, visitorUserId, workspaceId);
 
     return create(
       new TopicModel(tx, ownerId, workspaceId, undefined, { includeShareVisitor: true }),
@@ -108,6 +112,7 @@ export const reserveShareVisitorTopic = (
     db: LobeChatDatabase;
     expectedShareId: string;
     ownerId: string;
+    visitorUserId: string;
     workspaceId?: string;
   },
   createParams: CreateTopicParams,
@@ -163,7 +168,7 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     }
 
     // Fail closed BEFORE any row is written.
-    await assertShareStillAuthorized(tx, agentId, expectedShareId, workspaceId);
+    await assertShareStillAuthorized(tx, agentId, expectedShareId, visitorUserId, workspaceId);
 
     // Fresh read under the lock, not a caller-supplied value.
     const { maxMessagesPerVisitor } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);

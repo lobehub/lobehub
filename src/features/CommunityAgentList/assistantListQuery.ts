@@ -1,13 +1,13 @@
 import { type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 
-/** Keep the list and category sidebar on the same SWR request. */
+/** Request individual agents and groups together from the Marketplace. */
 export const buildAssistantListQuery = (params: AssistantQueryParams): AssistantQueryParams => ({
   category: params.category,
   includeAgentGroup: true,
-  includeCategoryCounts: Boolean(params.q?.trim()),
+  includeCategoryCounts: params.includeCategoryCounts ?? Boolean(params.q?.trim()),
   order: params.order,
   page: params.page,
-  pageSize: 21,
+  pageSize: params.pageSize ?? 21,
   q: params.q,
   sort: params.sort ?? AssistantSorts.Recommended,
   source: params.source,

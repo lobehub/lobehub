@@ -35,25 +35,53 @@ const runtime = new SkillStoreExecutionRuntime({
       const result = await agentSkillService.importFromGitHub({ gitUrl });
       if (!result) throw new Error('Import failed');
       await turnOnForActiveAgent(result.skill);
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     },
     importFromMarket: async (identifier) => {
       const result = await agentSkillService.importFromMarket(identifier);
       if (!result) throw new Error('Import failed');
       await turnOnForActiveAgent(result.skill);
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     },
     importFromUrl: async (url) => {
       const result = await agentSkillService.importFromUrl({ url });
       if (!result) throw new Error('Import failed');
       await turnOnForActiveAgent(result.skill);
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     },
     importFromZipUrl: async (url) => {
       const result = await agentSkillService.importFromUrl({ url });
       if (!result) throw new Error('Import failed');
       await turnOnForActiveAgent(result.skill);
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     },
     onSkillImported: async () => {
       // Dynamic import to avoid circular dependency (this file is inside the tool store)

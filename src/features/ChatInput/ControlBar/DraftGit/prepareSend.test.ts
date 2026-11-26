@@ -77,14 +77,6 @@ const prompts = (): DraftGitSendPrompts & { [K in keyof DraftGitSendPrompts]: an
   showProgress: vi.fn(() => () => {}),
 });
 
-const setLab = (on: boolean) =>
-  useUserStore.setState({
-    preference: {
-      ...useUserStore.getState().preference,
-      lab: { enableBetterCodingExperience: on },
-    },
-  } as any);
-
 const setWorktreeMode = (on: boolean) =>
   useUserStore.setState({
     preference: {
@@ -101,7 +93,6 @@ beforeEach(() => {
   useDraftGitStore.setState({ selections: {}, targets: {} });
   useGitStatusStore.setState({ gitAheadBehindMap: {} });
   registerDraftGitTarget(target);
-  setLab(true);
   setWorktreeMode(false);
   vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'main' });
   vi.mocked(gitService.listGitWorktrees).mockResolvedValue([
@@ -129,13 +120,6 @@ beforeEach(() => {
 });
 
 describe('prepareDraftGitSend — nothing to do', () => {
-  it('passes without touching git when the lab is off', async () => {
-    setLab(false);
-    pick('feat');
-    expect(await prepareDraftGitSend(context, { prompts: prompts(), t })).toEqual({ ok: true });
-    expect(gitService.getGitBranch).not.toHaveBeenCalled();
-  });
-
   it('passes for an existing topic', async () => {
     pick('feat');
     const result = await prepareDraftGitSend(

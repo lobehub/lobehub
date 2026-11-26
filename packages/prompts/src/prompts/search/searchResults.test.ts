@@ -8,6 +8,8 @@ describe('searchResultsPrompt', () => {
     expect(result).toBe(EMPTY_SEARCH_RESULTS_PROMPT);
     expect(result).toContain('No results found.');
     expect(result).toContain('do not resend the same query');
+    expect(result).toContain('retry in English');
+    expect(result).toContain('Stop after 2–3 rewrites');
   });
 
   it('should convert basic search results to compact XML format', () => {

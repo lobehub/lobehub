@@ -1,7 +1,9 @@
-import { Button, Flexbox, Input, ModalFooter, Text, toast, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -78,6 +80,8 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   });
   // Taken once per open modal: both generated avatars are seeded by these ids.
   const [reservedIds] = useState(reserveProjectIds);
+  /** Create failure that no field explains, shown above the footer buttons: the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const mainAgentId = form.mainAgentId ?? inboxAgentId;
   const createInput = getCreateProjectInput(form);
@@ -115,6 +119,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       return;
     const submittedIdentifier = createInput.identifier ?? '';
     const submittedSlug = createInput.slug ?? '';
+    setError(null);
     updateForm({ loading: true });
     try {
       const project = await createProject(
@@ -133,13 +138,13 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       close();
       if (onCreated) onCreated(project);
       else navigate(`/project/${project.slug ?? project.id}`);
-    } catch (error) {
-      console.error('Failed to create project', error);
+    } catch (err) {
+      console.error('Failed to create project', err);
       // The unique index stays the final authority: a concurrent create, or a
       // private project by another member that the loaded list cannot see, can
       // still collide after the inline check. The server names the field it
       // rejected, so the error lands on that input instead of a generic toast.
-      const conflict = getProjectConflictField(error);
+      const conflict = getProjectConflictField(err);
       if (conflict === 'identifier') {
         setForm((current) => ({
           ...current,
@@ -157,7 +162,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         }));
         return;
       }
-      toast.error(t('operationFailed', { ns: 'common' }));
+      setError(toInlineError(t('create.failedRetry'), err));
     } finally {
       updateForm({ loading: false });
     }
@@ -183,8 +188,11 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
               maxLength={255}
               placeholder={t('create.namePlaceholder')}
               value={form.name}
-              onChange={(event) => updateName(event.target.value)}
               onPressEnter={handleCreate}
+              onChange={(event) => {
+                updateName(event.target.value);
+                setError(null);
+              }}
             />
           </ProjectAvatarField>
         </Flexbox>
@@ -212,6 +220,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         <Text fontSize={12} type="secondary">
           {t('create.afterCreateHint')}
         </Text>
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

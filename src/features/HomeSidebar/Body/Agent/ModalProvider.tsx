@@ -17,7 +17,10 @@ import {
 
 import type { OpenCreateAgentIdentityModalOptions } from '@/features/AgentIdentityModal';
 import EditingPopover from '@/features/EditingPopover';
-import type { OpenCreateAgentModalOptions } from '@/features/HomeSidebar/hooks/useCreateModal';
+import type {
+  CreateAgentModalSubmitOptions,
+  OpenCreateAgentModalOptions,
+} from '@/features/HomeSidebar/hooks/useCreateModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { openLabelFormModal } from '@/features/WorkspaceSetting/Labels/LabelFormModal';
 import { useAgentStore } from '@/store/agent';
@@ -56,7 +59,7 @@ interface AgentModalContextValue {
   closeCreateGroupModal: () => void;
   closeGroupWizardModal: () => void;
   closeMemberSelectionModal: () => void;
-  openConfigGroupModal: (scope?: 'private' | 'public') => void;
+  openConfigGroupModal: () => void;
   openCreateGroupModal: (sessionId?: string, visibility?: 'private' | 'public') => void;
   /**
    * Create an agent label from anywhere in the list (e.g. the Labels
@@ -107,16 +110,25 @@ const CreateGroupModalRenderer = memo<CreateGroupModalRendererProps>(
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const sendAsGroup = useHomeStore((s) => s.sendAsGroup);
 
+    // The dialog's visibility field starts from the caller's context and hands
+    // back what the user settled on.
     const handleSubmit = useCallback(
-      async (prompt: string) => {
-        await sendAsGroup({ groupId, message: prompt, visibility });
+      async (prompt: string, options?: CreateAgentModalSubmitOptions) => {
+        await sendAsGroup({
+          groupId,
+          message: prompt,
+          visibility: options?.visibility ?? visibility,
+        });
       },
       [sendAsGroup, groupId, visibility],
     );
 
-    const handleCreateBlank = useCallback(async () => {
-      await sendAsGroup({ groupId, message: '', visibility });
-    }, [sendAsGroup, groupId, visibility]);
+    const handleCreateBlank = useCallback(
+      async (options?: CreateAgentModalSubmitOptions) => {
+        await sendAsGroup({ groupId, message: '', visibility: options?.visibility ?? visibility });
+      },
+      [sendAsGroup, groupId, visibility],
+    );
 
     // Mounted only while the modal should be open, so the open/close bridge is
     // just this component's lifetime — the panel itself lives in the ModalHost.
@@ -127,6 +139,7 @@ const CreateGroupModalRenderer = memo<CreateGroupModalRendererProps>(
       onClosed: onClose,
       onCreateBlank: handleCreateBlank,
       onSubmit: handleSubmit,
+      visibility: { groupId, visibility },
     };
 
     useEffect(() => {
@@ -202,9 +215,6 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
 
   // ConfigGroupModal state
   const [configGroupModalOpen, setConfigGroupModalOpen] = useState(false);
-  const [configGroupModalScope, setConfigGroupModalScope] = useState<'private' | 'public'>(
-    'public',
-  );
 
   // GroupWizard state
   const [groupWizardOpen, setGroupWizardOpen] = useState(false);
@@ -237,10 +247,7 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
       closeCreateGroupModal: () => createGroupModalRef.current?.close(),
       closeGroupWizardModal: () => setGroupWizardOpen(false),
       closeMemberSelectionModal: () => setMemberSelectionOpen(false),
-      openConfigGroupModal: (scope?: 'private' | 'public') => {
-        setConfigGroupModalScope(scope ?? 'public');
-        setConfigGroupModalOpen(true);
-      },
+      openConfigGroupModal: () => setConfigGroupModalOpen(true),
       openCreateGroupModal: (sessionId?: string, visibility?: 'private' | 'public') => {
         createGroupModalRef.current = openCreateGroupModal({ id: sessionId, visibility });
       },
@@ -286,7 +293,6 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
 
       <ConfigGroupModal
         open={configGroupModalOpen}
-        scope={configGroupModalScope}
         onCancel={() => setConfigGroupModalOpen(false)}
       />
 

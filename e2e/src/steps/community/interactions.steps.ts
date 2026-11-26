@@ -1,7 +1,9 @@
+import type { DataTable } from '@cucumber/cucumber';
 import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // When Steps (Actions)
@@ -25,46 +27,28 @@ When('I wait for the search results to load', async function (this: CustomWorld)
   await this.page.waitForTimeout(500);
 });
 
-When('I click on a category in the category menu', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+When(
+  'I open the assistant category {string}',
+  async function (this: CustomWorld, category: string) {
+    await this.page.locator(`section a[href="/marketplace/agent?category=${category}"]`).click();
+  },
+);
 
-  // Find the category menu items - they are clickable elements in the sidebar
-  // The UI shows categories like "All", "Academic", "Career", etc.
-  const categoryItems = this.page.locator('[data-testid="category-menu"] li > :is(a, button)');
+When('I open the recommended assistants', async function (this: CustomWorld) {
+  await this.page.locator('section a[href="/marketplace/agent?sort=recommended"]').click();
+});
 
-  const count = await categoryItems.count();
-  console.log(`   📍 Found ${count} category items`);
-
-  if (count === 0) {
-    // Fallback: try finding by text content that looks like a category
-    const fallbackCategories = this.page.locator(
-      'text=/^(Academic|Career|Design|Programming|General)/',
-    );
-    const fallbackCount = await fallbackCategories.count();
-    console.log(`   📍 Fallback: Found ${fallbackCount} category items by text`);
-
-    if (fallbackCount > 0) {
-      await fallbackCategories.first().click();
-      this.testContext.selectedCategory = await fallbackCategories.first().textContent();
-      return;
-    }
-  }
-
-  // Wait for categories to be visible
-  await categoryItems.first().waitFor({ state: 'visible', timeout: 30_000 });
-
-  // Click the third category (skip "Discover" at index 0 and "All" at index 1)
-  // This should select the first actual category filter like "Academic"
-  const targetCategory = categoryItems.nth(2);
-  await targetCategory.click();
-
-  // Store the category for later verification
-  const categoryText = await targetCategory.textContent();
-  this.testContext.selectedCategory = categoryText?.trim();
+When('I open the MCP catalog from the Marketplace sidebar', async function (this: CustomWorld) {
+  await expect(this.page.getByRole('heading', { exact: true, level: 1, name: 'Apps' })).toBeVisible(
+    {
+      timeout: WAIT_TIMEOUT,
+    },
+  );
+  await this.page.getByRole('link', { exact: true, name: 'MCP Servers' }).click();
 });
 
 When('I open the MCP category {string}', async function (this: CustomWorld, category: string) {
-  await this.page.locator(`section a[href="/marketplace/connector?category=${category}"]`).click();
+  await this.page.locator(`section a[href="/marketplace/mcp?category=${category}"]`).click();
 });
 
 When('I wait for the filtered results to load', async function (this: CustomWorld) {
@@ -209,24 +193,12 @@ When('I wait for the sorted results to load', async function (this: CustomWorld)
 // Then Steps (Assertions)
 // ============================================
 
-Then('I should see filtered assistant cards', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const assistantItems = this.page.locator('[data-testid="assistant-item"]');
-
-  // Wait for at least one item to be visible
-  await expect(assistantItems.first()).toBeVisible({ timeout: 30_000 });
-});
-
 Then(
-  'I should see assistant cards filtered by the selected category',
-  async function (this: CustomWorld) {
-    await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-    const assistantItems = this.page.locator('[data-testid="assistant-item"]');
-
-    // Wait for at least one item to be visible
-    await expect(assistantItems.first()).toBeVisible({ timeout: 30_000 });
+  'I should see only {string} in the assistant catalog',
+  async function (this: CustomWorld, title: string) {
+    const rows = this.page.getByTestId('assistant-item');
+    await expect(rows).toHaveCount(1, { timeout: WAIT_TIMEOUT });
+    await expect(rows.first()).toContainText(title);
   },
 );
 
@@ -348,14 +320,14 @@ Then('I should see the provider detail content', async function (this: CustomWor
   expect(titleText?.trim().length).toBeGreaterThan(0);
 });
 
-Then(
-  'I should see only {string} in the MCP catalog',
-  async function (this: CustomWorld, name: string) {
-    const cards = this.page.getByTestId('mcp-item');
-    await expect(cards).toHaveCount(1);
+Then('I should see only these MCP cards', async function (this: CustomWorld, expected: DataTable) {
+  const cards = this.page.getByTestId('mcp-item');
+  const rows = expected.raw();
+  await expect(cards).toHaveCount(rows.length, { timeout: WAIT_TIMEOUT });
+  for (const [name] of rows) {
     await expect(cards.getByText(name, { exact: true })).toBeVisible();
-  },
-);
+  }
+});
 
 Then('I should be navigated to the MCP detail page', async function (this: CustomWorld) {
   await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
@@ -380,5 +352,7 @@ Then('I should see the MCP detail content', async function (this: CustomWorld) {
 });
 
 Then('I should be navigated to {string}', async function (this: CustomWorld, expectedPath: string) {
-  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath);
+  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath, {
+    timeout: WAIT_TIMEOUT,
+  });
 });

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 
 export interface TaskEntry {
   agentId?: string;
@@ -26,7 +26,7 @@ export interface TaskEntry {
 }
 
 function getRegistryPath(): string {
-  return path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'task-registry.json');
+  return path.join(os.homedir(), resolveCliDirName(), 'task-registry.json');
 }
 
 function readRegistry(): Record<string, TaskEntry> {

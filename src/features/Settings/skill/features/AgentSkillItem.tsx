@@ -17,7 +17,11 @@ import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MarketSkillIcon from '@/components/MarketSkillIcon';
-import { GitHubSkillUpdate, hasGitHubSource } from '@/features/AgentSkillDetail/GitHubSkillUpdate';
+import {
+  GitHubSkillUpdate,
+  GitHubSkillUpdateIndicator,
+  hasGitHubSource,
+} from '@/features/AgentSkillDetail/GitHubSkillUpdate';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -99,7 +103,8 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
 
   // ===== Status & Actions =====
 
-  const updateAction = hasGitHubSource(skill) ? <GitHubSkillUpdate compact skill={skill} /> : null;
+  const tracked = hasGitHubSource(skill);
+  const updateAction = tracked ? <GitHubSkillUpdate compact skill={skill} /> : null;
 
   const renderActions = () => {
     return (
@@ -157,35 +162,37 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     return (
       <SkillListRow
         active={isSelected}
-        description={updateAction}
         icon={() => renderIcon(20, 40)}
         summary={skill.description}
         title={title}
         extra={
-          <RowMoreMenu
-            items={[
-              ...(skill.zipFileHash
-                ? [
-                    {
-                      disabled: loading,
-                      icon: <Icon icon={DownloadIcon} />,
-                      key: 'download',
-                      label: tc('download'),
-                      onClick: handleDownload,
-                    },
-                  ]
-                : []),
-              {
-                danger: true,
-                disabled: !canEdit || !canManage || loading,
-                icon: <Icon icon={Trash2} />,
-                key: 'uninstall',
-                label: tp('store.actions.uninstall'),
-                onClick: handleUninstall,
-              },
-            ]}
-            onOpenDetail={onSelect ?? handleOpenDetail}
-          />
+          <>
+            {updateAction}
+            <RowMoreMenu
+              items={[
+                ...(skill.zipFileHash
+                  ? [
+                      {
+                        disabled: loading,
+                        icon: <Icon icon={DownloadIcon} />,
+                        key: 'download',
+                        label: tc('download'),
+                        onClick: handleDownload,
+                      },
+                    ]
+                  : []),
+                {
+                  danger: true,
+                  disabled: !canEdit || !canManage || loading,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'uninstall',
+                  label: tp('store.actions.uninstall'),
+                  onClick: handleUninstall,
+                },
+              ]}
+              onOpenDetail={onSelect ?? handleOpenDetail}
+            />
+          </>
         }
         onClick={onSelect ?? handleOpenDetail}
       />
@@ -196,10 +203,18 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     return (
       <NavItem
         active={isSelected}
-        extra={updateAction}
         icon={() => renderIcon(18)}
+        role="button"
+        slots={{ titleSuffix: tracked && <GitHubSkillUpdateIndicator id={skill.id} /> }}
+        tabIndex={0}
         title={title}
         onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
       />
     );
   }

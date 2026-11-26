@@ -4,6 +4,7 @@ import { createSettingsSectionsSkeleton } from '@/components/Skeleton/Settings/S
 import { WORKSPACE_SETTINGS_SECTION_SHAPES } from '@/components/Skeleton/Settings/sectionShapes';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
+import { VAULT_TAB_SEARCH } from '@/features/EnvironmentsAndCreds/const';
 import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -194,6 +195,19 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/coding-plans'),
+        'Desktop > Workspace > Settings > Coding Plans',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.CodingPlans,
+          createSurfaceSkeleton('grid'),
+        ),
+      },
+      path: 'coding-plans',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
         'Desktop > Workspace > Settings > Service Model',
       ),
@@ -205,22 +219,15 @@ export const workspaceSettingsContentRoute: RouteObject = {
       },
       path: 'service-model',
     },
+    // Credentials are the vault tab of the Environments & Vault page; old
+    // links open that tab.
     {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/credential'),
-        'Desktop > Workspace > Settings > Credential',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Creds,
-          createSurfaceSkeleton('form'),
-        ),
-      },
+      element: redirectElement(`../environments${VAULT_TAB_SEARCH}`),
       path: 'credential',
     },
     // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
     {
-      element: redirectElement('../credential'),
+      element: redirectElement(`../environments${VAULT_TAB_SEARCH}`),
       path: 'creds',
     },
     {
@@ -450,70 +457,21 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/chat-preference'),
-        'Desktop > Workspace > Settings > Chat Preference',
+        () => import('@/routes/(main)/[workspaceSlug]/settings/conversation'),
+        'Desktop > Workspace > Settings > Conversation',
       ),
       handle: {
         meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.ChatPreference,
+          WorkspaceSettingsTabs.Conversation,
           createSurfaceSkeleton('form'),
         ),
       },
+      path: 'conversation',
+    },
+    // Legacy `/:slug/settings/chat-preference` URLs — the page became Conversation.
+    {
+      element: redirectElement('../conversation'),
       path: 'chat-preference',
-    },
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger',
-    },
-    // Platform detail level — the page reads the platform from `sub`.
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger > Platform',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger/:sub',
-    },
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-        'Desktop > Workspace > Settings > Integrations',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Integrations,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'integrations',
-    },
-    // Integration detail level — the page reads the integration from `sub`.
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-        'Desktop > Workspace > Settings > Integrations > Detail',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Integrations,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'integrations/:sub',
     },
     // Developer tools mirrored inside the workspace (user preferences).
     {

@@ -1,5 +1,9 @@
 import type { HeteroPermissionMode, WorkspaceUserPreference } from '@lobechat/types';
-import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
+} from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
 import type { ReplicaSlice } from 'local-replica/zustand';
@@ -28,7 +32,7 @@ const n = setNamespace('workspaceUserSettings');
 /** Per-directory habits stored the same way in both preference buckets. */
 type DirectoryPreference = Pick<
   WorkspaceUserPreference,
-  'heteroPermissionModeDirs' | 'worktreeModeDirs'
+  'heteroPermissionModeDirs' | 'heteroPlanModeDirs' | 'worktreeModeDirs'
 >;
 
 type Setter = StoreSetter<UserStore>;
@@ -284,6 +288,22 @@ export class WorkspaceUserSettingsActionImpl {
         worktreeModeDirs: await userService.setWorktreeModeDir(key, enabled),
       }),
       writeWorkspace: () => workspaceUserSettingsService.setWorktreeModeDir(key, enabled),
+    });
+
+  /**
+   * Remember whether the Codex Plan switch was left on for one directory (same
+   * key as the worktree switch), which a new Codex topic there starts with.
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        heteroPlanModeDirs: applyHeteroPlanModeDir(preference.heteroPlanModeDirs, key, enabled),
+      }),
+      name: 'setHeteroPlanModeDir',
+      writePersonal: async () => ({
+        heteroPlanModeDirs: await userService.setHeteroPlanModeDir(key, enabled),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setHeteroPlanModeDir(key, enabled),
     });
 
   /**

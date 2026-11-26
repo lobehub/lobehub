@@ -77,7 +77,12 @@ tool does not ship):
   (personal contacts, or the workspace's members and external contacts),
   including people added later; `allowlist` admits only visitors named in
   `deviceAllowUserIds`, and only while they are still in that address book.
-  There is no "every visitor" value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  A listed visitor the owner admitted by approving their request to use the
+  Agent (a live `request` share grant) is admitted outside the book, under
+  either setting, until the grant is revoked.
+  `everyone` admits every signed-in visitor holding the link, set only
+  after the creator confirms that it reaches strangers; a legacy stored `all`
+  stays denied. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
   `canUseDevice` and re-applied at dispatch. The same grant admits
   device-only MCP servers (which still need their own tool grant). The device
   is always the Agent's configured execution environment; a visitor never
@@ -222,10 +227,11 @@ absence of a known exploit.
   3. `updateWork` / `deleteWork` reach only Works this conversation created
      through the tool or `lh work` (`agentEditable`), never ones collected
      automatically or made in another conversation;
-  4. collection images must be generated images or run outputs of the run's
-     account (`resolveAgentWorkCollectionItems`), and in a visitor run each image
-     must also appear in a message of the visitor topic (`visitorTopicId`), so
-     a guessed id of another creator image is refused as not found.
+  4. collection images must be images of the run's account
+     (`resolveAgentWorkCollectionItems`): a generated image or run output must
+     also appear in a tool result of the visitor topic, and any other image must
+     come from an `exportFile` call of that topic (its state's `fileId`), so a
+     guessed id of another creator image is refused as not found.
 
   Its implied grant is added after the activator check, so it never implies
   `lobe-activator` on its own.

@@ -65,6 +65,42 @@ describe('filterProjectFileEntries', () => {
       'src/index.ts',
     ]);
   });
+
+  it('filters a large project in linear time', () => {
+    // 20,000 directories x 2 files. Scanning every file per directory took
+    // seconds here; one pass over the files takes a few milliseconds.
+    const large: ProjectFileIndexEntry[] = [];
+    for (let dir = 0; dir < 20_000; dir += 1) {
+      const directory = `pkg${dir}/`;
+      large.push({
+        isDirectory: true,
+        name: `pkg${dir}`,
+        path: `/repo/pkg${dir}`,
+        relativePath: directory,
+      });
+      for (let file = 0; file < 2; file += 1) {
+        const relativePath = `${directory}file${file}.ts`;
+        large.push({
+          gitIgnored: dir % 2 === 1,
+          isDirectory: false,
+          name: `file${file}.ts`,
+          path: `/repo/${relativePath}`,
+          relativePath,
+        });
+      }
+    }
+
+    const startedAt = performance.now();
+    const result = filterProjectFileEntries(large, new Set(), {
+      changedOnly: false,
+      hideIgnored: true,
+    });
+    const elapsed = performance.now() - startedAt;
+
+    // Half the directories hold only ignored files, so they drop out entirely.
+    expect(result).toHaveLength(10_000 * 3);
+    expect(elapsed).toBeLessThan(300);
+  });
 });
 
 describe('mergeMissingDeletedEntries', () => {

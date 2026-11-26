@@ -27,6 +27,7 @@
   "claimResources.claim": "Претендирай избраните",
   "claimResources.description": "Намерихме ресурси, свързани с вашия акаунт, които можете да претендирате:",
   "claimResources.error": "Неуспешно претендиране на ресурси. Моля, опитайте отново.",
+  "claimResources.failedRetry": "Неуспешно претендиране на тези ресурси. Проверете мрежовата си връзка и опитайте отново.",
   "claimResources.mcpSection": "MCP Сървъри",
   "claimResources.selectedCount": "{{count}} избран(и) елемент(и)",
   "claimResources.skillSection": "Умения",

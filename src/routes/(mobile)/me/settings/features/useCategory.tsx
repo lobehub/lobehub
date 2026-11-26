@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   CreditCard,
   Database,
   EllipsisIcon,
@@ -22,6 +23,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import { type CellProps } from '@/components/Cell';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -32,7 +34,6 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Agent = 'agent',
@@ -57,7 +58,9 @@ export const useCategory = (): CategoryGroup[] => {
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const codingPlansTab = useCodingPlansTab();
+  // Advanced only holds gateway mode on mobile; without it the page is empty.
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(() => {
@@ -87,6 +90,12 @@ export const useCategory = (): CategoryGroup[] => {
             key: SettingsTabs.Usage,
             label: t('subscription:tab.usage'),
           }),
+          codingPlansTab &&
+            makeItem({
+              icon: CodeXmlIcon,
+              key: SettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
+            }),
           makeItem({
             icon: CreditCard,
             key: SettingsTabs.Billing,
@@ -97,7 +106,7 @@ export const useCategory = (): CategoryGroup[] => {
             key: SettingsTabs.Referral,
             label: t('subscription:tab.referral'),
           }),
-        ]
+        ].filter((item): item is CategoryItem => Boolean(item))
       : [];
 
     const agent: CategoryItem[] = [
@@ -122,12 +131,13 @@ export const useCategory = (): CategoryGroup[] => {
 
     const system: CategoryItem[] = [
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
-      makeItem({
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('setting:tab.advanced'),
-      }),
-      (showApiKeyManage || isDevMode) &&
+      enableGatewayMode &&
+        makeItem({
+          icon: EllipsisIcon,
+          key: SettingsTabs.Advanced,
+          label: t('setting:tab.advanced'),
+        }),
+      showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
       enableOAuthApps &&
         makeItem({
@@ -152,11 +162,12 @@ export const useCategory = (): CategoryGroup[] => {
   }, [
     t,
     enableBusinessFeatures,
+    codingPlansTab,
     hideDocs,
     showApiKeyManage,
     showProvider,
-    isDevMode,
     enableOAuthApps,
+    enableGatewayMode,
     navigate,
   ]);
 };

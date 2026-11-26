@@ -147,3 +147,122 @@ describe('Channel messaging', () => {
     });
   });
 });
+
+describe('Channel postMessage', () => {
+  const history = { readMessage: vi.fn(), readMessages: vi.fn() };
+
+  it('posts through the posting service and returns where it landed', async () => {
+    const posted = {
+      cards: 1,
+      channelId: 'channel-lobehub',
+      channelTitle: 'General',
+      messageId: 'message-posted',
+      threadId: null,
+      url: 'https://example.com/channels/channel-lobehub',
+    };
+    const postMessage = vi.fn().mockResolvedValue(posted);
+    const runtime = new ChannelExecutionRuntime(history, undefined, undefined, { postMessage });
+
+    const result = await runtime.postMessage({ content: 'Summary' });
+    expect(postMessage).toHaveBeenCalledWith({ content: 'Summary' });
+    expect(result).toMatchObject({ state: posted, success: true });
+    expect(JSON.parse(result.content!)).toEqual(posted);
+  });
+
+  it('reports a refused post, and a run that cannot post', async () => {
+    const refused = new ChannelExecutionRuntime(history, undefined, undefined, {
+      postMessage: vi.fn().mockRejectedValue(new Error('The Agent is muted in this Channel')),
+    });
+    expect(await refused.postMessage({ content: 'Hi' })).toMatchObject({
+      content: 'The Agent is muted in this Channel',
+      error: { type: 'ChannelPostError' },
+      success: false,
+    });
+    expect(await new ChannelExecutionRuntime(history).postMessage({ content: 'Hi' })).toMatchObject(
+      { error: { type: 'ChannelPostError' }, success: false },
+    );
+  });
+});
+
+describe('Channel askUser', () => {
+  const questions = [{ options: [{ label: 'A' }, { label: 'B' }], question: 'Which?' }];
+
+  it('holds the questions and tells the run to end its turn instead of waiting', async () => {
+    const askUser = vi.fn().mockResolvedValue({ questions: 1, status: 'posts_with_reply' });
+    const runtime = new ChannelExecutionRuntime({
+      askUser,
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+    });
+    const result = await runtime.askUser({ questions });
+    expect(askUser).toHaveBeenCalledWith({ questions });
+    expect(result).toMatchObject({ state: { status: 'posts_with_reply' }, success: true });
+    expect(result.content).toContain('End your turn now');
+  });
+
+  it('reports a refused ask as a tool error the model can correct', async () => {
+    const runtime = new ChannelExecutionRuntime({
+      askUser: vi.fn().mockRejectedValue(new Error('Question 1 has duplicate options')),
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+    });
+    expect(await runtime.askUser({ questions })).toMatchObject({
+      content: 'Question 1 has duplicate options',
+      error: { type: 'ChannelAskError' },
+      success: false,
+    });
+  });
+});
+
+describe('Channel connector requests', () => {
+  it('posts the card and tells the Agent the connector comes next turn', async () => {
+    const requestConnector = vi
+      .fn()
+      .mockResolvedValue({ messageId: 'msg', name: 'GitHub', source: 'lobehub' });
+    const runtime = new ChannelExecutionRuntime({
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+      requestConnector,
+    });
+    const result = await runtime.requestConnector({ identifier: 'github' });
+    expect(requestConnector).toHaveBeenCalledWith({ identifier: 'github' });
+    expect(result).toMatchObject({ state: { messageId: 'msg' }, success: true });
+    expect(result.content).toContain('next turn');
+  });
+
+  it('fails as a tool error when the run cannot post one', async () => {
+    const runtime = new ChannelExecutionRuntime({ readMessage: vi.fn(), readMessages: vi.fn() });
+    expect(await runtime.requestConnector({ identifier: 'github' })).toMatchObject({
+      error: { type: 'ChannelConnectorError' },
+      success: false,
+    });
+  });
+});
+
+describe('Channel reactions', () => {
+  const history = () => ({ readMessage: vi.fn(), readMessages: vi.fn() });
+
+  it('adds and removes the Agent’s own reaction', async () => {
+    const react = vi
+      .fn()
+      .mockResolvedValueOnce({ added: true, emoji: '👀', messageId: 'm1' })
+      .mockResolvedValueOnce({ added: false, emoji: '👀', messageId: 'm1' });
+    const runtime = new ChannelExecutionRuntime({ ...history(), react });
+
+    const added = await runtime.addReaction({ emoji: '👀', messageId: 'm1' });
+    expect(react).toHaveBeenLastCalledWith({ emoji: '👀', messageId: 'm1' }, true);
+    expect(added).toMatchObject({ content: 'Reacted with 👀.', success: true });
+
+    const removed = await runtime.removeReaction({ emoji: '👀', messageId: 'm1' });
+    expect(react).toHaveBeenLastCalledWith({ emoji: '👀', messageId: 'm1' }, false);
+    expect(removed.success).toBe(true);
+  });
+
+  it('fails as a tool error when the run cannot react', async () => {
+    const runtime = new ChannelExecutionRuntime(history());
+    expect(await runtime.addReaction({ emoji: '👀', messageId: 'm1' })).toMatchObject({
+      error: { type: 'ChannelReactionError' },
+      success: false,
+    });
+  });
+});

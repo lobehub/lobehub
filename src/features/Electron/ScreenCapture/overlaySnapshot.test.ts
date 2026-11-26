@@ -27,6 +27,18 @@ describe('overlaySnapshot', () => {
     ]);
   });
 
+  // The overlay draws emoji and images only; it showed the picked value's first letter.
+  it('hands the overlay no picked Agent character', () => {
+    const [inbox, agent] = resolveOverlayAgentOptions({
+      agents: [{ avatar: 'agent-avatar:cat:green', id: 'agent-1', title: 'Agent 1' }],
+      inboxAgentId: 'inbox-agent',
+      inboxMeta: { avatar: 'agent-avatar:rocket:cyan', title: null },
+    });
+
+    expect(inbox.avatar).toBe(DEFAULT_INBOX_AVATAR);
+    expect(agent.avatar).toBeUndefined();
+  });
+
   it('falls back to inbox when the active agent is not selectable in overlay', () => {
     const agentOptions = resolveOverlayAgentOptions({
       agents: [{ avatar: 'A', id: 'agent-1', title: 'Agent 1' }],

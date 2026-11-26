@@ -193,6 +193,67 @@ describe('ToolResolver', () => {
     });
   });
 
+  describe('deferred manifests', () => {
+    const shellOnlyManifest: LobeToolManifest = {
+      ...mockLocalSystemManifest,
+      api: [mockLocalSystemManifest.api[0]],
+      systemRole: 'shell only',
+    };
+    const fullManifest: LobeToolManifest = { ...mockLocalSystemManifest, systemRole: 'full' };
+    const activation: ActivatedStepTool = {
+      activatedAtStep: 1,
+      id: 'local-system',
+      manifest: fullManifest,
+      source: 'discovery',
+    };
+
+    it('should keep the narrowed manifest until the tool is activated', () => {
+      const result = resolver.resolve(
+        {
+          ...makeOperationToolSet([shellOnlyManifest]),
+          deferredManifestMap: { 'local-system': fullManifest },
+        },
+        { activatedTools: [] },
+      );
+
+      expect(result.manifestMap['local-system']).toBe(shellOnlyManifest);
+      expect(result.tools).toHaveLength(1);
+    });
+
+    it('should promote an enabled narrowed tool to its full manifest without duplicating schemas', () => {
+      const result = resolver.resolve(
+        {
+          ...makeOperationToolSet([shellOnlyManifest]),
+          deferredManifestMap: { 'local-system': fullManifest },
+        },
+        { activatedTools: [] },
+        [activation, { ...activation, activatedAtStep: 2 }],
+      );
+
+      expect(result.manifestMap['local-system']).toBe(fullManifest);
+      expect(result.enabledToolIds).toEqual(['local-system']);
+      expect(result.tools.map((tool) => tool.function.name)).toEqual([
+        toolNameResolver.generate('local-system', 'run_command', 'builtin'),
+        toolNameResolver.generate('local-system', 'read_file', 'builtin'),
+      ]);
+    });
+
+    it('should enable a tool that was left out of the operation entirely', () => {
+      const result = resolver.resolve(
+        {
+          ...makeOperationToolSet([mockSearchManifest]),
+          deferredManifestMap: { 'local-system': fullManifest },
+        },
+        { activatedTools: [] },
+        [activation],
+      );
+
+      expect(result.enabledToolIds).toEqual(['web-search', 'local-system']);
+      expect(result.manifestMap['local-system']).toBe(fullManifest);
+      expect(result.tools).toHaveLength(3);
+    });
+  });
+
   describe('deactivation', () => {
     it('should strip all tools when deactivatedToolIds contains wildcard', () => {
       const opSet = makeOperationToolSet([mockSearchManifest, mockCalcManifest]);

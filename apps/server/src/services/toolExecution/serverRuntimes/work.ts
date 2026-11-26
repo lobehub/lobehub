@@ -107,7 +107,8 @@ export const createWorkToolService = (context: ToolExecutionContext): WorkToolSe
       db,
       items,
       userId,
-      visitorTopicId: agentShareVisitor ? topicId : undefined,
+      shareVisitor: !!agentShareVisitor,
+      topicId,
       workspaceId,
     });
     // The cover names one of the items the same way; map it to that item's

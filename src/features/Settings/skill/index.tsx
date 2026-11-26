@@ -90,7 +90,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
   // detail opened from it returns to it and names that tab's row.
   const workspaceId = useActiveWorkspaceId();
   const visibility: ConnectorVisibility | undefined =
-    viewMode === 'connector' && workspaceId
+    viewMode !== 'skill' && workspaceId
       ? searchParams.get('visibility') === 'private'
         ? 'private'
         : 'public'
@@ -126,7 +126,8 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
   const closeStackedDetail = () => {
     // Pop the entry this page pushed, so history keeps one list entry; a
     // deep-linked detail has none to pop and is replaced by the list instead.
-    if ((location.state as Record<string, unknown> | null)?.[PUSHED_DETAIL_STATE]) {
+    const state = location.state as Record<string, unknown> | null;
+    if (state?.[PUSHED_DETAIL_STATE] || typeof state?.marketplaceCatalog === 'string') {
       navigate(-1);
       return;
     }
@@ -166,7 +167,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
         fullWidth
         compact={mobile}
         headerExtra={headerExtra}
-        page={!mobile || viewMode === 'skill'}
+        page={!mobile || viewMode !== 'connector'}
         viewMode={viewMode}
         visibility={visibility}
         onDeleteSelected={closeStackedDetail}
@@ -222,9 +223,13 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
                 identifier={stackedSelected.identifier}
                 type={stackedSelected.type}
                 visibility={visibility}
-                listLabel={t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
-                  ns: 'setting',
-                })}
+                listLabel={
+                  viewMode === 'mcp'
+                    ? t('tab.mcp', { ns: 'discover' })
+                    : t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
+                        ns: 'setting',
+                      })
+                }
                 onBack={closeStackedDetail}
               />
               <Flexbox flex={1} style={{ minHeight: 0 }}>

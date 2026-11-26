@@ -3,10 +3,7 @@ import { type LobeAgentChatConfig, resolveToolMode } from '@lobechat/types';
 
 /** Agent mode provides the activator by default. Custom toolsets can declare it explicitly. */
 export const hasConnectorActivator = (
-  chatConfig:
-    | Pick<LobeAgentChatConfig, 'enableAgentMode' | 'skillActivateMode' | 'toolMode'>
-    | null
-    | undefined,
+  chatConfig: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'> | null | undefined,
   pluginIds: readonly string[] = [],
   disabledIds: readonly string[] = [],
 ): boolean => {

@@ -43,6 +43,11 @@ export type AgentModelSelectionLockReason = 'fixedByAgent' | 'useOnly';
 export interface UseAgentModelSelectionResult extends ModelSelection {
   canDisplayModel: boolean;
   canSelectModel: boolean;
+  /**
+   * `canDisplayModel` is false only because access or the caller's preference
+   * is still loading; the trigger shows a placeholder instead of disappearing.
+   */
+  isModelLoading: boolean;
   isPreferenceLoading: boolean;
   /** Set only while the model is displayed but locked (see the type doc). */
   selectionLockReason?: AgentModelSelectionLockReason;
@@ -82,10 +87,17 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   // row must not mean picking the model for everyone else — see
   // `AgentModelConfig.personalModelSelection`.
   const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
+  const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   const usesWorkspaceMemberSelection =
-    !!agent?.workspaceId &&
-    agent.visibility !== 'private' &&
-    (personalModelSelection || !canManageAgent);
+    isPublicWorkspaceAgent && (personalModelSelection || !canManageAgent);
+  // The manager-vs-member answer only picks the model and write target of a
+  // public Agent with a shared default. A collaborative builtin (the Workspace
+  // Lobe AI on Home) reads every caller's own choice whatever their role, so it
+  // must not wait for this session's re-check of the manager grant: that wait
+  // hid the Home model trigger on the first visit of each session.
+  const isAgentLoading = !!agentId && !agent;
+  const isManagementLoading =
+    isAgentLoading || (isPublicWorkspaceAgent && !personalModelSelection && isAccessLoading);
 
   const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
@@ -108,7 +120,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   const effectiveModel = resolveAgentModelConfig(sharedModelConfig, memberOverride);
   const selectionPolicy = resolveAgentModelSelectionPolicy(sharedModelConfig);
   const applyBusinessModelModeConfig = useBusinessModelModeConfig();
-  const isPreferenceLoading = isAccessLoading || (usesWorkspaceMemberSelection && isLoading);
+  const isPreferenceLoading = isManagementLoading || (usesWorkspaceMemberSelection && isLoading);
   const canSelectForAgent = usesWorkspaceMemberSelection
     ? canUseResource && selectionPolicy === 'member'
     : canConfigureResource;
@@ -120,6 +132,13 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
     canUseResource &&
     !isResourceAccessLoading &&
     !isPreferenceLoading;
+  // The trigger will show once access and preference settle; until then it
+  // holds its place instead of vanishing (see `canDisplayModel`).
+  const isModelLoading =
+    !!agentId &&
+    canCreateContent &&
+    canUseResource &&
+    (isResourceAccessLoading || isPreferenceLoading);
   // Only meaningful once the trigger actually renders: a hidden trigger has no
   // tooltip to explain, and a still-loading one isn't locked, just not settled.
   const selectionLockReason: AgentModelSelectionLockReason | undefined =
@@ -164,6 +183,7 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
   return {
     canDisplayModel,
     canSelectModel,
+    isModelLoading,
     isPreferenceLoading,
     model: effectiveModel.model,
     provider: effectiveModel.provider ?? sharedProvider,

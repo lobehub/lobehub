@@ -1,10 +1,10 @@
 'use client';
 
 import type { ConnectorVisibility } from '@lobechat/types';
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon, SearchBar, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, Grid2x2Plus, Import, Plus, RotateCw, Store } from 'lucide-react';
+import { Import, Plus, RotateCw } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,25 +14,11 @@ import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { getCatalogAddAction } from './catalogAddAction';
 import { getPageSearchPlacement } from './pageHeaderLayout';
 import type { SkillViewMode } from './SkillList';
 
 const styles = stylex.create({
-  // @lobehub/ui paints every open dropdown trigger with `colorFillTertiary`
-  // (`.lobe-dropdown-menu-trigger[data-popup-open]`, `lobe-popup` layer), which
-  // wins over the primary Button's own open state and leaves its light text on
-  // a near-white fill. Restore the primary open state with the same tokens the
-  // Button uses, so the label stays readable in both themes.
-  addTrigger: {
-    backgroundColor: {
-      'default': null,
-      ':is([data-popup-open])': cssVar.colorPrimaryActive,
-    },
-    color: {
-      'default': null,
-      ':is([data-popup-open])': cssVar.colorBgLayout,
-    },
-  },
   // The Codex Plugins header: the title shares its row with search, the page
   // controls and the primary Add (last); one line of what the page does sits
   // 8px under both, so a long description never pushes the toolbar down.
@@ -61,6 +47,8 @@ const styles = stylex.create({
   pageSearchCompact: { width: '100%' },
   // SearchBar draws its border on the inner input box, so the pill goes there.
   pageSearchInput: { borderRadius: '999px' },
+  // Disabled buttons swallow hover events; the wrapper anchors the tooltip.
+  tooltipAnchor: { display: 'inline-flex' },
   pageTitle: {
     marginBlock: 0,
     fontSize: cssVar.fontSizeHeading3,
@@ -73,7 +61,6 @@ const styles = stylex.create({
 interface CatalogPageHeaderProps {
   compact?: boolean;
   keyword: string;
-  onBrowseStore: () => void;
   onKeywordChange: (value: string) => void;
   onRefresh: () => void;
   onSearch?: (value: string) => void;
@@ -87,7 +74,6 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
   ({
     compact,
     keyword,
-    onBrowseStore,
     onKeywordChange,
     onRefresh,
     onSearch,
@@ -96,14 +82,12 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
     viewMode,
     visibility,
   }) => {
-    const { t } = useTranslation('setting');
+    const { t } = useTranslation(['setting', 'discover']);
     const [showAddConnector, setShowAddConnector] = useState(false);
     const { allowed: canCreate } = usePermission('create_content');
     const { canManage, isPending } = useConnectorManageable();
-    const isConnectorView = viewMode === 'connector';
+    const isConnectorView = viewMode !== 'skill';
     const isPrivateTab = visibility === 'private';
-    const canAddConnector = isPrivateTab || canManage;
-    const isPolicyPending = !isPrivateTab && isPending;
     const description = t(
       !isConnectorView
         ? 'skillView.skillsDesc'
@@ -113,54 +97,47 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
             ? 'skillView.workspaceConnectorsDesc'
             : 'skillView.connectorsDesc',
     );
-    const addItems = [
-      ...(isConnectorView
-        ? [
-            {
-              desc:
-                canAddConnector || isPolicyPending
-                  ? t('connectorMarket.add.customDesc')
-                  : t('tools.connectorFeedback.manageOnly'),
-              disabled: !canAddConnector,
-              icon: <Icon icon={Grid2x2Plus} />,
-              key: 'custom',
-              label: t('connectorMarket.add.custom'),
-              onClick: () => setShowAddConnector(true),
-            },
-          ]
-        : []),
-      // A store install joins the shared pool, so the private tab omits it
-      ...(isPrivateTab
-        ? []
-        : [
-            {
-              desc: t(
-                isConnectorView
-                  ? 'connectorMarket.add.browseStoreDesc'
-                  : 'skillView.browseStoreDesc',
-              ),
-              icon: <Icon icon={Store} />,
-              key: 'store',
-              label: t('connectorMarket.add.browseStore'),
-              onClick: onBrowseStore,
-            },
-          ]),
-      ...(!isConnectorView
-        ? [
-            {
-              desc: t('agentSkillModal.sources'),
-              disabled: !canCreate,
-              icon: <Icon icon={Import} />,
-              key: 'import',
-              label: t('agentSkillModal.title'),
-              onClick: openSkillImportModal,
-            },
-          ]
-        : []),
-    ];
-    const searchPlaceholder = t(
-      isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
-    );
+    const add = getCatalogAddAction({
+      canCreate,
+      canManageShared: canManage,
+      policyPending: isPending,
+      viewMode,
+      visibility,
+    });
+    const addAction =
+      add.kind === 'customConnector' ? (
+        <Tooltip title={add.disabledReason && t('tools.connectorFeedback.manageOnly')}>
+          <span {...stylex.props(styles.tooltipAnchor)}>
+            <Button
+              disabled={add.disabled}
+              icon={Plus}
+              shape={'round'}
+              type={'primary'}
+              onClick={() => setShowAddConnector(true)}
+            >
+              {viewMode === 'mcp'
+                ? t('apps.addMcp', { ns: 'discover' })
+                : t('connectorMarket.add.custom')}
+            </Button>
+          </span>
+        </Tooltip>
+      ) : (
+        <Button
+          disabled={add.disabled}
+          icon={Import}
+          shape={'round'}
+          type={'primary'}
+          onClick={openSkillImportModal}
+        >
+          {t('agentSkillModal.title')}
+        </Button>
+      );
+    const searchPlaceholder =
+      viewMode === 'mcp'
+        ? t('catalog.searchIn', { ns: 'discover', name: 'MCP' })
+        : t(
+            isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
+          );
 
     const searchBelowTitle = getPageSearchPlacement(compact) === 'below-title';
     const search = (
@@ -184,7 +161,9 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
         <div {...stylex.props(styles.pageHeader, compact && styles.pageHeaderCompact)}>
           <div {...stylex.props(styles.pageHeadRow)}>
             <h1 {...stylex.props(styles.pageTitle)}>
-              {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
+              {viewMode === 'mcp'
+                ? t('tab.mcp', { ns: 'discover' })
+                : t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
             </h1>
             <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
               {!searchBelowTitle && search}
@@ -197,21 +176,13 @@ const CatalogPageHeader = memo<CatalogPageHeaderProps>(
                 title={t('connectorMarket.refresh')}
                 onClick={onRefresh}
               />
-              <DropdownMenu items={addItems} placement={'bottomRight'}>
-                <Button
-                  className={stylex.props(styles.addTrigger).className}
-                  icon={Plus}
-                  shape={'round'}
-                  type={'primary'}
-                >
-                  {t('connectorMarket.add')}
-                  <Icon icon={ChevronDown} size={14} />
-                </Button>
-              </DropdownMenu>
+              {addAction}
             </Flexbox>
           </div>
           {searchBelowTitle && search}
-          <Text type={'secondary'}>{description}</Text>
+          <Text type={'secondary'}>
+            {viewMode === 'mcp' ? t('apps.mcpDescription', { ns: 'discover' }) : description}
+          </Text>
         </div>
         {showAddConnector && (
           <CustomConnectorModal

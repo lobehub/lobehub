@@ -7,6 +7,7 @@ import {
   ACCEPTANCE_REVIEW_SCOPE,
   LOBEHUB_DESKTOP_CLIENT_ID,
   LOBOT_DESKTOP_CLIENT_ID,
+  LOBOT_MOBILE_CLIENT_ID,
 } from '@lobechat/const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
@@ -86,13 +87,16 @@ const builtinClients: ClientMetadata[] = [
   },
   {
     application_type: 'native',
-    client_id: 'toby',
-    client_name: 'toby',
+    client_id: LOBOT_MOBILE_CLIENT_ID,
+    client_name: 'Lobot',
     grant_types: ['authorization_code', 'refresh_token'],
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
     post_logout_redirect_uris: [],
     // Universal-link callback: iOS only hands it to the app listed in the AASA webcredentials,
-    // so another app cannot impersonate toby the way it could with a custom scheme.
-    redirect_uris: desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/toby')),
+    // so another app cannot impersonate Lobot the way it could with a custom scheme.
+    redirect_uris: desktopAppOrigins.map((origin) =>
+      urlJoin(origin, `/oidc/callback/${LOBOT_MOBILE_CLIENT_ID}`),
+    ),
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },

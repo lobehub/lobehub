@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "种子",
   "config.seed.random": "随机种子",
+  "config.size.autoByOpenAI": "自动（由 OpenAI 决定）",
   "config.size.label": "尺寸",
   "config.steps.label": "步数",
   "config.title": "配置",

@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
+import { formatError } from '../../utils/error';
 import type { KanbanColumn } from '../../utils/format';
 import {
   confirm,
@@ -34,6 +35,13 @@ import { type TaskOriginInput, toCreateOrigin } from './origin';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
+import {
+  describeVisibilityError,
+  parseVisibility,
+  type TaskVisibility,
+  VISIBILITY_OPTION_DESCRIPTION,
+  withVisibilityHint,
+} from './visibility';
 
 export function registerTaskCommand(program: Command) {
   const task = program.command('task').description('Manage agent tasks');
@@ -579,6 +587,10 @@ export function registerTaskCommand(program: Command) {
     .option('--parent <id>', 'Parent task ID')
     .option('--priority <n>', 'Priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)', '0')
     .option(
+      '--visibility <visibility>',
+      `${VISIBILITY_OPTION_DESCRIPTION}. Default: inherited from --parent, private for a private --agent, otherwise public`,
+    )
+    .option(
       '--label <name>',
       'Attach an existing label (repeatable or comma-separated; "Group/Label" also works)',
       collectLabels,
@@ -614,10 +626,13 @@ export function registerTaskCommand(program: Command) {
         priority?: string;
         provider?: string;
         user?: string;
+        visibility?: string;
       }) => {
         let origin: TaskOriginInput | undefined;
+        let visibility: TaskVisibility | undefined;
         try {
           origin = toCreateOrigin(options);
+          visibility = parseVisibility(options.visibility);
         } catch (error) {
           log.error((error as Error).message);
           process.exitCode = 1;
@@ -643,8 +658,11 @@ export function registerTaskCommand(program: Command) {
         const modelConfig = toCreateModelConfig(options);
         if (modelConfig) input.config = modelConfig;
         if (origin) input.context = { origin };
+        if (visibility) input.visibility = visibility;
 
-        const result = await client.task.create.mutate(input);
+        const result = await client.task.create.mutate(input).catch((error: unknown) => {
+          throw withVisibilityHint(error, { command: 'create' });
+        });
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
 
         if (options.json !== undefined) {
@@ -668,6 +686,10 @@ export function registerTaskCommand(program: Command) {
     .option('--agent <id>', 'Assign to agent')
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--priority <n>', 'Priority (0-4)')
+    .option(
+      '--visibility <visibility>',
+      `${VISIBILITY_OPTION_DESCRIPTION}. Only the task creator can make a task private`,
+    )
     .option('--project <id>', 'Move to a project ("null" to remove it from its project)')
     .option(
       '--label <name>',
@@ -708,8 +730,18 @@ export function registerTaskCommand(program: Command) {
           removeLabel?: string[];
           status?: string;
           user?: string;
+          visibility?: string;
         },
       ) => {
+        let visibility: TaskVisibility | undefined;
+        try {
+          visibility = parseVisibility(options.visibility);
+        } catch (error) {
+          log.error((error as Error).message);
+          process.exitCode = 1;
+          return;
+        }
+
         const client = await getTrpcClient();
         const assigneeUserId = await resolveUserOption(client, options.user);
         if (assigneeUserId === false) return;
@@ -748,6 +780,42 @@ export function registerTaskCommand(program: Command) {
           return;
         }
 
+        // Visibility has its own endpoint, gated by the server (only the
+        // creator can make a task private). Going private runs before every
+        // other change, so a private `--agent` in the same command passes the
+        // "public task cannot use a private agent" check; going public runs
+        // after them, once the task has moved off a private agent.
+        const changeVisibility = (target: TaskVisibility, appliedOtherEdits: boolean) =>
+          client.task.updateVisibility
+            .mutate({ id, visibility: target })
+            .catch((error: unknown) => {
+              throw describeVisibilityError(error, id, target, appliedOtherEdits);
+            });
+        // Returns the promoted row, merged over the pre-promotion row in JSON output.
+        const applyPublic = async () =>
+          visibility === 'public' ? (await changeVisibility('public', true)).data : {};
+        // The private flip is not undone when a later step fails; say so.
+        const afterPrivate = (error: unknown): never => {
+          if (visibility !== 'private') throw error;
+          throw new Error(`${formatError(error)} (${id} was already made private)`);
+        };
+
+        if (visibility && !(hasLabelEdits || hasFieldEdits || options.status)) {
+          const result = await changeVisibility(visibility, false);
+          if (options.json !== undefined) {
+            outputJson(
+              withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+              typeof options.json === 'string' ? options.json : undefined,
+            );
+          } else {
+            log.info(`${pc.bold(result.data.identifier)} is now ${visibility}`);
+            console.log(`ID: ${result.data.id}`);
+          }
+          return;
+        }
+
+        if (visibility === 'private') await changeVisibility('private', false);
+
         // Labels have their own endpoint; apply them (in one transaction)
         // after input validation and before any field / status edit, so a bad
         // label fails the command before anything moves. When the field /
@@ -778,13 +846,16 @@ export function registerTaskCommand(program: Command) {
           throw error;
         };
         if (hasLabelEdits) {
-          labels = await client.taskLabel.changeForTask.mutate({
-            add: addLabelIds,
-            remove: removeLabelIds,
-            taskId: id,
-          });
+          labels = await client.taskLabel.changeForTask
+            .mutate({
+              add: addLabelIds,
+              remove: removeLabelIds,
+              taskId: id,
+            })
+            .catch(afterPrivate);
         }
         if (hasLabelEdits && !hasOtherEdits) {
+          await applyPublic();
           if (options.json !== undefined) {
             // Same task-shaped JSON as any other `task edit --json`.
             const { data } = await client.task.find.query({ id });
@@ -811,11 +882,13 @@ export function registerTaskCommand(program: Command) {
           if (!hasFieldEdits) {
             const result = await client.task.updateStatus
               .mutate({ id, status: options.status })
-              .catch(restoreLabelsOnFailure);
+              .catch(restoreLabelsOnFailure)
+              .catch(afterPrivate);
+            const promoted = await applyPublic();
             if (options.json !== undefined) {
               outputJson(
                 withUrl(
-                  result.data,
+                  { ...result.data, ...promoted },
                   await resolveUrlBuilder(client),
                   resourcePath.task(result.data),
                 ),
@@ -831,11 +904,18 @@ export function registerTaskCommand(program: Command) {
           input.status = options.status;
         }
 
-        const result = await client.task.update.mutate(input as any).catch(restoreLabelsOnFailure);
+        const result = await client.task.update
+          .mutate(input as any)
+          .catch(restoreLabelsOnFailure)
+          .catch((error: unknown) => {
+            throw withVisibilityHint(error, { command: 'edit', id });
+          })
+          .catch(afterPrivate);
+        const promoted = await applyPublic();
 
         if (options.json !== undefined) {
           // task.update returns the bare row; overlay the post-edit labels.
-          const data = labels ? { ...result.data, labels } : result.data;
+          const data = { ...result.data, ...promoted, ...(labels ? { labels } : {}) };
           outputJson(
             withUrl(data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
             typeof options.json === 'string' ? options.json : undefined,

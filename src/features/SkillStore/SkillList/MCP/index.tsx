@@ -4,19 +4,22 @@ import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VirtuosoGrid } from 'react-virtuoso';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useToolStore } from '@/store/tool';
+import { type DiscoverMcpItem } from '@/types/discover';
 
 import Item from '../Community/Item';
 import Empty from '../Empty';
 import Loading from '../Loading';
-import { virtuosoGridStyles } from '../style';
+import MasonicGrid from '../MasonicGrid';
 import VirtuosoLoading from '../VirtuosoLoading';
 import WantMoreSkills from '../WantMoreSkills';
 import { canAutoLoadMore, resolveMCPListFooter } from './utils';
+
+const getPluginKey = (item: DiscoverMcpItem) => item.identifier;
+const renderPlugin = (item: DiscoverMcpItem) => <Item {...item} />;
 
 export const MCPList = memo(() => {
   const { t } = useTranslation('setting');
@@ -89,16 +92,12 @@ export const MCPList = memo(() => {
   };
 
   return (
-    <VirtuosoGrid
-      components={{ Footer: renderFooter }}
-      data={allItems}
-      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
-      itemClassName={virtuosoGridStyles.item}
-      itemContent={(_, item) => <Item {...item} />}
-      listClassName={virtuosoGridStyles.list}
-      overscan={24}
-      style={{ height: '60vh', width: '100%' }}
-      endReached={() => {
+    <MasonicGrid
+      footer={renderFooter()}
+      getKey={getPluginKey}
+      items={allItems}
+      renderItem={renderPlugin}
+      onEndReached={() => {
         // While a page is failing, paging waits for the explicit retry above
         // instead of hammering the endpoint on every scroll.
         if (!canAutoLoadMore(list)) return;

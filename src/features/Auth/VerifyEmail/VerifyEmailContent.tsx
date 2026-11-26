@@ -2,6 +2,8 @@ import { Block, Button, Flexbox, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+
 import { useVerifyEmail } from './useVerifyEmail';
 
 interface VerifyEmailContentProps {
@@ -11,7 +13,7 @@ interface VerifyEmailContentProps {
 
 export const VerifyEmailContent = ({ email, callbackUrl }: VerifyEmailContentProps) => {
   const { t } = useTranslation('auth');
-  const { handleResendEmail, resending } = useVerifyEmail({ callbackUrl, email });
+  const { handleResendEmail, resendError, resending } = useVerifyEmail({ callbackUrl, email });
 
   return (
     <Flexbox gap={16}>
@@ -27,6 +29,7 @@ export const VerifyEmailContent = ({ email, callbackUrl }: VerifyEmailContentPro
       >
         {t('betterAuth.verifyEmail.resend.button')}
       </Button>
+      {resendError && <InlineErrorText>{resendError}</InlineErrorText>}
     </Flexbox>
   );
 };

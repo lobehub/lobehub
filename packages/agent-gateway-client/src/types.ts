@@ -297,7 +297,15 @@ export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question
 
 /** Producer that owns the blocked interaction. */
 export type AgentInterventionProvider =
-  'claude-code' | 'codex' | 'copilot' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
+  | 'antigravity'
+  | 'claude-code'
+  | 'codex'
+  | 'copilot'
+  | 'cursor'
+  | 'devin'
+  | 'droid'
+  | 'opencode'
+  | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

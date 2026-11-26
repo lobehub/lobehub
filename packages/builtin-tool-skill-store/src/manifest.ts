@@ -7,7 +7,7 @@ export const SkillStoreManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
+        "Search for skills in the LobeHub Market. Use this to discover available skills that can extend the agent's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
       name: SkillStoreApiName.searchSkill,
       parameters: {
         properties: {
@@ -25,12 +25,12 @@ export const SkillStoreManifest: BuiltinToolManifest = {
             type: 'number',
           },
           pageSize: {
-            description: 'Number of results per page. Default: 20.',
+            description: 'Number of results per page. Default: 10.',
             type: 'number',
           },
-          q: {
+          query: {
             description:
-              'Search query to filter skills. Searches across skill name, description, and summary. Optional.',
+              'Search query to filter skills. Searches across skill name, description, and summary. Optional; omit to browse skills without keyword filtering.',
             type: 'string',
           },
           sort: {

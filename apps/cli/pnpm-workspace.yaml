@@ -43,3 +43,7 @@ allowBuilds:
 overrides:
   '@types/react': 19.2.13
   antd: 6.3.5
+  # The standalone CLI install relinks shared packages. Match the root workspace pins.
+  react: 19.2.7
+  react-dom: 19.2.7
+  'zod@^4': 4.6.5

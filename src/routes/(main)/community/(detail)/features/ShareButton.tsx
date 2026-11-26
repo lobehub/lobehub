@@ -1,6 +1,5 @@
 import {
   ActionIcon,
-  Avatar,
   Button,
   Center,
   CopyButton,
@@ -21,6 +20,7 @@ import { type ComponentProps, type ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import ImperativeModal from '@/components/ImperativeModal';
 import SocialShare from '@/features/SocialShare';
 import { useShare } from '@/hooks/useShare';

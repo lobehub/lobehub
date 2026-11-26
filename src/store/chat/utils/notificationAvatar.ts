@@ -1,3 +1,5 @@
+import { parseAgentAvatar } from '@lobehub/ui';
+
 const AVATAR_SIZE = 256;
 const FALLBACK_BACKGROUND = '#EBEBEB';
 const EMOJI_FONT_RATIO = 0.62;
@@ -85,6 +87,9 @@ export const renderAvatarToDataUrl = (
 ): Promise<string | undefined> => {
   const { avatar, backgroundColor } = meta;
   if (!avatar || typeof document === 'undefined') return Promise.resolve(undefined);
+  // A picked Agent character (`agent-avatar:<shape>:<color>`) is no emoji or image; drawing it
+  // as text would print its value. It gets no picture, like the generated character.
+  if (parseAgentAvatar(avatar)) return Promise.resolve(undefined);
 
   const key = [cacheKey, avatar, backgroundColor].join('|');
   const cached = avatarCache.get(key);

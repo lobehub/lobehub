@@ -76,6 +76,7 @@ import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { steerQueuedFollowUps } from './clientSteer';
+import { deferClientSkillsTool } from './deferSkillsTool';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -643,12 +644,7 @@ export class StreamingExecutorActionImpl {
     // Step 1: Create Agent State (resolves config once)
     // ===========================================
     // agentConfig already has isSubAgent filtering applied and is passed to callLLM executor
-    const {
-      state: initialAgentState,
-      context: initialAgentContext,
-      agentConfig,
-      toolsEngine,
-    } = this.#get().internal_createAgentState({
+    const createdRun = this.#get().internal_createAgentState({
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
@@ -663,6 +659,18 @@ export class StreamingExecutorActionImpl {
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
       modelOverride: params.modelOverride,
       chatConfigOverride: params.chatConfigOverride,
+    });
+    // A run with no skill to offer starts without the skill APIs of lobe-skills.
+    const {
+      state: initialAgentState,
+      context: initialAgentContext,
+      agentConfig,
+      toolsEngine,
+    } = await deferClientSkillsTool(createdRun, {
+      agentId: groupId && subAgentId ? subAgentId : agentId,
+      disableTools,
+      messages,
+      resumed: !!params.initialState,
     });
 
     if (params.skipCreateFirstMessage) {

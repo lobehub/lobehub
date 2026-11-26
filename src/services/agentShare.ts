@@ -44,6 +44,11 @@ class AgentShareService {
     );
   }
 
+  /** The visitor landing page as the share settings preview renders it; never counts a view. */
+  async getProfilePreview(agentId: string) {
+    return lambdaClient.agentShare.getProfilePreview.query({ agentId });
+  }
+
   /** Candidates for the share settings skill picker — see the router's JSDoc. */
   async listGrantableSkills(agentId: string) {
     return lambdaClient.agentShare.listGrantableSkills.query({ agentId });

@@ -25,6 +25,7 @@ import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { ilikeContains as containsIgnoreCase } from '../utils/like';
+import { memberNicknameSql } from '../utils/workspaceMemberNickname';
 import { ResourcePermissionModel } from './resourcePermission';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
@@ -100,6 +101,31 @@ export class WorkspaceMemberModel {
     return new Map(rows.map((row) => [row.workspaceId, row.role]));
   };
 
+  /**
+   * `userId → nickname` for the active members of `workspaceId` among `userIds`
+   * who set one. Server surfaces that label people inside a workspace read it so
+   * a member goes by the same name there as in the member directory.
+   */
+  getNicknames = async (workspaceId: string, userIds: readonly string[]) => {
+    const ids = [...new Set(userIds)];
+    if (ids.length === 0) return new Map<string, string>();
+
+    const nickname = memberNicknameSql();
+    const rows = await this.db
+      .select({ nickname, userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          inArray(workspaceMembers.userId, ids),
+          isNull(workspaceMembers.deletedAt),
+          isNotNull(nickname),
+        ),
+      );
+
+    return new Map(rows.flatMap(({ nickname, userId }) => (nickname ? [[userId, nickname]] : [])));
+  };
+
   /** Lock an active membership row. Call only from an enclosing transaction. */
   getMemberForUpdate = async (workspaceId: string, userId: string) => {
     const [member] = await this.db
@@ -136,13 +162,17 @@ export class WorkspaceMemberModel {
   searchAssignableMembers = async (
     workspaceId: string,
     options: { limit: number; query?: string },
-  ): Promise<{ rows: Array<{ role: string; userId: string }>; total: number }> => {
+  ): Promise<{
+    rows: Array<{ nickname: string | null; role: string; userId: string }>;
+    total: number;
+  }> => {
     const { limit, query } = options;
     if (ASSIGNABLE_MEMBER_ROLES.length === 0 || limit <= 0) return { rows: [], total: 0 };
 
     const matchesQuery = query
       ? or(
           sql`lower(${users.id}) = ${query}`,
+          containsIgnoreCase(memberNicknameSql(), query),
           containsIgnoreCase(users.fullName, query),
           containsIgnoreCase(users.username, query),
           containsIgnoreCase(users.email, query),
@@ -165,6 +195,7 @@ export class WorkspaceMemberModel {
           ),
         )
       : undefined;
+    const nickname = memberNicknameSql();
     const where = and(
       eq(workspaceMembers.workspaceId, workspaceId),
       isNull(workspaceMembers.deletedAt),
@@ -174,11 +205,16 @@ export class WorkspaceMemberModel {
 
     const [rows, [{ total }]] = await Promise.all([
       this.db
-        .select({ role: workspaceMembers.role, userId: workspaceMembers.userId })
+        .select({ nickname, role: workspaceMembers.role, userId: workspaceMembers.userId })
         .from(workspaceMembers)
         .innerJoin(users, eq(users.id, workspaceMembers.userId))
         .where(where)
-        .orderBy(asc(users.fullName), asc(users.username), asc(workspaceMembers.userId))
+        .orderBy(
+          // Members are listed by the name they go by in this workspace.
+          asc(sql`coalesce(${nickname}, ${users.fullName})`),
+          asc(users.username),
+          asc(workspaceMembers.userId),
+        )
         .limit(limit),
       this.db
         .select({ total: count() })
@@ -214,7 +250,7 @@ export class WorkspaceMemberModel {
     // the soft delete is reactivated by `addMember`, so a row left behind would
     // silently restore their old access or teams on re-invite. Workspace-wide
     // rows carry no subject and stay. The job title, responsibilities and member
-    // config are cleared for the same reason: a re-invited member starts without them.
+    // config (nickname and badge color) are cleared for the same reason: a re-invited member starts without them.
     //
     // Soft-delete first, then revoke, both in one transaction: the update takes
     // the membership row lock that a concurrent grant waits on, so a grant can
@@ -223,7 +259,12 @@ export class WorkspaceMemberModel {
     await this.db.transaction(async (tx) => {
       await tx
         .update(workspaceMembers)
-        .set({ config: {}, deletedAt: new Date(), responsibilities: null, title: null })
+        .set({
+          config: {},
+          deletedAt: new Date(),
+          responsibilities: null,
+          title: null,
+        })
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
@@ -286,8 +327,8 @@ export class WorkspaceMemberModel {
   };
 
   /**
-   * Set an active member's workspace-scoped job title, responsibilities and
-   * badge color (kept in `config`). `null` clears a field; an omitted field
+   * Set an active member's workspace-scoped job title, responsibilities, and the
+   * nickname and badge color kept in `config`. `null` clears a field; an omitted field
    * stays as it is, and other `config` keys are left alone. Returns the
    * updated row, or `undefined` when the user is not an active member.
    */
@@ -296,21 +337,31 @@ export class WorkspaceMemberModel {
     userId: string,
     profile: {
       badgeColor?: string | null;
+      nickname?: string | null;
       responsibilities?: string | null;
       title?: string | null;
     },
   ) => {
-    const { badgeColor } = profile;
+    // Each `config` key is merged or removed on its own, so one edit never
+    // drops another key set concurrently.
+    const configKeys = { badgeColor: profile.badgeColor, nickname: profile.nickname };
+    const changed = Object.entries(configKeys).filter(([, value]) => value !== undefined);
+    const set = Object.fromEntries(changed.filter(([, value]) => value !== null));
     const config =
-      badgeColor === undefined
+      changed.length === 0
         ? undefined
-        : badgeColor === null
-          ? sql`${workspaceMembers.config} - 'badgeColor'`
-          : sql`${workspaceMembers.config} || ${JSON.stringify({ badgeColor })}::jsonb`;
+        : changed
+            .filter(([, value]) => value === null)
+            .reduce((expr, [key]) => sql`${expr} - ${key}::text`, sql`${workspaceMembers.config}`)
+            .append(sql` || ${JSON.stringify(set)}::jsonb`);
 
     const [result] = await this.db
       .update(workspaceMembers)
-      .set({ config, responsibilities: profile.responsibilities, title: profile.title })
+      .set({
+        config,
+        responsibilities: profile.responsibilities,
+        title: profile.title,
+      })
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),

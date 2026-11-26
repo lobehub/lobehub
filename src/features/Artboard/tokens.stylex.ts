@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 
 export const artboardTokens = stylex.defineVars({
   accent: cssVar.volcano,
-  accentStrong: cssVar.volcanoActive,
+  recommendation: cssVar.colorTextSecondary,
   agent: cssVar.volcanoActive,
   human: cssVar.colorInfo,
   overlayShadow: cssVar.boxShadowSecondary,

@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Сид",
   "config.seed.random": "Случайный сид",
+  "config.size.autoByOpenAI": "Авто (определяется OpenAI)",
   "config.size.label": "Размер",
   "config.steps.label": "Шаги",
   "config.title": "Конфигурация",

@@ -17,9 +17,12 @@ import { agents, agentShares, channelMembers, users, userSettings } from '../../
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
+import { agentShareAdmits } from '../../utils/agentShareAdmits';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import type { ChannelAgentAccess } from './agentAccess';
 import { ChannelError } from './error';
+import { syncMemberGrant } from './grants';
 
 /**
  * Whether a direct conversation is with an Agent reached through its share: someone else's Agent
@@ -117,8 +120,8 @@ export interface ChannelAddAgentInput {
 }
 
 /**
- * Another person's Agent that `userId` may talk to through its live link share. A link share is
- * open to anyone signed in, so no contact entry is needed; only a direct conversation (personal
+ * Another person's Agent that `userId` may talk to through its live share: a link share, open to
+ * anyone signed in, or a card share its owner granted them. No contact entry is needed; only a direct conversation (personal
  * or in a workspace) can hold one, because the share admits one person at a time and counts its
  * limits per person.
  */
@@ -143,7 +146,7 @@ export const findSharedChannelAgent = async (
     .where(
       and(
         eq(agents.id, agentId),
-        eq(agentShares.visibility, 'link'),
+        agentShareAdmits(userId),
         notTrashed(agents.isDeleted),
         ne(agents.userId, userId),
       ),
@@ -166,28 +169,6 @@ export const findSharedChannelAgent = async (
 const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
   channel.agentId === agentId;
 
-/**
- * The share a member's reply runs under, resolved as {@link resolveExecutionConfig} does: only in a
- * direct conversation, and only for an Agent the requester cannot use as their own.
- */
-export const channelReplyShare = async (
-  db: LobeChatDatabase | Transaction,
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
-  agentId: string,
-  userId: string,
-) => {
-  if (!acceptsSharedAgent(channel, agentId)) return;
-  const [usable] = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(agentUsableByWhere(agentId, { userId, workspaceId: channel.workspaceId ?? undefined }));
-  if (usable) return;
-  const share = await findSharedChannelAgent(db, userId, agentId);
-  return (
-    share && { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId }
-  );
-};
-
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (
   tx: Transaction,
@@ -197,19 +178,39 @@ export const requireChannelAgent = async (
   options: { allowShared?: boolean } = {},
 ) => {
   const [agent] = await tx
-    .select({ name: agents.name, slug: agents.slug, title: agents.title })
+    .select({
+      name: agents.name,
+      slug: agents.slug,
+      title: agents.title,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(agentUsableByWhere(agentId, { userId, workspaceId: workspaceId ?? undefined }))
     .for('share');
   if (agent)
     // LobeAI rows are stored without a title; label it the way the rest of the product does.
-    return { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) };
+    return {
+      name: agent.name,
+      title: normalizeInboxAgentTitle(agent.title, agent),
+      visibility: agent.visibility,
+    };
   const shared = options.allowShared
     ? await findSharedChannelAgent(tx, userId, agentId)
     : undefined;
   if (!shared) throw new ChannelError('NOT_FOUND', 'Agent not found');
-  return { name: shared.name, title: shared.title };
+  return { name: shared.name, title: shared.title, visibility: null };
 };
+
+/**
+ * Whether a workspace Channel may hold its owner's private Agent. Only the owner can use one, so
+ * only conversations no one else can join take it: the direct conversation with it, and the
+ * conversation between two of the owner's Agents. A group would show it, and its replies, to
+ * every member. The personal space has no private Agents.
+ */
+const acceptsPrivateAgent = (
+  channel: Pick<ChannelItem, 'agentId' | 'agentPairKey' | 'workspaceId'>,
+  agentId: string,
+) => !channel.workspaceId || channel.agentId === agentId || !!channel.agentPairKey;
 
 /**
  * Called under the Channel lock after the caller's admin role has been checked. `inviter` is the
@@ -240,6 +241,11 @@ export const addAgentMember = async (
   const agent = await requireChannelAgent(tx, channel.workspaceId, userId, input.agentId, {
     allowShared: acceptsSharedAgent(channel, input.agentId),
   });
+  if (agent.visibility === 'private' && !acceptsPrivateAgent(channel, input.agentId))
+    throw new ChannelError(
+      'FORBIDDEN',
+      'A private Agent cannot join a workspace Channel; make it visible to the workspace first',
+    );
   // Idempotent per Agent: retrying a partly applied batch must not add a second member that
   // answers the same requests again.
   const [joined] = await tx
@@ -266,6 +272,7 @@ export const addAgentMember = async (
       name: input.name?.trim() || agentDisplayName(agent, 'Agent'),
     })
     .returning();
+  await syncMemberGrant(tx, channel, member, inviter);
   return member;
 };
 
@@ -308,15 +315,23 @@ const agentSettingsColumns = {
   virtual: agents.virtual,
 };
 
-/** Read current settings with the requester's Agent permissions, then freeze the effective config. */
+/**
+ * Read current settings with the requester's Agent permissions, then freeze the effective config.
+ * `access` is how the requester may use it (`resolveChannelAgentAccess`): only `own` and `share`
+ * run.
+ */
 export const resolveExecutionConfig = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
   userId: string,
   serverDefault: PartialDeep<LobeAgentConfig>,
+  access: ChannelAgentAccess,
 ): Promise<ChannelExecutionConfig | null> => {
   if (!member.agentId) return null;
+  if (access.kind === 'share')
+    return sharedExecutionConfig(tx, member.agentId, access.share, serverDefault);
+  if (access.kind !== 'own') return null;
   const [agent] = await tx
     .select(agentSettingsColumns)
     .from(agents)
@@ -324,27 +339,32 @@ export const resolveExecutionConfig = async (
       agentUsableByWhere(member.agentId, { userId, workspaceId: channel.workspaceId ?? undefined }),
     )
     .for('share');
-  if (agent) {
-    const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
-    const runtime = agentRuntime(config);
-    if (!isChannelRuntime(runtime)) return null;
-    return {
-      ...config,
-      ...memberEnvironment(member.config),
-      provider: config.provider || DEFAULT_PROVIDER,
-      runtime,
-    };
-  }
+  if (!agent) return null;
+  const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
+  const runtime = agentRuntime(config);
+  if (!isChannelRuntime(runtime)) return null;
+  return {
+    ...config,
+    ...memberEnvironment(member.config),
+    provider: config.provider || DEFAULT_PROVIDER,
+    runtime,
+  };
+};
 
-  // Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
-  // exactly what a visitor of its share page gets — and only in the cloud.
-  if (!acceptsSharedAgent(channel, member.agentId)) return null;
-  const share = await findSharedChannelAgent(tx, userId, member.agentId);
-  if (!share) return null;
+/**
+ * Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
+ * exactly what a visitor of its share page gets — and only where its share runs.
+ */
+const sharedExecutionConfig = async (
+  tx: Transaction,
+  agentId: string,
+  share: ChannelSharedAgentAccess,
+  serverDefault: PartialDeep<LobeAgentConfig>,
+): Promise<ChannelExecutionConfig | null> => {
   const [owned] = await tx
     .select(agentSettingsColumns)
     .from(agents)
-    .where(eq(agents.id, member.agentId))
+    .where(eq(agents.id, agentId))
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
@@ -365,7 +385,7 @@ export const resolveExecutionConfig = async (
 };
 
 // Match ordinary Agent execution, including Agents created before agencyConfig existed.
-const agentRuntime = (config: LobeAgentConfig) =>
+export const agentRuntime = (config: Pick<LobeAgentConfig, 'agencyConfig' | 'model'>) =>
   config.agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(config.model) ? config.model : 'native');
 

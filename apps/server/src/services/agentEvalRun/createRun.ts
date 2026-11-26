@@ -7,7 +7,7 @@ import type {
   ImportedMessage,
   ToolIntervention,
 } from '@lobechat/types';
-import { evalCaseVersionOf, getActivePluginIds } from '@lobechat/types';
+import { evalCaseVersionOf, getOptedInPluginIds } from '@lobechat/types';
 import { clampToolIdentifier } from '@lobechat/utils/clampToolIdentifier';
 import { eq, inArray, sql } from 'drizzle-orm';
 
@@ -413,10 +413,8 @@ async function snapshotAgentConfig(
     fewShots: agentConfig.fewShots,
     model: agentConfig.model,
     params: agentConfig.params as Record<string, unknown>,
-    // Pinned identifiers only — this snapshot is a display-only DTO
-    // (EvalRunAgentSnapshot.plugins stays string[]), and a disabled entry
-    // isn't part of what actually ran.
-    plugins: getActivePluginIds(agentConfig.plugins),
+    // Opted-in identifiers (`auto` + legacy `pinned`) — excludes explicitly disabled entries.
+    plugins: getOptedInPluginIds(agentConfig.plugins),
     provider: agentConfig.provider,
     systemRole: agentConfig.systemRole,
     title: agentConfig.title,

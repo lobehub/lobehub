@@ -2,6 +2,15 @@ import type { LLMRoleType } from '../llm';
 import type { MessageToolCall, ModelReasoning } from '../message';
 import type { OpenAIFunctionCall } from './functionCall';
 
+/** A request-local projection of tool discoveries onto their original conversation positions. */
+export interface ToolActivationContext {
+  additions: { afterToolCallId: string; instructions: string; names: string[] }[];
+  /** Leading system prompt before mid-operation tool instructions were added. */
+  system?: { current: string; initial: string };
+}
+
+export type ResolveToolActivationContext = () => Promise<ToolActivationContext | undefined>;
+
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
@@ -53,6 +62,13 @@ export type UserMessageContentPart =
   | UserMessageContentPartVideo
   | UserMessageContentPartAudio;
 
+/** Optional prompt edits prepared from the final, paired conversation. The Responses
+ * runtime applies them only when the same request can declare all their tools inline. */
+export interface ToolActivationPlan {
+  results: { callId: string; content: string; toolNames: string[] }[];
+  system?: { original: string; replacement: string; start: number };
+}
+
 export interface OpenAIChatMessage {
   /**
    * @title Content
@@ -76,6 +92,7 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  toolActivationPlan?: ToolActivationPlan;
 }
 
 /**

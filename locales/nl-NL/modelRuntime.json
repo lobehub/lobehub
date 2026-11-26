@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Ollama-service is niet beschikbaar. Controleer of Ollama correct werkt of of de cross-origin-configuratie van Ollama correct is ingesteld.",
   "OperationInactivityTimeout": "De agentbewerking was te lang inactief en is beëindigd. Probeer het verzoek opnieuw.",
   "PermissionDenied": "Sorry, u heeft geen toestemming om deze service te gebruiken. Controleer of uw sleutel de benodigde toegangsrechten heeft.",
+  "ProviderBaseURLBlocked": "Het {{provider}}-endpoint verwijst naar een privé- of lokaal netwerkadres, dat de server om veiligheidsredenen niet mag bereiken. Dit adres werkt alleen vanaf uw eigen apparaat — gebruik in plaats daarvan een openbaar bereikbaar endpoint.",
   "ProviderBizError": "Fout bij het aanvragen van de {{provider}}-service, los het probleem op of probeer het opnieuw op basis van de onderstaande informatie.",
   "ProviderContentPolicyViolation": "De aanbieder heeft deze aanvraag of de output ervan geblokkeerd vanwege het inhoudsbeleid. Pas uw prompt aan en probeer het opnieuw.",
   "ProviderNetworkError": "De verbinding met de provider is verlopen of verbroken. Controleer uw netwerk en probeer het opnieuw.",
   "ProviderNoImageGenerated": "De provider heeft geen afbeelding gegenereerd voor deze aanvraag. Probeer de aanvraag anders te formuleren of kies een model dat beeldgeneratie ondersteunt.",
   "ProviderServiceUnavailable": "De provider is tijdelijk overbelast of niet beschikbaar. Probeer het over een tijdje opnieuw.",
+  "ProviderStreamInterrupted": "De provider heeft de verbinding verbroken voordat het antwoord volledig was. Dit is meestal tijdelijk; probeer het opnieuw.",
   "QuotaLimitReached": "Sorry, het tokengebruik of het aantal verzoeken heeft de quotumlimiet voor deze sleutel bereikt. Verhoog het quotum van de sleutel of probeer het later opnieuw.",
   "RateLimitExceeded": "Sorry, het tokengebruik of het aantal verzoeken heeft de snelheidslimiet voor deze sleutel bereikt. Probeer het later opnieuw of verhoog het quotum van de sleutel.",
   "RemoteMediaDownloadTimeout": "De provider heeft een time-out gekregen bij het downloaden van een bijgevoegde afbeelding of bestand. Probeer het opnieuw.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "De upstream-gateway of proxy heeft een fout geretourneerd. Probeer het over een tijdje opnieuw; controleer uw proxy-/eindpuntconfiguratie als het probleem aanhoudt.",
   "UpstreamHttpError": "De provider heeft een HTTP-fout geretourneerd zonder verdere details. Probeer het opnieuw, of controleer uw verzoek en modelconfiguratie.",
   "UpstreamMalformedResponse": "De provider heeft een onjuist geformatteerd antwoord geretourneerd dat niet kon worden geparsed. Probeer het opnieuw; probeer een ander model of een andere provider als het probleem aanhoudt.",
-  "UserConfigError": "De providerconfiguratie is ongeldig (onjuiste basis-URL, ontbrekende omgevingsvariabele, virtuele-sleutelbeperking, enz.). Controleer de providerinstellingen."
+  "UserConfigError": "De providerconfiguratie is ongeldig (onjuiste basis-URL, ontbrekende omgevingsvariabele, virtuele-sleutelbeperking, enz.). Controleer de providerinstellingen.",
+  "WorkspaceModelRestricted": "Dit model is hoger dan het hoogste niveau dat uw werkruimtebeheerder voor u toestaat. Kies een model van een lager niveau, of vraag een werkruimtebeheerder om uw niveau te verhogen."
 }

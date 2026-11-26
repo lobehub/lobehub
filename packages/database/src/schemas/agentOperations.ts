@@ -154,6 +154,14 @@ export const agentOperations = pgTable(
     index('agent_operations_running_created_at_idx')
       .on(t.createdAt)
       .where(sql`${t.status} = 'running'`),
+    /**
+     * Parked-run scans of `ParkedInterventionExpiry`, keyed on `created_at`
+     * for the same HOT-update reason. Without it every sweep reads each
+     * `waiting_for_human` row through `agent_operations_status_idx`.
+     */
+    index('agent_operations_waiting_for_human_created_at_idx')
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'waiting_for_human'`),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
     index('agent_operations_workspace_id_created_at_idx').on(t.workspaceId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),

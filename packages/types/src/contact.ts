@@ -24,6 +24,8 @@ export interface ContactAgentProfile {
   avatar: string | null;
   backgroundColor: string | null;
   description: string | null;
+  /** Personal name; the label is `agentDisplayName` of it and `title`. */
+  name: string | null;
   owner: ContactUserProfile;
   /** Share id; the visitor page and every run authorize against it. */
   shareId: string;

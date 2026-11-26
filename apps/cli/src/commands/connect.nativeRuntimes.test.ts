@@ -199,7 +199,9 @@ describe('connect native agent runtimes', () => {
     await createProgram().parseAsync(['node', 'test', 'connect', 'capabilities']);
     /** @example Only a successful native handshake is advertised in machine-readable output. */
     expect(output).toHaveBeenCalledWith(
-      JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+      JSON.stringify({
+        supportedAgentRuntimes: ['codex-app-server-v1', 'codex-collaboration-mode-v1'],
+      }),
     );
     /** @example Capability discovery does not consume a user login or gateway connection. */
     expect(resolveToken).not.toHaveBeenCalled();
@@ -229,6 +231,7 @@ describe('connect native agent runtimes', () => {
     expect(codexProbe.connect).toHaveBeenCalledOnce();
     expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([
       'codex-app-server-v1',
+      'codex-collaboration-mode-v1',
     ]);
   });
 

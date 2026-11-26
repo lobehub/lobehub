@@ -2,6 +2,7 @@
 
 import type { EnvironmentVisibility } from '@lobechat/types';
 import {
+  ActionIcon,
   Button,
   Center,
   createStaticStyles,
@@ -77,10 +78,16 @@ interface EnvironmentManagerProps {
   headerLeading?: ReactNode;
   /** Open one environment's page. */
   onOpenEnvironment: (id: string) => void;
+  /**
+   * A filter the host owns, when one header filter narrows several lists at
+   * once (environments and credentials share a page). The manager then shows
+   * no filter of its own.
+   */
+  visibilityFilter?: VisibilityFilterValue;
 }
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(
-  ({ createVisibility, headerLeading, onOpenEnvironment }) => {
+  ({ createVisibility, headerLeading, onOpenEnvironment, visibilityFilter: hostFilter }) => {
     const { t } = useTranslation('setting');
     // `settled`: a list to paint — the stored one on a reload, confirmed behind
     // it. A stored empty list waits for the server.
@@ -92,13 +99,15 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
     const list = environments ?? [];
     // Workspace pages only (where a new environment has a pool to land in):
     // narrow the one list to private or published environments.
-    const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+    const [ownFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+    const visibilityFilter = hostFilter ?? ownFilter;
     const isPrivateEnvironment = (environment: (typeof list)[number]) =>
       !!environment.workspaceId && environment.visibility === 'private';
-    const showVisibilityFilter = !!createVisibility && list.length > 0;
-    const visibleList = showVisibilityFilter
-      ? list.filter((e) => matchesVisibilityFilter(isPrivateEnvironment(e), visibilityFilter))
-      : list;
+    const showVisibilityFilter = !hostFilter && !!createVisibility && list.length > 0;
+    const visibleList =
+      createVisibility || hostFilter
+        ? list.filter((e) => matchesVisibilityFilter(isPrivateEnvironment(e), visibilityFilter))
+        : list;
 
     // Open what was just made. Nothing is built: an environment is applied to
     // a working directory when a conversation picks it.
@@ -130,22 +139,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
       // neighbour.
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
         {showVisibilityFilter && (
-          <VisibilityFilter
-            value={visibilityFilter}
-            counts={{
-              all: list.length,
-              private: list.filter(isPrivateEnvironment).length,
-              workspace: list.filter((e) => !isPrivateEnvironment(e)).length,
-            }}
-            onChange={setVisibilityFilter}
-          />
+          <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
         )}
-        <Button
-          icon={<Icon icon={RefreshCwIcon} />}
-          loading={refreshing}
-          title={t('environments.refresh')}
-          onClick={refresh}
-        />
         <Button
           icon={<Icon icon={PlusIcon} />}
           type={'primary'}
@@ -153,6 +148,15 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
         >
           {t('environments.create')}
         </Button>
+        {/* Last and borderless, as on the subscription accounts page. */}
+        <ActionIcon
+          loading={refreshing}
+          title={t('environments.refresh')}
+          onClick={refresh}
+          icon={RefreshCwIcon}
+          // A row that runs short of width shrinks its children; the icon keeps its square.
+          style={{ flex: 'none' }}
+        />
       </Flexbox>
     );
 

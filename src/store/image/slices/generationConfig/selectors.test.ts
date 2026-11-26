@@ -228,4 +228,22 @@ describe('imageGenerationConfigSelectors', () => {
       expect(imageGenerationConfigSelectors.isAnimatedOutput(state)).toBe(false);
     });
   });
+
+  it.each([
+    ['gpt-image-2.6-flare', 'gif', true],
+    ['gpt-image-2.6-sunburst', 'gif', true],
+    ['gpt-image-2.6-flare', 'png', false],
+    ['custom-gif-model', 'gif', false],
+  ])(
+    'uses automatic size only for the supported GPT Image GIF cards (%s, %s)',
+    (model, outputFormat, expected) => {
+      const state = merge(initialStore, {
+        model,
+        parameters: { prompt: '', outputFormat },
+        parametersSchema: { outputFormat: { default: 'png', enum: ['png', 'gif'] } },
+      });
+
+      expect(imageGenerationConfigSelectors.isAutomaticSize(state)).toBe(expected);
+    },
+  );
 });

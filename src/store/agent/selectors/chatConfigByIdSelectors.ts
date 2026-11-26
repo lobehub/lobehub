@@ -99,11 +99,6 @@ const getRuntimeModeById =
   (s: AgentStoreState): RuntimeEnvMode =>
     executionTargetToRuntimeMode(getExecutionTargetById(agentId)(s));
 
-const getSkillActivateModeById =
-  (agentId: string) =>
-  (s: AgentStoreState): 'auto' | 'manual' =>
-    getChatConfigById(agentId)(s).skillActivateMode ?? 'auto';
-
 /**
  * Resolve the agent's tool mode via the shared `resolveToolMode` helper, so
  * client and server agree on what counts as chat mode.
@@ -126,7 +121,6 @@ export const chatConfigByIdSelectors = {
   getRuntimeModeById,
   getSearchFCModelById,
   getSearchModeById,
-  getSkillActivateModeById,
   getToolModeById,
   getUseModelBuiltinSearchById,
   isChatModeById,

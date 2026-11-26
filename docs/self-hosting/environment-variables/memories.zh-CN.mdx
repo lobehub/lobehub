@@ -1,0 +1,178 @@
+---
+title: 配置记忆功能环境变量
+description: 了解如何配置 LobeHub 记忆功能所需的过滤器、提取器和向量化模型相关环境变量。
+tags:
+  - 记忆
+  - Memory
+  - 环境变量
+  - Embedding
+---
+
+# 配置记忆功能环境变量
+
+LobeHub 的记忆功能依赖三个相互独立的模型环节协同工作：**过滤器（Gate Keeper）** 负责判断对话内容是否值得写入记忆，**提取器（Layer Extractor）** 负责从对话上下文中提取具体的记忆内容，**向量化（Embedding）** 负责将记忆内容转换为向量以支持语义检索。
+
+为了适配不同的部署场景，这三个环节都支持单独配置模型、服务商、接口地址与 API Key。如果不配置，将回退使用用户在模型服务商设置中的偏好模型。
+
+## 过滤器（Gate Keeper）
+
+Gate Keeper 用于在写入记忆前对内容进行判断和把关，避免产生冗余或低质量的记忆。
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_LANGUAGE`
+
+- 类型：可选
+- 描述：强制指定 Gate Keeper 输出所使用的语言
+- 默认值：-
+- 示例：`简体中文`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_MODEL`
+
+- 类型：可选
+- 描述：强制指定 Gate Keeper 使用的模型，优先级高于服务商和模型偏好设置
+- 默认值：-
+- 示例：`gpt-5.4-mini`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_API_KEY`
+
+- 类型：可选
+- 描述：Gate Keeper 所使用模型对应服务商的 API Key
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_BASE_URL`
+
+- 类型：可选
+- 描述：接口的 Base URL。如果是 OpenAI 兼容接口，只需要填写到 `/v1` 的部分
+- 默认值：-
+- 示例：`https://example.com/v1`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_PROVIDER`
+
+- 类型：可选
+- 描述：选择该模型背后使用的 LobeHub 支持的服务商 SDK 实现。如果是 OpenAI 兼容接口，填写 `openai` 即可
+- 默认值：-
+- 示例：`openai`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_PREFERRED_PROVIDERS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商时，用于指定匹配服务商的顺序，多个服务商用英文逗号分隔
+- 默认值：-
+- 示例：`openai,deepseek`
+
+### `MEMORY_USER_MEMORY_GATEKEEPER_PREFERRED_MODELS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商并激活了多个模型时，用于指定匹配模型的顺序；如果没有匹配到，将依次尝试下一个 model id。例如 OpenRouter 上的 OpenAI 模型 ID 为 `openai/gpt-5.4-mini`，此时应填写该 ID
+- 默认值：-
+- 示例：`gpt-5.4-mini,openai/gpt-5.4-mini`
+
+## 提取器（Layer Extractor）
+
+Layer Extractor 用于从对话上下文中提取出需要沉淀为长期记忆的具体内容。
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_CONTEXT_LIMIT`
+
+- 类型：可选
+- 描述：模型的上下文 Token 限制。例如模型上下文限制为 `27200` Token 时，建议设置为该限制的 60%~75%，剩余部分预留给生成内容使用
+- 默认值：-
+- 示例：`20000`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_MODEL`
+
+- 类型：可选
+- 描述：强制指定 Layer Extractor 使用的模型，优先级高于服务商和模型偏好设置
+- 默认值：-
+- 示例：`gpt-5.4-mini`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_API_KEY`
+
+- 类型：可选
+- 描述：Layer Extractor 所使用模型对应服务商的 API Key
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_BASE_URL`
+
+- 类型：可选
+- 描述：接口的 Base URL。如果是 OpenAI 兼容接口，只需要填写到 `/v1` 的部分
+- 默认值：-
+- 示例：`https://example.com/v1`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PROVIDER`
+
+- 类型：可选
+- 描述：选择该模型背后使用的 LobeHub 支持的服务商 SDK 实现。如果是 OpenAI 兼容接口，填写 `openai` 即可
+- 默认值：-
+- 示例：`openai`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PREFERRED_PROVIDERS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商时，用于指定匹配服务商的顺序，多个服务商用英文逗号分隔
+- 默认值：-
+- 示例：`openai,deepseek`
+
+### `MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PREFERRED_MODELS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商并激活了多个模型时，用于指定匹配模型的顺序；如果没有匹配到，将依次尝试下一个 model id
+- 默认值：-
+- 示例：`gpt-5.4-mini,openai/gpt-5.4-mini`
+
+## 向量化（Embedding）
+
+Embedding 用于将提取出的记忆内容转换为向量，以便后续进行语义检索。
+
+### `MEMORY_USER_MEMORY_EMBEDDING_CONTEXT_LIMIT`
+
+- 类型：可选
+- 描述：Embedding 模型的 Token 限制。例如 OpenAI 的 Embedding 模型限制为 `8192` Token 时，建议设置为该限制的 75%~90%；如果使用 Voyage 等支持更大上下文的 Embedding 模型，可以设置得更高一些
+- 默认值：-
+- 示例：`5000`
+
+### `MEMORY_USER_MEMORY_EMBEDDING_API_KEY`
+
+- 类型：可选
+- 描述：Embedding 所使用模型对应服务商的 API Key
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `MEMORY_USER_MEMORY_EMBEDDING_BASE_URL`
+
+- 类型：可选
+- 描述：接口的 Base URL。如果是 OpenAI 兼容接口，只需要填写到 `/v1` 的部分
+- 默认值：-
+- 示例：`https://example.com/v1`
+
+### `MEMORY_USER_MEMORY_EMBEDDING_MODEL`
+
+- 类型：可选
+- 描述：强制指定 Embedding 使用的模型，优先级高于服务商和模型偏好设置
+- 默认值：-
+- 示例：`text-embedding-3-large`
+
+<Callout type={'info'}>
+  以上示例以 OpenAI 的 `text-embedding-3-large` 模型为例，实际使用时请替换为你要使用的 Embedding 模型。
+</Callout>
+
+### `MEMORY_USER_MEMORY_EMBEDDING_PROVIDER`
+
+- 类型：可选
+- 描述：选择该模型背后使用的 LobeHub 支持的服务商 SDK 实现。如果是 OpenAI 兼容接口，填写 `openai` 即可
+- 默认值：-
+- 示例：`openai`
+
+### `MEMORY_USER_MEMORY_EMBEDDING_PREFERRED_PROVIDERS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商时，用于指定匹配服务商的顺序，多个服务商用英文逗号分隔
+- 默认值：-
+- 示例：`openai`
+
+### `MEMORY_USER_MEMORY_EMBEDDING_PREFERRED_MODELS`
+
+- 类型：可选
+- 描述：当使用记忆功能的用户配置了多个服务商并激活了多个模型时，用于指定匹配模型的顺序；如果没有匹配到，将依次尝试下一个 model id
+- 默认值：-
+- 示例：`text-embedding-3-large,openai/text-embedding-3-large`

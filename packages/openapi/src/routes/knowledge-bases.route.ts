@@ -218,6 +218,7 @@ app.get(
 app.post(
   '/:id/files/batch',
   routeDoc({
+    operationId: 'knowledgeBases.addFiles',
     data: KnowledgeBaseFileOperationResultSchema,
     errors: [404],
     summary: 'Add files to a knowledge base',
@@ -243,6 +244,7 @@ app.post(
 app.delete(
   '/:id/files/batch',
   routeDoc({
+    operationId: 'knowledgeBases.removeFiles',
     data: KnowledgeBaseFileOperationResultSchema,
     description:
       'Detaches the files from the knowledge base without deleting them, and reports per file which ones were detached.',
@@ -270,6 +272,7 @@ app.delete(
 app.post(
   '/:id/files/move',
   routeDoc({
+    operationId: 'knowledgeBases.moveFiles',
     data: KnowledgeBaseFileOperationResultSchema,
     errors: [404],
     summary: 'Move files to another knowledge base',

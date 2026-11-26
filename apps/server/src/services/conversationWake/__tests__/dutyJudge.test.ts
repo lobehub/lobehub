@@ -52,7 +52,7 @@ describe('createWakeDutyJudge', () => {
     expect(options.signal).toBe(abort.signal);
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'duty-v3',
+      promptVersion: 'duty-v4',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_duty_decision',
     });
@@ -122,7 +122,7 @@ describe('createWakeDutyJudge', () => {
     expect(payload.messages[0].content).toContain('"helpful" high:');
     expect(payload.messages[1].content).toContain('PR 提了之后通知提需求的人');
     expect(options.tracing).toMatchObject({
-      promptVersion: 'duty-v3',
+      promptVersion: 'duty-v4',
       schemaName: 'bot_wake_duty',
     });
   });

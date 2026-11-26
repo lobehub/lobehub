@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   type BoundDirectoryLike,
   normalizeComparablePath,
   pickDirectoryForPath,
   pickLatestTopic,
-  resolveDirectoryMatch,
 } from './openDirectorySelection';
 
 const LOCAL = 'device-local';
@@ -110,54 +109,6 @@ describe('pickDirectoryForPath', () => {
 
   it('should return undefined for an empty binding list', () => {
     expect(pickDirectoryForPath([], '/repo', local)).toBeUndefined();
-  });
-});
-
-describe('resolveDirectoryMatch', () => {
-  const base = { pollMs: 1, targetPath: '/repo', timeoutMs: 50 };
-
-  it('should wait for the device identity before deciding it is unbound', async () => {
-    // A cold-start replay outruns `gatewayDeviceInfo`; a snapshot at that moment
-    // would fall through to the project list even though the directory is bound.
-    const getDeviceId = vi.fn().mockReturnValueOnce(undefined).mockReturnValue(LOCAL);
-    const list = vi.fn().mockResolvedValue([directory('a', '/repo')]);
-
-    await expect(resolveDirectoryMatch({ ...base, getDeviceId, list })).resolves.toEqual({
-      directory: directory('a', '/repo'),
-      matchedParent: false,
-    });
-    expect(getDeviceId).toHaveBeenCalledTimes(2);
-  });
-
-  it('should retry an empty list instead of treating it as unbound', async () => {
-    const list = vi
-      .fn()
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([directory('a', '/repo')]);
-
-    await expect(
-      resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list }),
-    ).resolves.toMatchObject({ directory: { id: 'a' } });
-    expect(list).toHaveBeenCalledTimes(2);
-  });
-
-  it('should survive a failing call', async () => {
-    const list = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('401'))
-      .mockResolvedValueOnce([directory('a', '/repo')]);
-
-    await expect(
-      resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list }),
-    ).resolves.toMatchObject({ directory: { id: 'a' } });
-  });
-
-  it('should give up at the deadline and report no match', async () => {
-    const list = vi.fn().mockResolvedValue([]);
-
-    await expect(
-      resolveDirectoryMatch({ ...base, getDeviceId: () => LOCAL, list, timeoutMs: 5 }),
-    ).resolves.toBeUndefined();
   });
 });
 

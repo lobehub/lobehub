@@ -29,4 +29,33 @@ export const pageCollab = {
       .set(RedisKeys.lobechat.pageProjection(documentId), digest, { ex: PROJECTION_TTL_SECONDS })
       .catch(() => undefined);
   },
+
+  /**
+   * The state vector of the room state the stored page was last written from. A
+   * room still at that state holds nothing the stored page does not show. `null`
+   * when none is recorded (never written, or expired); `undefined` when Redis is
+   * unavailable, so nobody can tell.
+   */
+  async lastPersistedRoomState(documentId: string): Promise<Uint8Array | null | undefined> {
+    const redis = await getClient();
+    if (!redis) return undefined;
+    try {
+      const value = await redis.get(RedisKeys.lobechat.pageRoomState(documentId));
+      return value ? new Uint8Array(Buffer.from(value, 'base64')) : null;
+    } catch {
+      return undefined;
+    }
+  },
+
+  async rememberPersistedRoomState(documentId: string, stateVector: Uint8Array): Promise<void> {
+    const redis = await getClient();
+    if (!redis) return;
+    await redis
+      .set(
+        RedisKeys.lobechat.pageRoomState(documentId),
+        Buffer.from(stateVector).toString('base64'),
+        { ex: PROJECTION_TTL_SECONDS },
+      )
+      .catch(() => undefined);
+  },
 };

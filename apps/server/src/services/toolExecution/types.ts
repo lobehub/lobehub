@@ -344,7 +344,12 @@ export interface ToolExecutionContext {
    * execution device. Used by the Skills runtime to load them on demand via the
    * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
+  projectSkills?: {
+    description?: string;
+    location: string;
+    name: string;
+    source?: 'device' | 'project';
+  }[];
   /** Root AI runtime operation ID used to aggregate artifacts produced by one run. */
   rootOperationId?: string;
   /**

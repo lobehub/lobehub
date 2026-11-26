@@ -49,6 +49,7 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          plugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
           // Explicit (the column defaults to random words): `create` seeds the
           // share slug from it, so tests below can assert the exact value.
           slug: 'shareable-agent',
@@ -432,6 +433,7 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        autoGrantAgentTools: true,
         deviceAccess: 'allowlist',
         deviceAllowUserIds: ['user_alice'],
         maxFileStorage: 256 * 1024 * 1024,
@@ -696,6 +698,7 @@ describe('AgentShareModel', () => {
         agentDescription: 'Shareable agent',
         agentId,
         agentName: 'Shareable Agent',
+        agentPlugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
         agentTitle: 'Shareable Agent Title',
         ownerId: userId,
         shareConfig: expect.objectContaining({ maxMessagesPerVisitor: 100 }),
@@ -767,6 +770,24 @@ describe('AgentShareModel', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Share not found' });
     });
 
+    // A card share admits its grantees in their Channels, never through the link page.
+    it('hides a card share page from non-owners, grantees included', async () => {
+      const created = await agentShareModel.create(agentId, 'card');
+      await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
+        shareId: created!.id,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: otherUserId,
+      });
+
+      await expect(
+        AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, otherUserId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(
+        (await AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, userId)).shareId,
+      ).toBe(created!.id);
+    });
+
     it('allows authenticated access to a link share', async () => {
       const created = await agentShareModel.create(agentId, 'link');
 
@@ -777,6 +798,19 @@ describe('AgentShareModel', () => {
       );
 
       expect(share.shareId).toBe(created!.id);
+    });
+
+    it('lets a signed-out viewer read a link share and nothing else', async () => {
+      const link = await agentShareModel.create(agentId, 'link');
+      const linkShare = await AgentShareModel.findByShareId(serverDB, link!.id);
+
+      expect(() => AgentShareModel.assertShareAccess(linkShare!, undefined)).not.toThrow();
+      // An empty viewer must never match the owner, even a row with no owner id.
+      for (const visibility of ['private', 'card'] as const) {
+        expect(() =>
+          AgentShareModel.assertShareAccess({ ownerId: '', visibility }, undefined),
+        ).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+      }
     });
 
     it('throws NOT_FOUND for an unknown UUID', async () => {

@@ -108,6 +108,7 @@ describe('useMenu', () => {
     const findItem = (key: string) =>
       result.current.mainItems?.find((item: any) => item?.key === key) as any;
 
+    // Settings opens the active space's own settings, not account settings.
     findItem('setting').onClick();
     expect(mockNavigate).toHaveBeenLastCalledWith('/settings');
 

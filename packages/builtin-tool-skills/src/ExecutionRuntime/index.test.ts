@@ -246,6 +246,73 @@ describe('SkillsExecutionRuntime', () => {
         size: 14,
       });
     });
+
+    it('returns a clear validation error instead of crashing when id is missing (e.g. model passed skillName)', async () => {
+      const runtime = new SkillsExecutionRuntime({ service: createMockService() });
+
+      const result = await runtime.readReference({
+        path: 'guide.md',
+        ...({ skillName: 'demo-skill' } as object),
+      } as never);
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('"id"');
+      expect(result.content).not.toContain('toLowerCase');
+    });
+
+    it('falls back to findById when id is a DB skill id and normalizes leading ./ in resource paths', async () => {
+      const readResource = vi.fn().mockResolvedValue({
+        content: '# Guide',
+        encoding: 'utf8',
+        fileHash: 'h1',
+        fileType: 'text/markdown',
+        path: 'references/guide.md',
+        size: 7,
+      });
+      const service = createMockService({
+        findById: vi.fn().mockResolvedValue({
+          id: 'skl_123',
+          name: 'demo-skill',
+          resources: { 'references/guide.md': { fileHash: 'h1', size: 7 } },
+        }),
+        findByName: vi.fn().mockResolvedValue(undefined),
+        readResource,
+      });
+      const runtime = new SkillsExecutionRuntime({ service });
+
+      const result = await runtime.readReference({
+        id: 'skl_123',
+        path: './references/guide.md',
+      });
+
+      expect(result.success).toBe(true);
+      expect(readResource).toHaveBeenCalledWith('skl_123', 'references/guide.md');
+      expect(result.content).toBe('# Guide');
+    });
+
+    it('matches builtin skills by identifier and normalizes leading ./ in resource paths', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'main',
+            description: 'desc',
+            identifier: 'lobe-lobehub',
+            name: 'LobeHub',
+            resources: { 'references/kb.md': { content: 'kb body', fileHash: 'h', size: 7 } },
+            source: 'builtin',
+          },
+        ],
+        service: createMockService(),
+      });
+
+      const result = await runtime.readReference({
+        id: 'lobe-lobehub',
+        path: './references/kb.md',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('kb body');
+    });
   });
 
   describe('project skills', () => {
@@ -269,9 +336,12 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('Run the deploy steps.');
       // The hint points at the skill's directory and instructs the model to
-      // call `local-system.globFiles` itself rather than pre-enumerating here.
+      // call `local-system.globFiles` itself rather than pre-enumerating here,
+      // and uses the real `id` parameter name for `readReference`.
       expect(result.content).toContain('/repo/.agents/skills/deploy');
       expect(result.content).toContain('globFiles');
+      expect(result.content).toContain('id="deploy"');
+      expect(result.content).not.toContain('skillName=');
       expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
     });
 
@@ -517,6 +587,146 @@ describe('SkillsExecutionRuntime', () => {
       } as never);
       expect(script.content).toContain('echo ok');
       expect(resolveSkill).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('activateSkill not-found candidates', () => {
+    it('lists project, DB, builtin/agent, and lazy user-library skills without duplicates', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        builtinSkills: [
+          {
+            content: 'builtin body',
+            description: 'Builtin artifacts',
+            identifier: 'artifacts',
+            name: 'artifacts',
+            source: 'builtin',
+          },
+          {
+            content: 'shadowed builtin',
+            description: 'Old overlap',
+            identifier: 'overlap',
+            name: 'Overlap',
+            source: 'builtin',
+          },
+          {
+            content: 'agent doc body',
+            description: 'Agent workflow',
+            identifier: 'agent-skills:workflow',
+            name: 'agent-skills:workflow',
+            source: 'builtin',
+          },
+        ],
+        listAvailableSkills: vi
+          .fn()
+          .mockResolvedValue([{ description: 'Saved plan', name: 'user-skills:plan' }]),
+        projectSkills: [
+          {
+            description: 'Deploy helper',
+            location: '/repo/.agents/skills/deploy/SKILL.md',
+            name: 'deploy',
+            source: 'project',
+          },
+        ],
+        service: createMockService({
+          findAll: vi.fn().mockResolvedValue({
+            data: [
+              { description: 'User override', id: 'db-1', name: 'overlap' },
+              { description: 'PDF helper', id: 'db-2', name: 'pdf' },
+            ],
+            total: 2,
+          }),
+        }),
+      });
+
+      const result = await runtime.activateSkill({ name: 'nonexistent' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Skill not found: "nonexistent"');
+      const jsonStart = result.content.indexOf('[');
+      const candidates = JSON.parse(result.content.slice(jsonStart)) as Array<{
+        description?: string;
+        name: string;
+      }>;
+      expect(candidates).toEqual([
+        { description: 'Deploy helper', name: 'deploy' },
+        { description: 'User override', name: 'overlap' },
+        { description: 'PDF helper', name: 'pdf' },
+        { description: 'Builtin artifacts', name: 'artifacts' },
+        { description: 'Agent workflow', name: 'agent-skills:workflow' },
+        { description: 'Saved plan', name: 'user-skills:plan' },
+      ]);
+    });
+
+    it('caps the list and says how many skills it left out', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi.fn().mockResolvedValue(
+          Array.from({ length: 45 }, (_, index) => ({
+            description: 'd'.repeat(400),
+            name: `user-skills:plan-${index}`,
+          })),
+        ),
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'nonexistent' });
+
+      expect(result.content).toMatch(/ \(15 more not listed\)$/);
+      const candidates = JSON.parse(
+        result.content.slice(result.content.indexOf('['), result.content.lastIndexOf(']') + 1),
+      ) as Array<{ description: string; name: string }>;
+      expect(candidates).toHaveLength(30);
+      expect(candidates[0].name).toBe('user-skills:plan-0');
+      expect(candidates[0].description).toHaveLength(160);
+    });
+
+    it('lists the skills that resemble the request first, so the cap cannot drop them', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi
+          .fn()
+          .mockResolvedValue([
+            ...Array.from({ length: 40 }, (_, index) => ({ name: `user-skills:plan-${index}` })),
+            { name: 'user-skills:weekly-report' },
+          ]),
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'weekly-report' });
+
+      const candidates = JSON.parse(
+        result.content.slice(result.content.indexOf('['), result.content.lastIndexOf(']') + 1),
+      ) as Array<{ name: string }>;
+      expect(candidates[0].name).toBe('user-skills:weekly-report');
+      expect(candidates[1].name).toBe('user-skills:plan-0');
+    });
+
+    it('does not treat a source prefix or the word "skill" as a resemblance', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi
+          .fn()
+          .mockResolvedValue([{ name: 'user-skills:plan' }, { name: 'user-skills:report' }]),
+        projectSkills: [{ location: '/repo/.agents/skills/deploy/SKILL.md', name: 'deploy' }],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skills:typo-skill' });
+
+      const candidates = JSON.parse(result.content.slice(result.content.indexOf('['))) as Array<{
+        name: string;
+      }>;
+      expect(candidates.map((skill) => skill.name)).toEqual([
+        'deploy',
+        'user-skills:plan',
+        'user-skills:report',
+      ]);
+    });
+
+    it('returns a clear validation error when name is missing', async () => {
+      const runtime = new SkillsExecutionRuntime({ service: createMockService() });
+
+      const result = await runtime.activateSkill({} as never);
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('"name"');
     });
   });
 });

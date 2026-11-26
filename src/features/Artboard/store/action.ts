@@ -108,9 +108,6 @@ export class ArtboardActionImpl {
 
   setFullscreen = (fullscreen: boolean) => this.#set({ fullscreen }, false, n('fullscreen'));
 
-  setStaleRevision = (staleRevision: number | null) =>
-    this.#set({ staleRevision }, false, n('staleRevision'));
-
   setNarrow = (narrow: boolean) => {
     if (narrow === this.#narrow) return;
     this.#narrow = narrow;

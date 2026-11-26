@@ -1,5 +1,7 @@
 import type {
   ChannelAgentExchange,
+  ChannelAskInput,
+  ChannelConnectorRequest,
   ChannelContextMessage,
   ChannelExecutionConfig,
   ChannelHistoryMessage,
@@ -9,24 +11,21 @@ import type {
   ChannelJobStatus,
   ChannelListThreadsParams,
   ChannelMessageVia,
+  ChannelReacted,
+  ChannelReactParams,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelThreadPage,
   ChannelThreadRunActivity,
   ChannelThreadSummary,
 } from '@lobechat/types';
-import {
-  agentDisplayName,
-  channelAgentExchange,
-  channelMessageVia,
-  RequestTrigger,
-} from '@lobechat/types';
+import { channelAgentExchange, channelMessageVia, connectorRequestText } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { isEqual } from 'es-toolkit';
 
 import {
   agentOperations,
-  agents,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -36,13 +35,15 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { isUuid } from '../../utils/uuid';
 import { normalizeWorkspaceId } from '../../utils/workspace';
-import { activeMembers, findThread } from './delivery';
+import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
-import { withChannelLock } from './transaction';
+import { channelUserNameSql } from './nickname';
+import { normalizeReactionEmoji, setReaction } from './reactions';
+import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
 const EXCERPT_LENGTH = 2000;
@@ -226,8 +227,8 @@ export class ChannelHistoryRepository {
 
   /**
    * The live run's Channel and request, under the same checks as a history read: what a run may
-   * act from (e.g. relay a request into another Channel). `requestVia` is set when the request
-   * it answers was itself relayed by an Agent, and `requestByAgent` when another Agent wrote it
+   * act from (e.g. ask another Agent). `requestVia` is set when an Agent posted the request it
+   * answers (a Thread it opened, a scheduled report), and `requestByAgent` when another Agent wrote it
    * in their conversation: either way the run answers instead of passing it on. `exchange` is set
    * when, in that conversation, it answers the other Agent's answer to what it asked.
    */
@@ -269,68 +270,39 @@ export class ChannelHistoryRepository {
     });
 
   /**
-   * Who a run relays as, and from where. A Channel run relays from its Channel and request
-   * (`currentRun`, all its checks). A run with no Channel job may only be the requester's own
-   * live bot run, and only when the caller says so (`allowBotRun`): the bot's owner asked their
-   * Agent from an IM platform to post into one of their Channels. Only a caller holding that run's
-   * `channel:message` token, minted only for an owner's bot message, may set it; the trigger is
-   * checked again here so no other run without a Channel can relay.
+   * Holds the questions a run asks its requester (`lobe-channel.askUser`) on its job; publishing
+   * the reply posts them with it as an `ask` message. One ask per run: a retried call with the
+   * same questions is a no-op, different ones are refused. Only a person's own request can be
+   * asked back: an Agent's request has nobody to answer the card.
    */
-  relaySource = async (
-    operationId: string,
-    { allowBotRun = false }: { allowBotRun?: boolean } = {},
-  ): Promise<{
-    /** The Channel run, with what {@link currentRun} reads; absent for a bot run. */
-    channelRun?: Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
-    origin?: { channelId: string; threadId: string | null };
-    requestVia?: ChannelMessageVia;
-    self: { agentId: string; name: string };
-  }> => {
-    const [job] = await this.db
-      .select({ id: channelJobs.id })
-      .from(channelJobs)
-      .where(eq(channelJobs.operationId, operationId))
-      .limit(1);
-    if (job || !allowBotRun) {
-      const run = await this.currentRun(operationId);
-      return {
-        channelRun: run,
-        origin: { channelId: run.channelId, threadId: run.manifest.threadId },
-        requestVia: run.requestVia,
-        self: { agentId: run.manifest.self.agentId, name: run.manifest.self.name },
-      };
-    }
-
-    const [operation] = await this.db
-      .select({
-        agentId: agentOperations.agentId,
-        agentName: agents.name,
-        agentTitle: agentTitleSql(),
-        status: agentOperations.status,
-        trigger: agentOperations.trigger,
-        userId: agentOperations.userId,
-        workspaceId: agentOperations.workspaceId,
-      })
-      .from(agentOperations)
-      .leftJoin(agents, eq(agents.id, agentOperations.agentId))
-      .where(eq(agentOperations.id, operationId))
-      .limit(1);
-    if (
-      !operation?.agentId ||
-      operation.userId !== this.userId ||
-      operation.workspaceId !== this.workspaceId ||
-      operation.trigger !== RequestTrigger.Bot
-    )
-      throw new ChannelError('NOT_FOUND', 'Channel operation not found');
-    if (operation.status !== 'running')
-      throw new ChannelError('CONFLICT', 'Channel operation is no longer active');
-    return {
-      self: {
-        agentId: operation.agentId,
-        name: agentDisplayName({ name: operation.agentName, title: operation.agentTitle }, 'Agent'),
-      },
-    };
-  };
+  ask = async (operationId: string, input: ChannelAskInput): Promise<void> =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [request] = await tx
+        .select({ agentId: channelMessages.agentId, metadata: channelMessages.metadata })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, manifest.requestMessageId),
+          ),
+        )
+        .limit(1);
+      if (!request || request.agentId || channelMessageVia(request.metadata))
+        throw new ChannelError(
+          'FORBIDDEN',
+          'Only a request a person wrote can be asked back; answer this one instead',
+        );
+      const [job] = await tx
+        .select({ ask: channelJobs.ask, id: channelJobs.id })
+        .from(channelJobs)
+        .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channelId)))
+        .limit(1);
+      if (job.ask) {
+        if (isEqual(job.ask, input)) return;
+        throw new ChannelError('CONFLICT', 'This reply already asks its questions');
+      }
+      await tx.update(channelJobs).set({ ask: input }).where(eq(channelJobs.id, job.id));
+    });
 
   /**
    * Threads of the run's Channel, newest first, with the calling Agent's latest reply in each.
@@ -451,7 +423,7 @@ export class ChannelHistoryRepository {
         },
         request: channelMessages.content,
         requesterName: channelMembers.name,
-        requesterFullName: users.fullName,
+        requesterFullName: channelUserNameSql(channelMembers.channelId, channelMembers.userId),
         requesterMemberId: channelJobs.requesterMemberId,
         status: channelJobs.status,
       })
@@ -586,6 +558,42 @@ export class ChannelHistoryRepository {
     });
   };
 
+  /**
+   * Posts the live run's card asking its requester to connect a connector, in the conversation
+   * the run is in (its Thread, or the main timeline). Stored like a reply that answers no request,
+   * so it wakes no one and the run's own reply still lands after it. `requestKey` makes a retried
+   * call return the card it already posted. A shared Agent runs as its owner, whose connectors the
+   * visitor cannot connect, so it cannot ask.
+   */
+  postConnectorRequest = async (
+    operationId: string,
+    request: Omit<ChannelConnectorRequest, 'agentId'>,
+    requestKey: string,
+  ) =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [existing] = await tx
+        .select()
+        .from(channelMessages)
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.requestKey, requestKey)),
+        )
+        .limit(1);
+      if (existing) return existing;
+
+      const connector: ChannelConnectorRequest = { ...request, agentId: manifest.self.agentId };
+      const message = await appendMessage(tx, {
+        agentId: manifest.self.agentId,
+        channelId,
+        content: connectorRequestText(connector),
+        metadata: { connector },
+        requestKey,
+        routingStatus: 'reply',
+        threadId: manifest.threadId,
+      });
+      await audit(tx, channelId, 'agent_posted', manifest.self.memberId, { messageId: message.id });
+      return message;
+    });
+
   readMessages = async (
     operationId: string,
     params: ChannelReadMessagesParams = {},
@@ -635,9 +643,10 @@ export class ChannelHistoryRepository {
             ? await findThread(tx, channelId, params.threadId)
             : null;
         const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
-        const [message] = await readManifestMessages(tx, channelId, manifest, {
-          messageId: params.messageId,
-        });
+        // Message ids are uuids; anything else (a Thread id, say) would abort the query.
+        const [message] = isUuid(params.messageId)
+          ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+          : [];
         if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
         if (offset > message.content.length)
           throw new ChannelError('BAD_REQUEST', 'Offset exceeds message length');
@@ -650,6 +659,40 @@ export class ChannelHistoryRepository {
       },
       { allowShared: true },
     );
+  };
+
+  /**
+   * The run's Agent adds (`add`) or removes its own reaction on a message it can read: in its own
+   * conversation up to the request cutoff, or in another Thread it read. Like a person's, the
+   * reaction posts nothing, wakes nobody and leaves read state alone.
+   */
+  react = async (
+    operationId: string,
+    params: ChannelReactParams,
+    add: boolean,
+  ): Promise<ChannelReacted & { channelId: string }> => {
+    if (!params.messageId?.trim()) throw new ChannelError('BAD_REQUEST', 'messageId is required');
+    const emoji = normalizeReactionEmoji(params.emoji ?? '');
+    return this.read(operationId, async (tx, channelId, runManifest) => {
+      const other =
+        params.threadId && params.threadId !== runManifest.threadId
+          ? await findThread(tx, channelId, params.threadId)
+          : null;
+      const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
+      const [message] = isUuid(params.messageId)
+        ? await readManifestMessages(tx, channelId, manifest, { messageId: params.messageId })
+        : [];
+      if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
+      const { added } = await setReaction(
+        tx,
+        channelId,
+        manifest.self.memberId,
+        message.id,
+        emoji,
+        add,
+      );
+      return { added, channelId, emoji, messageId: message.id };
+    });
   };
 }
 

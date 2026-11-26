@@ -170,6 +170,7 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  * turn.
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
+  'antigravity',
   ClaudeCodeIdentifier,
   'codex',
   COPILOT_IDENTIFIER,

@@ -31,6 +31,15 @@ const log = debug('lobe-server:page-collab:room');
 export interface RoomPageSession extends PageSession {
   /** Stores the room's current state as a version, edited or not. */
   persistAs: (saveSource: DocumentHistorySaveSource) => Promise<void>;
+  /**
+   * Stores the room as this session read it, the way the room's own projection
+   * does: an autosave of whatever its collaborators typed, attributed to nobody.
+   */
+  projectAsRead: () => Promise<void>;
+  /** The room's server-write sequence when read; absent from a gateway without conditional writes. */
+  readonly serverWriteSeq?: number;
+  /** The Yjs state vector of the room as this session read it. */
+  readonly stateVector: Uint8Array;
 }
 
 export class PageCollabUnavailableError extends Error {
@@ -122,7 +131,15 @@ export class RoomPageSessions implements PageSessions {
           log('persist as %s failed for %s: %O', saveSource, documentId, error);
         }
       },
+      projectAsRead: async () => {
+        await persistPageState(this.db, documentId, state.update, { saveSource: 'autosave' });
+      },
+      serverWriteSeq: state.serverWriteSeq,
       setTitle: (next) => fork.doc.getMap(PAGE_META_KEY).set('title', next),
+      // Only a conditional write reads it.
+      get stateVector() {
+        return Y.encodeStateVectorFromUpdate(state.update);
+      },
       title,
     };
   }

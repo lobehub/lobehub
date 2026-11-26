@@ -657,7 +657,7 @@ describe('agentManagementRuntime', () => {
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'auto' }],
       });
     });
 
@@ -749,7 +749,7 @@ describe('agentManagementRuntime', () => {
       expect(result.content).not.toContain('next run');
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }],
+        plugins: [{ identifier: 'lobe-web-browsing', mode: 'auto' }],
       });
     });
 
@@ -765,7 +765,7 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'auto' }],
       });
     });
 

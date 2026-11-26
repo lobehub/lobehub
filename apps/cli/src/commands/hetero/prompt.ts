@@ -6,7 +6,12 @@ import type {
   AgentImageSource,
   AgentPromptInput,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { type HeteroPermissionMode, isHeteroPermissionMode } from '@lobechat/types';
+import {
+  type CodexCollaborationMode,
+  type HeteroPermissionMode,
+  isCodexCollaborationMode,
+  isHeteroPermissionMode,
+} from '@lobechat/types';
 
 /** The `lh hetero exec` options that choose where the prompt comes from. */
 interface ExecOptions {
@@ -59,14 +64,18 @@ const parseImageArg = (value: string): AgentImageSource => {
  * Accepts:
  *   - `'plain text'` → single text block
  *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...], resumeFallback?: [...], permissionMode? }` → unwraps the
- *     primary prompt, reserves the fallback for a retry without native resume,
- *     and takes the Claude Code permission mode the run was dispatched with
+ *   - `{ content: [...], resumeFallback?: [...], permissionMode?, collaborationMode? }`
+ *     → unwraps the primary prompt, reserves the fallback for a retry without
+ *     native resume, and takes the Claude Code permission mode / Codex Plan
+ *     switch the run was dispatched with
  *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
  */
 const coerceJsonPrompt = (
   parsed: unknown,
-): Pick<ResolvedPrompt, 'permissionMode' | 'prompt' | 'resumeFallbackPrompt'> => {
+): Pick<
+  ResolvedPrompt,
+  'collaborationMode' | 'permissionMode' | 'prompt' | 'resumeFallbackPrompt'
+> => {
   if (typeof parsed === 'string') return { prompt: parsed };
   if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
   if (parsed && typeof parsed === 'object') {
@@ -74,6 +83,9 @@ const coerceJsonPrompt = (
     if (Array.isArray(obj.content)) {
       return {
         ...(isHeteroPermissionMode(obj.permissionMode) && { permissionMode: obj.permissionMode }),
+        ...(isCodexCollaborationMode(obj.collaborationMode) && {
+          collaborationMode: obj.collaborationMode,
+        }),
         prompt: obj.content as AgentContentBlock[],
         ...(Array.isArray(obj.resumeFallback)
           ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
@@ -91,10 +103,15 @@ const coerceJsonPrompt = (
 };
 
 export interface ResolvedPrompt {
+  /**
+   * Codex Plan switch: the collaboration mode
+   * a native Codex run sends on every turn.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   /**
-   * Claude Code permission mode (Better Coding Experience lab) carried by the
+   * Claude Code permission mode carried by the
    * dispatch envelope. An older `lh` ignores it and keeps allowing everything.
    */
   permissionMode?: HeteroPermissionMode;

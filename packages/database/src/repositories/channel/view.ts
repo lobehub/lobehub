@@ -1,9 +1,16 @@
 import {
   type AgentDeviceOverride,
+  type ChannelDeviceGrantCard,
+  channelMessageAsk,
+  channelMessageConnector,
   channelMessageDeletedAt,
+  channelMessageDeviceGrant,
   channelMessageEditedAt,
   channelMessageReceipt,
+  channelMessageReplyError,
+  channelMessageSurfaces,
   channelMessageVia,
+  type ChannelReplyError,
   type ChatMessageError,
   contactCardOf,
   defaultChannelAgentDirectory,
@@ -20,7 +27,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  like,
   lt,
   or,
   type SQL,
@@ -32,12 +38,12 @@ import {
   agentOperations,
   agents,
   channelJobs,
+  channelMemberGrants,
   channelMembers,
   channelMessages,
   channels,
   channelThreads,
   devices,
-  files as fileTable,
   topics,
   users,
   workspaceUserSettings,
@@ -45,11 +51,15 @@ import {
 import type { Transaction } from '../../type';
 import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
-import { fileIdsByMessage } from './attachments';
+import { agentAccessCards } from './agentAccess';
+import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
-import { externalWorksByMessage } from './works';
+import { channelUserNameSql } from './nickname';
+import { isOpeningAck } from './openingAck';
+import { reactionsByMessage } from './reactions';
+import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -57,7 +67,7 @@ export const publicMessageColumns = {
   senderAgentName: agents.name,
   senderAgentTitle: agentTitleSql(),
   senderUserAvatar: users.avatar,
-  senderUserName: users.fullName,
+  senderUserName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
   senderUsername: users.username,
 };
 
@@ -70,7 +80,48 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-export const publicMessage = (row: MessageRow, fileIds: string[]) => {
+/**
+ * Messages on this page whose card belongs to a shared Agent's run. Their failure text is the
+ * owner's diagnostics, so `publicMessage` returns the share page's projection on every read.
+ */
+const sharedCardMessageIds = async (tx: Transaction, rows: MessageRow[]) => {
+  const jobIds = rows
+    .map((row) => channelMessageReplyError(row.metadata)?.jobId)
+    .filter((jobId): jobId is string => !!jobId);
+  if (!jobIds.length) return new Set<string>();
+  const shared = await tx
+    .select({ id: channelJobs.id })
+    .from(channelJobs)
+    .where(
+      and(
+        inArray(channelJobs.id, jobIds),
+        sql`jsonb_exists(${channelJobs.executionConfig}, 'share')`,
+      ),
+    );
+  const sharedJobIds = new Set(shared.map((row) => row.id));
+  return new Set(
+    rows
+      .filter((row) => sharedJobIds.has(channelMessageReplyError(row.metadata)?.jobId ?? ''))
+      .map((row) => row.id),
+  );
+};
+
+/**
+ * The card's own failure text, as a visitor sees it. A card written while its share showed
+ * details keeps that text; a read after the owner turned details off must not hand it back, so
+ * every read applies the share page's projection, as `readJobs` does on the job.
+ */
+const redactCardError = (card: ChannelReplyError): ChannelReplyError => ({
+  ...card,
+  errorMessage: null,
+  errorType: null,
+});
+
+export const publicMessage = (
+  row: MessageRow,
+  fileIds: string[],
+  options: { redactCardError?: boolean } = {},
+) => {
   const {
     senderAgentAvatar,
     senderAgentName,
@@ -81,8 +132,12 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
     ...message
   } = row;
   const isAgent = isAgentAuthored(message);
+  const card = (isAgent && channelMessageReplyError(message.metadata)) || null;
+  const replyError = card && options.redactCardError ? redactCardError(card) : card;
+  const visible =
+    replyError === card ? message : { ...message, metadata: { ...message.metadata, replyError } };
   return {
-    ...message,
+    ...visible,
     fileIds,
     author: {
       avatar: isAgent ? senderAgentAvatar : senderUserAvatar,
@@ -90,7 +145,14 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    // A deleted question keeps its row as a tombstone, but nothing is left to answer.
+    ask:
+      message.kind === 'ask' && !channelMessageDeletedAt(message.metadata)
+        ? (channelMessageAsk(message.metadata) ?? null)
+        : null,
     card: contactCardOf(message.metadata) ?? null,
+    // An Agent asking the reader to connect a connector it needs.
+    connector: (isAgent && channelMessageConnector(message.metadata)) || null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
@@ -100,6 +162,18 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       const { agent, ...rest } = receipt;
       return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
     })(),
+    // An Agent's failed reply, shown as a card in its reply slot.
+    replyError,
+    // Cards the Agent drew in this reply.
+    // A deleted reply is a tombstone: its cards are gone with its text.
+    surfaces:
+      isAgent && !channelMessageDeletedAt(message.metadata)
+        ? channelMessageSurfaces(message.metadata)
+        : [],
+    surfacesBodyLength:
+      typeof message.metadata?.surfacesBodyLength === 'number'
+        ? message.metadata.surfacesBodyLength
+        : undefined,
     via: isAgent
       ? null
       : (() => {
@@ -155,6 +229,44 @@ const withRelayAvatar = <
   };
 };
 
+/**
+ * The current status of the device requests an Agent's cards on this page carry, for the device
+ * owner reading them. A grant that is gone (its environment moved, or the member left) reads as
+ * `expired`; a card the viewer does not own reads as nothing.
+ */
+const deviceGrantCards = async (
+  tx: Transaction,
+  rows: MessageRow[],
+  viewerUserId: string | undefined,
+) => {
+  const requests = rows.flatMap((row) => {
+    const request = isAgentAuthored(row) && channelMessageDeviceGrant(row.metadata);
+    return request ? [[row.id, request] as const] : [];
+  });
+  const cards = new Map<string, ChannelDeviceGrantCard>();
+  if (!viewerUserId || !requests.length) return cards;
+  const found = await tx
+    .select({
+      deviceOwnerId: channelMemberGrants.deviceOwnerId,
+      id: channelMemberGrants.id,
+      status: channelMemberGrants.status,
+    })
+    .from(channelMemberGrants)
+    .where(
+      inArray(
+        channelMemberGrants.id,
+        requests.map(([, request]) => request.grantId),
+      ),
+    );
+  const grants = new Map(found.map((grant) => [grant.id, grant]));
+  for (const [messageId, request] of requests) {
+    const grant = grants.get(request.grantId);
+    if (grant && grant.deviceOwnerId !== viewerUserId) continue;
+    cards.set(messageId, { ...request, status: grant?.status ?? 'expired' });
+  }
+  return cards;
+};
+
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
 /**
  * The Agent topic behind each published reply, for replies the viewer ran: the topic belongs to
@@ -188,18 +300,6 @@ const sourceTopicsByMessage = async (
 };
 
 const THREAD_PREVIEW_LENGTH = 240;
-
-/**
- * Request keys of the acknowledgements an Agent posts before its run (`openingRequestKey` in
- * `./opening`, which imports this module, so the prefix is repeated here).
- */
-const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
-
-/** An Agent's acknowledgement before its run: it says the work started, not what came of it. */
-const isOpeningAck = and(
-  eq(channelMessages.routingStatus, 'reply'),
-  like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
-);
 
 type ThreadSummary = {
   lastNewsAt: Date | null;
@@ -283,6 +383,8 @@ const publicJobColumns = {
       WHERE ${channelMessages.channelId} = ${channelJobs.channelId}
         AND ${channelMessages.requestKey} = 'opening:' || ${channelJobs.id}::text)`,
   topicId: channelJobs.topicId,
+  // Its name, under the same owner-only rule as the id, so a reply at work says which topic it is.
+  topicTitle: topics.title,
   // A trashed topic has no owner here, so its link goes with it.
   topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
       THEN ${topics.userId} ELSE NULL END`,
@@ -464,6 +566,26 @@ const memberEnvironmentSource = <
   };
 };
 
+/**
+ * Whether the viewer may open an Agent member's own page: the agent ownership predicate
+ * (`buildWorkspaceWhere`) read off the joined row. In a workspace Channel that is a live Agent of
+ * the same workspace, public or created by the viewer; in a personal one, the viewer's own.
+ */
+export const canViewerOpenAgent = (
+  row: {
+    agentDeleted: boolean | null;
+    agentUserId: string | null;
+    agentVisibility: 'private' | 'public' | null;
+    agentWorkspaceId: string | null;
+  },
+  viewer: Pick<EnvironmentViewer, 'userId' | 'workspaceId'>,
+): boolean => {
+  if (!viewer.userId || !row.agentUserId || row.agentDeleted === true) return false;
+  const own = row.agentUserId === viewer.userId;
+  if (!viewer.workspaceId) return !row.agentWorkspaceId && own;
+  return row.agentWorkspaceId === viewer.workspaceId && (row.agentVisibility !== 'private' || own);
+};
+
 const environmentViewer = async (
   tx: Transaction,
   channelId: string,
@@ -494,24 +616,32 @@ const environmentViewer = async (
 };
 
 /**
- * A view's jobs as one viewer sees them: who may stop each, and the run's topic only for the
- * viewer who runs the reply; for anyone else the job carries no topic at all.
+ * A view's jobs as one viewer sees them: who may stop each, and the run's topic (id and title)
+ * only for the viewer who runs the reply; for anyone else the job carries no topic at all.
  */
 export const viewerJobs = (
   jobs: Awaited<ReturnType<typeof readChannelView>>['jobs'],
   viewerUserId: string,
   canStop: (requesterMemberId: string | null) => boolean,
 ) =>
-  jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
+  jobs.map(({ requesterMemberId, topicId, topicOwnerId, topicTitle, ...job }) => ({
     ...job,
     canStop: canStop(requesterMemberId),
-    ...(topicId && topicOwnerId === viewerUserId ? { topicId } : {}),
+    ...(topicId && topicOwnerId === viewerUserId ? { topicId, topicTitle } : {}),
   }));
 
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
-  options: { before?: number; limit?: number; threadId?: string | null } = {},
+  options: {
+    before?: number;
+    /** The client opens canvases from reply cards; see `replyWorksByMessage`. */
+    includeCanvasWorks?: boolean;
+    /** The client renders the opt-in Work types on reply cards; see `replyWorksByMessage`. */
+    includeFileWorks?: boolean;
+    limit?: number;
+    threadId?: string | null;
+  } = {},
   viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
@@ -532,7 +662,7 @@ export const readChannelView = async (
         role: channelMembers.role,
         status: channelMembers.status,
         userId: channelMembers.userId,
-        userName: users.fullName,
+        userName: channelUserNameSql(channelMembers.channelId, channelMembers.userId),
         username: users.username,
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
@@ -540,7 +670,13 @@ export const readChannelView = async (
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
         workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
+        grantDeviceId: channelMemberGrants.deviceId,
+        grantDeviceOwnerId: channelMemberGrants.deviceOwnerId,
+        grantId: channelMemberGrants.id,
+        grantStatus: channelMemberGrants.status,
+        grantWorkingDirectory: channelMemberGrants.workingDirectory,
         agencyConfig: agents.agencyConfig,
+        agentDeleted: agents.isDeleted,
         agentUserId: agents.userId,
         agentVisibility: agents.visibility,
         agentWorkspaceId: agents.workspaceId,
@@ -548,6 +684,7 @@ export const readChannelView = async (
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
       .leftJoin(agents, eq(agents.id, channelMembers.agentId))
+      .leftJoin(channelMemberGrants, eq(channelMemberGrants.memberId, channelMembers.id))
       .where(eq(channelMembers.channelId, channelId))
       .orderBy(asc(channelMembers.createdAt)),
     tx
@@ -569,7 +706,14 @@ export const readChannelView = async (
     tx
       .select()
       .from(channelThreads)
-      .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
+      .where(
+        and(
+          eq(channelThreads.channelId, channelId),
+          notTrashed(channelThreads.isDeleted),
+          // A Thread's view needs only its own entry, not every Thread in the Channel.
+          options.threadId ? eq(channelThreads.id, options.threadId) : undefined,
+        ),
+      )
       .orderBy(asc(channelThreads.createdAt)),
     readJobs(
       tx,
@@ -628,6 +772,10 @@ export const readChannelView = async (
     ? []
     : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
   const summaries = await threadSummaries(tx, channelId, summarized);
+  const sharedCards = await sharedCardMessageIds(tx, [
+    ...page,
+    ...(rootMessage ? [rootMessage] : []),
+  ]);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -659,24 +807,31 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars] = await Promise.all([
-    sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
-    externalWorksByMessage(tx, channelId, replyIds),
-    relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
-  ]);
+  const [sourceTopics, works, relayAvatars, grantCards, accessCards, reactions] = await Promise.all(
+    [
+      sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
+      replyWorksByMessage(tx, channelId, replyIds, {
+        includeCanvasWorks: options.includeCanvasWorks,
+        includeFileWorks: options.includeFileWorks,
+        userId: viewerUserId,
+      }),
+      relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+      deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
+      agentAccessCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
+      reactionsByMessage(
+        tx,
+        channelId,
+        [...page, ...(rootMessage ? [rootMessage] : [])].map((message) => message.id),
+        // The viewer's own reaction is always named, so its chip shows as theirs.
+        members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)?.id,
+      ),
+    ],
+  );
+  // A tombstone keeps its row for the Threads and replies that point at it, not its reactions.
+  const reactionsOf = (message: MessageRow) =>
+    channelMessageDeletedAt(message.metadata) ? [] : (reactions.get(message.id) ?? []);
   const ids = [...new Set([...files.values()].flat())];
-  const attachments = ids.length
-    ? await tx
-        .select({
-          id: fileTable.id,
-          name: fileTable.name,
-          fileType: fileTable.fileType,
-          size: fileTable.size,
-          url: fileTable.url,
-        })
-        .from(fileTable)
-        .where(inArray(fileTable.id, ids))
-    : [];
+  const attachments = await channelAttachments(tx, ids);
   return {
     attachments,
     hasMore: reversed.length > limit,
@@ -684,15 +839,32 @@ export const readChannelView = async (
     members: environments.map((row) => {
       const {
         agencyConfig: _agencyConfig,
-        agentUserId: _agentUserId,
-        agentVisibility: _agentVisibility,
-        agentWorkspaceId: _agentWorkspaceId,
+        agentDeleted,
+        agentUserId,
+        agentVisibility,
+        agentWorkspaceId,
         deviceId,
-        deviceOwnerId: _deviceOwnerId,
+        deviceOwnerId,
+        grantDeviceId,
+        grantDeviceOwnerId,
+        grantId,
+        grantStatus,
+        grantWorkingDirectory,
         inheritedConfig,
         workingDirectory: channelDirectory,
         ...member
       } = row;
+      // Only a grant for exactly the Channel's current pick speaks for it; a stale one is moot.
+      const grant =
+        grantId &&
+        grantStatus &&
+        grantDeviceOwnerId &&
+        !inheritedConfig &&
+        grantDeviceId === deviceId &&
+        grantDeviceOwnerId === deviceOwnerId &&
+        grantWorkingDirectory === channelDirectory
+          ? { deviceOwnerId: grantDeviceOwnerId, id: grantId, status: grantStatus }
+          : null;
       const device = deviceInfos.get(row);
       // An inherited device works in the Agent's own folder there, else the device's default.
       const workingDirectory =
@@ -701,9 +873,22 @@ export const readChannelView = async (
           : channelDirectory;
       return {
         ...member,
+        ...(member.agentId
+          ? {
+              canOpenAgent: canViewerOpenAgent(
+                { agentDeleted, agentUserId, agentVisibility, agentWorkspaceId },
+                viewer,
+              ),
+            }
+          : {}),
         environment:
           member.agentId && (deviceId || workingDirectory)
-            ? { deviceId, deviceName: device?.name ?? null, workingDirectory }
+            ? {
+                deviceId,
+                deviceName: device?.name ?? null,
+                ...(grant ? { grant } : {}),
+                workingDirectory,
+              }
             : null,
       };
     }),
@@ -722,20 +907,33 @@ export const readChannelView = async (
     rootMessage: rootMessage
       ? {
           ...withRelayAvatar(
-            publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+            publicMessage(rootMessage, files.get(rootMessage.id) ?? [], {
+              redactCardError: sharedCards.has(rootMessage.id),
+            }),
             relayAvatars,
           ),
+          agentAccess: accessCards.get(rootMessage.id) ?? null,
+          deviceGrant: grantCards.get(rootMessage.id) ?? null,
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           works: works.get(rootMessage.id) ?? [],
+          reactions: reactionsOf(rootMessage),
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
     messages: page.map((message) => ({
-      ...withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
+      ...withRelayAvatar(
+        publicMessage(message, files.get(message.id) ?? [], {
+          redactCardError: sharedCards.has(message.id),
+        }),
+        relayAvatars,
+      ),
+      agentAccess: accessCards.get(message.id) ?? null,
+      deviceGrant: grantCards.get(message.id) ?? null,
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],
+      reactions: reactionsOf(message),
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

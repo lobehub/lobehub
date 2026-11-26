@@ -11,12 +11,26 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const mockUpdatePreference = vi.fn();
 const mockSetWorktreeModeDir = vi.fn();
+const mockGetPreference = vi.fn();
+const mockInitializeSidebar = vi.fn();
+const mockGetJoinedAt = vi.fn();
 vi.mock('@/database/models/workspaceUserSettings', () => ({
   WorkspaceUserSettingsModel: vi.fn(function () {
     return {
+      getJoinedAt: mockGetJoinedAt,
+      getPreference: mockGetPreference,
+      initializeSidebar: mockInitializeSidebar,
       setWorktreeModeDir: mockSetWorktreeModeDir,
       updatePreference: mockUpdatePreference,
     };
+  }),
+}));
+
+const mockGetTeamPinnedIds = vi.fn();
+const mockGetRecommendedIds = vi.fn();
+vi.mock('@/database/repositories/home', () => ({
+  HomeRepository: vi.fn(function () {
+    return { getRecommendedIds: mockGetRecommendedIds, getTeamPinnedIds: mockGetTeamPinnedIds };
   }),
 }));
 
@@ -199,5 +213,81 @@ describe('workspaceUserSettingsRouter.setWorktreeModeDir', () => {
   it('rejects an empty key', async () => {
     const caller = workspaceUserSettingsRouter.createCaller(ctx);
     await expect(caller.setWorktreeModeDir({ enabled: true, key: '' })).rejects.toThrow();
+  });
+});
+
+describe('workspaceUserSettingsRouter.getPreference', () => {
+  const ctx: any = { serverDB: {}, userId: 'user-member', workspaceId: 'ws-1' };
+  const joinedBefore = new Date('2026-01-01T00:00:00Z');
+  const joinedAfter = new Date('2026-12-01T00:00:00Z');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('keeps the team pins as the own pins of a member who joined while they were shown', async () => {
+    mockGetPreference.mockResolvedValue({ sidebarPinnedItemIds: ['mine'] });
+    mockGetJoinedAt.mockResolvedValue(joinedBefore);
+    mockGetTeamPinnedIds.mockResolvedValue(['team-1', 'team-2']);
+    const seeded = {
+      sidebarInitialized: true,
+      sidebarPinnedItemIds: ['mine', 'team-1', 'team-2'],
+    };
+    mockInitializeSidebar.mockResolvedValue(seeded);
+
+    const result = await workspaceUserSettingsRouter.createCaller(ctx).getPreference();
+
+    expect(mockInitializeSidebar).toHaveBeenCalledWith({
+      final: true,
+      pinIds: ['team-1', 'team-2'],
+    });
+    expect(mockGetRecommendedIds).not.toHaveBeenCalled();
+    expect(result).toEqual(seeded);
+  });
+
+  it('lists the recommended Agents, unpinned, for a member who joined later', async () => {
+    mockGetPreference.mockResolvedValue({});
+    mockGetJoinedAt.mockResolvedValue(joinedAfter);
+    mockGetRecommendedIds.mockResolvedValue(['rec-1']);
+    const seeded = { sidebarAgentVisibilityOverrides: { 'rec-1': true }, sidebarInitialized: true };
+    mockInitializeSidebar.mockResolvedValue(seeded);
+
+    const result = await workspaceUserSettingsRouter.createCaller(ctx).getPreference();
+
+    expect(mockInitializeSidebar).toHaveBeenCalledWith({ listIds: ['rec-1'] });
+    expect(mockGetTeamPinnedIds).not.toHaveBeenCalled();
+    expect(result).toEqual(seeded);
+  });
+
+  it('never sets the sidebar up again once it was', async () => {
+    const preference = { sidebarInitialized: true, sidebarPinnedItemIds: ['mine'] };
+    mockGetPreference.mockResolvedValue(preference);
+
+    const result = await workspaceUserSettingsRouter.createCaller(ctx).getPreference();
+
+    expect(result).toEqual(preference);
+    expect(mockGetJoinedAt).not.toHaveBeenCalled();
+    expect(mockInitializeSidebar).not.toHaveBeenCalled();
+  });
+
+  it('leaves a caller who is not a member alone', async () => {
+    mockGetPreference.mockResolvedValue({});
+    mockGetJoinedAt.mockResolvedValue(undefined);
+
+    const result = await workspaceUserSettingsRouter.createCaller(ctx).getPreference();
+
+    expect(result).toEqual({});
+    expect(mockInitializeSidebar).not.toHaveBeenCalled();
+  });
+
+  it('still returns the preference when the setup fails', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockGetPreference.mockResolvedValue({ sidebarPinnedItemIds: ['mine'] });
+    mockGetJoinedAt.mockRejectedValue(new Error('db down'));
+
+    const result = await workspaceUserSettingsRouter.createCaller(ctx).getPreference();
+
+    expect(result).toEqual({ sidebarPinnedItemIds: ['mine'] });
+    spy.mockRestore();
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCatalogListUrl, isCatalogListView, orderCategoriesByCount } from './sections';
+import {
+  buildCatalogListUrl,
+  catalogSearchParams,
+  isCatalogListView,
+  orderCategoriesByCount,
+} from './sections';
 
 const categories = [
   { key: 'all', label: 'All' },
@@ -45,14 +50,39 @@ describe('buildCatalogListUrl', () => {
 });
 
 describe('isCatalogListView', () => {
-  it('shows groups on the bare Discover page', () => {
+  it('shows groups on the bare Discover page and when searching across the catalog', () => {
+    const queryWithSearch = { category: undefined, q: 'pdf' };
     expect(isCatalogListView({})).toBe(false);
+    expect(isCatalogListView(queryWithSearch)).toBe(false);
   });
 
-  it.each([{ category: 'docs' }, { q: 'pdf' }, { sort: 'createdAt' }, { page: 2 }])(
+  it.each([{ category: 'docs' }, { sort: 'createdAt' }, { page: 2 }])(
     'shows one full list once narrowed by %o',
     (query) => {
       expect(isCatalogListView(query)).toBe(true);
     },
   );
+});
+
+describe('catalogSearchParams', () => {
+  it('keeps category and ordering when searching from a later page', () => {
+    const params = new URLSearchParams('category=docs&sort=name&order=asc&page=3&q=old');
+
+    expect(catalogSearchParams(params, '  pdf parser  ').toString()).toBe(
+      'category=docs&sort=name&order=asc&q=pdf+parser',
+    );
+    expect(params.get('page')).toBe('3');
+  });
+
+  it('clears only the text and page inside a local group', () => {
+    const params = new URLSearchParams('group=integrations&q=github&page=2');
+
+    expect(catalogSearchParams(params, ' ').toString()).toBe('group=integrations');
+  });
+
+  it('includes the active search when linking to a category', () => {
+    expect(
+      buildCatalogListUrl('/marketplace/connector', { category: 'productivity', q: 'files' }),
+    ).toBe('/marketplace/connector?category=productivity&q=files');
+  });
 });
