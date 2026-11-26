@@ -29,18 +29,6 @@ export const getListItemKey = (item: ListItem): string => {
 };
 
 /**
- * Whether a divider should follow the item at `index`: the recommended (featured)
- * entries form their own group at the top, and without a divider the first of them
- * reads as a fixed header instead of a selectable model.
- */
-export const endsFeaturedGroup = (items: ListItem[], index: number): boolean => {
-  const next = items[index + 1];
-  return (
-    items[index]?.type === 'featured-model-item' && !!next && next.type !== 'featured-model-item'
-  );
-};
-
-/**
  * Input price relative to the $1 / 1M input tokens baseline, so the model list
  * can compare cost at a glance. Tiered pricing uses its first (cheapest) tier.
  * Returns `undefined` when the model has no text input price.

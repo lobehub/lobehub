@@ -1,13 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
-import {
-  type ComponentType,
-  type FC,
-  Fragment,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from 'react';
+import { type ComponentType, type FC } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
@@ -24,7 +17,7 @@ import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
 import { type GroupMode } from '../../types';
-import { endsFeaturedGroup, menuKey } from '../../utils';
+import { menuKey } from '../../utils';
 import type { PricingMode } from '../ModelDetailPanel';
 import GenerationListItemRenderer from './GenerationListItemRenderer';
 import { ListItemRenderer } from './ListItemRenderer';
@@ -206,21 +199,12 @@ export const List: FC<ListProps> = ({
               />
             );
 
-          const row = isActive ? (
+          return isActive ? (
             <div key={itemKey} ref={activeItemRef}>
               {renderItem()}
             </div>
           ) : (
             renderItem(itemKey)
-          );
-
-          if (!endsFeaturedGroup(listItems, index)) return row;
-
-          return (
-            <Fragment key={itemKey}>
-              {row}
-              <div className={styles.featuredSeparator} role="separator" />
-            </Fragment>
           );
         })}
       </MetaColumnsContext>

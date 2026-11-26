@@ -83,23 +83,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
   `,
-  featuredDescription: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  /** Border tokens match the popup background in dark mode, so a translucent fill keeps the line visible in both themes */
-  featuredSeparator: css`
-    flex: none;
-    height: 1px;
-    margin-block: 4px;
-    margin-inline: 12px;
-    background: ${cssVar.colorFillSecondary};
-  `,
   footer: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,

@@ -118,7 +118,7 @@ export const buildListItems = (
     if (!provider || !model) return [];
     if (!matchesSearch(model.displayName || model.id) && !matchesSearch(provider.name)) return [];
 
-    return [{ description: featured.description, model, provider, type: 'featured-model-item' }];
+    return [{ model, provider, type: 'featured-model-item' }];
   });
   const enabledList =
     featuredModels.length > 0

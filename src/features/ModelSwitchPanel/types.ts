@@ -13,8 +13,6 @@ export type PricingMode = 'image' | 'video';
  * from the business guard, because a host overriding that module may not export the type.
  */
 export interface FeaturedModel {
-  /** One line under the model name saying what it is for. */
-  description?: string;
   modelId: string;
   providerId: string;
 }
@@ -49,7 +47,6 @@ export type ListItem =
       type: 'provider-model-item';
     }
   | {
-      description?: string;
       model: AiModelForSelect;
       provider: EnabledProviderWithModels;
       type: 'featured-model-item';

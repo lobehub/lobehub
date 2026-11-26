@@ -2,8 +2,7 @@ import { USD_TO_CNY } from '@lobechat/const/currency';
 import { type Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
-import { type ListItem } from './types';
-import { endsFeaturedGroup, formatPriceMultiplier, getInputPriceMultiplier } from './utils';
+import { formatPriceMultiplier, getInputPriceMultiplier } from './utils';
 
 describe('getInputPriceMultiplier', () => {
   it('uses the USD input rate per 1M tokens as the multiplier', () => {
@@ -76,28 +75,5 @@ describe('formatPriceMultiplier', () => {
     [37.5, '38'],
   ])('formats %s as %s', (input, expected) => {
     expect(formatPriceMultiplier(input)).toBe(expected);
-  });
-});
-
-describe('endsFeaturedGroup', () => {
-  const featured = { type: 'featured-model-item' } as ListItem;
-  const model = { type: 'model-item-single' } as ListItem;
-
-  it('marks only the last featured item before the regular list', () => {
-    const items = [featured, featured, model, model];
-    expect(items.map((_, index) => endsFeaturedGroup(items, index))).toEqual([
-      false,
-      true,
-      false,
-      false,
-    ]);
-  });
-
-  it('adds no divider when nothing follows the featured group', () => {
-    expect(endsFeaturedGroup([featured], 0)).toBe(false);
-  });
-
-  it('adds no divider when there is no featured group', () => {
-    expect(endsFeaturedGroup([model, model], 0)).toBe(false);
   });
 });

@@ -202,9 +202,9 @@ describe('buildListItems', () => {
 });
 
 describe('buildListItems featured and hidden models', () => {
-  const featuredModels = [{ description: 'Daily tasks', modelId: 'auto', providerId: 'lobehub' }];
+  const featuredModels = [{ modelId: 'auto', providerId: 'lobehub' }];
 
-  it('lists a featured model first with its description, out of its provider list', () => {
+  it('lists a featured model first, out of its provider list', () => {
     const items = buildListItems(
       [provider('lobehub', [model('gpt'), model('auto')]), provider('openai', [model('gpt')])],
       'byProvider',
@@ -214,7 +214,6 @@ describe('buildListItems featured and hidden models', () => {
     );
 
     expect(items[0]).toMatchObject({
-      description: 'Daily tasks',
       model: { id: 'auto' },
       type: 'featured-model-item',
     });

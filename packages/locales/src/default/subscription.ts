@@ -1128,8 +1128,6 @@ export default {
   'autoModelNudge.desc':
     'This model uses up your plan limits quickly. Auto Model has its own, more generous limits.',
   'autoModelNudge.title': 'Try Auto Model for everyday tasks',
-  'modelSwitch.auto.description':
-    'Balanced quality and speed with generous usage quota, ideal for daily tasks',
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
   'credits.agentShareBudget.saveFailed':
     "Couldn't save the Agent Share budget. Check your connection and try again.",
