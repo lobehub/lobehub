@@ -370,9 +370,12 @@ const MAX_DISCOVERED_SKILLS = 50;
  */
 const DISCOVERY_TIME_BUDGET_MS = 2000;
 
+/** `target` is `root` or below it. A child named `..cache` is still below it. */
 const isWithin = (root: string, target: string) => {
   const relative = path.relative(root, target);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  if (relative === '') return true;
+  if (path.isAbsolute(relative)) return false;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`);
 };
 
 /**
@@ -408,7 +411,10 @@ const resolveDiscoveryDirs = (start: string, root: string, known: ReadonlySet<st
   const dirs: string[] = [];
   let current = start;
 
-  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+  // `isWithin` as well as `current === root`: it compares the way the
+  // platform does (case-insensitively on Windows), so the walk stops at the
+  // working directory even when a spelling differs from `root`.
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH && isWithin(root, current); depth += 1) {
     if (known.has(current)) break;
     dirs.push(current);
     if (current === root) break;

@@ -109,6 +109,27 @@ describe('localSystemRuntime — mid-run agent file discovery', () => {
     }
   });
 
+  it('treats a child named ..cache as inside the working directory', async () => {
+    await call(makeContext(), LocalSystemApiName.readFile, { path: '..cache/a.ts' });
+    expect(sentArgs().agentFileScan).toBeDefined();
+  });
+
+  it('never offers a project skill the agent has disabled', async () => {
+    mocks.executeToolCall.mockResolvedValue({
+      content: 'file body',
+      state: { agentFileScan: webScan },
+      success: true,
+    });
+    const context = makeContext();
+    context.agentFiles!.disabledSkillIds = ['project:web-design'];
+
+    const result = await call(context, LocalSystemApiName.readFile, {
+      path: 'packages/web/src/app.ts',
+    });
+
+    expect(result.state.agentFileDiscovery.skills).toEqual([]);
+  });
+
   it('leaves a ~ path to the device, which resolves it like the file tool', async () => {
     await call(makeContext({ workingDirectory: '/home/u' }), LocalSystemApiName.editFile, {
       file_path: '~/pkg/a.ts',

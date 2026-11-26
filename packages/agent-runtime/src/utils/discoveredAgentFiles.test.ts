@@ -7,6 +7,7 @@ import {
   mergeDiscoveredAgentFiles,
   type PendingAgentFileDiscovery,
   persistAgentFileDiscoveries,
+  previewAgentFileDiscovery,
 } from './discoveredAgentFiles';
 
 const discovery = (overrides: Partial<DiscoveredAgentFiles> = {}): DiscoveredAgentFiles => ({
@@ -158,6 +159,16 @@ describe('applyAgentFileDiscovery', () => {
     expect(applied.content).toContain(
       '[Truncated to fit this tool result. Read /repo/web/AGENTS.md for the rest.]',
     );
+  });
+
+  it('previews the result for hooks: block rendered, raw instruction text out of state', () => {
+    const preview = previewAgentFileDiscovery(result(), { skillsToolAvailable: true });
+
+    expect(preview.content).toMatch(/^<agent_files_discovered>[\s\S]*Use pnpm\.[\s\S]*file body$/);
+    expect(preview.state).toEqual({ lines: 1 });
+
+    const plain = { content: 'x', state: { lines: 1 }, success: true };
+    expect(previewAgentFileDiscovery(plain, { skillsToolAvailable: true })).toBe(plain);
   });
 
   it('leaves a result without a discovery untouched', () => {

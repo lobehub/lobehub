@@ -224,3 +224,27 @@ export const applyAgentFileDiscovery = <
 /** Whether this step's tools include `lobe-skills`, which owns `activateSkill`. */
 export const hasSkillsTool = (manifestMap: Record<string, unknown> | undefined): boolean =>
   !!manifestMap && 'lobe-skills' in manifestMap;
+
+/**
+ * The result as the model will see it, for the host's `afterToolCall` control
+ * hooks and observers: the discovery block rendered into the content, and the
+ * pending payload (full instruction text) dropped from the state. Rendered
+ * without batch dedupe, so a hook reviews everything the model could be shown.
+ * The run still renders the real block itself, with {@link applyAgentFileDiscovery},
+ * once the hooks have let the result through.
+ */
+export const previewAgentFileDiscovery = <
+  T extends { content?: unknown; state?: Record<string, any>; success?: boolean },
+>(
+  result: T,
+  options: { skillsToolAvailable: boolean },
+): T => {
+  if (!isPending(result.state?.[AGENT_FILE_DISCOVERY_STATE_KEY])) return result;
+
+  const applied = applyAgentFileDiscovery(result, {
+    seen: createAgentFileBatchSeen(),
+    skillsToolAvailable: options.skillsToolAvailable,
+  });
+  const { [AGENT_FILE_DISCOVERY_STATE_KEY]: _record, ...state } = applied.state ?? {};
+  return { ...applied, state };
+};

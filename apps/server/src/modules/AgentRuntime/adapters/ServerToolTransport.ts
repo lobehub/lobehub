@@ -7,7 +7,11 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
-import { executeToolWithRetry, selectOperationToolSet } from '@lobechat/agent-runtime';
+import {
+  executeToolWithRetry,
+  previewAgentFileDiscovery,
+  selectOperationToolSet,
+} from '@lobechat/agent-runtime';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
@@ -400,6 +404,15 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
+      // Hooks review the result as the model will see it: with the agent files
+      // a file tool discovered rendered into the content, and without their
+      // raw payload in the state. An allowed result goes on as executed; the
+      // run renders the real block itself once it is through
+      // (`applyAgentFileDiscovery`), deduped across the batch.
+      const skillsToolAvailable = enabledToolIds.includes('lobe-skills');
+      const reviewedResult = previewAgentFileDiscovery(resultWithExecutionTime, {
+        skillsToolAvailable,
+      });
       // Evaluate the full result before truncation/archive creation. A denied
       // archive must not remain retrievable by the model on a later tool call.
       const originalOperationId = context.toolMessageId
@@ -433,7 +446,7 @@ export class ServerToolTransport implements ToolTransport {
             operationId: originalOperationId,
             includeServerHooks: originalOperationId === this.ctx.operationId,
             toolMessageId: context.toolMessageId,
-            result: resultWithExecutionTime,
+            result: reviewedResult,
             signal: context.abortSignal,
           },
         );
@@ -449,7 +462,7 @@ export class ServerToolTransport implements ToolTransport {
               {
                 ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
                 mocked: toolCallMocked || !!execution.mocked,
-                result: originalControl?.result ?? resultWithExecutionTime,
+                result: reviewedResult,
               },
               context.state.host?.hooks,
               context.abortSignal,
@@ -459,22 +472,24 @@ export class ServerToolTransport implements ToolTransport {
       }
       const executionResult = controlled.blocked
         ? controlled.result
-        : await archiveRuntimeToolResult(
-            { ...controlled.result, executionTime: controlled.result.executionTime ?? 0 },
-            {
-              agentId: context.state.origin?.agentId,
-              canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
-              identifier: chatToolPayload.identifier,
-              limit: context.toolResultMaxLength,
-              serverDB,
-              toolCallId: chatToolPayload.id,
-              topicId: this.ctx.topicId ?? context.state.origin?.topicId,
-              userId,
-              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
-            },
-          );
+        : await archiveRuntimeToolResult(resultWithExecutionTime, {
+            agentId: context.state.origin?.agentId,
+            canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+            identifier: chatToolPayload.identifier,
+            limit: context.toolResultMaxLength,
+            serverDB,
+            toolCallId: chatToolPayload.id,
+            topicId: this.ctx.topicId ?? context.state.origin?.topicId,
+            userId,
+            workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+          });
 
-      await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
+      await this.dispatchAfterToolCall(
+        chatToolPayload,
+        context,
+        previewAgentFileDiscovery(executionResult, { skillsToolAvailable }),
+        toolCallMocked,
+      );
 
       executeToolSpan.setAttributes(
         buildExecuteToolResultAttributes({

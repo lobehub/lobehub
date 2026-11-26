@@ -82,7 +82,8 @@ export const buildAgentFileScanRequest = (params: {
   const pathApi = pathApiFor(workingDirectory);
   const target = pathApi.resolve(workingDirectory, raw);
   const relative = pathApi.relative(trimSeparators(pathApi.normalize(workingDirectory)), target);
-  if (relative.startsWith('..') || pathApi.isAbsolute(relative)) return undefined;
+  const outside = relative === '..' || relative.startsWith('../') || relative.startsWith('..\\');
+  if (outside || pathApi.isAbsolute(relative)) return undefined;
   if (isTargetDirKnown(target, agentFiles.knownDirs)) return undefined;
 
   return request;
@@ -159,6 +160,7 @@ export const collectAgentFileScan = <T extends { state?: unknown; success?: bool
 
   const knownPaths = new Set(context.run.instructionPaths);
   const knownSkills = new Set(context.run.skillNames.map((name) => name.toLowerCase()));
+  const disabledSkills = new Set(context.run.disabledSkillIds);
 
   const instructions = (scan.instructions ?? []).flatMap((item) =>
     typeof item.path === 'string' && typeof item.content === 'string' && !knownPaths.has(item.path)
@@ -175,6 +177,8 @@ export const collectAgentFileScan = <T extends { state?: unknown; success?: bool
     const description = typeof skill.description === 'string' ? skill.description.trim() : '';
     if (typeof skill.name !== 'string' || typeof skill.path !== 'string' || !description) return [];
     if (skill.scope === 'device' || skill.disableModelInvocation === true) return [];
+    // The id the skill pool and `activateSkill` gate a filesystem skill by.
+    if (disabledSkills.has(`project:${skill.name}`)) return [];
     const key = skill.name.toLowerCase();
     if (knownSkills.has(key)) return [];
     knownSkills.add(key);

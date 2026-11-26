@@ -86,6 +86,7 @@ export const resolveRunAgentFiles = (
 
   return {
     deviceId: activeDeviceId,
+    disabledSkillIds: state.world?.disabledPluginIds,
     instructionPaths: [...startPaths, ...(discovered?.instructionPaths ?? [])],
     knownDirs: [
       ...new Set([

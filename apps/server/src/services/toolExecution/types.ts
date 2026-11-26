@@ -166,6 +166,11 @@ export interface ServerAgentMemberRunner {
 export interface RunAgentFiles {
   /** The device the record below describes; discovery on another device starts over. */
   deviceId?: string;
+  /**
+   * Skill ids the agent has turned off (`project:<name>` for a filesystem
+   * skill), so a discovered skill the user disabled is never offered.
+   */
+  disabledSkillIds?: string[];
   instructionPaths: string[];
   /** The bound working directory, its scanned parents, and every directory walked mid-run. */
   knownDirs: string[];

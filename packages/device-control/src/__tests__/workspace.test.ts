@@ -325,6 +325,19 @@ describe('discoverAgentFiles', () => {
     });
   });
 
+  it('treats a child named ..cache as inside the working directory', async () => {
+    const cache = path.join(repo, '..cache');
+    await write(path.join(cache, 'AGENTS.md'), 'cache rules');
+
+    const result = await discoverAgentFiles({
+      knownDirs: [repo],
+      path: path.join(cache, 'a.ts'),
+      root: repo,
+    });
+
+    expect(result).toMatchObject({ dirs: [cache], outcome: 'found' });
+  });
+
   it('lets concurrent calls for one directory share a single scan', async () => {
     const pkg = path.join(repo, 'pkg');
     await write(path.join(pkg, 'AGENTS.md'), 'pkg rules');
