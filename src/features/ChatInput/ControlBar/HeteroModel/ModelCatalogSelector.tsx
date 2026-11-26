@@ -104,7 +104,7 @@ const styles = stylex.create({
 const getCatalogErrorKey = (name: string) => {
   switch (name) {
     case 'auth_required': {
-      return 'heteroAgent.antigravityQuota.authRequired';
+      return 'heteroAgent.cliModel.antigravityAuthRequired';
     }
     case 'cli_not_found': {
       return 'heteroAgent.cliModel.cliNotFound';
