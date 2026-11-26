@@ -57,7 +57,23 @@ export interface AgentRunLineage {
    * placeholder tool message.
    */
   progressAnchor?: { parentOperationId: string; toolMessageId: string };
+  /**
+   * Agent of the run tree's root operation: the agent the user started. A
+   * child copies its parent's value, so a sub-agent or group member resolves
+   * to the agent that was asked, not to itself. Spend attribution reads it
+   * through {@link resolveRunRootAgentId}.
+   */
+  rootAgentId?: string;
 }
+
+/**
+ * Agent at the root of the run tree. A root run is its own root; a child
+ * without a recorded root (its parent's state was gone when it started) has
+ * none, so callers fall back to ordinary attribution instead of guessing.
+ */
+export const resolveRunRootAgentId = (origin?: AgentRunOrigin): string | undefined =>
+  origin?.lineage?.rootAgentId ??
+  (origin?.lineage?.parentOperationId ? undefined : origin?.agentId);
 
 /**
  * Server-authored provenance for a continuation created from a durable human

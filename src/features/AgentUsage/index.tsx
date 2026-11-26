@@ -4,6 +4,7 @@ import { Block, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentBudgetStatus from '@/business/client/features/AgentBudgetStatus';
 import AsyncError from '@/components/AsyncError';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
@@ -90,6 +91,7 @@ const AgentUsage = memo(() => {
       <Flexbox flex={1} style={styles.body} width={'100%'}>
         <WideScreenContainer>
           <Flexbox gap={16} paddingBlock={16}>
+            {activeAgentId && <AgentBudgetStatus agentId={activeAgentId} />}
             <Block gap={16} padding={20} variant={'outlined'}>
               <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
                 <Flexbox horizontal align={'center'} gap={8}>

@@ -1,7 +1,6 @@
 import type { VideoGenerationModelSummary } from '@lobechat/builtin-tool-video-generation';
 import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { VideoGenerationExecutionRuntime } from '@lobechat/builtin-tool-video-generation/executionRuntime';
-import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 import type { AiProviderModelListItem, VideoModelParamsSchema } from 'model-bank';
 
 import { aiModelRouter } from '@/server/routers/lambda/aiModel';
@@ -11,6 +10,7 @@ import { generationTopicRouter } from '@/server/routers/lambda/generationTopic';
 import { videoRouter } from '@/server/routers/lambda/video';
 import { runWithScheduledWorkScope } from '@/server/utils/scheduleAfterResponse';
 
+import { buildToolSpendOrigin } from './spendOrigin';
 import { type ServerRuntimeRegistration } from './types';
 
 const normalizeModel = (model: AiProviderModelListItem): VideoGenerationModelSummary => ({
@@ -30,19 +30,7 @@ export const videoGenerationRuntime: ServerRuntimeRegistration = {
 
     const callerContext = {
       clientIp: context.clientIp,
-      /**
-       * A share-visitor run executes under the shared agent's CREATOR, so the
-       * video spend it triggers is indistinguishable from the creator's own
-       * usage unless the origin is stamped on the charge. Projected fields
-       * only — never spread `context.agentShareVisitor`, which also carries the
-       * run's tool/memory permissions.
-       */
-      spendOrigin: context.agentShareVisitor
-        ? {
-            agentShare: toAgentShareVisitorIds(context.agentShareVisitor),
-            trigger: RequestTrigger.AgentShare,
-          }
-        : undefined,
+      spendOrigin: buildToolSpendOrigin(context),
       userId: context.userId,
       workspaceId: context.workspaceId,
     };

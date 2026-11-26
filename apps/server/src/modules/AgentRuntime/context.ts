@@ -46,6 +46,13 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   /**
+   * Agent this run's spend is attributed to: the root agent of the run tree
+   * (`resolveRunRootAgentId`), so a sub-agent's calls count toward the agent
+   * the user started. Server-derived from the operation state, never from
+   * request input; a hosting deployment may cap spend per agent with it.
+   */
+  billingAgentId?: string;
+  /**
    * Receives the agent-document index snapshot a step pinned (the run's first
    * step, or a mid-run compression). `executeStep` writes it into
    * `binding.agentDocumentIndex` of the state it saves, so later steps render

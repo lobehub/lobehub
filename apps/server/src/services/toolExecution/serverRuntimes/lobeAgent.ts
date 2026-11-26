@@ -73,6 +73,8 @@ interface LobeAgentRuntimeContext {
    * documents inherit private-agent visibility.
    */
   agentVisibility?: 'private' | 'public' | null;
+  /** See `ToolExecutionContext.billingAgentId`; stamped on the analysis call. */
+  billingAgentId?: string;
   groupId?: string | null;
   messageId: string;
   /** The current Agent Run (`agent_operations.id`). */
@@ -222,6 +224,7 @@ interface ServerMediaSourceMessage extends MediaSourceMessage {
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
   private db: LobeChatDatabase;
+  private billingAgentId?: string;
   private groupId?: string | null;
   private userId: string;
   private messageId: string;
@@ -237,6 +240,7 @@ class LobeAgentExecutionRuntime {
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
+    this.billingAgentId = context.billingAgentId;
     this.db = context.serverDB;
     this.groupId = context.groupId;
     this.messageId = context.messageId;
@@ -712,6 +716,7 @@ class LobeAgentExecutionRuntime {
           },
         },
         metadata: {
+          billingAgentId: this.billingAgentId,
           trigger: RequestTrigger.MultimodalAnalysis,
         },
       });
@@ -763,6 +768,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
     return new LobeAgentExecutionRuntime({
       agentId: context.agentId,
       agentVisibility: context.agentVisibility,
+      billingAgentId: context.billingAgentId,
       groupId: context.groupId,
       messageId: context.messageId,
       operationId: context.operationId,

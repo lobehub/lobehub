@@ -277,6 +277,7 @@ export class ServerToolTransport implements ToolTransport {
               // Share-visitor marker: lets `BuiltinToolsExecutor.execute`
               // re-apply the share data-tool gate at the actual dispatch site.
               agentShareVisitor: this.ctx.agentShareVisitor,
+              billingAgentId: this.ctx.billingAgentId,
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,

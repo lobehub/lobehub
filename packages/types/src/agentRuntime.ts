@@ -202,9 +202,29 @@ export interface SpendOrigin {
    * `SpendLogModel` — do NOT rename it.
    */
   agentShare?: AgentShareVisitorIds;
+  /**
+   * Root agent of the agent run that triggered this spend (server-derived,
+   * never request input), so async generation counts toward the same agent
+   * as the run's LLM calls.
+   */
+  billingAgentId?: string;
   /** Request source, see {@link RequestTrigger}. */
   trigger?: string;
 }
+
+/**
+ * Drop the server-only {@link SpendOrigin} attribution keys from metadata a
+ * client sent. They decide who pays for a call (a share's cap, an agent's
+ * budget), so a request must never set them; only the server runtime stamps
+ * them. Apply wherever client metadata is forwarded into a model call.
+ */
+export const omitServerSpendOrigin = <T extends Record<string, unknown>>(
+  metadata: T | undefined,
+): Omit<T, 'agentShare' | 'billingAgentId'> | undefined => {
+  if (!metadata) return undefined;
+  const { agentShare: _agentShare, billingAgentId: _billingAgentId, ...rest } = metadata;
+  return rest;
+};
 
 // ******* Runtime Biz Error ******* //
 export const AgentRuntimeErrorType = {

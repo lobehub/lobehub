@@ -1,3 +1,4 @@
+import { resolveRunRootAgentId } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import {
@@ -199,10 +200,31 @@ export async function createOperation(
         ? await deps.acceptsArtboardWorks(parentOperationId)
         : undefined);
 
+    // A child inherits its parent's root so the whole run tree is attributed
+    // to the agent the user started (see `AgentRunLineage.rootAgentId`).
+    // A parent whose state is gone leaves the child without a root; its spend
+    // then falls back to ordinary attribution, so say so in the logs.
+    const rootAgentId = parentOperationId
+      ? resolveRunRootAgentId(
+          (
+            await deps.coordinator.loadAgentState(parentOperationId).catch((error) => {
+              log(
+                '[%s] parent %s state unavailable for root agent: %O',
+                operationId,
+                parentOperationId,
+                error,
+              );
+              return null;
+            })
+          )?.origin,
+        )
+      : appContext?.agentId;
+
     const preInitState = buildPreInitState(params, {
       artboardWorksAccepted,
       fileWorksAccepted,
       llmExecutor,
+      rootAgentId,
     });
     // A deferred init leaves the turn's request on the state: its presence is
     // what tells the step-0 worker the init is still owed. The placeholder

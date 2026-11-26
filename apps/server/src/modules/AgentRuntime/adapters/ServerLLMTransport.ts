@@ -429,7 +429,11 @@ export class ServerLLMTransport implements LLMTransport {
         // `stream()` only serves context compression. Without a trigger, RouterRuntime
         // rejects the call in development (skipping compression) and bills it as
         // trigger=null in production.
-        metadata: { topicId: this.ctx.topicId, trigger: RequestTrigger.ContextCompression },
+        metadata: {
+          billingAgentId: this.ctx.billingAgentId,
+          topicId: this.ctx.topicId,
+          trigger: RequestTrigger.ContextCompression,
+        },
         user: this.ctx.userId,
       },
     );
@@ -711,6 +715,7 @@ export class ServerLLMTransport implements LLMTransport {
     const operationLogId = `${this.ctx.operationId}:${this.ctx.stepIndex}`;
     const attempt = createServerCallLlmAttempt({
       attempt: input.attempt,
+      billingAgentId: ctx.billingAgentId,
       blobStore: this.blobStore,
       chatPayload,
       getToolActivationContext: input.context.getToolActivationContext,

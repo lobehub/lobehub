@@ -49,6 +49,8 @@ interface CreateServerCallLlmAttemptInput {
    */
   agentShareVisitorIds?: AgentShareVisitorIds;
   attempt: number;
+  /** See `RuntimeExecutorContext.billingAgentId`. */
+  billingAgentId?: string;
   blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
   /** Client IP of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
@@ -183,6 +185,7 @@ export class ServerCallLlmAttempt {
   constructor({
     agentShareVisitorIds,
     attempt,
+    billingAgentId,
     blobStore,
     chatPayload,
     getToolActivationContext,
@@ -215,6 +218,7 @@ export class ServerCallLlmAttempt {
     this.resolved = resolved;
     this.runtimeMetadata = {
       agentShare: agentShareVisitorIds,
+      billingAgentId,
       clientIp,
       operationId: ctx.operationId,
       topicId,

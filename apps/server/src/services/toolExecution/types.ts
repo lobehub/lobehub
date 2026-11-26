@@ -230,6 +230,11 @@ export interface ToolExecutionContext {
    */
   assistantMessageId?: string;
   /**
+   * See `RuntimeExecutorContext.billingAgentId`. Tool runtimes that trigger
+   * their own billed work stamp it on `spendOrigin.billingAgentId`.
+   */
+  billingAgentId?: string;
+  /**
    * Who started this run from an IM conversation (`state.principal.actor.bot`): the platform
    * sender of the message the run answers and whether they are the bot's owner. Built per inbound
    * message by the bot / messenger routers, so it names the current speaker, not whoever opened

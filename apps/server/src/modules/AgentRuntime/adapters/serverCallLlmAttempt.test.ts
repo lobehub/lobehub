@@ -69,6 +69,7 @@ const createAttempt = (
   attemptOverrides?: {
     clientIp?: string;
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
+    billingAgentId?: string;
     userAgent?: string;
   },
   abortSignal?: AbortSignal,
@@ -246,6 +247,26 @@ describe('ServerCallLlmAttempt', () => {
         metadata: expect.objectContaining({
           agentShare: { agentId: 'agt_shared', shareId: 'share-1', visitorUserId: 'visitor-1' },
         }),
+      }),
+    );
+  });
+
+  it('forwards the billing agent into the chat call metadata', async () => {
+    const { attempt, chat } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+      },
+      undefined,
+      { billingAgentId: 'agt_root' },
+    );
+
+    await attempt.execute();
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ billingAgentId: 'agt_root' }),
       }),
     );
   });
