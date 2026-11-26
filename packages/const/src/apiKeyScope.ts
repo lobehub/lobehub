@@ -235,6 +235,9 @@ const rw = (read: ApiKeyScope | null, write: ApiKeyScope | null): TrpcNamespaceS
  * `apps/server` fails when a newly added router is left uncategorized.
  */
 export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule> = {
+  // the card tool run for a client-executed Agent run: validates a card and reads component docs,
+  // stores nothing, so it follows the Agent's own read/write scopes
+  a2ui: rw('agent:read', 'agent:write'),
   accountDeletion: 'blocked',
   // `acceptance:*` is internal (`INTERNAL_API_KEY_SCOPES`), so restricted keys
   // stay out; a device run's caller token holds it
