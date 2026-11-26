@@ -82,12 +82,23 @@ describe('AgentTasksPage', () => {
         }),
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
-        groupBy: 'automationMode',
+        groupBy: 'none',
+        subGroupBy: 'none',
         completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
       });
+    });
+
+    it('lists scheduled tasks without group headers, whatever grouping is stored', () => {
+      const options = getScheduledTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'status',
+        subGroupBy: 'priority',
+      });
+      expect(options.groupBy).toBe('none');
+      expect(options.subGroupBy).toBe('none');
     });
 
     it('renders a page newest-first, like the server paginates it', () => {
@@ -101,17 +112,14 @@ describe('AgentTasksPage', () => {
   describe('collectionGroupsByProject', () => {
     const project = { ...DEFAULT_TASK_LIST_VIEW_OPTIONS, groupBy: 'project' as const };
 
-    it('ignores a stored project grouping on the scheduled tab, which replaces it', () => {
+    it('ignores a stored project grouping on the scheduled tab, which is ungrouped', () => {
       expect(collectionGroupsByProject('scheduled', project)).toBe(false);
-    });
-
-    it('still counts a project sub-grouping on the scheduled tab, which keeps it', () => {
       expect(
         collectionGroupsByProject('scheduled', {
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           subGroupBy: 'project',
         }),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('counts it on the tabs that render the stored grouping', () => {

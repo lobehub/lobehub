@@ -1,14 +1,7 @@
-import { buildAntigravityArgs } from '@lobechat/heterogeneous-agents/spawn';
-
 import type { HeterogeneousAgentDriver } from '../types';
 
 export const antigravityDriver: HeterogeneousAgentDriver = {
-  async buildSpawnPlan({ args, helpers, promptInput, resumeSessionId }) {
-    const input = await helpers.buildAgentInput('antigravity', promptInput);
-    return {
-      args: buildAntigravityArgs({ extraArgs: args, resumeSessionId }),
-      liveInput: true,
-      stdinPayload: input.stdin,
-    };
+  async buildSpawnPlan() {
+    throw new Error('Antigravity prompts must run through the native ACP session');
   },
 };

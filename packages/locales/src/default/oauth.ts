@@ -34,6 +34,9 @@ export default {
   'consent.scope.acceptance-review':
     'Comment on this acceptance and accept or send it back from its preview page',
   'consent.scope.email': 'Access your email address',
+  'consent.scope.generation-read': 'View your generated images, videos and audio',
+  'consent.scope.generation-write':
+    'Generate images, videos and audio and delete the results, using your quota',
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',
   'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',

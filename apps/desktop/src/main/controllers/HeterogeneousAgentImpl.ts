@@ -76,7 +76,6 @@ import {
   DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
   findClaudeCodeTranscriptPath,
-  getCodexAppServerUnsupportedArgs,
   getHeterogeneousAgentSpawnEnv,
   prepareClaudeCodeLobeHubCli,
   readClaudeCodeSessionCost,
@@ -95,6 +94,7 @@ import {
   resolveHeteroSpawnCwd,
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
+  CodexCollaborationMode,
   HeterogeneousAgentModelCatalog,
   HeteroPermissionMode,
   ListHeterogeneousAgentModelsParams,
@@ -160,7 +160,7 @@ import {
 import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
-import { sendPromptWithCodexAppServer } from './codexAppServer';
+import { type CodexAppServerHost, dispatchCodexPrompt } from './codexAppServer';
 import { createLiveCliAdapter, endLiveCliRun, writeCliPrompt } from './heterogeneousAgentLiveInput';
 import {
   attachCliPermissionPrompts,
@@ -173,6 +173,7 @@ import type {
   CliTraceSession,
   GetSessionInfoParams,
   SendPromptParams,
+  SetCollaborationModeParams,
   SetPermissionModeParams,
   StopBackgroundTaskParams,
   StopSessionParams,
@@ -476,33 +477,14 @@ export default class HeterogeneousAgentCtr {
         await session.hostedProviderBinding?.cleanup();
       }
     },
-    'codex': async (params, session) => {
-      if (
-        session.hostedProviderBinding ||
-        session.codexAppServerFallback ||
-        !(session.useCodexAppServer || this.isCodexAppServerLabEnabled)
-      ) {
-        return false;
-      }
-      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
-        resume: !!session.agentSessionId,
-      });
-      if (unsupportedArgs.length === 0) {
-        // `true` = app-server handled the prompt; `false` = fall through to
-        // the generic `codex exec` spawn.
-        return this.sendPromptWithCodexAppServer(params, session);
-      }
-      if (session.agentSessionId) {
-        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
-        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
-        throw new Error(message);
-      }
-      session.codexAppServerFallback = true;
-      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-        sessionId: session.sessionId,
-        unsupportedArgs,
-      });
-      return false;
+    // `true` = app-server handled the prompt; `false` = the generic `codex exec` spawn.
+    'codex': (params, session) =>
+      dispatchCodexPrompt(this.codexAppServerHost(), params, session, {
+        appServerEnabled: !!(session.useCodexAppServer || this.isCodexAppServerLabEnabled),
+      }),
+    'antigravity': async (params, session) => {
+      await this.sendPromptWithAcp(params, session);
+      return true;
     },
     'copilot': async (params, session) => {
       await this.sendPromptWithAcp(params, session);
@@ -1996,39 +1978,32 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
-   * Delegates the Codex transport while retaining controller-owned session services.
+   * Controller-owned session services the Codex transport runs on.
    *
    * Call stack:
    *
-   * sendPrompt -> runtimeDispatchers -> {@link sendPromptWithCodexAppServer}
+   * sendPrompt -> runtimeDispatchers -> {@link dispatchCodexPrompt}
    */
-  private sendPromptWithCodexAppServer(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<boolean> {
-    return sendPromptWithCodexAppServer(
-      {
-        clientState: this.codexAppServerState,
-        fileCacheDir: this.fileCacheDir,
-        appendCliTraceFile: this.appendCliTraceFile.bind(this),
-        broadcast: this.broadcast.bind(this),
-        buildSessionSpawnEnv: this.buildSessionSpawnEnv.bind(this),
-        completeCancelledSessionBeforeLaunch: this.completeCancelledSessionBeforeLaunch.bind(this),
-        createCliTraceSession: this.createCliTraceSession.bind(this),
-        flushCliTrace: this.flushCliTrace.bind(this),
-        getErrorMessage: this.getErrorMessage.bind(this),
-        getInflightRuns: this.getInflightRuns.bind(this),
-        getSessionErrorPayload: this.getSessionErrorPayload.bind(this),
-        needsSessionIntroduction: this.needsSessionIntroduction.bind(this),
-        recordInflightRun: this.recordInflightRun.bind(this),
-        resolveSessionCommand: this.resolveSessionCommand.bind(this),
-        setupAcpInterventionForOp: this.setupAcpInterventionForOp.bind(this),
-        writeCliTraceFile: this.writeCliTraceFile.bind(this),
-        writeCliTraceJson: this.writeCliTraceJson.bind(this),
-      },
-      params,
-      session,
-    );
+  private codexAppServerHost(): CodexAppServerHost {
+    return {
+      clientState: this.codexAppServerState,
+      fileCacheDir: this.fileCacheDir,
+      appendCliTraceFile: this.appendCliTraceFile.bind(this),
+      broadcast: this.broadcast.bind(this),
+      buildSessionSpawnEnv: this.buildSessionSpawnEnv.bind(this),
+      completeCancelledSessionBeforeLaunch: this.completeCancelledSessionBeforeLaunch.bind(this),
+      createCliTraceSession: this.createCliTraceSession.bind(this),
+      flushCliTrace: this.flushCliTrace.bind(this),
+      getErrorMessage: this.getErrorMessage.bind(this),
+      getInflightRuns: this.getInflightRuns.bind(this),
+      getSessionErrorPayload: this.getSessionErrorPayload.bind(this),
+      needsSessionIntroduction: this.needsSessionIntroduction.bind(this),
+      recordInflightRun: this.recordInflightRun.bind(this),
+      resolveSessionCommand: this.resolveSessionCommand.bind(this),
+      setupAcpInterventionForOp: this.setupAcpInterventionForOp.bind(this),
+      writeCliTraceFile: this.writeCliTraceFile.bind(this),
+      writeCliTraceJson: this.writeCliTraceJson.bind(this),
+    };
   }
 
   private sendPromptWithAcp(params: SendPromptParams, session: AgentSession): Promise<void> {
@@ -2339,11 +2314,11 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code / Antigravity).
+    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code always is).
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
-      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live, session.agentType);
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live);
     }
 
     session.process = proc;
@@ -2367,7 +2342,7 @@ export default class HeterogeneousAgentCtr {
     // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
-      ...(session.liveInput && { adapter: createLiveCliAdapter(session.liveInput) }),
+      ...(session.liveInput && { adapter: createLiveCliAdapter() }),
       agentType: session.agentType,
       cwd,
       env: spawnEnv,
@@ -2540,7 +2515,7 @@ export default class HeterogeneousAgentCtr {
           session.liveInput = undefined;
           if (code === 0) broadcastStreamEvents(pipeline.validateCompletion());
           const liveEnd = endLiveCliRun(pipeline, liveInput, { code, sawError, signal });
-          if (code === 0 || liveEnd.length > 0) {
+          if (pipeline.resolveExitCode(code) === 0 || liveEnd.length > 0) {
             broadcastStreamEvents(liveEnd);
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
@@ -3227,6 +3202,13 @@ export default class HeterogeneousAgentCtr {
     return setSessionPermissionMode(this.sessions.get(sessionId), mode);
   }
 
+  /** Flip a native Codex thread's Plan switch; it applies from the next turn. */
+  async setCollaborationMode({ mode, sessionId }: SetCollaborationModeParams) {
+    const appServerSession = this.sessions.get(sessionId)?.appServerSession;
+    if (!appServerSession) throw new Error('This run is not a native Codex thread');
+    await appServerSession.setCollaborationMode(mode);
+  }
+
   /**
    * Renderer → main: deliver the user's answer to a pending CC AskUserQuestion
    * (or signal cancellation). The matching bridge resolves its blocked
@@ -3360,8 +3342,8 @@ export default class HeterogeneousAgentCtr {
    * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
-    /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
-    accountEnv?: Record<string, string>;
+    accountEnv?: Record<string, string>; // documented on `LhHeteroExecEnvParams`
+    accountUnsetEnv?: string[];
     agentId?: string;
     agentType: string;
     assistantMessageId?: string;
@@ -3373,6 +3355,8 @@ export default class HeterogeneousAgentCtr {
     jwt: string;
     operationId: string;
     permissionMode?: HeteroPermissionMode;
+    /** Codex Plan switch, forwarded into the `--input-json` envelope. */
+    collaborationMode?: CodexCollaborationMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
@@ -3440,6 +3424,7 @@ export default class HeterogeneousAgentCtr {
     ];
 
     const stdinPayload = buildHeteroExecStdinPayload({
+      collaborationMode: params.collaborationMode,
       imageList,
       isNewSession: !resumeSessionId,
       permissionMode: params.permissionMode,

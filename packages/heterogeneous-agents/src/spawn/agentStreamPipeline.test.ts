@@ -61,6 +61,96 @@ describe('AgentStreamPipeline', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
+  it.each([
+    {
+      expectedCode: 0,
+      finishReason: 'stop',
+      message: 'Web Search',
+      reply: 'Search was unavailable.',
+    },
+    { expectedCode: 1, finishReason: 'stop', message: 'Web Search', reply: ' ' },
+    { expectedCode: 1, finishReason: 'length', message: 'Web Search', reply: 'Partial answer' },
+    {
+      expectedCode: 1,
+      finishReason: 'stop',
+      message: 'Other input',
+      reply: 'Search was unavailable.',
+    },
+    {
+      expectedCode: 1,
+      finishReason: 'stop',
+      message: 'Web Search',
+      providerError: true,
+      reply: 'Search was unavailable.',
+    },
+  ])(
+    'settles an OpenCode cancellation ($finishReason, $message, "$reply", provider error: $providerError)',
+    async ({ expectedCode, finishReason, message, providerError, reply }) => {
+      const pipeline = new AgentStreamPipeline({ agentType: 'opencode', operationId: 'op-search' });
+      const nativeEvents = [
+        { part: { id: 'step-1', type: 'step-start' }, type: 'step_start' },
+        {
+          part: {
+            id: 'search-call',
+            partID: 'search-part',
+            state: { error: 'Web search cancelled', input: { query: 'example' }, status: 'error' },
+            tool: 'websearch',
+            type: 'tool',
+          },
+          type: 'tool_use',
+        },
+        {
+          part: { id: 'end-1', reason: 'tool-calls', type: 'step-finish' },
+          type: 'step_finish',
+        },
+        { part: { id: 'step-2', type: 'step-start' }, type: 'step_start' },
+        { part: { id: 'answer', text: reply, type: 'text' }, type: 'text' },
+        {
+          part: { id: 'end-2', reason: finishReason, type: 'step-finish' },
+          type: 'step_finish',
+        },
+        {
+          error: {
+            message: `Cancelled a request for input this run cannot answer: ${message}`,
+            type: 'unknown',
+          },
+          type: 'error',
+        },
+      ];
+      if (providerError) {
+        nativeEvents.push({
+          error: { message: 'Model unavailable', type: 'provider' },
+          type: 'error',
+        });
+      }
+      const events = [
+        ...(await pipeline.push(nativeEvents.map((event) => JSON.stringify(event)).join('\n'))),
+        ...(await pipeline.flush()),
+      ];
+
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ content: 'Web search cancelled', isError: true }),
+          type: 'tool_result',
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ content: reply }),
+          type: 'stream_chunk',
+        }),
+      );
+      expect(events.some(({ type }) => type === 'error')).toBe(expectedCode !== 0);
+      if (providerError) {
+        expect(events.find(({ type }) => type === 'error')?.data?.message).toBe(
+          'Model unavailable',
+        );
+      }
+      expect(pipeline.resolveExitCode(1)).toBe(expectedCode);
+      expect(pipeline.resolveExitCode(null)).toBeNull();
+    },
+  );
+
   it.each(['uploaded', 'unavailable', 'failed'])(
     'recovers only the current rollout images before stream end (%s)',
     async (upload) => {

@@ -203,9 +203,5 @@ describe('Relaying a request into another Channel', () => {
     expect(run.manifest.threadId).toBe(thread.id);
     expect(run.manifest.threadRootSequence).toBe(thread.rootSequence);
     expect(run.manifest.requestMessageId).toBe(request.id);
-
-    // A relay or a callback the moved run resolves opens where the run now is.
-    const source = await history.relaySource(claim.job.operationId!);
-    expect(source.origin).toEqual({ channelId: team.channel.id, threadId: thread.id });
   });
 });

@@ -20,7 +20,6 @@ export interface ArtboardState {
   pageByBoard: Record<string, string>;
   pageId: string | null;
   selected: string | null;
-  staleRevision: number | null;
   tool: BoardTool;
   verifyOpen: boolean;
   verifyView: VerifyView;
@@ -40,7 +39,6 @@ export const initialState: ArtboardState = {
   pageByBoard: {},
   pageId: null,
   selected: null,
-  staleRevision: null,
   tool: 'select',
   verifyOpen: true,
   verifyView: 'board',

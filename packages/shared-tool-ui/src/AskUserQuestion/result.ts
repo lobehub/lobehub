@@ -1,3 +1,5 @@
+import type { AskUserQuestionItem } from './types';
+
 export interface AskUserQuestionResultState {
   askUserAnswers?: Record<string, string | string[]>;
 }
@@ -40,4 +42,29 @@ export const resolveAskUserAnswers = (
   } catch {
     return;
   }
+};
+
+const FREEFORM_KEY = '__freeform__';
+
+export const summarizeAskUserAnswers = (
+  questions: AskUserQuestionItem[],
+  answers: Record<string, string | string[]> | undefined,
+): string | undefined => {
+  if (!answers) return;
+
+  const freeform = answers[FREEFORM_KEY];
+  if (typeof freeform === 'string' && freeform.trim()) return freeform.trim();
+
+  const toLabel = (question: AskUserQuestionItem, value: string) =>
+    question.options.find((option) => option.id === value)?.label ?? value;
+
+  const first = questions.find((question) => {
+    const value = answers[question.question];
+    return Array.isArray(value) ? value.length > 0 : !!value;
+  });
+  if (!first) return;
+
+  const value = answers[first.question];
+  const text = (Array.isArray(value) ? value : [value]).map((v) => toLabel(first, v)).join(', ');
+  return questions.length > 1 ? `${text} +${questions.length - 1}` : text;
 };

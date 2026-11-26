@@ -10,10 +10,12 @@ import { MAX_WIDTH } from '@/const/layoutTokens';
 const NotFound = memo<{
   desc?: string;
   extra?: ReactNode;
+  /** Drop the "check your URL" line when the URL is known to be right (e.g. no access). */
+  hideCheck?: boolean;
   hideWatermark?: boolean;
   status?: number | string;
   title?: string;
-}>(({ extra, hideWatermark, status = 404, title, desc }) => {
+}>(({ extra, hideCheck, hideWatermark, status = 404, title, desc }) => {
   const { t } = useTranslation('error');
   return (
     <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100%', width: '100%' }}>
@@ -38,7 +40,7 @@ const NotFound = memo<{
       </h2>
       <div style={{ lineHeight: '1.8', marginBottom: '2em', textAlign: 'center' }}>
         <div>{desc || t('notFound.desc')}</div>
-        <div style={{ marginTop: '0.5em' }}>{t('notFound.check')}</div>
+        {!hideCheck && <div style={{ marginTop: '0.5em' }}>{t('notFound.check')}</div>}
       </div>
       {extra || (
         <Button type={'primary'} onClick={() => (window.location.href = '/')}>

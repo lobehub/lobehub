@@ -523,6 +523,19 @@ describe('ModelRuntime', () => {
       schema: { name: 'test', schema: { type: 'object' as const, properties: {} } },
     };
 
+    it('keeps internal tool activation metadata outside the provider payload', async () => {
+      const { runtime, mockRuntimeAI } = createMockRuntime();
+      const plan = { results: [{ callId: 'call', content: 'Docs', toolNames: ['lookup'] }] };
+      const message = { role: 'tool' as const, tool_call_id: 'call', content: 'Activated' };
+      const payload = { ...chatPayload, messages: [{ ...message, toolActivationPlan: plan }] };
+      await runtime.chat(payload);
+      expect(mockRuntimeAI.chat).toHaveBeenCalledWith(
+        { ...payload, messages: [message] },
+        expect.objectContaining({ toolActivationPlan: plan }),
+      );
+      expect(payload.messages[0].toolActivationPlan).toBe(plan);
+    });
+
     describe('chat hooks', () => {
       it('beforeChat is called before runtime.chat', async () => {
         const beforeChat = vi.fn();

@@ -41,6 +41,7 @@ const styles = stylex.create({
     flex: '1',
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
+    textWrap: 'balance',
     wordBreak: 'break-all',
   },
   successIcon: { color: cssVar.colorSuccess },

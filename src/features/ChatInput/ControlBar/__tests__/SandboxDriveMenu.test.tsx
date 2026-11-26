@@ -15,22 +15,44 @@ vi.mock('@/services/sandboxStorage', () => ({
   sandboxStorageService: { listFiles: vi.fn(async () => ({ entries: [] })) },
 }));
 
-describe('SandboxDriveMenu', () => {
-  const onOpenStorage = vi.fn();
-  const onPick = vi.fn();
+const props = {
+  onBrowse: vi.fn(),
+  onPick: vi.fn(),
+  onPickTemporary: vi.fn(),
+  onUpgrade: vi.fn(),
+};
 
+// T-14791: storage is one level under the cloud sandbox — a temporary
+// sandbox, or a folder of the drive.
+describe('SandboxDriveMenu', () => {
   beforeEach(() => {
-    onOpenStorage.mockClear();
-    onPick.mockClear();
+    for (const fn of Object.values(props)) fn.mockClear();
   });
 
-  it('links to Sandbox Storage from the header without picking a folder', () => {
-    render(<SandboxDriveMenu onBrowse={vi.fn()} onOpenStorage={onOpenStorage} onPick={onPick} />);
+  it('offers the temporary sandbox above the drive folders', async () => {
+    render(<SandboxDriveMenu entitled temporary {...props} />);
 
-    expect(screen.getByText('sandboxDrive.title')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'sandboxDrive.openStorage' }));
+    fireEvent.click(screen.getByText('sandboxOptions.temporary'));
+    expect(props.onPickTemporary).toHaveBeenCalledTimes(1);
 
-    expect(onOpenStorage).toHaveBeenCalledTimes(1);
-    expect(onPick).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByText('sandboxDrive.root'));
+    expect(props.onPick).toHaveBeenCalledWith({ drive: undefined, workingDirectory: '.' });
+    expect(screen.getByText('sandboxDrive.browseOther')).toBeInTheDocument();
+  });
+
+  it('leads a plan without a drive to one instead of listing folders', () => {
+    render(<SandboxDriveMenu temporary entitled={false} {...props} />);
+
+    expect(screen.queryByText('sandboxDrive.root')).toBeNull();
+    fireEvent.click(screen.getByText('sandboxDrive.title'));
+    expect(props.onUpgrade).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers only the temporary sandbox without a drive service', () => {
+    render(<SandboxDriveMenu temporary {...props} />);
+
+    expect(screen.getByText('sandboxOptions.temporary')).toBeInTheDocument();
+    expect(screen.queryByText('sandboxDrive.title')).toBeNull();
+    expect(screen.queryByText('sandboxDrive.root')).toBeNull();
   });
 });

@@ -6,17 +6,19 @@ import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { taskListSelectors } from '@/store/task/selectors';
 
 interface TaskStatusIconProps {
+  /** Overrides the status color, e.g. to mute repeated group headers. */
+  color?: string;
   size?: number;
   status: TaskStatus;
 }
 
-const TaskStatusIcon = memo<TaskStatusIconProps>(({ size = 16, status }) => {
+const TaskStatusIcon = memo<TaskStatusIconProps>(({ color, size = 16, status }) => {
   const displayStatus = taskListSelectors.getDisplayStatus(status);
   const meta = TASK_STATUS_VISUALS[status as TaskStatus] ?? TASK_STATUS_VISUALS.backlog;
 
   return (
     <ActionIcon
-      color={meta.color}
+      color={color ?? meta.color}
       icon={meta.icon}
       title={displayStatus}
       size={{

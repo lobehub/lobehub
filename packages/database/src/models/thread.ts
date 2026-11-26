@@ -207,11 +207,16 @@ export class ThreadModel {
    * Record the operation id of a run that just started. The run is scheduled
    * before its id is known here, so it may already have settled the thread;
    * that metadata holds its final usage and error and must not be replaced.
+   * An external agent may also have bound its native session to the thread by
+   * now (`heteroSessionId`, written at its stream start); that one is kept.
    */
   attachRunOperation = async (id: string, metadata: ThreadMetadata) => {
     return this.db
       .update(threads)
-      .set({ metadata, updatedAt: new Date() })
+      .set({
+        metadata: sql`${JSON.stringify(metadata)}::jsonb || jsonb_strip_nulls(jsonb_build_object('heteroSessionId', ${threads.metadata} -> 'heteroSessionId'))`,
+        updatedAt: new Date(),
+      })
       .where(
         and(eq(threads.id, id), this.ownership(), eq(threads.status, ThreadStatus.Processing)),
       );

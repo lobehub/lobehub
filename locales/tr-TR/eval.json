@@ -277,6 +277,7 @@
   "experiment.list.title": "Deneyler",
   "experiment.overview.emptyHint": "Çalıştırma etkinliği ve kapsamlı veri kümeleri burada görünecek.",
   "experiment.run.parent": "{{name}}'den çatallandı",
+  "lobeBench.new.draft.storageError": "Bu tarayıcı taslağınızı kaydedemedi. Deney",
   "overview.createBenchmark": "Benchmark Oluştur",
   "overview.createExperiment": "Deney Oluştur",
   "overview.importDataset": "Veri Seti İçe Aktar",

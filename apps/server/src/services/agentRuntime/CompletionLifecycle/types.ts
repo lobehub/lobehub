@@ -80,6 +80,7 @@ export interface OperationCompletionInput {
   /** Trace / usage aggregates (llm calls, tokens, tool calls). */
   usage?: unknown;
   userId?: string;
+  worksRegistered?: boolean;
 }
 
 /** Options shared by {@link CompletionLifecycle.completeOperation} / `dispatchHooks`. */
@@ -98,6 +99,12 @@ export interface CompleteOperationOptions {
    * dispatch-failure path, which surfaces a device-specific `detail`).
    */
   skipErrorMessageWrite?: boolean;
+  /**
+   * The caller already moved the row to its terminal status with a compare-and-set it won (an
+   * abandonment claim), so this completion is the run's end even though the row already holds
+   * that status. Without it, the write reads as a replay of a settled run.
+   */
+  terminalClaimed?: boolean;
 }
 
 /** What the extracted completion steps read off a `CompletionLifecycle` instance. */

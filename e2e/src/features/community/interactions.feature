@@ -11,14 +11,14 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-001 @P1
   Scenario: Search for assistants
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I type "developer" in the search bar
     And I wait for the search results to load
     Then I should see only "Code Assistant" in the assistant catalog
 
   @COMMUNITY-INTERACT-002 @P1
   Scenario: Filter assistants by category
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I open the assistant category "programming"
     And I wait for the filtered results to load
     Then I should see only "Code Assistant" in the assistant catalog
@@ -26,7 +26,7 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-003 @P1
   Scenario: Navigate to next page of assistants
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I open the recommended assistants
     And I click the next page button
     Then I should be navigated to "/marketplace/agent?sort=recommended&page=2"
@@ -34,7 +34,7 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-004 @P1
   Scenario: Navigate to assistant detail page
-    Given I navigate to "/marketplace/agent"
+    Given I navigate to "/marketplace/agent?tab=public"
     When I click on the first assistant card
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content

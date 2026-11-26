@@ -858,7 +858,7 @@ export interface TopicPullRequestsMeta {
 }
 
 /**
- * One GitHub pull request linked to a topic (Better Coding Experience): by any
+ * One GitHub pull request linked to a topic: by any
  * `work_versions` row of a `github_pull_request` Work with that `topicId`, or by
  * a topic link (branch match / by hand). A topic can carry several.
  */

@@ -28,6 +28,8 @@ export default {
   'benchmark.create.description.label': 'Description',
   'benchmark.create.description.placeholder': 'Benchmark description (optional)',
   'benchmark.create.error': 'Failed to create benchmark',
+  'benchmark.create.failedRetry':
+    "Couldn't create the benchmark. Check your network and try again.",
   'benchmark.create.identifier.label': 'Identifier',
   'benchmark.create.identifier.placeholder': 'benchmark-identifier',
   'benchmark.create.identifierRequired': 'Please enter an identifier',
@@ -71,6 +73,7 @@ export default {
   'benchmark.detail.tabs.datasets': 'Datasets',
   'benchmark.detail.tabs.experiments': 'Experiments',
   'benchmark.detail.tabs.runs': 'Runs',
+  'benchmark.edit.failedRetry': "Couldn't save the benchmark. Check your network and try again.",
   'benchmark.empty': 'No benchmarks yet. Create one to get started.',
 
   'common.cancel': 'Cancel',
@@ -1221,4 +1224,22 @@ export default {
   'connections.statusConnected': 'Last check succeeded',
   'connections.statusError': 'Last check failed',
   'connections.statusDisconnected': 'Not checked',
+  'dataset.create.failedRetry':
+    "Couldn't create the dataset. Check that the identifier isn't already used, then try again.",
+  'dataset.edit.failedRetry': "Couldn't save the dataset. Check your network and try again.",
+  'experiment.create.failedRetry':
+    "Couldn't create the experiment. Check your network and try again.",
+  'experiment.edit.failedRetry': "Couldn't save the experiment. Check your network and try again.",
+  'lobeBench.benchmark.create.failedRetry':
+    "Couldn't create the benchmark. Check your network and try again.",
+  'lobeBench.experiment.edit.failedRetry':
+    "Couldn't save the experiment. Check your network and try again.",
+  'lobeBench.picks.createFailedRetry':
+    "Couldn't create the dataset. Check your network and try again.",
+  'lobeBench.picks.renameFailedRetry':
+    "Couldn't rename the dataset. Check your network and try again.",
+  'run.create.failedRetry': "Couldn't create the run. Check your network and try again.",
+  'run.edit.failedRetry': "Couldn't save the run. Check your network and try again.",
+  'testCase.create.failedRetry': "Couldn't create the test case. Check your network and try again.",
+  'testCase.edit.failedRetry': "Couldn't save the test case. Check your network and try again.",
 };

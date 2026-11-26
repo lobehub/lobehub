@@ -427,6 +427,45 @@ describe('discoverTools — connector discovery', () => {
     expect(result.agentPlugins).toContain('community-mcp');
   });
 
+  it('keeps tools and @agent delegation from earlier turns in the topic enabled on follow-up turns', async () => {
+    const result = await run({
+      ...sources,
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            content: '<mention name="Writer" id="agt_writer" /> Hello',
+            metadata: { selectedToolIds: ['community-mcp', 'lobe-agent-management'] },
+            role: 'user',
+          },
+          { content: 'How can I help?', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['community-mcp', 'lobe-agent-management']),
+    );
+  });
+
+  it('does not leak supervisor @-mentioned connectors from shared group history into an in-group member turn', async () => {
+    const result = await run({
+      ...sources,
+      appContext: { groupId: 'group-1', orchestrationRole: 'member' },
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            metadata: { selectedToolIds: ['community-mcp'] },
+            role: 'user',
+          },
+          { content: 'Delegating to member', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(result.agentPlugins).not.toContain('community-mcp');
+  });
+
   it('leaves an exact toolset untouched by the agent switches', async () => {
     const result = await run({
       ...sources,

@@ -88,13 +88,15 @@ export function AgentProfilePanel({
       label={t('profile.title')}
       title={t('profile.title')}
       actions={
-        <ActionIcon
-          aria-label={t('profile.view')}
-          icon={SquareArrowOutUpRightIcon}
-          size="small"
-          title={t('profile.view')}
-          onClick={() => navigate(`/agent/${agentId}/profile`)}
-        />
+        member.canOpenAgent && (
+          <ActionIcon
+            aria-label={t('profile.view')}
+            icon={SquareArrowOutUpRightIcon}
+            size="small"
+            title={t('profile.view')}
+            onClick={() => navigate(`/agent/${agentId}/profile`)}
+          />
+        )
       }
       onClose={onClose}
     >

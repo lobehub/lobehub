@@ -9,13 +9,14 @@ import {
   ModalFooter,
   Text,
   TextArea,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useDashboardStore } from '@/store/dashboard';
 
 interface DashboardFormProps {
@@ -29,17 +30,20 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  /** Submit failure, shown above the footer buttons: the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const trimmed = title.trim();
 
   const handleSubmit = async () => {
     if (!trimmed || loading) return;
+    setError(null);
     setLoading(true);
     try {
       await onSubmit({ description: description.trim() || undefined, title: trimmed });
       close();
-    } catch (error) {
-      console.error('[dashboard] form submit failed', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+    } catch (err) {
+      console.error('[dashboard] form submit failed', err);
+      setError(toInlineError(t('form.saveFailedRetry'), err));
     } finally {
       setLoading(false);
     }
@@ -58,8 +62,11 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
             maxLength={200}
             placeholder={t('form.titlePlaceholder')}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
             onPressEnter={() => void handleSubmit()}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError(null);
+            }}
           />
         </Flexbox>
         <Flexbox gap={6}>
@@ -74,6 +81,7 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

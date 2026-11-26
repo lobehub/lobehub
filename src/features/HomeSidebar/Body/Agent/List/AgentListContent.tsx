@@ -40,10 +40,11 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     isInit,
     isLogin: !!isLogin,
   });
-  const { customList, pinnedList, defaultList } = useAgentList();
-  // Personal pins are the user's own, so they can always be reordered. A
-  // workspace caller (compact switchers) gets the team pins here, whose order
-  // only owners/admins may change from the sidebar's own section.
+  const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
+  const { customList, pinnedList, defaultList, inboxItem } = useAgentList();
+  // Personal pins are the user's own, so they can always be reordered.
+  // Workspaces render `WorkspaceAgentListContent` instead, where each member
+  // arranges their own pinned list.
   const isWorkspace = !!useActiveWorkspaceId();
   const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents);
   const reorderPinnedAgents = useHomeStore((s) => s.reorderPinnedAgents);
@@ -71,19 +72,29 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     };
   }, [pinnedList?.length, customList?.length]);
 
+  // Signed-in lists carry Lobe AI (the inbox) as an ordinary item from the
+  // server, so it can be pinned, hidden and found again like any Agent. The
+  // standalone entry covers the moments no list row exists: a signed-out
+  // visitor, the first load, and a list cached or fetched before the inbox row.
+  const showStandaloneInbox = !hideInbox && (contentState !== 'ready' || !hasInboxAgent);
+
+  if (contentState === 'inbox') return showStandaloneInbox ? <InboxItem /> : null;
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem />}
-        {contentState === 'loading' && <SkeletonList rows={3} />}
+        {showStandaloneInbox && <InboxItem />}
+        <SkeletonList rows={3} />
       </>
     );
 
   // Always render the default SessionList so the "+ Create Agent" entry is visible
   // even when the user has only the built-in Lobe AI inbox.
+  // Lobe AI's own row leads the list, ahead of the pins, like the standalone
+  // entry it replaces.
   return (
     <>
-      {!hideInbox && <InboxItem />}
+      {showStandaloneInbox && <InboxItem />}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
       {showPinned &&
         (isWorkspace ? (
           <SessionList dataSource={pinnedList!} />

@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Tohum",
   "config.seed.random": "Rastgele Tohum",
+  "config.size.autoByOpenAI": "Otomatik (OpenAI tarafından belirlenir)",
   "config.size.label": "Boyut",
   "config.steps.label": "Adımlar",
   "config.title": "Yapılandırma",

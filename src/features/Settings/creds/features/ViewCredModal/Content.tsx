@@ -1,191 +1,322 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Alert, CopyButton, Descriptions, Flexbox, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Alert,
+  Button,
+  CopyButton,
+  Flexbox,
+  Icon,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useQuery } from '@tanstack/react-query';
-import { Eye, EyeOff } from 'lucide-react';
-import { type FC, useState } from 'react';
+import { Eye, EyeOff, type LucideIcon } from 'lucide-react';
+import { type FC, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
-import { densityTokens } from '@/styles/density.stylex';
+import SkeletonBar from '@/components/Skeleton/Bar';
 
+import { confirmCredModal } from '../confirmCredModal';
 import { type CredsApi } from '../useCredsApi';
 
+// The theme's card border (light: colorFill, dark: colorFillSecondary), the
+// line Surface draws; colorBorderSecondary vanishes on a dark modal.
+const FIELD_BORDER = 'var(--lobe-fill-border)';
+
 const styles = stylex.create({
-  kvKey: {
-    minWidth: '140px',
-    paddingBlock: '8px',
-    paddingInline: densityTokens['--lobe-density-content-gap'],
-    borderTopLeftRadius: cssVar.borderRadius,
-    borderTopRightRadius: '0',
-    borderBottomRightRadius: '0',
-    borderBottomLeftRadius: cssVar.borderRadius,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '13px',
-    color: cssVar.colorTextSecondary,
-    backgroundColor: cssVar.colorFillQuaternary,
-    backgroundImage: 'none',
-  },
-  kvRow: {
-    display: 'flex',
-    alignItems: 'stretch',
+  code: { fontFamily: cssVar.fontFamilyCode, fontSize: '13px' },
+  fields: {
+    overflow: 'hidden',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadius,
-    marginBlockEnd: { 'default': null, ':not(:last-child)': '8px' },
+    borderColor: FIELD_BORDER,
+    borderRadius: cssVar.borderRadiusLG,
   },
-  kvValue: {
+  footer: {
     display: 'flex',
-    flex: '1',
+    flexWrap: 'wrap',
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '8px',
-    paddingInline: densityTokens['--lobe-density-content-gap'],
-    borderTopLeftRadius: '0',
-    borderTopRightRadius: cssVar.borderRadius,
-    borderBottomRightRadius: cssVar.borderRadius,
-    borderBottomLeftRadius: '0',
-    fontFamily: cssVar.fontFamilyCode,
+    marginBlockStart: '20px',
+  },
+  label: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    width: '96px',
     fontSize: '13px',
-    backgroundColor: cssVar.colorBgContainer,
-    backgroundImage: 'none',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
-  maskedValue: { color: cssVar.colorTextQuaternary, letterSpacing: '2px' },
-  toggleBtn: {
-    cursor: 'pointer',
+  // A stored value's name (`OPENAI_API_KEY`) keeps its full width up to half the row.
+  labelFit: { width: 'auto', minWidth: '96px', maxWidth: '50%' },
+  masked: { letterSpacing: '2px' },
+  row: {
     display: 'flex',
+    gap: '12px',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: '4px',
-    borderRadius: cssVar.borderRadiusSM,
-    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
-    transition: 'all 0.2s',
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
-    backgroundImage: { 'default': null, ':hover': 'none' },
+    minHeight: '44px',
+    paddingBlock: '8px',
+    paddingInline: '14px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': '0' },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: FIELD_BORDER,
   },
-  valuesSection: { marginBlockStart: '16px' },
-  valuesTitle: { marginBlockEnd: '12px', fontWeight: 500 },
+  value: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: '14px',
+    color: cssVar.colorText,
+    overflowWrap: 'anywhere',
+  },
 });
 
-const maskValue = (value: string): string => {
-  if (value.length <= 4) return '••••••••';
-  return '••••••••' + value.slice(-4);
-};
+const MASK = '••••••••••••';
 
-interface KVRowProps {
-  keyName: string;
-  value: string;
+interface FieldRowProps {
+  children: ReactNode;
+  extra?: ReactNode;
+  /** Let a long label (`Credential Values`) take the width it needs, like a value name. */
+  fitLabel?: boolean;
+  label: ReactNode;
+  mono?: boolean;
 }
 
-const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
-  const [visible, setVisible] = useState(false);
+const FieldRow: FC<FieldRowProps> = ({ children, extra, fitLabel, label, mono }) => (
+  <div {...stylex.props(styles.row)}>
+    <div
+      {...stylex.props(styles.label, mono && styles.code, (mono || fitLabel) && styles.labelFit)}
+      title={mono && typeof label === 'string' ? label : undefined}
+    >
+      {label}
+    </div>
+    <div {...stylex.props(styles.value, mono && styles.code)}>{children}</div>
+    {extra}
+  </div>
+);
+
+/** One stored value: masked until revealed, copyable either way. */
+const SecretRow: FC<{ name: string; value: string }> = ({ name, value }) => {
+  const { t } = useTranslation('setting');
+  // Rows appear only after the viewer asked to see the values.
+  const [visible, setVisible] = useState(true);
 
   return (
-    <div {...stylex.props(styles.kvRow)}>
-      <div {...stylex.props(styles.kvKey)}>{keyName}</div>
-      <div {...stylex.props(styles.kvValue)}>
-        <Text
-          as={'span'}
-          className={stylex.props(!visible && styles.maskedValue).className}
-          style={{
-            flex: 1,
-            fontFamily: 'var(--lobe-font-family-code)',
-            fontSize: 13,
-            wordBreak: 'break-all',
-          }}
-        >
-          {visible ? value : maskValue(value)}
-        </Text>
-        <Flexbox horizontal align={'center'} gap={4}>
-          <div {...stylex.props(styles.toggleBtn)} onClick={() => setVisible(!visible)}>
-            {visible ? <EyeOff size={16} /> : <Eye size={16} />}
-          </div>
+    <FieldRow
+      mono
+      label={name}
+      extra={
+        <Flexbox horizontal align={'center'} gap={2}>
+          <ActionIcon
+            icon={visible ? EyeOff : Eye}
+            size={'small'}
+            title={t(visible ? 'creds.view.hide' : 'creds.view.show')}
+            onClick={() => setVisible(!visible)}
+          />
           <CopyButton content={value} size={'small'} />
         </Flexbox>
-      </div>
-    </div>
+      }
+    >
+      <span {...stylex.props(styles.code, !visible && styles.masked)}>
+        {visible ? value : MASK}
+      </span>
+    </FieldRow>
   );
 };
 
-export interface ViewCredModalContentProps {
-  cred: UserCredSummary;
-  credsApi: CredsApi;
+/** A row-specific action (share, publish, unshare…) offered in the detail footer. */
+export interface CredDetailAction {
+  /** Danger actions sit on the left beside Remove (red fill); the rest before Edit. */
+  danger?: boolean;
+  icon?: LucideIcon;
+  key: string;
+  label: string;
+  onClick: () => void;
 }
 
-const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi }) => {
+export interface ViewCredModalContentProps {
+  /** Row-specific actions; each closes the detail before it runs. */
+  actions?: CredDetailAction[];
+  /** Whether a key-value item's stored values may be decrypted and shown. */
+  canReadValues?: boolean;
+  cred: UserCredSummary;
+  credsApi: CredsApi;
+  /** Host-specific fields after the item's own, e.g. the workspace visibility and owner. */
+  extraItems?: CredDetailItem[];
+  /** Removes the item after a confirmation; no Remove button when omitted. */
+  onDelete?: (id: number) => Promise<unknown>;
+  /** Opens the edit form; no Edit button when omitted. */
+  onEdit?: (cred: UserCredSummary) => void;
+  /** Shown instead of the values when they exist but may not be read (write-only). */
+  valuesHint?: string;
+}
+
+/** One extra field row in the detail. */
+export interface CredDetailItem {
+  children: ReactNode;
+  key: string;
+  label: ReactNode;
+}
+
+/**
+ * A vault item opened from its row: its fields as one bordered list (a
+ * key-value item's stored values included, masked), with Remove on the left of
+ * the footer and Edit / Done on the right. Every button but Done is the fill variant.
+ */
+const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
+  actions = [],
+  canReadValues = false,
+  cred,
+  credsApi,
+  extraItems = [],
+  onDelete,
+  onEdit,
+  valuesHint,
+}) => {
   const { t } = useTranslation('setting');
+  const { close } = useModalContext();
+  const isKV = cred.type === 'kv-env' || cred.type === 'kv-header';
+  const showValues = isKV && canReadValues;
+  // Plaintext is decrypted only once the viewer asks for it, not on open.
+  const [revealed, setRevealed] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryFn: () =>
-      credsApi.client.get.query({
-        decrypt: true,
-        id: cred.id,
-      }),
+    enabled: showValues && revealed,
+    queryFn: () => credsApi.client.get.query({ decrypt: true, id: cred.id }),
     queryKey: ['cred-plaintext', cred.id],
   });
 
-  const values = (data as any)?.plaintext || {};
-  const valueEntries = Object.entries(values);
+  const values = Object.entries<string>((data as any)?.plaintext ?? {});
 
-  if (isLoading) {
-    return <ArticleSkeleton rows={3} />;
-  }
+  const handleRemove = () => {
+    if (!onDelete) return;
+    confirmCredModal({
+      content: t('creds.actions.deleteConfirm.content'),
+      danger: true,
+      okText: t('creds.actions.deleteConfirm.ok'),
+      onOk: async () => {
+        try {
+          await onDelete(cred.id);
+          close();
+        } catch {
+          toast.error(t('creds.errors.deleteFailed'));
+        }
+      },
+      title: t('creds.actions.deleteConfirm.title'),
+    });
+  };
 
-  if (error) {
-    return (
-      <Alert
-        showIcon
-        description={(error as Error).message}
-        message={t('creds.view.error')}
-        type={'error'}
-      />
-    );
-  }
+  const runAction = (action: CredDetailAction) => () => {
+    close();
+    action.onClick();
+  };
+
+  const renderAction = (action: CredDetailAction) => (
+    <Button
+      danger={action.danger}
+      icon={action.icon ? <Icon icon={action.icon} /> : undefined}
+      key={action.key}
+      type={'fill'}
+      onClick={runAction(action)}
+    >
+      {action.label}
+    </Button>
+  );
+
+  const handleEdit = () => {
+    close();
+    onEdit?.(cred);
+  };
 
   return (
     <>
-      <Alert
-        showIcon
-        message={t('creds.view.warning')}
-        style={{ marginBottom: 16 }}
-        type={'warning'}
-      />
-      <Descriptions
-        bordered
-        items={[
-          { children: cred.name, key: 'name', label: t('creds.table.name') },
-          { children: <code>{cred.key}</code>, key: 'key', label: t('creds.table.key') },
-          {
-            children: cred.type ? t(`creds.types.${cred.type}` as any) : '-',
-            key: 'type',
-            label: t('creds.table.type'),
-          },
-        ]}
-      />
-
-      {valueEntries.length > 0 && (
-        <div {...stylex.props(styles.valuesSection)}>
-          <div {...stylex.props(styles.valuesTitle)}>{t('creds.view.values')}</div>
-          {valueEntries.map(([key, value]) => (
-            <KVRow key={key} keyName={key} value={String(value)} />
+      <div {...stylex.props(styles.fields)}>
+        <FieldRow label={t('creds.table.type')}>{t(`creds.types.${cred.type}`)}</FieldRow>
+        {cred.type === 'oauth' && cred.oauthUsername && (
+          <FieldRow label={t('creds.detail.account')}>{cred.oauthUsername}</FieldRow>
+        )}
+        {cred.type === 'file' && cred.fileName && (
+          <FieldRow label={t('creds.form.file')}>{cred.fileName}</FieldRow>
+        )}
+        {extraItems.map((item) => (
+          <FieldRow key={item.key} label={item.label}>
+            {item.children}
+          </FieldRow>
+        ))}
+        {cred.description && (
+          <FieldRow label={t('creds.form.description')}>{cred.description}</FieldRow>
+        )}
+        {isKV && !showValues && valuesHint && (
+          <FieldRow fitLabel label={t('creds.view.values')}>
+            {valuesHint}
+          </FieldRow>
+        )}
+        {showValues &&
+          (!revealed ? (
+            <FieldRow
+              fitLabel
+              label={t('creds.view.values')}
+              extra={
+                <Button
+                  icon={<Icon icon={Eye} />}
+                  size={'small'}
+                  type={'text'}
+                  onClick={() => setRevealed(true)}
+                >
+                  {t('creds.view.showValues')}
+                </Button>
+              }
+            >
+              <span {...stylex.props(styles.code, styles.masked)}>{MASK}</span>
+            </FieldRow>
+          ) : isLoading ? (
+            <FieldRow label={<SkeletonBar height={12} width={72} />}>
+              <SkeletonBar height={12} width={160} />
+            </FieldRow>
+          ) : (
+            values.map(([name, value]) => (
+              <SecretRow key={name} name={name} value={String(value)} />
+            ))
           ))}
-        </div>
-      )}
+      </div>
 
-      {valueEntries.length === 0 && cred.type === 'oauth' && (
+      {error && (
         <Alert
           showIcon
-          description={t('creds.view.oauthNote')}
-          message={t('creds.view.noValues')}
-          style={{ marginTop: 16 }}
-          type={'info'}
+          description={(error as Error).message}
+          message={t('creds.view.error')}
+          style={{ marginTop: 12 }}
+          type={'error'}
         />
       )}
+
+      <div {...stylex.props(styles.footer)}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {onDelete && (
+            <Button danger type={'fill'} onClick={handleRemove}>
+              {t('creds.actions.remove')}
+            </Button>
+          )}
+          {actions.filter((action) => action.danger).map(renderAction)}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={8} style={{ marginInlineStart: 'auto' }}>
+          {actions.filter((action) => !action.danger).map(renderAction)}
+          {onEdit && (
+            <Button type={'fill'} onClick={handleEdit}>
+              {t('creds.actions.edit')}
+            </Button>
+          )}
+          <Button type={'primary'} onClick={close}>
+            {t('creds.actions.done')}
+          </Button>
+        </Flexbox>
+      </div>
     </>
   );
 };

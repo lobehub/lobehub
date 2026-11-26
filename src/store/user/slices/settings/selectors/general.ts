@@ -1,4 +1,8 @@
-import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
+import {
+  DEFAULT_FOLLOW_UP_BEHAVIOR,
+  type FollowUpBehavior,
+  type InterfaceDensity,
+} from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -38,7 +42,14 @@ const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLi
 // Users who switched off the retired `enableInputMarkdown` lab did so to keep pasted text verbatim.
 const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
+const enableVoiceMessage = (s: UserStore) => generalConfig(s).enableVoiceMessage ?? false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
+// `isDevMode` (the retired Advanced Tools switch) used to gate the usage row,
+// so it seeds the default for people who never chose this setting.
+const showMessageUsage = (s: UserStore) =>
+  generalConfig(s).showMessageUsage ??
+  (generalConfig(s) as { isDevMode?: boolean }).isDevMode ??
+  false;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
 const interfaceDensity = (s: UserStore): InterfaceDensity =>
   generalConfig(s).interfaceDensity ?? 'loose';
@@ -48,15 +59,9 @@ const interfaceDensity = (s: UserStore): InterfaceDensity =>
 const workflowStreamingExpandLevel = (s: UserStore) =>
   generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
 
-/**
- * What a message sent during a run does. `legacy` (lab off) keeps the
- * behavior from before the setting existed; the setting defaults to steer.
- */
-const followUpBehavior = (s: UserStore): FollowUpMode =>
-  resolveFollowUpMode(
-    s.preference.lab?.enableBetterCodingExperience,
-    generalConfig(s).followUpBehavior,
-  );
+/** What a message sent during a run does; defaults to steer. */
+const followUpBehavior = (s: UserStore): FollowUpBehavior =>
+  generalConfig(s).followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
 
 export const userGeneralSettingsSelectors = {
   animationMode,
@@ -64,6 +69,7 @@ export const userGeneralSettingsSelectors = {
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
+  enableVoiceMessage,
   followUpBehavior,
   fontAntialiasing,
   fontSize,
@@ -76,6 +82,7 @@ export const userGeneralSettingsSelectors = {
   currentTimezone,
   responseLanguage,
   showImageReadPreview,
+  showMessageUsage,
   telemetry,
   timezone,
   transitionMode,

@@ -16,7 +16,7 @@ import {
 import * as stylex from '@stylexjs/stylex';
 import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
@@ -27,10 +27,12 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { DENSITY_TOKENS, useInterfaceDensity } from '@/styles/density';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import {
   getKanbanCreateTaskModalProps,
   getTaskGroupCreateDefaults,
@@ -46,17 +48,17 @@ import {
   normalizeTaskGroupBy,
 } from './listViewOptions';
 import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
-import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
-import { isEditableTarget } from './selection/taskSelectionModel';
-import { useTaskBatchUndo } from './selection/undo/useTaskBatchUndo';
-import { useSelectionScope } from './selection/useSelectionScope';
+import { useTaskListSelection } from './selection/useTaskListSelection';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
 import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
+
+/** Space above a non-first top-level group header; Compact stacks them like Linear. */
+const GROUP_GAP = { compact: 4, loose: 16 } as const;
 
 /** Scope inherited by tasks created from a group header. */
 export interface TaskListCreateScope {
@@ -132,6 +134,7 @@ const CREATE_ENTRY_GUTTER = 28;
 const renderGroupTitle = (
   group: TaskGroupMeta,
   count: number,
+  fontSize: number,
   sub?: boolean,
   withCreateEntry?: boolean,
 ) => (
@@ -142,8 +145,9 @@ const renderGroupTitle = (
     justify={'space-between'}
     style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
   >
-    <TaskGroupLabel group={group} />
-    <Text fontSize={12} type={'secondary'}>
+    <TaskGroupLabel listHeader group={group} />
+    {/* Same size as the title, muted by color only (like Linear). */}
+    <Text fontSize={fontSize} type={'secondary'}>
       {count}
     </Text>
     {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
@@ -161,6 +165,8 @@ const TaskGroupHeader = memo<{
   onToggle: (key: string) => void;
 }>(({ createScope, item, onToggle }) => {
   const { t } = useTranslation('chat');
+  const density = useInterfaceDensity();
+  const { fontSize } = DENSITY_TOKENS[density];
   const sub = item.kind === 'subGroup';
   const createDefaults = !createScope
     ? undefined
@@ -173,18 +179,29 @@ const TaskGroupHeader = memo<{
   }, [createDefaults, createScope]);
 
   return (
-    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
+    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : GROUP_GAP[density] }}>
       <div {...stylex.props(styles.header)}>
+        {/* The built-in chevron is hidden for the small filled triangle the task
+            detail sections and the sidebar use (like Linear). */}
         <AccordionRoot
-          indicatorPlacement={'start'}
+          hideIndicator
           value={item.collapsed ? [] : [item.key]}
           variant={sub ? 'borderless' : 'filled'}
           onValueChange={() => onToggle(item.key)}
         >
           <AccordionItem value={item.key}>
             <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-                {renderGroupTitle(item.meta, item.count, sub, !!createDefaults)}
+              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 10 }}>
+                <Flexbox horizontal align={'center'} flex={1} gap={6}>
+                  <AccordionArrowIcon
+                    isOpen={!item.collapsed}
+                    size={16}
+                    style={{ color: cssVar.colorTextDescription }}
+                  />
+                  <Flexbox flex={1}>
+                    {renderGroupTitle(item.meta, item.count, fontSize, sub, !!createDefaults)}
+                  </Flexbox>
+                </Flexbox>
               </AccordionTrigger>
             </AccordionHeader>
           </AccordionItem>
@@ -334,63 +351,11 @@ const TaskList = memo<TaskListProps>((props) => {
     return [...ids];
   }, [groupedTaskEntries]);
   const listRef = useRef<HTMLDivElement>(null);
-  const selectableIdsRef = useRef(selectableIds);
-  selectableIdsRef.current = selectableIds;
-  const getSelectionOrder = useCallback(() => selectableIdsRef.current, []);
-
-  // A selection never outlives the rows it names: prune on every list change,
-  // and drop it when this list (or its collection) goes away.
-  useEffect(() => {
-    useTaskSelectionStore.getState().prune(new Set(selectableIds));
-  }, [selectableIds]);
-  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
-  useSelectionScope(selectionScope);
-  const { undoLast } = useTaskBatchUndo();
-  const undoLastRef = useRef(undoLast);
-  useEffect(() => {
-    undoLastRef.current = undoLast;
-  }, [undoLast]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) return;
-      // Only when nothing else holds focus, or focus is on the list itself:
-      // ⌘A over a side panel's text keeps selecting that text, and Esc inside
-      // a drawer or popover stays theirs.
-      const target = event.target as Node | null;
-      const onList = !!target && !!listRef.current?.contains(target);
-      if (target !== document.body && !onList) return;
-      const selection = useTaskSelectionStore.getState();
-      if (
-        event.key.toLowerCase() === 'a' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (selectableIdsRef.current.length === 0) return;
-        event.preventDefault();
-        selection.selectAll(selectableIdsRef.current);
-        return;
-      }
-      // ⌘/Ctrl+Z: undo the most recent batch action (session-wide stack, so it
-      // still works after its toast is gone). Shift+⌘Z is left to the page.
-      if (
-        event.key.toLowerCase() === 'z' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (undoLastRef.current()) event.preventDefault();
-        return;
-      }
-      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
-        event.preventDefault();
-        selection.clear();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  const { getSelectionOrder } = useTaskListSelection({
+    listRef,
+    scope: props.selectionScope ?? (items ? 'items' : (queryKey ?? '')),
+    selectableIds,
+  });
 
   const virtualItems = useMemo(
     () =>

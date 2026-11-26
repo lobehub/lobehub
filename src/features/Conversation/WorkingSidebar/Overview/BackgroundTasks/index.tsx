@@ -8,8 +8,6 @@ import { highlightMessageWhenScrollSettles } from '@/features/Portal/TopicCommen
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { getLocalBackgroundTaskStopper } from '@/store/chat/slices/agentRun/actions/transports/hetero/backgroundTasks';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { SectionHeader } from '../SectionHeader';
 import { sectionProps } from '../sectionStyles';
@@ -34,20 +32,19 @@ interface BackgroundTasksSectionProps {
 const locate = ({ toolCallId }: BackgroundTaskItem) => {
   const state = useChatStore.getState();
   const location = locateToolCall(displayMessageSelectors.mainDisplayChats(state), toolCallId);
-  const scrollToIndex = state.mainConversationScrollToIndex;
-  if (!location || !scrollToIndex) return;
+  const scrollToMessage = state.mainConversationScrollToMessage;
+  if (!location || !scrollToMessage) return;
   requestAnimationFrame(() => {
-    scrollToIndex(location.index, { align: 'center', smooth: true });
+    scrollToMessage(location.elementId, { align: 'center', smooth: true });
     highlightMessageWhenScrollSettles(location.elementId);
   });
 };
 
 /**
  * Background tasks a Claude Code run started (`run_in_background` Bash,
- * Monitor), Better Coding Experience only. Running ones all show; finished ones
- * fold to the most recent few.
+ * Monitor). Running ones all show; finished ones fold to the most recent few.
  */
-const BackgroundTasksBody = ({
+export const BackgroundTasksSection = ({
   afterBreak,
   deviceId,
   outputReadable,
@@ -108,11 +105,4 @@ const BackgroundTasksBody = ({
       )}
     </Flexbox>
   );
-};
-
-/** Renders nothing unless the Better Coding Experience lab is on. */
-export const BackgroundTasksSection = (props: BackgroundTasksSectionProps) => {
-  const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  if (!enabled) return null;
-  return <BackgroundTasksBody {...props} />;
 };

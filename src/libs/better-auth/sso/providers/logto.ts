@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import { buildOidcConfig } from '../helpers';
+import { buildOidcConfig, getStringClaim } from '../helpers';
 import { type GenericProviderDefinition } from '../types';
 
 const provider: GenericProviderDefinition<{
@@ -15,8 +15,13 @@ const provider: GenericProviderDefinition<{
       issuer: env.AUTH_LOGTO_ISSUER,
       overrides: {
         mapProfileToUser: (profile) => ({
-          email: profile.email,
-          name: profile.name ?? profile.username ?? profile.email ?? profile.sub,
+          email: profile.email ?? undefined,
+          name: getStringClaim(
+            profile.name,
+            profile.username,
+            profile.email,
+            profile.sub?.toString(),
+          ),
         }),
       },
       providerId: 'logto',

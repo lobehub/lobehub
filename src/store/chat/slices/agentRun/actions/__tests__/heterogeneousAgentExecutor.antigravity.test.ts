@@ -1,4 +1,4 @@
-/** Antigravity stream → tool persistence, final reply and resumable session identity. */
+/** Antigravity ACP stream → tool persistence, final reply and resumable session identity. */
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -185,38 +185,34 @@ describe('heterogeneousAgentExecutor — Antigravity', () => {
   };
 
   it('persists native Antigravity tools, final reply and resumable conversation identity', async () => {
+    // `agy acp` session updates as recorded from agy 1.5.15.
     const { store } = await runWithEvents(
       [
-        { event: 'init', conversation_id: 'agy-conversation', init: { cwd: '/project' } },
+        { model: 'gemini-4-neon-high', sessionId: 'agy-conversation', type: 'antigravity_session' },
         {
-          event: 'step_update',
-          step_update: {
-            conversation_id: 'agy-conversation',
-            step_index: 1,
-            state: 'DONE',
-            step_type: 'tool',
-            tool_info: { name: 'read_file', parameters: { path: 'hello.txt' }, output: 'hello' },
-          },
+          kind: 'read',
+          name: 'read_file',
+          rawInput: { Path: 'hello.txt' },
+          sessionUpdate: 'tool_call',
+          status: 'in_progress',
+          title: 'File hello.txt',
+          toolCallId: 'call_1',
         },
         {
-          event: 'step_update',
-          step_update: {
-            conversation_id: 'agy-conversation',
-            step_index: 2,
-            state: 'DONE',
-            step_type: 'agent_response',
-            text_delta: 'The file says hello.',
-            usage: { input_tokens: 10, output_tokens: 5 },
-          },
+          content: [{ content: { text: 'hello', type: 'text' }, type: 'content' }],
+          name: 'read_file',
+          sessionUpdate: 'tool_call_update',
+          status: 'completed',
+          toolCallId: 'call_1',
         },
         {
-          event: 'result',
-          result: {
-            conversation_id: 'agy-conversation',
-            status: 'SUCCESS',
-            response: 'The file says hello.',
-            usage: { input_tokens: 100, output_tokens: 50 },
-          },
+          content: { text: 'The file says hello.', type: 'text' },
+          sessionUpdate: 'agent_message_chunk',
+        },
+        {
+          stopReason: 'end_turn',
+          type: 'antigravity_prompt_completed',
+          usage: { cachedReadTokens: 0, inputTokens: 10, outputTokens: 5, thoughtTokens: 0 },
         },
       ],
       { params: { heterogeneousProvider: { command: 'agy', type: 'antigravity' } } },
@@ -225,8 +221,12 @@ describe('heterogeneousAgentExecutor — Antigravity', () => {
     const tool = mockCreateMessage.mock.calls.find(([p]) => p.role === 'tool')?.[0];
     expect(tool).toMatchObject({
       parentId: 'ast-initial',
-      plugin: { apiName: 'read_file', identifier: 'antigravity' },
-      tool_call_id: 'agy_agy-conversation_1',
+      plugin: {
+        apiName: 'read_file',
+        arguments: '{"Path":"hello.txt"}',
+        identifier: 'antigravity',
+      },
+      tool_call_id: 'call_1',
     });
     expect(mockUpdateToolMessage).toHaveBeenCalledWith(
       tool.id,

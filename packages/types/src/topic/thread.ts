@@ -44,6 +44,13 @@ export interface ThreadMetadata {
   /** Error details when task failed */
   error?: any;
   /**
+   * Native session of the external agent (Claude Code, Codex, …) that runs in
+   * this isolation thread. Kept per thread rather than on the topic, so a
+   * follow-up to that sub-agent resumes its own session and two external
+   * sub-agents in one conversation never share one.
+   */
+  heteroSessionId?: string;
+  /**
    * Model the subagent ran on (e.g. CC's per-turn `message.model`). Pinned
    * once for the run and rolled up here on finalize so historical / cold-load
    * viewers can surface it (e.g. the subagent inspector chip tooltip) without

@@ -198,7 +198,7 @@ describe('createAuthSlice', () => {
     it('should fetch providers from BetterAuth', async () => {
       mockBetterAuthClient.listAccounts.mockResolvedValueOnce({
         data: [
-          { providerId: 'github', accountId: 'gh-123' },
+          { id: 'local-github', providerId: 'github', accountId: 'gh-123' },
           { providerId: 'credential', accountId: 'cred-1' },
         ],
       });
@@ -215,6 +215,9 @@ describe('createAuthSlice', () => {
       expect(mockBetterAuthClient.listAccounts).toHaveBeenCalled();
       expect(result.current.isLoadedAuthProviders).toBe(true);
       expect(result.current.hasPasswordAccount).toBe(true);
+      expect(mockBetterAuthClient.accountInfo).toHaveBeenCalledWith({
+        query: { accountId: 'local-github' },
+      });
     });
 
     it('should handle fetch error gracefully', async () => {
@@ -236,7 +239,7 @@ describe('createAuthSlice', () => {
   describe('refreshAuthProviders', () => {
     it('should refresh providers from BetterAuth', async () => {
       mockBetterAuthClient.listAccounts.mockResolvedValueOnce({
-        data: [{ providerId: 'google', accountId: 'g-1' }],
+        data: [{ id: 'local-google', providerId: 'google', accountId: 'g-1' }],
       });
       mockBetterAuthClient.accountInfo.mockResolvedValueOnce({
         data: { user: { email: 'user@gmail.com' } },
@@ -250,7 +253,12 @@ describe('createAuthSlice', () => {
 
       expect(mockBetterAuthClient.listAccounts).toHaveBeenCalled();
       expect(result.current.authProviders).toEqual([
-        { provider: 'google', email: 'user@gmail.com', providerAccountId: 'g-1' },
+        {
+          accountId: 'local-google',
+          provider: 'google',
+          email: 'user@gmail.com',
+          providerAccountId: 'g-1',
+        },
       ]);
     });
 

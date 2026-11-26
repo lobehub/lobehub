@@ -53,17 +53,73 @@ export default defineFixtures({
         },
       },
     ]),
-    runCommand: single({
-      args: { command: 'bun run type-check' },
-      content: 'Checked 1247 files in 2.3s\nNo type errors found.',
-      pluginState: {
-        exitCode: 0,
-        isBackground: false,
-        output: 'Checked 1247 files in 2.3s\nNo type errors found.',
-        stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
-        success: true,
+    // Current rows persist `stdout` alone; the legacy variants keep the shapes
+    // older rows still carry, which the card must render the same way.
+    runCommand: variants([
+      {
+        args: { command: 'bun run type-check' },
+        content: 'Command completed successfully.\n\nOutput:\nChecked 1247 files in 2.3s',
+        label: 'Stdout and stderr',
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          stderr: 'warning: 2 files skipped\n',
+          stdout: 'Checked 1247 files in 2.3s\nNo type errors found.\n',
+          success: true,
+        },
       },
-    }),
+      {
+        args: { command: 'bun run type-check' },
+        content: 'Command completed successfully.\n\nOutput:\nChecked 1247 files in 2.3s',
+        label: 'Legacy output and stdout',
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          output: 'Checked 1247 files in 2.3s\nNo type errors found.\nwarning: 2 files skipped\n',
+          stderr: 'warning: 2 files skipped\n',
+          stdout: 'Checked 1247 files in 2.3s\nNo type errors found.\n',
+          success: true,
+        },
+      },
+      {
+        args: { command: 'ls missing-dir' },
+        content:
+          'Command failed with exit code 1\n\nStderr:\nls: missing-dir: No such file or directory',
+        label: 'Stderr only',
+        pluginState: {
+          exitCode: 1,
+          isBackground: false,
+          stderr: 'ls: missing-dir: No such file or directory\n',
+          stdout: '',
+          success: true,
+        },
+      },
+      {
+        args: { command: 'ls missing-dir' },
+        content:
+          'Command failed with exit code 1\n\nStderr:\nls: missing-dir: No such file or directory',
+        label: 'Legacy stderr only',
+        pluginState: {
+          exitCode: 1,
+          isBackground: false,
+          output: 'ls: missing-dir: No such file or directory\n',
+          stderr: 'ls: missing-dir: No such file or directory\n',
+          stdout: '',
+          success: true,
+        },
+      },
+      {
+        args: { command: 'bun run type-check' },
+        content: 'Checked 1247 files in 2.3s\nNo type errors found.',
+        label: 'Legacy output only',
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          output: 'Checked 1247 files in 2.3s\nNo type errors found.',
+          success: true,
+        },
+      },
+    ]),
     searchFiles: variants([
       {
         args: { keywords: 'quarterly report sample' },

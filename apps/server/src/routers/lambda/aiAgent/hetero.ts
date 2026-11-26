@@ -1,5 +1,6 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import {
+  CODEX_COLLABORATION_MODES,
   HETERO_PERMISSION_MODES,
   LocalExecutionHeterogeneousAgentTypeSchema,
 } from '@lobechat/types';
@@ -25,6 +26,7 @@ import {
   returnHeteroSteer,
   takeHeteroSteer,
 } from '@/server/services/aiAgent/steerQueue/hetero';
+import { setHeteroCollaborationMode } from '@/server/services/aiAgent/steerQueue/heteroCollaborationMode';
 import {
   type HeteroControlMessage,
   reportHeteroControlResult,
@@ -184,6 +186,12 @@ const StopHeteroBackgroundTaskSchema = z.object({
 /** Schema for `aiAgent.setHeteroPermissionMode` — switch a running Claude Code's mode. */
 const SetHeteroPermissionModeSchema = z.object({
   mode: z.enum(HETERO_PERMISSION_MODES),
+  operationId: z.string().min(1),
+});
+
+/** Schema for `aiAgent.setHeteroCollaborationMode` — the Codex Plan switch, mid-run. */
+const SetHeteroCollaborationModeSchema = z.object({
+  mode: z.enum(CODEX_COLLABORATION_MODES),
   operationId: z.string().min(1),
 });
 
@@ -621,7 +629,7 @@ export const heteroRouter = router({
 
       if (scope) await renewHeteroSteers(operationId);
       // Queue mode leaves the follow-ups to the run end; read once per poll.
-      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : undefined;
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -641,7 +649,6 @@ export const heteroRouter = router({
             acceptsImageAttachments,
             acceptsImages,
             agentId: operation.agentId,
-            mode: followUpMode,
             operationId,
             scope,
           });
@@ -744,6 +751,13 @@ export const heteroRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertControlsHeteroRun(ctx, input.operationId);
       return setHeteroPermissionMode(input.operationId, input.mode);
+    }),
+  /** Flip a running native Codex thread's Plan switch; it applies from the next turn. */
+  setHeteroCollaborationMode: aiAgentWriteProcedure
+    .input(SetHeteroCollaborationModeSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertControlsHeteroRun(ctx, input.operationId);
+      return setHeteroCollaborationMode(input.operationId, input.mode);
     }),
   /** Token-only atomic resolution path used by Mobile review/deep links. */
   resolveHeteroIntervention: aiAgentWriteProcedure

@@ -219,6 +219,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async setCollaborationMode(...args: Parameters<Implementation['setCollaborationMode']>) {
+    return (await this.getImplementation()).setCollaborationMode(...args);
+  }
+
+  @IpcMethod()
   async submitIntervention(...args: Parameters<Implementation['submitIntervention']>) {
     return (await this.getImplementation()).submitIntervention(...args);
   }

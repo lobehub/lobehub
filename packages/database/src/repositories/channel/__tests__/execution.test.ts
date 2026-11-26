@@ -213,8 +213,9 @@ describe('ChannelExecutionRepository', () => {
   });
 
   it('answers a branch in message order and holds one writer per member in it', async () => {
-    const { agent, asMember, channel, job } = await mentionAgent();
-    const next = await asMember.send(channel.id, {
+    const { agent, asOwner, channel, job } = await mentionAgent();
+    // Someone else asks next: the same person's next request would be merged into the first run.
+    const next = await asOwner.send(channel.id, {
       content: 'Second',
       mentions: [agent.id],
       requestKey: 'req-2',
@@ -228,7 +229,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
@@ -249,9 +250,9 @@ describe('ChannelExecutionRepository', () => {
       threads.push(await team.asMember.createThread(team.channel.id, { rootMessageId: root.id }));
     }
     let sent = 0;
-    const ask = async (threadId: string | null) => {
+    const ask = async (threadId: string | null, as = team.asMember) => {
       sent += 1;
-      const message = await team.asMember.send(team.channel.id, {
+      const message = await as.send(team.channel.id, {
         content: `Request ${sent}`,
         mentions: [agent.id],
         requestKey: `ask-${sent}`,
@@ -265,10 +266,11 @@ describe('ChannelExecutionRepository', () => {
   };
 
   it('runs one member in several branches at once, each in message order', async () => {
-    const { ask, channel, threads } = await threadsFor(nativeConfig, ['A', 'B']);
+    const { ask, asOwner, channel, threads } = await threadsFor(nativeConfig, ['A', 'B']);
     const [threadA, threadB] = threads;
     const a1 = await ask(threadA.id);
-    const a2 = await ask(threadA.id);
+    // From someone else, so it waits for its own run instead of being merged into a1's.
+    const a2 = await ask(threadA.id, asOwner);
     const b1 = await ask(threadB.id);
     const main = await ask(null);
 
@@ -282,7 +284,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
 
-    expect(await execution.retireReservation(channel.id, a1.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, a1.id)).toBe('error');
     expect(await execution.claim(channel.id, a2.id, lease)).not.toBeNull();
   });
 
@@ -324,7 +326,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, rootJob.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, threadJob.id, lease)).toBeNull();
 
-    expect(await execution.retireReservation(channel.id, rootJob.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, rootJob.id)).toBe('error');
     expect(await execution.claim(channel.id, threadJob.id, lease)).not.toBeNull();
   });
 
@@ -606,7 +608,7 @@ describe('ChannelExecutionRepository', () => {
       code: 'CONFLICT',
     });
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -632,7 +634,24 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.heartbeat(job.id, lease)).toBe(true);
     expect(await execution.heartbeat(job.id, { ...lease, leaseOwner: 'other' })).toBe(false);
 
-    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('error');
     expect(await execution.heartbeat(job.id, lease)).toBe(false);
+  });
+
+  it('retires a reservation cancelled before it started as interrupted', async () => {
+    const { channel, job } = await mentionAgent();
+    const claim = (await execution.claim(channel.id, job.id, lease))!;
+    await db
+      .update(channelJobs)
+      .set({ publicationRevoked: true })
+      .where(eq(channelJobs.id, job.id));
+
+    expect(await execution.retireReservation(channel.id, job.id)).toBe('interrupted');
+    const [operation] = await db
+      .select({ status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, claim.job.operationId!));
+    expect(operation.status).toBe('interrupted');
+    expect((await jobById(job.id)).status).toBe('cancelled');
   });
 });

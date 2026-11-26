@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { agents, channelMembers, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
+import { channelMemberNicknameSql } from './nickname';
 
 /**
  * A list avatar pictures the caller plus this many other members: a full 3×3 grid, the way a
@@ -36,6 +37,7 @@ export const channelAvatarMembers = async (
         nullif(${channelMembers.name}, ''),
         nullif(${agents.name}, ''),
         nullif(${agentTitleSql()}, ''),
+        ${channelMemberNicknameSql(channelMembers.channelId, channelMembers.userId)},
         nullif(${users.fullName}, ''),
         ${users.username}
       )`.as('name'),

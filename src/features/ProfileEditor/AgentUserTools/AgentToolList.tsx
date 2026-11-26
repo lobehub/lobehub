@@ -30,6 +30,7 @@ import PluginTag from '../PluginTag';
 import ProfilePopoverContent from '../PopoverContent';
 import ToolListGroup, { type ToolGroupMeta } from '../ToolListGroup';
 import { buildAgentToolRows, countAvailableTools } from './agentToolRows';
+import CapabilitySettingsButton, { isConfigurableCapability } from './CapabilitySettingsButton';
 import ConnectionMenu from './ConnectionMenu';
 import { isAvailableLibraryConnection, isComposioConnection } from './useOwnConnection';
 
@@ -205,23 +206,27 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
               ownConnection ? ownConnectionNote : libraryConnection && libraryConnectionNote
             }
             extra={
-              <ConnectionMenu
-                agentId={agentId}
-                fallbackConnectionId={inLibrary ? libraryConnection?.id : undefined}
-                libraryConnection={
-                  !ownConnection &&
-                  libraryConnection &&
-                  !libraryConnection.metadata?.mountedByAgentId &&
-                  canManage(libraryConnection)
-                    ? libraryConnection
-                    : undefined
-                }
-                ownConnection={
-                  libraryLoaded && ownConnection && canManage(ownConnection)
-                    ? ownConnection
-                    : undefined
-                }
-              />
+              isConfigurableCapability(id) ? (
+                <CapabilitySettingsButton enabled={enabled} pluginId={id} />
+              ) : (
+                <ConnectionMenu
+                  agentId={agentId}
+                  fallbackConnectionId={inLibrary ? libraryConnection?.id : undefined}
+                  libraryConnection={
+                    !ownConnection &&
+                    libraryConnection &&
+                    !libraryConnection.metadata?.mountedByAgentId &&
+                    canManage(libraryConnection)
+                      ? libraryConnection
+                      : undefined
+                  }
+                  ownConnection={
+                    libraryLoaded && ownConnection && canManage(ownConnection)
+                      ? ownConnection
+                      : undefined
+                  }
+                />
+              )
             }
             onOpen={onOpenDetail}
             onToggle={(on) => setEnabled(id, ownConnection, on)}

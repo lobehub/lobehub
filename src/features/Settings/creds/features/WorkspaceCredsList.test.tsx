@@ -1,5 +1,5 @@
 import { type UserCredSummary } from '@lobechat/types';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type CredsApi } from './useCredsApi';
@@ -14,6 +14,14 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/libs/trpc/client', () => ({ lambdaClient: { market: { creds: {} } } }));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: unknown) => unknown) =>
+    selector({ user: { avatar: 'me.png', fullName: 'Me' } }),
+}));
+
+const { createViewCredModal } = vi.hoisted(() => ({ createViewCredModal: vi.fn() }));
+vi.mock('./ViewCredModal', () => ({ createViewCredModal }));
 
 const cred = (overrides: Partial<UserCredSummary>): UserCredSummary =>
   ({
@@ -46,44 +54,75 @@ const credsApiWith = (rows: UserCredSummary[]) =>
   }) as unknown as CredsApi;
 
 describe('WorkspaceCredsList', () => {
-  it('lists shared and private credentials together and locks only the private ones', () => {
+  it("shows each row's visibility and, for the viewer's own credentials, their avatar", () => {
     render(
       <WorkspaceCredsList
         credsApi={credsApiWith([
           cred({ id: 1, key: 'TEAM_TOKEN', name: 'Team token', visibility: 'public' }),
           cred({ id: 2, key: 'MY_TOKEN', name: 'My token', visibility: 'private' }),
+          cred({ createdByAccountId: 9, id: 3, key: 'OTHER', name: 'Other', visibility: 'public' }),
         ])}
       />,
     );
 
-    const shared = screen.getByText('Team token').parentElement!;
-    const mine = screen.getByText('My token').parentElement!;
-
-    expect(within(shared).queryByTestId('private-lock')).toBeNull();
-    expect(within(mine).getByTestId('private-lock')).toBeInTheDocument();
-    expect(screen.getAllByTestId('private-lock')).toHaveLength(1);
+    // Visibility is an icon beside the name (team or lock), labelled for screen readers.
+    const workspaceIcon = screen.getByTestId('cred-visibility-1');
+    expect(workspaceIcon).toHaveAttribute('data-visibility', 'workspace');
+    expect(workspaceIcon).toHaveAccessibleName('visibilityFilter.workspace');
+    expect(workspaceIcon.parentElement).toHaveTextContent('Team token');
+    expect(screen.getByTestId('cred-visibility-2')).toHaveAttribute('data-visibility', 'private');
+    expect(screen.queryByText('visibilityFilter.workspace')).toBeNull();
+    expect(screen.getByTestId('cred-author-1')).toBeInTheDocument();
+    // Market returns no profile for another member's workspace credential.
+    expect(screen.queryByTestId('cred-author-3')).toBeNull();
+    // The row no longer carries a write-only tag or a private lock.
+    expect(screen.queryByText('creds.writeOnly.tag')).toBeNull();
+    expect(screen.queryByTestId('private-lock')).toBeNull();
   });
 
-  it('marks only workspace credentials shared with everyone as write-only', () => {
+  it('explains write-only values in the detail instead of reading them', () => {
     render(
       <WorkspaceCredsList
         credsApi={credsApiWith([
           cred({ id: 1, key: 'TEAM_TOKEN', name: 'Team token', visibility: 'public' }),
           cred({ id: 2, key: 'MY_TOKEN', name: 'My token', visibility: 'private' }),
-          cred({
-            id: 3,
-            key: 'SHARED_IN',
-            name: 'Shared in',
-            ownerAccountId: 1,
-            ownerType: 'user',
-            visibility: 'public',
-          }),
         ])}
       />,
     );
 
-    // Only "Team token": the private one stays readable by its creator, and a
-    // personal credential shared in stays readable by its owner.
-    expect(screen.getAllByText('creds.writeOnly.tag')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Team token/ }));
+    fireEvent.click(screen.getByRole('button', { name: /My token/ }));
+
+    const [team, mine] = createViewCredModal.mock.calls.map((call) => call[0]);
+    expect(team.canReadValues).toBe(false);
+    expect(team.valuesHint).toBe('creds.writeOnly.tooltip');
+    expect(mine.canReadValues).toBe(true);
+    expect(mine.valuesHint).toBeUndefined();
+    expect(mine.extraItems.map((item: { key: string }) => item.key)).toEqual([
+      'visibility',
+      'author',
+    ]);
+    createViewCredModal.mockClear();
+  });
+
+  it('opens the detail from the row, carrying its remove, edit and visibility actions', () => {
+    render(
+      <WorkspaceCredsList
+        credsApi={credsApiWith([
+          cred({ id: 2, key: 'MY_TOKEN', name: 'My token', visibility: 'private' }),
+        ])}
+      />,
+    );
+
+    // No "..." menu on the row any more: the row itself is the button.
+    expect(screen.queryByTitle('more')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /My token/ }));
+
+    expect(createViewCredModal).toHaveBeenCalledTimes(1);
+    const props = createViewCredModal.mock.calls[0][0];
+    expect(props.cred.id).toBe(2);
+    expect(props.onDelete).toBeTypeOf('function');
+    expect(props.onEdit).toBeTypeOf('function');
+    expect(props.actions.map((action: { key: string }) => action.key)).toContain('publish');
   });
 });

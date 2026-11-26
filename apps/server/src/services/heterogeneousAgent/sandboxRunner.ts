@@ -43,7 +43,7 @@ export interface SandboxRunParams {
   jwt: string;
   marketService: MarketService;
   operationId: string;
-  /** Claude Code permission mode (Better Coding Experience lab). */
+  /** Claude Code permission mode. */
   permissionMode?: HeteroPermissionMode;
   prompt: string;
   /** GitHub repos to clone before running the agent (e.g. ['owner/repo', ...]). */

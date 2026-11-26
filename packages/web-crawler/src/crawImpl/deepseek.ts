@@ -1,4 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { assertNotChallengePage } from '../utils/challengePage';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
@@ -66,6 +67,9 @@ export const deepseek: CrawlImpl = async (url) => {
   const data = await parseJSONResponse<DeepSeekFetchResponse>(res, 'DeepSeek');
 
   const content = data.content ? unescapeMarkdown(data.content) : '';
+  const title = data.title ? unescapeMarkdown(data.title) : '';
+
+  assertNotChallengePage({ content, title });
 
   // Check if content is empty or too short
   if (content.length < 100) {
@@ -77,7 +81,7 @@ export const deepseek: CrawlImpl = async (url) => {
     contentType: 'text',
     length: content.length,
     siteName: new URL(url).hostname,
-    title: data.title ? unescapeMarkdown(data.title) : '',
+    title,
     url,
   } satisfies CrawlSuccessResult;
 };

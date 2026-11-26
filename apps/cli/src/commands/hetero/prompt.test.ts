@@ -53,4 +53,24 @@ describe('resolvePrompt — dispatch envelope', () => {
       resumeFallbackPrompt: [{ text: 'history + hi', type: 'text' }],
     });
   });
+
+  it('takes the Codex Plan switch', async () => {
+    const resolved = await resolvePrompt({
+      inputJson: await inputFile({
+        collaborationMode: 'plan',
+        content: [{ text: 'hi', type: 'text' }],
+      }),
+    });
+    expect(resolved.collaborationMode).toBe('plan');
+  });
+
+  it('ignores a collaboration mode it does not know', async () => {
+    const resolved = await resolvePrompt({
+      inputJson: await inputFile({
+        collaborationMode: 'execute',
+        content: [{ text: 'hi', type: 'text' }],
+      }),
+    });
+    expect(resolved.collaborationMode).toBeUndefined();
+  });
 });

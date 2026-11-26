@@ -13,6 +13,7 @@ import { isRecord } from '@lobechat/utils/object';
 import { isHeterogeneousAgentAuthRequired } from '../config';
 import { getHeterogeneousTypeLabel } from '../labels';
 import { AcpRpcResponseError } from '../spawn/acpStdioClient';
+import { getAntigravitySpawnEnv } from '../spawn/antigravity';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
@@ -368,10 +369,11 @@ export const listHeterogeneousAgentModels = async (
   ]
     .filter(Boolean)
     .join(path.delimiter);
-  const env = {
+  const mergedEnv = {
     ...callerEnv,
     ...(mergedPath ? { PATH: mergedPath } : {}),
   };
+  const env = params.type === 'antigravity' ? getAntigravitySpawnEnv(mergedEnv) : mergedEnv;
 
   try {
     if (params.type === 'codex') {
@@ -449,11 +451,11 @@ export const listHeterogeneousAgentModels = async (
               : params.type === 'pi'
                 ? buildPiCatalogArgs(params.args)
                 : ['--list-models'];
-    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args, env as NodeJS.ProcessEnv);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd,
       encoding: 'utf8',
-      env: env as NodeJS.ProcessEnv,
+      env: spawnPlan.env ?? (env as NodeJS.ProcessEnv),
       maxBuffer: MODEL_CATALOG_MAX_BUFFER,
       timeout: MODEL_CATALOG_TIMEOUT_MS,
       windowsHide: true,

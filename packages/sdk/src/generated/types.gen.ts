@@ -226,7 +226,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'generation:read' | 'generation:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
 };
 
@@ -237,9 +237,16 @@ export type CreatedApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'generation:read' | 'generation:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
     key: string;
+};
+
+export type Transcription = {
+    /**
+     * The transcript.
+     */
+    text: string;
 };
 
 export type ChatResponse = {
@@ -310,6 +317,12 @@ export type Document = {
      * Markdown body.
      */
     content: string | null;
+    /**
+     * Lexical editor state (`SerializedEditorState`) of the body; `null` for folders, HTML pages and pages saved without one.
+     */
+    editorData: {
+        [key: string]: unknown;
+    } | null;
 };
 
 export type EvalRun = {
@@ -2800,6 +2813,75 @@ export type Usage = {
     }>;
 };
 
+export type Generation = {
+    /**
+     * The output; `null` until it succeeded.
+     */
+    asset: GenerationAsset | null;
+    /**
+     * The request (batch) this generation belongs to.
+     */
+    batchId: string;
+    /**
+     * ISO 8601 timestamp.
+     */
+    createdAt: string;
+    /**
+     * Why it failed; `null` unless `error`.
+     */
+    error: GenerationError | null;
+    /**
+     * Library file the output was saved as, once it succeeded.
+     */
+    fileId: string | null;
+    id: string;
+    model: string;
+    prompt: string;
+    provider: string;
+    seed: number | null;
+    /**
+     * `pending` → `processing` → `success` | `error`. The last two are final.
+     */
+    status: 'pending' | 'processing' | 'success' | 'error';
+    /**
+     * The generation topic the request was added to.
+     */
+    topicId: string;
+    type: 'image' | 'video' | 'music';
+};
+
+export type GenerationAsset = {
+    /**
+     * Video cover image URL.
+     */
+    coverUrl: string | null;
+    /**
+     * Video length in seconds.
+     */
+    duration: number | null;
+    height: number | null;
+    /**
+     * Resized preview URL.
+     */
+    thumbnailUrl: string | null;
+    /**
+     * Full-size asset URL.
+     */
+    url: string | null;
+    width: number | null;
+};
+
+export type GenerationError = {
+    /**
+     * Human-readable failure reason.
+     */
+    message: string;
+    /**
+     * Error type, for example `ServerError` or `Timeout`.
+     */
+    name: string;
+};
+
 /**
  * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
  */
@@ -4136,7 +4218,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'generation:read' | 'generation:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     };
     headers?: {
         /**
@@ -4371,7 +4453,24 @@ export type PatchApiV1ApiKeysByIdResponses = {
 export type PatchApiV1ApiKeysByIdResponse = PatchApiV1ApiKeysByIdResponses[keyof PatchApiV1ApiKeysByIdResponses];
 
 export type PostApiV1AudioSpeechData = {
-    body?: never;
+    body: {
+        input: string;
+        instructions?: string;
+        model: string;
+        params?: {
+            emotion?: string;
+            pitch?: number;
+            sampleRate?: number;
+            volume?: number;
+        };
+        provider?: string;
+        response_format?: 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm';
+        speed?: number;
+        stream_format?: 'audio' | 'sse';
+        voice?: string | {
+            id: string;
+        };
+    };
     headers?: {
         /**
          * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
@@ -4463,6 +4562,95 @@ export type PostApiV1AudioSpeechResponses = {
 };
 
 export type PostApiV1AudioSpeechResponse = PostApiV1AudioSpeechResponses[keyof PostApiV1AudioSpeechResponses];
+
+export type PostApiV1AudioTranscriptionsData = {
+    body: {
+        /**
+         * The audio clip.
+         */
+        file?: Blob | File;
+        /**
+         * An uploaded audio file, instead of `file`.
+         */
+        fileId?: string;
+        /**
+         * ISO-639-1 language code, e.g. `en`.
+         */
+        language?: string;
+        /**
+         * Transcription model, e.g. `whisper-1`.
+         */
+        model: string;
+        /**
+         * Text to guide the model's style.
+         */
+        prompt?: string;
+        /**
+         * Provider id; defaults to `openai`.
+         */
+        provider?: string;
+        response_format?: 'json' | 'text' | 'srt' | 'verbose_json' | 'vtt';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/audio/transcriptions';
+};
+
+export type PostApiV1AudioTranscriptionsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Payload too large
+     */
+    413: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1AudioTranscriptionsError = PostApiV1AudioTranscriptionsErrors[keyof PostApiV1AudioTranscriptionsErrors];
+
+export type PostApiV1AudioTranscriptionsResponses = {
+    /**
+     * Successful response
+     */
+    200: Transcription;
+};
+
+export type PostApiV1AudioTranscriptionsResponse = PostApiV1AudioTranscriptionsResponses[keyof PostApiV1AudioTranscriptionsResponses];
 
 export type PostApiV1ChatData = {
     body: {
@@ -5215,6 +5403,17 @@ export type PostApiV1DocumentsData = {
          */
         content?: string;
         /**
+         * Lexical editor state (`SerializedEditorState`) with a non-empty `root`, at most 50000000 characters serialized. Replaces the whole body. When `content` is omitted, the server exports the Markdown body from it. Not accepted for folders or HTML pages (`custom/html`).
+         */
+        editorData?: {
+            root: {
+                children: Array<unknown>;
+                type: 'root';
+                [key: string]: unknown;
+            };
+            [key: string]: unknown;
+        };
+        /**
          * `custom/folder` creates a folder; defaults to a page (`custom/document`).
          */
         fileType?: string;
@@ -5343,9 +5542,24 @@ export type GetApiV1DocumentsByIdResponse = GetApiV1DocumentsByIdResponses[keyof
 export type PatchApiV1DocumentsByIdData = {
     body: {
         /**
-         * Markdown body; replaces the whole body.
+         * Markdown body; replaces the whole body. Sent with `editorData`, it is stored as that state’s Markdown.
          */
         content?: string;
+        /**
+         * Lexical editor state (`SerializedEditorState`) with a non-empty `root`, at most 50000000 characters serialized. Replaces the whole body. When `content` is omitted, the server exports the Markdown body from it. Not accepted for folders or HTML pages (`custom/html`).
+         */
+        editorData?: {
+            root: {
+                children: Array<unknown>;
+                type: 'root';
+                [key: string]: unknown;
+            };
+            [key: string]: unknown;
+        };
+        /**
+         * The `updatedAt` the client last read. When the stored `updatedAt` differs, nothing is written and the API answers 409 `conflict`; the error’s `details` entry for `json.ifUpdatedAt` carries the stored `updatedAt` as its message.
+         */
+        ifUpdatedAt?: string;
         title?: string;
     };
     headers?: {
@@ -5378,6 +5592,10 @@ export type PatchApiV1DocumentsByIdErrors = {
      * Resource not found
      */
     404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
     /**
      * Rate limit exceeded
      */
@@ -12727,6 +12945,18 @@ export type PostApiV1ResponsesErrors = {
         requestId: string;
     };
     /**
+     * Resource not found
+     */
+    404: {
+        error: {
+            code: 'bad_request' | 'conflict' | 'forbidden' | 'idempotency_conflict' | 'insufficient_scope' | 'internal_error' | 'not_found' | 'payload_too_large' | 'payment_required' | 'precondition_failed' | 'rate_limited' | 'service_unavailable' | 'unauthorized' | 'unprocessable_entity' | 'upstream_error' | 'validation_error' | 'workspace_mismatch';
+            message: string;
+            param: string | null;
+            type: 'invalid_request_error' | 'not_found' | 'rate_limit_error' | 'server_error';
+        };
+        requestId: string;
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -15046,3 +15276,721 @@ export type GetApiV1UsageResponses = {
 };
 
 export type GetApiV1UsageResponse = GetApiV1UsageResponses[keyof GetApiV1UsageResponses];
+
+export type GetApiV1GenerationsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+        /**
+         * Only generations of this kind.
+         */
+        type?: 'image' | 'video' | 'music';
+    };
+    url: '/api/v1/generations';
+};
+
+export type GetApiV1GenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GenerationsError = GetApiV1GenerationsErrors[keyof GetApiV1GenerationsErrors];
+
+export type GetApiV1GenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<Generation>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GenerationsResponse = GetApiV1GenerationsResponses[keyof GetApiV1GenerationsResponses];
+
+export type DeleteApiV1GenerationsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/generations/{id}';
+};
+
+export type DeleteApiV1GenerationsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1GenerationsByIdError = DeleteApiV1GenerationsByIdErrors[keyof DeleteApiV1GenerationsByIdErrors];
+
+export type DeleteApiV1GenerationsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1GenerationsByIdResponse = DeleteApiV1GenerationsByIdResponses[keyof DeleteApiV1GenerationsByIdResponses];
+
+export type GetApiV1GenerationsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/generations/{id}';
+};
+
+export type GetApiV1GenerationsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GenerationsByIdError = GetApiV1GenerationsByIdErrors[keyof GetApiV1GenerationsByIdErrors];
+
+export type GetApiV1GenerationsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Generation;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GenerationsByIdResponse = GetApiV1GenerationsByIdResponses[keyof GetApiV1GenerationsByIdResponses];
+
+export type PostApiV1ImagesGenerationsData = {
+    body: {
+        /**
+         * Guidance scale, for models that accept one.
+         */
+        cfg?: number;
+        /**
+         * Image height in pixels.
+         */
+        height?: number;
+        /**
+         * Reference images (URLs) for image-to-image models.
+         */
+        imageUrls?: Array<string>;
+        /**
+         * Image model id. Omit to use the account's default image model.
+         */
+        model?: string;
+        /**
+         * Number of images to generate, 1–8. Defaults to 1.
+         */
+        n?: number;
+        /**
+         * Model-specific parameters beyond the named fields (for example `quality` or `size`). Parameters the model does not declare are rejected with 400.
+         */
+        params?: {
+            [key: string]: string | number | boolean | Array<string> | null;
+        };
+        /**
+         * What to generate.
+         */
+        prompt: string;
+        /**
+         * Provider id. Omit to use the first enabled provider serving `model`.
+         */
+        provider?: string;
+        /**
+         * Seed; omit for a random one per image.
+         */
+        seed?: number | null;
+        /**
+         * Sampling steps.
+         */
+        steps?: number;
+        /**
+         * Generation topic to add this request to. Omit to start a new topic, as `lh generate` does.
+         */
+        topicId?: string;
+        /**
+         * Wait for the images before answering (up to `waitTimeoutSeconds`). Generations still running at the deadline come back with their current status; poll `GET /generations/{id}` for the rest. Set `false` to answer as soon as the work is queued.
+         */
+        wait?: boolean;
+        /**
+         * How long `wait` may hold the request, 1–120 seconds. Defaults to 60.
+         */
+        waitTimeoutSeconds?: number;
+        /**
+         * Image width in pixels.
+         */
+        width?: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/images/generations';
+};
+
+export type PostApiV1ImagesGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ImagesGenerationsError = PostApiV1ImagesGenerationsErrors[keyof PostApiV1ImagesGenerationsErrors];
+
+export type PostApiV1ImagesGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            batchId: string;
+            generations: Array<Generation>;
+            topicId: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ImagesGenerationsResponse = PostApiV1ImagesGenerationsResponses[keyof PostApiV1ImagesGenerationsResponses];
+
+export type PostApiV1VideosGenerationsData = {
+    body: {
+        /**
+         * Aspect ratio, for example `16:9`.
+         */
+        aspectRatio?: string;
+        /**
+         * Keep the camera still, where supported.
+         */
+        cameraFixed?: boolean;
+        /**
+         * Video length in seconds.
+         */
+        duration?: number;
+        /**
+         * Last frame (URL), where supported.
+         */
+        endImageUrl?: string | null;
+        /**
+         * Generate a soundtrack, where supported.
+         */
+        generateAudio?: boolean;
+        /**
+         * First frame (URL) for image-to-video.
+         */
+        imageUrl?: string | null;
+        /**
+         * Video model id.
+         */
+        model: string;
+        /**
+         * Model-specific parameters beyond the named fields (for example `quality` or `size`). Parameters the model does not declare are rejected with 400.
+         */
+        params?: {
+            [key: string]: string | number | boolean | Array<string> | null;
+        };
+        /**
+         * A video generation to edit, for models that support conversational editing.
+         */
+        previousGenerationId?: string;
+        /**
+         * What to generate.
+         */
+        prompt: string;
+        /**
+         * Provider id serving `model`.
+         */
+        provider: string;
+        /**
+         * Output resolution, for example `720p`.
+         */
+        resolution?: string;
+        /**
+         * Seed; omit for a random one.
+         */
+        seed?: number | null;
+        /**
+         * Generation topic to add this request to. Omit to start a new topic, as `lh generate` does.
+         */
+        topicId?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/videos/generations';
+};
+
+export type PostApiV1VideosGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1VideosGenerationsError = PostApiV1VideosGenerationsErrors[keyof PostApiV1VideosGenerationsErrors];
+
+export type PostApiV1VideosGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data: {
+            batchId: string;
+            generations: Array<Generation>;
+            topicId: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1VideosGenerationsResponse = PostApiV1VideosGenerationsResponses[keyof PostApiV1VideosGenerationsResponses];
+
+export type PostApiV1TextGenerationsData = {
+    body: {
+        /**
+         * Maximum output tokens.
+         */
+        maxTokens?: number;
+        /**
+         * Conversation to complete. Use instead of, or after, `system` + `prompt`.
+         */
+        messages?: Array<{
+            /**
+             * Plain text, or text and image parts (OpenAI chat format) for a model that takes images. An image is an http(s) URL or a base64 `data:image/...` URL.
+             */
+            content: string | Array<{
+                text: string;
+                type: 'text';
+            } | {
+                image_url: {
+                    detail?: 'auto' | 'low' | 'high';
+                    url: string;
+                };
+                type: 'image_url';
+            }>;
+            role: 'user';
+        } | {
+            /**
+             * Plain-text message content.
+             */
+            content: string;
+            role: 'system' | 'assistant';
+        }>;
+        /**
+         * Model id. Omit to use the platform's default chat model.
+         */
+        model?: string;
+        /**
+         * User prompt; appended after `messages` when both are given.
+         */
+        prompt?: string;
+        /**
+         * Provider id (for example `lobehub`, `openai`). Omit with `model` for the default.
+         */
+        provider?: string;
+        /**
+         * System prompt, placed first.
+         */
+        system?: string;
+        /**
+         * Sampling temperature, 0–2.
+         */
+        temperature?: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/text/generations';
+};
+
+export type PostApiV1TextGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Payment required
+     */
+    402: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1TextGenerationsError = PostApiV1TextGenerationsErrors[keyof PostApiV1TextGenerationsErrors];
+
+export type PostApiV1TextGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            /**
+             * Why the model stopped, as the provider reports it (`stop`, `length`, …).
+             */
+            finishReason: string | null;
+            model: string;
+            provider: string;
+            /**
+             * Reasoning of a reasoning model, kept out of `text`; `null` otherwise.
+             */
+            reasoning: string | null;
+            /**
+             * The generated text.
+             */
+            text: string;
+            usage: {
+                inputTokens: number | null;
+                outputTokens: number | null;
+                reasoningTokens: number | null;
+                totalTokens: number | null;
+            } | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TextGenerationsResponse = PostApiV1TextGenerationsResponses[keyof PostApiV1TextGenerationsResponses];
+
+export type PostApiV1ObjectsGenerationsData = {
+    body: {
+        /**
+         * Conversation to complete. Use instead of, or after, `system` + `prompt`.
+         */
+        messages?: Array<{
+            /**
+             * Plain text, or text and image parts (OpenAI chat format) for a model that takes images. An image is an http(s) URL or a base64 `data:image/...` URL.
+             */
+            content: string | Array<{
+                text: string;
+                type: 'text';
+            } | {
+                image_url: {
+                    detail?: 'auto' | 'low' | 'high';
+                    url: string;
+                };
+                type: 'image_url';
+            }>;
+            role: 'user';
+        } | {
+            /**
+             * Plain-text message content.
+             */
+            content: string;
+            role: 'system' | 'assistant';
+        }>;
+        /**
+         * Model id. Omit to use the platform's default chat model.
+         */
+        model?: string;
+        /**
+         * User prompt; appended after `messages` when both are given.
+         */
+        prompt?: string;
+        /**
+         * Provider id (for example `lobehub`, `openai`). Omit with `model` for the default.
+         */
+        provider?: string;
+        /**
+         * System prompt, placed first.
+         */
+        system?: string;
+        /**
+         * A JSON Schema with `type: "object"` at the root. Supported root keywords: `properties`, `required`, `additionalProperties`, `$defs`, `title`, `description`; others (such as `allOf`) are rejected rather than silently dropped.
+         */
+        schema: {
+            $defs?: {
+                [key: string]: unknown;
+            };
+            additionalProperties?: boolean;
+            description?: string;
+            properties: {
+                [key: string]: unknown;
+            };
+            required?: Array<string>;
+            title?: string;
+            type: 'object';
+        };
+        /**
+         * What the object is, sent with the schema.
+         */
+        schemaDescription?: string;
+        /**
+         * Name sent with the schema. Defaults to `response`.
+         */
+        schemaName?: string;
+        /**
+         * Ask the provider to enforce the schema strictly (every property required, no extras).
+         */
+        strict?: boolean;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/objects/generations';
+};
+
+export type PostApiV1ObjectsGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Payment required
+     */
+    402: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1ObjectsGenerationsError = PostApiV1ObjectsGenerationsErrors[keyof PostApiV1ObjectsGenerationsErrors];
+
+export type PostApiV1ObjectsGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            model: string;
+            /**
+             * The generated object, valid for the requested schema.
+             */
+            object: {
+                [key: string]: unknown;
+            };
+            provider: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ObjectsGenerationsResponse = PostApiV1ObjectsGenerationsResponses[keyof PostApiV1ObjectsGenerationsResponses];

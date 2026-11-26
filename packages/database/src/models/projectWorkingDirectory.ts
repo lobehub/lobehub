@@ -115,6 +115,8 @@ export class ProjectWorkingDirectoryModel {
         platform: devices.platform,
         path: sql<string>`coalesce(${environmentInstances.workingDirectory}, ${projectWorkingDirectories.path})`,
         permission: projectWorkingDirectories.permission,
+        /** Its place among the project's execution environments; see `executionOrder`. */
+        sortOrder: projectWorkingDirectories.sortOrder,
         // Whether a run can start here: the same linked, enabled and writable
         // binding `resolve` requires, so a UI start affordance can match it.
         runnable: sql<boolean>`coalesce(${environments.id} is not null and ${environmentInstances.enabled} and ${environments.enabled} and ${projectEnvironments.enabled} and ${projectWorkingDirectories.permission} = 'readWrite', false)`,

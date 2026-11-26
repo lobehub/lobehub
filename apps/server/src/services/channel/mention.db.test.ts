@@ -60,6 +60,30 @@ describe('notifyChannelMentions against the database', () => {
     });
   });
 
+  it('skips a mentioned person who muted the Channel for themself', async () => {
+    const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await owner.create({ title: 'People' });
+    const member = await owner.addUser(channel.id, fixture.memberId);
+    await new ChannelRepository(db, fixture.memberId, fixture.workspaceId).setNotificationsMuted(
+      channel.id,
+      true,
+    );
+    const message = await owner.send(channel.id, {
+      content: '@mia please review',
+      mentions: [member.id],
+      requestKey: 'muted',
+      routing: 'fallback',
+    });
+    notifyChannelMentions(
+      db,
+      { userId: fixture.ownerId, workspaceId: fixture.workspaceId },
+      message,
+    );
+    await after.mock.calls[0][0]();
+
+    expect(notifyChannelMention).not.toHaveBeenCalled();
+  });
+
   it('skips a person who left the workspace but still has a Channel member row', async () => {
     const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
     const { channel } = await owner.create({ title: 'People' });

@@ -402,6 +402,8 @@ describe('generic webhook wakes', () => {
     // Nobody can approve a tool in the Channel: never park, whatever the user's settings.
     expect(params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
     expect(params.instructions).toContain('posted as your message in the Channel');
+    // It may answer with a card, so the card tool is in the run.
+    expect(params.additionalPluginIds).toEqual(['lobe-a2ui']);
     expect(params.hooks).toEqual([
       expect.objectContaining({ id: `inbound-webhook-report:${id}`, type: 'onComplete' }),
     ]);
@@ -416,6 +418,7 @@ describe('generic webhook wakes', () => {
     const [params] = execute.mock.calls[0];
     expect(params.hooks).toBeUndefined();
     expect(params.instructions).toBeUndefined();
+    expect(params.additionalPluginIds).toBeUndefined();
     expect(params.userInterventionConfig).toEqual({
       allowList: ['safe-read'],
       approvalMode: 'auto-run',

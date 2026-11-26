@@ -35,6 +35,7 @@ vi.mock('@/database/models/user', () => ({
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn().mockImplementation(function () {
     return {
+      getNicknames: async () => new Map<string, string>(),
       searchAssignableMembers: memberMocks.searchAssignableMembers,
     };
   }),
@@ -1298,12 +1299,11 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
     };
 
     it('lists the assignable page the directory query returns, with a self marker', async () => {
-      // Role gating, narrowing and the cap all happen in the model's SQL; the
-      // runtime only decorates the page it gets back.
+      // Gating, narrowing and the cap run in SQL; the runtime only decorates the page.
       memberMocks.searchAssignableMembers.mockResolvedValue({
         rows: [
           { role: 'owner', userId: 'usr_1' },
-          { role: 'member', userId: 'usr_2' },
+          { nickname: 'Aaron', role: 'member', userId: 'usr_2' },
         ],
         total: 2,
       });
@@ -1327,7 +1327,7 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
       });
       expect(result.state).toEqual({ count: 2, success: true, total: 2 });
       expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
-      expect(result.content).toContain('- Alice  @alice  role=member  id=usr_2');
+      expect(result.content).toContain('- Aaron  @alice  role=member  id=usr_2');
     });
 
     it('surfaces email and linked IM identities so platform handles resolve exactly', async () => {

@@ -51,14 +51,18 @@ export {
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
 } from './agentStreamPipeline';
-export { ANTIGRAVITY_BASE_ARGS, buildAntigravityArgs } from './antigravity';
 export {
-  type AntigravityLiveExit,
-  AntigravityLiveInput,
-  type AntigravityLiveInputOptions,
-  type AntigravityTurnOutcome,
-  resolveAntigravityLiveRuntimeEnd,
-} from './antigravityLiveInput';
+  type AntigravityAcpLaunch,
+  buildAntigravityAcpLaunch,
+  getAntigravitySpawnEnv,
+} from './antigravity';
+export {
+  type AntigravityAcpPromptBlock,
+  AntigravityAcpSession,
+  type AntigravityAcpSessionOptions,
+  buildAntigravityAcpPrompt,
+  isAntigravityAcpSessionNotFoundError,
+} from './antigravityAcpSession';
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
@@ -151,6 +155,7 @@ export {
   DshAcpSession,
   type DshAcpSessionHandle,
   type DshAcpSessionOptions,
+  resolveDshSpawnCommand,
   spawnDshAcpSession,
   type SpawnDshAcpSessionOptions,
 } from './dshAcpSession';

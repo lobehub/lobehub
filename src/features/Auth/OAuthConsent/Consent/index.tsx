@@ -1,6 +1,6 @@
 'use client';
 
-import { DESKTOP_OIDC_CLIENT_IDS } from '@lobechat/const';
+import { DESKTOP_OIDC_CLIENT_IDS, LOBOT_MOBILE_CLIENT_ID } from '@lobechat/const';
 import { Block, Button, Flexbox, Text } from '@lobehub/ui';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,7 @@ const BUILTIN_CLIENTS = new Set([
   ...DESKTOP_OIDC_CLIENT_IDS,
   'lobehub-mobile',
   'lobehub-market',
-  'toby',
+  LOBOT_MOBILE_CLIENT_ID,
 ]);
 
 const ConsentClient = memo<ClientProps>(

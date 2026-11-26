@@ -17,6 +17,7 @@ import type {
   PlanTodoConfig,
   ProjectInstructionFile,
   RevokedDocumentReads,
+  SkillChangesByMessage,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -199,6 +200,8 @@ export interface ServerMessagesEngineParams {
   agentAccountContext?: AgentAccountContext;
 
   // ========== Skills ==========
+  /** Skill-index change notes keyed by the user message each belongs to */
+  skillChanges?: SkillChangesByMessage;
   /** Skills configuration for <available_skills> injection */
   skillsConfig?: { enabledSkills?: SkillMeta[] };
   /** Tool discovery configuration for <available_tools> injection */

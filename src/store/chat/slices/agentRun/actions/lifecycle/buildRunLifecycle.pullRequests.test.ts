@@ -7,7 +7,6 @@ import { messageMapKey } from '../../../../utils/messageMapKey';
 import { buildRunLifecycle } from './buildRunLifecycle';
 
 const mocks = vi.hoisted(() => ({
-  betterCoding: true,
   linkOwnBranchPullRequest: vi.fn(async () => {}),
   refreshTopicPullRequests: vi.fn(async () => {}),
 }));
@@ -18,17 +17,6 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/linkOwnBranchPullRequest
 vi.mock('@/services/work', () => ({
   workService: { refreshTopicPullRequests: mocks.refreshTopicPullRequests },
 }));
-// Partial: the queued follow-up path reads other user selectors (follow-up mode).
-vi.mock('@/store/user/selectors', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    labPreferSelectors: {
-      ...actual.labPreferSelectors,
-      enableBetterCodingExperience: () => mocks.betterCoding,
-    },
-  };
-});
 vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -77,7 +65,6 @@ const complete = (get: () => ChatStore, runtimeStatus: 'done' | 'error' = 'done'
 describe('buildRunLifecycle.completeRun — topic pull requests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.betterCoding = true;
   });
 
   it('looks up the own-branch PR even when a queued follow-up takes over', async () => {
@@ -91,12 +78,10 @@ describe('buildRunLifecycle.completeRun — topic pull requests', () => {
     });
   });
 
-  it('skips the lookup for a failed run and while the lab is off', async () => {
+  it('skips the lookup for a failed run', async () => {
     await complete(makeStore(false), 'error');
-    mocks.betterCoding = false;
-    await complete(makeStore(false));
 
     expect(mocks.linkOwnBranchPullRequest).not.toHaveBeenCalled();
-    expect(mocks.refreshTopicPullRequests).toHaveBeenCalledTimes(2);
+    expect(mocks.refreshTopicPullRequests).toHaveBeenCalledTimes(1);
   });
 });

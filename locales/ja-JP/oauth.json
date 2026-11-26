@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "この承認にコメントし、プレビュー ページから承認または差し戻しを行います",
   "consent.scope.acceptance-review-site": "このサイトのレビューにコメントする（サイト自体から、8時間）",
   "consent.scope.email": "あなたのメールアドレスにアクセス",
+  "consent.scope.generation-read": "あなたが生成した画像、動画、音声を表示",
+  "consent.scope.generation-write": "あなたのクォータを使用して画像、動画、音声を生成し、その結果を削除",
   "consent.scope.offline_access": "クライアントがあなたのデータにアクセスすることを許可",
   "consent.scope.openid": "あなたの LobeChat アカウントで認証",
   "consent.scope.profile": "基本的なプロフィール情報（名前、アバターなど）にアクセス",

@@ -30,6 +30,7 @@ import {
   createCodexAgentHandle,
   createFileStoreImageUploader,
   isHeteroStatusGuideErrorData,
+  resolveDshSpawnCommand,
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -48,6 +49,7 @@ import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
 import { buildExtraArgs } from './buildExtraArgs';
+import { dispatchedModeSpawnOptions } from './dispatchedModes';
 import { type ResolvedPrompt, resolvePrompt } from './prompt';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
@@ -139,6 +141,7 @@ const spawnAgentOrRuntime = (
       askUserBridge: spawnOpts.askUserBridge,
       clientVersion: cliVersion,
       args: spawnOpts.extraArgs ?? [],
+      collaborationMode: spawnOpts.collaborationMode,
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       env: { ...process.env, ...spawnOpts.env },
@@ -156,20 +159,16 @@ const spawnAgentOrRuntime = (
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
  * without `--resume`.  Two classes of failure:
- *
  *   1. Session file missing (sandbox recycled): the container is ephemeral
  *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
  *      and the stored session id is stale.
- *
  *   2. Context overflow (long conversation): the resumed session carries all
- *      accumulated history; when the combined token count exceeds the model's
- *      context window the API rejects the request immediately after CC
- *      initialises.  Starting fresh (no `--resume`) drops the old history and
- *      lets CC respond to the new prompt alone.
+ *      accumulated history past the model's context window, so the API rejects
+ *      the request right after CC initialises. Starting fresh (no `--resume`)
+ *      drops the old history and lets CC respond to the new prompt alone.
  *
- * Checked against:
- *   - `error` stream events emitted by the CC adapter from CC's result event
- *   - Accumulated stderr output (fallback when CC exits without a result event)
+ * Checked against `error` stream events (from CC's result event) and, when CC
+ * exits without a result event, the accumulated stderr output.
  */
 const RESUME_RETRY_PATTERNS = [
   // Session file missing — sandbox was recycled
@@ -435,9 +434,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         })
       : undefined;
 
-  // DSH is a protocol runtime (its `acp` profile) with no CLI descriptor. Keep
-  // it on the same public `hetero exec` surface, but drive its ACP session
-  // directly instead of passing it through `spawnAgent`.
+  // DSH (an `acp`-profile runtime, no CLI descriptor) keeps the CLI agents' surface and
+  // identity echo, but drives its ACP session directly on the validated `dsh` + its PATH.
   if (agentType === DSH_AGENT_TYPE) {
     const hasImages =
       typeof resolved.prompt !== 'string' &&
@@ -468,15 +466,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
 
     try {
+      const dshCommand = await resolveDshSpawnCommand(options.command);
       session = spawnDshAcpSession({
         args: options.agentArg,
         clientVersion: 'lobehub-cli',
-        command: options.command,
+        command: dshCommand.command,
         cwd: options.cwd || process.cwd(),
-        // Same identity echo as the CLI agents, so `lh` commands the harness
-        // runs for this conversation can name its operation and topic.
         env: buildAgentProcessEnv({
           operationId: serverIngest ? operationId : undefined,
+          pathEnv: dshCommand.pathEnv,
           topicId: options.topic,
         }),
         model: options.model,
@@ -566,34 +564,32 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (
-    serverIngest &&
-    (agentType === 'claude-code' ||
-      (agentType === 'codex' && options.codexAppServer) ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'droid' ||
-      agentType === 'devin' ||
-      agentType === 'qoder') &&
-    serverIngester
-  ) {
-    if (
-      agentType === 'codex' ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'devin' ||
-      agentType === 'droid'
-    ) {
+  const mcpAskUserProvider =
+    agentType === 'claude-code' || agentType === 'qoder' ? agentType : undefined;
+  const nativeAskUserProvider =
+    agentType === 'antigravity' ||
+    (agentType === 'codex' && options.codexAppServer) ||
+    agentType === 'copilot' ||
+    agentType === 'cursor' ||
+    agentType === 'devin' ||
+    agentType === 'droid'
+      ? agentType
+      : undefined;
+  if (serverIngest && serverIngester && (mcpAskUserProvider || nativeAskUserProvider)) {
+    if (nativeAskUserProvider) {
       askBridge = new AskUserBridge(operationId, {
-        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
-        provider: agentType,
+        identifier: nativeAskUserProvider === 'cursor' ? 'claude-code' : nativeAskUserProvider,
+        provider: nativeAskUserProvider,
       });
-    } else {
+    } else if (mcpAskUserProvider) {
       askServer = new LobeBuiltinMcpServer();
       await askServer.start();
       askBridge = askServer.registerOperation(
         operationId,
-        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+        new AskUserBridge(operationId, {
+          identifier: mcpAskUserProvider,
+          provider: mcpAskUserProvider,
+        }),
       );
       askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
       await writeFile(
@@ -920,7 +916,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Stream events (steering Claude Code or native Codex, see withHeteroSteer); each is optionally written as JSONL
+    // Stream events (steering Claude Code, native Codex or Antigravity, see withHeteroSteer); each is optionally written as JSONL
     // and pushed into the ingester. A resume `error` is withheld and flags a retry instead.
     let resumeNotFound = false;
     let sawTerminalError = false;
@@ -1074,13 +1070,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
     initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
-    // Keep Claude Code's and Antigravity's stdin open while they can still use
-    // input (live steer / background tasks).
-    liveInput: options.type === 'claude-code' || options.type === 'antigravity',
+    // Keep Claude Code's stdin open while it can still use input: closing it
+    // early makes print mode kill background tasks after 10 minutes.
+    liveInput: options.type === 'claude-code',
     operationId,
-    // Better Coding Experience: Claude Code prompts answered on the bridge's cards.
-    ...(options.type === 'claude-code' &&
-      resolved.permissionMode && { permissionMode: resolved.permissionMode }),
+    // Claude Code permission mode, Codex Plan switch.
+    ...dispatchedModeSpawnOptions(options.type, resolved),
     uploadImage,
   };
 

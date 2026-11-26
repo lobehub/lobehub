@@ -284,6 +284,41 @@ describe('WorkModel.listTopicPullRequests', () => {
   });
 });
 
+describe('WorkModel.listTopicsPullRequests', () => {
+  it('lists each topic its own pull requests in one read, latest link first', async () => {
+    const secondTopicId = 'work-test-second-topic';
+    const emptyTopicId = 'work-test-empty-topic';
+    await serverDB.insert(topics).values([
+      { id: secondTopicId, userId },
+      { id: emptyTopicId, userId },
+    ]);
+    const model = new WorkModel(serverDB, userId);
+    await model.registerExternal(pr('lobehub/lobehub#30', 'call-30'));
+    await model.registerExternal(pr('lobehub/lobehub#31', 'call-31'));
+    // The same PR touched by both topics is listed for each.
+    await model.registerExternal(
+      pr('lobehub/lobehub#30', 'call-30-second', {
+        changeType: 'updated',
+        patchFields: ['identifier', 'status'],
+        status: 'merged',
+        topicId: secondTopicId,
+      }),
+    );
+    await new WorkModel(serverDB, userId2).registerExternal(
+      pr('lobehub/lobehub#32', 'call-user2', { topicId: secondTopicId }),
+    );
+
+    const byTopic = await model.listTopicsPullRequests([topicId, secondTopicId, emptyTopicId]);
+
+    expect(byTopic.get(topicId)?.map((item) => item.number)).toEqual([31, 30]);
+    expect(byTopic.get(secondTopicId)).toEqual([
+      expect.objectContaining({ number: 30, source: 'command', status: 'merged' }),
+    ]);
+    expect(byTopic.has(emptyTopicId)).toBe(false);
+    expect((await model.listTopicsPullRequests([])).size).toBe(0);
+  });
+});
+
 describe('WorkModel.listTopicPullRequests with a work that lost its resource id', () => {
   it('skips a row whose pull-request identifier is gone', async () => {
     await serverDB.insert(works).values({

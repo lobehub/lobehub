@@ -24,9 +24,10 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
+import { isBuiltinAgentSlug } from '@/features/AddAgentMemberModal/selectAddableAgents';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
@@ -210,7 +211,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
   }) => {
     const { t } = useTranslation(['chat', 'common']);
     const compact = useInterfaceDensity() === 'compact';
-    const enabledModels = useEnabledChatModels();
+    const enabledModels = useSelectableChatModels();
     const [selectedAgents, setSelectedAgents] = useState<string[]>(preSelectedAgents);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -246,8 +247,11 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
     useFetchAgentList(open && isLogin);
+    // Builtins (Lobe AI) are listed in the sidebar but can never join a group.
     const agents = useHomeStore((s) =>
-      homeAgentListSelectors.allAgents(s).filter((item) => item.type === 'agent'),
+      homeAgentListSelectors
+        .allAgents(s)
+        .filter((item) => item.type === 'agent' && !isBuiltinAgentSlug(item.slug)),
     );
 
     const handleAgentToggle = (agentId: string) => {

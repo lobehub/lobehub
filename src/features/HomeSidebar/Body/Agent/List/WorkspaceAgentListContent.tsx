@@ -1,15 +1,13 @@
 'use client';
 
-import { cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { ChevronDown, ChevronUp, MoreHorizontal, PinIcon, UsersIcon } from 'lucide-react';
-import { type ReactNode } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { MoreHorizontal } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -21,49 +19,18 @@ import CreateAgentButton from '../CreateAgentButton';
 import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
+import { liftInboxRow, withoutInboxInGroups } from './inboxRow';
 import SessionList from './List';
 import SortableList from './SortableList';
 import { useWorkspaceAgentSections } from './useWorkspaceAgentSections';
 
-/** Team pins beyond this many fold behind a "show more" row. */
-export const TEAM_PINNED_VISIBLE_LIMIT = 5;
-
-const SubHeader = memo<{ icon: typeof PinIcon; testId: string; title: string; tooltip?: string }>(
-  ({ icon, testId, title, tooltip }) => {
-    const node: ReactNode = (
-      <Flexbox
-        horizontal
-        align={'center'}
-        data-testid={testId}
-        gap={6}
-        style={{ paddingBlock: '6px 2px', paddingInline: 10 }}
-      >
-        <Icon icon={icon} size={12} style={{ opacity: 0.5 }} />
-        <Text ellipsis fontSize={11} type={'secondary'} weight={500}>
-          {title}
-        </Text>
-      </Flexbox>
-    );
-
-    return tooltip ? (
-      <Tooltip placement={'right'} title={tooltip}>
-        {node}
-      </Tooltip>
-    ) : (
-      node
-    );
-  },
-);
-
-SubHeader.displayName = 'WorkspaceAgentSubHeader';
-
 /**
  * The merged workspace "Agents" section body (replacing the former separate
- * "Workspace" and "Private" accordions): Inbox → my pins → team pins (fixed,
- * set by owners/admins for everyone) → folders → the rest. Personal pins come
- * first so the agents a member chose stay at the top instead of being pushed
- * down by the (possibly long) team list. Private rows
- * carry a lock icon wherever they appear. Personal mode keeps rendering
+ * "Workspace" and "Private" accordions): Lobe AI → pinned → folders → the rest.
+ * Pinned is the member's own list, which the workspace's default pins only
+ * seed once (server side); the member moves or unpins any row in it, and
+ * dragging never changes another member's order. Private rows carry a lock
+ * icon wherever they appear. Personal mode keeps rendering
  * `AgentListContent`.
  */
 const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) => {
@@ -79,33 +46,24 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
 
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
   const navigate = useWorkspaceAwareNavigate();
-  const [teamExpanded, setTeamExpanded] = useState(false);
-  // Team pins are shared by every member, so only owners/admins (the roles the
-  // server lets write team pins) can reorder them; everyone orders their own.
-  const { allowed: canManageTeamPins } = usePermission('manage_settings');
-  const [reorderPinnedAgents, reorderMyPinned] = useHomeStore((s) => [
-    s.reorderPinnedAgents,
-    s.reorderMyPinned,
-  ]);
+  const reorderMyPinned = useHomeStore((s) => s.reorderMyPinned);
 
-  const resolved = useWorkspaceAgentSections();
-  const { teamPinned } = resolved;
-  const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
-  const visibleTeamPinned =
-    teamOverflow && !teamExpanded ? teamPinned.slice(0, TEAM_PINNED_VISIBLE_LIMIT) : teamPinned;
+  const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
+  const sectionsWithInbox = useWorkspaceAgentSections();
+  // Lobe AI (the inbox) leads the sidebar wherever its row sits — a pin, a
+  // folder or the rest — so it is taken out of the sections and rendered first.
+  const { inboxItem, resolved } = useMemo(() => {
+    const folders = withoutInboxInGroups(sectionsWithInbox.folders);
+    const { inbox, lists } = liftInboxRow({
+      pinned: sectionsWithInbox.pinned,
+      rest: sectionsWithInbox.rest,
+    });
 
-  // While the team section is folded only its visible rows can move; the
-  // folded ones keep their order after them.
-  const handleReorderTeamPinned = useCallback(
-    (ids: string[]) => {
-      const moved = new Set(ids);
-      return reorderPinnedAgents([
-        ...ids,
-        ...teamPinned.map((item) => item.id).filter((id) => !moved.has(id)),
-      ]);
-    },
-    [reorderPinnedAgents, teamPinned],
-  );
+    return {
+      inboxItem: inbox ?? folders.inbox,
+      resolved: { ...lists, folders: folders.groups },
+    };
+  }, [sectionsWithInbox]);
   const sections = useMemo(
     () => ({
       ...resolved,
@@ -115,62 +73,30 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     [agentPageSize, resolved],
   );
 
+  // Signed-in lists carry Lobe AI (the inbox) as an ordinary item from the
+  // server, so it can be pinned, hidden and found again like any Agent. The
+  // standalone entry covers the moments no list row exists: a signed-out
+  // visitor, the first load, and a list cached or fetched before the inbox row.
+  const showStandaloneInbox = !hideInbox && (contentState !== 'ready' || !hasInboxAgent);
+
+  if (contentState === 'inbox') return showStandaloneInbox ? <InboxItem /> : null;
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem />}
-        {contentState === 'loading' && <SkeletonList rows={3} />}
+        {showStandaloneInbox && <InboxItem />}
+        <SkeletonList rows={3} />
       </>
     );
 
-  const { folders, hasMore, myPinned, rest } = sections;
+  const { folders, hasMore, pinned, rest } = sections;
 
   return (
     <>
-      {!hideInbox && <InboxItem />}
-      {myPinned.length > 0 && (
-        <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
-          <SubHeader
-            icon={PinIcon}
-            testId={'sidebar-my-pinned-header'}
-            title={t('navPanel.myPinned')}
-          />
-          <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
-        </Flexbox>
-      )}
-      {teamPinned.length > 0 && (
-        <Flexbox data-testid={'sidebar-team-pinned'} gap={1}>
-          <SubHeader
-            icon={UsersIcon}
-            testId={'sidebar-team-pinned-header'}
-            title={t('navPanel.teamPinned')}
-            tooltip={t('navPanel.teamPinnedHint')}
-          />
-          {canManageTeamPins ? (
-            <SortableList dataSource={visibleTeamPinned} onReorder={handleReorderTeamPinned} />
-          ) : (
-            <SessionList dataSource={visibleTeamPinned} />
-          )}
-          {teamOverflow && (
-            // Subordinate to the team pins above, so it reads lighter and
-            // smaller than an agent row instead of competing with them.
-            <NavItem
-              data-testid={'sidebar-team-pinned-toggle'}
-              icon={teamExpanded ? ChevronUp : ChevronDown}
-              iconSize={14}
-              titleColor={cssVar.colorTextDescription}
-              title={
-                <span style={{ fontSize: 12 }}>
-                  {teamExpanded
-                    ? t('navPanel.showLessTeamPinned')
-                    : t('navPanel.showMoreTeamPinned', {
-                        count: teamPinned.length - TEAM_PINNED_VISIBLE_LIMIT,
-                      })}
-                </span>
-              }
-              onClick={() => setTeamExpanded((expanded) => !expanded)}
-            />
-          )}
+      {showStandaloneInbox && <InboxItem />}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
+      {pinned.length > 0 && (
+        <Flexbox data-testid={'sidebar-pinned'} gap={1}>
+          <SortableList dataSource={pinned} onReorder={reorderMyPinned} />
         </Flexbox>
       )}
       {folders.length > 0 && <Group dataSource={folders} />}

@@ -1,4 +1,5 @@
 import Billing from '@/business/client/BusinessSettingPages/Billing';
+import CodingPlans from '@/business/client/BusinessSettingPages/CodingPlans';
 import Credits from '@/business/client/BusinessSettingPages/Credits';
 import Plans from '@/business/client/BusinessSettingPages/Plans';
 import Referral from '@/business/client/BusinessSettingPages/Referral';
@@ -10,6 +11,7 @@ import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Automations from '../automations';
+import Conversation from '../conversation';
 import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
@@ -36,6 +38,7 @@ export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
   [SettingsTabs.Labs]: Labs,
   [SettingsTabs.Appearance]: Appearance,
+  [SettingsTabs.Conversation]: Conversation,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
   [SettingsTabs.Memory]: Memory,
@@ -63,6 +66,7 @@ export const componentMap = {
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,
+  [SettingsTabs.CodingPlans]: CodingPlans,
   [SettingsTabs.Credits]: Credits,
   [SettingsTabs.Billing]: Billing,
   [SettingsTabs.Referral]: Referral,

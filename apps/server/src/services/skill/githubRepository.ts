@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   type GitHub,
+  GitHubAuthError,
   GitHubNotFoundError,
   GitHubRateLimitError,
   type GitHubRepoInfo,
@@ -12,6 +13,8 @@ import { redisService } from '@/server/services/redis';
 import { SkillImportError } from './errors';
 
 type GitHubProxy = MarketService['proxyOAuthRequest'];
+/** Resolves the caller's GitHub token from their Vault, or undefined when none is saved. */
+export type GitHubTokenResolver = () => Promise<string | undefined>;
 
 const snapshotQuery = `query SkillArchive($owner: String!, $repo: String!, $ref: String!) {
   repository(owner: $owner, name: $repo) {
@@ -33,26 +36,60 @@ const envelopeSchema = z.object({
 
 const connectorRequired = () =>
   new SkillImportError(
-    'Check the repository URL. For a private repository, connect GitHub in Settings → Connectors and retry.',
+    'Check the repository URL. For a private repository, connect GitHub in Settings → Connectors, or add a GitHub token (GITHUB_TOKEN) to your Vault, and retry.',
     'CONNECT_GITHUB',
   );
 const unavailable = () =>
   new SkillImportError(
-    'Check the repository URL and branch, and confirm your GitHub connector can read the repository.',
+    'Check the repository URL and branch, and confirm your GitHub connector or the GitHub token (GITHUB_TOKEN) in your Vault can read the repository.',
     'GITHUB_ACCESS',
   );
 
 /** Request-scoped. Only anonymous ref lookups may enter the shared Redis cache. */
 export class GitHubSkillRepository {
   private archiveUrls = new Map<string, string>();
+  private token?: Promise<string | undefined>;
 
   constructor(
     private readonly github: GitHub,
     private readonly proxy?: GitHubProxy,
+    private readonly vaultToken?: GitHubTokenResolver,
   ) {}
 
   private key(info: GitHubRepoInfo, commit: string) {
     return JSON.stringify([info.owner, info.repo, commit]);
+  }
+
+  /** Read once per request; a token GitHub rejects is dropped for the rest of it. */
+  private vaultGitHubToken() {
+    if (!this.vaultToken) return Promise.resolve(undefined);
+    this.token ??= this.vaultToken().catch(() => undefined);
+    return this.token;
+  }
+
+  /**
+   * The anonymous request could not read the repository. Try the Vault token
+   * before the connector; undefined means the token is missing or cannot read it.
+   */
+  private async withVaultToken<T>(
+    cause: unknown,
+    run: (token: string) => Promise<T>,
+  ): Promise<T | undefined> {
+    if (!(cause instanceof GitHubNotFoundError || cause instanceof GitHubRateLimitError)) return;
+    if (cause instanceof GitHubNotFoundError && cause.status === 422) return;
+    const token = await this.vaultGitHubToken();
+    if (!token) return;
+    try {
+      return await run(token);
+    } catch (error) {
+      if (error instanceof GitHubAuthError) {
+        this.token = Promise.resolve(undefined);
+        return;
+      }
+      // The token cannot read it either; the connector may still.
+      if (error instanceof GitHubNotFoundError || error instanceof GitHubRateLimitError) return;
+      throw error;
+    }
   }
 
   private async connectedSnapshot(info: GitHubRepoInfo, ref: string, cause: unknown) {
@@ -100,6 +137,11 @@ export class GitHubSkillRepository {
       if (!cached) await redisService.gitHubRefs.record(info, commit);
       return { commit, public: true };
     } catch (error) {
+      const commit = await this.withVaultToken(error, (token) =>
+        this.github.resolveCommit(info, token),
+      );
+      // Private to this caller: never enters the shared ref or package caches.
+      if (commit) return { commit, public: false };
       const snapshot = await this.connectedSnapshot(info, info.branch, error).catch((failure) => {
         // Preserve the anonymous ref-archive fallback when the public API is
         // rate limited and the connector cannot supply a snapshot.
@@ -116,6 +158,10 @@ export class GitHubSkillRepository {
       try {
         return await this.github.downloadCommitZip(info, commit);
       } catch (error) {
+        const archive = await this.withVaultToken(error, (token) =>
+          this.github.downloadTokenZip(info, commit, token),
+        );
+        if (archive) return archive;
         const snapshot = await this.connectedSnapshot(info, commit, error);
         if (snapshot.oid !== commit)
           throw new SkillImportError('GitHub returned a different commit', 'DOWNLOAD_FAILED');

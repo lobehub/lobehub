@@ -188,6 +188,13 @@ export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discover
 export interface OperationToolSet {
   /** Tool IDs that may be restored from historical explicit activations for this run. */
   activatableToolIds?: string[];
+  /**
+   * Full manifests of tools the operation starts with narrowed or left out,
+   * keyed by identifier. An activation of one of these ids replaces whatever
+   * `manifestMap` holds for it. They are not offered in `<available_tools>`:
+   * the runtime activates them itself once the run comes to need them.
+   */
+  deferredManifestMap?: Record<string, LobeToolManifest>;
   enabledToolIds: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -200,6 +207,8 @@ export interface OperationToolSet {
  */
 export interface ActivatedStepTool {
   activatedAtStep: number;
+  /** Absent for initially available tools and older persisted operations. */
+  afterToolCallId?: string;
   id: string;
   manifest?: LobeToolManifest;
   source: ActivationSource;

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 
+import { resolveAgentCredentialSpawnEnv } from '@lobechat/device-control/agent-credentials';
 import {
   listDefaultClaudeLogin,
   resolveClaudeAccountSpawnEnv,
@@ -13,9 +14,10 @@ import {
 } from '@lobechat/heterogeneous-agents/protocol';
 import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/quota';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
-import type { HeteroPermissionMode } from '@lobechat/types';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
 
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
+import { agentCredentialRootDir } from './agentCredentials';
 import { registerAgentRun } from './agentRunRegistry';
 
 export interface SpawnHeteroAgentRunParams {
@@ -28,6 +30,8 @@ export interface SpawnHeteroAgentRunParams {
   claudeAccountRouting?: ClaudeCodeAccountRouting;
   /** Entrypoint name the agent asked Claude Code to report. */
   claudeCodeEntrypoint?: string;
+  /** Codex Plan switch, forwarded in the input envelope. */
+  collaborationMode?: CodexCollaborationMode;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
@@ -75,6 +79,33 @@ export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
   logger?: SpawnHeteroAgentRunLogger,
 ): Promise<AgentRunAckResult> {
+  // Only agents that accept an installed credential pay for the lookup.
+  if (params.agentType !== 'claude-code' && params.agentType !== 'codex') {
+    return spawnWithAccountRouting(params, logger);
+  }
+
+  // Precedence: a credential the server installed on this device wins over
+  // both the device's own login and Claude Code account routing; an expired or
+  // unreadable one fails the run rather than falling back to another login.
+  return resolveAgentCredentialSpawnEnv(params.agentType, {
+    rootDir: agentCredentialRootDir(),
+  }).then((credential) => {
+    if (credential.kind === 'none') return spawnWithAccountRouting(params, logger);
+    if (credential.kind === 'reject') {
+      logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${credential.reason}`);
+      return { reason: credential.reason, status: 'rejected' as const };
+    }
+    logger?.info?.(
+      `hetero exec uses the installed ${params.agentType} credential (op=${params.operationId})`,
+    );
+    return startHeteroAgentRun(params, credential.env, logger, credential.unsetEnv);
+  });
+}
+
+function spawnWithAccountRouting(
+  params: SpawnHeteroAgentRunParams,
+  logger?: SpawnHeteroAgentRunLogger,
+): Promise<AgentRunAckResult> {
   if (!params.claudeAccountRouting) return startHeteroAgentRun(params, {}, logger);
 
   // A plain CLI device holds one Claude Code login (the one `claude` uses
@@ -94,6 +125,8 @@ function startHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
   accountEnv: Record<string, string>,
   logger?: SpawnHeteroAgentRunLogger,
+  /** Inherited env keys that would outrank `accountEnv`'s credential. */
+  unsetEnv: readonly string[] = [],
 ): Promise<AgentRunAckResult> {
   const {
     agentType,
@@ -144,6 +177,7 @@ function startHeteroAgentRun(
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({
+    collaborationMode: params.collaborationMode,
     imageList,
     isNewSession: !resumeSessionId,
     permissionMode: params.permissionMode,
@@ -155,6 +189,7 @@ function startHeteroAgentRun(
   // A connector can itself be started inside another agent run. Its ambient
   // identity (and JWT file) belongs to that ancestor, not this dispatched run.
   const childEnv = stripInheritedRunIdentity(process.env);
+  for (const key of unsetEnv) delete childEnv[key];
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;

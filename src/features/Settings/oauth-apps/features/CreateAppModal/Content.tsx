@@ -135,7 +135,7 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
   });
   const type = useWatch(form, 'type');
 
-  const { upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
+  const { error: logoError, upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
 
   const handleUpload = async (file: File) => {
     const url = await uploadLogo(file);
@@ -189,6 +189,11 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
             <Input placeholder={t('oauthApp.form.name.placeholder')} />
           </Form.Field>
         </Flexbox>
+        {logoError && (
+          <Text fontSize={12} role={'alert'} type={'danger'}>
+            {logoError}
+          </Text>
+        )}
 
         <Form.Field
           label={t('oauthApp.form.type.label')}

@@ -28,8 +28,20 @@ export interface ToolManifestInfo {
   type?: string;
 }
 
+export interface ActivateSkillOptions {
+  /**
+   * The name is an `activateTools` identifier that matched no tool, tried as a
+   * skill name. A miss then means the identifier names nothing, not that a
+   * skill failed to open.
+   */
+  probe?: boolean;
+}
+
 export interface ActivatorRuntimeService {
-  activateSkill?: (args: ActivateSkillParams) => Promise<BuiltinServerRuntimeOutput>;
+  activateSkill?: (
+    args: ActivateSkillParams,
+    options?: ActivateSkillOptions,
+  ) => Promise<BuiltinServerRuntimeOutput>;
   /**
    * Why an identifier that exists is withheld from this run, if the host knows.
    * A bare "Not found" for a tool the model has seen before reads as a typo, so
@@ -309,7 +321,7 @@ export class ActivatorExecutionRuntime {
       if (notFoundAsTools.length > 0 && this.service.activateSkill) {
         for (const id of notFoundAsTools) {
           try {
-            const skillResult = await this.service.activateSkill({ name: id });
+            const skillResult = await this.service.activateSkill({ name: id }, { probe: true });
             if (skillResult.success) {
               activatedSkillResults.push(skillResult);
             } else {

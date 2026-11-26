@@ -22,6 +22,7 @@ const params = {
   operationId: 'op-1',
   provider: 'lmstudio',
   topicId: 'tpc-1',
+  workspaceSlug: 'team',
 };
 
 const createAction = (status?: string) => {
@@ -50,7 +51,11 @@ describe('continueClientLlmWait', () => {
     await expect(action.continueClientLlmWait(params)).resolves.toBe(true);
 
     expect(reconnect).toHaveBeenCalledWith(
-      expect.objectContaining({ assistantMessageId: 'msg-assistant', operationId: 'op-1' }),
+      expect.objectContaining({
+        assistantMessageId: 'msg-assistant',
+        operationId: 'op-1',
+        workspaceSlug: 'team',
+      }),
     );
     expect(aiAgentService.resumeClientLlmWait).toHaveBeenCalledWith({
       llmExecutor: declaration,

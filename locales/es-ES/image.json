@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Semilla",
   "config.seed.random": "Semilla aleatoria",
+  "config.size.autoByOpenAI": "Automático (determinado por OpenAI)",
   "config.size.label": "Tamaño",
   "config.steps.label": "Pasos",
   "config.title": "Configuración",

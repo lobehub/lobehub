@@ -2,6 +2,7 @@ import { reject } from './reject';
 
 export const lambdaClient = reject('lambdaClient');
 export const createWorkspaceLambdaClient = reject('createWorkspaceLambdaClient');
+export const scopedLambdaClient = reject('scopedLambdaClient');
 export const asyncClient = reject('asyncClient');
 export const toolsClient = reject('toolsClient');
 export const lambdaQuery = reject('lambdaQuery');
