@@ -21,6 +21,7 @@ import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
+import DotHooshProvider from './dothoosh';
 import DoubaoSpeechProvider from './doubaospeech';
 import ElevenLabsProvider from './elevenlabs';
 import FalProvider from './fal';
@@ -236,6 +237,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ZenMuxProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
+  DotHooshProvider,
   StraicoProvider,
   LongCatProvider,
   MagpieProvider,
@@ -331,6 +333,7 @@ export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
+export { default as DotHooshProviderCard } from './dothoosh';
 export { default as DoubaoSpeechProviderCard } from './doubaospeech';
 export { default as ElevenLabsProviderCard } from './elevenlabs';
 export { default as FalProviderCard } from './fal';

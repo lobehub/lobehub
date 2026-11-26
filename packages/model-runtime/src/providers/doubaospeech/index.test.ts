@@ -7,7 +7,10 @@ import { providerRuntimeMap } from '../../runtimeMap';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { LobeDoubaoSpeechAI } from './index';
 
-vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn() }));
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: vi.fn(),
+  registerModelPricingResolver: vi.fn(),
+}));
 
 const VOICE = 'zh_female_vv_uranus_bigtts';
 
