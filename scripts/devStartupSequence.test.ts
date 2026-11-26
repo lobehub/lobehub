@@ -2,10 +2,18 @@
  * @vitest-environment node
  */
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { getWorkspaceDependencyIssue } from './devStartupSequence.mts';
+
+const makeTempDir = (prefix: string) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+
+const cleanup = (dir: string) => fs.rmSync(dir, { force: true, recursive: true });
 
 describe('devStartupSequence', () => {
   /**
@@ -24,5 +32,91 @@ describe('devStartupSequence', () => {
 
     expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
     expect(result.status).toBe(0);
+  });
+
+  describe('getWorkspaceDependencyIssue', () => {
+    it('accepts node_modules installed inside the worktree', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-local-');
+      try {
+        fs.mkdirSync(path.join(projectRoot, 'node_modules'));
+        expect(getWorkspaceDependencyIssue(projectRoot)).toBeUndefined();
+      } finally {
+        cleanup(projectRoot);
+      }
+    });
+
+    it('reports a missing node_modules instead of letting Next panic', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-missing-');
+      try {
+        expect(getWorkspaceDependencyIssue(projectRoot)).toContain('node_modules is missing');
+      } finally {
+        cleanup(projectRoot);
+      }
+    });
+
+    it('reports permission failures without treating node_modules as missing', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-permission-');
+      try {
+        const permissionError = Object.assign(new Error('permission denied'), { code: 'EPERM' });
+
+        const issue = getWorkspaceDependencyIssue(projectRoot, {
+          lstat: () => {
+            throw permissionError;
+          },
+          realpath: (targetPath) => targetPath,
+        });
+
+        expect(issue).toContain('node_modules cannot be inspected');
+        expect(issue).toContain('EPERM');
+      } finally {
+        cleanup(projectRoot);
+      }
+    });
+
+    it('rejects node_modules linked outside the worktree', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-project-');
+      const externalRoot = makeTempDir('lobehub-dev-preflight-external-');
+      try {
+        const externalNodeModules = path.join(externalRoot, 'node_modules');
+        fs.mkdirSync(externalNodeModules);
+        fs.symlinkSync(externalNodeModules, path.join(projectRoot, 'node_modules'), 'junction');
+
+        expect(getWorkspaceDependencyIssue(projectRoot)).toContain('outside the worktree');
+      } finally {
+        cleanup(projectRoot);
+        cleanup(externalRoot);
+      }
+    });
+
+    it('reports a dangling node_modules link as unresolvable', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-dangling-');
+      const externalRoot = makeTempDir('lobehub-dev-preflight-dangling-target-');
+      const nodeModulesLink = path.join(projectRoot, 'node_modules');
+      try {
+        const externalNodeModules = path.join(externalRoot, 'node_modules');
+        fs.mkdirSync(externalNodeModules);
+        fs.symlinkSync(
+          externalNodeModules,
+          nodeModulesLink,
+          process.platform === 'win32' ? 'junction' : undefined,
+        );
+
+        fs.rmSync(externalRoot, { force: true, recursive: true });
+
+        const issue = getWorkspaceDependencyIssue(projectRoot);
+
+        expect(issue).toContain('cannot be resolved');
+        expect(issue).not.toContain('is missing');
+        expect(issue).not.toContain('outside the worktree');
+      } finally {
+        try {
+          fs.unlinkSync(nodeModulesLink);
+        } catch {
+          // Cleanup is best effort and must not mask the assertion result.
+        }
+        cleanup(projectRoot);
+        cleanup(externalRoot);
+      }
+    });
   });
 });
