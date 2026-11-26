@@ -45,7 +45,7 @@ const log = debug('lobe-server:agent:run-step');
  * minutes (one model family measured ~317s at p99, ~439s max).
  *
  * 450s leaves 1350s of headroom under the 1800s invocation. A server LLM call
- * still streaming 30s before the kill is stopped and fails the operation with
+ * still streaming 60s before the kill is stopped and fails the operation with
  * `LlmStepTimeout` (see `serverCallLlmAttempt`), so keep this conservative and
  * raise it only alongside `STEP_INVOCATION_MAX_DURATION_MS`. Once past the
  * deadline the pending step goes back to the queue and a fresh invocation

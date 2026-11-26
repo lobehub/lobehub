@@ -776,10 +776,10 @@ describe('ServerCallLlmAttempt', () => {
       };
 
     const runNearDeadline = async (attempt: { execute: () => Promise<void> }) => {
-      // 100s left: the call must stop 30s before the host kills the invocation.
+      // 100s left: the call must stop 60s before the host kills the invocation.
       const run = runWithInvocationDeadline(Date.now() + 100_000, () => attempt.execute());
       const settled = run.catch((error: unknown) => error);
-      await vi.advanceTimersByTimeAsync(69_999);
+      await vi.advanceTimersByTimeAsync(39_999);
       await vi.advanceTimersByTimeAsync(1);
       return settled;
     };

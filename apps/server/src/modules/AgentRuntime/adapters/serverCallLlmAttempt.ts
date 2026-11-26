@@ -48,14 +48,16 @@ import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 /**
  * Room left before the step invocation is killed for stopping the stream,
  * persisting the partial message, recording the failure and settling the
- * operation. Same budget the device relay keeps (`LLM_RELAY_INVOCATION_MARGIN_MS`).
+ * operation. Twice the device relay's `LLM_RELAY_INVOCATION_MARGIN_MS`: the
+ * wrap-up time is not measured, and a kill during it loses that wrap-up, while
+ * the extra 30s costs the call about 2% of a late-started step's window.
  *
  * The cut-off call is not billed to the user: the provider reports output
  * tokens only when the stream ends, and the visible reasoning is a summary of
  * the billed thinking, so no estimate from the partial text is accurate. The
  * upstream may still bill it; stopping redeliveries is what bounds that cost.
  */
-export const LLM_STEP_DEADLINE_MARGIN_MS = 30_000;
+export const LLM_STEP_DEADLINE_MARGIN_MS = 60_000;
 
 /** Shortest window an LLM call gets, however late in the invocation it starts. */
 const LLM_STEP_DEADLINE_MIN_MS = 15_000;
