@@ -127,7 +127,7 @@ apps/cli/src/
 | `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                             |
 | `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                             |
 | `lh provider`      | -     | Provider CRUD, config, test, toggle                                                 |
-| `lh legacy-plugin` | -     | Legacy 1.0 plugins: list, search, uninstall, update                                 |
+| `lh legacy-plugin` | -     | Legacy 1.0 plugins: list, search, uninstall                                         |
 | `lh search`        | -     | Global search across all types                                                      |
 | `lh work`          | -     | Register the files and links an agent run produced as Works, update, delete, lookup |
 | `lh session-group` | -     | Manage agent session groups                                                         |
