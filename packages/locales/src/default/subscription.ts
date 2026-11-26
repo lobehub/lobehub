@@ -618,7 +618,7 @@ export default {
   'plans.compare.notIncluded': 'Not included',
   'plans.compare.modelUsage': 'AI model usage',
   'plans.compare.modelUsage.available': 'Available',
-  'plans.compare.modelUsage.monthly': 'Up to {{amount}} of model service a month',
+  'plans.compare.modelUsage.monthly': '{{amount}} of usage a month',
   'plans.compare.modelUsage.tooltip':
     'Counted as the equivalent model service, not as tokens. How much you can use depends on the models you use. Agent run fees are paid from it too.',
   'plans.compare.monthlySpend': 'Monthly limit',
@@ -683,7 +683,7 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
-  'plans.limits.modelUsage': 'AI model usage: up to {{amount}} of model service a month',
+  'plans.limits.modelUsage': '{{amount}} of AI model usage a month',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.autoMonthlySpend.tooltip':
