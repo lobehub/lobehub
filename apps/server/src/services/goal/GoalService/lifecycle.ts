@@ -1,9 +1,14 @@
 import type { GoalGraphSnapshot, GoalItem, GoalStatus, TaskItem } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { AcceptanceModel } from '@/database/models/acceptance';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { GoalRepository } from '@/database/repositories/goal';
 
 import { assertGoalNotArchived } from '../archiveGuard';
@@ -317,23 +322,12 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
 };
 
 /**
- * A person ends the goal themselves — declaring it achieved or dropping it.
- *
- * Everything still spending on the goal is interrupted first — the main
- * Agent's planning turn, the supervisor's diagnosis and every Task run — the
- * same way `delete` does, because a terminal status alone only stops the
- * coordinator from dispatching more. Reopening goes through `resume`, which
- * accepts any status.
+ * Keep a goal from dispatching while its work is interrupted: `dispatchWork`
+ * claims under this row lock and only while the goal reads `running`, so an
+ * advance overlapping the stop cannot start a Task after the scan that follows.
+ * The pause is the person's, so no measurement lifts it if the stop is refused.
  */
-export const close = async (
-  ctx: GoalServiceContext,
-  goalId: string,
-  to: 'achieved' | 'canceled',
-) => {
-  // Fence new claims before scanning: `dispatchWork` claims under this row
-  // lock and only while the goal reads `running`, so an advance overlapping
-  // the close cannot start a Task after the scan below. The pause is the
-  // person's, so no measurement lifts it if the close is refused later on.
+const fenceGoal = async (ctx: GoalServiceContext, goalId: string, reason: string) => {
   await ctx.db.transaction(async (db) => {
     const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
@@ -349,26 +343,71 @@ export const close = async (
       goalId,
       current.status,
       'paused',
-      'Stopping Goal before closing',
+      reason,
     );
   });
-  const graph = await ctx.requireGraph(goalId);
+};
 
-  // Deliberately not swallowed, as in `delete`: an operation whose exit is
-  // unconfirmed keeps spending, and a goal reading "ended" would hide it. The
-  // goal stays paused so nothing new starts, and the person can retry.
-  const notClosed = (error: unknown) =>
-    new TRPCError({
-      cause: error,
-      code: 'PRECONDITION_FAILED',
-      message:
-        'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
-    });
+/**
+ * Interrupt the repairs under way on delivered Tasks. A repair runs in the
+ * delivered topic, which reads `completed`, so the running-topic scan never
+ * sees it. Its interruption settles the round through the completion hook and
+ * parks the Task for the coordinator to pick up on resume.
+ */
+const interruptRepairs = async (
+  ctx: GoalServiceContext,
+  graph: GoalGraphSnapshot,
+  notStopped: (error: unknown) => TRPCError,
+) => {
+  const acceptances = new AcceptanceModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const runs = new VerifyRunModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const results = new VerifyCheckResultModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const operations = new AgentOperationModel(ctx.db, ctx.userId, ctx.workspaceId);
+  for (const node of graph.nodes) {
+    if (node.kind !== 'task' || !node.taskId || TERMINAL_NODE_STATUSES.has(node.status)) continue;
+    const acceptance = await acceptances.findBySubject('task', node.taskId);
+    if (!acceptance) continue;
+    const repairing = (await runs.listByAcceptance(acceptance.id)).filter(
+      (run) => run.status === 'repairing',
+    );
+    if (repairing.length === 0) continue;
+    const repairIds = [
+      ...new Set(
+        (await results.listByRuns(repairing.map((run) => run.id))).flatMap((result) =>
+          result.repairOperationId ? [result.repairOperationId] : [],
+        ),
+      ),
+    ];
+    for (const operation of await operations.findByIds(repairIds)) {
+      if (!isAgentOperationInFlight(operation.status)) continue;
+      try {
+        await ctx.taskService.interruptOperation(operation.id);
+      } catch (error) {
+        throw notStopped(error);
+      }
+    }
+  }
+};
+
+/**
+ * Interrupt everything spending on the goal — the main Agent's planning turn,
+ * the supervisor's diagnosis and every Task run — and put interrupted Tasks back
+ * to `backlog`, the way `delete` does, because a status alone only stops the
+ * coordinator from dispatching more. Refused while a stop cannot be confirmed:
+ * an operation whose exit is unconfirmed keeps spending.
+ */
+const interruptGoalWork = async (
+  ctx: GoalServiceContext,
+  graph: GoalGraphSnapshot,
+  {
+    notStopped,
+    stillStarting,
+  }: { notStopped: (error: unknown) => TRPCError; stillStarting: string },
+) => {
   try {
-    // Ending the goal is the person's own word that its stranded planning turn
-    // is over; see `GoalManagerService.stop`. The turn stays settled even if the
-    // Task pass below refuses the close: the person asked to end the goal, so a
-    // later resume plans afresh instead of pausing on that turn again.
+    // Stopping is the person's own word that a stranded planning turn is over;
+    // see `GoalManagerService.stop`. The turn stays settled even if the Task pass
+    // below refuses: a later resume plans afresh instead of pausing on it again.
     if (graph.goal.config?.manager)
       await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph, {
         ownerConfirmsExit: true,
@@ -376,7 +415,7 @@ export const close = async (
     if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
       await new GoalSupervisorService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
   } catch (error) {
-    throw notClosed(error);
+    throw notStopped(error);
   }
 
   const unfinishedTaskIds = graph.nodes.flatMap((node) =>
@@ -407,6 +446,21 @@ export const close = async (
           ctx.workspaceId,
         ).findRunningByTaskIds([taskId]);
         if (recorded.length > 0) return;
+        // A delivery being judged reads `running` with no running topic too, but
+        // nothing is starting: its repair, if any, is interrupted below.
+        const acceptance = await new AcceptanceModel(tx, ctx.userId, ctx.workspaceId).findBySubject(
+          'task',
+          taskId,
+        );
+        if (acceptance) {
+          // Read off the rounds: the rollup follows the newest round, which a
+          // repair opens as `planned`.
+          const rounds = await new VerifyRunModel(tx, ctx.userId, ctx.workspaceId).listByAcceptance(
+            acceptance.id,
+          );
+          if (rounds.some((round) => ['repairing', 'verifying'].includes(round.status ?? '')))
+            return;
+        }
         if (task.updatedAt.getTime() > staleBefore) {
           starting = true;
           return;
@@ -417,8 +471,7 @@ export const close = async (
     if (starting)
       throw new TRPCError({
         code: 'PRECONDITION_FAILED',
-        message:
-          'A run for this goal is still starting, so it was not closed. No new work will start; try again in a moment.',
+        message: stillStarting,
       });
 
     const runningTopics = await ctx.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
@@ -427,7 +480,7 @@ export const close = async (
       try {
         await ctx.taskService.cancelTopic(topic.topicId);
       } catch (error) {
-        throw notClosed(error);
+        throw notStopped(error);
       }
       // Reset right after its own interruption, as in `restart`: left `paused`
       // it reads as parked on a person and a reopened goal waits on it. Doing
@@ -442,6 +495,72 @@ export const close = async (
       }
     }
   }
+  await interruptRepairs(ctx, graph, notStopped);
+};
+
+/**
+ * Stop what the goal is running right now and hold it there. Pausing alone lets
+ * live runs finish; this interrupts them too. Interrupted Tasks go back to
+ * `backlog`, so Resume starts them again, and nothing is closed or retired.
+ */
+export const stopRuns = async (ctx: GoalServiceContext, goalId: string) => {
+  const before = await ctx.requireGraph(goalId);
+  assertGoalNotArchived(before.goal);
+  if (before.goal.status === 'draft') throw draftNotStarted(goalId);
+  if (['achieved', 'canceled', 'failed'].includes(before.goal.status))
+    throw new TRPCError({ code: 'CONFLICT', message: 'This goal has ended' });
+
+  await fenceGoal(ctx, goalId, 'Stopping current runs');
+  // Also when it was already paused: from here the hold is the person's.
+  await ctx.setPauseReason(goalId, 'user');
+  const graph = await ctx.requireGraph(goalId);
+  const notStopped = (error: unknown) =>
+    new TRPCError({
+      cause: error,
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Could not stop the work still running for this goal. No new work will start; try again once the run is reachable.',
+    });
+  await interruptGoalWork(ctx, graph, {
+    notStopped,
+    stillStarting:
+      'A run for this goal is still starting, so it was not stopped. No new work will start; try again in a moment.',
+  });
+  return (await ctx.requireGraph(goalId)).goal;
+};
+
+/**
+ * A person ends the goal themselves — declaring it achieved or dropping it.
+ *
+ * Everything still spending on the goal is interrupted first — the main
+ * Agent's planning turn, the supervisor's diagnosis and every Task run — the
+ * same way `delete` does, because a terminal status alone only stops the
+ * coordinator from dispatching more. Reopening goes through `resume`, which
+ * accepts any status.
+ */
+export const close = async (
+  ctx: GoalServiceContext,
+  goalId: string,
+  to: 'achieved' | 'canceled',
+) => {
+  await fenceGoal(ctx, goalId, 'Stopping Goal before closing');
+  const graph = await ctx.requireGraph(goalId);
+
+  // Deliberately not swallowed, as in `delete`: an operation whose exit is
+  // unconfirmed keeps spending, and a goal reading "ended" would hide it. The
+  // goal stays paused so nothing new starts, and the person can retry.
+  const notClosed = (error: unknown) =>
+    new TRPCError({
+      cause: error,
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
+    });
+  await interruptGoalWork(ctx, graph, {
+    notStopped: notClosed,
+    stillStarting:
+      'A run for this goal is still starting, so it was not closed. No new work will start; try again in a moment.',
+  });
   // Commit under the same lock the fence took, and only if the fence still
   // holds: a resume from another tab during the interruption pass lets an
   // advance claim work this pass never saw, and ending the goal over it

@@ -4,6 +4,7 @@ import {
   GOAL_CLARIFICATION_TITLE,
   GOAL_MACHINE_GATE_TITLE,
   GOAL_MANAGER_QUESTION_TITLE,
+  GOAL_RETRY_REVIEW_OPTION,
 } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 
@@ -29,6 +30,7 @@ const COORDINATOR_OPTION_IDS = new Set([
   'fail',
   'retire',
   'retry',
+  GOAL_RETRY_REVIEW_OPTION,
   // A batch's own gates: revise or fork the recipe, release the next wave.
   'new_class',
   'release',

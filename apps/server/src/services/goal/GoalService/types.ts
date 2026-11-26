@@ -65,6 +65,7 @@ import type {
   requestSignOff,
   restart,
   resume,
+  stopRuns,
   transitionStatus,
 } from './lifecycle';
 import type {
@@ -276,6 +277,7 @@ export interface GoalServiceContext {
   settleTerminalAcceptance: Bound<typeof settleTerminalAcceptance>;
   status: Bound<typeof status>;
   stopFencedTasks: Bound<typeof stopFencedTasks>;
+  stopRuns: Bound<typeof stopRuns>;
   readonly taskModel: TaskModel;
   readonly taskService: TaskService;
   readonly taskTopicModel: TaskTopicModel;

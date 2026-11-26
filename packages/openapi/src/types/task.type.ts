@@ -458,6 +458,7 @@ const TaskDetailActivitySchema = z
       .object({
         acceptanceId: z.string().nullable(),
         passed: z.number().int(),
+        reviewStatus: z.enum(['errored', 'rejected', 'unjudgeable']).optional(),
         roundIndex: z.number().int().nullable(),
         runId: z.string(),
         status: z.string().nullable(),

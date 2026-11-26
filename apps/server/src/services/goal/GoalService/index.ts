@@ -61,6 +61,7 @@ import {
   requestSignOff,
   restart,
   resume,
+  stopRuns,
   transitionStatus,
 } from './lifecycle';
 import {
@@ -244,6 +245,7 @@ export class GoalService {
       openFailureDecisionLocked: (...args) => self.openFailureDecisionLocked(...args),
       openPatternBreakGate: (...args) => self.openPatternBreakGate(...args),
       pause: (...args) => self.pause(...args),
+      stopRuns: (...args) => self.stopRuns(...args),
       pendingClarifications: (...args) => self.pendingClarifications(...args),
       pendingForIsland: (...args) => self.pendingForIsland(...args),
       planDecomposition: (...args) => self.planDecomposition(...args),
@@ -377,6 +379,8 @@ export class GoalService {
     transitionStatus(this.context, ...args);
 
   pause = (...args: MethodArgs<typeof pause>) => pause(this.context, ...args);
+
+  stopRuns = (...args: MethodArgs<typeof stopRuns>) => stopRuns(this.context, ...args);
 
   private evaluateMetricCriteria = (...args: MethodArgs<typeof evaluateMetricCriteria>) =>
     evaluateMetricCriteria(this.context, ...args);

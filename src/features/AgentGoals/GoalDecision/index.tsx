@@ -1,6 +1,10 @@
 'use client';
 
-import { GOAL_BATCH_BREAK_OPTION, GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
+import {
+  GOAL_BATCH_BREAK_OPTION,
+  GOAL_BATCH_RELEASE_OPTION,
+  GOAL_RETRY_REVIEW_OPTION,
+} from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import { Center, createStaticStyles, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { MonitorCog } from 'lucide-react';
@@ -20,6 +24,7 @@ import {
   coordinatorGateReason,
   gateOptionLabelKey,
   localizedCoordinatorReason,
+  reviewGateSummaryKey,
 } from '../ProcessControl/coordinatorCopy';
 import {
   gateAnswerProblem,
@@ -137,6 +142,9 @@ export const useGateOptionCopy = () => {
             return terminalAcceptance
               ? t('goalProcess.decision.effect.retryAcceptance')
               : t('goalProcess.decision.effect.retry');
+          }
+          case GOAL_RETRY_REVIEW_OPTION: {
+            return t('goalProcess.decision.effect.retryReview');
           }
           case 'retire': {
             if (terminalAcceptance) return t('goalProcess.decision.effect.abandonAcceptance');
@@ -262,8 +270,8 @@ const GateContext = ({
  */
 export const useGateSummary = () => {
   const { t } = useTranslation('chat');
-  return (category: GateCategory, taskTitle?: string | null) =>
-    t(`goalProcess.decision.summary.${category}` as const, {
+  return (category: GateCategory, taskTitle?: string | null, question?: string | null) =>
+    t(reviewGateSummaryKey(question) ?? (`goalProcess.decision.summary.${category}` as const), {
       task: taskTitle || t('goalProcess.decision.summary.thisTask'),
     });
 };

@@ -834,6 +834,12 @@ export interface GoalNodeAcceptance {
    */
   checks?: VerifyCheckTally;
   id: string;
+  /**
+   * A repair run is working on a delivery of this acceptance. Read off the
+   * rounds: the rollup `status` follows the newest round, which a repair opens
+   * as `planned`, so it does not say `repairing` while the repair runs.
+   */
+  repairing?: boolean;
   status: AcceptanceStatus;
 }
 

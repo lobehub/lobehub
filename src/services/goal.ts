@@ -162,6 +162,9 @@ class GoalService {
   /** Stop scheduling new work. Does not abort the operation already running. */
   pause = async (id: string) => lambdaClient.goal.pause.mutate({ id });
 
+  /** Pause the goal and interrupt what it is running now. Resume starts it again. */
+  stopRuns = async (id: string) => lambdaClient.goal.stopRuns.mutate({ id });
+
   resume = async (id: string) => lambdaClient.goal.resume.mutate({ id });
 
   /** Launch a draft goal; nothing was dispatched before this. */

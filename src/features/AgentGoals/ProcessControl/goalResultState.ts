@@ -219,7 +219,10 @@ export interface CheckLike {
   evidence: EvidenceLike[];
   /** The union row id — `sourceCriterionId ?? checkItemId`. */
   id: string;
+  /** The automatic review's rejection, when it is the one that sent this check back. */
+  prediction?: { comment?: string | null } | null;
   result?: CheckResultLike;
+  reviewSentBack?: boolean;
 }
 
 export type CriterionOutcomeState = 'failed' | 'passed' | 'unjudged';
@@ -235,6 +238,8 @@ export interface CriterionOutcome {
   /** Why it is unmet (or undecided); absent for a met criterion. */
   reason?: string;
   resultId?: string;
+  /** The verifier passed it and the automatic review sent it back: unmet, for that reason. */
+  sentBack?: boolean;
   state: CriterionOutcomeState;
   /** One line of what the evidence showed. */
   summary?: string;
@@ -293,13 +298,16 @@ export const buildCriterionOutcomes = ({
     if (!check?.result) return [{ criterion, evidence: [], state: 'unjudged' }];
 
     const { result } = check;
-    const state = outcomeState(result);
+    const verdict = outcomeState(result);
+    const sentBack = verdict === 'passed' && !!check.reviewSentBack;
+    const state = sentBack ? 'failed' : verdict;
     const toulmin = result.toulmin ?? undefined;
     const summary =
       firstLine(toulmin?.evidence) ??
       firstLine(check.evidence.find((item) => item.description)?.description);
-    const reason =
-      state === 'passed'
+    const reason = sentBack
+      ? firstLine(check.prediction?.comment)
+      : state === 'passed'
         ? undefined
         : (firstLine(toulmin?.counterEvidence) ??
           firstLine(toulmin?.reasoning) ??
@@ -312,6 +320,7 @@ export const buildCriterionOutcomes = ({
         evidence: check.evidence,
         ...(reason ? { reason } : {}),
         resultId: result.id,
+        ...(sentBack ? { sentBack } : {}),
         state,
         ...(summary ? { summary } : {}),
       },

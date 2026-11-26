@@ -1,4 +1,8 @@
-import { GOAL_BRIEF_TRIGGER, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
+import {
+  GOAL_BRIEF_TRIGGER,
+  GOAL_CLARIFICATION_OPTION,
+  GOAL_RETRY_REVIEW_OPTION,
+} from '@lobechat/const/goal';
 import type { BriefAction, BriefGoalMetadata, GoalDecisionOption, GoalItem } from '@lobechat/types';
 import { coordinatorGateReason } from '@lobechat/utils/goalCopy';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -12,6 +16,7 @@ const COORDINATOR_OPTION_LABELS: Record<string, string> = {
   fail: 'Fail goal',
   retire: 'Retire work',
   retry: 'Retry work',
+  [GOAL_RETRY_REVIEW_OPTION]: 'Run the review again',
   [GOAL_CLARIFICATION_OPTION.assume]: 'Go with the assumption',
 };
 

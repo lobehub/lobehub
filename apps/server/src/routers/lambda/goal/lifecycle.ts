@@ -208,6 +208,21 @@ export const lifecycleRouter = router({
       mapGoalError(error, 'pause');
     }
   }),
+  /**
+   * Pause the goal and interrupt what it is running now. It interrupts live
+   * runs, so it carries the same ownership check as restart and close.
+   */
+  stopRuns: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const goal = await ctx.goalModel.findById(input.id);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+      const data = await ctx.goalService.stopRuns(input.id);
+      return { data, message: 'Current runs stopped', success: true };
+    } catch (error) {
+      mapGoalError(error, 'stopRuns');
+    }
+  }),
   resume: goalWriteProcedure
     .input(
       idInput.extend({

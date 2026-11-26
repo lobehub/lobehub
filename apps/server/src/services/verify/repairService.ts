@@ -9,6 +9,7 @@ import {
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { MessageModel } from '@/database/models/message';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
@@ -20,10 +21,12 @@ import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AcceptanceService } from './acceptanceService';
 import { carryPassedResultsForward } from './carryForward';
-import { settleFailedRepair } from './repairTerminal';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
+
+/** A Goal in one of these must not start another run on its own. */
+const GOAL_HOLDING_WORK = new Set(['achieved', 'canceled', 'failed', 'paused']);
 
 /**
  * Resolve the run's repair-round cap. A per-run override on the session metadata
@@ -481,6 +484,50 @@ export class VerifyRepairService {
   }
 
   /**
+   * Whether this round belongs to a Goal that was stopped. A repair is a new
+   * agent run, so it answers to the same fence as a dispatch: pausing a Goal
+   * promises no new work starts. The round's verdict stands and the coordinator
+   * picks the Task up on resume. An unreadable Goal keeps the repair, as it
+   * would for a Task outside any Goal, rather than dropping it on a failed read.
+   */
+  private async isGoalHoldingWork(operationId: string): Promise<boolean> {
+    try {
+      const operations = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+      let operation = await operations.findById(operationId);
+      for (let depth = 0; !operation?.taskId && operation?.parentOperationId && depth < 10; depth++)
+        operation = await operations.findById(operation.parentOperationId);
+      if (!operation?.taskId) return false;
+      const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+        operation.taskId,
+      );
+      return !!goal && GOAL_HOLDING_WORK.has(goal.status);
+    } catch (error) {
+      log('goal status unavailable for op %s: %O', operationId, error);
+      return false;
+    }
+  }
+
+  /**
+   * Close the window between the check before spawning and the spawn itself. A
+   * spawn cannot hold the Goal row, so a pause can commit while it is under way.
+   * This read comes after the round is marked `repairing`: a pause it misses
+   * committed later, so a Stop behind that pause finds this repair in its scan.
+   * The interrupted repair settles its round through the completion hook.
+   */
+  private async stopRepairIfGoalHeld(operationId: string, repairOperationId: string) {
+    if (!(await this.isGoalHoldingWork(operationId))) return;
+    try {
+      const result = await new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      }).interruptTask({ operationId: repairOperationId });
+      if (!result.success) throw new Error('Interruption was not confirmed');
+      log('goal stopped during spawn, interrupted repair %s', repairOperationId);
+    } catch (error) {
+      console.error('[verify-repair] could not stop a repair on a held Goal:', error);
+    }
+  }
+
+  /**
    * Mark a failed round's auto-repair as declined, so readers (the persisted
    * verify card) can treat its `failed` status as final rather than transient.
    */
@@ -503,6 +550,10 @@ export class VerifyRepairService {
     if (failures.length === 0) return null;
     if (await this.isSuperseded(operationId)) {
       log('op %s round is superseded within its acceptance, not repairing', operationId);
+      return this.declineRepair(operationId);
+    }
+    if (await this.isGoalHoldingWork(operationId)) {
+      log('op %s belongs to a stopped goal, not repairing', operationId);
       return this.declineRepair(operationId);
     }
     if (!spawner) {
@@ -544,9 +595,7 @@ export class VerifyRepairService {
       }
     }
     await this.statusService.markRepairing(operationId);
-    // A fast startup failure can precede the plan/parent writes above. Reconcile
-    // after both exist as well as from the completion hook.
-    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
+    await this.stopRepairIfGoalHeld(operationId, spawned.repairOperationId);
     log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
     return spawned;

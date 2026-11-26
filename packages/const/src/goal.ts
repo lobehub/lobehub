@@ -175,6 +175,15 @@ export const VERIFICATION_UNJUDGEABLE_ERROR =
  */
 export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
   'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.';
+/**
+ * A person asked for the Acceptance review to run again on the delivery it could
+ * not judge. The Task waits on this until the coordinator's next move re-reviews
+ * the delivered round, so the builder is not sent back for work nobody faulted.
+ */
+export const ACCEPTANCE_REVIEW_RETRY_REQUESTED_ERROR =
+  'Acceptance review was asked to run again; the delivery is waiting for it.';
+/** The gate answer that re-runs only the Acceptance review. */
+export const GOAL_RETRY_REVIEW_OPTION = 'retry_review';
 
 /**
  * Fixed title of the wrap-up Task the coordinator dispatches once the

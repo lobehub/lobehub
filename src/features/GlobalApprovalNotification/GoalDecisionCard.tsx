@@ -145,7 +145,7 @@ const GoalDecisionCard = ({ item, onCollapse, onDismiss }: GoalDecisionCardProps
             actionsPortalTarget={actionsPortalTarget}
             basis={item.decision.description}
             category={category!}
-            summary={gateSummary(category!, item.decision.sourceTitle)}
+            summary={gateSummary(category!, item.decision.sourceTitle, item.decision.question)}
             task={item.decision.sourceTitle ? { title: item.decision.sourceTitle } : undefined}
             decision={{
               id: item.decision.decisionId,

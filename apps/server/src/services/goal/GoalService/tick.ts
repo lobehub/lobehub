@@ -15,6 +15,7 @@ import { GoalProbeDistill, needsProbeDistill } from '../probeDistill';
 import { resolveMaxConcurrentTasks } from '../recoveryPolicy';
 import { withoutGoalReport } from '../report';
 import { GoalReportService } from '../reportService';
+import { readReviewGate, retryAcceptanceReview } from '../reviewRetry';
 import { GoalSubscriptionService } from '../subscriptions';
 import { GoalSupervisorService } from '../supervisor';
 import {
@@ -327,6 +328,10 @@ export const tickOnce = async (
           return observe(await ctx.recoverAfterVerification(graph, acting!.id, task, effects));
         }
 
+        case 'retry_review': {
+          return observe(await retryAcceptanceReview(ctx, graph, acting!.id, task));
+        }
+
         case 'failure_decision': {
           // A device that went to sleep or a usage window that closed says
           // nothing about the recipe, for a batch member as for any Task: wait it
@@ -360,6 +365,7 @@ export const tickOnce = async (
           return observe(
             await ctx.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects, {
               machine: isMachineFailureClass(classifyGoalFailure(task.error).class),
+              ...(await readReviewGate(ctx, task)),
             }),
           );
         }

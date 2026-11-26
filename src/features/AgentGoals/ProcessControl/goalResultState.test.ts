@@ -407,6 +407,31 @@ describe('buildCriterionOutcomes', () => {
   });
 
   /**
+   * Regression: a check the verifier passed and the automatic review sent back
+   * read as met, so every criterion was green while the Goal kept repairing.
+   */
+  it('reads a check the review sent back as unmet, with the review reason', () => {
+    const [outcome] = buildCriterionOutcomes({
+      checks: [
+        {
+          ...check('c1', 'run-2', 'passed'),
+          prediction: { comment: 'The screenshot shows the old layout.' },
+          reviewSentBack: true,
+        },
+      ],
+      criteria,
+      criteriaIds: ['c1'],
+      latestRunId: 'run-2',
+    });
+
+    expect(outcome).toMatchObject({
+      reason: 'The screenshot shows the old layout.',
+      sentBack: true,
+      state: 'failed',
+    });
+  });
+
+  /**
    * Regression: the result page only linked to the acceptance, so the owner
    * could not see which criterion held and which did not. Each criterion now
    * carries the latest round's verdict, a one-line evidence summary and, when

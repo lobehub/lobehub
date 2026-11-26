@@ -17,6 +17,7 @@ import pMap from 'p-map';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { UserModel } from '@/database/models/user';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 
 import { classifyRunFailure, QUOTA_RESET_MARGIN_MS } from '../recoveryPolicy';
 import { GoalReportStore } from '../reportStore';
@@ -132,12 +133,23 @@ export const collectAcceptances = async (
     rows.map((row) => row.id),
   );
 
+  const repairing = new Set(
+    await new VerifyRunModel(ctx.db, ctx.userId, ctx.workspaceId).listRepairingAcceptanceIds(
+      rows.map((row) => row.id),
+    ),
+  );
+
   const result: Record<string, GoalNodeAcceptance> = {};
   for (const row of rows) {
     const nodeId = nodeByTaskId.get(row.subjectId);
     if (!nodeId) continue;
     const checks = tallies.get(row.id);
-    result[nodeId] = { id: row.id, status: row.status, ...(checks ? { checks } : {}) };
+    result[nodeId] = {
+      id: row.id,
+      status: row.status,
+      ...(checks ? { checks } : {}),
+      ...(repairing.has(row.id) ? { repairing: true } : {}),
+    };
   }
   return Object.keys(result).length > 0 ? result : undefined;
 };

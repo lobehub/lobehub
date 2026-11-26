@@ -460,7 +460,7 @@ const GateCard = memo<{
           category={category}
           decision={view.decision!}
           evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
-          summary={gateSummary(category, subjectTitle)}
+          summary={gateSummary(category, subjectTitle, view.decision!.question)}
           footer={
             // A goal-level question (the main Agent asking about the goal itself)
             // stopped no Task, so there is no run to open.
@@ -541,7 +541,9 @@ const FrontierRow = memo<{
                     ? t('goalProcess.tag.done')
                     : t('goalProcess.tag.retired'),
               }
-            : null;
+            : view.halted
+              ? { color: undefined, text: t('goalProcess.node.stopped') }
+              : null;
 
   return (
     <Block

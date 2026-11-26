@@ -3,16 +3,31 @@ import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { recomputeRepairAncestors } from './repairAncestors';
 import { planItemToPendingResult } from './resultSnapshot';
-import { driveTaskFromVerify, recomputeRepairAncestors } from './settle';
 import { VerifyStatusService } from './statusService';
 
-/** Close a repair that died before it could deliver anything to the checker. */
-export const settleFailedRepair = async (
+/** Settles the Task from a finished round; the settle module passes its own. */
+export type DriveTaskFromRound = (
   db: LobeChatDatabase,
   userId: string,
   operationId: string,
   workspaceId?: string,
+) => Promise<void>;
+
+/**
+ * Close a repair that died before it could deliver anything to the checker.
+ *
+ * Takes the Task drive as an argument because driving a Task can start a repair,
+ * which reconciles through here: a static import of it closes a module cycle.
+ * Callers use `settleFailedRepair` from `./settle`.
+ */
+export const settleFailedRepairRound = async (
+  db: LobeChatDatabase,
+  userId: string,
+  operationId: string,
+  workspaceId: string | undefined,
+  driveTaskFromVerify: DriveTaskFromRound,
 ): Promise<boolean> => {
   const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const op = await operationModel.findById(operationId);

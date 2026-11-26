@@ -59,6 +59,10 @@ type TaskTopicActivityRow = DirectTaskTopicActivityRow &
  * that `TaskService` itself depends on (the agent runtime) can load a task
  * without an import cycle.
  */
+/** The Goal's automatic review, when it held back a round whose checks passed. */
+const reviewStatusOf = (status: string | null) =>
+  status === 'errored' || status === 'rejected' || status === 'unjudgeable' ? status : undefined;
+
 export class TaskDetailService {
   private agentModel: AgentModel;
   private db: LobeChatDatabase;
@@ -408,6 +412,9 @@ export class TaskDetailService {
             ? {
                 acceptanceId: verifyRun.acceptanceId,
                 passed: verifyRun.passed,
+                ...(reviewStatusOf(verifyRun.goalReviewStatus)
+                  ? { reviewStatus: reviewStatusOf(verifyRun.goalReviewStatus) }
+                  : {}),
                 roundIndex: verifyRun.roundIndex,
                 runId: verifyRun.id,
                 status: verifyRun.status,

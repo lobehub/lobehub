@@ -1,4 +1,9 @@
-import { GOAL_BATCH_RELEASE_TITLE, GOAL_MACHINE_GATE_TITLE } from '@lobechat/const/goal';
+import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  GOAL_BATCH_RELEASE_TITLE,
+  GOAL_MACHINE_GATE_TITLE,
+  VERIFICATION_UNJUDGEABLE_ERROR,
+} from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,6 +12,7 @@ import {
   coordinatorReasonCopy,
   gateOptionLabelKey,
   localizedCoordinatorReason,
+  reviewGateSummaryKey,
 } from './coordinatorCopy';
 
 const decision = (ids: string[]) => ({ options: ids.map((id) => ({ id, label: id })) }) as any;
@@ -70,6 +76,32 @@ describe('isGoalAcceptanceTask', () => {
     expect(
       isGoalAcceptanceTask(view({ kind: 'decision', title: 'Complete full Goal acceptance' })),
     ).toBe(false);
+  });
+});
+
+describe('reviewGateSummaryKey', () => {
+  /**
+   * Regression: a gate on a review outage opened with "used up its automatic
+   * retries without passing acceptance" above checks that had all passed.
+   */
+  it('names a review that could not run, also with the main Agent diagnosis on it', () => {
+    expect(reviewGateSummaryKey(`${ACCEPTANCE_REVIEW_ERRORED_ERROR}. Retry or retire?`)).toBe(
+      'goalProcess.decision.summary.reviewErrored',
+    );
+    expect(
+      reviewGateSummaryKey(`${ACCEPTANCE_REVIEW_ERRORED_ERROR} — main Agent: provider is down`),
+    ).toBe('goalProcess.decision.summary.reviewErrored');
+  });
+
+  it('names a criterion the review could not judge', () => {
+    expect(reviewGateSummaryKey(VERIFICATION_UNJUDGEABLE_ERROR)).toBe(
+      'goalProcess.decision.summary.reviewUnjudgeable',
+    );
+  });
+
+  it('leaves every other gate on its category summary', () => {
+    expect(reviewGateSummaryKey('Task T-3 did not pass verification.')).toBeUndefined();
+    expect(reviewGateSummaryKey(undefined)).toBeUndefined();
   });
 });
 

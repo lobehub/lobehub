@@ -253,6 +253,8 @@ export class VerifyRunModel {
     Map<
       string,
       Pick<VerifyRunItem, 'acceptanceId' | 'id' | 'roundIndex' | 'status'> & {
+        /** The Goal's automatic review outcome recorded on this round, if any. */
+        goalReviewStatus: string | null;
         passed: number;
         total: number;
       }
@@ -267,6 +269,7 @@ export class VerifyRunModel {
     const rows = await this.db
       .select({
         acceptanceId: verifyRuns.acceptanceId,
+        goalReviewStatus: sql<string | null>`${verifyRuns.metadata} -> 'goalReview' ->> 'status'`,
         id: verifyRuns.id,
         operationId: verifyRuns.operationId,
         passed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'passed')`,
@@ -320,6 +323,22 @@ export class VerifyRunModel {
       orderBy: [asc(verifyRuns.roundIndex)],
       where: and(eq(verifyRuns.acceptanceId, acceptanceId), this.ownership()),
     });
+  };
+
+  /** Which of these acceptances have a round under repair, in one batched read. */
+  listRepairingAcceptanceIds = async (acceptanceIds: string[]): Promise<string[]> => {
+    if (acceptanceIds.length === 0) return [];
+    const rows = await this.db
+      .selectDistinct({ acceptanceId: verifyRuns.acceptanceId })
+      .from(verifyRuns)
+      .where(
+        and(
+          inArray(verifyRuns.acceptanceId, acceptanceIds),
+          eq(verifyRuns.status, 'repairing'),
+          this.ownership(),
+        ),
+      );
+    return rows.flatMap((row) => (row.acceptanceId ? [row.acceptanceId] : []));
   };
 
   /**
@@ -624,6 +643,20 @@ export class VerifyRunModel {
       .returning({ id: verifyRuns.id });
 
     return claimed.length > 0;
+  };
+
+  /**
+   * Reopen a settled round's task drive so its Acceptance review can run again.
+   * Only the drive claim and that review's outcome go; the rest of `metadata`
+   * (policy, provenance, repair history) stays.
+   */
+  releaseTaskDrive = async (runId: string): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) - 'taskDrivenAt' - 'goalReview'`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
   /** Record the auto-repair decision without clobbering the rest of `metadata`. */

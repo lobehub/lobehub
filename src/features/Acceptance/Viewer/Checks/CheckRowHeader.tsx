@@ -188,6 +188,15 @@ export const CheckRowHeader = memo<CheckRowHeaderProps>(
               <Tag size={'small'}>{t('acceptance.checks.waived')}</Tag>
             </Tooltip>
           )}
+          {check.reviewSentBack && check.state === 'passed' && (
+            // The head icon stays the verifier's verdict; this says why a green
+            // check is still holding the delivery back.
+            <Tooltip title={check.prediction?.comment || t('acceptance.checks.reviewSentBackHint')}>
+              <Tag color={'warning'} size={'small'}>
+                {t('acceptance.checks.reviewSentBack')}
+              </Tag>
+            </Tooltip>
+          )}
           {/* The verdict pair travels WITH the title, not adrift at the row's
           far right: the claim you judge and the judgement you give land in
           one glance, so a long checklist needs no eye round-trip across the

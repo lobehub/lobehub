@@ -89,6 +89,16 @@ const REASON_PATTERNS: Array<{
     pattern: /^Verification could not run \(internal error\); the delivery was not evaluated\.?$/,
   },
   {
+    key: 'goalProcess.gate.reason.reviewErrored',
+    pattern:
+      /^Acceptance review could not run; the delivery passed its verifiers but was never reviewed\.?$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.reviewUnjudgeable',
+    pattern:
+      /^Acceptance review could not judge the delivery from evidence alone; the criterion needs a judge that can act on the system\.?$/,
+  },
+  {
     key: 'goalProcess.gate.reason.verifyFailed',
     param: 'id',
     pattern: /^Task (\S+) did not pass verification$/,

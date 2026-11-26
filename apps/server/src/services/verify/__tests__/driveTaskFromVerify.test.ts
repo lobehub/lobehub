@@ -11,6 +11,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { reviewGoalDelivery } from '../goalReview';
 import { maybeAutoRepair, repairRejectedReview } from '../repairService';
+import { settleFailedRepairRound } from '../repairTerminal';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from '../taskAcceptance';
 
@@ -30,6 +31,7 @@ vi.mock('../repairService', () => ({
   maybeAutoRepair: vi.fn(),
   repairRejectedReview: vi.fn().mockResolvedValue(null),
 }));
+vi.mock('../repairTerminal', () => ({ settleFailedRepairRound: vi.fn(async () => false) }));
 vi.mock('../reporter', () => ({
   VerifyReporterService: vi.fn(function () {
     return { generateReport: vi.fn() };
@@ -195,6 +197,45 @@ describe('driveTaskFromVerify', () => {
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
     expect(deliverMock).not.toHaveBeenCalled();
     expect(scheduleGoalAdvance).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a repair that may have died before its round was marked', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    vi.mocked(maybeAutoRepair).mockResolvedValueOnce({ repairOperationId: 'repair-op' });
+
+    await finalizeVerifyRun(db, 'u1', 'parent-op', {});
+
+    expect(settleFailedRepairRound).toHaveBeenCalledWith(
+      db,
+      'u1',
+      'repair-op',
+      undefined,
+      driveTaskFromVerify,
+    );
+  });
+
+  it('leaves the Task with its running repair when reconciling that repair fails', async () => {
+    const rejectedChecks = [{ checkItemId: 'landing', feedback: 'Add the second screenshot.' }];
+    vi.mocked(settleFailedRepairRound).mockClear();
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'rejected',
+      feedback: 'Landing: Add the second screenshot.',
+      predictionIds: ['p1'],
+      rejectedChecks,
+    });
+    vi.mocked(repairRejectedReview).mockResolvedValueOnce({ repairOperationId: 'repair-op' });
+    vi.mocked(settleFailedRepairRound).mockRejectedValueOnce(new Error('connection lost'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(settleFailedRepairRound).toHaveBeenCalledOnce();
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(deliverMock).not.toHaveBeenCalled();
   });
 
   it('pauses the Goal Task as before when no in-round repair can start', async () => {

@@ -2382,6 +2382,9 @@ export default {
   'taskDetail.runVerify.pending': 'Awaiting verification',
   'taskDetail.runVerify.repairing': 'Repairing',
   'taskDetail.runVerify.review': 'Awaiting review',
+  'taskDetail.runVerify.reviewErrored': 'Review did not run',
+  'taskDetail.runVerify.reviewRejected': 'Sent back by review',
+  'taskDetail.runVerify.reviewUnjudgeable': 'Review could not judge',
   'taskDetail.runVerify.round': 'Round {{index}}',
   'taskDetail.runVerify.running': 'Verifying',
   'taskDetail.runExpand': 'Expand run',
@@ -2986,6 +2989,10 @@ export default {
     'The goal-level acceptance did not pass. Decide whether to run it again, abandon it, or record the goal as failed.',
   'goalProcess.decision.summary.agentQuestion':
     'While working on the goal, the main Agent hit a call only you can make. It lays out the options and its recommendation below.',
+  'goalProcess.decision.summary.reviewErrored':
+    'The checks on {{task}} passed, but the final review could not run. Decide how to continue.',
+  'goalProcess.decision.summary.reviewUnjudgeable':
+    'The final review could not judge {{task}} from its evidence, so it needs your call.',
   'goalProcess.decision.summary.thisTask': 'this task',
   'goalProcess.decision.context.task': 'Task',
   'goalProcess.decision.context.decision': 'Your call',
@@ -3029,6 +3036,7 @@ export default {
   'goalProcess.attempts.passed': 'Passed',
   'goalProcess.attempts.failed': 'Did not pass',
   'goalProcess.attempts.retired': 'Retired',
+  'goalProcess.attempts.stopped': 'Stopped',
   'goalProcess.attempts.running': 'Running',
   'goalProcess.stalled.description':
     'Last heartbeat {{duration}}. The next advance restarts this attempt — it does not count as a failure.',
@@ -3361,6 +3369,22 @@ export default {
   'goalProcess.manager.turns': 'Planning rounds: {{count}}',
   'goalProcess.manager.pending': 'Waiting for the first run',
   'goalProcess.manager.viewTrace': 'View supervision progress',
+  'goalProcess.gate.reason.reviewErrored':
+    'The checks passed, but the final review could not run, so this delivery has not been reviewed',
+  'goalProcess.gate.reason.reviewUnjudgeable':
+    'The final review could not judge this delivery from its evidence; a person needs to check it or restate the criterion',
+  'goalProcess.gate.option.retryReview': 'Run the review again',
+  'goalProcess.decision.effect.retryReview':
+    'Review the same delivery again. The task is not redone.',
+  'goalProcess.pauseHint': 'No new work will start. Runs already in progress keep going.',
+  'goalProcess.stopRuns': 'Stop current runs',
+  'goalProcess.stopRunsConfirm.title': 'Stop current runs?',
+  'goalProcess.stopRunsConfirm.content':
+    'Runs in progress are interrupted and the goal stays paused. When you resume, the interrupted tasks start again.',
+  'goalProcess.stopRunsConfirm.ok': 'Stop runs',
+  'goalProcess.stopRunsConfirm.failed':
+    'Some runs could not be stopped. No new work will start. Try again in a moment.',
+  'goalProcess.result.criteria.state.sentBack': 'Sent back by review',
   'goalProcess.pause': 'Pause',
   'goalProcess.resume': 'Resume',
   'goalProcess.paused': 'Paused — no new work will start',

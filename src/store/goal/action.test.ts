@@ -134,6 +134,25 @@ describe('GoalAction', () => {
       },
     );
 
+    /**
+     * Regression: a repair stopped from the page settles just after the stop
+     * returns, and the unpolled paused page kept reading it as verifying.
+     */
+    it('keeps polling a paused goal until its live runs have ended', () => {
+      seedGraph(
+        graphWith('paused', {
+          acceptances: { n1: { id: 'a', repairing: true, status: 'planned' } },
+        }),
+      );
+      renderGraph();
+      expect(syncConfigFor('goalGraph')?.refreshInterval).toBeGreaterThan(0);
+
+      vi.mocked(useClientDataSWR).mockClear();
+      seedGraph(graphWith('paused', { acceptances: { n1: { id: 'a', status: 'errored' } } }));
+      renderGraph();
+      expect(syncConfigFor('goalGraph')?.refreshInterval).toBe(0);
+    });
+
     it('keeps polling a finished goal while its wrap-up report is being written', () => {
       seedGraph(graphWith('achieved', { report: { status: 'running' } }));
       renderGraph();

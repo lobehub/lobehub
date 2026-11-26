@@ -22,7 +22,9 @@ import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
 import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
+import { recomputeRepairAncestors } from './repairAncestors';
 import { maybeAutoRepair, repairRejectedReview } from './repairService';
+import { settleFailedRepairRound } from './repairTerminal';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
@@ -31,7 +33,6 @@ import { isOutOfCreditsFailure } from './verifierError';
 const log = debug('lobe-server:verify-settle');
 
 const TERMINAL_TASK_STATUS = new Set(['canceled', 'completed', 'failed']);
-const MAX_OPERATION_ANCESTORS = 32;
 
 /**
  * Repair operations are descendants of the task's original operation and do
@@ -48,27 +49,6 @@ const resolveTaskOperation = async (operationModel: AgentOperationModel, operati
   }
 
   return current?.taskId ? current : null;
-};
-
-/** Collapse every transient `repairing` marker left along a bounded repair chain. */
-export const recomputeRepairAncestors = async (
-  operationModel: AgentOperationModel,
-  statusService: VerifyStatusService,
-  operationId: string,
-) => {
-  const visited = new Set<string>();
-  let current = await operationModel.findById(operationId);
-  let depth = 0;
-
-  while (current?.parentOperationId && depth < MAX_OPERATION_ANCESTORS) {
-    const parentOperationId = current.parentOperationId;
-    if (visited.has(parentOperationId)) break;
-    visited.add(parentOperationId);
-
-    await statusService.recompute(parentOperationId);
-    current = await operationModel.findById(parentOperationId);
-    depth += 1;
-  }
 };
 
 const MAX_REPORTED_FAILURES = 5;
@@ -224,6 +204,11 @@ export const driveTaskFromVerify = async (
         return null;
       });
       if (repair) {
+        // The repair is running either way: a failed reconcile must not fall
+        // through and pause the Task underneath it. The completion hook retries.
+        await settleFailedRepair(db, userId, repair.repairOperationId, workspaceId).catch((error) =>
+          log('reconciling repair %s failed: %O', repair.repairOperationId, error),
+        );
         log(
           'acceptance review rejected → repairing op %s in round (%s)',
           operationId,
@@ -422,6 +407,15 @@ export const driveTaskFromVerify = async (
   }
 };
 
+/** Close a repair that died before it could deliver anything to the checker. */
+export const settleFailedRepair = (
+  db: LobeChatDatabase,
+  userId: string,
+  operationId: string,
+  workspaceId?: string,
+): Promise<boolean> =>
+  settleFailedRepairRound(db, userId, operationId, workspaceId, driveTaskFromVerify);
+
 /**
  * Single finalizer for a verification run, called from both settle paths. Runs
  * the repair-aware tail (`maybeAutoRepair` may flip the run to `repairing`), then
@@ -441,8 +435,12 @@ export const finalizeVerifyRun = async (
   // repair (→ `repairing`), in which case finalize defers to the repair op.
   const repair = await maybeAutoRepair(db, userId, operationId, workspaceId);
   // The child owns settlement even when it failed before the spawn returned
-  // and already recomputed this parent from repairing back to failed.
-  if (repair) return;
+  // and already recomputed this parent from repairing back to failed. A fast
+  // startup failure can precede the spawner's writes, so reconcile once they exist.
+  if (repair) {
+    await settleFailedRepair(db, userId, repair.repairOperationId, workspaceId);
+    return;
+  }
 
   const settled = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
   if (settled?.status !== 'passed' && settled?.status !== 'failed' && settled?.status !== 'errored')
