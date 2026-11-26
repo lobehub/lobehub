@@ -227,15 +227,26 @@ const isOfficialOpenAIEndpoint = (baseURL: string | undefined) => {
   }
 };
 
+/** Constructor option that opts one endpoint in or out of tool anchoring. */
+export interface ResponsesToolAnchoringOptions {
+  /**
+   * Anchoring for this endpoint only, in the `override` values of
+   * {@link resolveOpenAIToolAnchoring}. A router channel sets it after verifying that its
+   * relay accepts the anchored items, so one verified relay can opt in without the
+   * process-wide env also opting in every other relay. Takes precedence over the env.
+   */
+  responsesToolAnchoring?: string;
+}
+
 /**
  * Tool anchoring for a runtime that talks to OpenAI's public Responses API, possibly
  * through a relay the user configured.
  *
  * A relay may validate or translate the request, and one that does not know the
  * `additional_tools` item fails the whole chat, so only the official endpoint anchors by
- * default. `override` (the `OPENAI_RESPONSES_TOOL_ANCHORING` env) is the operator's
- * answer for everything else: `0` turns anchoring off, `additional_tools` or
- * `tool_search` forces that mode for any endpoint.
+ * default. `override` (the endpoint's `responsesToolAnchoring` option, else the
+ * `OPENAI_RESPONSES_TOOL_ANCHORING` env) is the operator's answer for everything else:
+ * `0` turns anchoring off, `additional_tools` or `tool_search` forces that mode.
  */
 export const resolveOpenAIToolAnchoring = ({
   baseURL,
