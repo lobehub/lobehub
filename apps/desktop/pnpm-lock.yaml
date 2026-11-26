@@ -708,8 +708,8 @@ importers:
         specifier: workspace:*
         version: link:../business/const
       '@lobehub/a2ui':
-        specifier: ^1.1.1
-        version: 1.1.1(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^1.2.0
+        version: 1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@lobehub/market-sdk':
         specifier: 0.46.0
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
@@ -2237,8 +2237,8 @@ packages:
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
 
-  '@lobehub/a2ui@1.1.1':
-    resolution: {integrity: sha512-ChJMG42pYSlXd1z1c7HhEcpevS5dU2WsKFvIXRBpinEIngVaGp1PXzQj6EOwsWB6BJFcJ9RNYtVEB1rrs8pArA==}
+  '@lobehub/a2ui@1.2.0':
+    resolution: {integrity: sha512-eG73RFOw1hi2TpVs/KloRWtjjkWwJWx/ku581HvPl3c2Z8I5vnOJag/kZpCDnxMs7fpU5IZc/UqShuNX1pcyoQ==}
     peerDependencies:
       '@lobehub/charts': ^6.0.0
       '@lobehub/ui': ^6.21.0
@@ -9770,7 +9770,7 @@ snapshots:
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
 
-  '@lobehub/a2ui@1.1.1(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@lobehub/a2ui@1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@a2ui/react': 0.16.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@3.25.76)
       '@a2ui/web_core': 0.16.1

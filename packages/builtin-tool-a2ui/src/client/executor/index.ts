@@ -1,7 +1,12 @@
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
 import type { A2uiExecutionRuntime } from '../../ExecutionRuntime';
-import { A2uiApiName, A2uiIdentifier, type RenderUIParams } from '../../types';
+import {
+  A2uiApiName,
+  A2uiIdentifier,
+  type ReadCardDocsParams,
+  type RenderUIParams,
+} from '../../types';
 
 export class A2uiExecutor extends BaseExecutor<typeof A2uiApiName> {
   readonly identifier = A2uiIdentifier;
@@ -16,4 +21,9 @@ export class A2uiExecutor extends BaseExecutor<typeof A2uiApiName> {
 
   renderUI = async (params: RenderUIParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
     this.runtime.renderUI(params);
+
+  readCardDocs = async (
+    params: ReadCardDocsParams,
+    _ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => this.runtime.readCardDocs(params);
 }
