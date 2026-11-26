@@ -36,6 +36,8 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { actionMessagePreview, readActionMessage } from './actionMessage';
+import { ActionMessageCard } from './ActionMessageCard';
 import { AskCard } from './AskCard';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
@@ -160,6 +162,14 @@ export const ChannelMessage = ({
     : message.surfaces?.length
       ? message.content.slice(0, message.surfacesBodyLength ?? message.content.length)
       : message.content;
+  // A reply sent from a card's button reads as the form it submitted, not the payload it carries.
+  const submittedAction =
+    message.author.type === 'user' && body.includes('<a2ui_action>')
+      ? readActionMessage(
+          body,
+          detail.messages.find((entry) => entry.id === message.replyToId)?.surfaces,
+        )
+      : undefined;
   // A direct conversation is a chat with one Agent; folding its answers only adds a click.
   const collapsible = !detail.channel.agentId;
   // Long messages stay open by default; folding one is an explicit choice from "more".
@@ -323,7 +333,7 @@ export const ChannelMessage = ({
                   <Text ellipsis as="span" fontSize={12} type="secondary">
                     {message.replyTo.author.name || t('deletedMember')}
                     {': '}
-                    {message.replyTo.content || t('reply.attachment')}
+                    {actionMessagePreview(message.replyTo.content) || t('reply.attachment')}
                   </Text>
                 </Button>
               ) : (
@@ -334,7 +344,10 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {body &&
+            {submittedAction ? (
+              <ActionMessageCard fields={submittedAction.fields} title={submittedAction.title} />
+            ) : (
+              body &&
               (collapsible ? (
                 <CollapsibleContent
                   hideCollapseToggle
@@ -348,7 +361,8 @@ export const ChannelMessage = ({
                 </CollapsibleContent>
               ) : (
                 <MessageText content={body} names={mentionNames} />
-              ))}
+              ))
+            )}
             {!!message.surfaces?.length && (
               <MessageSurfaces detail={detail} message={message} threadId={threadId} />
             )}

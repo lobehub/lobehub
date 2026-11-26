@@ -1,5 +1,6 @@
 import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { GoalIdentifier } from '@lobechat/builtin-tool-goal';
+import { ProjectIdentifier } from '@lobechat/builtin-tool-project';
 import { describe, expect, it, vi } from 'vitest';
 
 import { collectSelectedToolIds, resolveTurnScopedPluginIds } from './turnContext';
@@ -54,6 +55,11 @@ describe('resolveTurnScopedPluginIds artboard', () => {
   it('offers the artboard tool only in a project conversation', async () => {
     expect(await resolveIn(true)).toContain(ArtboardIdentifier);
     expect(await resolveIn(false)).not.toContain(ArtboardIdentifier);
+  });
+
+  it('offers the project tool only in a project conversation', async () => {
+    expect(await resolveIn(true)).toContain(ProjectIdentifier);
+    expect(await resolveIn(false)).not.toContain(ProjectIdentifier);
   });
 });
 

@@ -8,6 +8,10 @@ export default {
   'receipt.errorAttachmentUnavailable':
     "One or more attachments can't be sent here, for example because they were uploaded in another workspace. Delete this message and attach them again.",
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareAttachmentTooLarge':
+    'A message to a shared Agent can carry up to 10 files of up to 32 MB each. Remove some attachments and send it again.',
+  'receipt.errorShareFileStorage':
+    'This shared Agent has no room for more attachments. Send your message without files, or ask its creator to raise the limit.',
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
@@ -135,6 +139,11 @@ export default {
   'ask.submit': 'Send answer',
   'ask.waitingFor': 'Waiting for {{name}} to answer',
   'actionFailed': 'Something went wrong. Try again.',
+  'a2uiAction.empty': '—',
+  'a2uiAction.no': 'No',
+  'a2uiAction.submitted': 'Submitted',
+  'a2uiAction.submittedTitle': 'Submitted “{{title}}”',
+  'a2uiAction.yes': 'Yes',
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',
   'shareVisitorReadOnlyNotice':
@@ -177,6 +186,7 @@ export default {
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
   'attachments.limit': 'Attach up to {{count}} files.',
+  'attachments.tooLarge': 'Each file must be {{size}} or smaller.',
   'attachments.failedShort': 'Upload failed',
   'attachments.remove': 'Remove {{name}}',
   'attachments.retry': 'Retry',

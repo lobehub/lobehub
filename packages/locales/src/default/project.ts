@@ -64,7 +64,7 @@ export default {
   'topics.subGroup.byStatus': 'By status',
   'settings.addDirectory': 'Add folder',
   'settings.addDirectoryDescription':
-    'Select a connected device, then enter the full path of an existing folder. Files stay on that device.',
+    'Pick a device and a workspace folder on it. The agent prepares the code inside this folder; nothing outside it is touched.',
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -696,10 +696,10 @@ export default {
   'overview.context.location.emptySandboxDesc':
     'Starts in an empty folder, without the project environment',
   'settings.cloudSandboxGroup': 'Cloud sandbox',
-  'settings.addExecutionEnvironment': 'Add execution environment',
+  'settings.addExecutionEnvironment': 'Add runner',
   'settings.configureSandbox': 'Configure',
   'settings.executionOrderHint':
-    'New conversations use the first available execution environment in this order. Drag to reorder.',
+    'New conversations run on the first available runner in this order and prepare the environment there. Drag to reorder.',
   'settings.sandboxNoRepository': 'No repository yet',
   'settings.reorderFailed': "Couldn't save the new order. Try again.",
   'settings.setDeviceDirectory': 'Set folder',
@@ -714,4 +714,17 @@ export default {
     "This folder couldn't be set up. Check its path, or try again later.",
   'settings.directoryUnavailable_needsManager':
     'A project manager needs to open this page while the device is online.',
+  'settings.environment': 'Environment',
+  'settings.environmentNotes': 'Run notes',
+  'settings.environmentNotesEmpty': 'No notes',
+  'settings.environmentNotesHint':
+    'What a run needs from a machine. The agent reads these when it picks where to work; nothing enforces them.',
+  'settings.environmentNotesPlaceholder': 'For example: running dev needs at least 8 GB of memory',
+  'settings.runners': 'Runners',
+  'settings.sandboxRunnerDesc': 'A temporary cloud machine, removed after use',
+  'settings.envSandboxOnly':
+    'These variables are set only in the cloud sandbox, never on your devices. For runs on a device, set the variables you need on that device yourself.',
+  'runnerPicker.auto': 'Auto',
+  'runnerPicker.autoDesc': 'Run on the first available runner in the project order',
+  'runnerPicker.autoResolved': 'Will run on {{runner}}',
 };

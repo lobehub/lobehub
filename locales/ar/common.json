@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "بطاقة",
   "agentViewAll.view.list": "قائمة",
   "alert.cloud.action": "جرّب الآن",
-  "alert.cloud.desc": "يحصل جميع المستخدمين المسجلين على استخدام مجاني بقيمة ${{credit}} شهريًا - دون الحاجة إلى أي إعداد. يتضمن مزامنة سحابية عالمية وبحثًا متقدمًا على الويب.",
-  "alert.cloud.descOnMobile": "يحصل جميع المستخدمين المسجلين على استخدام مجاني بقيمة ${{credit}} شهريًا - دون الحاجة إلى أي إعداد.",
   "alert.cloud.title": "النسخة التجريبية من {{name}} متاحة الآن",
   "alreadyUpToDate": "محدث بالفعل",
   "appLoading.appIdle": "جاهز للبدء",

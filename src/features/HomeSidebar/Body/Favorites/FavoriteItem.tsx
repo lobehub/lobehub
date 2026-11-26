@@ -1,8 +1,8 @@
 'use client';
 
 import type { FavoriteItem as FavoriteItemType } from '@lobechat/types';
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, toast } from '@lobehub/ui';
-import { MoreHorizontalIcon, StarOffIcon } from 'lucide-react';
+import { ActionIcon, type DropdownItem, Icon, toast } from '@lobehub/ui';
+import { StarOffIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,17 +21,19 @@ const FavoriteItem = memo<FavoriteItemProps>(({ active, item }) => {
   const { t } = useTranslation('common');
   const removeFavorite = useHomeStore((s) => s.removeFavorite);
 
+  const remove = () => {
+    removeFavorite(item.type, item.targetId).catch((error) => {
+      console.error('[favorite] remove failed', error);
+      toast.error(t('favorite.updateError'));
+    });
+  };
+
   const menuItems = (): DropdownItem[] => [
     {
       icon: <Icon icon={StarOffIcon} />,
       key: 'removeFavorite',
       label: t('favorite.remove'),
-      onClick: () => {
-        removeFavorite(item.type, item.targetId).catch((error) => {
-          console.error('[favorite] remove failed', error);
-          toast.error(t('favorite.updateError'));
-        });
-      },
+      onClick: remove,
     },
   ];
 
@@ -43,14 +45,14 @@ const FavoriteItem = memo<FavoriteItemProps>(({ active, item }) => {
         icon={<FavoriteItemIcon item={item} />}
         title={item.title}
         actions={() => (
-          <DropdownMenu items={menuItems()}>
-            <ActionIcon
-              aria-label={t('more')}
-              icon={MoreHorizontalIcon}
-              size={'small'}
-              style={{ flex: 'none' }}
-            />
-          </DropdownMenu>
+          <ActionIcon
+            aria-label={t('favorite.remove')}
+            icon={XIcon}
+            size={'small'}
+            style={{ flex: 'none' }}
+            title={t('favorite.remove')}
+            onClick={remove}
+          />
         )}
       />
     </WorkspaceLink>

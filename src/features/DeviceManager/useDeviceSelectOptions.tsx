@@ -6,6 +6,8 @@ import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ExecutionTargetDeviceStatus } from '@/features/ExecutionTargetPicker';
+
 import { isCurrentMachineDevice, splitPickerDevices, useCurrentMachine } from './devicePicker';
 import { getDeviceIcon } from './getDeviceIcon';
 import { OfflineDevicesToggle } from './OfflineDevicesToggle';
@@ -37,11 +39,17 @@ export const useDeviceSelectOptions = (
             {t('picker.thisDevice')}
           </Tag>
         )}
-        {!device.online && !device.onlineUnknown && (
-          <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-            {t('heteroAgent.executionTarget.offline', { ns: 'chat' })}
-          </Text>
-        )}
+        {/* Every row says whether its machine is reachable: a dot and a word
+            beside the name, as the other device pickers show it. */}
+        <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+          <ExecutionTargetDeviceStatus
+            offlineLabel={t('heteroAgent.executionTarget.offline', { ns: 'chat' })}
+            online={device.online}
+            onlineLabel={t('heteroAgent.executionTarget.online', { ns: 'chat' })}
+            unknown={device.onlineUnknown}
+            unknownLabel={t('heteroAgent.executionTarget.presenceChecking', { ns: 'chat' })}
+          />
+        </Text>
       </Flexbox>
     ),
     value: device.deviceId,

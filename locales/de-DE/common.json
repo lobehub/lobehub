@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Karte",
   "agentViewAll.view.list": "Liste",
   "alert.cloud.action": "Jetzt ausprobieren",
-  "alert.cloud.desc": "Alle registrierten Nutzer erhalten monatlich ${{credit}} kostenloses Guthaben—keine Einrichtung erforderlich. Enthält globale Cloud-Synchronisierung und erweiterte Websuche.",
-  "alert.cloud.descOnMobile": "Alle registrierten Nutzer erhalten monatlich ${{credit}} kostenloses Guthaben—keine Einrichtung erforderlich.",
   "alert.cloud.title": "{{name}} Beta ist live",
   "alreadyUpToDate": "Bereits auf dem neuesten Stand",
   "appLoading.appIdle": "Bereit zum Start",

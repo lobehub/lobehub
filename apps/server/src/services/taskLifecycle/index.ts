@@ -50,6 +50,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
+import { postTaskRunToChannel } from '@/server/services/task/channelDelivery';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
@@ -392,6 +393,23 @@ export class TaskLifecycleService {
           error,
         );
       }
+
+      // 8. A task with a Channel delivery posts the run's answer (text and cards) there as its
+      //    Agent's message, once per run. A Channel that refuses the post skips only this run.
+      //    A verify-bound run posts only once Verify accepts it (driveTaskFromVerify), so the
+      //    Channel never reads an output a later verdict rejects.
+      if (currentTask && !verifyBound)
+        await postTaskRunToChannel(this.db, {
+          operationId: params.operationId,
+          scope: { userId: this.userId, workspaceId: this.workspaceId },
+          task: currentTask,
+        }).catch((error) =>
+          console.error(
+            '[TaskLifecycle] Channel delivery failed for task=%s (non-fatal):',
+            taskIdentifier,
+            error,
+          ),
+        );
     } else if (reason === 'error') {
       if (
         topicId &&

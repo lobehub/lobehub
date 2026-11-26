@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import compressImage, {
   COMPRESSIBLE_IMAGE_TYPES,
   compressImageFile,
   MAX_IMAGE_BYTES,
   MAX_IMAGE_SIZE,
+  WEBP_MIN_BYTES,
 } from './compressImage';
 
 const getContextSpy = vi.spyOn(global.HTMLCanvasElement.prototype, 'getContext');
@@ -125,6 +126,15 @@ describe('constants', () => {
 });
 
 describe('compressImageFile', () => {
+  const originalImage = global.Image;
+
+  // Restore here rather than at the end of each test: a test that fails before its own
+  // cleanup would leave its MockImage installed, and every later mock would then extend it
+  // and fail with "Cannot redefine property: width".
+  afterEach(() => {
+    global.Image = originalImage;
+  });
+
   const createMockFile = (name: string, type: string, size: number) => {
     const content = new Uint8Array(size);
     return new File([content], name, { type });
@@ -199,26 +209,25 @@ describe('compressImageFile', () => {
 
   it('should preserve JPEG type when compressing large JPEG inputs (no PNG re-encoding)', async () => {
     const file = createMockFile('photo.jpg', 'image/jpeg', 1000);
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback, type) =>
+        setTimeout(() => callback(new Blob([new Uint8Array(10)], { type })), 0),
+      );
+    mockImageLoad(3000, 2000);
 
-    const originalImage = global.Image;
-    global.Image = class MockImage extends originalImage {
-      constructor() {
-        super();
-        Object.defineProperty(this, 'width', { value: 3000, writable: false });
-        Object.defineProperty(this, 'height', { value: 2000, writable: false });
-        setTimeout(() => this.dispatchEvent(new Event('load')), 0);
-      }
-    } as any;
+    try {
+      const result = await compressImageFile(file);
 
-    const result = await compressImageFile(file);
-
-    expect(result).not.toBe(file);
-    // Output File MIME type must match the source format — previously this
-    // was hardcoded to 'image/png', which inflated photographic JPEGs.
-    expect(result.type).toBe('image/jpeg');
-    expect(result.name).toBe('photo.jpg');
-    expect(toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.85);
-    global.Image = originalImage;
+      expect(result).not.toBe(file);
+      // Output File MIME type must match the source format — previously this
+      // was hardcoded to 'image/png', which inflated photographic JPEGs.
+      expect(result.type).toBe('image/jpeg');
+      expect(result.name).toBe('photo.jpg');
+      expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85);
+    } finally {
+      toBlobSpy.mockRestore();
+    }
   });
 
   it('should preserve WebP inputs as PNG (existing fallback behaviour)', async () => {
@@ -243,6 +252,28 @@ describe('compressImageFile', () => {
     global.Image = originalImage;
   });
 
+  it('should encode through async toBlob instead of blocking on toDataURL', async () => {
+    const file = createMockFile('screenshot.png', 'image/png', 1000);
+    const encoded = new Blob([new Uint8Array(10)], { type: 'image/png' });
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => setTimeout(() => callback(encoded), 0));
+    const restoreImage = mockImageLoad(3000, 2000);
+
+    try {
+      const result = await compressImageFile(file);
+
+      expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/png', undefined);
+      expect(toDataURLSpy).not.toHaveBeenCalled();
+      expect(result.name).toBe('screenshot.png');
+      expect(result.type).toBe('image/png');
+      expect(result.size).toBe(10);
+    } finally {
+      toBlobSpy.mockRestore();
+      restoreImage();
+    }
+  });
+
   it('should compress images exceeding max file size even if dimensions are small', async () => {
     const file = createMockFile('heavy.png', 'image/png', 6 * 1024 * 1024);
 
@@ -261,6 +292,78 @@ describe('compressImageFile', () => {
     expect(result).not.toBe(file);
     expect(result.type).toBe('image/png');
     global.Image = originalImage;
+  });
+
+  describe('webp', () => {
+    const mockToBlob = (type: string, size: number) =>
+      vi
+        .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation((callback) =>
+          setTimeout(() => callback(new Blob([new Uint8Array(size)], { type })), 0),
+        );
+
+    it('should re-encode a heavy screenshot as WebP and rename it', async () => {
+      const file = createMockFile('image.png', 'image/png', 1024 * 1024);
+      const toBlobSpy = mockToBlob('image/webp', 100);
+      const restoreImage = mockImageLoad(1200, 800);
+
+      try {
+        const result = await compressImageFile(file, { webp: true });
+
+        expect(toBlobSpy).toHaveBeenCalledWith(expect.any(Function), 'image/webp', 0.9);
+        expect(result.type).toBe('image/webp');
+        expect(result.name).toBe('image.webp');
+        expect(result.size).toBe(100);
+      } finally {
+        toBlobSpy.mockRestore();
+        restoreImage();
+      }
+    });
+
+    it('should leave small images alone rather than re-encode them', async () => {
+      const file = createMockFile('icon.png', 'image/png', WEBP_MIN_BYTES);
+      const toBlobSpy = mockToBlob('image/webp', 100);
+      const restoreImage = mockImageLoad(64, 64);
+
+      try {
+        expect(await compressImageFile(file, { webp: true })).toBe(file);
+        expect(toBlobSpy).not.toHaveBeenCalled();
+      } finally {
+        toBlobSpy.mockRestore();
+        restoreImage();
+      }
+    });
+
+    it('should keep the original when WebP comes out larger', async () => {
+      const file = createMockFile('flat.png', 'image/png', 300 * 1024);
+      const toBlobSpy = mockToBlob('image/webp', 400 * 1024);
+      const restoreImage = mockImageLoad(1200, 800);
+
+      try {
+        expect(await compressImageFile(file, { webp: true })).toBe(file);
+      } finally {
+        toBlobSpy.mockRestore();
+        restoreImage();
+      }
+    });
+
+    it('should fall back to the PNG path when the browser cannot encode WebP', async () => {
+      const file = createMockFile('large.png', 'image/png', 1000);
+      // Browsers without a WebP encoder hand back PNG instead.
+      const toBlobSpy = mockToBlob('image/png', 100);
+      const restoreImage = mockImageLoad(3000, 2000);
+
+      try {
+        const result = await compressImageFile(file, { webp: true });
+
+        expect(toBlobSpy).toHaveBeenLastCalledWith(expect.any(Function), 'image/png', undefined);
+        expect(result.type).toBe('image/png');
+        expect(result.name).toBe('large.png');
+      } finally {
+        toBlobSpy.mockRestore();
+        restoreImage();
+      }
+    });
   });
 
   it('should resolve original file on load error', async () => {

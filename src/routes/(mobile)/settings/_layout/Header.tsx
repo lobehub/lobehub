@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useParams, useSearchParams } from 'react-router';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
 import { useAgentStore } from '@/store/agent';
@@ -95,7 +96,10 @@ const Header = memo(() => {
   // i18next's strict key union rejects dynamic strings. `Parameters<typeof t>[0]` would push TS
   // onto the wrong overload and infer the return as `unknown`, so we fall back to `as any`.
   // Unknown keys surface visibly as raw text, which is acceptable.
-  const tabTitle = t(tabTitleKey as any);
+  const codingPlansTab = useCodingPlansTab();
+  // The optional business tab is titled by its slot, not by open-source copy.
+  const tabTitle =
+    tab === SettingsTabs.CodingPlans ? (codingPlansTab?.label ?? '') : t(tabTitleKey as any);
 
   return (
     <ChatHeader

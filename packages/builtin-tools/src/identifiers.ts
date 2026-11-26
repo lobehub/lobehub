@@ -35,6 +35,7 @@ import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ProjectManifest } from '@lobechat/builtin-tool-project';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
@@ -57,6 +58,7 @@ export const builtinToolIdentifiers: string[] = [
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
   ArtboardManifest.identifier,
+  ProjectManifest.identifier,
   AttachmentsManifest.identifier,
   AuvManifest.identifier,
   CalculatorManifest.identifier,

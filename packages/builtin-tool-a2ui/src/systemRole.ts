@@ -14,6 +14,7 @@ Most cards are for reading, not for acting. Two kinds:
 - Prefer showing over telling: a trend is a Chart, peer figures are Metrics, a list of findings is Items. Use Text only for what the components cannot say.
 - Not for prose, explanations, or anything a few sentences answer. Never wrap ordinary text in a card.
 - One card per answer. Put a sentence of text before it only if it adds something; for a report, the card alone is usually enough.
+- A card goes out with your answer, where you are answering. To put a card somewhere else (another Thread, the Channel's main timeline, another Channel), draw it, then post it with lobe-channel postMessage.
 
 HOW
 Send three messages for one surfaceId:

@@ -30,8 +30,6 @@
   "agentViewAll.view.card": "Kaart",
   "agentViewAll.view.list": "Lijst",
   "alert.cloud.action": "Probeer nu",
-  "alert.cloud.desc": "Alle geregistreerde gebruikers krijgen ${{credit}} gratis gebruik per maand — geen installatie nodig. Inclusief wereldwijde cloudsynchronisatie en geavanceerd zoeken op het web.",
-  "alert.cloud.descOnMobile": "Alle geregistreerde gebruikers krijgen ${{credit}} gratis gebruik per maand — geen installatie nodig.",
   "alert.cloud.title": "{{name}} bèta is live",
   "alreadyUpToDate": "Al up-to-date",
   "appLoading.appIdle": "Klaar om te starten",

@@ -394,10 +394,14 @@ export default {
     'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.collapsed': 'Compressed {{turns}} earlier turns · View summary',
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
+  'compression.compacted': 'Context compressed',
+  'compression.compacting': 'Compressing context',
+  'compression.compactingSlow': 'This may take a few minutes',
   'compression.emptySummary': 'The model returned an empty summary',
   'compression.failed': 'Context compression failed, original messages kept',
   'compression.failedReason': 'Summary generation failed: {{reason}}',
   'compression.history': 'Original conversation',
+  'compression.loadEarlier': 'Show earlier messages',
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',
@@ -1062,13 +1066,12 @@ export default {
   'input.agentRunFeeUnfunded.descTopUp': 'Top up, then send again.',
   'input.agentRunFeeUnfunded.free.desc':
     'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs.',
-  'input.agentRunFeeUnfunded.free.descNoReset':
-    'Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descNoReset': 'Upgrade to {{plan}} for more usage.',
   'input.agentRunFeeUnfunded.free.descOwnKey':
     'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
   'input.agentRunFeeUnfunded.free.descOwnKeyNoReset':
-    'Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
-  'input.agentRunFeeUnfunded.free.title': 'You’ve used this month’s free credits',
+    'Upgrade to {{plan}} for more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.title': 'You’ve used your trial credits',
   'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':

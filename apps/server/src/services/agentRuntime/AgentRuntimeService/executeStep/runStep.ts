@@ -245,10 +245,12 @@ export async function saveAndPublishStep(
         stepIndex,
       };
     } else {
-      // Without group members, like the entry read it is diffed against.
+      // Read like the entry read it is diffed against: without group members
+      // and without the tool payload keys the projection drops.
       const settledUiMessages = await deps.queryUiMessages(stepResult.newState, {
         skipCompressedMembers: true,
         skipWorks: shouldContinue,
+        viewModelPluginState: true,
       });
       if (settledUiMessages) {
         await publishStepMessagePatch(deps, {

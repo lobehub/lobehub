@@ -1,13 +1,13 @@
-import { A2uiApiName, A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
+import { A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
-import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import {
+  SHARE_VISITOR_MAX_FILE_SIZE,
+  SHARE_VISITOR_MAX_FILES_PER_TURN,
+  SHARE_VISITOR_PROMPT_MAX_LENGTH,
+} from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
-import type {
-  ChannelExecutionConfig,
-  ChannelMessageSurface,
-  ChannelSharedAgentAccess,
-} from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
 import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -43,10 +43,18 @@ import { ChannelRoutingService } from './ChannelRoutingService';
 import { announceDeviceGrants } from './deviceGrantCard';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
+import { type PickedOfflineDevice, wakePickedDevices } from './pickedDeviceWake';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { reportChannelReplyFailure } from './replyError';
 import { openChannelReply } from './replyOpening';
 import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
+import { runSurfaces } from './runSurfaces';
+import {
+  importShareAttachments,
+  readVisitorFiles,
+  shareAttachmentLimitType,
+  ShareAttachmentRefusal,
+} from './shareAttachments';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
@@ -80,6 +88,8 @@ const SHARE_REFUSAL_MESSAGES: Record<string, string> = {
   [ChatErrorType.ShareMessageLimitExceeded]:
     'You have sent all the messages this shared Agent allows',
   [ChatErrorType.SharePromptTooLong]: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
+  [ChatErrorType.ShareAttachmentTooLarge]: `A message to a shared Agent can carry up to ${SHARE_VISITOR_MAX_FILES_PER_TURN} files of ${SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024} MB each`,
+  [ChatErrorType.ShareFileStorageExceeded]: 'This shared Agent has no room for more attachments',
   [ChatErrorType.ShareSpendLimitExceeded]: 'This shared Agent reached its monthly usage limit',
 };
 
@@ -140,7 +150,8 @@ export class ChannelCoordinator {
   /**
    * Admit a visitor's message to a shared Agent right before submission, and build the gate the
    * run executes under. The one place a visitor's limits refuse a Channel reply, in the order the
-   * share page checks them: the live share, the prompt length, the messages the visitor may send
+   * share page checks them: the live share, the prompt length, the attachments' count and size,
+   * the messages the visitor may send
    * (`maxMessagesPerVisitor`, across all their conversations with the Agent) and the share's
    * monthly spend. Like the spend limit, the message count is a guardrail rather than a
    * reservation: concurrent replies can each pass here, and the run's turn guard
@@ -150,8 +161,12 @@ export class ChannelCoordinator {
     access: ChannelSharedAgentAccess,
     agentId: string,
     requesterId: string,
-    /** The visitor's own message; a message it quotes is not part of its prompt. */
-    request: string,
+    request: {
+      /** The files of each of the visitor's messages the run reads, a quoted one included. */
+      attachments: string[][];
+      /** The visitor's own message; a message it quotes is not part of its prompt. */
+      content: string;
+    },
   ): Promise<AgentShareGate> {
     const share = await AgentShareModel.findByShareId(this.db, access.shareId);
     if (!share || share.agentId !== agentId || share.ownerId !== access.ownerId)
@@ -162,8 +177,21 @@ export class ChannelCoordinator {
     // request is refused here, before an opening acknowledges it: its card asks the owner.
     if (granted.local && !granted.canUseDevice)
       throw shareRefusal(ChatErrorType.ShareHeterogeneousAgentUnsupported);
-    if (request.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
+    if (request.content.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
       throw shareRefusal(ChatErrorType.SharePromptTooLong);
+    const fileIds = request.attachments.flat();
+    let attachmentLimit: string | undefined;
+    if (fileIds.length) {
+      // The share page's per-message file count holds for each message, not the turn's total.
+      const byId = new Map(
+        (await readVisitorFiles(this.db, requesterId, fileIds)).map((file) => [file.id, file]),
+      );
+      attachmentLimit = shareAttachmentLimitType(
+        request.attachments.map((ids) => [...new Set(ids)].flatMap((id) => byId.get(id) ?? [])),
+        share.shareConfig.maxFileStorage,
+      );
+    }
+    if (attachmentLimit) throw shareRefusal(attachmentLimit);
     const sent = await new TopicModel(
       this.db,
       share.ownerId,
@@ -189,6 +217,38 @@ export class ChannelCoordinator {
       shareId: share.shareId,
       visitorUserId: requesterId,
     };
+  }
+
+  /**
+   * The visitor's attachments for a shared Agent's run, copied into the share: the run is its
+   * owner's and cannot read the visitor's own files. Running out of the share's storage refuses
+   * the reply like any other share limit.
+   */
+  private async shareAttachments(
+    access: ChannelSharedAgentAccess,
+    gate: AgentShareGate,
+    fileIds: string[],
+  ) {
+    if (!fileIds.length) return {};
+    try {
+      return {
+        fileIds: await importShareAttachments(
+          this.db,
+          {
+            agentId: gate.agentId,
+            maxFileStorage: gate.shareConfig.maxFileStorage,
+            ownerId: access.ownerId,
+            shareId: gate.shareId,
+            visitorUserId: gate.visitorUserId,
+            workspaceId: access.workspaceId,
+          },
+          await readVisitorFiles(this.db, gate.visitorUserId, fileIds),
+        ),
+      };
+    } catch (error) {
+      if (error instanceof ShareAttachmentRefusal) throw shareRefusal(error.type);
+      throw error;
+    }
   }
 
   advance = async (channelId: string) => {
@@ -248,6 +308,8 @@ export class ChannelCoordinator {
       .flat()
       .filter((device) => device.online)
       .map((device) => device.deviceId);
+    // Devices picked in the Channel that a claim found offline; a sleeping cloud one is woken.
+    const pickedOffline: PickedOfflineDevice[] = [];
 
     try {
       await pMap(
@@ -265,7 +327,10 @@ export class ChannelCoordinator {
             await openChannelReply(this.db, channelId, job.id, {
               admitShare: ({ agent, request, requesterUserId, share }) =>
                 // Only a refusal skips the opening; a failed check leaves it to dispatch.
-                this.shareGate(share, agent.id, requesterUserId, request.content).then(
+                this.shareGate(share, agent.id, requesterUserId, {
+                  attachments: [request.fileIds ?? []],
+                  content: request.content,
+                }).then(
                   () => true,
                   (error) => !dispatchFailure(error),
                 ),
@@ -280,6 +345,9 @@ export class ChannelCoordinator {
                   accessDenied = true;
                 },
                 onlineDeviceIds,
+                onPickedDeviceOffline: (device) => {
+                  pickedOffline.push(device);
+                },
                 routedDevice: (run) => resolveChannelRoutedDevice(this.db, run, routedPresence),
                 serverDefaultAgentConfig: getServerDefaultAgentConfig(),
               });
@@ -301,6 +369,13 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    if (pickedOffline.length)
+      await wakePickedDevices(this.db, {
+        channelId,
+        devices: pickedOffline,
+        onlineDeviceIds,
+        workspaceId: channel.workspaceId,
+      });
     // A claim that found the device made private since it was picked files a request, and so does
     // one whose requester may not use the Agent; ask their owners now.
     if (pending.length) {
@@ -424,20 +499,28 @@ export class ChannelCoordinator {
         // A resumed reply tells the run why its previous turn stopped, from the card it left.
         resumed ? this.executions.replyError(job.channelId, job.id) : undefined,
       ]);
+      // A shared Agent reads only what its visitor attached, from their own messages.
+      const visitorAttachments =
+        share && topic.senderId
+          ? input
+              .filter(({ author }) => author.type === 'user' && author.id === topic.senderId)
+              .map((message) => message.fileIds ?? [])
+          : [];
+      const visitorFileIds = visitorAttachments.flat();
       const shareGate =
         share && topic.senderId
-          ? await this.shareGate(
-              share,
-              member.agentId,
-              topic.senderId,
-              input.find((message) => message.id === job.manifest!.requestMessageId)?.content ?? '',
-            )
+          ? await this.shareGate(share, member.agentId, topic.senderId, {
+              content:
+                input.find((message) => message.id === job.manifest!.requestMessageId)?.content ??
+                '',
+              attachments: visitorAttachments,
+            })
           : undefined;
       if (share && !shareGate) throw new Error('A shared Agent run needs its requester');
-      // Sending refuses attachments to a shared Agent: the owner's run cannot read them.
-      const attachments = share
-        ? {}
-        : await resolveChannelAttachments(this.db, topic.userId, workspaceId, input);
+      const attachments =
+        share && shareGate
+          ? await this.shareAttachments(share, shareGate, visitorFileIds)
+          : await resolveChannelAttachments(this.db, topic.userId, workspaceId, input);
       // The last check before submission. A dispatcher that stalled past its lease stops
       // here; one that already passed it can only consume the still-idle reservation.
       if (!(await this.executions.heartbeat(job.id, lease)))
@@ -785,25 +868,3 @@ export class ChannelCoordinator {
 registerLocalChannelAdvance(async (channelId) => {
   await new ChannelCoordinator(await getServerDB()).advance(channelId);
 });
-
-/** The cards one run drew, in the order it drew them; malformed states are skipped. */
-const runSurfaces = async (
-  messages: MessageModel,
-  operationId: string,
-  topicId: string,
-): Promise<ChannelMessageSurface[]> => {
-  const states = await messages.listToolStatesByOperationId({
-    apiName: A2uiApiName.renderUI,
-    identifier: A2uiIdentifier,
-    operationId,
-    topicId,
-  });
-  return states
-    .map((state) => (isRecord(state) ? state.surface : undefined))
-    .filter(
-      (surface): surface is ChannelMessageSurface =>
-        isRecord(surface) &&
-        typeof surface.surfaceId === 'string' &&
-        Array.isArray(surface.operations),
-    );
-};

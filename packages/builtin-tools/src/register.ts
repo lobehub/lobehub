@@ -137,6 +137,7 @@ import {
   PageAgentRenders,
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
+import { ProjectInspectors, ProjectManifest } from '@lobechat/builtin-tool-project/client';
 import {
   RemoteDeviceInspectors,
   RemoteDeviceManifest,
@@ -428,6 +429,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
     [ArtboardManifest.identifier]: ArtboardInspectors,
+    [ProjectManifest.identifier]: ProjectInspectors,
     [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.

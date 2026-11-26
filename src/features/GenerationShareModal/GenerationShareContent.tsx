@@ -16,22 +16,14 @@ import {
 import { CopyIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import InlineErrorText from '@/components/InlineErrorText';
 import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import SocialShare from '@/features/SocialShare';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { mutate as globalMutate } from '@/libs/swr';
-import { lambdaClient } from '@/libs/trpc/client';
+import { useFileShareSettings } from '@/hooks/useFileShareSettings';
 
 export type GenerationShareType = 'image' | 'music' | 'video';
-
-/**
- * Same key as the file share button in the resource library and file preview,
- * so every entry to one file's share shows the same state.
- */
-const FILE_SHARE_SETTINGS_KEY = (fileId: string) => ['fileShare.getShareSettings', fileId];
 
 export interface GenerationShareContentProps {
   /** Library file the generation was saved as; the share link is that file's. */
@@ -55,11 +47,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
     const [updating, setUpdating] = useState(false);
     const [updateError, setUpdateError] = useState<InlineErrorState | null>(null);
 
-    const { data, error, isLoading, mutate } = useSWR(
-      FILE_SHARE_SETTINGS_KEY(fileId),
-      () => lambdaClient.fileShare.getShareSettings.query({ fileId }),
-      { revalidateOnFocus: false },
-    );
+    const { data, error, isLoading, revalidate, updateVisibility } = useFileShareSettings(fileId);
 
     const isPublic = data?.visibility === 'link';
     const shareUrl = isPublic ? fileShareUrl(appOrigin, data.shareId) : undefined;
@@ -70,8 +58,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
         setUpdateError(null);
         let next: FileShareSettings | null;
         try {
-          next = await lambdaClient.fileShare.updateShareSettings.mutate({ fileId, visibility });
-          await globalMutate(FILE_SHARE_SETTINGS_KEY(fileId), next, { revalidate: false });
+          next = await updateVisibility(visibility);
         } catch (error) {
           console.error('[GenerationShare] Failed to update share settings:', error);
           setUpdateError(toInlineError(t('shareModal.generation.updateFailedRetry'), error));
@@ -94,7 +81,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
           toast.success(t('shareModal.generation.enabledNotCopied'));
         }
       },
-      [appOrigin, fileId, t],
+      [appOrigin, t, updateVisibility],
     );
 
     const copyLink = useCallback(async () => {
@@ -109,7 +96,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
       return (
         <Flexbox align={'center'} gap={12} paddingBlock={16}>
           <Text type={'secondary'}>{t('shareModal.generation.loadError')}</Text>
-          <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
+          <Button onClick={() => revalidate()}>{t('retry', { ns: 'common' })}</Button>
         </Flexbox>
       );
 

@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { ChannelApiName } from '../../types';
+import { PostMessageInspector } from './PostMessage';
 
 const ChannelInspector = memo<
   BuiltinInspectorProps<unknown, ChannelHistoryPage | ChannelHistoryMessageDetail>
@@ -157,4 +158,5 @@ export const ChannelInspectors = {
   [ChannelApiName.readMessage]: ChannelInspector,
   [ChannelApiName.readMessages]: ChannelInspector,
   [ChannelApiName.sendMessage]: SendMessageInspector,
+  [ChannelApiName.postMessage]: PostMessageInspector,
 };

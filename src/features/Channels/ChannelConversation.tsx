@@ -20,6 +20,7 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
+import { useFeedFollow } from './feedFollow';
 import { hasReplyActivity, replyFailurePlacement } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
@@ -103,6 +104,9 @@ const Timeline = ({
   const outgoingById = new Map(outgoing.map((item) => [item.message.id, item.entry]));
   const feedRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
+  // Rows keep growing after they were appended (a card's chart settles its height after the first
+  // paint), so the feed follows its content's size, not just a new tail.
+  const feedFollowRef = useFeedFollow(feedRef, () => followLatest.current && before === undefined);
   const feedTail = timelineTail(detail?.messages, outgoing);
   const sequence = detail?.channel.sequence;
   useChannelEvents(params);
@@ -195,7 +199,7 @@ const Timeline = ({
             <Flexbox
               aria-label={t(threadId ? 'thread' : 'main')}
               justify={!threadId && !timeline.length ? 'center' : undefined}
-              ref={feedRef}
+              ref={feedFollowRef}
               onScroll={(event) => {
                 const feed = event.currentTarget;
                 followLatest.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 64;

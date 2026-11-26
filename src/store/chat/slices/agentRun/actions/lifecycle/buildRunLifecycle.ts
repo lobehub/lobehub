@@ -409,6 +409,11 @@ export const buildRunLifecycle = (
         // queued turn can move the topic off that branch.
         if (disposition === 'success' && topicId && agentId)
           void linkOwnBranchPullRequest(get, { agentId, topicId });
+        // A project conversation can move to another runner as a turn starts
+        // (the Project tool's `switchRunner`); only the server row changed, so
+        // the folder and device shown would otherwise stay on the old runner.
+        if (topicId && topicSelectors.getTopicById(topicId)(get())?.projectId)
+          void Promise.resolve(get().refreshTopicDetail(topicId, true)).catch(() => {});
       }
 
       const completeSuccess = () => {

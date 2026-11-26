@@ -1,4 +1,9 @@
-import type { ChannelMessageKind, ChannelMessageMetadata } from '@lobechat/types';
+import type {
+  ChannelMessageKind,
+  ChannelMessageMetadata,
+  ChannelMessageSurface,
+} from '@lobechat/types';
+import { channelSurfacesText } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -19,6 +24,12 @@ export interface ChannelAgentPostInput {
   replyToId?: string;
   /** Identity of what produced the post (e.g. the run). Posting it again returns the stored one. */
   requestKey: string;
+  /**
+   * Cards the Agent drew (`lobe-a2ui.renderUI`). Stored like a published reply's: in
+   * `metadata.surfaces`, with their text form after the post's own words in `content`. With
+   * cards the post's own text may be empty.
+   */
+  surfaces?: ChannelMessageSurface[];
   /** The Thread to post in; one that is gone or closed falls back to the main timeline. */
   threadId?: string | null;
 }
@@ -47,6 +58,11 @@ export const postAgentMessage = async (
     .limit(1);
   if (existing) return existing;
 
+  const surfaces = input.surfaces ?? [];
+  const body = input.content.trim();
+  if (!body && !surfaces.length)
+    throw new ChannelError('BAD_REQUEST', 'A post needs text or a card');
+
   const [member] = await tx
     .select({ config: channelMembers.config, id: channelMembers.id })
     .from(channelMembers)
@@ -67,9 +83,16 @@ export const postAgentMessage = async (
   const message = await appendMessage(tx, {
     agentId: input.agentId,
     channelId,
-    content: input.content,
+    // Like a published reply: the cards' text form follows the post's own words, read by
+    // everything that cannot draw them; views show only the body.
+    content: surfaces.length
+      ? [body, channelSurfacesText(surfaces)].filter(Boolean).join('\n\n')
+      : input.content,
     ...(input.kind && { kind: input.kind }),
-    metadata: input.metadata ?? {},
+    metadata: {
+      ...input.metadata,
+      ...(surfaces.length > 0 && { surfaces, surfacesBodyLength: body.length }),
+    },
     ...(input.replyToId && { replyToId: input.replyToId }),
     requestKey: input.requestKey,
     routingStatus: 'reply',

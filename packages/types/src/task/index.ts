@@ -3,6 +3,7 @@ import type { ChatFileItem } from '../message/ui/chat';
 import type { TaskLabelRef } from './label';
 
 export * from './archive';
+export * from './delivery';
 export * from './execution';
 export * from './label';
 export * from './listFilter';

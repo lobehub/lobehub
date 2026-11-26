@@ -1082,6 +1082,9 @@ export default {
   'share.settings.permissions.visitorConversations.view': 'View conversations',
   'share.settings.permissions.visitorConversations.visitors_one': '{{count}} visitor',
   'share.settings.permissions.visitorConversations.visitors_other': '{{count}} visitors',
+  'share.settings.profile.demoCases.item': 'Example {{number}}',
+  'share.settings.profile.featuredWorks.select': 'Feature',
+  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
   'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
@@ -1359,7 +1362,6 @@ export default {
   'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
   'share.settings.profile.invalid':
     'Each example needs a task prompt. Keep at most 20 examples and 100 featured works.',
-  'share.settings.profile.demoCases.item': 'Example {{number}}',
   'share.settings.profile.demoCases.promptLabel': 'Task prompt (required)',
   'share.settings.profile.demoCases.promptHint':
     'Shown as the example title. Clicking it fills the visitor’s chat input without sending.',
@@ -1380,8 +1382,6 @@ export default {
   'share.settings.profile.featuredWorks.title': 'Featured works',
   'share.settings.profile.featuredWorks.desc':
     'Choose this agent’s works to showcase. Visitor works are never included.',
-  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
-  'share.settings.profile.featuredWorks.select': 'Feature',
   'share.settings.profile.featuredWorks.withdraw': 'Remove',
   'share.settings.profile.featuredWorks.empty':
     'No eligible works yet. Create a work with this agent first.',
@@ -1392,6 +1392,21 @@ export default {
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'share.settings.profile.demoCases.untitled': 'No task prompt yet',
+  'share.settings.profile.discard': 'Discard changes',
+  'share.settings.profile.featuredWorks.pick': 'Choose works',
+  'share.settings.profile.featuredWorks.pickConfirm': 'Done',
+  'share.settings.profile.featuredWorks.pickTitle': 'Choose featured works',
+  'share.settings.profile.preview.desktop': 'Desktop',
+  'share.settings.profile.preview.draft': 'Draft',
+  'share.settings.profile.preview.loadFailed': 'Could not load the preview.',
+  'share.settings.profile.preview.mobile': 'Mobile',
+  'share.settings.profile.preview.open': 'Open the published page',
+  'share.settings.profile.preview.published': 'Published',
+  'share.settings.profile.preview.retry': 'Retry',
+  'share.settings.profile.preview.show': 'Preview',
+  'share.settings.profile.preview.title': 'Visitor preview',
+  'share.settings.profile.preview.unsaved': 'Unsaved changes',
   'webhook.actions.delete': 'Delete',
   'webhook.actions.deliveries': 'Recent calls',
   'webhook.actions.edit': 'Edit',
