@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   filterGroupsByScope,
   getActiveSettingsScope,
+  getSettingsDefaultTab,
   getSettingsScopeEntryTab,
   rememberSettingsTab,
   resetRememberedSettingsTabs,
@@ -57,6 +58,28 @@ describe('links out of the space', () => {
     rememberSettingsTab('acme', 'account', 'notification');
 
     expect(getSettingsScopeEntryTab('acme', 'account', withLink)).toBe('profile');
+  });
+});
+
+describe('getSettingsDefaultTab', () => {
+  it('opens the space set first, even though account groups are listed before it', () => {
+    expect(getSettingsDefaultTab(groups)).toBe('general');
+  });
+
+  it('skips a link out of the space', () => {
+    const withLink: ScopedSettingsGroup[] = [
+      { items: [{ key: 'profile' }], scope: 'account' },
+      { items: [{ href: '/settings/plans', key: 'plans' }, { key: 'provider' }], scope: 'space' },
+    ];
+
+    expect(getSettingsDefaultTab(withLink)).toBe('provider');
+  });
+
+  it('falls back to the account set when the space lists no tab', () => {
+    const accountOnly = groups.filter((group) => group.scope === 'account');
+
+    expect(getSettingsDefaultTab(accountOnly)).toBe('profile');
+    expect(getSettingsDefaultTab([])).toBeUndefined();
   });
 });
 
