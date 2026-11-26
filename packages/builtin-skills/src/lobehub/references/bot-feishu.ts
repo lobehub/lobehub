@@ -76,6 +76,8 @@ Connect a Feishu custom app bot to your agent.
    - \`im:message.group_msg\` — 「获取群组中所有消息」, read **group** chat history; required *in addition to* \`im:message:readonly\`, otherwise history reads in groups fail with \`230027 权限不足\`. Search 权限管理 by the Chinese name — the console does not match on the code. It is 免审, but the app must be re-published (创建版本 → 发布) before it takes effect. Do NOT confuse it with \`im:message.group_msg.include_bot:read\`（获取群组中用户和机器人发送的消息）, which governs the receive-message event, not history reads
    - \`docx:document:readonly\` — 「查看新版文档」, lets \`readDocument\` pull the text of docx documents (智能纪要 / meeting minutes, specs) shared into the chat. The document must ALSO be visible to the app: sharing it into a group the bot is in is not enough — the owner adds the app as a collaborator (文档「分享」→ 添加协作者 → 搜索应用名), or the knowledge space grants the app access
    - \`wiki:wiki:readonly\` — only if users share \`/wiki/\` links; resolves a wiki page to the docx behind it
+   - \`bitable:app\` — 「查看、评论、编辑和管理多维表格」, lets \`createBitable\` / \`addBitableRecords\` build a 多维表格 (to-do list, tracker) and write rows on the app's own credentials. A Bitable created this way is owned by the app; to append rows to an existing one, its owner adds the app as a collaborator
+   - \`docs:permission.member:create\` — 「添加、修改、移除云文档协作者」, lets \`createBitable\` share the new 多维表格 with the requester (and anyone they name); without it the table is created but nobody but the app can open it
 3. Publish the app (see Step 7) for permissions to take effect
 
 ### Step 7: Publish the App

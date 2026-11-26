@@ -1,8 +1,18 @@
 // Re-export all param/state types so adapters can import from executionRuntime entry
 export type {
+  AddBitableRecordsParams,
+  AddBitableRecordsState,
+  BitableCollaborator,
+  BitableFieldSpec,
+  BitableFieldType,
+  BitableIssue,
+  BitablePermission,
+  BitableRecord,
   ConfiguredBotInfo,
   ConnectBotParams,
   ConnectBotState,
+  CreateBitableParams,
+  CreateBitableState,
   CreateBotParams,
   CreateBotState,
   CreatePollParams,

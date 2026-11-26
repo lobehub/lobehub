@@ -101,6 +101,105 @@ describe('ChannelMessageRuntime', () => {
     ).toBe(false);
   });
 
+  it('reports the Bitable link, sharing and non-fatal warnings', async () => {
+    const createBitable = vi.fn().mockResolvedValue({
+      appToken: 'bascnABC',
+      collaborators: ['ou_1'],
+      issues: [{ error: 'Access denied', target: 'ou_2' }],
+      name: '待办',
+      recordIds: ['rec1', 'rec2'],
+      tableId: 'tblNew',
+      url: 'https://x.feishu.cn/base/bascnABC',
+    });
+    const runtime = runtimeWith({ createBitable });
+    const params = {
+      collaborators: [{ openId: 'ou_1' }, { openId: 'ou_2' }],
+      fields: [{ name: '任务', type: 'text' as const }],
+      name: '待办',
+      platform: 'feishu' as const,
+    };
+
+    const output = await runtime.createBitable(params);
+
+    expect(createBitable).toHaveBeenCalledWith(params);
+    expect(output.success).toBe(true);
+    expect(output.content).toContain('URL: https://x.feishu.cn/base/bascnABC');
+    expect(output.content).toContain('Records written: 2');
+    expect(output.content).toContain('Shared with: ou_1');
+    expect(output.content).toContain('Warning (ou_2): Access denied');
+  });
+
+  it('warns when a new Bitable is shared with nobody', async () => {
+    const runtime = runtimeWith({
+      createBitable: vi.fn().mockResolvedValue({ appToken: 'bascnABC', collaborators: [] }),
+    });
+
+    const output = await runtime.createBitable({
+      fields: [{ name: '任务', type: 'text' }],
+      name: '待办',
+      platform: 'feishu',
+    });
+
+    expect(output.content).toContain('only the bot app can open it');
+  });
+
+  it('validates Bitable calls and reports unsupported platforms', async () => {
+    const createBitable = vi.fn();
+    const addBitableRecords = vi.fn().mockResolvedValue({
+      appToken: 'bascnABC',
+      recordIds: ['rec1'],
+      tableId: 'tblX',
+    });
+    const runtime = runtimeWith({ addBitableRecords, createBitable });
+
+    expect(
+      (await runtime.createBitable({ fields: [], name: '待办', platform: 'feishu' })).success,
+    ).toBe(false);
+    expect(createBitable).not.toHaveBeenCalled();
+    expect(
+      (await runtime.addBitableRecords({ platform: 'feishu', records: [{ a: 1 }] })).content,
+    ).toMatch(/pass the Bitable `url`/);
+    expect(
+      (await runtime.addBitableRecords({ appToken: 'bascnABC', platform: 'feishu', records: [] }))
+        .content,
+    ).toMatch(/`records` is empty/);
+    expect(
+      (
+        await runtime.addBitableRecords({
+          appToken: 'bascnABC',
+          platform: 'feishu',
+          records: [{ 任务: 'a' }],
+        })
+      ).content,
+    ).toBe('Added 1 record(s) to Bitable bascnABC (table tblX)');
+
+    const unsupported = runtimeWith({});
+    expect(
+      await unsupported.createBitable({
+        fields: [{ name: 'a', type: 'text' }],
+        name: 'x',
+        platform: 'slack',
+      }),
+    ).toEqual({ content: 'createBitable is not supported on slack', success: false });
+    expect(
+      await unsupported.addBitableRecords({ appToken: 'x', platform: 'slack', records: [{}] }),
+    ).toEqual({ content: 'addBitableRecords is not supported on slack', success: false });
+  });
+
+  it('reports a Bitable adapter error instead of throwing', async () => {
+    const runtime = runtimeWith({
+      createBitable: vi.fn().mockRejectedValue(new Error('scope missing')),
+    });
+
+    expect(
+      await runtime.createBitable({
+        fields: [{ name: 'a', type: 'text' }],
+        name: 'x',
+        platform: 'feishu',
+      }),
+    ).toEqual({ content: 'createBitable error: scope missing', success: false });
+  });
+
   it('rejects conflicting or malformed Discord cursors before calling the adapter', async () => {
     const readMessages = vi.fn();
     const runtime = runtimeWith({ readMessages });

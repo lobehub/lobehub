@@ -49,6 +49,10 @@ export const MessageApiName = {
   // Platform-specific
   createPoll: 'createPoll',
 
+  // Feishu / Lark Bitable (多维表格)
+  addBitableRecords: 'addBitableRecords',
+  createBitable: 'createBitable',
+
   // Direct messaging
   sendDirectMessage: 'sendDirectMessage',
 
@@ -329,6 +333,88 @@ export interface ReadDocumentState {
   truncated?: boolean;
   /** Canonical URL of the document, when known */
   url?: string;
+}
+
+// --- Bitable (Feishu / Lark 多维表格) ---
+
+/** Column types `createBitable` can create, mapped to Feishu field types server-side. */
+export type BitableFieldType =
+  'checkbox' | 'date' | 'multiSelect' | 'number' | 'person' | 'singleSelect' | 'text' | 'url';
+
+export interface BitableFieldSpec {
+  name: string;
+  /** Choices for `singleSelect` / `multiSelect`. Values not listed are added on write. */
+  options?: string[];
+  type: BitableFieldType;
+}
+
+/**
+ * One row, keyed by column name. Values are plain: strings / numbers /
+ * booleans, a date string or millisecond timestamp for `date`, an array of
+ * strings for `multiSelect`, open_id(s) for `person`, a URL for `url`.
+ */
+export type BitableRecord = Record<string, unknown>;
+
+export type BitablePermission = 'edit' | 'full_access' | 'view';
+
+export interface BitableCollaborator {
+  /** Platform user id (Feishu/Lark open_id, `ou_…`) — the `id` on a `<speaker>` tag. */
+  openId: string;
+  /** Defaults to `full_access` (can manage and share). */
+  perm?: BitablePermission;
+}
+
+export interface CreateBitableParams {
+  /** People to grant access; the app owns the new Bitable, so nobody else can open it otherwise. */
+  collaborators?: BitableCollaborator[];
+  /** Columns, in order; the first one is the primary column. */
+  fields: BitableFieldSpec[];
+  /** Optional drive folder token to create the Bitable in. */
+  folderToken?: string;
+  /** Bitable (file) name */
+  name: string;
+  platform: MessagePlatformType;
+  /** Initial rows */
+  records?: BitableRecord[];
+  /** Table name inside the Bitable; defaults to `name` */
+  tableName?: string;
+}
+
+export interface BitableIssue {
+  error: string;
+  /** What failed, e.g. `records` or a collaborator's open_id */
+  target: string;
+}
+
+export interface CreateBitableState {
+  appToken?: string;
+  /** Collaborators that were granted access */
+  collaborators?: string[];
+  /** Non-fatal failures (records, collaborators) — the Bitable itself exists */
+  issues?: BitableIssue[];
+  name?: string;
+  platform?: string;
+  recordIds?: string[];
+  tableId?: string;
+  url?: string;
+}
+
+export interface AddBitableRecordsParams {
+  /** Bitable app token — the `<token>` in `/base/<token>`. Either this or `url` is required. */
+  appToken?: string;
+  platform: MessagePlatformType;
+  records: BitableRecord[];
+  /** Table id (`tbl…`); defaults to the table in the URL's `?table=`, else the first table. */
+  tableId?: string;
+  /** Bitable URL, e.g. `https://<tenant>.feishu.cn/base/<token>?table=<tableId>` */
+  url?: string;
+}
+
+export interface AddBitableRecordsState {
+  appToken?: string;
+  platform?: string;
+  recordIds?: string[];
+  tableId?: string;
 }
 
 export interface EditMessageParams {

@@ -243,6 +243,86 @@ export const botMessageRouter = router({
       });
     }),
 
+  createBitable: botMessageWriteProcedure
+    .input(
+      z.object({
+        botId: z.string(),
+        collaborators: z
+          .array(
+            z.object({
+              openId: z.string(),
+              perm: z.enum(['view', 'edit', 'full_access']).optional(),
+            }),
+          )
+          .optional(),
+        fields: z
+          .array(
+            z.object({
+              name: z.string(),
+              options: z.array(z.string()).optional(),
+              type: z.enum([
+                'checkbox',
+                'date',
+                'multiSelect',
+                'number',
+                'person',
+                'singleSelect',
+                'text',
+                'url',
+              ]),
+            }),
+          )
+          .min(1),
+        folderToken: z.string().optional(),
+        name: z.string().min(1),
+        records: z.array(z.record(z.string(), z.unknown())).optional(),
+        tableName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { botId: _botId, ...params } = input;
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
+      if (!service.createBitable) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `createBitable is not supported on ${platform}`,
+        });
+      }
+      return service.createBitable({ ...params, platform });
+    }),
+
+  addBitableRecords: botMessageWriteProcedure
+    .input(
+      z
+        .object({
+          appToken: z.string().optional(),
+          botId: z.string(),
+          records: z.array(z.record(z.string(), z.unknown())).min(1),
+          tableId: z.string().optional(),
+          url: z.string().optional(),
+        })
+        .refine((v) => !!v.url || !!v.appToken, {
+          message: 'Either url or appToken is required',
+        }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { botId: _botId, ...params } = input;
+      const { service, platform } = await resolveBotMessageTarget(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
+      if (!service.addBitableRecords) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `addBitableRecords is not supported on ${platform}`,
+        });
+      }
+      return service.addBitableRecords({ ...params, platform });
+    }),
+
   editMessage: botMessageWriteProcedure
     .input(
       z.object({
