@@ -19,6 +19,7 @@ import type {
   AgentSignalExecutionContext,
   AgentSignalSourceEventInput,
 } from './emitter';
+import { resolveAgentSignalModelConfig } from './modelConfig';
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
@@ -107,6 +108,7 @@ const createPolicyOptions = (
   context: AgentSignalExecutionContext,
   options: ExecuteAgentSignalSourceEventOptions,
   procedurePolicyOptions: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
+  modelConfig: { model: string; provider: string },
 ): CreateDefaultAgentSignalPoliciesOptions => {
   // Nightly review writes proposal Daily Briefs in-run via the builtin review
   // serverRuntime primitive; the completion handler only writes the ideas brief.
@@ -141,6 +143,7 @@ const createPolicyOptions = (
     },
     feedbackDomainJudge: {
       db: context.db,
+      ...modelConfig,
       ...policyOptions?.feedbackDomainJudge,
       userId: context.userId,
       workspaceId: context.workspaceId,
@@ -158,6 +161,7 @@ const createPolicyOptions = (
               }),
           }),
       db: context.db,
+      ...modelConfig,
       ...policyOptions?.feedbackSatisfactionJudge,
       userId: context.userId,
       workspaceId: context.workspaceId,
@@ -182,6 +186,7 @@ const createPolicyOptions = (
     },
     skillIntentClassifier: {
       db: context.db,
+      ...modelConfig,
       ...policyOptions?.skillIntentClassifier,
       userId: context.userId,
       workspaceId: context.workspaceId,
@@ -215,7 +220,12 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
     const policies =
       scenarioId === AGENT_SIGNAL_SCENARIO_IDS.selfIteration
         ? createDefaultAgentSignalPolicies(
-            createPolicyOptions(context, options, procedurePolicyOptions),
+            createPolicyOptions(
+              context,
+              options,
+              procedurePolicyOptions,
+              await resolveAgentSignalModelConfig(context.db, context.userId),
+            ),
           )
         : createScenarioPolicies(scenarioId, {
             botWake: {
