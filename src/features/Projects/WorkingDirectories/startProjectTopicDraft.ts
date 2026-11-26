@@ -63,5 +63,5 @@ export const startProjectTopicDraft = ({
       ? { agentId, projectWorkingDirectoryId: directoryId, ...(auto && { auto }) }
       : { agentId, projectId, ...(auto && { auto }) },
   );
-  navigate(getProjectDraftPath(projectId, agentId, directoryId));
+  navigate(getProjectDraftPath(projectId, agentId, directoryId, auto));
 };

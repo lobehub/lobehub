@@ -149,4 +149,17 @@ describe('useProjectConversation', () => {
       projectId: 'prj_launch',
     });
   });
+
+  // Review: Auto lived only in memory, so a reloaded draft pinned its last runner.
+  it('restores Auto from the route when a draft is reloaded', () => {
+    renderHook(() => useProjectConversation(), {
+      wrapper: wrapper('/project/launch/topic?agent=agt_coord&auto=1'),
+    });
+
+    expect(useChatStore.getState().pendingNewTopicDirectory).toEqual({
+      agentId: 'agt_coord',
+      auto: true,
+      projectId: 'prj_launch',
+    });
+  });
 });

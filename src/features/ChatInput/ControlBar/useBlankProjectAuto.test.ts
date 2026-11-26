@@ -82,6 +82,23 @@ describe('useBlankProjectAuto', () => {
   });
 
   // Review: split panes on two projects of the same agent restaged each other.
+  // Review: a "+" that resolved straight to the sandbox never moved the agent
+  // there, so the first message could run on its previous device.
+  it('sends the agent to the sandbox when Auto starts there', () => {
+    env.online = new Set();
+    act(() =>
+      useChatStore
+        .getState()
+        .setPendingNewTopicDirectory({ agentId: 'agt', auto: true, projectId: 'prj' }),
+    );
+
+    const { rerender } = renderHook(() => useBlankProjectAuto('agt', 'prj'));
+    rerender();
+
+    expect(env.selectExecutionTarget).toHaveBeenCalledTimes(1);
+    expect(env.selectExecutionTarget).toHaveBeenCalledWith('sandbox');
+  });
+
   it("does not drive another project's staged draft", () => {
     act(() =>
       useChatStore

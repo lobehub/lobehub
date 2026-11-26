@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
@@ -49,6 +49,15 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
         )
       : undefined;
 
+  // The agent is sent to the sandbox once per stay there, whether Auto moved
+  // the draft there or found it there (a "+" that resolved to the sandbox).
+  const sandboxTargetedRef = useRef(false);
+  const targetSandbox = () => {
+    sandboxTargetedRef.current = true;
+    // Same as picking the sandbox by hand: the first send must not land on a device.
+    void selectExecutionTarget('sandbox');
+  };
+
   const stage = () => {
     if (!projectId || !resolved) return;
     const { setPendingNewTopicDirectory } = useChatStore.getState();
@@ -57,13 +66,15 @@ export const useBlankProjectAuto = (agentId: string, projectId: string | undefin
       return;
     }
     setPendingNewTopicDirectory({ agentId, auto: true, projectId });
-    // Same as picking the sandbox by hand: the first send must not land on a device.
-    void selectExecutionTarget('sandbox');
+    targetSandbox();
   };
 
   // While automatic, the draft follows the order as runners come and go.
   useEffect(() => {
-    if (active && resolved && staged !== resolved.id) stage();
+    if (staged !== 'sandbox') sandboxTargetedRef.current = false;
+    if (!active || !resolved) return;
+    if (staged !== resolved.id) stage();
+    else if (staged === 'sandbox' && !sandboxTargetedRef.current) targetSandbox();
   }, [active, resolved?.id, staged]);
 
   return projectId && resolved ? { active, onSelect: stage } : undefined;
