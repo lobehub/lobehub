@@ -192,16 +192,20 @@ jobs:
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
         working-directory: apps/cli
 
-      # Each package runs its own vitest; three at a time keeps the runner busy
-      # instead of paying every small package's startup one after another.
+      # Each package runs its own vitest. Two at a time with two workers each
+      # fills the 4 vCPUs instead of paying every small package's startup one
+      # after another; three at a time with Vitest's default 3 workers
+      # oversubscribed the runner and timing-sensitive tests timed out.
       - name: Test packages
+        env:
+          VITEST_MAX_WORKERS: '2'
         run: |
           run_packages() {
             local script="$1"; shift
             [ "$#" -gt 0 ] || return 0
             local filters=()
             for package in "$@"; do filters+=(--filter "$package"); done
-            pnpm "${filters[@]}" --workspace-concurrency=3 --no-sort --no-bail run "$script"
+            pnpm "${filters[@]}" --workspace-concurrency=2 --no-sort --no-bail run "$script"
           }
           status=0
           # shellcheck disable=SC2086

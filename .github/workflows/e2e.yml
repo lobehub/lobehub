@@ -141,10 +141,35 @@ jobs:
       - name: Run database migrations
         run: bun run db:migrate
 
+      # Turbopack's persistent cache: with a warm cache the Next.js compile of
+      # the same tree took 2.2 s instead of 2.1 min. It is 1.1 GB and the repo's
+      # Actions cache is full, so only the first canary push of each day saves
+      # one; every run restores the newest.
+      - name: Restore the Next.js build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .next/cache
+          key: next-build-v1-${{ github.sha }}
+          restore-keys: |
+            next-build-v1-
+
       - name: Build application
         run: bun run build
         env:
           SKIP_LINT: '1'
+
+      - name: Name today's Next.js build cache
+        id: next_cache_day
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the Next.js build cache (first canary push of the day)
+        if: steps.next_cache_day.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .next/cache
+          key: next-build-v1-${{ steps.next_cache_day.outputs.day }}
 
       # ===== Bundle size gate (web dist) =====
       # Baseline: artifact from the latest successful canary commit in the tested SHA's lineage.

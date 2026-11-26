@@ -175,6 +175,11 @@ export default defineConfig({
     },
     environment: 'happy-dom',
     exclude,
+    // Worker threads start faster than the default forked processes: a third of
+    // the files of each project ran ~30% (app) and ~20% (server) faster on the
+    // CI runners, with the same results. `isolate: false` was faster still but
+    // broke 255 server files, and `vmThreads` crashed a worker.
+    pool: 'threads',
     // Vitest 4 removed `environmentMatchGlobs`; split the run into an `app`
     // (happy-dom) and a `server` (node) project instead. The server project
     // matters because `apps/server` is backend code: forcing Node keeps

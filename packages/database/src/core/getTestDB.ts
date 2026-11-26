@@ -27,15 +27,48 @@ const workerDatabaseUrl = async (connectionString: string) => {
 
   const url = new URL(connectionString);
   const name = `${decodeURIComponent(url.pathname.slice(1)) || 'postgres'}_w${workerId}`;
+  const quote = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
   const admin = new NodePool({ connectionString, max: 1 });
+  let extensions: string[];
   try {
     const existing = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
-    if (!existing.rowCount) await admin.query(`CREATE DATABASE "${name.replaceAll('"', '""')}"`);
+    if (!existing.rowCount) await admin.query(`CREATE DATABASE ${quote(name)}`);
+    // A new database only gets the extensions of template1. Mirror the base
+    // database's (pg_search, vector, …): migrations skip the BM25 indexes when
+    // pg_search is missing, and the FTS tests then fail.
+    const { rows } = await admin.query<{ extname: string }>(
+      "SELECT extname FROM pg_extension WHERE extname <> 'plpgsql'",
+    );
+    extensions = rows.map((row) => row.extname);
   } finally {
     await admin.end();
   }
+
   url.pathname = `/${encodeURIComponent(name)}`;
+  const worker = new NodePool({ connectionString: url.toString(), max: 1 });
+  try {
+    for (const extension of extensions) {
+      // Best effort: some (pg_cron) can only live in one database per server.
+      await worker.query(`CREATE EXTENSION IF NOT EXISTS ${quote(extension)}`).catch(() => {});
+    }
+  } finally {
+    await worker.end();
+  }
   return url.toString();
+};
+
+let testDatabaseUrl: Promise<string> | undefined;
+
+/**
+ * The server-DB connection string this worker's tests use: `DATABASE_TEST_URL`,
+ * or the worker's own database when `DATABASE_TEST_WORKERS` is above 1. Tests
+ * that open their own connection must use this, not the variable.
+ */
+export const getTestDatabaseUrl = (): Promise<string> => {
+  const connectionString = serverDBEnv.DATABASE_TEST_URL;
+  if (!connectionString) throw new Error('DATABASE_TEST_URL is not set');
+  testDatabaseUrl ??= workerDatabaseUrl(connectionString);
+  return testDatabaseUrl;
 };
 
 export const getTestDB = async (): Promise<LobeChatDatabase> => {
@@ -43,13 +76,7 @@ export const getTestDB = async (): Promise<LobeChatDatabase> => {
   if (isServerDBMode) {
     if (testServerDB) return testServerDB as unknown as LobeChatDatabase;
 
-    const baseConnectionString = serverDBEnv.DATABASE_TEST_URL;
-
-    if (!baseConnectionString) {
-      throw new Error('DATABASE_TEST_URL is not set');
-    }
-
-    const connectionString = await workerDatabaseUrl(baseConnectionString);
+    const connectionString = await getTestDatabaseUrl();
     const client = new NodePool({ connectionString });
     testServerDB = nodeDrizzle(client, { schema });
 
