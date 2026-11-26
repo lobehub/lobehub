@@ -125,8 +125,9 @@ export function computeScope({ eventName, headRef = '', labels = [], changes, wo
     // config aliases `@/` to src/ and `@/server/*` to apps/server/src, so DB
     // tests import code outside the package (KeyVaultsEncrypt, file service, …).
     // In affected mode it narrows with `--changed` like the other shards.
-    // Packages whose vitest config reaches into src/ or apps/server/ test that
-    // code too, so a source change there reruns them (and their dependents).
+    // Packages whose vitest config aliases outside the package (into src/,
+    // apps/server/ or another package, without declaring it as a dependency)
+    // test that code too, so any source change reruns them and their dependents.
     if (file.startsWith('src/')) {
       scope.app = true;
       if (!isTest) {
@@ -154,6 +155,7 @@ export function computeScope({ eventName, headRef = '', labels = [], changes, wo
       } else if (!isTest && !isAsset) {
         // the app, the server and the database layer all import packages
         Object.assign(scope, { app: true, database: true, e2e: true, server: true });
+        for (const name of appReachingPackages) changedPackages.add(name);
         if (file.endsWith('.tsx')) scope.renderBudget = true;
       } else if (isAsset) {
         Object.assign(scope, { e2e: true, renderBudget: true });
@@ -240,13 +242,15 @@ export function testPackages(workspace) {
 
 // Reads the manifests one and two levels under packages/, as pnpm-workspace.yaml allows.
 /**
- * Whether a package's tests can import app or server code: its vitest config
- * aliases into `src/` or `apps/server/` (openapi resolves `@/server` there), or
- * resolves `@/…` through the root tsconfig paths (`tsconfigPaths()` or
+ * Whether a package's tests can import code outside the package that its
+ * manifest does not declare: its vitest config aliases into `src/`,
+ * `apps/server/` or a sibling package (openapi resolves `@/server` into
+ * apps/server/src and `@/database` into packages/database), or resolves `@/…`
+ * through the root tsconfig paths (`tsconfigPaths()` or
  * `resolve.tsconfigPaths: true`), which map onto the same directories.
  */
 const APP_REACHING_CONFIG =
-  /\.\.\/(src|apps\/server)\b|\.\.\/tsconfig\.json|tsconfigPaths(\(|:\s*true)/;
+  /\.\.\/(src|apps\/server)\b|\.\.\/[\w-]+\/src\b|\.\.\/tsconfig\.json|tsconfigPaths(\(|:\s*true)/;
 export function vitestConfigReachesApp(packageDir) {
   return readdirSync(packageDir).some(
     (file) =>

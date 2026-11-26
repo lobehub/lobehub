@@ -141,21 +141,31 @@ test('app source runs the app, server, database and E2E jobs; a test-only change
   assert.deepEqual(ran(computeScope(pr('public/favicon.ico'))), ['e2e', 'renderBudget']);
 });
 
-test('a package change selects it and its dependents, and runs the database tests', () => {
+test('a package change selects it, its dependents and the alias consumers, and runs the database tests', () => {
   const types = computeScope(pr('packages/types/src/index.ts'));
   assert.deepEqual(ran(types), ['app', 'server', 'packages', 'database', 'e2e']);
-  assert.deepEqual(types.packageNames, ['@lobechat/types', '@lobechat/utils']);
+  // openapi aliases into other packages without declaring them (alias consumer)
+  assert.deepEqual(types.packageNames, [
+    '@lobechat/openapi',
+    '@lobechat/types',
+    '@lobechat/utils',
+    '@lobehub/sdk',
+  ]);
 
   const editor = computeScope(pr('packages/editor/src/Editor.tsx'));
   assert.deepEqual(ran(editor), ['app', 'server', 'packages', 'database', 'e2e', 'renderBudget']);
-  assert.deepEqual(editor.packageNames, ['@lobechat/editor']);
+  assert.deepEqual(editor.packageNames, ['@lobechat/editor', '@lobechat/openapi', '@lobehub/sdk']);
 
   const dbTest = computeScope(pr('packages/database/src/models/a.test.ts'));
   assert.deepEqual(ran(dbTest), ['database']);
   assert.deepEqual(dbTest.packageNames, []);
 
   const nested = computeScope(pr('packages/business/const/src/index.ts'));
-  assert.deepEqual(nested.packageNames, ['@lobechat/business-const']);
+  assert.deepEqual(nested.packageNames, [
+    '@lobechat/business-const',
+    '@lobechat/openapi',
+    '@lobehub/sdk',
+  ]);
 
   assert.deepEqual(ran(computeScope(pr('packages/local-file-shell/src/a.test.ts'))), [
     'packages',
@@ -163,7 +173,7 @@ test('a package change selects it and its dependents, and runs the database test
   ]);
 });
 
-test('app or server source reruns the packages whose tests import it, with their dependents', () => {
+test('app or server source reruns the alias consumers, with their dependents', () => {
   const server = computeScope(
     pr('apps/server/src/modules/AgentRuntime/InMemoryStreamEventManager.ts'),
   );
@@ -177,11 +187,19 @@ test('app or server source reruns the packages whose tests import it, with their
   assert.deepEqual(computeScope(pr('apps/server/src/a.test.ts')).packageNames, []);
 });
 
-test('vitestConfigReachesApp spots aliases and tsconfig paths into app or server code', () => {
+test('vitestConfigReachesApp spots aliases and tsconfig paths outside the package', () => {
   for (const reaching of ['openapi', 'trpc', 'utils', 'builtin-tool-task']) {
     assert.equal(vitestConfigReachesApp(path.join(repoRoot, 'packages', reaching)), true, reaching);
   }
-  assert.equal(vitestConfigReachesApp(path.join(repoRoot, 'packages/fetch-sse')), false);
+  for (const contained of ['prompts', 'types']) {
+    assert.equal(
+      vitestConfigReachesApp(path.join(repoRoot, 'packages', contained)),
+      false,
+      contained,
+    );
+  }
+  // aliases a sibling package it does not declare
+  assert.equal(vitestConfigReachesApp(path.join(repoRoot, 'packages/fetch-sse')), true);
 });
 
 test('affectedTestPackages follows dependents transitively and drops packages without tests', () => {
