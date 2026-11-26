@@ -414,4 +414,62 @@ describe('useAgentModelSelection', () => {
     expect(result.current.canDisplayModel).toBe(false);
     expect(result.current.selectionLockReason).toBeUndefined();
   });
+
+  it('shows a collaborative builtin model without waiting for the manager re-check', () => {
+    // The Workspace Lobe AI on Home: every caller picks their own model, so the
+    // session re-check of the manager grant must not hide the trigger.
+    testState.access.isAccessLoading = true;
+    testState.agent.agentMap['agent-1'] = {
+      slug: 'inbox',
+      virtual: true,
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.fetchedPreference = {
+      agentModelOverrides: { 'agent-1': { model: 'member-model', provider: 'member-provider' } },
+    };
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: true,
+      canSelectModel: true,
+      isModelLoading: false,
+      model: 'member-model',
+      provider: 'member-provider',
+    });
+  });
+
+  it('still waits for the manager re-check on a public Agent with a shared default', () => {
+    testState.access.isAccessLoading = true;
+    testState.agent.agentMap['agent-1'] = { visibility: 'public', workspaceId: 'workspace-1' };
+
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current).toMatchObject({
+      canDisplayModel: false,
+      canSelectModel: false,
+      isModelLoading: true,
+    });
+  });
+
+  it('reports loading while the caller preference loads, and not when access is denied', () => {
+    testState.agent.agentMap['agent-1'] = {
+      slug: 'inbox',
+      virtual: true,
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    };
+    testState.user.isLoading = true;
+
+    const { result, rerender } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    expect(result.current.canDisplayModel).toBe(false);
+    expect(result.current.isModelLoading).toBe(true);
+
+    testState.resource.canUseResource = false;
+    rerender();
+
+    expect(result.current.isModelLoading).toBe(false);
+  });
 });

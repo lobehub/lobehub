@@ -27,6 +27,7 @@
   "claimResources.claim": "선택 항목 요청",
   "claimResources.description": "귀하의 계정과 연결된 요청 가능한 리소스를 찾았습니다:",
   "claimResources.error": "리소스 요청에 실패했습니다. 다시 시도해 주세요.",
+  "claimResources.failedRetry": "이 리소스를 요청할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.",
   "claimResources.mcpSection": "MCP 서버",
   "claimResources.selectedCount": "{{count}}개 항목 선택됨",
   "claimResources.skillSection": "기술",

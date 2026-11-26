@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "Skomentuj tę akceptację i zaakceptuj ją lub odeślij z jej strony podglądu.",
   "consent.scope.acceptance-review-site": "Komentuj przegląd tej witryny bezpośrednio z witryny przez 8 godzin",
   "consent.scope.email": "Dostęp do Twojego adresu e-mail",
+  "consent.scope.generation-read": "Przeglądanie wygenerowanych obrazów, filmów i dźwięków",
+  "consent.scope.generation-write": "Generowanie obrazów, filmów i dźwięków oraz usuwanie wyników z wykorzystaniem Twojego limitu",
   "consent.scope.offline_access": "Zezwól aplikacji na dostęp do Twoich danych",
   "consent.scope.openid": "Uwierzytelnij się za pomocą konta LobeHub",
   "consent.scope.profile": "Dostęp do podstawowych informacji o profilu (imię, avatar itp.)",

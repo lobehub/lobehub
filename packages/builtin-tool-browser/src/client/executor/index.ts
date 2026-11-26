@@ -25,6 +25,9 @@ const BrowserApiEnum = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const mediaTypeOf = (dataUrl: string) =>
+  dataUrl.match(/^data:(image\/[\w.+-]+);/)?.[1] ?? 'image/jpeg';
+
 /**
  * Browser Tool Executor (client / desktop only)
  *
@@ -122,6 +125,7 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.fill({
+        oldText: params.oldText,
         ref: params.ref,
         sessionId: this.sessionIdOf(ctx),
         submit: params.submit,
@@ -129,6 +133,11 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       });
       if (!result.success) return this.failure(result.error ?? 'Fill failed');
 
+      if (params.oldText !== undefined) {
+        return this.success(
+          `Replaced "${params.oldText}" with "${params.text}" in ${params.ref} and read it back.`,
+        );
+      }
       return this.success(
         `Filled ${params.ref} with "${params.text}"${params.submit ? ' and pressed Enter' : ''}.`,
       );
@@ -202,7 +211,13 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
       return this.success(
         `Screenshot captured (${result.width}×${result.height}) and shown to the user.`,
-        { dataUrl: result.dataUrl, height: result.height, width: result.width },
+        // `images` is what the context engine turns into the model's image part;
+        // a bare `dataUrl` only ever reached the chat render.
+        {
+          height: result.height,
+          images: [{ mediaType: mediaTypeOf(result.dataUrl), url: result.dataUrl }],
+          width: result.width,
+        },
       );
     } catch (error) {
       return this.errorResult(error);

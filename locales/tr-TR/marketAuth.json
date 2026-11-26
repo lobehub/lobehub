@@ -27,6 +27,7 @@
   "claimResources.claim": "Seçilenleri Talep Et",
   "claimResources.description": "Hesabınıza bağlı talep edebileceğiniz kaynaklar bulduk:",
   "claimResources.error": "Kaynaklar talep edilemedi. Lütfen tekrar deneyin.",
+  "claimResources.failedRetry": "Bu kaynaklar talep edilemedi. Ağınızı kontrol edip tekrar deneyin.",
   "claimResources.mcpSection": "MCP Sunucuları",
   "claimResources.selectedCount": "{{count}} öğe seçildi",
   "claimResources.skillSection": "Beceriler",

@@ -1,11 +1,11 @@
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { actionToMessage } from '@lobehub/a2ui';
-import { type A2uiHost, A2uiHostProvider, SurfaceView } from '@lobehub/a2ui/react';
-import { Flexbox } from '@lobehub/ui';
-import { memo, useMemo, useState } from 'react';
+import { actionToMessage } from '@lobehub/a2ui/action';
+import { type A2uiHost, A2uiHostProvider, SurfaceList } from '@lobehub/a2ui/react';
+import { memo, useMemo } from 'react';
 
-import { useA2uiStatusLabels } from '@/features/A2uiCards/useStatusLabels';
 import { channelActions } from '@/store/channel';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 
 interface MessageSurfacesProps {
   detail: ChannelDetail;
@@ -23,14 +23,12 @@ export const MessageSurfaces = memo<MessageSurfacesProps>(({ detail, message, th
   )?.id;
   const canAct = detail.channel.status !== 'archived' && !!agentMemberId;
   const channelId = detail.channel.id;
-  // Surfaces submitted from this view; the stored state covers the ones sent before a reload.
-  const [submitted, setSubmitted] = useState<ReadonlySet<string>>(() => new Set());
+  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
-  const statusLabels = useA2uiStatusLabels();
   const host = useMemo<A2uiHost>(
     () => ({
       canAct,
-      statusLabels,
+      locale,
       sendAction: async (action, surface) => {
         if (!agentMemberId) return false;
         const sent = await channelActions.queueSend({
@@ -42,31 +40,16 @@ export const MessageSurfaces = memo<MessageSurfacesProps>(({ detail, message, th
           replyToId: message.id,
           threadId: threadId ?? message.threadId,
         });
-        if (sent) setSubmitted((ids) => new Set(ids).add(surface.surfaceId));
         return !!sent;
       },
     }),
-    [agentMemberId, canAct, channelId, message.id, message.threadId, threadId, statusLabels],
+    [agentMemberId, canAct, channelId, locale, message.id, message.threadId, threadId],
   );
 
   if (!message.surfaces?.length) return null;
   return (
     <A2uiHostProvider value={host}>
-      <Flexbox gap={8}>
-        {message.surfaces.map((surface) => {
-          const done = submitted.has(surface.surfaceId) || surface.state?.status === 'submitted';
-          return (
-            <SurfaceView
-              key={surface.surfaceId}
-              record={surface}
-              state={done ? { status: 'submitted' } : surface.state}
-              onAction={
-                canAct && !done ? (action) => void host.sendAction(action, surface) : undefined
-              }
-            />
-          );
-        })}
-      </Flexbox>
+      <SurfaceList surfaces={message.surfaces} />
     </A2uiHostProvider>
   );
 });

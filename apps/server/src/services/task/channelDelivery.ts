@@ -1,9 +1,16 @@
 import { A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
-import type { TaskChannelDelivery, TaskChannelDeliveryInput } from '@lobechat/types';
-import { readTaskChannelDelivery } from '@lobechat/types';
+import type {
+  TaskChannelDelivery,
+  TaskChannelDeliveryInput,
+  TaskDeliveryContext,
+} from '@lobechat/types';
+import { readTaskChannelDelivery, readTaskDeliveryContext } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { TopicTrigger } from '@/const/topic';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import type { RunChannelPostResult } from '@/server/services/inboundWebhook/channelDelivery';
 import {
@@ -81,6 +88,37 @@ export const resolveTaskDeliveryInput = async (
   return { channelId: origin.channelId, threadId: threadId ?? origin.threadId ?? null };
 };
 
+/**
+ * {@link resolveTaskDeliveryInput} then {@link normalizeTaskDeliveryConfig} for a client's
+ * `setTaskSchedule`, nothing stored: what the delivery resolves to and the line saying so, or a bad
+ * request saying why it is refused. `operationId` resolves `{}` only when it is a run of the
+ * caller's own.
+ */
+export const checkTaskDeliveryInput = async (
+  db: LobeChatDatabase,
+  scope: Scope,
+  agentId: string | null | undefined,
+  operationId: string | undefined,
+  input: TaskChannelDeliveryInput | null,
+): Promise<{ delivery: TaskChannelDelivery | null; description: string }> => {
+  try {
+    const ownRun =
+      operationId &&
+      (await new AgentOperationModel(db, scope.userId, scope.workspaceId).findById(operationId))
+        ? operationId
+        : undefined;
+    const delivery = await resolveTaskDeliveryInput(db, ownRun, input);
+    const { delivery: checked } = await normalizeTaskDeliveryConfig(db, scope, agentId, {
+      delivery,
+    });
+    return { delivery: checked, description: describeTaskDelivery(checked) };
+  } catch (error) {
+    if (error instanceof ChannelDeliveryError)
+      throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+    throw error;
+  }
+};
+
 /** One line for the tool result saying where results now go. */
 export const describeTaskDelivery = (delivery: TaskChannelDelivery | null) =>
   delivery
@@ -101,14 +139,18 @@ export const taskChannelDeliveryRun = (config: unknown) =>
 /**
  * Post a finished task run's answer (text and cards) to the task's Channel delivery as the run's
  * Agent. Idempotent per run: a repeated completion callback finds the post already there.
- * `none` when the task delivers nowhere.
+ * `none` when the task delivers nowhere. Only the task's own runs deliver: a person's follow-up in
+ * a run's Topic is answered privately there (`not-delivered`).
+ *
+ * A post the Channel refuses is recorded on the task (`context.delivery.lastError`), so the owner
+ * can see why results stopped arriving; the next post that lands clears it.
  */
 export const postTaskRunToChannel = async (
   db: LobeChatDatabase,
   params: {
     operationId: string;
     scope: Scope;
-    task: { config: unknown; id: string; identifier: string };
+    task: { config: unknown; context?: unknown; id: string; identifier: string };
   },
 ): Promise<RunChannelPostResult | 'none'> => {
   const delivery = readTaskChannelDelivery(params.task.config);
@@ -119,14 +161,24 @@ export const postTaskRunToChannel = async (
     operationId: params.operationId,
     requestKey: `task-delivery:${params.operationId}`,
     scope: params.scope,
+    trigger: TopicTrigger.RunTask,
   });
-  if (result === 'unavailable')
+  const tasks = new TaskModel(db, params.scope.userId, params.scope.workspaceId);
+  if (result === 'unavailable') {
     log(
       'task %s cannot post to channel %s: %s',
       params.task.identifier,
       delivery.channelId,
       error?.message,
     );
+    const lastError: TaskDeliveryContext['lastError'] = {
+      at: new Date().toISOString(),
+      code: 'channel_unavailable',
+      ...(error?.message && { message: error.message }),
+    };
+    await tasks.updateContext(params.task.id, { delivery: { lastError } });
+  } else if (result === 'posted' && readTaskDeliveryContext(params.task.context)?.lastError)
+    await tasks.updateContext(params.task.id, { delivery: { lastError: null } });
   return result;
 };
 

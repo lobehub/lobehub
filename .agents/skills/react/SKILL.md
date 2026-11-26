@@ -45,6 +45,7 @@ user-invocable: false
   2. A pseudo-class on the slot's element: StyleX compiles keys like `':has([data-replace-all])'` and `':nth-child(2)'`, so `.tabs [role=tab]:has([data-replace-all])` becomes `classNames.tab` with `marginInlineStart: { default: null, ':has([data-replace-all])': 'auto' }`.
   3. Our own component: add an `xstyle?: StyleXStyles` prop (or `<part>Xstyle` for an inner part) and apply it there.
   4. Only DOM no prop can reach (editor content such as `.ProseMirror p`, rendered markdown, third-party widgets, lobe-ui parts without a slot) keeps its original nested rule, unchanged, in a `createStaticStyles` object in the same file, merged onto the host element with `{...sx(styles.content, fallback.content)}`. Put `// oxlint-disable-next-line stylex-migration/no-emotion-styles -- <what no prop reaches>` above the `@lobehub/ui` import. Add a missing slot to lobe-ui instead when the component is ours.
+- After a `:has()` that is not on the styled element, keep the rest of the selector a class, attribute or tag, never universal (`*`, `> :not(...)`, `> * > :last-child`). Chrome shares one invalidation set across all `:has()` rules, so one such rule makes every DOM insertion restyle the whole page; StyleX's `':is(body:has([role="dialog"]) *)'` made each message row a list mounts recalc about 4600 elements. Write that condition as `body:has(...) & {}` in a `createStaticStyles` fallback (step 4).
 
 ## Component Priority
 

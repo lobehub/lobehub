@@ -1,107 +1,112 @@
 'use client';
 
-import { Button, Flexbox, Hotkey, Icon, KeyMapEnum, Tabs, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Check, PenLine, Replace, Send, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import { memo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { registerPendingHotkeyCard } from '../pendingHotkeys';
+import type { AskUserFooterLabels } from './AskUserFooter';
+import AskUserFooter from './AskUserFooter';
 import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
-import type { AskUserQuestionItem } from './types';
 import type { AskUserFormApi } from './useAskUserForm';
+import { useAskUserHotkeys } from './useAskUserHotkeys';
 
 const styles = stylex.create({
-  tab: { marginInlineStart: { 'default': null, ':has([data-replace-all])': 'auto' } },
+  dimmed: { opacity: 0.55, transition: 'opacity 0.12s ease' },
+  note: {
+    gap: '6px',
+    paddingBlockStart: '12px',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: cssVar.colorFillSecondary,
+  },
+  progress: {
+    position: 'absolute',
+    insetBlockStart: '50%',
+    insetInlineEnd: '4px',
+    transform: 'translateY(-50%)',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    pointerEvents: 'none',
+  },
+  tabLabel: {
+    overflow: 'hidden',
+    maxWidth: '160px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   tabList: { width: '100%' },
+  tabs: { position: 'relative' },
 });
-
-const optionValue = (option: AskUserQuestionItem['options'][number]): string =>
-  option.id ?? option.label;
-
-/**
- * A focused interactive control keeps its native key activation — hijacking
- * Enter/Space away from a tabbed-to button or link would invert the keyboard
- * user's intent.
- */
-const INTERACTIVE_SELECTOR =
-  'a,button,select,summary,[role="button"],[role="tab"],[role="option"],[role="menuitem"],' +
-  '[role="combobox"],[role="listbox"],[role="radio"],[role="slider"],[role="spinbutton"]';
 
 /**
  * All display strings the view needs. Kept i18n-free so `shared-tool-ui` stays
- * app-decoupled — each host builds this from its own namespace (Claude Code
- * uses its `claudeCode.askUserQuestion.*` keys, the builtin surface uses the
- * generic `askUserQuestion.*` keys).
+ * app-decoupled — each host builds this from its own namespace.
  */
-export interface AskUserQuestionLabels {
+export interface AskUserQuestionLabels extends AskUserFooterLabels {
   customPlaceholder: string;
-  /** "Back to options" — reserved for hosts that render a back affordance. */
-  escapeBack: string;
-  escapeEnter: string;
-  escapePlaceholder: string;
-  multiSelectTag: string;
+  noteLabel: string;
+  progress: (answered: number, total: number) => string;
   /** Badge text for options carrying the "(Recommended)" label marker. */
   recommendedTag: string;
-  skip: string;
-  submit: string;
-  supplementEnter: string;
   supplementPlaceholder: string;
   /** Shown once the timeout fallback has answered on the user's behalf. */
   timeExpired: string;
   /**
    * Shown when the clock ran out with no fallback answer — provider-owned
    * option ids (consent is never inferred) or a card opened after the
-   * producer already stopped waiting. Promising "option 1 will be used" here
-   * would describe a submission that is never going to happen.
+   * producer already stopped waiting.
    */
   timeExpiredNoAnswer: string;
   timeRemaining: (time: string) => string;
 }
 
+const countdownLabel = (
+  labels: AskUserQuestionLabels,
+  {
+    autoSubmitted,
+    expired,
+    remainingMs,
+  }: Pick<AskUserFormApi, 'autoSubmitted' | 'expired' | 'remainingMs'>,
+) => {
+  if (autoSubmitted) return labels.timeExpired;
+  if (expired) return labels.timeExpiredNoAnswer;
+  return labels.timeRemaining(formatRemaining(remainingMs));
+};
+
 export interface AskUserQuestionViewProps extends AskUserFormApi {
-  /** Portal the Skip/Submit footer here so it stays pinned below the scroll. */
+  /** Portal the footer here so it stays pinned below the scroll. */
   actionsPortalTarget?: HTMLElement | null;
   labels: AskUserQuestionLabels;
   /** Render the countdown text in the footer (only when a countdown is active). */
   showCountdown: boolean;
 }
 
-/**
- * The presentational shell for AskUserQuestion:
- * - a top tab strip (Q1, Q2, … + additional-notes and replace-all tabs) when
- *   there is more than one question,
- * - the active `QuestionPanel` (or the notes / replace-all TextArea), and
- * - a Skip/Submit footer with an optional countdown.
- *
- * All form state and handlers arrive via props (from `useAskUserForm`); the
- * only local state is the keyboard cursor. Its one side effect is the
- * window-level shortcut listener (digits / arrows / Space / Enter / Esc).
- */
 export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   const {
     actionsPortalTarget,
     activeQuestion,
     activeTab,
+    answeredCount,
     autoSubmitted,
     custom,
-    escapeActive,
-    escapeText,
     expired,
     handleCustomChange,
-    handleEscapeTextChange,
+    handlePrimary,
+    handleRemoveNote,
     handleSkip,
-    handleSubmit,
     handleSupplementTextChange,
     handleToggle,
-    isMulti,
+    hasDraft,
     isSubmitDisabled,
     labels,
     picks,
+    primary,
     questions,
     remainingMs,
-    setEscapeMode,
     setQuestionMode,
     setSupplementMode,
     showCountdown,
@@ -111,313 +116,108 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const portalRef = useRef(actionsPortalTarget);
-
-  // Keyboard cursor over the active question's rows, keyed by question text so
-  // each question keeps its own cursor across tab switches with no reset
-  // effect. `options.length` is a sentinel for the trailing free-text row.
-  // Unset falls back to the picked option (single-select revisit) or row 1 —
-  // so Enter alone accepts the first/recommended option, Codex-style.
-  const [highlightMap, setHighlightMap] = useState<Record<string, number>>({});
-  const highlightedIndex = useMemo(() => {
-    if (!activeQuestion) return undefined;
-    const stored = highlightMap[activeQuestion.question];
-    if (stored != null) return stored;
-    if (!activeQuestion.multiSelect) {
-      const picked = picks[activeQuestion.question];
-      const idx = activeQuestion.options.findIndex((option) => optionValue(option) === picked);
-      if (idx >= 0) return idx;
-    }
-    return 0;
-  }, [activeQuestion, highlightMap, picks]);
-
-  const setHighlight = useCallback((q: AskUserQuestionItem, idx: number) => {
-    setHighlightMap((m) => ({ ...m, [q.question]: idx }));
-  }, []);
-
-  // The active panel renders exactly one textarea (the per-question free-text
-  // row; the whole-form escape textarea replaces it and disables row
-  // navigation), so a DOM query is enough — no ref plumbing through the panel.
-  const focusCustomInput = useCallback(() => {
-    rootRef.current?.querySelector('textarea')?.focus();
-  }, []);
-
-  // Page-level keyboard: 1-9 pick the numbered row, ↑/↓ move the cursor (the
-  // row after the last option focuses the free-text box), Space toggles the
-  // highlighted row, Enter picks (single-select, unanswered) or submits, Esc
-  // skips. The card is the pending interaction, so the shortcuts work without
-  // focusing it first. Backs off while the user is typing anywhere outside the
-  // card (chat composer included; the card's own textareas handle their keys
-  // via onKeyDown while Esc keeps skipping there), when the event was already
-  // consumed (e.g. an overlay closing itself on Esc), or inside open overlays
-  // so Esc keeps meaning "close this overlay" there.
-  //
-  // Read through a ref so the arbiter registration below stays mount-stable
-  // while the handler always sees fresh state; the effect re-runs every render
-  // instead of tracking a dependency list.
-  const onKeyDownRef = useRef<(event: KeyboardEvent) => void>(() => {});
-  useEffect(() => {
-    portalRef.current = actionsPortalTarget;
-    onKeyDownRef.current = (event) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
-          // Typing inside this card only backs off non-Esc keys (handled by the
-          // textarea itself) — the advertised Esc-to-skip must keep working.
-          // The IME guard keeps Esc-canceling a CJK composition from skipping.
-          const typingInCard = rootRef.current?.contains(target) ?? false;
-          if (!typingInCard || event.key !== 'Escape' || event.isComposing) return;
-        }
-        if (target.closest('[role="dialog"],[role="alertdialog"],[role="menu"]')) return;
-        // A focused interactive control (a select, a radio group, a tabbed-to
-        // button…) keeps its native keys — digits/arrows/Space/Enter all
-        // yield; only the advertised Esc-to-skip stays. Our own option rows
-        // are non-focusable divs, so they never appear as the keydown target.
-        if (event.key !== 'Escape' && target.closest(INTERACTIVE_SELECTOR)) return;
-      }
-
-      // Held-key auto-repeat must not chain picks across auto-advanced
-      // questions (a held digit could answer-and-submit the whole form) or
-      // hammer Enter; arrows may repeat for fast row scanning.
-      if (event.repeat && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-
-      const q = activeQuestion;
-      const rowNavEnabled =
-        !!q &&
-        !escapeActive &&
-        !supplementActive &&
-        !submitting &&
-        !expired &&
-        q.options.length > 0;
-
-      // Digit keys pick the matching numbered row directly; the row after the
-      // last option is the "write your own" line, which focuses its textarea.
-      if (/^[1-9]$/.test(event.key)) {
-        if (!rowNavEnabled) return;
-        const idx = Number(event.key) - 1;
-        if (idx < q.options.length) {
-          event.preventDefault();
-          setHighlight(q, idx);
-          handleToggle(q, optionValue(q.options[idx]), { submitOnComplete: true });
-        } else if (idx === q.options.length) {
-          event.preventDefault();
-          setHighlight(q, q.options.length);
-          focusCustomInput();
-        }
-        return;
-      }
-
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-        if (!rowNavEnabled) return;
-        event.preventDefault();
-        const total = q.options.length + 1; // +1: the free-text row
-        const delta = event.key === 'ArrowUp' ? -1 : 1;
-        const next = ((highlightedIndex ?? 0) + delta + total) % total;
-        setHighlight(q, next);
-        if (next === q.options.length) focusCustomInput();
-        return;
-      }
-
-      if (event.key === ' ') {
-        if (!rowNavEnabled || highlightedIndex == null || highlightedIndex >= q.options.length)
-          return;
-        event.preventDefault();
-        handleToggle(q, optionValue(q.options[highlightedIndex]));
-        return;
-      }
-
-      if (event.key === 'Enter') {
-        if (event.shiftKey) return;
-        // Single-select with the cursor on a row that isn't the current pick:
-        // Enter accepts that row (which may select-to-submit via the form
-        // hook) — including when revisiting an already-answered question to
-        // change the answer. With the cursor on the picked row, on a
-        // custom-text answer, or on a multi-select (Space/digits toggle
-        // there), Enter keeps meaning "submit the form".
-        if (
-          rowNavEnabled &&
-          !q.multiSelect &&
-          highlightedIndex != null &&
-          highlightedIndex < q.options.length &&
-          !(custom[q.question] ?? '').trim() &&
-          picks[q.question] !== optionValue(q.options[highlightedIndex])
-        ) {
-          event.preventDefault();
-          handleToggle(q, optionValue(q.options[highlightedIndex]), { submitOnComplete: true });
-          return;
-        }
-        if (isSubmitDisabled) return;
-        event.preventDefault();
-        handleSubmit();
-      } else if (event.key === 'Escape') {
-        if (submitting || !labels.skip) return;
-        event.preventDefault();
-        handleSkip();
-      }
-    };
+  const { handleCustomNavigate, highlightedIndex } = useAskUserHotkeys({
+    actionsPortalTarget,
+    canSkip: !!labels.skip,
+    form: props,
+    rootRef,
   });
 
-  // Registered once per mount: the shared arbiter dispatches each keypress to
-  // exactly one pending card (containment first, then newest registration), so
-  // coexisting cards — this one, the global notification's, a tool-approval
-  // card — never race on the same keystroke, regardless of re-render timing.
-  useEffect(
-    () =>
-      registerPendingHotkeyCard({
-        contains: (node) =>
-          Boolean(rootRef.current?.contains(node)) || Boolean(portalRef.current?.contains(node)),
-        onKeyDown: (event) => onKeyDownRef.current(event),
-      }),
-    [],
-  );
+  const handleAddNote = useCallback(() => {
+    setSupplementMode(true);
+    requestAnimationFrame(() =>
+      rootRef.current?.querySelector<HTMLTextAreaElement>('[data-ask-note] textarea')?.focus(),
+    );
+  }, [setSupplementMode]);
+
+  const countdownText = showCountdown
+    ? countdownLabel(labels, { autoSubmitted, expired, remainingMs })
+    : undefined;
 
   const footer = (
-    <Flexbox
-      horizontal
-      align="center"
-      gap={8}
-      justify={showCountdown ? 'space-between' : 'flex-end'}
-      width={'100%'}
-    >
-      {showCountdown && (
-        <Text fontSize={12} type="secondary">
-          {autoSubmitted
-            ? labels.timeExpired
-            : expired
-              ? labels.timeExpiredNoAnswer
-              : labels.timeRemaining(formatRemaining(remainingMs))}
-        </Text>
-      )}
-      <Flexbox horizontal gap={8}>
-        {/* A host whose question has no "not now" answer (a decision gate)
-            passes no skip label, and the form offers no way around it. */}
-        {labels.skip && (
-          <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
-            {labels.skip}
-            <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
-          </Button>
-        )}
-        <Button
-          disabled={isSubmitDisabled}
-          icon={<Icon icon={Send} />}
-          loading={submitting}
-          type="primary"
-          onClick={handleSubmit}
-        >
-          {labels.submit}
-          <Hotkey compact inverseTheme keys={KeyMapEnum.Enter} variant="borderless" />
-        </Button>
-      </Flexbox>
-    </Flexbox>
+    <AskUserFooter
+      countdownText={countdownText}
+      hasDraft={hasDraft}
+      labels={labels}
+      noteOpen={supplementActive}
+      primary={primary}
+      primaryDisabled={isSubmitDisabled}
+      questions={questions}
+      submitting={submitting}
+      onAddNote={handleAddNote}
+      onPrimary={handlePrimary}
+      onRemoveNote={handleRemoveNote}
+      onSkip={handleSkip}
+    />
   );
 
   return (
     <Flexbox gap={12} ref={rootRef}>
-      {questions.length > 0 && (
-        <Tabs
-          activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
-          variant="square"
-          classNames={{
-            list: stylex.props(styles.tabList).className,
-            tab: stylex.props(styles.tab).className,
-          }}
-          items={[
-            ...questions.map((q, idx) => {
-              const done = isQuestionAnswered(q, picks, custom);
-              return {
-                key: String(idx),
-                label: (
-                  <Flexbox horizontal align="center" gap={6}>
-                    <Text>Q{idx + 1}</Text>
-                    {done && <Icon icon={Check} size={12} />}
-                  </Flexbox>
-                ),
-              };
-            }),
-            {
-              key: 'supplement',
+      {questions.length > 1 && (
+        <div {...stylex.props(styles.tabs)}>
+          <Tabs
+            activeKey={activeTab}
+            classNames={{ list: stylex.props(styles.tabList).className }}
+            variant="square"
+            items={questions.map((q, idx) => ({
+              key: String(idx),
               label: (
                 <Flexbox horizontal align="center" gap={6}>
-                  <Icon icon={PenLine} size={12} />
-                  <Text>{labels.supplementEnter}</Text>
+                  <Text className={stylex.props(styles.tabLabel).className}>
+                    {q.header || `Q${idx + 1}`}
+                  </Text>
+                  {isQuestionAnswered(q, picks, custom) && <Icon icon={Check} size={12} />}
                 </Flexbox>
               ),
-            },
-            ...(isMulti
-              ? [
-                  // Replace-all stays at the far right because it discards the
-                  // structured selections, unlike additional notes.
-                  {
-                    key: 'escape',
-                    label: (
-                      <Flexbox data-replace-all horizontal align="center" gap={6}>
-                        <Icon icon={Replace} size={12} />
-                        <Text>{labels.escapeEnter}</Text>
-                      </Flexbox>
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-          onChange={(key: string) => {
-            if (key === 'escape') {
-              setEscapeMode(true);
-            } else if (key === 'supplement') {
-              setSupplementMode(true);
-            } else {
-              setQuestionMode(key);
-            }
-          }}
-        />
+            }))}
+            onChange={(key: string) => setQuestionMode(key)}
+          />
+          <span {...stylex.props(styles.progress)}>
+            {labels.progress(answeredCount, questions.length)}
+          </span>
+        </div>
       )}
 
-      {escapeActive || supplementActive ? (
-        <TextArea
-          autoSize={{ maxRows: 8, minRows: 3 }}
-          disabled={expired || submitting}
-          placeholder={supplementActive ? labels.supplementPlaceholder : labels.escapePlaceholder}
-          value={supplementActive ? supplementText : escapeText}
-          variant="filled"
-          onChange={(e) =>
-            supplementActive
-              ? handleSupplementTextChange(e.target.value)
-              : handleEscapeTextChange(e.target.value)
-          }
-          onKeyDown={(e) => {
-            // Enter submits (Shift+Enter keeps inserting a newline); fall back
-            // to the default newline while submit is unavailable. The IME guard
-            // keeps CJK composition confirms from submitting the form.
-            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
-            if (e.metaKey || e.ctrlKey || e.altKey) return;
-            if (isSubmitDisabled) return;
-            e.preventDefault();
-            handleSubmit();
-          }}
-        />
-      ) : (
-        activeQuestion && (
+      {activeQuestion && (
+        <div {...stylex.props(primary.action.kind === 'sendNote' && styles.dimmed)}>
           <QuestionPanel
             answer={picks[activeQuestion.question]}
             customPlaceholder={labels.customPlaceholder}
             customValue={custom[activeQuestion.question] ?? ''}
             disabled={expired || submitting}
             highlightedIndex={highlightedIndex}
-            multiSelectTag={labels.multiSelectTag}
             question={activeQuestion}
             recommendedTag={labels.recommendedTag}
             onCustomChange={handleCustomChange}
-            onPressEnter={isSubmitDisabled ? undefined : handleSubmit}
+            onCustomNavigate={handleCustomNavigate}
+            onPressEnter={isSubmitDisabled ? undefined : handlePrimary}
             onToggle={handleToggle}
-            onCustomNavigate={(direction) =>
-              setHighlight(
-                activeQuestion,
-                direction === 'prev' ? activeQuestion.options.length - 1 : 0,
-              )
-            }
           />
-        )
+        </div>
+      )}
+
+      {supplementActive && (
+        <Flexbox data-ask-note className={stylex.props(styles.note).className}>
+          <Text fontSize={12} type="secondary">
+            {labels.noteLabel}
+          </Text>
+          <TextArea
+            autoSize={{ maxRows: 8, minRows: 2 }}
+            disabled={expired || submitting}
+            placeholder={labels.supplementPlaceholder}
+            value={supplementText}
+            variant="filled"
+            onChange={(e) => handleSupplementTextChange(e.target.value)}
+            onKeyDown={(e) => {
+              // The IME guard keeps CJK composition confirms from submitting.
+              if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+              if (e.metaKey || e.ctrlKey || e.altKey) return;
+              if (isSubmitDisabled) return;
+              e.preventDefault();
+              handlePrimary();
+            }}
+          />
+        </Flexbox>
       )}
 
       {actionsPortalTarget ? createPortal(footer, actionsPortalTarget) : footer}
