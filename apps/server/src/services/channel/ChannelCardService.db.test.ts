@@ -49,7 +49,9 @@ const card = (title: string) => [
   {
     updateComponents: {
       components: [
-        { child: 'body', component: 'Card', id: 'root', title },
+        { child: 'column', component: 'Card', id: 'root' },
+        { children: ['title', 'body'], component: 'Column', id: 'column' },
+        { component: 'Text', id: 'title', text: `#### ${title}` },
         { component: 'Text', id: 'body', text: '12 done' },
       ],
       surfaceId: 'weekly',

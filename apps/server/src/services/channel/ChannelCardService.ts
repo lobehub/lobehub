@@ -1,5 +1,6 @@
-import { A2uiApiName, A2uiIdentifier, systemPrompt } from '@lobechat/builtin-tool-a2ui';
+import { A2uiApiName, A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { A2uiExecutionRuntime } from '@lobechat/builtin-tool-a2ui/executionRuntime';
+import { buildA2uiSystemPrompt } from '@lobehub/a2ui';
 import { eq, sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
@@ -11,6 +12,7 @@ import { assertChannelEnabled } from './featureGate';
 
 /** The builtin `renderUI` itself: the same validation and messages; stateless. */
 const runtime = new A2uiExecutionRuntime();
+const cliGuide = buildA2uiSystemPrompt({ delivery: 'cli' });
 
 /**
  * One tool call per surface and run: rendering the surface again finds and replaces it. Not a
@@ -42,12 +44,12 @@ export class ChannelCardService {
   }
 
   /**
-   * The builtin tool's card guide and component catalog as is, so it always matches the validator
-   * the server runs.
+   * The `@lobehub/a2ui` card guide worded for `lh card render`, from the same processor that
+   * validates the builtin tool, so it always matches what the server accepts.
    */
   guide = async () => {
     await assertChannelEnabled(this.userId);
-    return { guide: systemPrompt };
+    return { guide: cliGuide };
   };
 
   render = async (operations: unknown): Promise<ChannelCardRenderResult> => {
