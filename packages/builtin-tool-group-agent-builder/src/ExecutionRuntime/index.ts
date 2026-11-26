@@ -9,6 +9,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
+import { formatGroupMembers } from '../formatGroupMembers';
 import type {
   BatchCreateAgentsParams,
   BatchCreateAgentsState,
@@ -19,6 +20,7 @@ import type {
   GetAgentInfoParams,
   InviteAgentParams,
   InviteAgentState,
+  ListGroupMembersState,
   RemoveAgentParams,
   RemoveAgentState,
   SearchAgentParams,
@@ -66,6 +68,50 @@ export class GroupAgentBuilderExecutionRuntime {
 
     // Return formatted agent profile for the supervisor
     return { content: formatAgentProfile(agent), state: agent, success: true };
+  }
+
+  /**
+   * List the group's members with their agent IDs. Group-built members are
+   * virtual agents that `searchAgent` never returns, so this is where the model
+   * reads back the id that update/remove calls need.
+   */
+  async listGroupMembers(groupId: string | undefined): Promise<BuiltinToolResult> {
+    if (!groupId) {
+      return {
+        content: 'No group context available',
+        error: { message: 'No group context available', type: 'NoGroupContext' },
+        success: false,
+      };
+    }
+
+    try {
+      const cached = agentGroupSelectors.getGroupById(groupId)(getChatGroupStoreState());
+      const group = cached ?? (await chatGroupService.getGroupDetail(groupId));
+
+      if (!group) {
+        return {
+          content: `Group "${groupId}" not found`,
+          error: { message: `Group "${groupId}" not found`, type: 'GroupNotFound' },
+          success: false,
+        };
+      }
+
+      const members = (group.agents ?? []).map((agent) => ({
+        description: agent.description ?? undefined,
+        id: agent.id,
+        isSupervisor: agent.isSupervisor,
+        name: agent.name ?? undefined,
+        title: agent.title || 'Untitled Agent',
+      }));
+
+      return {
+        content: formatGroupMembers(members),
+        state: { groupId, members, total: members.length } as ListGroupMembersState,
+        success: true,
+      };
+    } catch (error) {
+      return this.handleError(error, 'Failed to list group members');
+    }
   }
 
   // ==================== Group Member Management ====================
@@ -254,7 +300,7 @@ export class GroupAgentBuilderExecutionRuntime {
       await state.refreshGroupDetail(groupId);
 
       return {
-        content: `Successfully created agent "${args.title}" and added it to the group.`,
+        content: `Successfully created agent "${args.title}" (ID: ${result.agentId}) and added it to the group. Use this ID for getAgentInfo, updateAgentPrompt, updateConfig and removeAgent.`,
         state: {
           agentId: result.agentId,
           success: true,

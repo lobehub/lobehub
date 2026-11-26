@@ -13,6 +13,7 @@ import { CreateAgentInspector } from './CreateAgent';
 import { CreateGroupInspector } from './CreateGroup';
 import { GetAgentInfoInspector } from './GetAgentInfo';
 import { InviteAgentInspector } from './InviteAgent';
+import { ListGroupMembersInspector } from './ListGroupMembers';
 import { RemoveAgentInspector } from './RemoveAgent';
 import { SearchAgentInspector } from './SearchAgent';
 import { UpdateAgentPromptInspector } from './UpdateAgentPrompt';
@@ -32,6 +33,7 @@ export const GroupAgentBuilderInspectors: Record<string, BuiltinInspector> = {
   [GroupAgentBuilderApiName.createGroup]: CreateGroupInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.getAgentInfo]: GetAgentInfoInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.inviteAgent]: InviteAgentInspector as BuiltinInspector,
+  [GroupAgentBuilderApiName.listGroupMembers]: ListGroupMembersInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.removeAgent]: RemoveAgentInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.searchAgent]: SearchAgentInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.updateAgentPrompt]: UpdateAgentPromptInspector as BuiltinInspector,
@@ -51,6 +53,7 @@ export { CreateAgentInspector } from './CreateAgent';
 export { CreateGroupInspector } from './CreateGroup';
 export { GetAgentInfoInspector } from './GetAgentInfo';
 export { InviteAgentInspector } from './InviteAgent';
+export { ListGroupMembersInspector } from './ListGroupMembers';
 export { RemoveAgentInspector } from './RemoveAgent';
 export { SearchAgentInspector } from './SearchAgent';
 export { UpdateAgentPromptInspector } from './UpdateAgentPrompt';

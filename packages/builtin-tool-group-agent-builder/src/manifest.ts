@@ -33,10 +33,23 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
       },
     },
 
+    {
+      description:
+        "List the group's current members (supervisor included) with their agent IDs. Members created with createAgent / batchCreateAgents exist only inside the group, so searchAgent never returns them — call this to look up the agentId that getAgentInfo, updateAgentPrompt, updateConfig and removeAgent need.",
+      name: GroupAgentBuilderApiName.listGroupMembers,
+      parameters: {
+        properties: {
+          groupId: targetGroupIdProperty,
+        },
+        required: [],
+        type: 'object',
+      },
+    },
+
     // ==================== Group Member Management ====================
     {
       description:
-        "Search for agents that can be invited to the group. Returns agents from the user's collection. Use this to find suitable agents before inviting them.",
+        "Search the user's own agents that can be invited to the group. It does not return the group's existing members (use listGroupMembers for those). Use this to find suitable agents before inviting them.",
       name: GroupAgentBuilderApiName.searchAgent,
       parameters: {
         properties: {
@@ -364,6 +377,7 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
             },
             type: 'object',
           },
+          groupId: targetGroupIdProperty,
           togglePlugin: {
             description: 'Toggle a specific plugin on/off for the agent.',
             properties: {

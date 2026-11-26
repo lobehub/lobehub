@@ -29,6 +29,27 @@ export default defineFixtures({
         ],
       },
     }),
+    listGroupMembers: single({
+      pluginState: {
+        groupId: 'group_fixture',
+        members: [
+          { id: 'agent_supervisor', isSupervisor: true, title: 'Supervisor' },
+          {
+            description: 'Checks render output and local screenshots.',
+            id: 'agent_preview_qa',
+            isSupervisor: false,
+            title: 'Preview QA',
+          },
+          {
+            description: 'Writes issue notes and rollout summaries.',
+            id: 'agent_docs_writer',
+            isSupervisor: false,
+            title: 'Docs Writer',
+          },
+        ],
+        total: 3,
+      },
+    }),
     updateAgentPrompt: single({
       pluginState: {
         newPrompt: 'Focus on validating preview fixtures and reporting only concrete UI issues.',

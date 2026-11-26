@@ -335,6 +335,22 @@ describe('agentBuilderRuntime', () => {
       });
     });
 
+    // The write lands either way; the model must not be told nothing changed,
+    // or it retries or reports the tools as unset.
+    it('reports a plain config.plugins write instead of "No fields to update"', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+
+      const runtime = createRuntime();
+      const result = await runtime.updateConfig(
+        { config: { plugins: ['lobe-web-browsing'] } },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { plugins: ['lobe-web-browsing'] });
+      expect(result.content).not.toBe('No fields to update.');
+      expect(result.content).toContain('plugins');
+    });
+
     it('applies metadata nested under config instead of reporting a successful no-op', async () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
 
