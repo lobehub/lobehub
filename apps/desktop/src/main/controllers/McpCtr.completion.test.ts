@@ -1,6 +1,5 @@
-import { afterEach, expect, it, vi } from 'vitest';
-
 import { DeviceMcpRuntime } from '@lobechat/device-mcp';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
@@ -25,13 +24,11 @@ it('delivers the original receipt after a relay failure with no renderer and nev
     getController: () => config,
     getService: () => config,
   } as unknown as App);
-  const execute = vi
-    .spyOn(DeviceMcpRuntime.prototype, 'runTool')
-    .mockResolvedValue({
-      content: 'committed receipt',
-      state: { mcpApp: { resourceUri: 'ui://fixture/view', server: 'fingerprint' } },
-      success: true,
-    });
+  const execute = vi.spyOn(DeviceMcpRuntime.prototype, 'runTool').mockResolvedValue({
+    content: 'committed receipt',
+    state: { mcpApp: { resourceUri: 'ui://fixture/view', server: 'fingerprint' } },
+    success: true,
+  });
   const relay: string[] = [];
   let failures = 1;
   const network = vi.fn(async (url: string, init: RequestInit) => {

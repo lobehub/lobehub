@@ -8,7 +8,6 @@ import {
   partitionMcpToolsForViews,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
-import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import type { ListMcpToolsParams } from '@lobechat/device-control';
 import {
   DeviceMcpRuntime,
@@ -20,12 +19,13 @@ import {
   serializeMcpClientParams,
   withStdioOutput,
 } from '@lobechat/device-mcp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
+import { safeParseJSON } from '@lobechat/utils';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
   serializeMcpIpcPayload,
 } from '@lobechat/utils/mcpIpcPayload';
-import { safeParseJSON } from '@lobechat/utils';
 import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
 import { getDesktopEnv } from '@/env';
@@ -549,7 +549,13 @@ export default class McpCtr extends ControllerModule {
       config,
       elicitation,
       fingerprint: createHash('sha256')
-        .update(JSON.stringify([serializeMcpClientParams(params), toolName, typeof rawArgs === 'string' ? safeParseJSON(rawArgs) : rawArgs]))
+        .update(
+          JSON.stringify([
+            serializeMcpClientParams(params),
+            toolName,
+            typeof rawArgs === 'string' ? safeParseJSON(rawArgs) : rawArgs,
+          ]),
+        )
         .digest('hex'),
       producerId: this.mcpProducerId,
       invocations: this.mcpInvocations,
