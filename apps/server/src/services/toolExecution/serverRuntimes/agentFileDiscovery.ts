@@ -25,16 +25,22 @@ const TARGET_PATH_ARG: Partial<Record<string, 'file_path' | 'path'>> = {
   [LocalSystemApiName.writeFile]: 'path',
 };
 
-/** What the server asks the device for, riding on the file tool's args. */
+/**
+ * What the server asks the device for, riding on the file tool's args. The
+ * device bounds the scan by the working directory it was given as `cwd`.
+ */
 export interface AgentFileScanRequest {
   knownDirs: string[];
-  root: string;
 }
 
 const pathApiFor = (target: string) =>
   /^[A-Za-z]:[\\/]/.test(target) || target.startsWith('\\\\') ? path.win32 : path.posix;
 
-const trimSeparators = (dir: string) => dir.replace(/[\\/]+$/, '') || dir;
+/** Drop trailing separators, keeping a root (`/`, `C:\\`) whole. */
+const trimSeparators = (dir: string) => {
+  const trimmed = dir.replace(/[\\/]+$/, '');
+  return !trimmed || /^[A-Za-z]:$/.test(trimmed) ? dir : trimmed;
+};
 
 /**
  * Whether the directory holding `target` was already walked, so the scan can
@@ -70,7 +76,7 @@ export const buildAgentFileScanRequest = (params: {
   const raw = arg ? args?.[arg] : undefined;
   if (!agentFiles || !workingDirectory || typeof raw !== 'string' || !raw.trim()) return undefined;
 
-  const request = { knownDirs: agentFiles.knownDirs, root: workingDirectory };
+  const request = { knownDirs: agentFiles.knownDirs };
   if (raw.startsWith('~')) return request;
 
   const pathApi = pathApiFor(workingDirectory);

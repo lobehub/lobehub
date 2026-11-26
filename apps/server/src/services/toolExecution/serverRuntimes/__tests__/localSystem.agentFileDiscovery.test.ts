@@ -76,7 +76,8 @@ describe('localSystemRuntime — mid-run agent file discovery', () => {
     });
 
     expect(mocks.executeToolCall).toHaveBeenCalledTimes(1);
-    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['/repo', '/'], root: '/repo' });
+    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['/repo', '/'] });
+    expect(sentArgs().cwd).toBe('/repo');
     // The raw answer is replaced by what the run has not seen yet; the agent
     // runtime renders it once the result is final.
     expect(result.content).toBe('file body');
@@ -113,7 +114,40 @@ describe('localSystemRuntime — mid-run agent file discovery', () => {
       file_path: '~/pkg/a.ts',
     });
 
-    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['/repo', '/'], root: '/home/u' });
+    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['/repo', '/'] });
+    expect(sentArgs().cwd).toBe('/home/u');
+  });
+
+  it('scans below a Windows drive root used as the working directory', async () => {
+    await call(
+      makeContext({
+        agentFiles: {
+          deviceId: 'device-a',
+          instructionPaths: [],
+          knownDirs: ['C:\\'],
+          skillNames: [],
+        },
+        workingDirectory: 'C:\\',
+      }),
+      LocalSystemApiName.readFile,
+      { path: 'C:\\work\\pkg\\a.ts' },
+    );
+    expect(sentArgs().agentFileScan).toEqual({ knownDirs: ['C:\\'] });
+
+    await call(
+      makeContext({
+        agentFiles: {
+          deviceId: 'device-a',
+          instructionPaths: [],
+          knownDirs: ['C:\\'],
+          skillNames: [],
+        },
+        workingDirectory: 'C:\\',
+      }),
+      LocalSystemApiName.readFile,
+      { path: 'C:\\a.ts' },
+    );
+    expect(sentArgs()).not.toHaveProperty('agentFileScan');
   });
 
   it('skips a directory the run already walked, and non-file tools', async () => {

@@ -836,7 +836,7 @@ describe('LocalSystemExecutionRuntime.runCommand', () => {
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — agent file scan', () => {
-  const scanRequest = { knownDirs: ['/repo'], root: '/repo' };
+  const scanRequest = { knownDirs: ['/repo'] };
   const readResult = { charCount: 4, content: 'body', filename: 'a.ts', totalLineCount: 1 };
 
   it('answers the server’s scan request after a successful read', async () => {
@@ -854,13 +854,37 @@ describe('LocalSystemExecutionRuntime.executeToolCall — agent file scan', () =
     );
 
     expect(service.discoverAgentFiles).toHaveBeenCalledWith({
-      ...scanRequest,
       cwd: '/repo',
+      knownDirs: ['/repo'],
       path: 'web/a.ts',
+      root: '/repo',
     });
     expect(output?.state?.agentFileScan).toEqual(scan);
     // The scan request is not a read param.
     expect(vi.mocked(service.readLocalFile).mock.calls[0][0]).not.toHaveProperty('agentFileScan');
+  });
+
+  it('bounds a scan by the trusted cwd, never by a root in the request', async () => {
+    // A server that predates the scan forwards a model-supplied request as is.
+    const service = createService({
+      discoverAgentFiles: vi.fn().mockResolvedValue({ dirs: [] }),
+      readLocalFile: vi.fn().mockResolvedValue(readResult),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    await runtime.executeToolCall(
+      'readFile',
+      { agentFileScan: { knownDirs: [], root: '/' }, cwd: '/repo', path: '/etc/a' },
+      { trustArgsCwd: true },
+    );
+    expect(vi.mocked(service.discoverAgentFiles!).mock.calls[0][0].root).toBe('/repo');
+
+    await runtime.executeToolCall(
+      'readFile',
+      { agentFileScan: { root: '/' }, path: '/etc/a' },
+      { trustArgsCwd: true },
+    );
+    expect(service.discoverAgentFiles).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a scan request on an untrusted (renderer) call', async () => {

@@ -325,6 +325,23 @@ describe('discoverAgentFiles', () => {
     });
   });
 
+  it('lets concurrent calls for one directory share a single scan', async () => {
+    const pkg = path.join(repo, 'pkg');
+    await write(path.join(pkg, 'AGENTS.md'), 'pkg rules');
+    const params = { knownDirs: [repo], root: repo };
+
+    const [first, second] = await Promise.all([
+      discoverAgentFiles({ ...params, path: path.join(pkg, 'a.ts') }),
+      discoverAgentFiles({ ...params, path: path.join(pkg, 'b.ts') }),
+    ]);
+
+    // One scan answered both: a slow one outliving its time budget is joined,
+    // not repeated beside itself.
+    expect(second.instructions).toBe(first.instructions);
+    const later = await discoverAgentFiles({ ...params, path: path.join(pkg, 'a.ts') });
+    expect(later.instructions).not.toBe(first.instructions);
+  });
+
   // `~/…` goes through the same `resolveAgainstCwd` as the file tools.
   it('resolves a relative path the way the file tool does', async () => {
     const pkg = path.join(repo, 'pkg');

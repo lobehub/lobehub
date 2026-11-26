@@ -38,8 +38,10 @@ export interface ILocalSystemService {
 /**
  * Host-owned arg of `readFile` / `writeFile` / `editFile`: the server asks the
  * device to report the agent files of a directory the run has not scanned,
- * `{ knownDirs, root }`. Honored only on server-sanitized calls
- * (`trustArgsCwd`), the same trust boundary as `cwd`.
+ * `{ knownDirs }`. Honored only on server-sanitized calls (`trustArgsCwd`),
+ * and always bounded by the trusted working directory: the request carries no
+ * root of its own, because a server that predates the scan forwards a
+ * model-supplied arg untouched.
  */
 export const AGENT_FILE_SCAN_ARG = 'agentFileScan';
 
@@ -48,18 +50,15 @@ export const AGENT_FILE_SCAN_STATE_KEY = 'agentFileScan';
 
 interface AgentFileScanRequest {
   knownDirs?: string[];
-  root: string;
 }
 
 const readScanRequest = (value: unknown): AgentFileScanRequest | undefined => {
   if (!value || typeof value !== 'object') return undefined;
-  const { knownDirs, root } = value as Record<string, unknown>;
-  if (typeof root !== 'string' || !root) return undefined;
+  const { knownDirs } = value as Record<string, unknown>;
   return {
     knownDirs: Array.isArray(knownDirs)
       ? knownDirs.filter((dir): dir is string => typeof dir === 'string')
       : undefined,
-    root,
   };
 };
 
@@ -454,11 +453,18 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
     cwd: string | undefined,
     request: AgentFileScanRequest | undefined,
   ): Promise<BuiltinServerRuntimeOutput> {
-    if (!request || !output.success || typeof target !== 'string' || !target) return output;
+    if (!request || !cwd || !output.success || typeof target !== 'string' || !target) {
+      return output;
+    }
     if (!this.service.discoverAgentFiles) return output;
 
     try {
-      const scan = await this.service.discoverAgentFiles({ ...request, cwd, path: target });
+      const scan = await this.service.discoverAgentFiles({
+        cwd,
+        knownDirs: request.knownDirs,
+        path: target,
+        root: cwd,
+      });
       return {
         ...output,
         state: {

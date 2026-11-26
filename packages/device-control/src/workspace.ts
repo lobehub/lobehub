@@ -475,6 +475,28 @@ const scan = async (
  * tools, and approving a root here would widen what the web preview can read
  * on the strength of one tool call.
  */
+/**
+ * Scans still running, by what they scan. The time budget only stops waiting:
+ * a scan on a slow disk keeps going, so a later call for the same directory
+ * joins it instead of starting another one beside it.
+ */
+const inflightScans = new Map<string, ReturnType<typeof scan>>();
+
+const scanOnce = (params: DiscoverAgentFilesParams) => {
+  const target = resolveAgainstCwd(params.path, params.cwd);
+  const key = JSON.stringify([
+    params.root,
+    target ? path.dirname(path.resolve(target)) : params.path,
+    params.knownDirs ?? [],
+  ]);
+  const running = inflightScans.get(key);
+  if (running) return running;
+
+  const started = scan(params).finally(() => inflightScans.delete(key));
+  inflightScans.set(key, started);
+  return started;
+};
+
 export const discoverAgentFiles = async (
   params: DiscoverAgentFilesParams,
 ): Promise<DiscoverAgentFilesResult> => {
@@ -489,7 +511,7 @@ export const discoverAgentFiles = async (
 
   try {
     const result = await Promise.race([
-      scan(params).catch(() => ({
+      scanOnce(params).catch(() => ({
         dirs: [],
         instructions: [],
         outcome: 'failed' as const,
