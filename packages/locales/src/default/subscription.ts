@@ -616,11 +616,10 @@ export default {
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
-  'plans.compare.modelUsage': 'AI model usage',
+  'plans.compare.modelUsage': 'AI model service',
   'plans.compare.modelUsage.available': 'Available',
-  'plans.compare.modelUsage.monthly': '{{amount}} of usage a month',
-  'plans.compare.modelUsage.tooltip':
-    'Counted as the equivalent model service, not as tokens. How much you can use depends on the models you use. Agent run fees are paid from it too.',
+  'plans.compare.modelUsage.monthly': 'Up to {{amount}} a month',
+  'plans.compare.modelUsage.tooltip': 'Covers LobeHub-hosted model calls and agent run fees.',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
@@ -683,7 +682,7 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
-  'plans.limits.modelUsage': '{{amount}} of AI model usage a month',
+  'plans.limits.modelUsage': 'Up to {{amount}} of AI model service a month',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.autoMonthlySpend.tooltip':
