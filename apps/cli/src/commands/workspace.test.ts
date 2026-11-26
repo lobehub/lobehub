@@ -41,7 +41,10 @@ const {
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../api/workspace', () => ({ resolveWorkspaceScope: mockResolveWorkspaceScope }));
+vi.mock('../api/workspace', () => ({
+  PERSONAL_SCOPE_ENV_VALUE: 'personal',
+  resolveWorkspaceScope: mockResolveWorkspaceScope,
+}));
 vi.mock('../auth/identity', () => ({
   resolveIdentityFingerprint: mockResolveIdentityFingerprint,
 }));

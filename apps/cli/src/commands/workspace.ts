@@ -25,6 +25,7 @@ import { workspaceUrl } from './resourceUrl';
 const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
   env: 'LOBEHUB_WORKSPACE_ID',
   explicit: '--workspace',
+  flag: '--workspace',
   personal: 'personal (no workspace scope)',
   settings: `${CLI_PRIMARY_BIN} workspace use`,
   stale: 'personal (saved scope ignored — see the warning above)',
@@ -33,9 +34,11 @@ const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
 const describeScope = (scope: WorkspaceScope): string =>
   scope.workspaceId
     ? `workspace ${scope.workspaceId} ${pc.dim(`(from ${SCOPE_HINTS[scope.source]})`)}`
-    : scope.source === 'env'
-      ? pc.dim(`personal (from LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE})`)
-      : pc.dim(SCOPE_HINTS[scope.source === 'stale' ? 'stale' : 'personal']);
+    : scope.source === 'flag'
+      ? pc.dim(`personal (from --workspace ${PERSONAL_SCOPE_ENV_VALUE})`)
+      : scope.source === 'env'
+        ? pc.dim(`personal (from LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE})`)
+        : pc.dim(SCOPE_HINTS[scope.source === 'stale' ? 'stale' : 'personal']);
 
 /**
  * Every workspace-scoped read goes through the workspace header, so a command
@@ -60,7 +63,8 @@ const requireScope = async (explicit?: string): Promise<string> => {
  */
 const warnIfEnvOverridesPersistedScope = (): void => {
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
-  if (!fromEnv) return;
+  // The global `--workspace` flag also sets the env var, but only for this run.
+  if (!fromEnv || resolveWorkspaceScope().source === 'flag') return;
 
   log.warn(
     `LOBEHUB_WORKSPACE_ID=${fromEnv} is set and takes precedence — commands keep running against that workspace until you unset it.`,

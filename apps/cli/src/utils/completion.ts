@@ -61,10 +61,12 @@ function filterCandidates(candidates: string[], currentWord: string) {
 function resolveCommandContext(program: Command, completedWords: string[]) {
   let command = program;
   let expectsOptionValue = false;
+  let pendingOption: Option | undefined;
 
   for (const token of completedWords) {
     if (expectsOptionValue) {
       expectsOptionValue = false;
+      pendingOption = undefined;
       continue;
     }
 
@@ -76,6 +78,7 @@ function resolveCommandContext(program: Command, completedWords: string[]) {
       expectsOptionValue = Boolean(
         option && (option.required || option.optional || option.variadic),
       );
+      pendingOption = expectsOptionValue ? option : undefined;
       continue;
     }
 
@@ -85,7 +88,7 @@ function resolveCommandContext(program: Command, completedWords: string[]) {
     }
   }
 
-  return { command, expectsOptionValue };
+  return { command, expectsOptionValue, pendingOption };
 }
 
 export function getCompletionCandidates(
@@ -111,6 +114,21 @@ export function getCompletionCandidates(
   }
 
   return filterCandidates(listOptionTokens(command), currentWord);
+}
+
+/**
+ * Whether the word being completed is the value of a `--workspace` option that
+ * resolves slugs. `connect` and `notification` take an id only, and Cloud answers
+ * an unknown id from another scope, so a suggested slug would read the wrong data.
+ */
+export function isCompletingWorkspaceValue(
+  program: Command,
+  words: string[],
+  currentWordIndex = words.length,
+) {
+  const completedWords = words.slice(0, Math.max(currentWordIndex, 0));
+  const { pendingOption } = resolveCommandContext(program, completedWords);
+  return pendingOption?.long === '--workspace' && pendingOption.flags.includes('slug');
 }
 
 export function parseCompletionWordIndex(rawValue: string | undefined, words: string[]) {
