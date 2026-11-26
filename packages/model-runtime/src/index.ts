@@ -60,6 +60,7 @@ export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeDoubaoSpeechAI } from './providers/doubaospeech';
 export { LobeElevenLabsAI } from './providers/elevenlabs';
 export { LobeFishAudioAI } from './providers/fishaudio';
+export { LobeGmicloudSpeechAI } from './providers/gmicloudspeech';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
 export { LobeGoogleAI } from './providers/google';
 export * from './providers/google/modelId';

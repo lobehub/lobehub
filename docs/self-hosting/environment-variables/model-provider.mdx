@@ -806,6 +806,30 @@ Volcengine speech synthesis, text-to-speech only; separate from the Volcengine A
 - Default: Unset; uses the built-in model list.
 - Example: `-all,+seed-tts-2.0`
 
+## GMI Cloud Speech
+
+Text-to-speech only. See [Using GMI Cloud Speech in LobeHub](/docs/usage/providers/gmicloudspeech) for setup instructions.
+
+### `GMICLOUDSPEECH_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in GMI Cloud Speech provider settings, which takes precedence.
+- Description: A key created in the [GMI Cloud console](https://console.gmicloud.ai) organization settings. Setting a non-empty key automatically enables GMI Cloud Speech in the server configuration. `ENABLED_GMICLOUDSPEECH` is derived from this key, not a separate environment switch. Without a key from either source, speech requests to GMI Cloud Speech fail with an `InvalidProviderAPIKey` error.
+- Default: Unset; no shared server key.
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `GMICLOUDSPEECH_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the GMI Cloud console API base URL. Only used together with the server key.
+- Default: `https://console.gmicloud.ai`
+- Example: `https://console.gmicloud.ai`
+
+### `GMICLOUDSPEECH_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the GMI Cloud Speech model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: Unset; uses the built-in model list.
+
 ## ComfyUI
 
 ### `ENABLED_COMFYUI`

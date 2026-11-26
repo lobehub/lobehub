@@ -185,6 +185,82 @@ describe('ttsRouter.synthesize', () => {
       message: 'MiniMax API error: rate limit',
     });
   });
+  describe('provider gmicloudspeech', () => {
+    it('routes provider gmicloudspeech to its runtime with the card default voice', async () => {
+      textToSpeechMock.mockResolvedValue({
+        audio: new Uint8Array([4, 5]).buffer,
+        format: 'mp3',
+        usage: { inputCharacters: 2 },
+      });
+
+      const res = await caller.synthesize({
+        input: 'Hi',
+        model: 'inworld-tts-2',
+        params: { speed: 1.1 },
+        provider: 'gmicloudspeech',
+      });
+
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        expect.anything(),
+        'u1',
+        'gmicloudspeech',
+        undefined,
+      );
+      expect(textToSpeechMock).toHaveBeenCalledWith(
+        {
+          input: 'Hi',
+          model: 'inworld-tts-2',
+          params: { speed: 1.1 },
+          voice: 'Dennis',
+          voiceIsDefault: true,
+        },
+        { metadata: { trigger: 'tts' }, user: 'u1' },
+      );
+      expect(res).toEqual({
+        audioBase64: Buffer.from([4, 5]).toString('base64'),
+        format: 'mp3',
+        mimeType: 'audio/mpeg',
+        usage: { inputCharacters: 2 },
+      });
+    });
+
+    it('validates params against the GMI Cloud Speech card', async () => {
+      await expect(
+        caller.synthesize({
+          input: 'Hi',
+          model: 'inworld-tts-2',
+          params: { format: 'mp3', speed: 3 },
+          provider: 'gmicloudspeech',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('params.speed must be between 0.5 and 2'),
+      });
+      expect(textToSpeechMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a missing API key with the InvalidProviderAPIKey copy instead of a bare 500', async () => {
+      // what a runtime constructor throws when neither the user nor the server has a key
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce({
+        errorType: 'InvalidProviderAPIKey',
+      });
+
+      const error = await caller
+        .synthesize({ input: 'Hi', model: 'inworld-tts-2', provider: 'gmicloudspeech' })
+        .catch((e) => e);
+
+      expect(error).toMatchObject({
+        code: 'BAD_GATEWAY',
+        message:
+          'GMI Cloud Speech API Key is incorrect or empty, please check your GMI Cloud Speech API Key and try again. Set it in Settings → AI Providers → GMI Cloud Speech, or in the server environment.',
+      });
+      // the lambda errorFormatter exposes `cause.data` to clients as `data.errorData`
+      expect(error.cause).toMatchObject({
+        data: { errorType: 'InvalidProviderAPIKey', provider: 'gmicloudspeech' },
+      });
+    });
+  });
+
   describe('provider elevenlabs', () => {
     it('routes provider elevenlabs to its runtime with the card default voice', async () => {
       textToSpeechMock.mockResolvedValue({

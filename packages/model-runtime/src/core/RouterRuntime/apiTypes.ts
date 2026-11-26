@@ -10,6 +10,7 @@ export type ApiType =
   | 'doubaospeech'
   | 'elevenlabs'
   | 'fal'
+  | 'gmicloudspeech'
   | 'fishaudio'
   | 'google'
   | 'meta'

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import elevenlabsModels from '../../aiModels/elevenlabs';
+import gmicloudspeechModels from '../../aiModels/gmicloudspeech';
 import googleModels from '../../aiModels/google';
 import minimaxModels from '../../aiModels/minimax';
 import { openaiTTSModels } from '../../aiModels/openai/nonChat';
@@ -291,5 +292,38 @@ describe('Google Gemini TTS model cards', () => {
         ['audioOutput', 'millionTokens', 20],
       ],
     });
+  });
+});
+
+describe('GMI Cloud Speech TTS model cards', () => {
+  const ttsCards = gmicloudspeechModels.filter(
+    (card): card is AITTSModelCard => card.type === 'tts',
+  );
+
+  it('lists Inworld TTS 2 and MiniMax Speech 2.8 Turbo', () => {
+    expect(ttsCards.map((card) => card.id)).toEqual([
+      'inworld-tts-2',
+      'minimax-tts-speech-2.8-turbo',
+    ]);
+    expect(ttsCards.every((card) => card.enabled)).toBe(true);
+  });
+
+  it('declares valid parameter schemas and voices', () => {
+    for (const card of ttsCards) {
+      const schema = validateTTSModelParamsSchema(card.parameters);
+      expect(schema.format?.default).toBe('mp3');
+      expect(schema.format?.enum).toEqual(['mp3', 'wav']);
+      expect(schema.speed).toMatchObject({ default: 1, max: 2, min: 0.5 });
+      for (const voice of card.voices ?? []) {
+        expect(TTSVoiceSchema.parse(voice)).toBeTruthy();
+      }
+    }
+  });
+
+  it('uses the family default voice per model', () => {
+    const inworld = ttsCards.find((card) => card.id === 'inworld-tts-2')!;
+    const minimax = ttsCards.find((card) => card.id === 'minimax-tts-speech-2.8-turbo')!;
+    expect(inworld.parameters?.voice?.default).toBe('Dennis');
+    expect(minimax.parameters?.voice?.default).toBe('English_expressive_narrator');
   });
 });

@@ -32,6 +32,7 @@ const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([
   ModelProvider.DoubaoSpeech,
   ModelProvider.ElevenLabs,
   ModelProvider.FishAudio,
+  ModelProvider.GmicloudSpeech,
 ]);
 
 export interface TTSSynthesizeParams {
