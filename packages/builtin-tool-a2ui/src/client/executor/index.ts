@@ -1,6 +1,5 @@
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
-import type { A2uiExecutionRuntime } from '../../ExecutionRuntime';
 import {
   A2uiApiName,
   A2uiIdentifier,
@@ -8,13 +7,19 @@ import {
   type RenderUIParams,
 } from '../../types';
 
+/** Where the card tool runs: the package runtime on a server, or a forwarder to it in a browser. */
+export interface A2uiToolRuntime {
+  readCardDocs: (params: ReadCardDocsParams) => Promise<BuiltinToolResult>;
+  renderUI: (params: RenderUIParams) => Promise<BuiltinToolResult>;
+}
+
 export class A2uiExecutor extends BaseExecutor<typeof A2uiApiName> {
   readonly identifier = A2uiIdentifier;
   protected readonly apiEnum = A2uiApiName;
 
-  private runtime: A2uiExecutionRuntime;
+  private runtime: A2uiToolRuntime;
 
-  constructor(runtime: A2uiExecutionRuntime) {
+  constructor(runtime: A2uiToolRuntime) {
     super();
     this.runtime = runtime;
   }
