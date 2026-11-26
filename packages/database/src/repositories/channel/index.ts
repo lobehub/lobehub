@@ -68,7 +68,7 @@ import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
-import { channelMentionCounts, channelThreadMentions, channelUnreadCounts } from './threadMentions';
+import { channelReadCounts, channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView, viewerJobs } from './view';
@@ -664,15 +664,7 @@ export class ChannelRepository {
       replyJobsOf.set(channelId, jobs);
     }
 
-    // Unread messages that @mention the caller, counted from the same read position as
-    // `unreadCount`; only channels with unread messages are scanned.
-    const unreadMemberIds = rows
-      .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
-      .map(({ memberId }) => memberId);
-    const [mentionCountOf, unreadCountOf] = await Promise.all([
-      channelMentionCounts(this.db, unreadMemberIds),
-      channelUnreadCounts(this.db, unreadMemberIds),
-    ]);
+    const { mentionCountOf, unreadCountOf } = await channelReadCounts(this.db, rows);
 
     // Thread mentions outlive the read position, which opening the main conversation moves.
     const threadMentionsOf = await channelThreadMentions(

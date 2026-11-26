@@ -122,3 +122,21 @@ export const channelUnreadCounts = async (
     .groupBy(channelMessages.channelId);
   return new Map(rows.map(({ channelId, count }) => [channelId, count]));
 };
+
+/**
+ * The unread and unread-@mention counts of each Channel in the caller's list, from the same read
+ * position; only Channels with messages past it are scanned.
+ */
+export const channelReadCounts = async (
+  db: LobeChatDatabase,
+  rows: { channel: { sequence: number }; lastReadSequence: number | null; memberId: string }[],
+) => {
+  const memberIds = rows
+    .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
+    .map(({ memberId }) => memberId);
+  const [mentionCountOf, unreadCountOf] = await Promise.all([
+    channelMentionCounts(db, memberIds),
+    channelUnreadCounts(db, memberIds),
+  ]);
+  return { mentionCountOf, unreadCountOf };
+};
