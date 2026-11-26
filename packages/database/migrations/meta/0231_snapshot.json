@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "87348d27-bf06-4029-a239-f9be07bbdd7e",
+  "id": "4f39d76a-e174-4646-b844-bc241db83165",
   "policies": {},
   "prevId": "13b67834-ee93-4531-b2a8-cdbbf99775f9",
   "roles": {},
@@ -31164,7 +31164,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "message_context_snapshots_user_id_idx": {
+          "name": "message_context_snapshots_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "message_context_snapshots_workspace_id_idx": {
+          "name": "message_context_snapshots_workspace_id_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "message_context_snapshots_message_id_messages_id_fk": {
           "name": "message_context_snapshots_message_id_messages_id_fk",

@@ -3609,6 +3609,11 @@ table message_context_snapshots {
   workspace_id text
   snapshot jsonb [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'message_context_snapshots_user_id_idx']
+    workspace_id [name: 'message_context_snapshots_workspace_id_idx']
+  }
 }
 
 table messenger_account_links {
