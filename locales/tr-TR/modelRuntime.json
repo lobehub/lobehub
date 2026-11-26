@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "Ollama hizmeti kullanılamıyor. Lütfen Ollama'nın düzgün çalışıp çalışmadığını veya Ollama'nın çapraz köken yapılandırmasının doğru ayarlanıp ayarlanmadığını kontrol edin.",
   "OperationInactivityTimeout": "Ajan işlemi çok uzun süre hareketsiz kaldı ve sonlandırıldı. Lütfen isteği yeniden deneyin.",
   "PermissionDenied": "Üzgünüz, bu hizmete erişim izniniz yok. Lütfen anahtarınızın gerekli erişim haklarına sahip olup olmadığını kontrol edin.",
+  "ProviderBaseURLBlocked": "{{provider}} uç noktası özel veya yerel bir ağ adresine işaret ediyor; sunucunun güvenlik nedeniyle bu adrese erişmesine izin verilmiyor. Bu adres yalnızca kendi cihazınızdan çalışır — bunun yerine herkese açık şekilde erişilebilen bir uç nokta kullanın.",
   "ProviderBizError": "{{provider}} hizmeti istenirken hata oluştu, lütfen aşağıdaki bilgilere dayanarak sorun giderin veya yeniden deneyin.",
   "ProviderContentPolicyViolation": "Sağlayıcı, içerik politikası nedeniyle bu isteği veya çıktısını engelledi. Lütfen isteminizi gözden geçirip tekrar deneyin.",
   "ProviderNetworkError": "Sağlayıcıya bağlantı zaman aşımına uğradı veya kesildi. Lütfen ağınızı kontrol edip yeniden deneyin.",
   "ProviderNoImageGenerated": "Sağlayıcı bu istek için bir görüntü döndürmedi. İsteği yeniden ifade etmeyi deneyin veya görüntü oluşturmayı destekleyen bir model seçin.",
   "ProviderServiceUnavailable": "Sağlayıcı geçici olarak aşırı yüklenmiş veya kullanılamıyor. Lütfen kısa bir süre sonra yeniden deneyin.",
+  "ProviderStreamInterrupted": "Sağlayıcı, yanıtı tamamlamadan bağlantıyı kapattı. Bu genellikle geçicidir, lütfen tekrar deneyin.",
   "QuotaLimitReached": "Üzgünüz, jeton kullanımı veya istek sayısı bu anahtar için kota sınırına ulaştı. Lütfen anahtarın kotasını artırın veya daha sonra yeniden deneyin.",
   "RateLimitExceeded": "Üzgünüz, jeton kullanımı veya istek sayısı bu anahtar için hız sınırına ulaştı. Lütfen daha sonra yeniden deneyin veya anahtarın kotasını artırın.",
   "RemoteMediaDownloadTimeout": "Sağlayıcı, ekli bir görüntü veya dosyayı indirirken zaman aşımına uğradı. Lütfen tekrar deneyin.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "Yukarı akış ağ geçidi veya proxy bir hata döndürdü. Lütfen kısa bir süre sonra yeniden deneyin; devam ederse proxy / uç nokta yapılandırmanızı kontrol edin.",
   "UpstreamHttpError": "Sağlayıcı ayrıntı vermeden bir HTTP hatası döndürdü. Lütfen yeniden deneyin veya isteğinizi ve model yapılandırmanızı kontrol edin.",
   "UpstreamMalformedResponse": "Sağlayıcı ayrıştırılamayan hatalı biçimlendirilmiş bir yanıt döndürdü. Lütfen yeniden deneyin; devam ederse farklı bir model veya sağlayıcı deneyin.",
-  "UserConfigError": "Sağlayıcı yapılandırması geçersiz (yanlış temel URL, eksik ortam değişkeni, sanal anahtar kısıtlaması vb.). Lütfen sağlayıcı ayarlarını gözden geçirin."
+  "UserConfigError": "Sağlayıcı yapılandırması geçersiz (yanlış temel URL, eksik ortam değişkeni, sanal anahtar kısıtlaması vb.). Lütfen sağlayıcı ayarlarını gözden geçirin.",
+  "WorkspaceModelRestricted": "Bu model, çalışma alanı yöneticinizin size izin verdiği en üst katmanın üzerinde. Daha düşük katmanlı bir model seçin veya çalışma alanı yöneticinizden katmanınızı yükseltmesini isteyin."
 }

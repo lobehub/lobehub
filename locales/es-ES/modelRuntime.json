@@ -40,11 +40,13 @@
   "OllamaServiceUnavailable": "El servicio Ollama no está disponible. Por favor, verifica si Ollama está funcionando correctamente o si la configuración de origen cruzado de Ollama está configurada correctamente.",
   "OperationInactivityTimeout": "La operación del agente estuvo inactiva demasiado tiempo y fue terminada. Por favor, vuelve a intentarlo.",
   "PermissionDenied": "Lo sentimos, no tienes permiso para acceder a este servicio. Por favor, verifica si tu clave tiene los derechos de acceso necesarios.",
+  "ProviderBaseURLBlocked": "El endpoint de {{provider}} apunta a una dirección de red privada o local, a la que el servidor no puede acceder por motivos de seguridad. Esta dirección solo funciona desde tu propio dispositivo; utiliza en su lugar un endpoint de acceso público.",
   "ProviderBizError": "Error al solicitar el servicio de {{provider}}, por favor soluciona el problema o vuelve a intentarlo basándote en la información siguiente.",
   "ProviderContentPolicyViolation": "El proveedor bloqueó esta solicitud o su resultado debido a la política de contenido. Por favor, revisa tu solicitud e inténtalo de nuevo.",
   "ProviderNetworkError": "La conexión con el proveedor se agotó o fue interrumpida. Por favor, verifica tu red y vuelve a intentarlo.",
   "ProviderNoImageGenerated": "El proveedor no devolvió ninguna imagen para esta solicitud. Intenta reformular la solicitud o elige un modelo que admita la generación de imágenes.",
   "ProviderServiceUnavailable": "El proveedor está temporalmente sobrecargado o no disponible. Por favor, vuelve a intentarlo en breve.",
+  "ProviderStreamInterrupted": "El proveedor cerró la conexión antes de finalizar la respuesta. Por lo general, esto es temporal; vuelve a intentarlo.",
   "QuotaLimitReached": "Lo sentimos, el uso de tokens o el número de solicitudes ha alcanzado el límite de cuota para esta clave. Por favor, aumenta la cuota de la clave o vuelve a intentarlo más tarde.",
   "RateLimitExceeded": "Lo sentimos, el uso de tokens o el número de solicitudes ha alcanzado el límite de velocidad para esta clave. Por favor, vuelve a intentarlo más tarde o aumenta la cuota de la clave.",
   "RemoteMediaDownloadTimeout": "El proveedor agotó el tiempo de espera al descargar una imagen o archivo adjunto. Por favor, inténtalo de nuevo.",
@@ -55,5 +57,6 @@
   "UpstreamGatewayError": "El gateway o proxy del proveedor devolvió un error. Por favor, vuelve a intentarlo en breve; si el problema persiste, verifica tu configuración de proxy/punto final.",
   "UpstreamHttpError": "El proveedor devolvió un error HTTP sin más detalles. Por favor, vuelve a intentarlo, o verifica tu solicitud y configuración del modelo.",
   "UpstreamMalformedResponse": "El proveedor devolvió una respuesta mal formada que no pudo ser analizada. Por favor, vuelve a intentarlo; si el problema persiste, intenta con un modelo o proveedor diferente.",
-  "UserConfigError": "La configuración del proveedor es inválida (URL base incorrecta, variable de entorno faltante, restricción de clave virtual, etc.). Por favor, revisa la configuración del proveedor."
+  "UserConfigError": "La configuración del proveedor es inválida (URL base incorrecta, variable de entorno faltante, restricción de clave virtual, etc.). Por favor, revisa la configuración del proveedor.",
+  "WorkspaceModelRestricted": "Este modelo supera el nivel más alto que te permite el administrador de tu espacio de trabajo. Elige un modelo de nivel inferior o pide a un administrador del espacio de trabajo que aumente tu nivel."
 }

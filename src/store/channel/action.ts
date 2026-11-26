@@ -122,6 +122,10 @@ class ChannelActionImpl {
       channelId,
       (channel) => ({
         ...channel,
+        lastReadSequence: Math.max(
+          channel.lastReadSequence ?? 0,
+          Math.min(sequence, channel.sequence),
+        ),
         mentionCount: channel.sequence <= sequence ? 0 : channel.mentionCount,
         unreadCount: Math.min(channel.unreadCount ?? 0, Math.max(0, channel.sequence - sequence)),
       }),
