@@ -14,6 +14,7 @@ export type CloudErrorCode =
   | typeof ChatErrorType.InsufficientBudgetForModel
   | typeof ChatErrorType.LobeHubModelDeprecated
   | typeof ChatErrorType.SubscriptionPlanLimit
+  | typeof ChatErrorType.WorkspaceByokNotEnabled
   | typeof ChatErrorType.WorkspaceModelRestricted;
 
 /** Every code the spec table can classify. */
@@ -172,6 +173,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'A workspace admin restricted the requested LobeHub Cloud model for this member.',
+  },
+  [ChatErrorType.WorkspaceByokNotEnabled]: {
+    code: ChatErrorType.WorkspaceByokNotEnabled,
+    numericId: 1902,
+    category: 'auth',
+    severity: 'info',
+    attribution: 'user',
+    httpStatus: 403,
+    retryable: false,
+    countAsFailure: false,
+    description: 'The workspace may not call providers with its own keys on LobeHub Cloud.',
   },
 
   // ─── 2xxx Quota / Billing ─────────────────────────────────────────────

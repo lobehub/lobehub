@@ -426,6 +426,15 @@ describe('replyTemplate', () => {
       expect(zh).toContain('模型超出了你的可用档位');
     });
 
+    it('tells the user the workspace cannot use its own provider keys', () => {
+      const output = renderAgentError('WorkspaceByokNotEnabled', undefined, 'op-byok');
+      expect(output).toContain('Own provider keys are not available in this workspace');
+      expect(output).not.toContain('Agent Execution Failed');
+
+      const zh = renderAgentError('WorkspaceByokNotEnabled', undefined, 'op-byok', 'zh-CN');
+      expect(zh).toContain('这个工作区还不能使用自己的服务商密钥');
+    });
+
     it('classifies a legacy envelope before choosing IM copy', () => {
       const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
       expect(output).toContain('Provider quota exhausted');

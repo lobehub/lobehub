@@ -1,6 +1,7 @@
 import type { GoalConfig, ProviderConfig, UserSystemAgentConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { assertWorkspaceByokAllowed } from '@/business/server/workspaceByok';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import type { LobeChatDatabase } from '@/database/type';
@@ -77,6 +78,22 @@ export const assertGoalModelRunnable = async (
       code: 'BAD_REQUEST',
       message: "This model is not available to the goal's owner",
     });
+
+  // A workspace may not be open for its own provider keys. Refuse such a pick
+  // here as a request error, before the relay probe below would surface the
+  // runtime refusal as an internal error.
+  if (workspaceId) {
+    try {
+      await assertWorkspaceByokAllowed({ provider, userId: owner.userId, workspaceId });
+    } catch (error) {
+      const message = (error as { message?: unknown })?.message;
+      throw new TRPCError({
+        cause: error,
+        code: 'BAD_REQUEST',
+        message: typeof message === 'string' ? message : "This workspace can't use this provider",
+      });
+    }
+  }
 
   if (
     slot === 'planning' &&

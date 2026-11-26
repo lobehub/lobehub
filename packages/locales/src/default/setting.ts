@@ -2449,6 +2449,19 @@ When I am ___, I need ___
   'trash.untitled': 'Untitled',
   'trash.workspaceDesc':
     'Public shows the shared content members deleted. Private shows only the private content you deleted, and no one else can see it. Deleted items stay here for {{days}} days and can be restored. After that they are removed permanently.',
+  'workspace.byok.locked.benefits.billing.desc':
+    'Calls with your own keys are billed by your provider, not from workspace credits.',
+  'workspace.byok.locked.benefits.billing.title': 'Billed by your provider',
+  'workspace.byok.locked.benefits.models.desc':
+    'Use models from OpenAI, Anthropic, your own endpoints and more.',
+  'workspace.byok.locked.benefits.models.title': 'More models',
+  'workspace.byok.locked.benefits.shared.desc':
+    'Set up keys once and every member of the workspace can use them.',
+  'workspace.byok.locked.benefits.shared.title': 'Shared provider keys',
+  'workspace.byok.locked.cta': 'Contact us to turn it on',
+  'workspace.byok.locked.desc':
+    'This workspace runs on LobeHub models. Using your own provider keys in a workspace is available on request.',
+  'workspace.byok.locked.title': 'Use your own provider keys',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',

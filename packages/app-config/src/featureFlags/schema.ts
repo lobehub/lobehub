@@ -140,6 +140,12 @@ export const FeatureFlagsSchema = z.object({
    * on the server. Empty or unset: no workspace lists it.
    */
   cloud_device_bundle_workspaces: z.array(z.string()).optional(),
+  /**
+   * Workspaces that may configure and call providers with their own keys, read by business
+   * builds: a list of workspace ids, or `true` for every workspace. Open-source builds do not
+   * read it and keep workspace provider keys open.
+   */
+  byok_workspaces: FeatureFlagValue.optional(),
 
   topic_preview: FeatureFlagValue.optional(),
 

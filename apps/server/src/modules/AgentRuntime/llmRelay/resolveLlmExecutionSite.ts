@@ -4,6 +4,7 @@ import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import { isProviderFetchOnClient } from 'model-bank/modelProviders';
 
+import { assertWorkspaceByokAllowed } from '@/business/server/workspaceByok';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import type { LobeChatDatabase } from '@/database/type';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
@@ -59,6 +60,10 @@ export const resolveProviderRelay = async ({
   workspaceId,
 }: ResolveProviderRelayParams): Promise<{ runtimeProvider: string } | undefined> => {
   if (provider === BRANDING_PROVIDER || provider === ModelProvider.LobeHub) return;
+
+  // A relayed call runs on the device with the workspace's keys and never
+  // reaches `initModelRuntimeFromDB`, so the workspace key gate runs here too.
+  if (workspaceId) await assertWorkspaceByokAllowed({ provider, userId, workspaceId });
 
   const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
   if (!featureFlags.enableLlmRelay) return;

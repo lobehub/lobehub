@@ -33,6 +33,7 @@ import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
+import { assertWorkspaceByokAllowed } from '@/business/server/workspaceByok';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
@@ -553,6 +554,10 @@ export const initModelRuntimeFromDB = async (
   provider: string,
   workspaceId?: string,
 ): Promise<ModelRuntime> => {
+  // 0. Every server-side call with workspace keys passes through here, so the
+  //    business gate on workspace provider keys runs before any key is read.
+  if (workspaceId) await assertWorkspaceByokAllowed({ provider, userId, workspaceId });
+
   // 1. Get user's provider configuration from database
   const aiProviderModel = new AiProviderModel(db, userId, workspaceId);
 

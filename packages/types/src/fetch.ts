@@ -10,6 +10,7 @@ export const ChatErrorType = {
   WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
   WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
   WorkspaceModelRestricted: 'WorkspaceModelRestricted', // A workspace admin restricted the LobeHub model this member asked for
+  WorkspaceByokNotEnabled: 'WorkspaceByokNotEnabled', // This workspace may not call providers with its own keys; only the LobeHub provider works here
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareMessageLimitExceeded: 'ShareMessageLimitExceeded', // Visitor hit shareConfig.maxMessagesPerVisitor on this shared agent
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset

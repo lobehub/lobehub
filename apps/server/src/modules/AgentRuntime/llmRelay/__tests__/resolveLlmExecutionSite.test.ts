@@ -8,6 +8,9 @@ import { resolveLlmExecutionSite } from '../resolveLlmExecutionSite';
 
 const providerRow = vi.hoisted(() => ({ current: undefined as any }));
 const getAiProviderById = vi.hoisted(() => vi.fn(async () => providerRow.current));
+const assertWorkspaceByokAllowed = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('@/business/server/workspaceByok', () => ({ assertWorkspaceByokAllowed }));
 
 vi.mock('@/database/models/aiProvider', () => ({
   AiProviderModel: vi.fn(function (this: any) {
@@ -154,5 +157,41 @@ describe('resolveLlmExecutionSite', () => {
     providerRow.current = { fetchOnClient: true, keyVaults: { baseURL: 'http://127.0.0.1:1/v1' } };
 
     expect(await resolve('cloudflare', executor(['cloudflare']))).toEqual({ site: 'server' });
+  });
+
+  describe('workspace provider key gate', () => {
+    const resolveInWorkspace = (provider: string) =>
+      resolveLlmExecutionSite({
+        db: {} as any,
+        provider,
+        state: executor([provider]),
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+
+    it('asks the gate before reading the workspace keys of a relayed provider', async () => {
+      await resolveInWorkspace('ollama');
+
+      expect(assertWorkspaceByokAllowed).toHaveBeenCalledWith({
+        provider: 'ollama',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+    });
+
+    it('refuses to relay when the gate refuses, without reading the keys', async () => {
+      const refusal = { errorType: 'WorkspaceByokNotEnabled' };
+      assertWorkspaceByokAllowed.mockRejectedValueOnce(refusal);
+
+      await expect(resolveInWorkspace('ollama')).rejects.toBe(refusal);
+      expect(getAiProviderById).not.toHaveBeenCalled();
+    });
+
+    it('skips the gate in personal mode and for the platform provider', async () => {
+      await resolve('ollama', executor(['ollama']));
+      await resolveInWorkspace('lobehub');
+
+      expect(assertWorkspaceByokAllowed).not.toHaveBeenCalled();
+    });
   });
 });
