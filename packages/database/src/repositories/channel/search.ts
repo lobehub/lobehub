@@ -15,6 +15,8 @@ export interface ChannelSearchOptions {
   before?: number;
   limit?: number;
   query: string;
+  /** A Thread id searches only that Thread; `null` only the main timeline; omitted both. */
+  threadId?: string | null;
 }
 
 /** Whitespace-separated words; a message matches when it contains every one of them. */
@@ -34,7 +36,8 @@ export const channelSearchSnippet = (content: string, terms: string[]) => {
 
 /**
  * Messages of one Channel, its live Threads included, containing every word of `query`, newest
- * first. The caller has already authorized reading the Channel.
+ * first; `threadId` narrows to one Thread or (`null`) the main timeline. The caller has already
+ * authorized reading the Channel.
  */
 export const searchChannelMessages = async (
   tx: Transaction,
@@ -61,6 +64,11 @@ export const searchChannelMessages = async (
         eq(channelMessages.channelId, channelId),
         // A trashed Thread's messages are out of reach, as when opening it.
         or(isNull(channelMessages.threadId), notTrashed(channelThreads.isDeleted)),
+        options.threadId === undefined
+          ? undefined
+          : options.threadId === null
+            ? isNull(channelMessages.threadId)
+            : eq(channelMessages.threadId, options.threadId),
         options.before === undefined ? undefined : lt(channelMessages.sequence, options.before),
         ...terms.map((term) => ilikeContains(channelMessages.content, term)),
       ),

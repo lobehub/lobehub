@@ -335,7 +335,11 @@ export const channelRouter = router({
       data: await ctx.channelService.shareVisitorTopics(input.agentId),
       success: true,
     })),
-  /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
+  /**
+   * Messages in a Channel and its Threads containing every word of `query`, newest first.
+   * `threadId` narrows the scope: a Thread id searches only that Thread, `null` only the main
+   * timeline; omitted searches both.
+   */
   searchMessages: channelProcedure
     .input(
       z.object({
@@ -343,6 +347,7 @@ export const channelRouter = router({
         channelId,
         limit: z.number().int().min(1).max(50).optional(),
         query: z.string().trim().min(1).max(200),
+        threadId: threadId.nullish(),
       }),
     )
     .query(async ({ ctx, input: { channelId, ...options } }) => ({
