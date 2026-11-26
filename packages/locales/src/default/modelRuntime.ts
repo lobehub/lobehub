@@ -63,6 +63,8 @@ export default {
     "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
   ModelEmptyCompletion:
     'The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.',
+  ModelEmptyCompletionNotCharged:
+    'The model returned no usable response, even after automatic retries. You were not charged for this request. You can retry or switch models.',
   ModelEmptyCompletionWithCost:
     'The model provider returned an empty response. This request cost ${{credits}}. Retrying may incur a similar cost, or you can switch models.',
   ModelRefusal:
