@@ -13,6 +13,11 @@ export type PricingMode = 'image' | 'video';
  * from the business guard, because a host overriding that module may not export the type.
  */
 export interface FeaturedModel {
+  /**
+   * @deprecated The panel renders featured models as plain rows and ignores this. Kept so hosts
+   * that still pass it type-check; remove once none do.
+   */
+  description?: string;
   modelId: string;
   providerId: string;
 }

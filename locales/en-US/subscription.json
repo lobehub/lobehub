@@ -588,6 +588,7 @@
   "modelSelection.confirm.inputPrice": "Input",
   "modelSelection.confirm.outputPrice": "Output",
   "modelSelection.confirm.title": "Use {{model}}?",
+  "modelSwitch.auto.description": "Balanced quality and speed with generous usage quota, ideal for daily tasks",
   "models.intro": "Introduction",
   "models.link": "View",
   "navPanelUpgrade.desc": "Upgrade to unlock extended capabilities",
