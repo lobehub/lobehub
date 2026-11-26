@@ -6,7 +6,7 @@ import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-devi
 import debug from 'debug';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
-import { awaitManagedDeviceForToolCall } from '@/server/services/deviceGateway/managedDeviceWake';
+import { startManagedDeviceForActivation } from '@/server/services/deviceGateway/managedDeviceWake';
 import {
   filterAuthorizedDevicePresence,
   isGatewayOnlyDevicePresenceAllowed,
@@ -89,11 +89,12 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
         );
         return devices;
       },
-      // Activating an offline managed cloud device wakes it and waits briefly;
-      // if it is still starting, the model is told to retry the activation.
+      // A managed cloud device is always online for the model: activating a
+      // sleeping one starts it and activates it at once. Its Local System
+      // calls wait for it (or answer DEVICE_WAKING) until it connects.
       resolveOfflineDevice: async (deviceId) => {
         if (!serverDB) return;
-        return awaitManagedDeviceForToolCall(
+        return startManagedDeviceForActivation(
           {
             db: serverDB,
             userId,
