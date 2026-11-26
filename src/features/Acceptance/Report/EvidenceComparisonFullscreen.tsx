@@ -327,12 +327,26 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
   ({ after, before, layout, onClose, returnFocusRef }) => {
     const { t } = useTranslation('verify');
     const closeRef = useRef<HTMLButtonElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
     const { images, panes, reset, view, zoomCenter } = useSyncedZoom();
 
     useEffect(() => {
       const opener = returnFocusRef?.current ?? (document.activeElement as HTMLElement | null);
       const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') onClose();
+        if (event.key === 'Tab') {
+          // The overlay hides the page but does not make it inert: cycle Tab
+          // through the dialog's own controls instead of letting it reach the
+          // covered report.
+          const focusables = [
+            ...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? []),
+          ];
+          if (focusables.length === 0) return;
+          const index = focusables.indexOf(document.activeElement as HTMLElement);
+          const next = event.shiftKey
+            ? focusables.at(index <= 0 ? -1 : index - 1)
+            : focusables[index === -1 || index === focusables.length - 1 ? 0 : index + 1];
+          next?.focus();
+        } else if (event.key === 'Escape') onClose();
         else if (event.key === '=' || event.key === '+') zoomCenter(STEP);
         else if (event.key === '-') zoomCenter(1 / STEP);
         else if (event.key === '0') reset();
@@ -359,6 +373,7 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
       <div
         aria-modal
         aria-label={t('report.evidence.comparison.fullscreen')}
+        ref={dialogRef}
         role={'dialog'}
         {...stylex.props(styles.overlay)}
       >
