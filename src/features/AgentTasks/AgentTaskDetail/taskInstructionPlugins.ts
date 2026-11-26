@@ -17,7 +17,7 @@ export const TASK_INSTRUCTION_EXTRA_PLUGINS = [
  * Editor configuration of the task instruction.
  *
  * Inline `$…$` math is off, as in PageEditor: task descriptions quote prices
- * (`Plus $30 / Pro $150`) far more often than inline formulas, and the Markdown
+ * (`Basic $10 / Pro $20`) far more often than inline formulas, and the Markdown
  * import would otherwise turn the text between two prices into one formula.
  * Block `$$` math and formula nodes already in a saved instruction still render.
  */

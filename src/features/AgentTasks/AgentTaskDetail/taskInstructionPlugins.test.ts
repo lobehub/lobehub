@@ -45,9 +45,9 @@ describe('TASK_INSTRUCTION_EXTRA_PLUGINS', () => {
 
 describe('TASK_INSTRUCTION_EDITOR_PROPS', () => {
   it('keeps dollar prices in a description as plain text', () => {
-    const snapshot = importInstruction('Auto quota Plus $30 / Pro $150 / Max $300');
+    const snapshot = importInstruction('Pricing: Basic $10 / Pro $20 / Team $40');
 
-    expect(snapshot.markdown).toContain('Plus $30 / Pro $150 / Max $300');
+    expect(snapshot.markdown).toContain('Basic $10 / Pro $20 / Team $40');
     expect(hasNodeType(snapshot.editorData, 'math')).toBe(false);
   });
 
