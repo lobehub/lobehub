@@ -170,26 +170,5 @@ describe('LobeZeroOneAI - custom features', () => {
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
-
-    it('should pass correct client to processModelList', async () => {
-      const mockModelList = [
-        { id: 'yi-34b-chat-0205', object: 'model' },
-        { id: 'yi-lightning', object: 'model' },
-      ];
-
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.lingyiwanwu.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({ data: mockModelList }),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      // Verify processModelList was called with correct parameters
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-    });
   });
 });

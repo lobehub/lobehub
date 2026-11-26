@@ -29,13 +29,15 @@ it('retains each failed component and attempts the rest without fabricating comp
   // Both exported source entries are genuinely missing. No build/browser mock.
   const result = await runFixtureBatch(options);
   expect(result.summary).toMatchObject({ planned: 2, completed: 0, errors: 2, equalInSamples: 0 });
-  expect(result.errors[0]).toContain('DotsLoading');
-  expect(result.errors[1]).toContain('UnreadDot');
-  expect(result.fixtureResults).toEqual([]);
+  expect(result.entries.map(({ fixtureId, outcome }) => ({ fixtureId, outcome }))).toEqual([
+    { fixtureId: 'DotsLoading', outcome: 'ERROR' },
+    { fixtureId: 'UnreadDot', outcome: 'ERROR' },
+  ]);
+  expect(result.entries.every((entry) => !entry.summary)).toBe(true);
   for (const fixture of options.fixtures) {
     const directory = path.join(options.output, 'components', fixture.id);
     const error = JSON.parse(await readFile(path.join(directory, 'fixture-error.json'), 'utf8'));
-    expect(error).toMatchObject({ fixtureId: fixture.id, gateEligible: false });
+    expect(error).toMatchObject({ fixtureId: fixture.id });
     const artifacts = JSON.parse(
       await readFile(path.join(directory, 'artifacts.json'), 'utf8'),
     ) as Array<{ path: string; sha256: string }>;

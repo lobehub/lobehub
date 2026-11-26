@@ -396,6 +396,7 @@ describe('AgentBridgeService', () => {
       await service.handleMention(thread, createMessage(), {
         agentId: 'agent-1',
         botContext: { platformThreadId: THREAD_ID } as any,
+        botSettings: { processingMessage: true },
         client: createClient(),
       });
 
@@ -413,6 +414,7 @@ describe('AgentBridgeService', () => {
       await service.handleMention(thread, createMessage(), {
         agentId: 'agent-1',
         botContext: { platformThreadId: THREAD_ID } as any,
+        botSettings: { processingMessage: true },
         client: createClient(),
       });
 

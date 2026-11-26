@@ -8,6 +8,7 @@ import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/for
 import { log } from '../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 import { registerTopicExportCommand } from './topic/export';
+import { registerTopicLifecycleCommands } from './topic/lifecycle';
 import { registerTopicSendCommand } from './topic/send';
 import { registerTopicViewCommand } from './topic/view';
 
@@ -20,6 +21,14 @@ export function registerTopicCommand(program: Command) {
     .command('list')
     .description('List topics')
     .option('--agent-id <id>', 'Filter by agent ID')
+    .option(
+      '--parent-topic-id <tpc_id>',
+      'Only the topics opened from this one (its child topics), whatever their agent',
+    )
+    .option(
+      '--opened-by-me',
+      'Only the topics this conversation opened (--parent-topic-id from LOBEHUB_TOPIC_ID)',
+    )
     .option('-L, --limit <n>', 'Page size', '30')
     .option('-P, --page <n>', 'Page number', '1')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -28,12 +37,22 @@ export function registerTopicCommand(program: Command) {
         agentId?: string;
         json?: string | boolean;
         limit?: string;
+        openedByMe?: boolean;
         page?: string;
+        parentTopicId?: string;
       }) => {
+        const parentTopicId =
+          options.parentTopicId ?? (options.openedByMe ? process.env.LOBEHUB_TOPIC_ID : undefined);
+        if (options.openedByMe && !parentTopicId) {
+          log.error('--opened-by-me needs LOBEHUB_TOPIC_ID; pass --parent-topic-id instead.');
+          process.exit(1);
+          return;
+        }
         const client = await getTrpcClient();
 
         const input: Record<string, any> = {};
         if (options.agentId) input.agentId = options.agentId;
+        if (parentTopicId) input.openedByTopicId = parentTopicId;
         if (options.limit) input.pageSize = Number.parseInt(options.limit, 10);
         const page = options.page ? Number.parseInt(options.page, 10) : undefined;
         if (page !== undefined && page > 1) input.current = page - 1;
@@ -54,6 +73,20 @@ export function registerTopicCommand(program: Command) {
 
         if (items.length === 0) {
           console.log('No topics found.');
+          return;
+        }
+
+        // Child topics may run other agents: say which.
+        if (parentTopicId) {
+          printTable(
+            items.map((t: any) => [
+              t.id || '',
+              truncate(t.title || 'Untitled', 50),
+              t.agentId || '',
+              t.updatedAt ? timeAgo(t.updatedAt) : '',
+            ]),
+            ['ID', 'TITLE', 'AGENT', 'UPDATED'],
+          );
           return;
         }
 
@@ -355,4 +388,5 @@ export function registerTopicCommand(program: Command) {
   registerTopicExportCommand(topic);
   registerTopicViewCommand(topic);
   registerTopicSendCommand(topic);
+  registerTopicLifecycleCommands(topic);
 }

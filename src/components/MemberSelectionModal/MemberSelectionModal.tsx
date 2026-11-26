@@ -24,13 +24,16 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
+import { isBuiltinAgentSlug } from '@/features/AddAgentMemberModal/selectAddableAgents';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { sx } from '@/styles/sx';
 
 const AvailableAgentItem = memo<{
@@ -48,11 +51,17 @@ const AvailableAgentItem = memo<{
   const avatar = typeof agent.avatar === 'string' ? agent.avatar : undefined;
   const avatarBackground = agent.backgroundColor || undefined;
 
+  const compact = useInterfaceDensity() === 'compact';
+
   if (!_agentId) return null;
 
   return (
-    <div {...stylex.props(styles.listItem)} ref={ref} onClick={() => onToggle(_agentId)}>
-      <Flexbox horizontal align="center" gap={12} width="100%">
+    <div
+      {...stylex.props(styles.listItem, compact && styles.listItemCompact)}
+      ref={ref}
+      onClick={() => onToggle(_agentId)}
+    >
+      <Flexbox horizontal align="center" gap={compact ? 8 : 12} width="100%">
         <Checkbox
           checked={isSelected}
           onChange={() => {
@@ -70,11 +79,13 @@ const AvailableAgentItem = memo<{
             background={avatarBackground}
             name={title}
             shape={'circle'}
-            size={40}
+            size={compact ? 28 : 40}
           />
         </Flexbox>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text weight={500}>{title}</Text>
+          <Text fontSize={compact ? 13 : undefined} weight={500}>
+            {title}
+          </Text>
           {description && (
             <Text ellipsis className={stylex.props(styles.description).className}>
               {description}
@@ -142,6 +153,9 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
+  listItemCompact: {
+    padding: '6px',
+  },
   modelSelectDisabled: { pointerEvents: 'none' },
   rightColumn: {
     overflowY: 'auto',
@@ -196,7 +210,8 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     preSelectedAgents = [],
   }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const enabledModels = useEnabledChatModels();
+    const compact = useInterfaceDensity() === 'compact';
+    const enabledModels = useSelectableChatModels();
     const [selectedAgents, setSelectedAgents] = useState<string[]>(preSelectedAgents);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -232,8 +247,11 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
     useFetchAgentList(open && isLogin);
+    // Builtins (Lobe AI) are listed in the sidebar but can never join a group.
     const agents = useHomeStore((s) =>
-      homeAgentListSelectors.allAgents(s).filter((item) => item.type === 'agent'),
+      homeAgentListSelectors
+        .allAgents(s)
+        .filter((item) => item.type === 'agent' && !isBuiltinAgentSlug(item.slug)),
     );
 
     const handleAgentToggle = (agentId: string) => {
@@ -312,7 +330,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                 background={avatarBackground}
                 name={title}
                 shape="circle"
-                size={40}
+                size={compact ? 28 : 40}
               />
             ),
             description,
@@ -322,7 +340,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
-    }, [selectedAgents, agents, t, handleRemoveAgent]);
+    }, [selectedAgents, agents, t, handleRemoveAgent, compact]);
 
     const handleReset = () => {
       setSelectedAgents(preSelectedAgents);
@@ -449,7 +467,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                 >
                   <Flexbox flex={1} gap={2}>
                     <Text
-                      style={{ fontSize: 14, fontWeight: 500 }}
+                      style={{ fontSize: densityVars.fontSize, fontWeight: 500 }}
                       type={isHostRemoved ? 'secondary' : undefined}
                     >
                       {t('groupWizard.host.title')}
@@ -463,11 +481,9 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                   </Flexbox>
                   <Flexbox horizontal align="center" gap={12}>
                     <div
-                      {...sx(
-                        [styles.hostModelSelect, isHostRemoved && styles.modelSelectDisabled],
-                        undefined,
-                        { opacity: isHostRemoved ? 0.6 : 1 },
-                      )}
+                      {...sx(styles.hostModelSelect, isHostRemoved && styles.modelSelectDisabled, {
+                        opacity: isHostRemoved ? 0.6 : 1,
+                      })}
                     >
                       <ModelSelect
                         requiredAbilities={['functionCall']}

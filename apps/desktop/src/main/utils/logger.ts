@@ -5,6 +5,9 @@ import electronLog from 'electron-log';
 
 import { getDesktopEnv } from '@/env';
 
+import type { LogLevel } from './structuredLog';
+import { rawConsole, writeStructuredLog } from './structuredLog';
+
 /**
  * Electron never sets `NODE_ENV` for packaged builds, and the main bundle reads
  * env through a `{ ...process.env }` spread, so no build-time define reaches it
@@ -24,15 +27,25 @@ electronLog.transports.console.level = isPackagedBuild()
   ? 'info' // Show info level and above in production environment
   : 'debug'; // Show more logs in development environment
 
+/**
+ * Every level reaches `<userData>/logs/main.jsonl` in dev and packaged builds,
+ * independent of `DEBUG`; the terminal (`debug`) and `main.log` (electron-log)
+ * outputs below keep their previous behavior.
+ */
+const record = (namespace: string, level: LogLevel, message: unknown, args: unknown[]) =>
+  writeStructuredLog({ args, level, message, ns: namespace, process: 'main' });
+
 // Create namespaced debugger
 export const createLogger = (namespace: string) => {
   const debugLogger = debug(namespace);
 
   return {
     debug: (message, ...args) => {
+      record(namespace, 'debug', message, args);
       debugLogger(message, ...args);
     },
     error: (message, ...args) => {
+      record(namespace, 'error', message, args);
       // A packaged build has no console anyone can read, so its errors must reach
       // the log file. Development keeps `console.error` — the terminal is where a
       // dev reads them, and electron-log's console transport would print a second
@@ -40,10 +53,12 @@ export const createLogger = (namespace: string) => {
       if (isPackagedBuild()) {
         electronLog.error(`[${namespace}]`, message, ...args);
       } else {
-        console.error(message, ...args);
+        // The raw method: the main-process console mirror would record this line twice.
+        rawConsole.error(message, ...args);
       }
     },
     info: (message, ...args) => {
+      record(namespace, 'info', message, args);
       if (isPackagedBuild()) {
         electronLog.info(`[${namespace}]`, message, ...args);
       }
@@ -51,12 +66,14 @@ export const createLogger = (namespace: string) => {
       debugLogger(`INFO: ${message}`, ...args);
     },
     verbose: (message, ...args) => {
+      record(namespace, 'debug', message, args);
       electronLog.verbose(message, ...args);
       if (getDesktopEnv().DEBUG_VERBOSE) {
         debugLogger(`VERBOSE: ${message}`, ...args);
       }
     },
     warn: (message, ...args) => {
+      record(namespace, 'warn', message, args);
       if (isPackagedBuild()) {
         electronLog.warn(`[${namespace}]`, message, ...args);
       }

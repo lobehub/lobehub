@@ -1,6 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentDocumentIndexSnapshot,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -8,6 +9,7 @@ import type {
   OperationSkillSet,
   OperationToolSet,
   ProjectInstructionFile,
+  SkillIndexSnapshot,
   ToolExecutor,
   ToolSource,
   UserMemoryConfig,
@@ -18,6 +20,7 @@ import type {
   AgentSignalOperationMarker,
   ChatToolPayload,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
@@ -157,7 +160,17 @@ export interface AgentRunPrincipal {
  */
 export interface AgentRunPlan {
   /** Evaluation execution controls (tool forwarding) for eval runs. */
-  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  eval?: {
+    connectorSnapshots?: EvalConnectorSnapshots;
+    /** The only tool identifiers the attempt may see or call; see EvalRuntimeContext. */
+    allowedTools?: string[];
+    /** The eval attempt (case run or pass@k thread) this operation serves; inherited by sub-agents. */
+    attemptId?: string;
+    caseId?: string;
+    /** Isolated Memory scope of the eval trial (server-created). */
+    memory?: { fixtureHash: string; runId: string; threadId?: string; topicId: string };
+    toolForwarding?: EvalToolForwardingConfig;
+  };
   /** Where (and whether) the run executes, resolved once at the entry point. */
   execution?: ExecutionPlan;
   /** Operation-level skill set for the skill resolver. */
@@ -173,6 +186,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.
@@ -297,6 +311,12 @@ export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
 export interface AgentWorldSnapshot {
   /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
   agent?: RunAgentSnapshot;
+  /**
+   * Library skills the agent set to `auto` (explicit tri-state entries). A
+   * library skill is opt-in per agent and `agent.plugins` is already collapsed
+   * to pinned ids, so the skill pool reads the opted-in ones from here.
+   */
+  autoSkillIds?: string[];
   /** Channel-specific facts the model should know (bot platform, Discord …). */
   channel?: {
     botPlatform?: BotPlatformContext;
@@ -339,6 +359,13 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
+   * The agent-document index snapshot (rows + change notes) this run renders
+   * from, pinned on its first step so later steps send the same index and
+   * notes (see `resolveAgentDocumentIndex`). Replaced only when the history is
+   * compressed mid-run.
+   */
+  agentDocumentIndex?: AgentDocumentIndexSnapshot;
+  /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was
    * resolved from a persisted device row.
@@ -348,6 +375,13 @@ export interface AgentRunBinding {
     platform?: string;
     systemInfo?: Record<string, string>;
   };
+  /**
+   * The skill-index snapshot (rows + change notes) this run renders from,
+   * pinned on its first step so later steps send the same `<available_skills>`
+   * block and `<skills_changes>` notes (see `resolveSkillIndex`). Replaced only
+   * when the history is compressed mid-run.
+   */
+  skillIndex?: SkillIndexSnapshot;
 }
 
 /**
@@ -361,8 +395,8 @@ export interface AgentState {
   activatedStepTools?: ActivatedStepTool[];
   // --- Late-bound execution facts ---
   /**
-   * Execution facts bound at a step boundary (device routing). The only
-   * business slot the host may write after creation.
+   * Execution facts bound at a step boundary (device routing, agent-document
+   * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
 
@@ -592,7 +626,20 @@ export interface AgentState {
    * Only signatures present in the latest tool-calling turn are retained.
    */
   toolCallRepeatGuard?: {
+    /**
+     * Calls each budgeted API (`maxCallsPerOperation` on its manifest entry)
+     * was asked for so far in this operation, keyed by tool identity without
+     * arguments. Unlike `counts` it is never reset by a turn that skips the
+     * API: the budget is for the whole operation.
+     */
+    apiCalls?: Record<string, number>;
     counts: Record<string, number>;
+    /**
+     * Consecutive LLM turns that asked for a budgeted API past its budget.
+     * Each of those turns got a rejected tool result; the run stops once the
+     * model has ignored that feedback too many turns in a row.
+     */
+    overBudgetRounds?: number;
     /**
      * Set on the turn the guard cut short. The run still lands in `status:
      * 'done'` — the turn was finalized without tool calls, which is what
@@ -625,8 +672,10 @@ export interface AgentState {
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
-   * How many times this operation has answered unresolvable tool calls with a
-   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * How many consecutive LLM turns this operation has answered unresolvable
+   * tool calls with a rejected tool result. Any resolved tool call reaching a
+   * tool executor resets it to 0, so it measures a model stuck on names that do not exist,
+   * not the run's lifetime total of typos. Operation-scoped on purpose: the same rejection rows
    * are also readable from the message history, but that history is rehydrated
    * from the DB on every step and carries earlier operations' rejections, so
    * counting rows there would spend a new operation's budget before it starts.

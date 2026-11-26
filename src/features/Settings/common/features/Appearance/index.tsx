@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { AppearanceSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
@@ -28,7 +28,7 @@ const Appearance = memo(() => {
     onValuesChange: (value) => save(() => setSettings({ general: value })),
   });
 
-  if (!isUserStateInit) return <SettingsSectionSkeleton />;
+  if (!isUserStateInit) return <AppearanceSectionSkeleton />;
 
   const theme: FormGroupItem<UserGeneralConfig> = {
     children: [

@@ -7,6 +7,8 @@ import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import { build } from 'vite';
 
+import { fixtureDataBoundary, type ModuleBoundary, workspaceExports } from './fixtureResolvers';
+
 /** Bundled into the source snapshot, then executed as a separate Node process. */
 const main = async () => {
   const root = await realpath(process.cwd());
@@ -29,6 +31,17 @@ const main = async () => {
     pathToFileURL(path.join(tools, 'compiler/lobeUiImports.mjs')).href
   );
   const modules = new Set<string>();
+  const boundaryHits = new Set<string>();
+  const boundaries = JSON.parse(
+    await readFile(path.join(tools, 'fixture-boundaries.json'), 'utf8'),
+  ) as ModuleBoundary[];
+  const dataBoundary = fixtureDataBoundary(
+    root,
+    path.join(tools, 'host'),
+    boundaries,
+    boundaryHits,
+  );
+  const workspaceResolver = await workspaceExports(root);
   const observer = JSON.parse(await readFile(path.join(tools, 'style-bindings.json'), 'utf8')) as {
     composition: { edits: Array<{ start: number; end: number; text: string }> };
     observerExport: string;
@@ -92,6 +105,8 @@ const main = async () => {
     logLevel: 'error',
     plugins: [
       audit,
+      dataBoundary,
+      workspaceResolver,
       bindingObserver,
       stylexPlugin({ overlaySrcDirs: [path.join(root, 'src')] }),
       react(),
@@ -117,6 +132,11 @@ const main = async () => {
     root: path.join(tools, 'host'),
   });
   if (!modules.has(source)) throw new Error('COMPONENT_NOT_IN_BUILD_GRAPH');
+  await writeFile(
+    path.join(tools, 'fixture-boundary-hits.json'),
+    JSON.stringify([...boundaryHits].sort()),
+    { flag: 'wx' },
+  );
   await writeFile(path.join(tools, 'build-modules.json'), JSON.stringify([...modules].sort()), {
     flag: 'wx',
   });

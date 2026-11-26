@@ -71,8 +71,8 @@ describe('resolveDocumentWrite', () => {
 
   it('drops the heading that repeats the title from a Markdown write and its editorData', async () => {
     const write = await resolveDocumentWrite({
-      content: '# rc 与 device — 讨论纪要\n\n来源：eval 频道\n',
-      title: 'rc 与 device — 讨论纪要',
+      content: '# 集群与设备 — 讨论纪要\n\n来源：eval 频道\n',
+      title: '集群与设备 — 讨论纪要',
     });
 
     expect(write.content).toBe('来源：eval 频道\n');

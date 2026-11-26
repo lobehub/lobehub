@@ -23,6 +23,10 @@ export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknow
 
 export interface GitLinkedPullRequest {
   ciStatus?: GitPullRequestCiStatus;
+  /** The PR's head branch on GitHub */
+  headRefName?: string;
+  /** `owner/repo` of the PR's head branch — not the PR's own repo for a fork PR */
+  headRepoFullName?: string;
   isDraft?: boolean;
   mergeable?: string;
   mergedAt?: string | null;
@@ -41,6 +45,8 @@ export interface GitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
+  /** `owner/repo` of the GitHub remote the branch publishes to, when it is one */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
   status: GitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found */
@@ -319,6 +325,8 @@ export interface GitBranchDiffPatches {
 
 export interface GitCheckoutResult {
   error?: string;
+  /** Echo of the start point the new branch was cut from, when one was requested. */
+  startPoint?: string;
   success: boolean;
 }
 
@@ -342,21 +350,50 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** `cleanupOwnedWorktree`: an app-created worktree removed, kept dirty, or refused. */
+export interface GitOwnedWorktreeCleanupResult {
+  branch?: string;
+  dirtyFiles?: number;
+  error?: string;
+  outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  unpushedSubmodules?: number;
+}
+
+/** `restoreOwnedWorktree`: an app-created worktree checked out again at its path. */
+export interface GitOwnedWorktreeRestoreResult {
+  error?: string;
+  outcome: 'branchMissing' | 'error' | 'refused' | 'restored';
+}
+
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
+  /** Echo of the start point the worktree's branch was cut from, when one was requested. */
+  startPoint?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
   worktreePath?: string;
 }
 
+/** Why a named-branch pull was refused before git ran. */
+export type GitSyncRefusal = 'checkedOutElsewhere' | 'noUpstream';
+
 export interface GitPullResult {
+  /** Echo of the named branch that was pulled; absent for a HEAD pull. */
+  branch?: string;
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */
   noop?: boolean;
+  reason?: GitSyncRefusal;
   success: boolean;
+  /** The worktree holding the branch, for `reason: 'checkedOutElsewhere'`. */
+  worktreePath?: string;
 }
 
 export interface GitPushResult {
+  /** Echo of the named branch that was pushed; absent for a HEAD push. */
+  branch?: string;
   error?: string;
   /** True when `git push` reported everything is already up-to-date */
   noop?: boolean;
@@ -368,6 +405,8 @@ export interface GitAheadBehind {
   ahead: number;
   /** Commits in upstream not in HEAD — pull count */
   behind: number;
+  /** Echo of the named branch the counts describe; absent when they describe HEAD. */
+  branch?: string;
   /** True when the branch has an upstream tracking ref configured */
   hasUpstream: boolean;
   /**

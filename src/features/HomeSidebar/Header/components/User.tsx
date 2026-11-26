@@ -1,12 +1,15 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, use } from 'react';
 
 import { useActiveIdentity } from '@/business/client/hooks/useActiveIdentity';
 import { ProductLogo } from '@/components/Branding';
 import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
+import { NavPanelDensityContext, useNavItemMetrics } from '@/features/NavPanel/density';
 import UserAvatar from '@/features/User/UserAvatar';
 import UserPanel from '@/features/User/UserPanel';
 import { useUserStore } from '@/store/user';
@@ -17,11 +20,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 // name) paints the system text-selection highlight across the whole row;
 // that bright blue is heavier than the Sidebar's active-route fill below
 // and inverts the visual hierarchy.
-const styles = createStaticStyles(({ css }) => ({
-  trigger: css`
-    user-select: none;
-  `,
-}));
+const styles = stylex.create({ trigger: { userSelect: 'none' } });
 
 const User = memo<{ lite?: boolean }>(({ lite }) => {
   const [nickname, username, isSignedIn] = useUserStore((s) => [
@@ -34,6 +33,8 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
   // (avatar + name) instead of the user's identity. Personal workspaces and
   // OSS builds fall back to the user-level display.
   const activeIdentity = useActiveIdentity();
+  const compact = use(NavPanelDensityContext) === 'compact';
+  const { headerAvatarSize, headerLabelFontSize, headerLabelWeight } = useNavItemMetrics();
   const displayAvatar = activeIdentity?.avatar ?? undefined;
   const displayName = activeIdentity?.name ?? (nickname || username);
 
@@ -43,7 +44,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
         clickable
         horizontal
         align={'center'}
-        className={styles.trigger}
+        className={stylex.props(styles.trigger).className}
         gap={8}
         paddingBlock={2}
         variant={'borderless'}
@@ -58,14 +59,19 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
           avatarOverride={displayAvatar}
           nameOverride={activeIdentity?.name ?? undefined}
           shape={'square'}
-          size={28}
+          size={headerAvatarSize}
         />
         {!lite && (
           <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
             {!isSignedIn && !activeIdentity ? (
-              <ProductLogo color={cssVar.colorText} size={28} type={'text'} />
+              <ProductLogo color={cssVar.colorText} size={compact ? 22 : 28} type={'text'} />
             ) : (
-              <Text ellipsis style={{ flex: 1 }} weight={500}>
+              <Text
+                ellipsis
+                fontSize={headerLabelFontSize}
+                style={{ flex: 1 }}
+                weight={headerLabelWeight}
+              >
                 {displayName}
               </Text>
             )}

@@ -22,11 +22,17 @@ export interface UserSystemAgentConfig {
   channelRouting: SystemAgentItem;
   /** Model used to draft expertise domains and extract reusable experience from conversations. */
   expertise: SystemAgentItem;
+  /**
+   * Embedding model for file chunks and knowledge-base semantic search. An unset
+   * slot runs the deployment's `DEFAULT_FILES_CONFIG` `embedding_model`, else the
+   * code default. Follows no Service Model tier: switching it leaves files that
+   * were already embedded on their old vectors.
+   */
+  fileEmbedding: SystemAgentItem;
   followUpAction: SystemAgentItem;
   generationTopic: SystemAgentItem;
   /** Model used to turn a persistent goal into its standing acceptance criteria. */
   goal: SystemAgentItem;
-  historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;
   /** Model used to turn onboarding evidence into background-safe task recommendations. */
   onboardingTaskRecommender: SystemAgentItem;

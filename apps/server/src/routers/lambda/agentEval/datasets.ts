@@ -1,13 +1,59 @@
-import { parseDataset } from '@lobechat/eval-dataset-parser';
+import type { ParseResult } from '@lobechat/eval-dataset-parser';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
+import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
+import type { FileService } from '@/server/services/file';
+import { FileParseError, parseDatasetInWorker } from '@/server/services/fileParse';
+import { isFileParseError } from '@/server/services/fileParse/errors';
+import { isDeterministicParseFailure } from '@/server/services/fileParse/failure';
+import { normalizeParseFileError } from '@/server/services/fileParse/normalizeError';
 
+import {
+  importDatasetPackageProcedure,
+  previewDatasetPackage,
+  readDatasetPackageUpload,
+} from './datasetPackages';
+import { assertDatasetDeletable, assertDatasetMove } from './lobeBenchMembership';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
-import { evalConfigSchema, rubricTypeSchema } from './schemas';
+import { evalConfigSchema, evalTestCaseContentSchema, rubricTypeSchema } from './schemas';
+
+/**
+ * Refuses a stored upload larger than the in-memory parse cap by its stored size, before the
+ * bytes are fetched: a few hundred MiB would otherwise be read, then cloned into the parse thread.
+ */
+const assertWithinParseLimit = async (fileService: FileService, pathname: string) => {
+  const { contentLength } = await fileService.getFileMetadata(pathname);
+  if (contentLength > MAX_FILE_PARSE_SIZE) {
+    throw new FileParseError('INPUT_TOO_LARGE', FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE);
+  }
+};
+
+/**
+ * A parse failure that is the worker's state, not the file's (queue full or timed out, artifact
+ * missing, thread could not start or died): the same upload can parse later, so it is kept.
+ */
+const isRetryableParseFailure = (error: unknown) =>
+  isFileParseError(error) && !isDeterministicParseFailure(error);
+
+/** Retryable: 429 when busy, 503 otherwise. Anything else is a bad file, as before. */
+const toParseRequestError = (error: any) => {
+  if (!isRetryableParseFailure(error)) {
+    return new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Failed to parse file: ${error.message}`,
+    });
+  }
+  const mapped = normalizeParseFileError(error) as TRPCError;
+  return mapped.code === 'INTERNAL_SERVER_ERROR'
+    ? new TRPCError({ cause: error, code: 'SERVICE_UNAVAILABLE', message: error.message })
+    : mapped;
+};
 
 export const datasetRouter = router({
+  importDatasetPackage: importDatasetPackageProcedure,
   // ============================================
   // Dataset Operations
   // ============================================
@@ -24,11 +70,24 @@ export const datasetRouter = router({
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
         sourceExperimentId: z.string().optional(),
+        cases: z
+          .array(
+            z.object({
+              content: evalTestCaseContentSchema,
+              environmentId: z.string().nullish(),
+              evalMode: rubricTypeSchema.optional(),
+              evalConfig: evalConfigSchema.optional(),
+              metadata: z.record(z.string(), z.unknown()).optional(),
+              sortOrder: z.number().optional(),
+            }),
+          )
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const result = await ctx.datasetModel.create(input);
+        const { cases, ...dataset } = input;
+        const result = await ctx.datasetModel.create(dataset, cases);
         if (!result) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -37,6 +96,9 @@ export const datasetRouter = router({
         }
         return result;
       } catch (error: any) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
         // PostgreSQL errors might be in error.cause
         const pgError = error?.cause || error;
 
@@ -75,6 +137,9 @@ export const datasetRouter = router({
     .input(
       z.object({
         id: z.string(),
+        // Moves the dataset into another benchmark the caller can see (its own, or a
+        // built-in one), e.g. an account dataset into a benchmark the account made.
+        benchmarkId: z.string().optional(),
         name: z.string().optional(),
         description: z.string().optional(),
         evalMode: rubricTypeSchema.nullish(),
@@ -84,7 +149,22 @@ export const datasetRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      const result = await ctx.datasetModel.update(id, data);
+      await assertDatasetMove(ctx, id, data.benchmarkId);
+      if (data.benchmarkId && !(await ctx.benchmarkModel.findById(data.benchmarkId))) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Benchmark with id "${data.benchmarkId}" not found`,
+        });
+      }
+      let result;
+      try {
+        result = await ctx.datasetModel.update(id, data);
+      } catch (error) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
+        throw error;
+      }
       if (!result) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -96,8 +176,9 @@ export const datasetRouter = router({
   deleteDataset: agentEvalProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertDatasetDeletable(ctx, input.id);
       try {
-        const result = await ctx.datasetModel.delete(input.id);
+        const result = await ctx.datasetDeletionRepo.deleteDataset(input.id);
         // Check if any rows were affected
         if (result.rowCount === 0) {
           return {
@@ -117,7 +198,7 @@ export const datasetRouter = router({
     .input(
       z.object({
         pathname: z.string(),
-        format: z.enum(['json', 'jsonl', 'csv', 'xlsx']).optional(),
+        format: z.enum(['json', 'jsonl', 'csv', 'xlsx', 'zip']).optional(),
         filename: z.string().optional(),
       }),
     )
@@ -126,14 +207,37 @@ export const datasetRouter = router({
       const format = input.format || 'auto';
       const resolvedFilename = input.filename || input.pathname;
       const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
+      const isZip = format === 'zip' || /\.zip$/i.test(resolvedFilename);
+      // Storage failures are not user validation errors; only parse failures below are BAD_REQUEST.
+      const archive = isZip
+        ? await readDatasetPackageUpload(ctx.fileService, input.pathname)
+        : undefined;
+      if (!archive) {
+        try {
+          await assertWithinParseLimit(ctx.fileService, input.pathname);
+        } catch (error) {
+          // A storage failure is not a user validation error; only the size refusal is.
+          if (!(error instanceof FileParseError)) throw error;
+          if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Failed to parse file: ${error.message}`,
+          });
+        }
+      }
+      const content =
+        archive ??
+        (isXlsx
+          ? await ctx.fileService.getFileByteArray(input.pathname)
+          : await ctx.fileService.getFileContent(input.pathname));
 
       try {
-        const content = isXlsx
-          ? await ctx.fileService.getFileByteArray(input.pathname)
-          : await ctx.fileService.getFileContent(input.pathname);
-        const result = parseDataset(content, {
+        if (archive) {
+          return previewDatasetPackage(archive);
+        }
+        const result = await parseDatasetInWorker<ParseResult>(content, {
           filename: resolvedFilename,
-          format: format === 'auto' ? undefined : format,
+          format: format === 'auto' || format === 'zip' ? undefined : format,
           preview: 50,
         });
 
@@ -142,13 +246,14 @@ export const datasetRouter = router({
           preview: result.rows,
           totalCount: result.totalCount,
           format: result.format,
+          datasetPackage: undefined,
         };
       } catch (error: any) {
-        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Failed to parse file: ${error.message}`,
-        });
+        // A busy or unavailable worker keeps the upload so the same pathname can be retried.
+        if (upload && !isRetryableParseFailure(error)) {
+          await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        }
+        throw toParseRequestError(error);
       }
     }),
   importDataset: agentEvalProcedureWrite
@@ -172,6 +277,7 @@ export const datasetRouter = router({
     .mutation(async ({ input, ctx }) => {
       const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
       let imported = false;
+      let keepUpload = false;
 
       try {
         const format = input.format || 'auto';
@@ -180,18 +286,17 @@ export const datasetRouter = router({
 
         let parsed;
         try {
+          await assertWithinParseLimit(ctx.fileService, input.pathname);
           const content = isXlsx
             ? await ctx.fileService.getFileByteArray(input.pathname)
             : await ctx.fileService.getFileContent(input.pathname);
-          parsed = parseDataset(content, {
+          parsed = await parseDatasetInWorker<ParseResult>(content, {
             filename: resolvedFilename,
             format: format === 'auto' ? undefined : format,
           });
         } catch (error: any) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Failed to parse file: ${error.message}`,
-          });
+          keepUpload = isRetryableParseFailure(error);
+          throw toParseRequestError(error);
         }
 
         const { fieldMapping } = input;
@@ -267,9 +372,15 @@ export const datasetRouter = router({
         imported = true;
 
         return { count: result.length, data: result };
+      } catch (error) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
+        throw error;
       } finally {
-        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        else if (imported) await ctx.fileService.deleteFile(input.pathname);
+        if (upload) {
+          if (!keepUpload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        } else if (imported) await ctx.fileService.deleteFile(input.pathname);
       }
     }),
 });

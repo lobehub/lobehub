@@ -794,7 +794,7 @@ export const mergeLocalReviewEvents = (
 ): LocalReviewEvent[] => {
   const byId = new Map<string, LocalReviewEvent>();
   for (const events of logs) for (const event of events ?? []) byId.set(event.id, event);
-  return [...byId.values()].sort(
-    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-  );
+  // Ids are random, so ties keep log order (sort is stable) — a decision written in the same
+  // millisecond as the review before it must still come after it.
+  return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 };

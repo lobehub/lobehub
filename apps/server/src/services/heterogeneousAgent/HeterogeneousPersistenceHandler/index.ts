@@ -5,12 +5,22 @@ import type {
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
 import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import {
+  isPermissionModeReport,
+  permissionModeReportPatch,
+} from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import {
+  collaborationModeReportPatch,
+  isCollaborationModeReport,
+} from '@lobechat/heterogeneous-agents/codexPlanMode';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
+import { ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
 
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { consumeHeteroSteer } from '@/server/services/aiAgent/steerQueue/hetero';
 
 import { persistCodexTurnProvenance } from '../heteroProvenance';
 import { applyMainIntent, applySubagentIntent } from './applyIntents';
@@ -35,6 +45,15 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
 /** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
 const opensSignalTurn = (event: AgentStreamEvent): boolean =>
   event.type === 'stream_start' && !!event.data?.newStep && !!event.data?.externalSignal;
+
+/** A `user_message` replay from Claude Code (see `consumeSteer`). */
+const isSteerReplay = (
+  event: AgentStreamEvent,
+): event is AgentStreamEvent & { data: { uuid: string } } =>
+  event.type === 'step_complete' &&
+  event.data?.phase === 'user_message' &&
+  typeof event.data?.uuid === 'string' &&
+  getEventScope(event).kind === 'main';
 
 /** Subagent turns live in their thread; only main-agent step boundaries name a main assistant. */
 const isMainStreamStart = (event: AgentStreamEvent): boolean =>
@@ -156,9 +175,14 @@ export class HeterogeneousPersistenceHandler {
       // front would silently swallow event-level failures — the BatchIngester
       // would ack OK while DB state diverges from the renderer's view. Mark
       // only on success so a retry can complete the lost write.
+      const spineBefore = state.main.lastSpineMessageId;
       await this.handleEvent(state, event);
       if (isMainStreamStart(event)) {
         state.streamStartAssistantIds.set(key, state.main.currentAssistantId);
+        const steer = state.steerMessages.get(spineBefore);
+        if (steer && state.main.lastSpineMessageId !== spineBefore) {
+          state.streamStartParentMessages.set(key, steer);
+        }
       }
       state.processedKeys.add(key);
       state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
@@ -197,16 +221,31 @@ export class HeterogeneousPersistenceHandler {
    * so without it a subscriber can only infer each step's row from where it
    * started. A reconnect starts from `runningOperation.assistantMessageId`,
    * the newest row, so its full replay wrote every earlier step onto that row.
+   *
+   * A `user_message` replay that delivered a steer carries that user message
+   * as `steerMessage`, so the client shows it as soon as Claude Code reads it
+   * instead of when its reply starts (the tray drops it at the same moment).
+   *
    * Without state (a retry on a cold replica) the event goes out unchanged
    * and the client falls back to its DB lookup.
    */
   publishData(operationId: string, event: AgentStreamEvent): AgentStreamEvent['data'] {
-    const assistantId = operationStates
-      .get(operationId)
-      ?.streamStartAssistantIds.get(eventKey(event));
+    const state = operationStates.get(operationId);
+    if (isSteerReplay(event)) {
+      const steerMessage = state?.steerMessages.get(event.data.uuid);
+      return steerMessage ? { ...event.data, steerMessage } : event.data;
+    }
+
+    const key = eventKey(event);
+    const assistantId = state?.streamStartAssistantIds.get(key);
     if (!assistantId) return event.data;
 
-    return { ...event.data, assistantMessage: { id: assistantId } };
+    const parentMessage = state?.streamStartParentMessages.get(key);
+    return {
+      ...event.data,
+      assistantMessage: { id: assistantId },
+      ...(parentMessage ? { parentMessage } : {}),
+    };
   }
 
   /** Latch an event as published so a batch retry skips its XADD. */
@@ -217,6 +256,7 @@ export class HeterogeneousPersistenceHandler {
     const key = eventKey(event);
     state.publishedKeys.add(key);
     state.streamStartAssistantIds.delete(key);
+    state.streamStartParentMessages.delete(key);
   }
 
   /**
@@ -300,23 +340,79 @@ export class HeterogeneousPersistenceHandler {
   }
 
   /**
-   * Persist the CLI's native session id onto `topic.metadata.heteroSessionId`.
-   * `TopicModel.updateMetadata` merges into existing JSONB so this does NOT
-   * clobber `runningOperation` / `workingDirectory` / other peer fields.
+   * Persist the CLI's native session id as the run's resume binding: on
+   * `topic.metadata.heteroSessionId` for the conversation's own agent, or on
+   * the isolation thread's metadata for a sub-agent (the topic's binding is
+   * not its to take). `TopicModel.updateMetadata` merges into existing JSONB
+   * so this does NOT clobber `runningOperation` / `workingDirectory` / other
+   * peer fields.
    */
-  private async persistSessionId(topicId: string, sessionId: string): Promise<void> {
+  private async persistSessionId(state: OperationState, sessionId: string): Promise<void> {
+    const { threadId, topicId } = state;
     try {
+      if (threadId) {
+        const thread = await this.deps.threadModel.findById(threadId);
+        if (thread?.type === ThreadType.Isolation) {
+          await this.deps.threadModel.update(threadId, {
+            metadata: { ...thread.metadata, heteroSessionId: sessionId },
+          });
+          log('persisted sessionId thread=%s sessionId=%s', threadId, sessionId);
+          return;
+        }
+      }
       await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: sessionId });
       log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
     } catch (err) {
-      log('persistSessionId failed topic=%s err=%O', topicId, err);
+      log('persistSessionId failed topic=%s thread=%s err=%O', topicId, threadId, err);
     }
   }
 
   // ─── Event dispatch ──────────────────────────────────────────────────────
 
   private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
+    if (isSteerReplay(event)) {
+      await this.consumeSteer(state, event.data.uuid);
+      return;
+    }
+    // Claude Code's mode, incl. the switch it makes when a plan is approved:
+    // the topic's next run starts in it, and the composer chip shows it.
+    if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
+      await this.deps.topicModel.updateMetadata(state.topicId, {
+        ...permissionModeReportPatch(event.data),
+        heteroPermissionModeReportPending: null,
+      });
+      return;
+    }
+    // Codex Plan switch: a thread back in `default` clears the pending reset;
+    // the switch follows Codex only where Codex disagrees with the request.
+    if (event.type === 'step_complete' && isCollaborationModeReport(event.data)) {
+      const patch = collaborationModeReportPatch(event.data);
+      if (Object.keys(patch).length > 0) {
+        await this.deps.topicModel.updateMetadata(state.topicId, patch);
+      }
+      return;
+    }
     await this.reduceAndApply(state, event);
+  }
+
+  /**
+   * Claude Code picked up a message the producer typed into its live session.
+   * Write it as a steer user message on the run's spine; the next turn opens
+   * under it. A replay that is not a delivery (the run's own prompt) is ignored.
+   */
+  private async consumeSteer(state: OperationState, messageId: string): Promise<void> {
+    const steer = await consumeHeteroSteer(this.deps.messageModel, {
+      agentId: state.agentId,
+      messageId,
+      operationId: state.operationId,
+      parentId: state.main.lastSpineMessageId,
+      threadId: state.threadId,
+      topicId: state.topicId,
+    });
+    if (!steer) return;
+
+    state.main = { ...state.main, lastSpineMessageId: steer.id };
+    state.steerMessages.set(steer.id, { ...steer, agentId: state.agentId ?? null, role: 'user' });
   }
 
   // ─── Main-agent reducer interpreter ──────────────────────────────────────
@@ -353,7 +449,7 @@ export class HeterogeneousPersistenceHandler {
         // next turn to spawn a fresh CC session and drop all `--resume` history.
         // Writing it here makes resume survive abandon. The terminal service
         // path may still overwrite it after verifying topic ownership.
-        await this.persistSessionId(state.topicId, sid);
+        await this.persistSessionId(state, sid);
       }
     }
 

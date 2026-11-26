@@ -5,7 +5,8 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerArtifactCommand } from './artifact';
+import { log } from '../utils/logger';
+import { fingerprintCreate, registerArtifactCommand } from './artifact';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -235,6 +236,86 @@ describe('artifact publish', () => {
       expect(call.idempotencyKey).toBe('key-from-a-lost-response');
     });
 
+    // T-6166: the commit failed after the site went live; the next publish
+    // changed the title with --new and was rejected as a reused key.
+    describe('after a commit whose outcome is unknown', () => {
+      let errorSpy: ReturnType<typeof vi.spyOn>;
+      const commit = () => mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate;
+      const preparedKey = (index: number) =>
+        mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mock.calls[index][0]
+          .idempotencyKey;
+
+      beforeEach(async () => {
+        errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+        commit().mockRejectedValueOnce(
+          Object.assign(
+            new Error(
+              'The hosting service did not confirm this publish, so the site may already be live',
+            ),
+            { data: { code: 'INTERNAL_SERVER_ERROR' } },
+          ),
+        );
+        await publish('--title', 'First');
+      });
+
+      afterEach(() => {
+        errorSpy.mockRestore();
+      });
+
+      it('says the site may be live and that retrying is safe', () => {
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        const output = errorSpy.mock.calls.flat().join('\n');
+        expect(output).toContain('may already be live');
+        expect(output).toContain('Run the same command again');
+        expect(readManifest().artifacts['index.html'].pendingCreateKey).toBe(preparedKey(0));
+      });
+
+      it('reuses the key when the same command is retried', async () => {
+        await publish('--title', 'First');
+
+        expect(preparedKey(1)).toBe(preparedKey(0));
+        expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+      });
+
+      it('uses a fresh key for --new with a changed title', async () => {
+        await publish('--new', '--title', 'Second');
+
+        expect(preparedKey(1)).toEqual(expect.any(String));
+        expect(preparedKey(1)).not.toBe(preparedKey(0));
+        expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+      });
+    });
+
+    it('reports a definite rejection without suggesting a retry', async () => {
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        Object.assign(new Error('Upload expired'), { data: { code: 'BAD_REQUEST' } }),
+      );
+
+      await publish();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      const output = errorSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('Upload expired');
+      expect(output).not.toContain('Run the same command again');
+      errorSpy.mockRestore();
+    });
+
+    it('discards a pre-fingerprint key that market rejects as a different publish', async () => {
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      writeManifest({ 'index.html': { pendingCreateKey: 'legacy-key', pendingType: 'html' } });
+      mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        new Error('Idempotency key was already used for a different publish'),
+      );
+
+      await publish('--new', '--title', 'Changed');
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain('Run the command again');
+      expect(readManifest().artifacts['index.html']).toEqual({});
+      errorSpy.mockRestore();
+    });
+
     it('records the pending key before sending, so a crash mid-publish is recoverable', async () => {
       mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
         new Error('network died'),
@@ -322,5 +403,31 @@ describe('artifact publish', () => {
 
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+  });
+});
+
+describe('fingerprintCreate', () => {
+  const entry = (path: string, body: string) => ({
+    body: Buffer.from(body),
+    contentType: 'text/plain',
+    path,
+  });
+
+  it('does not depend on the order assets finished reading', () => {
+    const a = entry('/a.png', 'a');
+    const b = entry('/b.png', 'b');
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index, b, a], '', 'Site')).toBe(
+      fingerprintCreate([index, a, b], '', 'Site'),
+    );
+  });
+
+  it('changes when the title changes', () => {
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index], '', 'First')).not.toBe(
+      fingerprintCreate([index], '', 'Second'),
+    );
   });
 });

@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
 import type { ScmActorAssociation } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
 import {
   acceptances,
   agents,
+  scmChangeRequests,
   scmWebhookDeliveries,
   topics,
   users,
@@ -117,6 +118,29 @@ const createTopic = async () => {
   return topic;
 };
 
+const privatePullRequestWork = (userId: string): typeof works.$inferInsert => ({
+  resourceId: 'arvinxx/sandbox#5',
+  resourceType: 'github_pull_request',
+  status: 'open',
+  toolIdentifier: 'lobe-local-system',
+  toolName: 'runCommand',
+  type: 'external',
+  userId,
+  visibility: 'private',
+});
+
+const userInstallationInput = (
+  userId: string,
+): Parameters<typeof ScmInstallationModel.bind>[1] => ({
+  accountExternalId: '1',
+  accountLogin: 'arvinxx',
+  accountType: 'user',
+  installationId: '90001',
+  provider: 'github',
+  repositorySelection: 'all',
+  userId,
+});
+
 describe('ScmControlService — merge', () => {
   it('accepts the linked acceptance, stamps the round, and flips the Work', async () => {
     const [acceptance] = await serverDB
@@ -127,19 +151,7 @@ describe('ScmControlService — merge', () => {
       .insert(verifyRuns)
       .values({ acceptanceId: acceptance.id, roundIndex: 1, userId })
       .returning();
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { acceptanceId: acceptance.id, workId: work.id },
@@ -209,15 +221,7 @@ describe('ScmControlService — merge', () => {
 describe('ScmControlService — wake', () => {
   it('wakes the agent of the linked conversation with the failing check and its log', async () => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       headRef: 'feat/x',
@@ -377,15 +381,7 @@ describe('ScmControlService — wake', () => {
 
   it('wakes the agent for a trusted review bot even though GitHub reports it as none', async () => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { installationId: installation.id, topicId: topic.id },
@@ -617,19 +613,7 @@ describe('ScmControlService — wake', () => {
   });
 
   it('flips the Work to merged even when accepting on merge is off', async () => {
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { workId: work.id },
@@ -683,19 +667,7 @@ describe('ScmControlService — wake', () => {
 
     // The merge itself is still mirrored: the gate covers what we do on the
     // author's behalf, not the record of what GitHub reported.
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     expect(
       await control().handle({
         event: changeRequestEvent('merged'),
@@ -765,18 +737,165 @@ describe('ScmControlService — wake', () => {
   });
 });
 
+describe('ScmControlService — per pull request Auto-fix', () => {
+  const linked = async (metadata: Record<string, unknown> = {}) => {
+    const topic = await createTopic();
+    return ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+      metadata,
+    });
+  };
+
+  it('wakes as before when the pull request never set Auto-fix', async () => {
+    const row = await linked();
+    expect(row.metadata.autoFix).toBeUndefined();
+
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toMatchObject({
+      outcome: 'woken',
+    });
+  });
+
+  it('skips CI failures and review feedback while Auto-fix is off, without spending a wake', async () => {
+    const row = await linked({ autoFix: false });
+
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toEqual({
+      detail: 'auto-fix off',
+      outcome: 'skipped',
+    });
+    expect(
+      await control().handle({ event: reviewEvent('reviewer'), kind: 'review_commented', row }),
+    ).toEqual({ detail: 'auto-fix off', outcome: 'skipped' });
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    // Nothing built either: the job log is only read for a wake that happens.
+    expect(mocks.jobLog).not.toHaveBeenCalled();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+  });
+
+  it('cannot turn a wake back on that the account switched off', async () => {
+    const row = await linked({ autoFix: true });
+    await serverDB
+      .update(users)
+      .set({ preference: { integration: { github: { wakeOnCiFailure: false } } } as any })
+      .where(eq(users.id, userId));
+
+    // Both switches have to be on: the account's off wins over the PR's on…
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toEqual({
+      detail: 'wakeOnCiFailure is off',
+      outcome: 'skipped',
+    });
+    // …and the PR's off wins over the account's on.
+    await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, false);
+    const off = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    expect(
+      await control().handle({
+        event: reviewEvent('reviewer'),
+        kind: 'review_commented',
+        row: off,
+      }),
+    ).toEqual({ detail: 'auto-fix off', outcome: 'skipped' });
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('wakes again from a spent cap once Auto-fix is turned off and back on', async () => {
+    const row = await linked();
+    for (let i = 0; i < SCM_MAX_WAKES; i++) {
+      await ScmChangeRequestModel.reserveWake(serverDB, row.id, SCM_MAX_WAKES, 'ci_failed');
+    }
+    const capped = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row: capped })).toEqual({
+      detail: `wake cap (${SCM_MAX_WAKES}) reached`,
+      outcome: 'skipped',
+    });
+
+    await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, false);
+    const off = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row: off })).toEqual({
+      detail: 'auto-fix off',
+      outcome: 'skipped',
+    });
+
+    await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, true);
+    const on = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+    expect(
+      await control().handle({ event: checksEvent, kind: 'ci_failed', row: on }),
+    ).toMatchObject({ outcome: 'woken' });
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(1);
+  });
+
+  it('refuses the wake when Auto-fix is turned off while the prompt is being built', async () => {
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { installationId: installation.id, topicId: topic.id },
+    });
+    const withChecks = await ScmChangeRequestModel.applyChecks(serverDB, row.id, {
+      checks: [
+        { conclusion: 'failure', externalId: 'check_run:9', name: 'Test', status: 'completed' },
+      ],
+      headSha: baseRow.headSha,
+    });
+    // The person switches it off while the job log is still being fetched.
+    mocks.jobLog.mockImplementationOnce(async () => {
+      await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, false);
+      return 'log';
+    });
+
+    expect(
+      await control().handle({ event: checksEvent, kind: 'ci_failed', row: withChecks!.row }),
+    ).toEqual({ detail: 'auto-fix off', outcome: 'skipped' });
+    expect(mocks.jobLog).toHaveBeenCalledTimes(1);
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+  });
+
+  it('drops a held wake instead of delivering it after Auto-fix went off', async () => {
+    const row = await linked();
+    await ScmChangeRequestModel.markPendingWake(serverDB, row.id, 'ci_failed');
+    await serverDB
+      .update(scmChangeRequests)
+      .set({ metadata: sql`${scmChangeRequests.metadata} || '{"autoFix": false}'::jsonb` })
+      .where(eq(scmChangeRequests.id, row.id));
+    const off = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+
+    // An unrelated event flushes the held wake.
+    await control().handle({ event: changeRequestEvent('opened'), kind: 'synchronized', row: off });
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.pendingWake).toBe(
+      undefined,
+    );
+  });
+
+  it('says Auto-fix is off in the tracking comment when it is rewritten', async () => {
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { installationId: installation.id, topicId: topic.id },
+      metadata: { repoPrivate: true },
+    });
+    await control().handle({ event: changeRequestEvent('opened'), kind: 'opened', row });
+
+    await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, false);
+    await control().onAutoFixChanged(row.id);
+
+    expect(mocks.updateComment).toHaveBeenCalledTimes(1);
+    expect(mocks.updateComment.mock.calls[0][0].body).toContain('⏸ Auto-fix off');
+  });
+
+  it('posts nothing when Auto-fix changes on a pull request without a comment', async () => {
+    const row = await linked();
+    await control().onAutoFixChanged(row.id);
+    expect(mocks.postComment).not.toHaveBeenCalled();
+    expect(mocks.updateComment).not.toHaveBeenCalled();
+  });
+});
+
 describe('ScmControlService — the tracking comment in GitHub', () => {
   const bindAndOpen = async (extra: Record<string, unknown>) => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const [acceptance] = await serverDB
       .insert(acceptances)
       .values({ status: 'delivered', subjectId: 's', subjectType: 'standalone', userId })

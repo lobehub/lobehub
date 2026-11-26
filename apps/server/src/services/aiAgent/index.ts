@@ -1,10 +1,13 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   AgentRunInitRequest,
   AgentSenderMetadata,
+  CancelVirtualSubAgentParams,
+  CancelVirtualSubAgentResult,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
@@ -45,9 +48,15 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   AgentStepContinuation,
+  DeferredMessagePatch,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import {
+  completeDeferredShell,
+  type CompleteDeferredShellOutcome,
+  type CompleteDeferredShellParams,
+} from '@/server/services/agentRuntime/AgentRuntimeService/asyncShellResult';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -57,6 +66,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
   type BackgroundSubAgentResult,
@@ -75,6 +85,7 @@ import {
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
+import { releaseUnstartedRunFee, type RunFeeClaim } from './pipeline/runFee';
 import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
@@ -84,10 +95,16 @@ import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import { startQueuedFollowUp } from './steerQueue';
 import { injectQueuedFollowUp } from './steerQueue/inject';
 import { findOwnLiveRuns } from './steerQueue/liveRuns';
+import { queueSubAgentSteer } from './steerQueue/subAgent';
 import type { SubAgentLlmRelayRequest } from './subAgentLlmRelay';
 import { closeSubAgentLlmRelay, openSubAgentLlmRelay } from './subAgentLlmRelay';
 import type { SubAgentRunDeps } from './subAgentRuns';
-import { execAgentMember, execAgentThreadRun, execIsolatedAgentMember } from './subAgentRuns';
+import {
+  cancelSubAgentThreadRun,
+  execAgentMember,
+  execAgentThreadRun,
+  execIsolatedAgentMember,
+} from './subAgentRuns';
 import type { InternalExecAgentParams } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -160,7 +177,7 @@ export class AiAgentService {
     this.agentService = new AgentService(db, userId, wsId);
     this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
-    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
+    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId, { agentRun: true });
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
@@ -178,6 +195,7 @@ export class AiAgentService {
       //
       // Arrow fields are auto-bound, so no `.bind(this)`.
       delegate: {
+        cancelVirtualSubAgent: this.cancelVirtualSubAgent,
         deliverBackgroundSubAgentResults: this.deliverBackgroundSubAgentResults,
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
@@ -218,6 +236,8 @@ export class AiAgentService {
       agentRuntimeService: this.agentRuntimeService,
       execAgent: (p) => this.execAgent(p),
       messageModel: this.messageModel,
+      queueSubAgentSteer: (p) =>
+        queueSubAgentSteer({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }, p),
       threadModel: this.threadModel,
       userId: this.userId,
     };
@@ -368,9 +388,15 @@ export class AiAgentService {
     return this.agentRuntimeService.createOperationLockOwner(operationId);
   }
 
-  /** Publish a step that an inline loop deferred instead of running. */
-  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
-    return this.agentRuntimeService.scheduleContinuation(continuation);
+  /**
+   * Publish a step that an inline loop deferred instead of running, after the
+   * message patch its previous step left unpublished.
+   */
+  scheduleContinuation(
+    continuation: AgentStepContinuation,
+    deferredMessagePatch?: DeferredMessagePatch,
+  ): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation, deferredMessagePatch);
   }
 
   /** Release a lock retained across an inline step loop. */
@@ -389,6 +415,42 @@ export class AiAgentService {
    */
   completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
     return this.agentRuntimeService.completeSubAgentBridge(params);
+  }
+
+  /**
+   * Finish a shell command that outlived its tool call.
+   *
+   * Driven by `/api/agent/tool-result` when the gateway forwards a device's
+   * late `deferred` result. Routed through the AiAgentService like the other
+   * bridges so the placeholder backfill and the resume barrier stay
+   * workspace-scoped.
+   */
+  completeDeferredShell(
+    params: CompleteDeferredShellParams,
+  ): Promise<CompleteDeferredShellOutcome> {
+    return completeDeferredShell(
+      {
+        archiveResult: async ({ maxLength, ...input }) =>
+          (
+            await archiveToolResultIfNeeded({
+              ...input,
+              identifier: LocalSystemIdentifier,
+              limit: maxLength,
+              serverDB: this.db,
+              userId: this.userId,
+            })
+          ).content,
+        // The parked step never returned through `ServerToolTransport`, so this
+        // is the only place an `afterToolCall` policy can see its answer.
+        controlCompletedToolResult: (input) =>
+          this.agentRuntimeService.controlCompletedToolResult(input),
+        messageModel: this.messageModel,
+        serverDB: this.db,
+        tryResumeParentFromAsyncTool: (resumeParams, options) =>
+          this.agentRuntimeService.tryResumeParentFromAsyncTool(resumeParams, options),
+      },
+      params,
+    );
   }
 
   /**
@@ -529,11 +591,13 @@ export class AiAgentService {
     };
 
     const runSlot: RunSlotClaim = {};
+    const runFee: RunFeeClaim = {};
 
     try {
-      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot);
+      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot, runFee);
     } finally {
       await releaseUnstartedRunSlot(runSlot, this.userId);
+      await releaseUnstartedRunFee(runFee, this.userId);
       if (
         !approvalClaim.continuationPrepared &&
         !approvalClaim.continuationStarted &&
@@ -712,6 +776,7 @@ export class AiAgentService {
   verifyShareRunStillAuthorized = async (params: {
     agentId: string;
     shareId: string;
+    visitorUserId?: string;
   }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
@@ -798,6 +863,24 @@ export class AiAgentService {
       provider: params.provider,
       resumeParentOnComplete: true,
     });
+
+  /**
+   * Stop a running `lobe-agent.callSubAgent` child for the agent that
+   * dispatched it — see `cancelSubAgentThreadRun`. Runtime delegate entry.
+   */
+  cancelVirtualSubAgent = (
+    params: CancelVirtualSubAgentParams,
+  ): Promise<CancelVirtualSubAgentResult> =>
+    cancelSubAgentThreadRun(
+      {
+        agentOperationModel: this.agentOperationModel,
+        interruptTask: (p) => this.interruptTask(p),
+        isOperationInterrupted: (operationId) => this.isOperationInterrupted(operationId),
+        messageModel: this.messageModel,
+        threadModel: this.threadModel,
+      },
+      params,
+    );
 
   /**
    * Hand a topic's finished background sub-agent results to their parent agent

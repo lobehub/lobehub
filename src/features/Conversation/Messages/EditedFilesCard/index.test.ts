@@ -5,12 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 
-import EditedFilesCard, {
-  AGGREGATE_EDITED_FILE_ICON_SIZE,
-  getEditedFileIconName,
-  getEditedFilesCardMode,
-  SINGLE_EDITED_FILE_ICON_SIZE,
-} from './index';
+import EditedFilesCard, { getEditedFileIconName, getEditedFilesCardMode } from './index';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -73,18 +68,6 @@ describe('getFilePathDisplayInfo', () => {
       isImage: true,
       name: 'r24-studio-crop.PNG',
     });
-  });
-});
-
-describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
-  it('matches the height of the two-line title block beside it', () => {
-    expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(40);
-  });
-});
-
-describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
-  it('matches the single-file card so stacked cards share one icon scale', () => {
-    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
   });
 });
 

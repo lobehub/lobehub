@@ -1,0 +1,175 @@
+---
+title: LobeHub API Streaming, Agent Runs, and Human Approval
+description: >-
+  Stream Agent replies from POST /responses, follow Agent run events, approve
+  tool calls, and return client tool results through the LobeHub public API.
+tags:
+  - LobeHub
+  - REST API
+  - Streaming
+  - SSE
+  - Agent Runs
+  - Human in the Loop
+---
+
+# LobeHub API Streaming, Agent Runs, and Human Approval
+
+There are two ways to run an Agent over the public API:
+
+- **`POST /responses`** (available): one request in, one reply out, optionally streamed. It follows the OpenResponses format, so OpenAI Responses clients work with small changes.
+- **`/runs`** (coming soon, [#23253](https://github.com/lobehub/lobehub/pull/23253)): start a run in the background, then read its status and event stream, cancel or steer it, approve tool calls, and supply your own tool results.
+
+Both stream with [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html): `Content-Type: text/event-stream`, one `event:` line naming the type and one `data:` line of JSON per event.
+
+## Responses
+
+`POST /api/v1/responses` needs the scopes `model:invoke`, `chat:write`, and `agent:write`.
+
+| Field                                                                | Notes                                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `model`                                                              | Required. The **Agent id** to run (`agt_…`)                                                             |
+| `input`                                                              | Required. A string, or an array of `message`, `function_call`, and `function_call_output` items         |
+| `instructions`                                                       | Extra instructions for this request                                                                     |
+| `stream`                                                             | `true` to stream events                                                                                 |
+| `previous_response_id`                                               | Continue the conversation of an earlier response                                                        |
+| `tools`, `tool_choice`                                               | Your own function tools (`{ "type": "function", "name", "parameters" }`) and how the model may use them |
+| `tools_mode`                                                         | `additional` (default: your tools plus the Agent's) or `exclusive` (only yours)                         |
+| `max_output_tokens`, `temperature`, `top_p`, `reasoning`, `metadata` | Standard generation options                                                                             |
+
+### Without Streaming
+
+The response is the bare response object (no `success` envelope). A run that fails still answers `200`, with `"status": "failed"` and an `error`. Always check `status`.
+
+### With Streaming
+
+```bash
+curl -N https://app.lobehub.com/api/v1/responses \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"agt_xxx","input":"Summarize my week","stream":true}'
+```
+
+```text
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_…","status":"in_progress",…}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_…","output_index":0,"content_index":0,"delta":"This week you…"}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":31,"response":{"id":"resp_…","status":"completed",…}}
+```
+
+Every event has `type` and `sequence_number`.
+
+| Event                                                                                                      | Extra fields                                        |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `response.created`, `response.in_progress`, `response.completed`, `response.failed`, `response.incomplete` | `response`                                          |
+| `response.output_item.added`, `response.output_item.done`                                                  | `item`, `output_index`                              |
+| `response.content_part.added`, `response.content_part.done`                                                | `part`, `item_id`, `output_index`, `content_index`  |
+| `response.output_text.delta`                                                                               | `delta`, `item_id`, `output_index`, `content_index` |
+| `response.output_text.done`                                                                                | `text`, `item_id`, `output_index`, `content_index`  |
+| `response.function_call_arguments.delta` / `.done`                                                         | `delta` / `arguments`, `item_id`, `output_index`    |
+| `response.reasoning_summary_text.delta` / `.done`                                                          | `delta` / `text`, `item_id`, `output_index`         |
+
+The stream ends after `response.completed`, `response.failed`, or `response.incomplete`. A `/responses` stream has no event ids and cannot be resumed, and there is no read endpoint for a finished response: re-sending with `previous_response_id` **starts a new Agent turn** on the same topic, so it repeats tool side effects instead of replaying the dropped output. If the connection drops, the run still finishes on the server and its reply lands in the Agent's topic, which you can open in the app. A replayable stream arrives with `/runs` ([#23253](https://github.com/lobehub/lobehub/pull/23253)): `GET /runs/{id}/events` serves stored events, each with an `id` you can resume after.
+
+When the model calls one of your function tools, the response ends with a `function_call` output item. Run the tool yourself, then send a new request with `previous_response_id` and a `function_call_output` item carrying the same `call_id`.
+
+## Agent Runs
+
+<Callout type="info">
+  **Coming soon** ([#23253](https://github.com/lobehub/lobehub/pull/23253)). The endpoints, events,
+  and fields below come from that pull request and can change before release. They need the new
+  `run:read` / `run:write` scopes; starting a run or resuming one also needs `model:invoke`.
+</Callout>
+
+Today you can already start a **task** run with `POST /api/v1/tasks/{id}/runs` (`202`, returns `operationId` and `topicId`) and list past runs with `GET /api/v1/tasks/{id}/runs`.
+
+### Endpoints
+
+| Method and path                                  | Purpose                                                                                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /runs`                                     | Start a run of an Agent (`agentId`) or group (`groupId`). Returns `202` with the run `id` and `status: "queued"` or `"scheduled"` |
+| `GET /runs/{id}`                                 | Read a run: `status`, `result`, `usage`, `cost`, `pendingToolCalls`, `continuedByRunId`, …                                        |
+| `GET /runs/{id}/events`                          | Event stream (SSE)                                                                                                                |
+| `POST /runs/{id}/cancel`                         | Cancel a run                                                                                                                      |
+| `GET /runs/{id}/interventions`                   | Tool calls waiting for a person                                                                                                   |
+| `POST /runs/{id}/interventions/{interventionId}` | Approve, reject, answer, or skip one                                                                                              |
+| `POST /runs/{id}/tool-results`                   | Return results for your own function tools                                                                                        |
+| `POST /runs/{id}/messages`                       | Steer a running Agent with an extra message                                                                                       |
+
+`POST /runs` takes `input`, `agentId` or `groupId`, and optionally `topicId`, `fileIds`, `tools` (your function tools), `approvalMode` (`headless` by default, `manual`, `allow-list`, or `auto-run`), `allowList`, and `scheduledAt`.
+
+Run statuses: `scheduled`, `queued`, `running`, `waiting_for_human`, `waiting_for_tool_results`, `waiting_for_async_tool`, and the final `completed`, `failed`, `cancelled`, `abandoned`.
+
+### Run Events
+
+Each SSE frame has `event: <type>`, `data: <json>`, and an `id:` when the event is stored. The JSON is `{ id, runId, stepIndex, timestamp, type, data }`.
+
+| Event                              | `data`                                                          |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `run.started`                      | `{}`                                                            |
+| `step.started`, `step.completed`   | `{ llmCalls }`                                                  |
+| `message.delta`, `reasoning.delta` | `{ delta }`                                                     |
+| `message.completed`                | `{ content, reasoning, toolCalls }`                             |
+| `tool_call.started`                | `{ toolCall: { id, name, arguments } }`                         |
+| `tool_call.completed`              | `{ toolCall, content, isSuccess }`                              |
+| `intervention.requested`           | `{ interventions }`                                             |
+| `tool_results.required`            | `{ toolCalls }`                                                 |
+| `run.error`                        | `{ error }`, a step failed                                      |
+| `run.waiting`                      | `{ status: "waiting_for_human" \| "waiting_for_tool_results" }` |
+| `run.completed`                    | `{ result: { content, messageId } \| null }`                    |
+| `run.failed`                       | `{ error: { message, type } }`                                  |
+| `run.cancelled`                    | `{}`                                                            |
+
+- The server closes the stream after `run.completed`, `run.failed`, `run.cancelled`, or `run.waiting`.
+- **Resume** after a drop with the `Last-Event-ID` header (or `?after=<id>`), set to the last `id` you received. Without it the stream replays from the first event.
+- A stream also closes after 5 minutes; reconnect with `Last-Event-ID` to continue. During quiet periods the server sends a `: ping` comment every 15 seconds.
+
+## Human Approval
+
+When a run uses `approvalMode: "manual"`, or `allow-list` and the tool is not on the list, the Agent stops before calling the tool and asks a person. `auto-run` also stops for calls that always need a person, such as a question to the user or a call flagged by the security check.
+
+1. The stream sends `intervention.requested`, then `run.waiting` with `status: "waiting_for_human"`, and closes. A webhook subscriber also receives `run.intervention_requested`.
+
+2. Read what is waiting:
+
+   ```bash
+   curl https://app.lobehub.com/api/v1/runs/$RUN_ID/interventions -H "Authorization: Bearer $KEY"
+   ```
+
+   Each item is `{ id, type: "approval" | "question", tool: { identifier, apiName, arguments } }`.
+
+3. Resolve it. The body is one of:
+
+   ```json
+   { "action": "approve" }
+   { "action": "reject", "reason": "Do not email customers", "continue": true }
+   { "action": "answer", "content": "Use the EU region" }
+   { "action": "skip" }
+   ```
+
+   ```bash
+   curl -X POST https://app.lobehub.com/api/v1/runs/$RUN_ID/interventions/$INTERVENTION_ID \
+     -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"action":"approve"}'
+   ```
+
+4. The response contains `continuedByRunId`. The Agent continues in that **new run**: stream `GET /runs/{continuedByRunId}/events` to follow it. The waiting run does not resume under its own id.
+
+## Client Tool Results
+
+If you pass your own `tools` to `POST /runs`, the run pauses when the model calls one:
+
+1. The stream sends `tool_results.required` with `toolCalls`, then `run.waiting` with `status: "waiting_for_tool_results"`.
+
+2. Run the tools and send one result per pending call:
+
+   ```bash
+   curl -X POST https://app.lobehub.com/api/v1/runs/$RUN_ID/tool-results \
+     -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"results":[{"callId":"call_abc","output":"{\"temperature\":21}"}]}'
+   ```
+
+3. The run resumes under the **same** id. Reconnect to its event stream with `Last-Event-ID`.

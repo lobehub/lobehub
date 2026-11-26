@@ -8,7 +8,6 @@ const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockMessageSuccess = vi.hoisted(() => vi.fn());
 const mockSignInSocial = vi.hoisted(() => vi.fn());
-const mockSignInOauth2 = vi.hoisted(() => vi.fn());
 const mockSignInEmail = vi.hoisted(() => vi.fn());
 const mockSignInMagicLink = vi.hoisted(() => vi.fn());
 const mockRequestPasswordReset = vi.hoisted(() => vi.fn());
@@ -43,7 +42,6 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
   signIn: {
     email: mockSignInEmail,
     magicLink: mockSignInMagicLink,
-    oauth2: mockSignInOauth2,
     social: mockSignInSocial,
   },
 }));
@@ -208,7 +206,11 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'unknownuser' });
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Pinned under the email field with a next step, not a corner toast
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('usernameNotFound'),
+      });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('email');
     });
 
@@ -219,7 +221,10 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'invalid email!@#' });
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('emailInvalid'),
+      });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });
@@ -312,10 +317,12 @@ describe('useSignIn', () => {
       expect(mockMessageError).not.toHaveBeenCalled();
     });
 
-    it('should redirect to verify-email on 403', async () => {
+    it('should redirect to verify-email when the email is not verified', async () => {
       mockSignInEmail.mockImplementation(async (_data: any, opts: any) => {
-        opts.onError({ error: { status: 403 } });
-        return { error: { message: 'Email not verified', status: 403 } };
+        opts.onError({ error: { code: 'EMAIL_NOT_VERIFIED', status: 403 } });
+        return {
+          error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified', status: 403 },
+        };
       });
 
       mockFetch.mockResolvedValueOnce({
@@ -336,6 +343,32 @@ describe('useSignIn', () => {
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining('/verify-email?email=user%40example.com'),
       );
+      expect(mockForm.setErrors).not.toHaveBeenCalled();
+    });
+
+    it('should surface a non-verification 403 inline instead of redirecting', async () => {
+      mockSignInEmail.mockImplementation(async (_data: any, opts: any) => {
+        opts.onError({ error: { code: 'BANNED_USER', status: 403 } });
+        return { error: { code: 'BANNED_USER', message: 'You have been banned', status: 403 } };
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      await act(async () => {
+        await result.current.handleSignIn({ password: 'password' });
+      });
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockForm.setErrors).toHaveBeenCalledWith({ password: 'You have been banned' });
     });
   });
 
@@ -384,8 +417,8 @@ describe('useSignIn', () => {
       expect(mockMessageError).not.toHaveBeenCalled();
     });
 
-    it('should call signIn.oauth2 for custom providers', async () => {
-      mockSignInOauth2.mockResolvedValue({ url: 'https://custom.com/auth' });
+    it('should call signIn.social for custom providers', async () => {
+      mockSignInSocial.mockResolvedValue({ url: 'https://custom.com/auth' });
 
       const { result } = renderHook(() => useSignIn());
 
@@ -393,10 +426,10 @@ describe('useSignIn', () => {
         await result.current.handleSocialSignIn('custom-oidc');
       });
 
-      expect(mockSignInOauth2).toHaveBeenCalledWith(
+      expect(mockSignInSocial).toHaveBeenCalledWith(
         expect.objectContaining({
           newUserCallbackURL: `${originalLocation.origin}/onboarding`,
-          providerId: 'custom-oidc',
+          provider: 'custom-oidc',
         }),
       );
     });
@@ -447,7 +480,9 @@ describe('useSignIn', () => {
         await result.current.handleSocialSignIn('google');
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Explained under the provider buttons instead of a toast
+      expect(result.current.socialErrorProvider).toBe('google');
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it('should not retry social sign in when captcha is returned unexpectedly', async () => {
@@ -462,7 +497,7 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInSocial).toHaveBeenCalledTimes(1);
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.socialErrorProvider).toBe('google');
     });
 
     it('should save last auth provider to localStorage', async () => {
@@ -588,7 +623,9 @@ describe('useSignIn', () => {
         await result.current.handleForgotPassword();
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Shown under the Forgot password link, not as a toast
+      expect(result.current.sendError).toContain('resetEmailFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('password');
       expect(result.current.sentInfo).toBeNull();
     });
@@ -611,7 +648,8 @@ describe('useSignIn', () => {
         await result.current.handleForgotPassword();
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.sendError).toContain('resetEmailFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('password');
     });
   });
@@ -642,6 +680,56 @@ describe('useSignIn', () => {
       expect(result.current.sentInfo).toEqual(
         expect.objectContaining({ email: 'user@example.com', type: 'magicLink' }),
       );
+    });
+  });
+
+  describe('magic link failures', () => {
+    it('should pin a failed first send to the email field', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockEnableMagicLink = true;
+      mockSignInMagicLink.mockResolvedValue({ error: { message: 'smtp down', status: 500 } });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: false }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('magicLinkFailed'),
+      });
+      expect(result.current.step).toBe('email');
+      expect(mockMessageError).not.toHaveBeenCalled();
+    });
+
+    it('should show a failed resend under the Resend button on the inbox screen', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockEnableMagicLink = true;
+      mockSignInMagicLink.mockResolvedValueOnce({ error: null });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: false }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+      expect(result.current.step).toBe('emailSent');
+
+      mockSignInMagicLink.mockResolvedValueOnce({ error: { message: 'smtp down', status: 500 } });
+      await act(async () => {
+        await result.current.handleResendEmail();
+      });
+
+      expect(result.current.sendError).toContain('magicLinkFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
+      expect(mockMessageSuccess).not.toHaveBeenCalled();
     });
   });
 

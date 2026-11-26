@@ -21,8 +21,6 @@ import type {
 import { coerceDate } from './utils';
 
 const normalizeRelationshipValue = (input: unknown): RelationshipEnum | null => {
-  /* v8 ignore next -- unreachable: every caller maps null to null before normalizing */
-  if (input === null) return null;
   if (typeof input !== 'string') return null;
   const normalized = input.trim().toLowerCase();
   return Object.values(RelationshipEnum).includes(normalized as RelationshipEnum)
@@ -31,8 +29,6 @@ const normalizeRelationshipValue = (input: unknown): RelationshipEnum | null => 
 };
 
 const normalizeIdentityTypeValue = (input: unknown): IdentityTypeEnum | null => {
-  /* v8 ignore next -- unreachable: every caller maps null to null before normalizing */
-  if (input === null) return null;
   if (typeof input !== 'string') return null;
   const normalized = input.trim().toLowerCase();
   return Object.values(IdentityTypeEnum).includes(normalized as IdentityTypeEnum)

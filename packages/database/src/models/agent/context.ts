@@ -5,6 +5,7 @@ import type { SQL } from 'drizzle-orm';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
+import type { AGENT_VISIBILITY } from '../../schemas';
 import {
   agents,
   agentsFiles,
@@ -21,6 +22,8 @@ import {
 } from '../../utils/agencyConfigDevices';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
+type AgentVisibility = (typeof AGENT_VISIBILITY)[number];
+
 /**
  * The state and scope predicates every `AgentModel` operation shares. Built once
  * per model instance; the operation modules receive it as their first argument.
@@ -32,6 +35,7 @@ export interface AgentModelContext {
   assertFixedExecutionTarget: (
     agentWorkspaceId: string | null,
     agencyConfig: LobeAgentAgencyConfig | null | undefined,
+    visibility?: AgentVisibility | null,
   ) => Promise<void>;
   assertWorkspaceDeviceBinding: (
     agentWorkspaceId: string | null,
@@ -204,12 +208,23 @@ export const createAgentModelContext = ({
      * public in the same workspace. Use one generic device error for
      * missing/private/cross-workspace rows so the write path never reveals a
      * device the caller cannot otherwise see.
+     *
+     * A private Agent has a single runner — its owner — so the member-selection
+     * policy is dormant until publication (the client already treats it that
+     * way: `resolveAgentAgencyConfig` drops the policy for the owner and the
+     * picker writes the shared row directly). Config writes on a private Agent
+     * therefore skip this check; the publication boundary
+     * (`publishToWorkspace` / `setVisibility('public')`) omits `visibility` and
+     * re-checks the stored config, so a private device can never reach a
+     * published fixed Agent.
      */
     assertFixedExecutionTarget: async (
       agentWorkspaceId: string | null,
       agencyConfig: LobeAgentAgencyConfig | null | undefined,
+      visibility?: AgentVisibility | null,
     ): Promise<void> => {
       if (!agentWorkspaceId || agencyConfig?.executionTargetSelectionPolicy !== 'fixed') return;
+      if (visibility === 'private') return;
 
       if (
         !agencyConfig.executionTarget ||

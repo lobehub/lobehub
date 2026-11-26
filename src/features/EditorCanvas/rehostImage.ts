@@ -20,9 +20,37 @@ export const needsImageRehost = (src: string): boolean => {
   }
 };
 
+/**
+ * Pasting a page with many external images asks the editor to rehost all of them at once. Each
+ * rehost is a server-side upload transaction serialized on the owner's storage lock, and tRPC
+ * batches simultaneous calls into one request, so an unbounded paste (78 images on 2026-11-02)
+ * lands as dozens of competing transactions on a single server instance.
+ */
+export const MAX_CONCURRENT_REHOSTS = 3;
+
+let activeRehosts = 0;
+const waitingRehosts: (() => void)[] = [];
+
+const withRehostSlot = async <T>(run: () => Promise<T>): Promise<T> => {
+  if (activeRehosts >= MAX_CONCURRENT_REHOSTS) {
+    await new Promise<void>((resolve) => waitingRehosts.push(resolve));
+  } else {
+    activeRehosts += 1;
+  }
+
+  try {
+    return await run();
+  } finally {
+    // Hand the slot straight to the next waiter so the count never dips and refills.
+    const next = waitingRehosts.shift();
+    if (next) next();
+    else activeRehosts -= 1;
+  }
+};
+
 export const rehostImage = async (src: string): Promise<{ url: string }> => {
   try {
-    const result = await fileService.rehostImage(resolveImageUrl(src).href);
+    const result = await withRehostSlot(() => fileService.rehostImage(resolveImageUrl(src).href));
     registerAttachment(result.url, result.fileId);
     return { url: result.url };
   } catch (error) {

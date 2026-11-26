@@ -8,6 +8,7 @@ import {
   probeRemotePlatform,
   resolveRemotePlatformCommand,
   resolveRemotePlatformRuntime,
+  scanHeterogeneousAgentsOnHost,
 } from './scanHost';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
@@ -20,16 +21,19 @@ vi.mock('node:os', async () => {
 const {
   detectHeterogeneousCliCommandMock,
   detectValidatedCommandCandidatesMock,
+  invalidateLoginShellPathCacheMock,
   resolveCliSpawnPlanMock,
 } = vi.hoisted(() => ({
   detectHeterogeneousCliCommandMock: vi.fn(),
   detectValidatedCommandCandidatesMock: vi.fn(),
+  invalidateLoginShellPathCacheMock: vi.fn(),
   resolveCliSpawnPlanMock: vi.fn(),
 }));
 
 vi.mock('../spawn/resolveCliCommand', () => ({
   detectHeterogeneousCliCommand: detectHeterogeneousCliCommandMock,
   detectValidatedCommandCandidates: detectValidatedCommandCandidatesMock,
+  invalidateLoginShellPathCache: invalidateLoginShellPathCacheMock,
 }));
 
 vi.mock('../spawn/cliSpawn', () => ({
@@ -138,6 +142,21 @@ describe('platform command scanning', () => {
       available: true,
       version: '0.9.0',
     });
+  });
+
+  it('drops the cached login-shell PATH before a host scan probes anything', async () => {
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: false });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
+
+    await scanHeterogeneousAgentsOnHost();
+
+    expect(invalidateLoginShellPathCacheMock).toHaveBeenCalledTimes(1);
+    const invalidatedAt = invalidateLoginShellPathCacheMock.mock.invocationCallOrder[0]!;
+    const firstProbeAt = Math.min(
+      ...detectHeterogeneousCliCommandMock.mock.invocationCallOrder,
+      ...detectValidatedCommandCandidatesMock.mock.invocationCallOrder,
+    );
+    expect(invalidatedAt).toBeLessThan(firstProbeAt);
   });
 
   it('binds spawn preparation to the validated executable and recovered PATH', async () => {

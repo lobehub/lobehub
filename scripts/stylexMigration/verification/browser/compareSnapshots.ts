@@ -1,5 +1,5 @@
+import { compareSnapshots } from '../../../../packages/style-equivalence/src/capture/snapshot';
 import type { ComponentSnapshot } from './capture';
-import { compareSnapshots } from './snapshot';
 
 export const compareComponents = (before: ComponentSnapshot, after: ComponentSnapshot) => {
   const raw = compareSnapshots(before.tree, after.tree);

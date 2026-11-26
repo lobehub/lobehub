@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
     on: vi.fn(),
     commandLine: {
       appendSwitch: vi.fn(),
+      hasSwitch: vi.fn(() => false),
     },
     dock: {
       setIcon: vi.fn(),
@@ -147,7 +148,7 @@ vi.mock('../infrastructure/ProtocolManager', () => ({
   ProtocolManager: vi.fn(function () {
     return {
       initialize: vi.fn(),
-      processPendingUrls: vi.fn().mockResolvedValue(undefined),
+      processPendingTargets: vi.fn().mockResolvedValue(undefined),
     };
   }),
 }));

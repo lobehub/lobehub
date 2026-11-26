@@ -31,6 +31,35 @@ import { type ChatTopic } from '@/types/topic';
 import { useChatStore } from '../../store';
 import { topicListResource } from './projection';
 
+const topicState = (key: string, topics: ChatTopic[], total: number) => ({
+  activeAgentId: 'test',
+  topicDataMap: {
+    [key]: {
+      currentPage: 0,
+      hasMore: false,
+      items: topics,
+      pageSize: 20,
+      total,
+    },
+  },
+});
+
+const topicPage = (topics: ChatTopic[], total: number) => ({
+  items: topics,
+  total,
+  currentPage: 0,
+  hasMore: false,
+  pageSize: 20,
+});
+
+const singleTopicPage = (topic: ChatTopic) => ({
+  currentPage: 0,
+  hasMore: false,
+  items: [topic],
+  pageSize: 20,
+  total: 1,
+});
+
 // Revalidation is narrowed to the active identity scope.
 const topicListSyncKey = (containerKey: string, scope = cacheScope.get()) =>
   replicaKeys.sync(topicListResource.name, topicListResource.version, scope, containerKey, {
@@ -2593,13 +2622,7 @@ describe('topic action', () => {
         useChatStore.setState({
           activeAgentId: 'abc',
           topicDataMap: {
-            [topicMapKey({ agentId: 'abc' })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
+            [topicMapKey({ agentId: 'abc' })]: topicPage(topics, topics.length),
           },
         });
       });
@@ -2771,13 +2794,7 @@ describe('topic action', () => {
           operationsByContext: {},
           operationsByMessage: {},
           topicDataMap: {
-            [key]: {
-              currentPage: 0,
-              hasMore: false,
-              items: [topic],
-              pageSize: 20,
-              total: 1,
-            },
+            [key]: singleTopicPage(topic),
           },
         });
       });
@@ -2842,13 +2859,7 @@ describe('topic action', () => {
           operationsByContext: {},
           operationsByMessage: {},
           topicDataMap: {
-            [groupKey]: {
-              currentPage: 0,
-              hasMore: false,
-              items: [topic],
-              pageSize: 20,
-              total: 1,
-            },
+            [groupKey]: singleTopicPage(topic),
           },
         });
       });
@@ -2901,13 +2912,7 @@ describe('topic action', () => {
           operationsByContext: {},
           operationsByMessage: {},
           topicDataMap: {
-            [key]: {
-              currentPage: 0,
-              hasMore: false,
-              items: [topic],
-              pageSize: 20,
-              total: 1,
-            },
+            [key]: singleTopicPage(topic),
           },
         });
       });
@@ -3649,165 +3654,6 @@ describe('topic action', () => {
     });
   });
 
-  describe('internal_updateTopicLinkedPullRequest', () => {
-    const agentId = 'agent-1';
-    const topicId = 'topic-1';
-    const branch = 'fix/topic-running';
-    const path = '/repo';
-    const key = topicMapKey({ agentId });
-    const stalePR = {
-      number: 123,
-      state: 'OPEN',
-      title: 'fix: stop stale running topics',
-      url: 'https://github.com/lobehub/lobehub/pull/123',
-    };
-    const mergedPR = {
-      ...stalePR,
-      mergedAt: '2026-07-07T09:00:00Z',
-      state: 'MERGED',
-    };
-
-    const setupTopic = (
-      pullRequest: typeof stalePR | null = stalePR,
-      pullRequestStatus: 'error' | 'gh-missing' | 'ok' = 'ok',
-    ) => {
-      const topic: ChatTopic = {
-        createdAt: Date.now(),
-        favorite: false,
-        id: topicId,
-        metadata: {
-          workingDirectory: path,
-          workingDirectoryConfig: {
-            git: {
-              branch,
-              github: { pullRequest, pullRequestStatus },
-              isWorktree: false,
-            },
-            path,
-            repoType: 'github',
-          },
-        },
-        sessionId: agentId,
-        title: 'Topic',
-        updatedAt: Date.now(),
-      };
-
-      useChatStore.setState({
-        activeAgentId: agentId,
-        topicDataMap: {
-          [key]: {
-            currentPage: 0,
-            hasMore: false,
-            items: [topic],
-            pageSize: 20,
-            total: 1,
-          },
-        },
-      });
-    };
-
-    it('silently patches the topic with the latest merged PR state', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, pullRequestNumber: 123, topicId },
-          { pullRequest: mergedPR, pullRequestStatus: 'ok' },
-        );
-      });
-
-      const updatedTopic = useChatStore.getState().topicDataMap[key]!.items[0]!;
-      expect(updatedTopic.metadata?.workingDirectoryConfig?.git?.github).toEqual({
-        pullRequest: mergedPR,
-        pullRequestStatus: 'ok',
-      });
-      expect(updateTopicMetadataMock).toHaveBeenCalledWith(topicId, {
-        workingDirectoryConfig: {
-          git: {
-            branch,
-            github: { pullRequest: mergedPR, pullRequestStatus: 'ok' },
-            isWorktree: false,
-          },
-          path,
-          repoType: 'github',
-        },
-      });
-    });
-
-    it('updates empty PR metadata when no existing PR number is anchored', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic(null, 'error');
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, topicId },
-          { pullRequest: null, pullRequestStatus: 'ok' },
-        );
-      });
-
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: null, pullRequestStatus: 'ok' });
-      expect(updateTopicMetadataMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps the existing PR snapshot when lookup returns a different PR number', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, pullRequestNumber: 123, topicId },
-          {
-            pullRequest: {
-              ...mergedPR,
-              number: 456,
-              url: 'https://github.com/lobehub/lobehub/pull/456',
-            },
-            pullRequestStatus: 'ok',
-          },
-        );
-      });
-
-      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
-    });
-
-    it('keeps the existing PR snapshot when gh is unavailable', async () => {
-      const { result } = renderHook(() => useChatStore());
-      setupTopic();
-      const updateTopicMetadataMock = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as never);
-
-      await act(async () => {
-        await result.current.internal_updateTopicLinkedPullRequest(
-          { branch, path, topicId },
-          { ghMissing: true, pullRequest: null, pullRequestStatus: 'gh-missing' },
-        );
-      });
-
-      expect(updateTopicMetadataMock).not.toHaveBeenCalled();
-      expect(
-        useChatStore.getState().topicDataMap[key]!.items[0]!.metadata?.workingDirectoryConfig?.git
-          ?.github,
-      ).toEqual({ pullRequest: stalePR, pullRequestStatus: 'ok' });
-    });
-  });
   describe('optimistic topic preservation across refetches', () => {
     const agentId = 'agent-1';
     const key = topicMapKey({ agentId });
@@ -4000,18 +3846,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
-        useChatStore.setState({
-          activeAgentId: 'test',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              currentPage: 0,
-              hasMore: false,
-              items: topics,
-              pageSize: 20,
-              total: topics.length,
-            },
-          },
-        });
+        useChatStore.setState(topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
       });
 
       const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
@@ -4040,18 +3875,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
-        useChatStore.setState({
-          activeAgentId: 'test',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              currentPage: 0,
-              hasMore: false,
-              items: topics,
-              pageSize: 20,
-              total: topics.length,
-            },
-          },
-        });
+        useChatStore.setState(topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
       });
 
       const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
@@ -4100,18 +3924,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
-        useChatStore.setState({
-          activeAgentId: 'test',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              currentPage: 0,
-              hasMore: false,
-              items: topics,
-              pageSize: 20,
-              total: topics.length,
-            },
-          },
-        });
+        useChatStore.setState(topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
       });
 
       const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
@@ -4134,18 +3947,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
-        useChatStore.setState({
-          activeAgentId: 'test',
-          topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              currentPage: 0,
-              hasMore: false,
-              items: topics,
-              pageSize: 20,
-              total: topics.length,
-            },
-          },
-        });
+        useChatStore.setState(topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
       });
 
       let resolveGeneration!: (value: unknown) => void;
@@ -4179,13 +3981,7 @@ describe('topic action', () => {
       await act(async () => {
         useChatStore.setState({
           topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
+            [topicMapKey({ agentId: 'test' })]: topicPage(topics, topics.length),
           },
           activeAgentId: 'test',
         });
@@ -4221,13 +4017,7 @@ describe('topic action', () => {
       await act(async () => {
         useChatStore.setState({
           topicDataMap: {
-            [topicMapKey({ agentId: 'test' })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
+            [topicMapKey({ agentId: 'test' })]: topicPage(topics, topics.length),
           },
           activeAgentId: 'test',
         });
@@ -4263,13 +4053,7 @@ describe('topic action', () => {
         await act(async () => {
           useChatStore.setState({
             topicDataMap: {
-              [topicMapKey({ agentId: 'test' })]: {
-                items: topics,
-                total: topics.length,
-                currentPage: 0,
-                hasMore: false,
-                pageSize: 20,
-              },
+              [topicMapKey({ agentId: 'test' })]: topicPage(topics, topics.length),
             },
             activeAgentId: 'test',
           });
@@ -4441,13 +4225,7 @@ describe('topic action', () => {
         useChatStore.setState({
           activeAgentId: 'abc',
           topicDataMap: {
-            [topicMapKey({ agentId: 'abc' })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
+            [topicMapKey({ agentId: 'abc' })]: topicPage(topics, topics.length),
           },
         });
       });
@@ -4477,13 +4255,7 @@ describe('topic action', () => {
           activeAgentId: 'abc',
           activeTopicId: topicId,
           topicDataMap: {
-            [topicMapKey({ agentId: 'abc' })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
+            [topicMapKey({ agentId: 'abc' })]: topicPage(topics, topics.length),
           },
         });
       });

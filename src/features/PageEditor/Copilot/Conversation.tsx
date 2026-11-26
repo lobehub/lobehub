@@ -43,7 +43,13 @@ const Conversation = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+  const composerKey = useConversationStore(conversationSelectors.composerKey);
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: currentAgentId,
+    contextKey: composerKey,
+    model,
+    provider,
+  });
 
   const handleAgentChange = useCallback(
     (id: string) => {

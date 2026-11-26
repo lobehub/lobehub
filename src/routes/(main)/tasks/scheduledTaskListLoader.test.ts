@@ -13,7 +13,10 @@ vi.mock('@/store/task', () => ({
   getTaskStoreState: () => ({ preHydrateScheduledTaskList }),
 }));
 
-vi.mock('@/store/task/slices/list/action', () => ({ TASK_COLLECTION_PAGE_SIZE: 50 }));
+vi.mock('@/store/task/slices/list/action', () => ({
+  SCHEDULED_TASK_RECENT_RUNS: 5,
+  TASK_COLLECTION_PAGE_SIZE: 50,
+}));
 
 const request = (path: string) => new Request(`http://localhost${path}`);
 
@@ -36,6 +39,8 @@ describe('scheduledTaskListLoader', () => {
       limit: 50,
       offset: 0,
       projectId: undefined,
+      // The page asks for the same rows; a different key would miss the seed.
+      recentRuns: 5,
     });
   });
 

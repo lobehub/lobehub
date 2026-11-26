@@ -1,5 +1,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
+import { onAgentCreated } from '@/business/server/channel/onAgentCreated';
+
 import { ChannelService } from './ChannelService';
 import { isChannelEnabled } from './featureGate';
 
@@ -16,8 +18,8 @@ export interface DefaultChannelParams {
 }
 
 /**
- * Runs `open` only while Channels are on for the creator. Best-effort: what it follows already
- * exists, so a failure must not fail its creation.
+ * Runs `open` best-effort: what it follows already exists, so a failure must not fail its
+ * creation.
  */
 const openForCreator = async (
   what: string,
@@ -25,7 +27,6 @@ const openForCreator = async (
   open: () => Promise<unknown>,
 ) => {
   try {
-    if (!(await isChannelEnabled(context.userId))) return;
     await open();
   } catch (error) {
     console.error(`[channel] Failed to create ${what}`, { ...context, error });
@@ -34,7 +35,8 @@ const openForCreator = async (
 
 /**
  * Opens the Channel a new workspace or project starts with: its creator and its main Agent (the
- * scope's LobeAI when that Agent needs a device).
+ * scope's LobeAI when that Agent needs a device). Not gated by the `channel` flag: every project
+ * starts with its General Channel, so turning Channels on later finds it already there.
  */
 export const createDefaultChannel = async ({ db, ...context }: DefaultChannelParams) =>
   openForCreator('the default channel', context, () =>
@@ -49,24 +51,26 @@ export interface AgentDirectChannelParams {
   /** The Agent its creator just made. */
   agentId: string;
   db: LobeChatDatabase;
-  /** The creator's own desktop, where an Agent that runs locally answers; checked before use. */
-  localDeviceId?: string;
   userId: string;
   workspaceId?: string;
 }
 
 /**
  * Opens the direct conversation between a person and the Agent they just created, named after the
- * Agent and on the device and directory a new Channel would give it; see
- * `ChannelService.createDirect`.
+ * Agent and bound to no device; see `ChannelService.createDirect`. Then hands the Agent to the
+ * `onAgentCreated` slot, which may seed its documents. Both run only while Channels are on for the
+ * creator, and each failure is reported on its own.
  */
-export const createAgentDirectChannel = async ({
-  db,
-  localDeviceId,
-  ...context
-}: AgentDirectChannelParams) =>
-  openForCreator('the direct channel of a new agent', context, () =>
-    new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId, {
-      localDeviceId,
-    }),
+export const createAgentDirectChannel = async ({ db, ...context }: AgentDirectChannelParams) => {
+  let enabled = false;
+  await openForCreator('the direct channel of a new agent', context, async () => {
+    enabled = await isChannelEnabled(context.userId);
+    if (!enabled) return;
+    await new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId);
+  });
+  if (!enabled) return;
+
+  await openForCreator('the setup of a new channel agent', context, () =>
+    onAgentCreated({ db, ...context }),
   );
+};

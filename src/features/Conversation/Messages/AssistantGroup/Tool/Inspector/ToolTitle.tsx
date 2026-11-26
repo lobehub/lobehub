@@ -10,10 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { shinyTextStyles } from '@/styles';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import { getToolDisplayName } from '../../toolDisplayNames';
-import { extractToolKeyword } from './extractToolKeyword';
+import { extractToolKeyword, getShellCommandTitle } from './extractToolKeyword';
 
 export const styles = stylex.create({
   aborted: { color: cssVar.colorTextQuaternary },
@@ -39,6 +40,16 @@ export const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
   label: { flex: 'none' },
+  labelCompact: { fontWeight: 500, color: cssVar.colorText },
+  keywordCompact: {
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    lineHeight: '16px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
   standalone: {
     overflow: 'hidden',
     flexGrow: 0,
@@ -72,6 +83,9 @@ const isCJK = (value: string) => /[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.tes
 const ToolTitle = memo<ToolTitleProps>(
   ({ identifier, apiName, args, partialArgs, isLoading, isAborted, result }) => {
     const { t } = useTranslation('plugin');
+    const { compact } = useDensity();
+    const labelCompact = compact && !isAborted && styles.labelCompact;
+    const keywordStyles = stylex.props(styles.keyword, compact && styles.keywordCompact);
 
     const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
     const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta);
@@ -84,6 +98,7 @@ const ToolTitle = memo<ToolTitleProps>(
 
     const effectiveArgs = args ?? partialArgs;
     const keyword = useMemo(() => extractToolKeyword(effectiveArgs), [effectiveArgs]);
+    const commandTitle = useMemo(() => getShellCommandTitle(effectiveArgs), [effectiveArgs]);
 
     // Only command step descriptions can replace the action. Resource titles,
     // queries, and paths can also contain CJK text but do not say what the tool
@@ -114,7 +129,9 @@ const ToolTitle = memo<ToolTitleProps>(
       const status = isLoading ? 'loading' : failed ? 'failed' : 'completed';
       return (
         <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
-          <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
+          <span
+            {...sx(styles.label, labelCompact, isLoading ? shinyTextStyles.shinyText : undefined)}
+          >
             {t(`builtins.goalCommand.${goalCommand.kind}.${status}`)}
           </span>
           {goalTitle && <span {...stylex.props(styles.standalone)}>{goalTitle}</span>}
@@ -122,15 +139,35 @@ const ToolTitle = memo<ToolTitleProps>(
       );
     }
 
+    // An undescribed shell command reads as what it does ("读取 app.ts"); the
+    // exact command line stays one click away in the expanded row.
+    if (commandTitle) {
+      const { action, isProse, subject } = commandTitle;
+      return (
+        <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
+          <span
+            {...sx(styles.label, labelCompact, isLoading ? shinyTextStyles.shinyText : undefined)}
+          >
+            {t(`builtins.shellCommand.${action}`)}
+          </span>
+          {subject && (
+            <span {...(isProse ? stylex.props(styles.standalone) : keywordStyles)}>{subject}</span>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
         {isStandaloneDescription ? (
-          <span {...sx([styles.standalone], isLoading ? shinyTextStyles.shinyText : undefined)}>
+          <span {...sx(styles.standalone, isLoading ? shinyTextStyles.shinyText : undefined)}>
             {keyword}
           </span>
         ) : (
           <>
-            <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
+            <span
+              {...sx(styles.label, labelCompact, isLoading ? shinyTextStyles.shinyText : undefined)}
+            >
               {actionLabel || (
                 <>
                   {pluginTitle && (
@@ -143,7 +180,7 @@ const ToolTitle = memo<ToolTitleProps>(
                 </>
               )}
             </span>
-            {keyword && <span {...stylex.props(styles.keyword)}>{keyword}</span>}
+            {keyword && <span {...keywordStyles}>{keyword}</span>}
           </>
         )}
       </div>

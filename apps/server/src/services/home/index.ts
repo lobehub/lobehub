@@ -29,17 +29,26 @@ export interface HomeBriefData {
  */
 export class HomeService {
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(userId: string) {
+  constructor(userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   /**
    * Read the cached daily brief for this user. Returns `{ pairs: [] }` when
    * Redis is disabled, the key is missing, or the payload is malformed —
    * callers can render unconditionally without a null check.
+   *
+   * The brief is generated from the user's personal-scope topics and tasks
+   * only, so inside a workspace it would surface personal conversations (and
+   * links to personal agents). Workspaces get no brief until one is generated
+   * per workspace.
    */
   async getDailyBrief(): Promise<HomeBriefData> {
+    if (this.workspaceId) return { pairs: [] };
+
     const data = await this.readDailyBriefFromRedis();
     return data ?? { pairs: [] };
   }

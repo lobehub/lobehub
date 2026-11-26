@@ -41,10 +41,19 @@ export enum RequestTrigger {
   /** Rolling history summary stored on a topic. */
   HistorySummary = 'history_summary',
   Image = 'image',
+  /**
+   * A message arrived on one of the agent's own accounts (e.g. mail) and
+   * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
+   * an identity the agent owns, rather than a user turn.
+   */
+  Inbox = 'inbox',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
+  McpEvent = 'mcp_event',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
+  /** Text-to-music generation from a music generation topic. */
+  Music = 'music',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
@@ -60,6 +69,12 @@ export enum RequestTrigger {
   SignupEmailLLMReview = 'signup_email_llm_review',
   /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
   Task = 'task',
+  /**
+   * The creator agent woken in its own conversation to pick up finished task
+   * results (`taskResultBridge`). Server-started, but it continues the user's
+   * conversation on the main spine, unlike {@link RequestTrigger.Task} runs.
+   */
+  TaskCallback = 'task_callback',
   /** Thread (sub-topic) title summaries. */
   ThreadTitle = 'thread_title',
   /**
@@ -81,13 +96,14 @@ export enum RequestTrigger {
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',
+  /** An Agent run a generic inbound webhook call started. */
+  Webhook = 'webhook',
 }
 
 /**
  * Everything one shared-agent visitor run carries: WHO the run belongs to
  * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
- * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
- * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
  * at operation creation onto `state.metadata.agentShareVisitor` and read back
@@ -112,6 +128,13 @@ export interface AgentShareVisitorContext {
    */
   allowReadMemory?: boolean;
   /**
+   * Whether this visitor may run on the agent's execution environment, as
+   * resolved from `shareConfig.deviceAccess` when the run started. Lets the
+   * dispatch-time gates (device builtins, device-only MCP) re-apply the same
+   * decision the assembled tool set was built with.
+   */
+  canUseDevice?: boolean;
+  /**
    * The agent's OWN persisted knowledge-base assignment, never derived from
    * visitor input, so `isShareBlockedDataToolCall` can id-scope
    * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no
@@ -124,10 +147,6 @@ export interface AgentShareVisitorContext {
    * `AgentShareModel.isRunStillAuthorized`).
    */
   shareId: string;
-  /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
-  showErrorDetails?: boolean;
-  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
-  showModelInfo?: boolean;
   /**
    * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
    * per-skill allowlist the operation's skill pool was built from. Absent or
@@ -287,6 +306,12 @@ export const AgentRuntimeErrorType = {
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
   /**
+   * The provider base URL resolves to a private / reserved network address that
+   * the server is not allowed to reach (SSRF protection). The endpoint is only
+   * reachable from the user's own device.
+   */
+  ProviderBaseURLBlocked: 'ProviderBaseURLBlocked',
+  /**
    * The model can only be reached from the user's own device, and no open
    * LobeHub client picked up the request (no client declared it can run this
    * provider, or none claimed the call in time). Retrying once a client is
@@ -309,6 +334,13 @@ export const AgentRuntimeErrorType = {
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
+  /**
+   * The provider closed the stream without a terminal event (no stop / usage /
+   * error), e.g. its connection dropped or its server gave up mid-response.
+   * Upstream-owned and transient, unlike `StreamChunkError`, which is a chunk
+   * the harness could not parse or process.
+   */
+  ProviderStreamInterrupted: 'ProviderStreamInterrupted',
   /**
    * The model returned an empty completion — no text content, no tool calls,
    * and ~0 output tokens — typically after a stalled tool loop where it

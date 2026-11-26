@@ -69,10 +69,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface DeviceGatewayProps {
+  /** Keeps the status subscriptions running while a page claims the corner for its own actions. */
+  hidden?: boolean;
   workspaceScoped: boolean;
 }
 
-const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
+const DeviceGateway = memo<DeviceGatewayProps>(({ hidden, workspaceScoped }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
   const [
@@ -188,6 +190,8 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
     </Flexbox>
   );
 
+  if (hidden) return null;
+
   return (
     <Popover
       arrow={false}
@@ -216,13 +220,13 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
   );
 });
 
-const DeviceGatewayWithAuth = memo(() => {
+const DeviceGatewayWithAuth = memo<{ hidden?: boolean }>(({ hidden }) => {
   const isSyncActive = useElectronStore(electronSyncSelectors.isSyncActive);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   if (!isSyncActive) return null;
 
-  return <DeviceGateway workspaceScoped={!!activeWorkspaceSlug} />;
+  return <DeviceGateway hidden={hidden} workspaceScoped={!!activeWorkspaceSlug} />;
 });
 
 export default DeviceGatewayWithAuth;

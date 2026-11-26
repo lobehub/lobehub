@@ -1,30 +1,29 @@
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import React, { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-
-  meta: css`
-    font-size: 12px;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    padding: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  meta: { fontSize: '12px' },
+});
 
 const ReadFileSkeleton = memo(() => {
   return (
-    <Flexbox className={styles.container} gap={2}>
+    <Flexbox className={stylex.props(styles.container).className} gap={2}>
       <Flexbox horizontal align={'center'} gap={24} justify={'space-between'}>
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
           <Skeleton height={16} style={{ flex: 1 }} width={20} />
 
           <Skeleton height={16} style={{ flex: 1, minWidth: 100 }} />
         </Flexbox>
-        <Flexbox align={'center'} className={styles.meta} gap={16}>
+        <Flexbox align={'center'} className={stylex.props(styles.meta).className} gap={16}>
           <Skeleton height={16} style={{ maxWidth: 40 }} />
         </Flexbox>
       </Flexbox>

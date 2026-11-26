@@ -1,5 +1,7 @@
 import { type RuntimeImageGenParamsKeys } from 'model-bank';
 
+import { isAutomaticGifSize } from '@/utils/normalizeImageGenerationParams';
+
 import { type GenerationConfigState } from './initialState';
 
 export const model = (s: GenerationConfigState) => s.model;
@@ -16,10 +18,22 @@ const isSupportedParam = (paramName: RuntimeImageGenParamsKeys) => {
   };
 };
 
+/**
+ * Whether the current model will produce an animated GIF. GIF output is generation-only (the
+ * OpenAI edit endpoint rejects it), so it excludes reference images.
+ */
+const isAnimatedOutput = (s: GenerationConfigState) =>
+  isSupportedParam('outputFormat')(s) && s.parameters?.outputFormat === 'gif';
+
+const isAutomaticSize = (s: GenerationConfigState) =>
+  isAnimatedOutput(s) && isAutomaticGifSize(s.model, s.parameters.outputFormat);
+
 export const imageGenerationConfigSelectors = {
   model,
   provider,
   imageNum,
+  isAnimatedOutput,
+  isAutomaticSize,
   isSupportedParam,
   parameters,
   parametersSchema,

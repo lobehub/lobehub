@@ -6,8 +6,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface GoalClarificationGroup {
   agentId: string | null;
@@ -47,11 +45,10 @@ export const selectIslandGoalClarifications = (
 
 /** Goal clarification rounds the island should ask, oldest first. */
 export const usePendingGoalClarifications = (): GoalClarificationGroup[] => {
-  const enabled = useUserStore(labPreferSelectors.enableGoals);
   // The same gate the goal page puts on its answer controls.
   const { allowed: canAnswer } = usePermission('create_content');
   const useFetchPendingClarifications = useGoalStore((s) => s.useFetchPendingClarifications);
-  const { data } = useFetchPendingClarifications(enabled && canAnswer);
+  const { data } = useFetchPendingClarifications(canAnswer);
   const { pathname } = useLocation();
   const portalGoalId = useChatStore(chatPortalSelectors.goalPortalId);
 

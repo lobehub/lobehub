@@ -10,6 +10,8 @@ import { SessionModel } from '@/database/models/session';
 import { DataExporterRepos } from '@/database/repositories/dataExporter';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { DataExportService } from '@/server/services/dataExport';
+import { startDataExport } from '@/server/services/dataExport/start';
 import { type ExportDatabaseData } from '@/types/export';
 
 const exportProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -173,6 +175,28 @@ const generatePdfFromMarkdown = async (
 };
 
 export const exporterRouter = router({
+  /** Download link for a finished background export; the link expires after a few minutes. */
+  getExportDownloadUrl: workspaceExportProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) =>
+      new DataExportService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).getDownloadUrl(
+        input.id,
+      ),
+    ),
+
+  getLatestExport: workspaceExportProcedure.query(async ({ ctx }) =>
+    new DataExportService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).getLatest(),
+  ),
+
+  /** Queue a full data export in the background, or return the one already running. */
+  startExport: workspaceExportProcedure.mutation(async ({ ctx }) =>
+    startDataExport(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+  ),
+
+  /**
+   * Synchronous export kept for clients released before background exports;
+   * it holds the request open until every table is read.
+   */
   exportData: workspaceExportProcedure.mutation(async ({ ctx }): Promise<ExportDatabaseData> => {
     const data = await ctx.dataExporterRepos.export(5);
     const schemaHash = await ctx.drizzleMigration.getLatestMigrationHash();

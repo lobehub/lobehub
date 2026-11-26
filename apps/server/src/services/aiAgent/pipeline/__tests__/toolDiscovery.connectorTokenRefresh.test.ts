@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
+import { refreshExpiredLinkTokens } from '@/server/services/connector/tokens';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -29,8 +30,32 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({}) },
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
-  refreshExpiredConnectorTokens: vi.fn(async (connectors: any[]) =>
-    connectors.map((c) => ({ ...c, credentials: { accessToken: 'fresh', type: 'oauth2' } })),
+  refreshExpiredConnectorTokens: vi.fn(async (connectors: any[]) => connectors),
+  refreshExpiredLinkTokens: vi.fn(async (_connector: unknown, links: any[]) =>
+    links.map((link) => ({ ...link, credentials: { accessToken: 'fresh', type: 'oauth2' } })),
+  ),
+}));
+// The OAuth token lives on the connector's account, read through the link
+// storage; stand that in so the bare runtime needs no database.
+vi.mock('@/server/services/connector/links', async (original) => ({
+  ...(await original<object>()),
+  getConnectorLinkModel: vi.fn().mockReturnValue({}),
+  loadConnectorLinksMap: vi.fn(
+    async (connectors: { id: string }[]) =>
+      new Map(
+        connectors.map((connector) => [
+          connector.id,
+          [
+            {
+              credentials: { accessToken: 'expired', type: 'oauth2' },
+              id: 'lnk_xmind',
+              name: 'Default',
+              status: 'connected',
+              userConnectorId: connector.id,
+            },
+          ],
+        ]),
+      ),
   ),
 }));
 vi.mock('@/server/services/deviceGateway', () => ({
@@ -40,7 +65,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 const XMIND = 'xmind-mcp';
 
 const oauthConnector = {
-  credentials: { accessToken: 'expired', type: 'oauth2' },
+  credentials: null,
   id: 'conn-xmind',
   identifier: XMIND,
   isEnabled: true,
@@ -48,6 +73,8 @@ const oauthConnector = {
   mcpServerUrl: 'https://app.xmind.com/api/mcp',
   metadata: {},
   name: 'XMind',
+  status: 'connected',
+  oidcConfig: { clientId: 'client', scheme: 'dcr' },
 };
 
 const connectorTools = [
@@ -60,17 +87,36 @@ const connectorTools = [
   },
 ];
 
-const run = (plugins: string[]) =>
-  discoverTools(
+interface RunOptions {
+  /** The agent's `auto` entries: on without a legacy pin. */
+  autoSkillIds?: string[];
+  disabledPluginIds?: string[];
+  /** The agent's legacy pinned entries, which also read as on. */
+  plugins?: string[];
+  /** This turn's @-mention picks. */
+  selectedToolIds?: string[];
+}
+
+const connectorModel = {
+  resolveAll: vi.fn(),
+  resolveByIdentifiers: vi.fn(),
+  resolveToolSets: toolSetsFrom(
+    (ids: string[], target: unknown) => connectorModel.resolveByIdentifiers(ids, target),
+    (target: unknown) => connectorModel.resolveAll(target),
+  ),
+};
+
+const run = (options: RunOptions = {}) => {
+  connectorModel.resolveAll.mockReset().mockResolvedValue([oauthConnector]);
+  connectorModel.resolveByIdentifiers
+    .mockReset()
+    .mockImplementation(async (ids: string[]) => (ids.includes(XMIND) ? [oauthConnector] : []));
+
+  return discoverTools(
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
       composioService: { getComposioManifests: vi.fn().mockResolvedValue([]) },
-      connectorModel: {
-        resolveAll: vi.fn().mockResolvedValue([oauthConnector]),
-        resolveByIdentifiers: vi.fn(async (ids: string[]) =>
-          ids.includes(XMIND) ? [oauthConnector] : [],
-        ),
-      },
+      connectorModel,
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue(connectorTools),
         queryByConnector: vi.fn().mockResolvedValue([]),
@@ -84,8 +130,9 @@ const run = (plugins: string[]) =>
       userId: 'creator-1',
     } as never,
     {
-      agentConfig: { chatConfig: {}, plugins },
+      agentConfig: { chatConfig: {}, plugins: options.plugins ?? [] },
       appContext: undefined,
+      autoSkillIds: options.autoSkillIds ?? [],
       canUseDevice: false,
       model: 'test-model',
       prompt: 'make a mind map',
@@ -97,31 +144,54 @@ const run = (plugins: string[]) =>
       },
     } as never,
     {
-      disabledPluginIds: [],
+      disabledPluginIds: options.disabledPluginIds ?? [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
       loadHistoryMessages: vi.fn().mockResolvedValue([]),
+      selectedToolIds: options.selectedToolIds,
       throwIfExecutionAborted: vi.fn(),
     } as never,
   );
+};
 
 const manifestToken = (manifest: unknown) =>
   (manifest as { mcpParams?: { auth?: { accessToken?: string } } })?.mcpParams?.auth?.accessToken;
 
-// Manifests carry the connector token for the whole run, so an
-// expired-but-refreshable token used to 401 on the first call after expiry.
+// A single-account manifest carries that account's token for the whole run, so
+// an expired-but-refreshable token used to 401 on the first call after expiry.
 describe('discoverTools — connector OAuth token refresh', () => {
-  it('builds a pinned connector manifest from refreshed credentials', async () => {
-    const result = await run([XMIND]);
+  it.each([
+    // Both entries turn the connector on, so it is read with the discoverable ones.
+    { label: 'the agent pinned', options: { plugins: [XMIND] } },
+    { label: 'the agent turned on', options: { autoSkillIds: [XMIND] } },
+    // The turn brings it in, so it is resolved straight into the invocation set.
+    { label: 'the turn @-mentions', options: { selectedToolIds: [XMIND] } },
+  ])(
+    'builds the manifest of a connector $label from refreshed credentials',
+    async ({ options }) => {
+      vi.mocked(refreshExpiredLinkTokens).mockClear();
 
-    expect(refreshExpiredConnectorTokens).toHaveBeenCalled();
-    expect(manifestToken(result.toolManifestMap[XMIND])).toBe('fresh');
-  });
+      const result = await run(options);
 
-  it('builds an unpinned connector manifest from refreshed credentials', async () => {
-    const result = await run([]);
+      expect(refreshExpiredLinkTokens).toHaveBeenCalled();
+      expect(manifestToken(result.toolManifestMap[XMIND])).toBe('fresh');
+    },
+  );
 
-    expect(manifestToken(result.toolManifestMap[XMIND])).toBe('fresh');
+  it('excludes a disabled connector before refreshing credentials', async () => {
+    vi.mocked(refreshExpiredLinkTokens).mockClear();
+
+    const result = await run({ disabledPluginIds: [XMIND] });
+
+    expect(result.toolManifestMap[XMIND]).toBeUndefined();
+    expect(connectorModel.resolveToolSets).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.anything(),
+      expect.arrayContaining([XMIND]),
+    );
+    expect(connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    expect(refreshExpiredLinkTokens).not.toHaveBeenCalled();
   });
 });

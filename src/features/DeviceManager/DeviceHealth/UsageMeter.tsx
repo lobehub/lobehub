@@ -6,7 +6,7 @@ import { type ReactNode, useRef } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
 
-import { formatPercent, usageLevel } from './format';
+import { formatPercent, usageLevel, type UsageThresholds } from './format';
 import { USAGE_COLOR, usageTextColor } from './shared';
 
 /**
@@ -57,6 +57,8 @@ export const litSegments = (value: number | null | undefined, segments: number) 
 interface UsageBarProps {
   /** Bar height in px. */
   height?: number;
+  /** Where the bar turns yellow / red; CPU-style shares by default. */
+  thresholds?: UsageThresholds;
   value: number | null | undefined;
 }
 
@@ -64,11 +66,11 @@ interface UsageBarProps {
  * The segmented bar alone, colored by the normal / high / critical thresholds.
  * No reading keeps every segment unlit.
  */
-export const UsageBar = ({ height = 12, value }: UsageBarProps) => {
+export const UsageBar = ({ height = 12, thresholds, value }: UsageBarProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const size = useSize(ref);
   const segments = segmentCount(size?.width ?? 0);
-  const level = usageLevel(value);
+  const level = usageLevel(value, thresholds);
   const lit = litSegments(value, segments);
   const color = level ? USAGE_COLOR[level] : cssVar.colorFillSecondary;
 
@@ -87,6 +89,7 @@ export const UsageBar = ({ height = 12, value }: UsageBarProps) => {
 
 interface UsageMeterProps {
   label: string;
+  thresholds?: UsageThresholds;
   value: number | null | undefined;
 }
 
@@ -128,15 +131,15 @@ export const UsageMeterSkeleton = () => (
  * the bar unlit and the value as an em dash, so a card keeps its height
  * whether or not the device has reported. Render inside {@link UsageMeterGroup}.
  */
-const UsageMeter = ({ label, value }: UsageMeterProps) => {
-  const level = usageLevel(value);
+const UsageMeter = ({ label, thresholds, value }: UsageMeterProps) => {
+  const level = usageLevel(value, thresholds);
 
   return (
     <>
       <Text fontSize={13} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
         {label}
       </Text>
-      <UsageBar value={value} />
+      <UsageBar thresholds={thresholds} value={value} />
       <Text
         fontSize={13}
         style={{ color: usageTextColor(level), textAlign: 'end' }}

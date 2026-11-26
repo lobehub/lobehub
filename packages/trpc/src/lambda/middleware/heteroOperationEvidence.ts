@@ -25,7 +25,9 @@ const FILE_STORE: readonly HeteroOperationCapability[] = ['acceptance:evidence',
  *
  * The `verify.*` routes bind every read and write to `heteroOperationScope`,
  * and `submitCheckEvidence` takes evidence only: the verdict and the rest of
- * the result belong to the round's verifier. `upload.createS3PreSignedUrl`
+ * the result belong to the round's verifier. `verify.disputeCheck` files the
+ * builder's dispute of one check in that same scoped round; the ruling comes
+ * from the review panel, never from the token. `upload.createS3PreSignedUrl`
  * signs only a sized, reserved PUT under a content-addressed key.
  * `file.createFile` files what this token uploads as a private acceptance or
  * tool-result attachment, kept out of the creator's library, folders and
@@ -41,6 +43,7 @@ export const HETERO_OPERATION_ROUTE_CAPABILITIES: ReadonlyMap<
   ['upload.abortS3Upload', FILE_STORE],
   ['upload.createS3PreSignedUrl', FILE_STORE],
   ['user.getUserState', EVIDENCE],
+  ['verify.disputeCheck', EVIDENCE],
   ['verify.getRun', EVIDENCE],
   ['verify.getVerifyState', EVIDENCE],
   ['verify.listResults', EVIDENCE],

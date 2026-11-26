@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   createStaticStyles,
   cx,
   type DropdownItem,
@@ -14,6 +13,9 @@ import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
   addButton: css`
     cursor: pointer;
@@ -23,9 +25,9 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
+    border-radius: ${densityVars.radius};
 
     color: ${cv.colorTextTertiary};
 
@@ -72,10 +74,12 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: 8px;
+    height: ${densityVars.controlHeight};
+    padding-block: 4px;
+    padding-inline: ${densityVars.contentGap};
+    border-radius: ${densityVars.radius};
+
+    font-size: ${densityVars.fontSize};
 
     color: ${cv.colorTextTertiary};
 

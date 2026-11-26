@@ -234,6 +234,11 @@ describe('GeneralChatAgent empty-arguments handling (llm_result phase)', () => {
       {
         payload: {
           blockedContent: expect.stringContaining('arguments of this call arrived empty'),
+          blockedContentByCallId: {
+            'call-1': expect.stringContaining(
+              'arguments of this call (tool: lobe-acceptance-evidence.submitEvidence, call id: call-1) arrived empty',
+            ),
+          },
           blockedReason: 'tool_arguments_empty',
           parentMessageId: 'msg-1',
           toolsCalling: [requiredArgsCall],

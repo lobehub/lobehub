@@ -1,4 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { HeterogeneousAgentModel } from '@lobechat/types';
+import { parseModelTuple } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type { AcpAgentSessionOptions } from './acpAgentSession';
@@ -9,8 +11,12 @@ import {
 } from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
-import type { CliCommandStatus } from './resolveCliCommand';
-import { detectValidatedCommand } from './resolveCliCommand';
+import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
+import {
+  detectInUserBinDirs,
+  detectInWslWhenMissing,
+  detectValidatedCommandCandidates,
+} from './resolveCliCommand';
 
 /**
  * DeepSeek Harness over the Agent Client Protocol.
@@ -49,22 +55,51 @@ const isSupportedDshVersion = (version: string | undefined): boolean => {
  * Find a `dsh` that can run LobeHub turns. An older CLI still answers
  * `--version` but has no `acp` profile, so it is reported unavailable here
  * rather than failing every turn after the agent was created.
+ *
+ * `dsh` is installed with `npm i -g`, which puts it in whichever global folder
+ * the user's Node setup has: `%APPDATA%\npm`, an nvm-windows or fnm Node's own
+ * folder, a pnpm / bun / Volta global, often off the PATH this app started
+ * with. Those folders are swept before WSL is asked.
  */
 export const detectDshCommand = async (
   command: string = DSH_COMMAND,
   env?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  const status = await detectValidatedCommand(
-    command,
-    { validatePattern: DSH_VERSION_PATTERN },
-    env,
-  );
+  const isDefaultCommand = command.trim() === DSH_COMMAND;
+  const validation = { validatePattern: DSH_VERSION_PATTERN };
+  const nativeStatus = await detectValidatedCommandCandidates([command], validation, env);
+  const status = isDefaultCommand
+    ? await detectInWslWhenMissing(
+        await detectInUserBinDirs(nativeStatus, [DSH_COMMAND], validation, env),
+        [DSH_COMMAND],
+        validation,
+      )
+    : nativeStatus;
   if (!status.available || isSupportedDshVersion(status.version)) return status;
   return {
     ...status,
     available: false,
     error: `DeepSeek Harness CLI ${status.version} is too old; LobeHub needs ${DSH_MIN_VERSION} or newer. Update it with: npm i -g @deepseek-ai/dsh`,
   };
+};
+
+/**
+ * The `dsh` binary a session should spawn, with the PATH that validated it.
+ * A custom command is used verbatim; the default one is re-detected so a CLI
+ * installed after the host started (a fresh registry PATH on Windows, a new
+ * login-shell PATH elsewhere) still launches instead of failing with ENOENT.
+ */
+export const resolveDshSpawnCommand = async (
+  command?: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<ResolvedHeteroCommand> => {
+  const requested = command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env).catch(() => undefined);
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv, version: detected.version }
+    : { command: DSH_COMMAND };
 };
 
 /** Select the CLI's shipped ACP profile, served on stdio until disconnect. */
@@ -79,7 +114,7 @@ const DISPOSE_GRACE_MS = 5000;
 const DSH_MODEL_CONFIG_ID = 'model';
 
 interface DshInitializeResult {
-  agentCapabilities?: { sessionCapabilities?: { resume?: unknown } };
+  agentCapabilities?: { sessionCapabilities?: { close?: unknown; resume?: unknown } };
   protocolVersion?: number | string;
 }
 
@@ -96,8 +131,9 @@ interface DshSessionResult {
 
 export interface DshAcpSessionOptions extends AcpAgentSessionOptions {
   /**
-   * Model to select, by name (`deepseek-v4-pro`). A name the runtime does not
-   * offer keeps the harness's own default rather than failing the turn.
+   * Model to select, by ACP tuple value (`["provider","model"]`) or legacy
+   * name (`deepseek-v4-pro`). A model the runtime does not offer keeps the
+   * harness's own default rather than failing the turn.
    */
   model?: string;
   prompt: string;
@@ -131,16 +167,8 @@ const modelChoices = (configOptions: DshConfigOption[] | undefined) => {
 };
 
 /** The model name inside a `[provider, model]` choice value. */
-const modelOf = (value: string | undefined): string | undefined => {
-  if (!value) return;
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed) && typeof parsed[1] === 'string') return parsed[1];
-  } catch {
-    // Not the encoded pair; treat the raw value as the model name.
-  }
-  return value;
-};
+const modelOf = (value: string | undefined): string | undefined =>
+  value ? (parseModelTuple(value)?.modelId ?? value) : undefined;
 
 /** DeepSeek Harness's ACP lifecycle on the shared session base. */
 export class DshAcpSession extends AcpAgentSession<DshInitializeResult, DshAcpSessionOptions> {
@@ -158,6 +186,50 @@ export class DshAcpSession extends AcpAgentSession<DshInitializeResult, DshAcpSe
 
   get sessionId(): string | undefined {
     return this.acpSessionId;
+  }
+
+  /**
+   * Enumerate the configured providers through ACP without sending a prompt.
+   * The harness advertises its model selector on `session/new`; the same
+   * lifecycle a real turn uses, so discovery sees exactly what a turn can pick.
+   */
+  async discoverModels(): Promise<HeterogeneousAgentModel[]> {
+    try {
+      const initialized = await this.initializeConnection();
+      const result = await this.client.request<DshSessionResult>('session/new', {
+        cwd: this.options.cwd,
+        mcpServers: [],
+      });
+      if (!result?.sessionId) throw new Error('DeepSeek Harness ACP returned no session id');
+      if (!result.configOptions?.some(({ id }) => id === DSH_MODEL_CONFIG_ID)) {
+        throw new Error('DeepSeek Harness ACP did not expose a model configuration option');
+      }
+
+      const seen = new Set<string>();
+      const models = modelChoices(result.configOptions).choices.flatMap(({ name, value }) => {
+        // The value is an opaque selection id; the `[provider, model]` pair is
+        // only a convention, and an unrecognized encoding must still be usable.
+        if (seen.has(value)) return [];
+        seen.add(value);
+
+        const tuple = parseModelTuple(value);
+        return [
+          {
+            id: value,
+            ...(name ? { label: name } : {}),
+            modelId: tuple?.modelId ?? value,
+            providerId: tuple?.providerId ?? 'deepseek-harness',
+          },
+        ];
+      });
+
+      if (initialized?.agentCapabilities?.sessionCapabilities?.close) {
+        await this.client.request('session/close', { sessionId: result.sessionId });
+      }
+      return models;
+    } finally {
+      this.client.close();
+    }
   }
 
   protected buildInitializeParams(): unknown {
@@ -253,8 +325,12 @@ export class DshAcpSession extends AcpAgentSession<DshInitializeResult, DshAcpSe
   ): Promise<string | undefined> {
     const { choices, current } = modelChoices(configOptions);
     const wanted = this.options.model?.trim();
+    // An exact tuple wins: two providers may expose the same model name, and
+    // the picker's persisted id is the tuple, so name matching is only a
+    // fallback for selections created before the tuple was persisted.
     const choice = wanted
-      ? choices.find(({ name, value }) => name === wanted || modelOf(value) === wanted)
+      ? (choices.find(({ value }) => value === wanted) ??
+        choices.find(({ name, value }) => name === wanted || modelOf(value) === wanted))
       : undefined;
     if (!choice || choice.value === current) return modelOf(current);
 
@@ -380,3 +456,33 @@ export const spawnDshAcpSession = (options: SpawnDshAcpSessionOptions): DshAcpSe
     },
   };
 };
+
+export interface ListDshAcpModelsOptions {
+  args?: string[];
+  clientVersion?: string;
+  commandPath: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+
+/** Discover the runtime's grouped model catalog over the `acp` profile. */
+export const listDshAcpModels = async (
+  options: ListDshAcpModelsOptions,
+): Promise<HeterogeneousAgentModel[]> =>
+  new DshAcpSession({
+    args: options.args ?? [],
+    clientVersion: options.clientVersion ?? '1.0.0',
+    commandPath: options.commandPath,
+    cwd: options.cwd,
+    env: options.env,
+    onEvents: () => {},
+    onRawMessage: () => {},
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: () => {},
+    operationId: 'dsh-model-discovery',
+    prompt: '',
+    requestTimeoutMs: options.timeoutMs,
+    sessionId: 'dsh-model-discovery',
+  }).discoverModels();

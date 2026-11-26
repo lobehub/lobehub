@@ -186,6 +186,34 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Round statuses past which a dispute can no longer change anything: the round
+ * has been judged (or handed to a repair round) and its Task driven, so a waiver
+ * written there would only rewrite metadata under a settled verdict.
+ */
+export const DISPUTE_SETTLED_RUN_STATUSES = [
+  'delivered',
+  'errored',
+  'failed',
+  'passed',
+  'repairing',
+] as const satisfies readonly VerifyRunStatus[];
+
+/** Why a builder disputes a check; see `VerifyCheckDisputeKind` in `@lobechat/types`. */
+export const VERIFY_DISPUTE_KINDS = ['invalid_criterion', 'missed_evidence'] as const;
+
+/**
+ * Whether a panel upheld the builder's `invalid_criterion` dispute on this check
+ * result, which waives it: the rollup, the Goal review and the failure summary
+ * stop counting it against the delivery. Takes the raw metadata bag so every
+ * layer reads the same field.
+ */
+export const isCheckWaivedByDispute = (metadata: unknown): boolean => {
+  const dispute = (metadata as { dispute?: { arbitration?: { outcome?: string }; kind?: string } })
+    ?.dispute;
+  return dispute?.kind === 'invalid_criterion' && dispute.arbitration?.outcome === 'upheld';
+};
+
+/**
  * Stored title of the synthesized holistic fallback check (one broad agent
  * verify over the whole deliverable, used when a task opted into verify without
  * decomposing into criteria). The server persists this fixed English string;

@@ -24,10 +24,9 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useSessionStore } from '@/store/session';
 import { sx } from '@/styles/sx';
 import { type LobeAgentSession } from '@/types/session';
@@ -123,8 +122,9 @@ const TemplateItem = memo<{
           avatars={template.members
             .filter((member) => member !== null && member !== undefined)
             .map((member) => ({
-              avatar: member.avatar || DEFAULT_AVATAR,
+              avatar: member.avatar || undefined,
               background: member.backgroundColor || undefined,
+              seed: member.title,
             }))}
         />
         <Flexbox flex={1} gap={2}>
@@ -214,7 +214,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
   }) => {
     const { t } = useTranslation(['chat', 'common']);
     const groupTemplates = useGroupTemplates();
-    const enabledModels = useEnabledChatModels();
+    const enabledModels = useSelectableChatModels();
     const agentSessions = useSessionStore((s) =>
       (s.sessions || []).filter((session) => session.type === LobeSessionType.Agent),
     );
@@ -671,7 +671,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                 </Flexbox>
                 <Flexbox horizontal align="center" gap={12}>
                   <div
-                    {...sx([isHostRemoved && styles.modelSelectDisabled], undefined, {
+                    {...sx(isHostRemoved && styles.modelSelectDisabled, {
                       opacity: isHostRemoved ? 0.6 : 1,
                     })}
                   >

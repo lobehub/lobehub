@@ -8,15 +8,12 @@ import { findByDocumentId } from './queries';
 import type { AgentDocumentQueryOptions } from './types';
 import { buildDeletedAtFilters, normalizeListOffset, toAgentDocument } from './utils';
 
-export async function listByParentIds(
+async function listByParentIds(
   ctx: AgentDocumentContext,
   agentId: string,
   parentIds: string[],
   options?: AgentDocumentQueryOptions,
 ): Promise<AgentDocument[]> {
-  /* v8 ignore next -- unreachable: the only caller (listSubtreeByDocumentId) loops while pendingParentIds is non-empty */
-  if (parentIds.length === 0) return [];
-
   const results = await ctx.db
     .select({ doc: documents, settings: agentDocuments })
     .from(agentDocuments)

@@ -3,15 +3,16 @@ import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import TopicItem from '@/features/PageEditor/Copilot/TopicSelector/TopicItem';
 import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import TopicActions from './TopicActions';
+import { useConversationTopic } from './useConversationTopic';
 
 interface ToolbarProps {
   /** Shown while the open conversation has no titled topic. @default the side chat's title */
@@ -32,6 +33,7 @@ interface ToolbarProps {
  */
 const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -42,7 +44,7 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) 
     s.switchTopic,
     topicSelectors.currentTopics(s),
   ]);
-  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
+  const currentTopic = useConversationTopic();
 
   const isLoadingTopics = topics === undefined;
   const topicTitle = currentTopic?.title || fallbackTitle || t('goalChat.title');
@@ -77,7 +79,7 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) 
             <>
               <ActionIcon
                 icon={PlusIcon}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                size={headerActionSmallSize}
                 title={t('goalChat.newTopic')}
                 onClick={() => switchTopic(null)}
               />
@@ -128,14 +130,14 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) 
                   disabled={isLoadingTopics}
                   icon={Clock3Icon}
                   loading={isLoadingTopics}
-                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  size={headerActionSmallSize}
                 />
               </Popover>
             </>
           )}
           <ActionIcon
             icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSmallSize}
             onClick={onCollapse}
           />
         </>

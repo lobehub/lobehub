@@ -13,6 +13,7 @@ import { ChevronRightIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { RuleGroup } from '@/services/expertise';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { useScopeLabel } from './labels';
 import { styles } from './styles';
@@ -34,12 +35,20 @@ const GroupSection = ({ collapsed, count, group, menu, onToggle, onWrite }: Grou
   const { t } = useTranslation('memory');
   const scopeLabel = useScopeLabel();
   const owner = group.owner;
+  const compact = useInterfaceDensity() === 'compact';
   const onlyItsAgent =
     owner.kind === 'agent' &&
     group.scopes.every((scope) => scope.kind === 'agent' && scope.id === owner.agent.id);
 
   return (
-    <div className={cx(styles.section, collapsed && styles.sectionCollapsed)} onClick={onToggle}>
+    <div
+      className={cx(
+        styles.section,
+        compact && styles.sectionCompact,
+        collapsed && styles.sectionCollapsed,
+      )}
+      onClick={onToggle}
+    >
       <span className={cx(styles.chevron, !collapsed && styles.chevronOpen)}>
         <Icon icon={ChevronRightIcon} size={14} />
       </span>

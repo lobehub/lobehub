@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { withSuspense } from '@/components/withSuspense';
+import { getMarketplaceSubPath, MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname, useQuery } from '@/libs/router/navigation';
 
@@ -20,9 +21,10 @@ const Search = memo<StoreSearchBarProps>(() => {
   const { q } = useQuery() as { q?: string };
   const router = useQueryRoute();
   const [word, setWord] = useState<string>(q || '');
-  const activeTab = pathname.split('/')[2] || 'agent';
+  // Workspace-aware: `/:slug/marketplace/<tab>` reads `<tab>`, not `marketplace`.
+  const activeTab = getMarketplaceSubPath(pathname)?.split('/')[0] || 'agent';
   const handleSearch = (value: string) => {
-    router.push(urlJoin('/community', activeTab), {
+    router.push(urlJoin(MARKETPLACE_PATH, activeTab), {
       query: value ? { q: value } : {},
       replace: true,
     });

@@ -34,6 +34,8 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -47,10 +49,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
 import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
+import { GOAL_INSTRUCTION_EDITOR_PROPS } from './goalEditor';
 import {
   deriveGoalTitle,
   resolveDraftedTitle,
@@ -63,7 +67,7 @@ const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
     display: grid;
     grid-template-columns: 96px 144px minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -79,7 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
     max-height: min(70vh, 680px);
     padding-block: 8px 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   close: css`
     position: absolute;
@@ -93,7 +97,7 @@ const styles = createStaticStyles(({ css }) => ({
   footer: css`
     flex-shrink: 0;
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   generatingStatus: css`
@@ -107,7 +111,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 22px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 22px;
     white-space: nowrap;
@@ -152,8 +156,8 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     position: relative;
     min-height: 0;
-    padding-block: 16px 8px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 8px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   inputShell: css`
     overflow: hidden;
@@ -170,7 +174,7 @@ const styles = createStaticStyles(({ css }) => ({
   instructionEditor: css`
     min-height: 36px;
     padding-block: 0 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     /* EditorCanvas reserves space for its document footer by default. The
        compact review summary has no footer, so keeping that space turns a
@@ -180,7 +184,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   reviewSection: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
 
     &:first-child {
       padding-block: 0 4px;
@@ -252,6 +256,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
+  /** Create failure, shown above the footer buttons: the modal stays on the review step with the user's plan. */
+  const [createError, setCreateError] = useState<InlineErrorState | null>(null);
   // Drafting failed, so the review step offers to draft again.
   const [generateFailed, setGenerateFailed] = useState(false);
   // The stopgap title a failed draft leaves behind; still unedited at submit,
@@ -287,7 +293,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const handleContentChange = useCallback(() => {
     if (!canCreate || !editor) return;
-    instructionRef.current = String(editor.getDocument('markdown') ?? '');
+    instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     setPlan((current) => ({ ...current, instruction: instructionRef.current }));
   }, [canCreate, editor]);
 
@@ -418,6 +424,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       instruction,
     });
 
+    setCreateError(null);
     setIsCreating(true);
     try {
       const { agentId: goalAgentId, taskAgentId } = buildGoalAgents(plannerId, executorId);
@@ -461,7 +468,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      toast.error(t('createGoal.createFailed'));
+      setCreateError(toInlineError(t('createGoal.createFailedRetry'), error));
     } finally {
       setIsCreating(false);
     }
@@ -565,11 +572,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
                 <div className={styles.inputScroller}>
                   <EditorCanvas
+                    {...GOAL_INSTRUCTION_EDITOR_PROPS}
                     disabled={!canCreate || step === 'preparing'}
                     editor={editor}
                     editorData={{ content: plan.instruction }}
                     entityId={'create-goal-description'}
-                    floatingToolbar={false}
                     placeholder={t('createGoal.instructionPlaceholder')}
                     style={{ fontSize: 14, minHeight: 206, padding: 16 }}
                     onContentChange={handleContentChange}
@@ -617,7 +624,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </>
           )}
         </Flexbox>
-        <ActionIcon className={styles.close} icon={X} onClick={close} />
+        <ActionIcon
+          className={styles.close}
+          icon={X}
+          title={t('close', { ns: 'common' })}
+          onClick={close}
+        />
       </Flexbox>
 
       {step === 'review' && (
@@ -625,11 +637,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           <Flexbox className={styles.reviewSection} gap={10}>
             <Flexbox className={styles.instructionEditor}>
               <EditorCanvas
+                {...GOAL_INSTRUCTION_EDITOR_PROPS}
                 disabled={!canCreate}
                 editor={editor}
                 editorData={{ content: plan.instruction }}
                 entityId={'create-goal-instruction'}
-                floatingToolbar={false}
                 placeholder={t('createGoal.instructionPlaceholder')}
                 style={{ fontSize: 13, minHeight: 32 }}
                 onContentChange={handleContentChange}
@@ -665,6 +677,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                       <ActionIcon
                         icon={Pencil}
                         size={'small'}
+                        title={t('edit', { ns: 'common' })}
                         onClick={(event) => {
                           event.stopPropagation();
                           editCriterion(index);
@@ -788,6 +801,14 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           </Flexbox>
         </Flexbox>
+      )}
+
+      {createError && (
+        <div
+          style={{ flexShrink: 0, paddingBlock: '8px 0', paddingInline: densityVars.cardPadding }}
+        >
+          <InlineErrorText detail={createError.detail}>{createError.summary}</InlineErrorText>
+        </div>
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>

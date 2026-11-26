@@ -1,6 +1,6 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, scopedLambdaClient } from '@/libs/trpc/client';
 import {
   type CheckFileHashResult,
   type FileItem,
@@ -12,6 +12,7 @@ import {
 } from '@/types/files';
 
 interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
+  conversationAgentId?: string;
   knowledgeBaseId?: string;
   parentId?: string;
   url: string;
@@ -23,6 +24,8 @@ export class FileService {
 
   createFile = async (
     params: UploadFileParams & {
+      /** Agent whose conversation this upload is attached to; the server resolves its visibility. */
+      conversationAgentId?: string;
       parentId?: string;
       /**
        * Workspace visibility for the new file. `undefined` lets the server
@@ -32,8 +35,13 @@ export class FileService {
       visibility?: 'private' | 'public';
     },
     knowledgeBaseId?: string,
+    /** Pins the scope the file is created in; `undefined` follows the active workspace. */
+    workspaceId?: string | null,
   ): Promise<{ id: string; url: string }> => {
-    return lambdaClient.file.createFile.mutate({ ...params, knowledgeBaseId } as CreateFileParams);
+    return scopedLambdaClient(workspaceId).file.createFile.mutate({
+      ...params,
+      knowledgeBaseId,
+    } as CreateFileParams);
   };
 
   getFile = async (id: string): Promise<FileItem> => {
@@ -140,8 +148,11 @@ export class FileService {
     return lambdaClient.document.getFolderBreadcrumb.query({ slug });
   };
 
-  checkFileHash = async (hash: string): Promise<CheckFileHashResult> => {
-    return lambdaClient.file.checkFileHash.mutate({ hash });
+  checkFileHash = async (
+    hash: string,
+    workspaceId?: string | null,
+  ): Promise<CheckFileHashResult> => {
+    return scopedLambdaClient(workspaceId).file.checkFileHash.mutate({ hash });
   };
 
   removeFileAsyncTask = async (id: string, type: 'embedding' | 'chunk') => {

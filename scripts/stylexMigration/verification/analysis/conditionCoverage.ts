@@ -9,8 +9,7 @@ const matchesCell = (id: string, width: number, planned: number) => {
   return width > lower && width < upper;
 };
 
-/** Per side/rule/node/partition/direction/operation records, still not certified
- * gate witnesses. In particular a rule hit in one cell cannot close another. */
+// A rule hit in one side/rule/node/partition/direction/operation cell cannot close another.
 export const summarizeConditionCoverage = (
   plans: ConditionProbePlan[],
   evidence: RuleProbeEvidence[],
@@ -79,7 +78,6 @@ export const summarizeConditionCoverage = (
     }),
   );
   return {
-    gateEligible: false as const,
     keys,
     limitations: [...new Set(plans.flatMap((plan) => plan.limitations))],
     summary: {

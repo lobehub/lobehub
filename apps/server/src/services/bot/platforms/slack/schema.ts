@@ -12,11 +12,12 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  processingMessageField,
   reactionModeField,
   replyPlacementField,
   watchKeywordsField,
 } from '../const';
-import { deviceAccessFields } from '../deviceAccess';
+import { deviceAccessFields, deviceChannelFields } from '../deviceAccess';
 import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
@@ -63,6 +64,7 @@ export const schema: FieldSchema[] = [
     properties: [
       makeUserIdField('slack'),
       ...deviceAccessFields,
+      ...deviceChannelFields,
       makeServerIdField('slack'),
       {
         key: 'connectionMode',
@@ -123,6 +125,7 @@ export const schema: FieldSchema[] = [
       },
       replyPlacementField,
       displayToolCallsField,
+      processingMessageField,
       reactionModeField,
       {
         key: 'historyLimit',

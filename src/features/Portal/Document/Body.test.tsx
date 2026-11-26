@@ -88,6 +88,23 @@ vi.mock('./TodoList', () => ({
   default: () => <div data-testid="todo-list" />,
 }));
 
+const mockTocProps = vi.hoisted(() => ({
+  current: undefined as
+    | {
+        contentRef: { current: HTMLElement | null };
+        scrollRef: { current: HTMLElement | null };
+      }
+    | undefined,
+}));
+
+vi.mock('@/features/PageEditor/TableOfContents', () => ({
+  TOC_RAIL_GUTTER: 32,
+  default: (props: NonNullable<typeof mockTocProps.current>) => {
+    mockTocProps.current = props;
+    return <div data-testid="table-of-contents" />;
+  },
+}));
+
 vi.mock('@/features/FloatingChatPanel', () => ({
   default: () => <div data-testid="floating-chat-panel" />,
 }));
@@ -206,7 +223,7 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('char-limit-banner')).toBeDefined();
   });
 
-  it('renders EditorCanvas for markdown files', () => {
+  it('renders the markdown editor with an outline wired to the portal scroll host', () => {
     mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
 
     render(<DocumentBody />);
@@ -214,6 +231,22 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.getByTestId('char-limit-banner').dataset.documentId).toBe('document-1');
+    expect(screen.getByTestId('table-of-contents')).toBeDefined();
+    const canvas = screen.getByTestId('editor-canvas');
+    expect(mockTocProps.current?.contentRef.current).toContainElement(canvas);
+    expect(mockTocProps.current?.scrollRef.current).toContainElement(canvas);
+  });
+
+  it.each([
+    ['highlight', { content: 'raw', filename: 'topic_call.txt' }],
+    ['html', { content: '<h1>a</h1><h2>b</h2>', fileType: 'custom/html', filename: 'report' }],
+    ['file', { content: '', fileId: 'file-original', filename: 'source.unknown' }],
+  ])('does not offer the outline rail in %s mode', (_mode, meta) => {
+    mockDocumentMeta.current = meta;
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('table-of-contents')).toBeNull();
   });
 
   it('renders an HTML page in a sandboxed frame without mounting either editor', () => {

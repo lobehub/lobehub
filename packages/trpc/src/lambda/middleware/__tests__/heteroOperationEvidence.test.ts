@@ -45,6 +45,7 @@ const testRouter = trpc.router({
   }),
   verify: trpc.router({
     deleteRun: trpc.procedure.use(oidcAuth).mutation(scopeOf),
+    disputeCheck: trpc.procedure.use(oidcAuth).mutation(scopeOf),
     submitCheckEvidence: trpc.procedure.use(oidcAuth).mutation(scopeOf),
   }),
 });
@@ -90,6 +91,16 @@ describe('oidcAuth with a Task run operation token', () => {
     );
   });
 
+  /**
+   * Regression: a sandbox builder running `lh acceptance plan dispute` was
+   * rejected because the dispute route was missing from the allowlist.
+   */
+  it('lets the token dispute a check of its own round', async () => {
+    const caller = createCaller({ oidcAuth: operationToken() } as any);
+
+    await expect(caller.verify.disputeCheck()).resolves.toMatchObject({ scope: 'op_task_run' });
+  });
+
   it('keeps rejecting the token on every other route', async () => {
     const caller = createCaller({ oidcAuth: operationToken() } as any);
 
@@ -127,6 +138,40 @@ describe('oidcAuth with a Task run operation token', () => {
     await expect(caller.verify.submitCheckEvidence()).rejects.toMatchObject({
       code: 'CONFLICT',
     });
+  });
+
+  it('keeps an evidence route bound to the round when the token also acts as its caller', async () => {
+    const caller = createCaller({
+      oidcAuth: operationToken({
+        capabilities: ['caller:act', 'hetero:ingest', 'hetero:finish', 'acceptance:evidence'],
+      }),
+      workspaceId: 'ws_1',
+    } as any);
+
+    await expect(caller.verify.submitCheckEvidence()).resolves.toEqual({
+      scope: 'op_task_run',
+      userId: 'operation-owner',
+      workspaceId: 'ws_1',
+    });
+    expect(resolvePrincipal).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: 'acceptance:evidence' }),
+    );
+  });
+
+  it('lets a caller token use other routes as its caller, without the round scope', async () => {
+    const caller = createCaller({
+      oidcAuth: operationToken({ capabilities: ['caller:act', 'hetero:ingest'] }),
+      workspaceId: 'ws_1',
+    } as any);
+
+    await expect(caller.verify.deleteRun()).resolves.toEqual({
+      scope: null,
+      userId: 'operation-owner',
+      workspaceId: 'ws_1',
+    });
+    expect(resolvePrincipal).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: 'caller:act' }),
+    );
   });
 });
 

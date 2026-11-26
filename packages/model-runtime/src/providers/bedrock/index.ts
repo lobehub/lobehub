@@ -6,18 +6,21 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { ModelProvider } from 'model-bank';
 
-import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+import type { AnthropicGenerateObjectResponse } from '../../core/protocols/anthropicMessages/generateObject';
 import {
   buildAnthropicGenerateObjectRequest,
   emitAnthropicGenerateObjectUsage,
   parseAnthropicGenerateObjectResponse,
-} from '../../core/anthropicCompatibleFactory/generateObject';
-import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
-import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
-import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
-import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
-import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+} from '../../core/protocols/anthropicMessages/generateObject';
+import {
+  buildAnthropicMessages,
+  buildAnthropicTools,
+} from '../../core/protocols/anthropicMessages/messages';
+import { resolveCacheTTL } from '../../core/protocols/anthropicMessages/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/protocols/anthropicMessages/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/protocols/anthropicMessages/resolveThinkingConfig';
 import {
   finalizeProviderResponse,
   initializeProviderDiagnostics,

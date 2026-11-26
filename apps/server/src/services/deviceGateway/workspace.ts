@@ -14,9 +14,9 @@ import type { DeviceClientGetter } from './types';
 const log = debug('lobe-server:device-gateway');
 
 /**
- * Scan a bound project directory on the device in a single round-trip:
- * project skills (`.agents/skills` + `.claude/skills`) plus the root
- * `AGENTS.md` / `CLAUDE.md`. Routed through the generic device RPC relay
+ * Discover device skills, optionally including a bound project's skills and
+ * `AGENTS.md` / `CLAUDE.md`, in a single round-trip. With no scope, only the
+ * device's home skill directories are scanned. Routed through the generic device RPC relay
  * (`invokeRpc`) — a server-internal channel the agent never sees, distinct
  * from the LLM-facing tool-call path.
  *
@@ -27,7 +27,7 @@ export async function initWorkspace(
   getClient: DeviceClientGetter,
   params: {
     deviceId: string;
-    scope: string;
+    scope?: string;
     timeout?: number;
     userId: string;
     workspaceId?: string;
@@ -55,8 +55,9 @@ export async function initWorkspace(
     const { instructions, skills } = result.data;
     return {
       instructions: instructions ?? [],
-      skills: (skills ?? []).map(({ description, name, path, scope }) => ({
+      skills: (skills ?? []).map(({ description, disableModelInvocation, name, path, scope }) => ({
         description,
+        ...(disableModelInvocation ? { disableModelInvocation: true } : {}),
         name,
         path,
         scope,
@@ -145,7 +146,8 @@ export async function enrollWorkspace(
   },
 ): Promise<{
   error?: string;
-  identity?: { deviceId: string; identitySource: 'fallback' | 'machine-id' };
+  /** As the device reported it; callers validate `identitySource`. */
+  identity?: { deviceId: string; identitySource: string };
   success: boolean;
 }> {
   const { deviceId, identityOnly, timeout = 30_000, token, userId, workspaceId } = params;
@@ -153,10 +155,7 @@ export async function enrollWorkspace(
   if (!client) return { error: 'Device Gateway is not configured', success: false };
 
   try {
-    const result = await client.invokeRpc<{
-      deviceId: string;
-      identitySource: 'fallback' | 'machine-id';
-    }>(
+    const result = await client.invokeRpc<{ deviceId: string; identitySource: string }>(
       { deviceId, timeout, userId },
       {
         method: 'enrollWorkspace',

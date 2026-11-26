@@ -1,8 +1,10 @@
-import { cx } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- descendant hover and dl children are styled from their container
+  createStaticStyles,
+  cx,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import relational from './relational.module.css';
 
 const definitions = stylex.create({
   foldHeader: {
@@ -235,8 +237,34 @@ const definitions = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  facts: css`
+    dt {
+      color: var(--lobe-color-text-tertiary);
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      color: var(--lobe-color-text-secondary);
+      overflow-wrap: anywhere;
+    }
+
+    @media (width <= 767px) {
+      dd + dt {
+        margin-block-start: 6px;
+      }
+    }
+  `,
+  foldHeader: css`
+    &:hover [data-fold-title] {
+      color: var(--lobe-color-text);
+    }
+  `,
+}));
+
 export const styles = {
-  foldHeader: cx(stylex.props(definitions.foldHeader).className ?? '', relational.foldHeader),
+  foldHeader: cx(stylex.props(definitions.foldHeader).className ?? '', fallback.foldHeader),
   foldChevron: stylex.props(definitions.foldChevron).className ?? '',
   foldChevronOpen: stylex.props(definitions.foldChevronOpen).className ?? '',
   foldIcon: stylex.props(definitions.foldIcon).className ?? '',
@@ -248,7 +276,7 @@ export const styles = {
   command: stylex.props(definitions.command).className ?? '',
   commandText: stylex.props(definitions.commandText).className ?? '',
   commandPrompt: stylex.props(definitions.commandPrompt).className ?? '',
-  facts: cx(stylex.props(definitions.facts).className ?? '', relational.facts),
+  facts: cx(stylex.props(definitions.facts).className ?? '', fallback.facts),
   mono: stylex.props(definitions.mono).className ?? '',
   inlineList: stylex.props(definitions.inlineList).className ?? '',
   linkButton: stylex.props(definitions.linkButton).className ?? '',

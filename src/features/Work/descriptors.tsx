@@ -1,5 +1,7 @@
 import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
+  type CollectionWorkItem,
+  type ExternalWorkResourceType,
   type ListedWorkType,
   type WorkListItem,
   workProviderOfResourceType,
@@ -9,13 +11,19 @@ import {
   type WorkVersionMetadata,
 } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { FileTypeIcon as FileTypeBadge } from '@lobehub/ui';
+import { cssVar, FileTypeIcon as FileTypeBadge } from '@lobehub/ui';
+import type { LucideIcon } from 'lucide-react';
 import {
+  CircleCheckIcon,
+  CircleDotIcon,
   ClipboardListIcon,
+  DraftingCompassIcon,
   FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileTypeIcon,
+  GitPullRequestDraftIcon,
+  ImagesIcon,
   LinkIcon,
   PanelsTopLeftIcon,
   PresentationIcon,
@@ -23,10 +31,15 @@ import {
 import type { ComponentType } from 'react';
 
 import { mimeTypeMap } from '@/components/FileIcon/config';
+import {
+  MERGED_PURPLE,
+  PR_STATE_VISUAL,
+  type PullRequestStateVisual,
+} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 
 import LinearIcon from './icons/LinearIcon';
 
-type WorkIcon = ComponentType<{ className?: string; size?: number }>;
+export type WorkIcon = ComponentType<{ className?: string; size?: number }>;
 
 /**
  * Brand icon per skill provider for the unified `external` Work type. An
@@ -38,12 +51,80 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
   linear: LinearIcon,
 };
 
+/** Bind a color at module level so `getIcon` keeps a stable component identity. */
+const tintIcon = (Glyph: LucideIcon, color: string): WorkIcon => {
+  const TintedIcon: WorkIcon = ({ className, size }) => (
+    <Glyph className={className} color={color} size={size} />
+  );
+  return TintedIcon;
+};
+
+/** `topic` namespace label of a GitHub state, the tooltip of its glyph. */
+export type WorkStateLabelKey = PullRequestStateVisual['labelKey'] | 'metaCard.pr.draft';
+
+interface GithubStateVisual {
+  icon: WorkIcon;
+  labelKey: WorkStateLabelKey;
+}
+
+const prState = (state: keyof typeof PR_STATE_VISUAL): GithubStateVisual => ({
+  icon: tintIcon(PR_STATE_VISUAL[state].icon, PR_STATE_VISUAL[state].color),
+  labelKey: PR_STATE_VISUAL[state].labelKey,
+});
+
+/**
+ * GitHub state glyphs, matching the topic PR card: the icon's shape and color
+ * carry open / draft / merged / closed instead of a status word on the card.
+ * Keys are the `status` values the github normalizer writes; any other status
+ * keeps the brand icon.
+ */
+const GITHUB_STATES: Partial<Record<ExternalWorkResourceType, Map<string, GithubStateVisual>>> = {
+  github_issue: new Map([
+    [
+      'closed',
+      { icon: tintIcon(CircleCheckIcon, MERGED_PURPLE), labelKey: PR_STATE_VISUAL.closed.labelKey },
+    ],
+    [
+      'open',
+      {
+        icon: tintIcon(CircleDotIcon, cssVar.colorSuccess),
+        labelKey: PR_STATE_VISUAL.open.labelKey,
+      },
+    ],
+  ]),
+  github_pull_request: new Map([
+    ['closed', prState('closed')],
+    [
+      'draft',
+      {
+        icon: tintIcon(GitPullRequestDraftIcon, cssVar.colorTextTertiary),
+        labelKey: 'metaCard.pr.draft',
+      },
+    ],
+    ['merged', prState('merged')],
+    ['open', prState('open')],
+  ]),
+};
+
+const getGithubState = (
+  item: Pick<WorkListItem, 'resourceType' | 'status'>,
+): GithubStateVisual | undefined =>
+  item.status
+    ? GITHUB_STATES[item.resourceType as ExternalWorkResourceType]?.get(item.status.toLowerCase())
+    : undefined;
+
+export interface WorkBranch {
+  base: string | null;
+  head: string;
+}
+
 /**
  * Where opening a Work should lead. Components map this to their own action
  * (chat portal, preview modal, router navigate, `window.open`) — the descriptor
  * only names the destination, it never reaches into a store or the DOM itself.
  */
 export type WorkOpenTarget =
+  | { artboardId: string; kind: 'artboard' }
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
   | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
@@ -53,7 +134,13 @@ export type WorkOpenTarget =
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
   | { fileId: string; kind: 'filePreview'; url?: string }
-  | { canvasId: string; kind: 'canvas'; version?: number };
+  | { canvasId: string; kind: 'canvas'; version?: number }
+  /**
+   * Grid viewer of a collection Work. Summary rows carry the version's images;
+   * list rows only know the cover, so the viewer loads the images itself when
+   * `items` is missing.
+   */
+  | { items?: CollectionWorkItem[]; kind: 'collection'; title?: string | null; workId: string };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -81,6 +168,12 @@ type WorkItemOfType<T extends WorkType> =
 
 interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   /**
+   * A pull request's branches, from the summary row's version metadata. Cards
+   * show the head branch in place of the description; `null` for every other
+   * Work and for PRs registered without a known branch.
+   */
+  getBranch?: (item: Item) => WorkBranch | null;
+  /**
    * Summary preview text. Summary payloads slim long free-text server-side
    * (linear content / github body / task instruction capped), so prefer the
    * description, then a short body/status — never a full document.
@@ -88,7 +181,8 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   getDescription: (item: Item) => string | null;
   /**
    * The icon for one item. Constant for document/task; the `external` type
-   * resolves a per-provider brand icon from the item's resourceType.
+   * resolves a GitHub state glyph when the status is known, else a
+   * per-provider brand icon from the item's resourceType.
    */
   getIcon: (item: Item) => WorkIcon;
   /**
@@ -97,8 +191,16 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    * further to `resourceId` when this is also null.
    */
   getIdentifier: (item: Item) => string | null;
+  /**
+   * Brand mark drawn before the identifier on the card's second line. GitHub
+   * cards spend their main icon on the issue/PR state, so the mark keeps
+   * `owner/repo#n` recognizable as a GitHub repository.
+   */
+  getIdentifierIcon?: (item: Item) => WorkIcon | null;
   /** Where a click should lead, or `null` when the Work is not clickable. */
   getOpenTarget: (item: Item) => WorkOpenTarget | null;
+  /** Label of the state `getIcon` draws, for its tooltip; `null` when the icon carries no state. */
+  getStateLabelKey?: (item: Item) => WorkStateLabelKey | null;
   /**
    * Display title straight from the `works` row (task name is live from the
    * tasks join). No synthesized fallback here: a nameless resource deliberately
@@ -158,9 +260,52 @@ const getFileWorkMetadata = (item: WorkItemOfType<'file'>): WorkVersionMetadata 
 const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
   getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
 
+/** The images of a collection summary row; list rows carry no version metadata. */
+const getCollectionItems = (
+  item: WorkItemOfType<'collection'>,
+): CollectionWorkItem[] | undefined =>
+  'event' in item ? (item.event?.metadata?.collection?.items ?? undefined) : undefined;
+
+/**
+ * The cover a collection card shows: the version's named cover, else its first
+ * image, else the denormalized `works.url` list rows carry. Only http(s) URLs.
+ */
+export const getCollectionCoverUrl = (item: WorkItemOfType<'collection'>): string | null => {
+  const collection = 'event' in item ? item.event?.metadata?.collection : undefined;
+  const cover = collection?.coverFileId
+    ? collection.items.find((image) => image.fileId === collection.coverFileId)
+    : undefined;
+  const url = (cover ?? collection?.items[0])?.url ?? item.url;
+  return isSafeExternalUrl(url) ? url : null;
+};
+
+/**
+ * Up to three images a collection card fans out, cover first. Fewer than two means
+ * there is nothing to fan: list rows know only the cover.
+ */
+export const getCollectionFanUrls = (item: WorkItemOfType<'collection'>): string[] => {
+  const cover = getCollectionCoverUrl(item);
+  const others = (getCollectionItems(item) ?? [])
+    .map((image) => image.url)
+    .filter((url) => url !== cover && isSafeExternalUrl(url));
+  return [...(cover ? [cover] : []), ...others].slice(0, 3);
+};
+
+/** Image count of a collection summary row, `null` for list rows that do not know it. */
+export const getCollectionImageCount = (item: WorkItemOfType<'collection'>): number | null =>
+  getCollectionItems(item)?.length ?? null;
+
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  artboard: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => DraftingCompassIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) =>
+      item.resourceId ? { artboardId: item.resourceId, kind: 'artboard' } : null,
+    getTitle: (item) => item.title,
+  },
   canvas: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => PanelsTopLeftIcon,
@@ -202,9 +347,9 @@ export const WORK_TYPE_DESCRIPTORS: {
   // aggregate card instead. The version metadata carries the file identity
   // (path / url); plain list rows fall back to the denormalized `works` columns.
   file: {
-    // Subtitle is the file path (metadata), falling back to the denormalized
-    // description column for list rows without version metadata.
-    getDescription: (item) => getFileWorkPath(item),
+    // Subtitle is the description an agent gave the file; otherwise the
+    // denormalized description column holds the file path.
+    getDescription: (item) => item.description?.trim() || getFileWorkPath(item),
     // Pick the branded file-type badge from the file's extension; unclassifiable
     // paths (or a path-less list row) fall back to the generic file-text glyph.
     getIcon: (item) => {
@@ -227,29 +372,60 @@ export const WORK_TYPE_DESCRIPTORS: {
       if (metadata?.fileId) return { fileId: metadata.fileId, kind: 'filePreview', url: safeUrl };
       return safeUrl ? { kind: 'external', url: safeUrl } : null;
     },
-    // Title is the file name (basename of the path), falling back to the
-    // denormalized title column.
+    // The stored title wins: scanned Works store the basename there on every
+    // version, and an agent-created Work (`lh work create --title`) stores the
+    // title the agent chose. The path basename covers rows without a title.
     getTitle: (item) => {
+      if (item.title?.trim()) return item.title;
       const path = getFileWorkPath(item);
-      // `getBasename` returns '' for a segment-less path; fall through to the
-      // denormalized title in that case (matching the previous null-coalescing).
-      return (path ? getBasename(path) : '') || item.title;
+      return path ? getBasename(path) : item.title;
     },
   },
   external: {
-    getDescription: (item) => (item.description || item.status)?.trim() ?? null,
-    // Resolve the brand icon from the item's provider; unknown providers fall
-    // back to a generic link glyph (forward-compat).
+    getBranch: (item) => {
+      if (item.resourceType !== 'github_pull_request' || !('event' in item)) return null;
+      const metadata = item.event?.metadata;
+      return metadata?.headBranch
+        ? { base: metadata.baseBranch ?? null, head: metadata.headBranch }
+        : null;
+    },
+    // GitHub state is drawn by the icon, so only Linear falls back to its status text.
+    getDescription: (item) =>
+      (workProviderOfResourceType(item.resourceType) === 'github'
+        ? item.description
+        : item.description || item.status
+      )?.trim() ?? null,
+    // A GitHub issue/PR with a known state takes its state glyph; otherwise
+    // the provider's brand icon. Unknown providers fall back to a generic link
+    // glyph (forward-compat).
     getIcon: (item) => {
       const provider = workProviderOfResourceType(item.resourceType);
-      return provider ? PROVIDER_ICONS[provider] : LinkIcon;
+      if (!provider) return LinkIcon;
+      return getGithubState(item)?.icon ?? PROVIDER_ICONS[provider];
     },
     getIdentifier: (item) => item.identifier,
+    // Every GitHub card carries the mark, including a brand-icon card with an
+    // unknown state, so the identifiers line up in a list.
+    getIdentifierIcon: (item) =>
+      workProviderOfResourceType(item.resourceType) === 'github' ? Github : null,
     // External works registered from CLI/tool results may carry no URL (or a
     // member-planted non-http(s) scheme) — those cards have nothing safe to
     // open, so drop the click affordance entirely.
     getOpenTarget: (item) =>
       isSafeExternalUrl(item.url) ? { kind: 'external', url: item.url } : null,
+    getStateLabelKey: (item) => getGithubState(item)?.labelKey ?? null,
+    getTitle: (item) => item.title,
+  },
+  collection: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => ImagesIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => ({
+      items: getCollectionItems(item),
+      kind: 'collection',
+      title: item.title,
+      workId: item.id,
+    }),
     getTitle: (item) => item.title,
   },
   task: {

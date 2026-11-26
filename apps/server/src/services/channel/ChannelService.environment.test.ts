@@ -48,6 +48,10 @@ vi.mock('@/server/services/deviceGateway', () => ({
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./notify', () => ({ notifyChannel: notify }));
+vi.mock('./deviceGrantCard', () => ({
+  announceDeviceGrants: vi.fn(),
+  refreshDeviceGrantCard: vi.fn(),
+}));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
 
 describe('changing an Agent member’s channel environment', () => {
@@ -120,19 +124,52 @@ describe('changing an Agent member’s channel environment', () => {
     expect(notify).toHaveBeenCalledWith(expect.anything(), 'channel');
   });
 
-  it('keeps the old environment when a coding Agent would lose its device', async () => {
-    await expect(service().updateAgentEnvironment('channel', 'member-1', {})).rejects.toMatchObject(
-      { code: 'BAD_REQUEST' },
-    );
+  // A Channel binds no device by default, so clearing one returns a coding Agent to its own
+  // settings instead of being refused.
+  it("clears a coding Agent's device so it runs where its own settings say", async () => {
+    await expect(
+      service().updateAgentEnvironment('channel', 'member-1', {}),
+    ).resolves.toBeDefined();
+
+    expect(update).toHaveBeenCalledWith('channel', 'member-1', {});
+    expect(wake).toHaveBeenCalledWith('channel');
+    expect(notify).toHaveBeenCalledWith(expect.anything(), 'channel');
+  });
+
+  it.each(['hermes', 'openclaw'])('refuses a device for a remote %s Agent', async (type) => {
+    getAgent.mockResolvedValue({ agencyConfig: { heterogeneousProvider: { type } } });
+    await expect(
+      service().updateAgentEnvironment('channel', 'member-1', { deviceId: 'mac' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'A remote Agent runs on its own host, not a device',
+    });
+
+    expect(findDevice).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('seats a remote Agent with no device', async () => {
+    getAgent.mockResolvedValue({ agencyConfig: { heterogeneousProvider: { type: 'hermes' } } });
+    await service().updateAgentEnvironment('channel', 'member-1', {});
+
+    expect(update).toHaveBeenCalledWith('channel', 'member-1', {});
+  });
+
+  it('still refuses a directory without a device', async () => {
+    await expect(
+      service().updateAgentEnvironment('channel', 'member-1', { workingDirectory: '/repo' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 
     expect(update).not.toHaveBeenCalled();
-    expect(wake).not.toHaveBeenCalled();
-    expect(notify).not.toHaveBeenCalled();
   });
 
   it('creates a member in the device home folder when the Agent has no directory there', async () => {
     querySystemInfo.mockResolvedValue({ homePath: '/Users/me' });
     statPath.mockResolvedValue({ canonicalPath: '/Users/me', isDirectory: true });
+    create.mockResolvedValue({
+      channel: { id: 'chn_1', metadata: null, projectId: null, title: 'c' },
+    });
 
     await service().create({ agents: [{ agentId: 'agent-1', deviceId: 'mac' }], title: 'c' });
 

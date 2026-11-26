@@ -1,6 +1,7 @@
 import type { Chat, Message, MessageContext } from 'chat';
 
 import type { LobeChatDatabase } from '@/database/type';
+import type { WakeInitiation } from '@/server/services/conversationWake/initiation';
 
 import type { AgentBridgeService } from '../AgentBridgeService';
 import type {
@@ -13,7 +14,7 @@ import type {
 } from '../platforms';
 import type { WakeMessageLike } from '../wake/signal';
 import type { FollowupGate } from './followupGate';
-import type { BotWakeEntryPoint, BotWakeInitiation, BotWakeReason } from './wakeDecision';
+import type { BotWakeEntryPoint, BotWakeReason } from './wakeDecision';
 
 export interface ResolvedAgentInfo {
   agentId: string;
@@ -156,7 +157,11 @@ export interface BotHandlerContext {
     message: WakeMessageLike,
     thread: { id: string },
     threadSubscribed?: boolean,
-  ) => Promise<BotWakeInitiation | undefined>;
+  ) => Promise<WakeInitiation | undefined>;
+  /** Whether everyone in a thread may use the devices because its channel is granted. */
+  isDeviceChannelGrantedFor: (thread: { id: string; isDM?: boolean }) => boolean;
+  /** Whether a thread is outside the channels the owner limited device use to. */
+  isDeviceChannelRestrictedFor: (thread: { id: string; isDM?: boolean }) => boolean;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
   nameKeywords: ReadonlyArray<string>;

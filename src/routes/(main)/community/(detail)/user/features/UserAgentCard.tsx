@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   Block,
   DropdownMenu,
   Flexbox,
@@ -31,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -39,6 +39,7 @@ import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
+import { densityTokens } from '@/styles/density.stylex';
 import { type AgentStatus, type DiscoverAssistantItem } from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -93,7 +94,7 @@ const styles = stylex.create({
   },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
@@ -130,7 +131,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/agent', identifier),
+        url: urlJoin('/marketplace/agent', identifier),
       },
       { skipNull: true },
     );
@@ -139,7 +140,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const isUnderReview = isValidated === false;
 
     const handleViewDetail = useCallback(() => {
-      window.open(urlJoin('/community/agent', identifier), '_blank');
+      window.open(urlJoin('/marketplace/agent', identifier), '_blank');
     }, [identifier]);
 
     const handleEdit = useCallback(async () => {
@@ -371,10 +372,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={stylex.props(styles.secondaryDesc).className}
-                date={createdAt}
-              />
+              <PublishedTime date={createdAt} xstyle={styles.secondaryDesc} />
             </Flexbox>
             {category && t(`category.assistant.${category}` as any)}
           </Flexbox>

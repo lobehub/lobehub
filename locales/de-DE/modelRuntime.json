@@ -1,5 +1,6 @@
 {
   "AccountDeactivated": "Ihr Konto wurde deaktiviert oder gesperrt. Dies kann aus Gründen der Richtlinien, Sicherheit oder einer Kontoprüfung geschehen sein. Bitte wenden Sie sich an den Support des Anbieters, um Unterstützung zu erhalten.",
+  "AgentRuntimeError": "Beim Generieren der Antwort ist ein Fehler aufgetreten. Erweitern Sie die Details unten, um die Ursache zu sehen, oder versuchen Sie es erneut.",
   "CapabilityNotSupported": "Entschuldigung, dieses Modell unterstützt die angeforderte Funktion (wie z. B. visuelle Eingabe oder Tool-Aufrufe) nicht. Bitte wechseln Sie zu einem Modell, das dies unterstützt.",
   "ClientLlmExecutorLost": "Das Gerät, auf dem {{provider}} für dieses Gespräch ausgeführt wird, hat vor Abschluss der Antwort nicht mehr reagiert – es könnte geschlossen, aktualisiert oder getrennt worden sein. Halten Sie das LobeHub-Fenster geöffnet und versuchen Sie es erneut.",
   "ClientLlmExecutorUnavailable": "{{provider}} kann nur von Ihrem eigenen Gerät aus erreicht werden, aber keine offene LobeHub-Sitzung hat die Anfrage aufgenommen. Öffnen Sie LobeHub auf dem Gerät, auf dem {{provider}} läuft, und versuchen Sie es erneut.",
@@ -31,6 +32,7 @@
   "LobeHubModelDeprecated": "Das ausgewählte Modell ist nicht mehr verfügbar. Bitten Sie den Bot- oder Agentenbesitzer, ein verfügbares Modell auszuwählen, und versuchen Sie es erneut.",
   "LocationNotSupportError": "Entschuldigung, Ihr aktueller Standort unterstützt diesen Modelldienst nicht. Dies kann auf regionale Einschränkungen oder die Nichtverfügbarkeit des Dienstes zurückzuführen sein. Bitte überprüfen Sie, ob der aktuelle Standort die Nutzung dieses Dienstes unterstützt, oder versuchen Sie es von einem anderen Standort aus.",
   "ModelEmptyCompletion": "Der Modellanbieter hat eine leere Antwort zurückgegeben. Auch ohne sichtbaren Inhalt können für diese Anfrage Kosten anfallen. Sie können es erneut versuchen oder das Modell wechseln und es erneut versuchen.",
+  "ModelEmptyCompletionWithCost": "Der Modellanbieter hat eine leere Antwort zurückgegeben. Diese Anfrage hat ${{credits}} gekostet. Ein erneuter Versuch kann ähnliche Kosten verursachen, oder Sie wechseln das Modell.",
   "ModelNotFound": "Entschuldigung, das angeforderte Modell konnte nicht gefunden werden. Es existiert möglicherweise nicht oder Sie haben nicht die erforderlichen Zugriffsberechtigungen. Bitte versuchen Sie es erneut, nachdem Sie den API-Schlüssel geändert oder Ihre Zugriffsberechtigungen angepasst haben.",
   "ModelRefusal": "Das Modell hat die Anfrage abgelehnt. Versuchen Sie, sie umzuformulieren oder wählen Sie ein anderes Modell.",
   "NoAvailableChannel": "Entschuldigung, der Proxy oder Router hat keinen verfügbaren Kanal für das angeforderte Modell. Bitte wechseln Sie die Kanal-/Schlüsselkonfiguration oder versuchen Sie es später erneut.",

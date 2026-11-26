@@ -51,7 +51,6 @@ export const GoalCardItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
     goal,
     projectId,
     routeAgentId: aid,
-    signedOff: item.signedOff,
   });
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;

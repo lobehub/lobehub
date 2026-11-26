@@ -7,13 +7,13 @@ import {
   Block,
   Button,
   ContextMenuTrigger,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -22,25 +22,31 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useInterfaceDensity } from '@/styles/density';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { createNotificationDetailModal } from './NotificationDetailModal';
+import { getNotificationTabRoutes } from './notificationTabRoutes';
+import { resolveNotificationAction } from './resolveNotificationAction';
 import { toNotificationPreview } from './toNotificationPreview';
 import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
-const styles = createStaticStyles(({ css }) => ({
-  unreadDot: css`
-    flex-shrink: 0;
-
-    width: 8px;
-    height: 8px;
-    margin-block-start: 7px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-}));
+const styles = stylex.create({
+  unreadDot: {
+    flexShrink: 0,
+    width: '8px',
+    height: '8px',
+    marginBlockStart: '7px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+  // Centers the dot on the first 20px compact text line.
+  unreadDotCompact: { marginBlockStart: '6px' },
+});
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
   image_generation_completed: ImageIcon,
@@ -77,8 +83,11 @@ const NotificationItem = memo<NotificationItemProps>(
     onArchive,
   }) => {
     const { i18n, t } = useTranslation('notification');
+    const compact = useInterfaceDensity() === 'compact';
+    const avatarSize = compact ? 24 : 32;
     const { close } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
+    const appOrigin = useAppOrigin();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
     const dateLocale = i18n.resolvedLanguage || i18n.language;
     const preview = useMemo(() => toNotificationPreview(content), [content]);
@@ -94,13 +103,18 @@ const NotificationItem = memo<NotificationItemProps>(
 
       if (!actionUrl) return;
 
-      if (/^https?:\/\//i.test(actionUrl)) {
-        window.open(actionUrl, '_blank', 'noopener,noreferrer');
+      const action = resolveNotificationAction(actionUrl, {
+        appOrigin,
+        desktopTabRoutes: getNotificationTabRoutes(),
+      });
+
+      if (action.type === 'external') {
+        openTrustedExternalUrl(action.url);
       } else {
-        navigate(actionUrl);
+        navigate(action.path);
         close();
       }
-    }, [actionUrl, close, handleMarkAsRead, navigate]);
+    }, [actionUrl, appOrigin, close, handleMarkAsRead, navigate]);
 
     // The row only shows a two-line preview, so a click must always give access
     // to the full body — the detail modal is the only place a content-only
@@ -141,20 +155,22 @@ const NotificationItem = memo<NotificationItemProps>(
         <Block
           aria-label={title}
           gap={4}
-          paddingBlock={12}
-          paddingInline={20}
+          paddingBlock={compact ? 8 : 12}
+          paddingInline={compact ? 16 : 20}
           style={{ cursor: 'pointer' }}
           variant="borderless"
           onClick={handleOpenDetail}
         >
-          <Flexbox horizontal align="flex-start" gap={12}>
-            {!isRead && <span className={styles.unreadDot} />}
+          <Flexbox horizontal align="flex-start" gap={compact ? 8 : 12}>
+            {!isRead && (
+              <span {...stylex.props(styles.unreadDot, compact && styles.unreadDotCompact)} />
+            )}
             {actor ? (
               <Avatar
                 alt={actor.name}
                 avatar={actor.avatar || DEFAULT_USER_AVATAR_URL}
                 shape="circle"
-                size={32}
+                size={avatarSize}
                 style={{ flex: 'none' }}
               />
             ) : agent ? (
@@ -165,14 +181,18 @@ const NotificationItem = memo<NotificationItemProps>(
                 background={agent.backgroundColor}
                 name={agent.title}
                 shape="circle"
-                size={32}
+                size={avatarSize}
                 style={{ flex: 'none' }}
               />
             ) : (
-              <ProductLogo size={32} style={{ flex: 'none' }} />
+              <ProductLogo size={avatarSize} style={{ flex: 'none' }} />
             )}
-            <Flexbox flex={1} gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-              <Text ellipsis={{ rows: 2 }} wordBreak="break-word">
+            <Flexbox flex={1} gap={compact ? 2 : 6} style={{ minWidth: 0, overflow: 'hidden' }}>
+              <Text
+                ellipsis={{ rows: 2 }}
+                fontSize={compact ? 13 : undefined}
+                wordBreak="break-word"
+              >
                 {preview}
               </Text>
               <Flexbox horizontal align="center" gap={6}>

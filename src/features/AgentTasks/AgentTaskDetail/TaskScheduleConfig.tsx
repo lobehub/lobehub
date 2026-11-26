@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   formatIntervalLabel,
@@ -49,8 +50,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   preview: css`
-    padding-block: 12px;
-    padding-inline: 14px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-radius: 12px;
     background: ${cssVar.colorFillQuaternary};
   `,

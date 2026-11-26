@@ -8,29 +8,27 @@ import {
   Flexbox,
   Icon,
   Text,
-  toast,
   useResponsive,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, CheckIcon, ChevronDown, Trash2 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
 import Rate from '@/components/RatingOverview/Rate';
 import { usePermission } from '@/hooks/usePermission';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
-import { agentSkillService } from '@/services/skill';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
-import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { formatShortenNumber } from '@/utils/format';
 
 import { FIRST_COMMENTS_PAGE_QUERY } from './const';
 import { useDetailContext } from './DetailProvider';
+import { useMarketSkillInstall } from './useMarketSkillInstall';
 
 const styles = stylex.create({
   author: { fontWeight: 500, color: cssVar.colorInfo },
@@ -129,8 +127,6 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const { t } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
   const { t: td } = useTranslation('discover');
-  const [installing, setInstalling] = useState(false);
-  const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Ensure agent skills are fetched so the install state is real on a direct
@@ -138,44 +134,29 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
 
-  const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier || ''));
-  const installedSkill = useToolStore(
-    agentSkillsSelectors.getAgentSkillByIdentifier(identifier || ''),
-  );
-  const [refreshAgentSkills, deleteAgentSkill] = useToolStore((s) => [
-    s.refreshAgentSkills,
-    s.deleteAgentSkill,
-  ]);
-
-  const handleInstall = useCallback(async () => {
-    if (!identifier || !canCreate || installing || installed) return;
-    setInstalling(true);
-    try {
-      await agentSkillService.importFromMarket(identifier);
-      await refreshAgentSkills();
-    } catch {
-      // The button falls back to Install (clicking again retries) — say why
-      toast.error(t('error.installError', { name: name || identifier }));
-    } finally {
-      setInstalling(false);
-    }
-  }, [canCreate, identifier, installing, installed, name, refreshAgentSkills, t]);
+  const {
+    canCreate,
+    install: handleInstall,
+    installedSkillId,
+    installing,
+  } = useMarketSkillInstall(identifier, name);
+  const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const handleUninstall = useCallback(() => {
-    if (!canEdit || !installedSkill) return;
+    if (!canEdit || !installedSkillId) return;
     confirmModal({
       cancelText: tc('cancel'),
       content: t('store.actions.confirmUninstall'),
       okButtonProps: { danger: true },
       okText: t('store.actions.uninstall'),
       onOk: async () => {
-        await deleteAgentSkill(installedSkill.id);
+        await deleteAgentSkill(installedSkillId);
       },
       title: t('store.actions.uninstall'),
     });
-  }, [canEdit, installedSkill, deleteAgentSkill, t, tc]);
+  }, [canEdit, installedSkillId, deleteAgentSkill, t, tc]);
 
-  if (installed)
+  if (installedSkillId)
     return (
       <DropdownMenu
         nativeButton={false}
@@ -358,9 +339,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               <>
                 <MetaDivider />
                 <PublishedTime
-                  className={stylex.props(styles.time).className}
                   date={(updatedAt || createdAt) as string}
                   template={'MMM DD, YYYY'}
+                  xstyle={styles.time}
                 />
               </>
             )}

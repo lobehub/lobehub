@@ -46,6 +46,16 @@ export interface QueryMessagesOptions {
    */
   current?: number;
   /**
+   * Which conversation inside the topic the page belongs to, as a condition on
+   * a group's member messages: the main conversation (`thread_id IS NULL`) or
+   * one thread (its own rows plus the parent rows it shows). MessageGroups are
+   * stored per topic, so without it a thread's compression group also renders
+   * in the main conversation and in every other thread. A group is kept when
+   * any member matches; groups without members are kept. Omit to keep every
+   * group of the topic.
+   */
+  groupMemberScope?: SQL;
+  /**
    * Constrain MessageGroup assembly to an explicit `[from, before)` time window
    * instead of loading every group in the topic (or deriving the window from the
    * fetched rows). Set by cursor pagination so consecutive pages partition the
@@ -55,6 +65,8 @@ export interface QueryMessagesOptions {
    * timestamp strings compared with a `::timestamptz` cast.
    */
   groupNodeWindow?: MessageGroupNodeWindow;
+  /** Same opt-in as `includeFileWorks`, for `artboard` work summaries. */
+  includeArtboardWorks?: boolean;
   /**
    * Opt-in for `file` work summaries in the payload (see
    * `QueryMessageParams.includeFileWorks`).
@@ -71,6 +83,8 @@ export interface QueryMessagesOptions {
     path: string | null,
     file: { fileType: string; id?: string | null },
   ) => Promise<string>;
+  /** See `QueryMessageParams.skipCompressedMembers`. */
+  skipCompressedMembers?: boolean;
   /**
    * Skip the Work-summary assembly (see `QueryMessageParams.skipWorks`).
    */
@@ -80,6 +94,8 @@ export interface QueryMessagesOptions {
    * Topic ID for MessageGroup aggregation queries
    */
   topicId?: string;
+  /** See `QueryMessageParams.viewModelPluginState`. */
+  viewModelPluginState?: boolean;
   /**
    * Custom where condition for message filtering
    */
@@ -148,6 +164,7 @@ export interface QueryTopicByCursorParams {
   /** Group chat topic: rows carry the group id, same filter as `query`. */
   groupId?: string | null;
   /** See {@link QueryMessageParams.includeFileWorks}. */
+  includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
   /** How many rounds to load per page (the current round is always whole). */
   roundLimit?: number;
@@ -241,28 +258,6 @@ export interface MessageModelOptions {
   includeShareVisitor?: boolean;
 }
 
-/**
- * Per-share switches that relax {@link toVisitorMessage}'s default redaction.
- * Both default to `false` (strip everything), so a caller that forgets to pass
- * options gets the fail-closed projection.
- */
-export interface VisitorRedactionOptions {
-  /**
-   * `AgentShareConfig.showErrorDetails`. When false, a run failure is
-   * projected down to a generic classified `type` (see
-   * {@link sanitizeVisitorError}) instead of the raw
-   * message/provider/budget/upstream-body payload `formatErrorForState`
-   * builds.
-   */
-  showErrorDetails?: boolean;
-  /**
-   * `AgentShareConfig.showModelInfo`. When false, the creator's model /
-   * provider choice and the token/cost snapshot are stripped everywhere they
-   * appear, at any nesting depth.
-   */
-  showModelInfo?: boolean;
-}
-
 export interface SoftDeletedMessage {
   /** Live children that were re-parented away from this message at trash time. */
   childIds: string[];
@@ -279,4 +274,12 @@ export interface SoftDeletedMessage {
   projectId: string | null;
   role: string;
   topicId: string | null;
+}
+
+/** One page of a compression group's older members, see `queryCompressedGroupMembers`. */
+export interface CompressedGroupMembersPage {
+  /** The page's members, parsed into display nodes (oldest first). */
+  messages: UIChatMessage[];
+  /** Newest member older than this page, the next page's `untilId`; absent at the group start. */
+  nextUntilId?: string;
 }

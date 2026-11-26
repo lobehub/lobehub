@@ -2,7 +2,16 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import {
   ChevronRightIcon,
   FolderCogIcon,
@@ -14,12 +23,20 @@ import {
   TerminalIcon,
   ZapIcon,
 } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
 import AsyncBoundary from '@/components/AsyncBoundary';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import DeviceCard from './DeviceCard';
 import DeviceGrid from './DeviceGrid';
@@ -40,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorPrimaryBg};
   `,
   capabilityCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
@@ -217,44 +234,44 @@ interface DeviceManagerProps {
   onOpenDevice: (deviceId: string) => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
-  /**
-   * Left side of the toolbar — the workspace page puts its visibility tabs
-   * here; the personal page has a single pool and leaves it empty.
-   */
-  toolbarLeading?: ReactNode;
-  /**
-   * Workspace scope only: narrow the list to one visibility tab — 'public'
-   * (shared pool) or 'private' (the caller's own private enrollments). Omitted
-   * → no visibility filtering (personal page).
-   */
-  visibility?: DeviceVisibility;
 }
 
 /**
  * Device list shared by the personal (`/settings/devices`) and workspace
  * (`/:slug/settings/devices`) pages — toolbar (refresh + connect) above the
- * card grid / onboarding empty state, filtered to the given `scope` (and, for
- * workspace, the active visibility tab). A card opens the device's detail
+ * card grid / onboarding empty state, filtered to the given `scope`. The workspace
+ * list holds the shared pool and the caller's private devices together, the
+ * private ones marked with a lock on their card. A card opens the device's detail
  * page; the host owns that route.
  */
 const DeviceManager = memo<DeviceManagerProps>((props) => {
-  const { onConnect, onOpenDevice, scope, toolbarLeading, visibility } = props;
+  const { onConnect, onOpenDevice, scope } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
+  // The `managed_cloud_device` flag gates only the entry that creates a managed
+  // device. Managed devices that already exist still list and open here.
+  const showManagedDeviceCreate = useServerConfigStore(
+    serverConfigSelectors.enableManagedCloudDevice,
+  );
 
   // The device replica every device-listing surface reads (see `useDeviceList`):
   // a reload paints the persisted cards first, presence pending.
   const deviceList = useDeviceList();
   const { data, isValidating, error, mutate } = deviceList;
-  // `listDevices` is workspace-aware and returns both pools — keep each surface
-  // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
-  // online but unregistered) belong to the shared pool: the server already
-  // strips other members' private devices, so an unclaimed live connection can
-  // only be a public-pool machine.
-  const devices = (data ?? []).filter(
-    (d) => d.scope === scope && (!visibility || (d.visibility ?? 'public') === visibility),
-  );
-  // A persisted copy with no row for this pool / tab is not proof the pool is
+  // `listDevices` is workspace-aware and returns both scopes — keep each
+  // surface to its own. In a workspace the server already strips other
+  // members' private devices, so both visibility pools list here together.
+  const devices = (data ?? []).filter((d) => d.scope === scope);
+  // Workspace only: narrow the one list to private or shared devices.
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+  const isPrivateDevice = (d: (typeof devices)[number]) => d.visibility === 'private';
+  const showVisibilityFilter = isWorkspace && devices.length > 0;
+  const visibleDevices = showVisibilityFilter
+    ? devices.filter((d) => matchesVisibilityFilter(isPrivateDevice(d), visibilityFilter))
+    : devices;
+  // A device connected from here starts private; its card menu publishes it.
+  const createVisibility: DeviceVisibility | undefined = isWorkspace ? 'private' : undefined;
+  // A persisted copy with no row for this scope is not proof the pool is
   // empty: wait for the server (or its error) before showing onboarding.
   const boundary = getDeviceListBoundary(deviceList, devices.length === 0);
 
@@ -272,14 +289,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   // Workspace machines are headless (CLI-only enrollment), so that scope gets
   // a single primary button instead of the personal page's connect-method
   // cards + capabilities. The copy is pool-agnostic; only the hero icon forks
-  // between the shared (server) and private (own machine) pools.
-  const isPrivatePool = isWorkspace && visibility === 'private';
+  // between the workspace (server) and personal (own machine) pages.
   const emptyState = (
     <Flexbox gap={32}>
       <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
+            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
           <Text fontSize={18} weight={600}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
@@ -296,6 +312,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
             >
               {t('devices.empty.methodCli.title')}
             </Button>
+          )}
+          {showManagedDeviceCreate && (
+            <ManagedDeviceCreateEntry
+              placement={'empty'}
+              scope={scope}
+              visibility={createVisibility}
+            />
           )}
         </Flexbox>
 
@@ -326,31 +349,67 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
 
   // Workspace machines are headless, so that pool enrolls through the CLI
   // only; the personal wizard also offers the desktop app.
-  const toolbar = (
-    <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-      <div style={{ minWidth: 0 }}>{toolbarLeading}</div>
-      <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-        <Button
-          icon={<Icon icon={RefreshCwIcon} />}
-          loading={isValidating}
-          title={t('devices.actions.refresh')}
-          onClick={() => mutate()}
+  const renderActions = (size?: 'small') => (
+    <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+      {showVisibilityFilter && (
+        <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+      )}
+      {showManagedDeviceCreate && (
+        <ManagedDeviceCreateEntry
+          placement={'toolbar'}
+          scope={scope}
+          visibility={createVisibility}
         />
-        {isWorkspace ? (
-          <Button
-            icon={<Icon icon={TerminalIcon} />}
-            type={'primary'}
-            onClick={() => onConnect('cli')}
-          >
-            {t('devices.empty.methodCli.title')}
-          </Button>
-        ) : (
-          <Button icon={<Icon icon={MonitorUpIcon} />} type={'primary'} onClick={() => onConnect()}>
-            {t('devices.connectWizard.button')}
-          </Button>
-        )}
-      </Flexbox>
+      )}
+      {isWorkspace ? (
+        <Button
+          icon={<Icon icon={TerminalIcon} />}
+          size={size}
+          type={'primary'}
+          onClick={() => onConnect('cli')}
+        >
+          {t('devices.empty.methodCli.title')}
+        </Button>
+      ) : (
+        <Button
+          icon={<Icon icon={MonitorUpIcon} />}
+          size={size}
+          type={'primary'}
+          onClick={() => onConnect()}
+        >
+          {t('devices.connectWizard.button')}
+        </Button>
+      )}
+      {/* Last, as on the subscription accounts page: refreshing is secondary to
+          adding a device. */}
+      <ActionIcon
+        loading={isValidating}
+        size={size}
+        title={t('devices.actions.refresh')}
+        onClick={() => mutate()}
+        icon={RefreshCwIcon}
+        // A row that runs short of width shrinks its children; the icon keeps its square.
+        style={{ flex: 'none' }}
+      />
     </Flexbox>
+  );
+
+  // How many devices the filter leaves, on the left of the toolbar, as the
+  // subscription accounts summary does.
+  const toolbar = (
+    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
+      <Text fontSize={13} type={'secondary'}>
+        {devices.length > 0 && t('devices.summary', { count: visibleDevices.length })}
+      </Text>
+      {renderActions()}
+    </Flexbox>
+  );
+
+  // The actions join the shared settings header instead of leaving a
+  // half-empty toolbar row; hosts without that header (workspace settings,
+  // mobile) keep the toolbar.
+  const toolbarSlot = (
+    <SettingsPageActions fallback={toolbar}>{renderActions()}</SettingsPageActions>
   );
 
   const list = (
@@ -364,22 +423,29 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
       loading={<DeviceGridSkeleton />}
       onRetry={() => mutate()}
     >
-      <DeviceGrid>
-        {devices.map((device) => (
-          <DeviceCard
-            device={device}
-            isCurrent={isCurrent(device.deviceId)}
-            key={device.deviceId}
-            onOpen={() => onOpenDevice(device.deviceId)}
-          />
-        ))}
-      </DeviceGrid>
+      {visibleDevices.length === 0 ? (
+        <Empty
+          description={t('visibilityFilter.empty', { ns: 'common' })}
+          style={{ paddingBlock: 48 }}
+        />
+      ) : (
+        <DeviceGrid>
+          {visibleDevices.map((device) => (
+            <DeviceCard
+              device={device}
+              isCurrent={isCurrent(device.deviceId)}
+              key={device.deviceId}
+              onOpen={() => onOpenDevice(device.deviceId)}
+            />
+          ))}
+        </DeviceGrid>
+      )}
     </AsyncBoundary>
   );
 
   return (
     <Flexbox gap={16}>
-      {toolbar}
+      {toolbarSlot}
       {list}
     </Flexbox>
   );

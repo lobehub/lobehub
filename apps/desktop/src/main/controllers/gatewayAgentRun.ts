@@ -1,7 +1,14 @@
 import type { ChildProcess } from 'node:child_process';
 
+import {
+  type AgentCredentialSpawnEnv,
+  defaultAgentCredentialRootDir,
+  resolveAgentCredentialSpawnEnv,
+} from '@lobechat/device-control/agent-credentials';
 import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
+import { buildClaudeCodeEntrypointEnv } from '@lobechat/heterogeneous-agents/protocol';
+import { app as electronApp } from 'electron';
 
 import type HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 
@@ -30,7 +37,19 @@ export interface GatewayAgentRunDeps {
   >;
   /** Gateway-run processes by operationId, so `cancelHeteroTask` can kill them. */
   platformTasks: Map<string, PlatformTaskEntry>;
+  /**
+   * The provider credential a server installed on this machine, as spawn env.
+   * Defaults to the store `lh connect` shares; tests inject it.
+   */
+  resolveAgentCredential?: (agentType: string) => Promise<AgentCredentialSpawnEnv>;
 }
+
+const resolveInstalledCredential = (agentType: string) =>
+  resolveAgentCredentialSpawnEnv(agentType, {
+    rootDir: defaultAgentCredentialRootDir(electronApp.getPath('home')),
+  });
+
+const NO_CREDENTIAL: AgentCredentialSpawnEnv = { kind: 'none' };
 
 export interface GatewayAgentRunAck {
   reason?: string;
@@ -76,7 +95,20 @@ export const executeGatewayAgentRun = async (
       return { reason: 'Missing operation token', status: 'rejected' };
     }
 
-    const account = await resolveClaudeAccountEnv(heterogeneousAgentCtr, request);
+    // Same precedence as `lh connect`: an installed credential wins over the
+    // desktop's own logins and account routing; an expired or unreadable one
+    // rejects the run instead of falling back to another login.
+    // Only agents that accept an installed credential look one up.
+    const credential =
+      request.agentType === 'claude-code' || request.agentType === 'codex'
+        ? await (deps.resolveAgentCredential ?? resolveInstalledCredential)(request.agentType)
+        : NO_CREDENTIAL;
+    if (credential.kind === 'reject') return { reason: credential.reason, status: 'rejected' };
+
+    const account =
+      credential.kind === 'spawn'
+        ? { env: credential.env, kind: 'spawn' as const }
+        : await resolveClaudeAccountEnv(heterogeneousAgentCtr, request);
     if (account.kind === 'reject') return { reason: account.reason, status: 'rejected' };
 
     // The embedded CLI handles spawn -> adapt -> BatchIngester ->
@@ -84,15 +116,23 @@ export const executeGatewayAgentRun = async (
     // the process has actually spawned (or emitted an early error) before
     // acknowledging the server request.
     return await heterogeneousAgentCtr.spawnLhHeteroExec({
-      accountEnv: account.env,
+      accountEnv: {
+        ...account.env,
+        ...(request.agentType === 'claude-code'
+          ? buildClaudeCodeEntrypointEnv(request.claudeCodeEntrypoint)
+          : {}),
+      },
+      accountUnsetEnv: credential.kind === 'spawn' ? credential.unsetEnv : undefined,
       agentId: request.agentId,
       agentType: request.agentType,
       assistantMessageId: request.assistantMessageId,
       args: request.args,
+      collaborationMode: request.collaborationMode,
       cwd: request.cwd,
       imageList: request.imageList,
       jwt: request.jwt,
       operationId: request.operationId,
+      permissionMode: request.permissionMode,
       prompt: request.prompt,
       resumeFallbackSystemContext: request.resumeFallbackSystemContext,
       resumeSessionId: request.resumeSessionId,

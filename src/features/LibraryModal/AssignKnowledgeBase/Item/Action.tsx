@@ -1,12 +1,11 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { CheckIcon, ExternalLinkIcon, MoreHorizontalIcon, PlusIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildFilePath, buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useAgentStore } from '@/store/agent';
-import { useServerConfigStore } from '@/store/serverConfig';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 interface ActionsProps {
@@ -15,10 +14,13 @@ interface ActionsProps {
   type: KnowledgeType;
 }
 
+/**
+ * A row's add / attached control. Adding is a single round "+"; an attached row says so in words and
+ * keeps removal one step away behind "…", so a stray click on the state never detaches it.
+ */
 const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   const { t } = useTranslation('chat');
 
-  const mobile = useServerConfigStore((s) => s.isMobile);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const [
     addFilesToAgent,
@@ -33,66 +35,70 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   ]);
 
   const [loading, setLoading] = useState(false);
+  const isLibrary = type === KnowledgeType.KnowledgeBase;
 
-  const assignKnowledge = async () => {
+  const run = async (task: () => Promise<void>) => {
     setLoading(true);
-    if (type === KnowledgeType.KnowledgeBase) {
-      await addKnowledgeBasesToAgent(id);
-    } else {
-      await addFilesToAgent([id], true);
+    try {
+      await task();
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const removeKnowledge = async () => {
-    setLoading(true);
-    if (type === KnowledgeType.KnowledgeBase) {
-      await removeKnowledgeBasesFromAgent(id);
-    } else {
-      await removeFilesFromAgent(id);
-    }
-    setLoading(false);
-  };
+  const assignKnowledge = () =>
+    run(() => (isLibrary ? addKnowledgeBasesToAgent(id) : addFilesToAgent([id], true)));
+
+  const removeKnowledge = () =>
+    run(() => (isLibrary ? removeKnowledgeBasesFromAgent(id) : removeFilesFromAgent(id)));
+
+  if (!enabled)
+    return (
+      <ActionIcon
+        icon={PlusIcon}
+        loading={loading}
+        size={'small'}
+        style={{ borderRadius: '50%' }}
+        title={t('knowledgeBase.library.action.add')}
+        variant={'filled'}
+        onClick={assignKnowledge}
+      />
+    );
 
   return (
-    <Flexbox horizontal align={'center'}>
-      {enabled ? (
-        <DropdownMenu
-          placement="bottomRight"
-          items={[
-            {
-              icon: <Icon icon={InfoIcon} />,
-              key: 'detail',
-              label: t('knowledgeBase.library.action.detail'),
-              onClick: () => {
-                window.open(
-                  type === KnowledgeType.KnowledgeBase
-                    ? buildLibraryPath(id, activeWorkspaceSlug)
-                    : buildFilePath(id, activeWorkspaceSlug),
-                );
-              },
+    <Flexbox horizontal align={'center'} gap={4}>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Icon icon={CheckIcon} size={14} />
+        <Text fontSize={12} type={'secondary'}>
+          {t('knowledgeBase.library.action.added')}
+        </Text>
+      </Flexbox>
+      <DropdownMenu
+        placement={'bottomRight'}
+        items={[
+          {
+            icon: <Icon icon={ExternalLinkIcon} />,
+            key: 'detail',
+            label: t('knowledgeBase.library.action.detail'),
+            onClick: () => {
+              window.open(
+                isLibrary
+                  ? buildLibraryPath(id, activeWorkspaceSlug)
+                  : buildFilePath(id, activeWorkspaceSlug),
+              );
             },
-            {
-              danger: true,
-              icon: <Icon icon={Trash2} />,
-              key: 'remove',
-              label: t('knowledgeBase.library.action.remove'),
-              onClick: removeKnowledge,
-            },
-          ]}
-        >
-          <ActionIcon icon={MoreVerticalIcon} loading={loading} />
-        </DropdownMenu>
-      ) : (
-        <Button
-          loading={loading}
-          size={mobile ? 'small' : undefined}
-          type={'primary'}
-          onClick={assignKnowledge}
-        >
-          {t('knowledgeBase.library.action.add')}
-        </Button>
-      )}
+          },
+          {
+            danger: true,
+            icon: <Icon icon={Trash2} />,
+            key: 'remove',
+            label: t('knowledgeBase.library.action.remove'),
+            onClick: removeKnowledge,
+          },
+        ]}
+      >
+        <ActionIcon icon={MoreHorizontalIcon} loading={loading} size={'small'} />
+      </DropdownMenu>
     </Flexbox>
   );
 });

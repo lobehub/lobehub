@@ -57,12 +57,7 @@ describe('UserMemoryModel surface', () => {
     ]);
   });
 
-  it('keeps the prototype helpers and static parsers', () => {
-    expect(functionMembers(UserMemoryModel.prototype)).toEqual([
-      'buildBaseMemoryInsertValues',
-      'extractSourceMetadata',
-      'memoryWhere',
-    ]);
+  it('keeps the static parsers', () => {
     expect(functionMembers(UserMemoryModel)).toEqual([
       'parseAssociatedLocations',
       'parseAssociatedObjects',

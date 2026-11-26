@@ -613,6 +613,56 @@ describe('GatewayClient', () => {
     });
   });
 
+  describe('reportToolCallCompletion', () => {
+    const completion = {
+      operationId: 'op-1',
+      result: { content: 'done', success: true },
+      toolCallId: 'call-1',
+    };
+    const connectAndAuth = async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      return (client as any).ws;
+    };
+    const ack = (status: string) =>
+      (client as any).handleMessage(
+        JSON.stringify({
+          ...completion,
+          result: undefined,
+          status,
+          type: 'tool_call_completion_ack',
+        }),
+      );
+
+    it('resolves with the gateway verdict for the same call', async () => {
+      const ws = await connectAndAuth();
+      const pending = client.reportToolCallCompletion(completion);
+
+      expect(JSON.parse(ws.send.mock.calls.at(-1)[0])).toEqual({
+        ...completion,
+        type: 'tool_call_completion',
+      });
+      ack('retry');
+
+      await expect(pending).resolves.toMatchObject({ status: 'retry', toolCallId: 'call-1' });
+    });
+
+    it('rejects when not connected, so the watcher keeps the result', async () => {
+      await expect(client.reportToolCallCompletion(completion)).rejects.toThrow('not connected');
+    });
+
+    it('rejects an in-flight report when the socket goes away', async () => {
+      await connectAndAuth();
+      const assertion = expect(client.reportToolCallCompletion(completion)).rejects.toThrow(
+        'closed',
+      );
+
+      await client.disconnect();
+      await assertion;
+    });
+  });
+
   describe('tunnel serving', () => {
     it('forwards tunnel frames to the tunnel host', async () => {
       client.connect();
@@ -637,6 +687,19 @@ describe('GatewayClient', () => {
       await vi.advanceTimersByTimeAsync(30_000 * 5);
 
       expect(closeAll).toHaveBeenCalledWith('DEVICE_DISCONNECTED');
+    });
+
+    it('reports the tunnel host active count, and 0 when serving is off', () => {
+      vi.spyOn((client as any).tunnelHost, 'activeCount', 'get').mockReturnValue(2);
+      expect(client.activeTunnelCount).toBe(2);
+
+      const offClient = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        tunnel: false,
+      });
+      expect(offClient.activeTunnelCount).toBe(0);
     });
 
     it('answers tunnel_open with TUNNEL_DISABLED when serving is off', async () => {

@@ -298,8 +298,11 @@ export default class ShellCommandCtr extends ControllerModule {
     // client executor via the runtime's `trustArgsCwd: false` path. This
     // process cannot re-check that (it has no idea which directory the agent
     // was configured with), so the guarantee is pinned by tests on both
-    // injection sites instead.
-    if (!params.cwd) {
+    // injection sites instead. A caller that runs from a different directory
+    // than the one it fences (skill scripts) names the fence in `sandboxRoot`,
+    // which both runCommand injection sites strip from model args the same way.
+    const fenceRoot = params.sandboxRoot ?? params.cwd;
+    if (!fenceRoot) {
       return {
         error:
           'Local Sandbox requires a working directory. Set one for this agent (or topic) and run the command again.',
@@ -331,7 +334,7 @@ export default class ShellCommandCtr extends ControllerModule {
       onSandboxUnavailable: (error) => this.downgradeSandboxCapability(error),
       processManager,
       spawnProcess,
-      sandboxPolicy: createLocalSandboxPolicy(params.cwd, {
+      sandboxPolicy: createLocalSandboxPolicy(fenceRoot, {
         allowNetwork: params.sandboxNetwork === true,
       }),
     });

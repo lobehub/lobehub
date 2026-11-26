@@ -12,7 +12,18 @@ import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
 import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
-import { accessTokenTTL, isAcceptanceReviewClient, reviewResourceServer } from './acceptanceReview';
+import {
+  accessTokenTTL,
+  defaultResourceFor,
+  expiresWithSession,
+  extensionCorsDecision,
+  extensionGrantScopes,
+  extensionResourceServer,
+  interactionPathFor,
+  isAcceptanceReviewClient,
+  issuesRefreshToken,
+  reviewResourceServer,
+} from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
 import { stampClientLastUsed } from './clientLastUsed';
@@ -75,6 +86,9 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       // The acceptance toolbar runs on whatever origin the delivered product is
       // previewed on; its token is scoped to one acceptance by audience.
       if (isAcceptanceReviewClient(client?.clientId)) return true;
+
+      const extension = extensionCorsDecision(client?.clientId, origin);
+      if (extension !== null) return extension;
 
       // Check if the client allows this origin
       // A common strategy is to allow origins of all registered redirect_uris
@@ -149,11 +163,14 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       },
       introspection: { enabled: true },
       resourceIndicators: {
-        defaultResource: () => API_AUDIENCE,
+        defaultResource: (ctx, client) => defaultResourceFor(client?.clientId, API_AUDIENCE),
         enabled: true,
 
         getResourceServerInfo: async (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
+          const extension = extensionResourceServer(ctx.oidc.client?.clientId, resourceIndicator);
+          if (extension === 'reject') throw new errors.InvalidTarget();
+          if (extension) return extension;
           const review = reviewResourceServer(
             ctx.oidc.client?.clientId,
             resourceIndicator,
@@ -295,15 +312,36 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
           logProvider('No ui_locales provided in authorization request');
         }
 
-        const interactionUrl = `/oauth/consent/${interaction.uid}${query}`;
+        const interactionUrl = `${interactionPathFor(ctx.oidc?.client?.clientId, interaction.prompt.name, interaction.uid)}${query}`;
         logProvider('Generated interaction URL: %s', interactionUrl);
         // ---> End of added logs <---
         return interactionUrl;
       },
     },
 
+    expiresWithSession: async (_ctx, source) => expiresWithSession(source),
+
+    issueRefreshToken: async (_ctx, client, source) => issuesRefreshToken(client, source.scopes),
+
     // 6. Key configuration - using RS256 JWKS
     jwks: jwks as { keys: any[] },
+
+    loadExistingGrant: async (ctx) => {
+      const { client, provider, result, session } = ctx.oidc;
+      const grantId = result?.consent?.grantId || session!.grantIdFor(client!.clientId);
+      if (grantId) return provider.Grant.find(grantId);
+
+      const scopes = extensionGrantScopes(client?.clientId);
+      if (!scopes || !session?.accountId) return undefined;
+      const grant = new provider.Grant({
+        accountId: session.accountId,
+        clientId: client!.clientId,
+      });
+      grant.addOIDCScope(scopes.oidc);
+      grant.addResourceScope(scopes.resource, scopes.resourceScope);
+      await grant.save();
+      return grant;
+    },
 
     // 2. PKCE configuration
     pkce: {

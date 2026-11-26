@@ -32,12 +32,6 @@ vi.mock('@/store/agent', () => ({
       useHydrateAgentConfig: () => sync,
     }),
 }));
-vi.mock('@/store/electron', () => ({
-  useElectronStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      gatewayDeviceInfo: { deviceId: 'bound' },
-    }),
-}));
 const devices: DeviceListResult = {
   data: [
     {
@@ -80,13 +74,21 @@ describe('Channel Agent device selection events', () => {
   });
   afterEach(cleanup);
 
+  // A Channel binds no device by default, even for an Agent bound to one.
+  it('starts without a device, following the Agent settings', () => {
+    const { result } = setup();
+    expect(result.current.draft).toMatchObject({ agentId: 'agent', initialized: true });
+    expect(result.current.draft.deviceId).toBeUndefined();
+    expect(result.current.draft.issue).toBeUndefined();
+    expect(canSubmitChannelAgents(result.current.drafts)).toBe(true);
+  });
+
   it.each([undefined, null, ''])(
-    'clears the inherited Native device and directory for an empty selection (%s)',
+    'clears a picked device and directory for an empty selection (%s)',
     (value) => {
       const defaults = structuredClone(source.agencyConfig);
       const { result, rerender } = setup();
-      expect(result.current.requiresDevice).toBe(false);
-      expect(result.current.draft.deviceId).toBe('bound');
+      act(() => result.current.changeDevice('bound'));
       expect(result.current.draft.workingDirectory).toBe('/agent-project');
       // Select normalizes its empty-string option to undefined in onChange.
       act(() => result.current.changeDevice(value));
@@ -116,17 +118,15 @@ describe('Channel Agent device selection events', () => {
   });
 
   it.each(['pi', 'codex'] as const)(
-    'clears %s visibly but still requires a device before submission',
+    'lets a %s coding Agent go without a device, following its own settings',
     (runtime) => {
       source.agencyConfig.heterogeneousProvider = { type: runtime };
       const { result, rerender } = setup();
-      expect(result.current.requiresDevice).toBe(true);
       act(() => result.current.changeDevice(undefined));
       rerender();
       expect(result.current.draft.deviceId).toBeUndefined();
-      expect(result.current.draft.workingDirectory).toBeUndefined();
-      expect(result.current.draft.issue).toBe('deviceRequired');
-      expect(canSubmitChannelAgents(result.current.drafts)).toBe(false);
+      expect(result.current.draft.issue).toBeUndefined();
+      expect(canSubmitChannelAgents(result.current.drafts)).toBe(true);
     },
   );
 });

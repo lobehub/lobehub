@@ -22,7 +22,6 @@ const required: ConditionRequirement = {
 };
 const plan: ConditionProbePlan = {
   blocked: [],
-  gateEligible: false,
   gaps: [],
   mode: 'same-target-condition-partitions',
   scheduling: 'round-robin-trigger-state-direction',
@@ -83,7 +82,6 @@ describe('condition keys use measured per-node evidence', () => {
     );
     expect(result.keys.map((key) => key.status)).toEqual(['OBSERVED', 'MISSING_PROBE']);
     expect(result.summary.missing).toBe(1);
-    expect(result.gateEligible).toBe(false);
   });
   it('does not use an unstable A/A capture or an evidence-free record', () => {
     expect(summarizeConditionCoverage([plan], [sample], []).keys[0].status).toBe('PROBE_UNSTABLE');

@@ -11,7 +11,6 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { AgentAccountService } from '../index';
 import { createAgentMailProvider } from '../providers/agentMail';
-import { createLinqProvider } from '../providers/linq';
 import { AgentAccountProviderRegistry } from '../registry';
 
 // The agent's edit ACL is its own suite's subject; here it is the seam whose
@@ -136,6 +135,17 @@ afterEach(async () => {
   assertCanEditResource.mockReset();
 });
 
+const signedInbound = (body: string): Parameters<AgentAccountService['handleInbound']>[1] => ({
+  body,
+  headers: {
+    'x-agentmail-signature': computeAgentMailSignature(
+      WEBHOOK_SECRET,
+      body,
+      Math.floor(Date.now() / 1000),
+    ),
+  },
+});
+
 describe('AgentAccountService — provisioning', () => {
   it('persists the provider-declared kind and capabilities, and keeps the secret out of reads', async () => {
     const { fetchImpl } = createMailFetch();
@@ -150,6 +160,8 @@ describe('AgentAccountService — provisioning', () => {
       identifier: 'agent-7@lobe.id',
       kind: 'mail',
       provider: 'agent-mail',
+      // Opened synchronously, so the persisted row is live — the settings page
+      // must not show a usable address as still "opening".
       status: 'active',
     });
     expect(created).not.toHaveProperty('credentials');
@@ -324,6 +336,9 @@ describe('AgentAccountService — provisioning', () => {
 
     expect(retry.id).toBe(first.id);
     expect(retry.identifier).toBe('agent-7@lobe.id');
+    // The live row already stores the first webhook's secret: the retry must
+    // not register a second webhook whose secret nothing would store.
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/v1/webhooks')).toHaveLength(1);
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     expect(await service.list()).toHaveLength(1);
   });
@@ -359,30 +374,11 @@ describe('AgentAccountService — provisioning', () => {
     expect(second.id).not.toBe(first.id);
   });
 
-  it('hands out one pool number per live phone account', async () => {
-    const registry = new AgentAccountProviderRegistry().register(
-      createLinqProvider({ apiKey: 'linq_svc', fromNumbers: ['+15550002222'] }),
-    );
-    const service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
-
-    const first = await service.provision({ agentId, provider: 'linq' });
-    expect(first.identifier).toBe('+15550002222');
-
-    await expect(
-      service.provision({ agentId: otherAgentId, provider: 'linq' }),
-    ).rejects.toMatchObject({ code: 'capacity_exhausted' });
-
-    await service.revoke(first.id);
-    await expect(
-      service.provision({ agentId: otherAgentId, provider: 'linq' }),
-    ).resolves.toMatchObject({ agentId: otherAgentId, identifier: '+15550002222' });
-  });
-
   it('surfaces the registry error for a provider the deployment does not run', async () => {
     const service = buildService(createMailFetch().fetchImpl);
 
-    await expect(service.provision({ agentId, provider: 'linq' })).rejects.toThrow(
-      /Unknown agent account provider "linq"/,
+    await expect(service.provision({ agentId, provider: 'not-configured' })).rejects.toThrow(
+      /Unknown agent account provider "not-configured"/,
     );
   });
 });
@@ -488,6 +484,30 @@ describe('AgentAccountService — actions', () => {
     await expect(service.update(mounted.id, { metadata: { org: 'lobehub' } })).resolves.toBe(
       mounted.id,
     );
+  });
+
+  it("lets the owner set an issued account's wake rules, in the shape this build accepts", async () => {
+    const { fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    // Settings are the owner's, not the provider's: patchable on an issued account.
+    await expect(
+      service.update(created.id, {
+        settings: { wake: { mode: 'on', wakeSenders: [' CEO@LobeHub.com '] } },
+      }),
+    ).resolves.toBe(created.id);
+    expect(await service.get(created.id)).toMatchObject({
+      metadata: { clientId: 'cli_1', inboxId: 'inb_1' },
+      settings: { wake: { mode: 'on', wakeSenders: ['ceo@lobehub.com'] } },
+    });
+
+    await expect(
+      service.update(created.id, { settings: { wake: { mode: 'loud' } } as any }),
+    ).rejects.toMatchObject({ code: 'invalid_settings', reason: 'invalid' });
+    expect(await service.get(created.id)).toMatchObject({
+      settings: { wake: { mode: 'on' } },
+    });
   });
 
   it('admits exactly the members the agent edit ACL admits, for every write', async () => {
@@ -633,16 +653,7 @@ describe('AgentAccountService — inbound routing', () => {
     const created = await service.provision({ agentId, provider: 'agent-mail' });
 
     const body = inboundBody();
-    const outcome = await service.handleInbound('agent-mail', {
-      body,
-      headers: {
-        'x-agentmail-signature': computeAgentMailSignature(
-          WEBHOOK_SECRET,
-          body,
-          Math.floor(Date.now() / 1000),
-        ),
-      },
-    });
+    const outcome = await service.handleInbound('agent-mail', signedInbound(body));
 
     expect(outcome.outcome).toBe('delivered');
     if (outcome.outcome !== 'delivered') throw new Error('unreachable');
@@ -678,16 +689,7 @@ describe('AgentAccountService — inbound routing', () => {
       .where(eq(agentAccounts.id, created.id));
 
     const body = inboundBody();
-    const outcome = await service.handleInbound('agent-mail', {
-      body,
-      headers: {
-        'x-agentmail-signature': computeAgentMailSignature(
-          WEBHOOK_SECRET,
-          body,
-          Math.floor(Date.now() / 1000),
-        ),
-      },
-    });
+    const outcome = await service.handleInbound('agent-mail', signedInbound(body));
 
     expect(outcome.outcome).toBe('unknown-account');
   });
@@ -704,16 +706,7 @@ describe('AgentAccountService — inbound routing', () => {
 
     // A fresh event id: the default replay store outlives a single test.
     const body = inboundBody(undefined, 'evt_receive_disabled');
-    const outcome = await service.handleInbound('agent-mail', {
-      body,
-      headers: {
-        'x-agentmail-signature': computeAgentMailSignature(
-          WEBHOOK_SECRET,
-          body,
-          Math.floor(Date.now() / 1000),
-        ),
-      },
-    });
+    const outcome = await service.handleInbound('agent-mail', signedInbound(body));
 
     expect(outcome).toMatchObject({
       accountId: created.id,

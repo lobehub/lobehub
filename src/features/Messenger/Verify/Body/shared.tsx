@@ -1,17 +1,19 @@
 'use client';
 
-import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
+import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
-import { messengerKeys } from '@/libs/swr/keys';
+import InlineErrorText from '@/components/InlineErrorText';
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
 import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from '../../AgentSelect';
 import { type MessengerPlatform, PlatformBrandIcon } from '../../constants';
@@ -22,6 +24,7 @@ import {
   PERSONAL_SCOPE,
   resolvePersonalScopeLabel,
 } from '../../scopeOptions';
+import { resolveDefaultAgentId } from './defaultAgent';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   bubble: css`
@@ -34,9 +37,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 14px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 6%),
-      0 4px 12px rgb(0 0 0 / 4%);
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   card: css`
     width: 100%;
@@ -57,7 +58,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   iconRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 
@@ -65,7 +66,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   infoRow: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     justify-content: space-between;
 
@@ -81,12 +82,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   successBubble: css`
-    color: #fff;
-    background: #22c55e;
+    color: ${cssVar.colorTextLightSolid};
+    background: ${cssVar.colorSuccess};
   `,
   warningBlock: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
   `,
@@ -162,16 +163,14 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     const { t } = useTranslation('messenger');
 
     const enableWorkspaceScopes = useServerConfigStore(
-      (s) =>
-        serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
+      serverConfigSelectors.enableBusinessFeatures,
     );
 
     // First-level scope selector — personal plus every workspace the user
     // belongs to. Picking a scope just filters the agent list below; the
     // backend derives the binding's workspace from the chosen agent on confirm.
-    const scopesSWR = useSWR(enableWorkspaceScopes ? messengerKeys.bindingScopes() : null, () =>
-      messengerService.listBindingScopes(),
-    );
+    messengerActions.useFetchBindingScopes(enableWorkspaceScopes);
+    const bindingScopes = useMessengerStore(messengerSelectors.bindingScopes);
     const [scope, setScope] = useState<string>(PERSONAL_SCOPE);
     const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
     const scopeWorkspaceId = scope === PERSONAL_SCOPE ? null : scope;
@@ -184,21 +183,27 @@ export const ConfirmCard = memo<ConfirmCardProps>(
       setSelectedAgentId(undefined);
     }, [enableWorkspaceScopes, scope]);
 
-    // Scope-aware agent list. The SWR key matches AgentSelect's so the fetch is
-    // shared (single request per scope) and stays in sync as the scope changes.
-    const agentsSWR = useSWR(messengerKeys.agentsForBinding(scopeWorkspaceId), () =>
-      messengerService.listAgentsForBinding(scopeWorkspaceId),
+    // Scope-aware agent list, the same replica entry AgentSelect reads, so the
+    // fetch is shared (single request per scope) and follows the scope.
+    messengerActions.useFetchBindingAgents(scopeWorkspaceId);
+    const agents = useMessengerStore(messengerSelectors.bindingAgents(scopeWorkspaceId));
+    // "No agents" only from the server: a restored empty copy may be stale.
+    const isAgentsConfirmed = useMessengerStore(
+      messengerSelectors.isBindingAgentsConfirmed(scopeWorkspaceId),
     );
 
     const [confirming, setConfirming] = useState(false);
+    /** Link failure (already mapped to localized copy), shown above the confirm button so the user's agent pick stays in view. */
+    const [confirmError, setConfirmError] = useState('');
 
-    // Default-select the first agent (inbox is pinned to the top) once a scope's
-    // list loads. Resetting selectedAgentId on scope change re-triggers this so
-    // it re-defaults to the new scope's inbox.
+    // Default-select the first agent (inbox is pinned to the top) once the
+    // server confirms a scope's list, and drop a pick that list no longer has.
+    // Resetting selectedAgentId on scope change re-triggers this so it
+    // re-defaults to the new scope's inbox.
+    const resolvedAgentId = resolveDefaultAgentId(agents, isAgentsConfirmed, selectedAgentId);
     useEffect(() => {
-      if (selectedAgentId || !agentsSWR.data?.length) return;
-      setSelectedAgentId(agentsSWR.data[0].id);
-    }, [agentsSWR.data, selectedAgentId]);
+      if (resolvedAgentId !== selectedAgentId) setSelectedAgentId(resolvedAgentId);
+    }, [resolvedAgentId, selectedAgentId]);
 
     // Mirror the Messenger connection card's scope picker: avatar + name per row.
     // Personal uses the user's avatar; workspaces use their own.
@@ -212,24 +217,25 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         personalAvatar: userAvatar,
         personalLabel,
         personalTagLabel: t('messenger.scopePersonalTag', { defaultValue: 'personal' }),
-        workspaces: scopesSWR.data,
+        workspaces: enableWorkspaceScopes ? bindingScopes : undefined,
       });
-    }, [scopesSWR.data, t, userAvatar, userDisplayName, userFullName]);
+    }, [bindingScopes, enableWorkspaceScopes, t, userAvatar, userDisplayName, userFullName]);
 
     // Personal-only deployments (OSS) return no workspaces — hide the scope
     // selector entirely so the experience is unchanged there.
-    const hasWorkspaces = enableWorkspaceScopes && (scopesSWR.data?.length ?? 0) > 0;
+    const hasWorkspaces = enableWorkspaceScopes && (bindingScopes?.length ?? 0) > 0;
 
     const isBlocked = !!blockingNotice;
 
     const handleConfirm = async () => {
-      if (!selectedAgentId) return;
+      if (!selectedAgentId || !isAgentsConfirmed) return;
+      setConfirmError('');
       setConfirming(true);
       try {
         await messengerService.confirmLink({ initialAgentId: selectedAgentId, randomId });
         onSuccess();
       } catch (error) {
-        toast.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
+        setConfirmError(getMessengerErrorMessage(error, t, 'verify.error.generic'));
       } finally {
         setConfirming(false);
       }
@@ -284,32 +290,40 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                     setScope((next as string | null) ?? PERSONAL_SCOPE);
                     // Re-default to the new scope's inbox agent.
                     setSelectedAgentId(undefined);
+                    setConfirmError('');
                   }}
                 />
               </Flexbox>
             )}
             <Flexbox gap={8}>
               <Text strong>{t('verify.confirm.defaultAgent')}</Text>
-              {agentsSWR.data?.length === 0 ? (
+              {isAgentsConfirmed && agents?.length === 0 ? (
                 <Text type="warning">{t('verify.confirm.noAgents')}</Text>
               ) : (
                 <AgentSelect
                   placeholder={t('verify.confirm.defaultAgentPlaceholder')}
                   value={selectedAgentId}
                   workspaceId={scopeWorkspaceId}
-                  onChange={setSelectedAgentId}
+                  onChange={(id) => {
+                    setSelectedAgentId(id);
+                    setConfirmError('');
+                  }}
                 />
               )}
               <Text style={{ fontSize: 12 }} type="secondary">
-                {t('verify.confirm.defaultAgentHint')}
+                {t('verify.confirm.defaultAgentMarketplaceHint')}
               </Text>
             </Flexbox>
           </Flexbox>
         )}
 
+        {confirmError && (
+          <InlineErrorText style={{ width: '100%' }}>{confirmError}</InlineErrorText>
+        )}
+
         <Button
           block
-          disabled={isBlocked || !selectedAgentId}
+          disabled={isBlocked || !selectedAgentId || !isAgentsConfirmed}
           loading={confirming}
           size="large"
           type="primary"
@@ -351,10 +365,10 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platf
           </Button>
         )}
         {/* Mirror the Slack/Discord install callback's landing page so every
-            platform's flow ends back on its Messenger settings tab. */}
+            platform's flow ends back on its Marketplace app. */}
         <Button
           block
-          href={`/settings/messenger/${platform}`}
+          href={marketplaceAppPath(platform)}
           size="large"
           type={openBotUrl ? 'default' : 'primary'}
         >

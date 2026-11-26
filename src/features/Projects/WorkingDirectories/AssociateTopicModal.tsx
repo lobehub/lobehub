@@ -108,7 +108,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
             value: p.id,
             label: (
               <Flexbox horizontal align="center" gap={8}>
-                <ProjectAvatar avatar={p.avatar} name={p.name} />
+                <ProjectAvatar avatar={p.avatar} id={p.id} name={p.name} />
                 {p.name}
               </Flexbox>
             ),

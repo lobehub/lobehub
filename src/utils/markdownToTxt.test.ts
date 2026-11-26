@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { markdownToTxt } from './markdownToTxt';
+import { markdownToTxt, toTitleText } from './markdownToTxt';
 
 describe('markdownToTxt', () => {
   describe('basic markdown conversion', () => {
@@ -242,5 +242,11 @@ npm install package
       expect(result).toContain('Paragraph 1');
       expect(result).toContain('Paragraph 2');
     });
+  });
+});
+
+describe('toTitleText', () => {
+  it('leaves inline image references out of the title text', () => {
+    expect(toTitleText('[Image #1]  dup **test**')).toBe('dup test');
   });
 });

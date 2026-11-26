@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "ビデオ認識対応",
   "providerModels.item.modelConfig.vision.extra": "この設定はアプリ内の画像アップロード設定のみを有効にします。認識のサポートはモデル自体に依存しますので、そのモデルの視覚認識機能の可用性を自分でテストしてください",
   "providerModels.item.modelConfig.vision.title": "視覚認識をサポート",
+  "providerModels.item.pricing.audioOutputTokens": "音声出力 ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/画像",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M 文字",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/分",

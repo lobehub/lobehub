@@ -30,6 +30,12 @@ export const TaskManifest: BuiltinToolManifest = {
               "Optional workspace member (user ID) to set as the task's human owner. Coexists with assigneeAgentId — the agent executes the task, the member owns the outcome. Resolve the ID with listWorkspaceMembers first; never guess it.",
             type: 'string',
           },
+          labels: {
+            description:
+              'Optional existing task label names to attach (e.g. ["Bug", "Frontend"]; a grouped label may be written "Type/Bug"). Only use labels that already exist — unknown names fail with suggestions and nothing is created. A task carries at most one label per label group.',
+            items: { type: 'string' },
+            type: 'array',
+          },
           model: {
             description:
               'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
@@ -92,6 +98,12 @@ export const TaskManifest: BuiltinToolManifest = {
                     "Optional workspace member (user ID) to set as the task's human owner (coexists with assigneeAgentId). Resolve the ID with listWorkspaceMembers first.",
                   type: 'string',
                 },
+                labels: {
+                  description:
+                    'Optional existing task label names to attach (same rules as createTask.labels).',
+                  items: { type: 'string' },
+                  type: 'array',
+                },
                 model: {
                   description:
                     'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
@@ -146,6 +158,12 @@ export const TaskManifest: BuiltinToolManifest = {
             description:
               'Restrict to tasks assigned to this agent. When omitted, no assignee filter is applied unless listTasks is called without any filters in an agent conversation, which defaults to the current agent.',
             type: 'string',
+          },
+          labels: {
+            description:
+              'Only tasks carrying any of these existing label names. A label group name (e.g. "Type") matches any label in that group.',
+            items: { type: 'string' },
+            type: 'array',
           },
           limit: { description: `Max 1-100. Default ${DEFAULT_LIST_TASK_LIMIT}.`, type: 'number' },
           offset: { description: 'Pagination offset.', type: 'number' },
@@ -267,13 +285,19 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority, model/provider), assignee (agent or workspace member), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
+        "Edit a task's fields (name, description, instruction, priority, model/provider), assignee (agent or workspace member), parent, labels, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
           addDependencies: {
             description:
               'Identifiers of tasks this task should block on (e.g. ["T-2", "T-3"]). Accepts identifiers or ids returned by previous results; prefer stable ids.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          addLabels: {
+            description:
+              'Existing task label names to add (e.g. ["Bug"]; "Type/Bug" also works). Adding a label from a label group replaces the task\'s current label of that group. Unknown names fail with suggestions; labels are never created.',
             items: { type: 'string' },
             type: 'array',
           },
@@ -330,6 +354,11 @@ export const TaskManifest: BuiltinToolManifest = {
             items: { type: 'string' },
             type: 'array',
           },
+          removeLabels: {
+            description: 'Task label names to remove from the task.',
+            items: { type: 'string' },
+            type: 'array',
+          },
         },
         required: ['identifier'],
         type: 'object',
@@ -341,7 +370,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. Will fail with a CONFLICT-style error if the task already has a running topic (cancel it first or pass continueTopicId).',
+        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. If the task already has a live run, this fails with a CONFLICT error naming the operation behind that run, its status and the next step; a run whose operation ended long ago is cleaned up and no longer blocks. Running a scheduled task by hand works as a test tick: it does not count toward maxExecutions, and the task returns to scheduled afterwards.',
       name: TaskApiName.runTask,
       parameters: {
         properties: {
@@ -404,10 +433,19 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
+        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). channelDelivery also posts each run answer to a Channel or Thread, e.g. a daily report for a team. Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
       name: TaskApiName.setTaskSchedule,
       parameters: {
         properties: {
+          channelDelivery: {
+            description:
+              "Post each run's final answer (text and any cards it draws) to a Channel as the assignee Agent's message, besides returning it here. Pass {} for where you are answering now (this Channel, and this Thread if you are in one); give channelId (from lobe-channel listChannels) for another Channel, and threadId for one of its Threads, else its main timeline. The assignee Agent must be an active member there. Pass null to stop posting.",
+            properties: {
+              channelId: { type: 'string' },
+              threadId: { type: 'string' },
+            },
+            type: ['object', 'null'],
+          },
           automationMode: {
             description:
               'Enables periodic execution. "schedule" fires on the cron `schedulePattern`; "heartbeat" ticks every `heartbeatInterval` seconds. Pass null to disable automation entirely.',

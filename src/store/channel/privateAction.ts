@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
+import type { ChannelDetail, ChannelJoinableItem, ChannelListItem } from '@lobechat/types';
 
 import {
   arrayEntity,
@@ -10,9 +10,11 @@ import {
 import type { StoreSetter } from '@/store/types';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import { settleOutbox } from './outbox';
 import {
   channelDetailEntity,
   channelDetailResource,
+  channelJoinableResource,
   channelListResource,
   channelThreadEntityId,
 } from './projection';
@@ -37,6 +39,7 @@ export class ChannelPrivateAction {
   };
   readonly detail;
   readonly entity;
+  readonly joinable;
   readonly list;
   constructor(set: StoreSetter<ChannelState>, get: () => ChannelState) {
     this.list = createReplicaSlice(channelListResource, {
@@ -47,9 +50,21 @@ export class ChannelPrivateAction {
       stateKey: 'listReplica',
       view: recordLens<ChannelState, ChannelListItem[]>('listMap'),
     });
+    this.joinable = createReplicaSlice(channelJoinableResource, {
+      actionPrefix: 'channel/joinable',
+      get,
+      set,
+      stateKey: 'joinableReplica',
+      view: recordLens<ChannelState, ChannelJoinableItem[]>('joinableMap'),
+    });
     this.detail = createReplicaSlice(channelDetailResource, {
       actionPrefix: 'channel/detail',
       effects: {
+        onApplied: (data, params, { scope }) => {
+          const { outbox } = get();
+          const next = settleOutbox(outbox, params, data, scope);
+          if (next !== outbox) set({ outbox: next }, false, 'channel/outbox/settle');
+        },
         onError: (error, params, { scope }) => {
           if (params.threadId && isTrpcErrorCode(error, 'NOT_FOUND')) {
             this.removeThread(params.channelId, params.threadId, scope);

@@ -93,7 +93,6 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 主题生成   | `topic`           | 根据聊天内容自动生成主题名称和摘要                |
 | 翻译     | `translation`     | 文本翻译使用的助手                        |
 | 元数据生成  | `agentMeta`       | 为助手生成描述性信息和元数据                   |
-| 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理            |
 | 分支对话   | `thread`          | 自动生成分支对话的标题                      |
 | 图片生成命名 | `generationTopic` | AI 图片自动命名话题                      |
 | 输入自动补全 | `inputCompletion` | 输入自动补全建议（类似 GitHub Copilot 幽灵文本） |
@@ -202,6 +201,10 @@ LobeHub 会在以下场景执行 SSRF 安全检查：
 2. **网页爬取**：使用网页爬取功能获取外部内容时。
 
 3. **代理请求**：代理外部 API 请求时。
+
+4. **HTTP MCP 服务器与连接器**：服务端连接 Streamable HTTP 类型的 MCP 服务器或连接器时（包括其 OAuth 发现与令牌请求）。检查基于域名实际解析出的 IP，每次请求和重定向都会检查。未配置设备网关、需要直连本地网络中 MCP 服务器的自部署实例，需通过 `SSRF_ALLOW_PRIVATE_IP_ADDRESS` 或 `SSRF_ALLOW_IP_ADDRESS_LIST` 放行；经桌面端在用户本机运行的 MCP 服务器不受影响。
+
+5. **AI 提供商端点**：服务端调用用户填写的 AI 提供商 `baseURL`（提供商设置 /keyVaults）时，该端点域名在每次请求和重定向都会检查。LobeHub Cloud 上用户端点永远不能访问私有地址。自部署默认允许私有提供商端点 —— 容器访问同一 docker 网络中的 `http://ollama:11434` 是常见的正当用法 —— 可用 `SSRF_ALLOW_PRIVATE_IP_ADDRESS=0` 开启拦截（注意此处语义相反），或用 `SSRF_ALLOW_IP_ADDRESS_LIST` 只放行特定地址。即使自部署放行了私网，链路本地地址（`169.254.0.0/16`、`fe80::/10` 及其 NAT64 转换前缀）依然被拦截，避免开放注册的实例被用来访问云元数据服务；如确有需求可用 `SSRF_ALLOW_IP_ADDRESS_LIST` 单独放行。运维配置的端点（`*_PROXY_URL` 环境变量、内置提供商地址）视为可信，不做检查。
 
 **配置示例**：
 

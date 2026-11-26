@@ -11,6 +11,7 @@ import {
   AgentEvalTestCaseModel,
 } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { messages } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
@@ -283,7 +284,11 @@ export const agentEvalExternalRouter = router({
           });
         }
 
-        await ctx.runTopicModel.batchMarkAborted(input.runId);
+        await new AgentEvalExecutionRepo(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).batchMarkAborted(input.runId);
 
         if (input.status === 'failed') {
           const runTopics = await ctx.runTopicModel.findByRunId(input.runId);

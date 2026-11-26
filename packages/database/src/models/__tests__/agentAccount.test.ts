@@ -154,7 +154,92 @@ describe('AgentAccountModel credential discipline', () => {
   });
 });
 
+describe('AgentAccountModel workspace isolation by agent visibility', () => {
+  const workspaceId = 'agent-account-visibility-ws';
+  const privateAgentId = 'agent-account-private-ws-agent';
+  const publicAgentId = 'agent-account-public-ws-agent';
+
+  beforeEach(async () => {
+    await seedWorkspace(workspaceId);
+    await serverDB.insert(agents).values([
+      { id: privateAgentId, userId, visibility: 'private', workspaceId },
+      { id: publicAgentId, userId, visibility: 'public', workspaceId },
+    ]);
+  });
+
+  /** user1 owns both agents; user2 is a fellow member of the same workspace. */
+  const seedAccounts = async () => {
+    const owner = new AgentAccountModel(serverDB, userId, mockGateKeeper, workspaceId);
+    const privateAccount = await owner.create({
+      ...mailAccount('private-agent@lobe.id'),
+      agentId: privateAgentId,
+      credential: { webhookSecret: 'whsec_private' },
+    });
+    const publicAccount = await owner.create({
+      ...mailAccount('public-agent@lobe.id'),
+      agentId: publicAgentId,
+    });
+
+    return { owner, privateAccount, publicAccount };
+  };
+
+  it('hides a private agent account from another workspace member', async () => {
+    const { owner, privateAccount, publicAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.findById(privateAccount.id)).toBeUndefined();
+    expect(await member.getCredential(privateAccount.id)).toBeNull();
+    expect((await member.query()).map((a) => a.id)).toEqual([publicAccount.id]);
+    expect(await member.query({ agentId: privateAgentId })).toHaveLength(0);
+
+    // The owner still sees both.
+    expect(await owner.query()).toHaveLength(2);
+  });
+
+  it('refuses a member update / setCredential / revoke on a private agent account', async () => {
+    const { owner, privateAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.update(privateAccount.id, { displayName: 'hijacked' })).toBeUndefined();
+    expect(await member.setCredential(privateAccount.id, { webhookSecret: 'x' })).toBeUndefined();
+    expect(await member.revoke(privateAccount.id)).toBeUndefined();
+
+    const intact = await owner.findById(privateAccount.id);
+    expect(intact).toMatchObject({
+      displayName: null,
+      hasCredential: true,
+      status: 'provisioning',
+    });
+    expect(await owner.getCredential(privateAccount.id)).toEqual({
+      webhookSecret: 'whsec_private',
+    });
+  });
+
+  it('lets a member use the account of a public agent', async () => {
+    const { publicAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.findById(publicAccount.id)).toMatchObject({ id: publicAccount.id });
+    expect(await member.update(publicAccount.id, { displayName: 'shared' })).toBe(publicAccount.id);
+  });
+});
+
 describe('AgentAccountModel scope and writes', () => {
+  it("starts with empty settings and returns the owner's settings once written", async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount());
+
+    expect(created.settings).toEqual({});
+    expect((await model.findById(created.id))?.settings).toEqual({});
+
+    const settings = {
+      wake: { digestMinutes: 30, mode: 'on' as const, wakeSenders: ['@lobehub.com'] },
+    };
+    await expect(model.update(created.id, { settings })).resolves.toBe(created.id);
+    expect((await model.findById(created.id))?.settings).toEqual(settings);
+    expect((await model.query({ agentId }))[0]?.settings).toEqual(settings);
+  });
+
   it('does not expose another user account', async () => {
     const model1 = new AgentAccountModel(serverDB, userId);
     const model2 = new AgentAccountModel(serverDB, userId2);
@@ -305,6 +390,46 @@ describe('AgentAccountModel scope and writes', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('leaves suspended and revoked accounts out of a live-only query', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const active = await model.create({ ...mailAccount('live@lobe.id'), status: 'active' });
+    const suspended = await model.create(mailAccount('paused@lobe.id'));
+    const revoked = await model.create(mailAccount('gone@lobe.id'));
+
+    await model.update(suspended.id, { status: 'suspended' });
+    await model.revoke(revoked.id);
+
+    const live = await model.query({ agentId, liveOnly: true });
+    expect(live.map((account) => account.id)).toEqual([active.id]);
+  });
+
+  it('leaves a retired-kind account out of a live-only query but keeps it revocable', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const mail = await model.create({ ...mailAccount('kept@lobe.id'), status: 'active' });
+    // A row written before the agent-owned phone was retired: still `active`,
+    // but its provider (linq) is no longer registered.
+    const legacy = await model.create({
+      ...mailAccount('+15550002222'),
+      // The cast is the write-side half of the same split: the column stores
+      // every persisted kind, while the writable type only admits the kinds the
+      // product still opens. This row predates the retirement.
+      kind: 'phone' as any,
+      provider: 'linq',
+      status: 'active',
+    });
+
+    const live = await model.query({ agentId, liveOnly: true });
+    expect(live.map((account) => account.id)).toEqual([mail.id]);
+
+    const all = await model.query({ agentId });
+    expect(all.map((account) => account.id)).toContain(legacy.id);
+    // The read has to report the kind the row actually carries: the Identity
+    // list keys its icon off it and the OpenAPI response admits it.
+    expect(all.find((account) => account.id === legacy.id)?.kind).toBe('phone');
+    await model.revoke(legacy.id);
+    expect((await model.findById(legacy.id))?.status).toBe('revoked');
+  });
+
   it('keeps one account per (agent, kind, provider, identifier)', async () => {
     const model = new AgentAccountModel(serverDB, userId);
     await model.create(mailAccount('dupe@lobe.id'));
@@ -394,5 +519,24 @@ describe('AgentAccountModel.findForInboundVerification', () => {
 
     expect(inbound?.view.id).toBe(created.id);
     expect(inbound?.credential).toBeNull();
+  });
+});
+
+describe('AgentAccountModel.findByIdUnscoped', () => {
+  it('resolves an account by id without a user scope, and nothing for an unknown id', async () => {
+    const created = await new AgentAccountModel(serverDB, userId).create(
+      mailAccount('unscoped@lobe.id'),
+    );
+
+    // The inbound edge learns the id from a verified routing key; it has no caller yet.
+    expect(await AgentAccountModel.findByIdUnscoped(serverDB, created.id)).toMatchObject({
+      agentId,
+      id: created.id,
+      identifier: 'unscoped@lobe.id',
+      userId,
+    });
+    expect(
+      await AgentAccountModel.findByIdUnscoped(serverDB, '00000000-0000-0000-0000-000000000000'),
+    ).toBeUndefined();
   });
 });

@@ -1,10 +1,10 @@
 // @vitest-environment node
 import type { GoogleGenAI } from '@google/genai';
 import { MediaModality } from '@google/genai';
-import * as imageToBase64Module from '../../utils/imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import {
   createGoogleImage,
   GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
@@ -27,6 +27,28 @@ const expectGoogleImagePromptPart = (prompt: string) => ({
       '</image_generation_request>',
     ].join('\n'),
   ),
+});
+
+const createImagenResponse = (imageBytes: string) => ({
+  generatedImages: [
+    {
+      image: { imageBytes },
+    },
+  ],
+});
+
+const createGeminiImageResponse = (data: string) => ({
+  candidates: [
+    {
+      content: {
+        parts: [
+          {
+            inlineData: { data, mimeType: 'image/png' },
+          },
+        ],
+      },
+    },
+  ],
 });
 
 // Mock the console.error to avoid polluting test output
@@ -55,15 +77,7 @@ describe('createGoogleImage', () => {
       // Arrange - Use real base64 image data (5x5 red pixel PNG)
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockImageResponse = {
-        generatedImages: [
-          {
-            image: {
-              imageBytes: realBase64ImageData,
-            },
-          },
-        ],
-      };
+      const mockImageResponse = createImagenResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateImages').mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -95,15 +109,7 @@ describe('createGoogleImage', () => {
       // Arrange - Use real base64 data
       const realBase64Data =
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const mockImageResponse = {
-        generatedImages: [
-          {
-            image: {
-              imageBytes: realBase64Data,
-            },
-          },
-        ],
-      };
+      const mockImageResponse = createImagenResponse(realBase64Data);
       vi.spyOn(mockClient.models, 'generateImages').mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -132,15 +138,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64Data =
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const mockImageResponse = {
-        generatedImages: [
-          {
-            image: {
-              imageBytes: realBase64Data,
-            },
-          },
-        ],
-      };
+      const mockImageResponse = createImagenResponse(realBase64Data);
       vi.spyOn(mockClient.models, 'generateImages').mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -326,15 +324,7 @@ describe('createGoogleImage', () => {
         // Arrange
         const realBase64Data =
           'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-        const mockImageResponse = {
-          generatedImages: [
-            {
-              image: {
-                imageBytes: realBase64Data,
-              },
-            },
-          ],
-        };
+        const mockImageResponse = createImagenResponse(realBase64Data);
         vi.spyOn(mockClient.models, 'generateImages').mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -366,22 +356,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -530,22 +505,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -581,22 +541,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -634,22 +579,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -688,22 +618,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -756,22 +671,7 @@ describe('createGoogleImage', () => {
       // Arrange
       const realBase64ImageData =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: realBase64ImageData,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(realBase64ImageData);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -804,22 +704,7 @@ describe('createGoogleImage', () => {
       const outputImageBase64 =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
 
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: outputImageBase64,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(outputImageBase64);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -873,22 +758,7 @@ describe('createGoogleImage', () => {
         mimeType: 'image/jpeg',
       });
 
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: outputImageBase64,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(outputImageBase64);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
@@ -937,22 +807,7 @@ describe('createGoogleImage', () => {
       const outputImageBase64 =
         'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
 
-      const mockContentResponse = {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  inlineData: {
-                    data: outputImageBase64,
-                    mimeType: 'image/png',
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      };
+      const mockContentResponse = createGeminiImageResponse(outputImageBase64);
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {

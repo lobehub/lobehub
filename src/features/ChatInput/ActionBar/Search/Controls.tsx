@@ -1,5 +1,7 @@
-import { Center, createStaticStyles, cssVar, cx, Divider, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Divider, Flexbox, Icon } from '@lobehub/ui';
 import { GlobeOffIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type LucideIcon } from 'lucide-react';
 import { SparkleIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -9,6 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { densityTokens } from '@/styles/density.stylex';
 import { type SearchMode } from '@/types/search';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -17,44 +20,33 @@ import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import FCSearchModel from './FCSearchModel';
 import ModelBuiltinSearch from './ModelBuiltinSearch';
 
-const styles = createStaticStyles(({ css }) => ({
-  active: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  check: css`
-    margin-inline-start: 12px;
-    font-size: 16px;
-    color: ${cssVar.colorPrimary};
-  `,
-  description: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  icon: css`
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgElevated};
-  `,
-  option: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  description: { fontSize: '12px', color: cssVar.colorTextDescription },
+  icon: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  option: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 interface NetworkOption {
   description: string;
@@ -74,7 +66,7 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
     <Flexbox
       horizontal
       align={'flex-start'}
-      className={cx(styles.option, mode === value && styles.active)}
+      className={stylex.props(styles.option, mode === value && styles.active).className}
       gap={12}
       key={value}
       style={{
@@ -86,27 +78,19 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
         await updateAgentChatConfig({ searchMode: value });
       }}
     >
-      <Center className={styles.icon} flex={'none'} height={32} width={32}>
+      <Center className={stylex.props(styles.icon).className} flex={'none'} height={32} width={32}>
         <Icon icon={icon} />
       </Center>
       <Flexbox flex={1}>
-        <div className={styles.title}>{label}</div>
-        <div className={styles.description}>{description}</div>
+        <div {...stylex.props(styles.title)}>{label}</div>
+        <div {...stylex.props(styles.description)}>{description}</div>
       </Flexbox>
     </Flexbox>
   );
 });
 
-/**
- * Search settings that are only meaningful once web search is on: which engine
- * answers (app tool vs the model's built-in search) and which model runs the
- * function-calling search. Extracted so the search capability row in the
- * chat-input Tools popover can host it beside the Auto/Disable policy.
- */
-export const SearchAdvancedControls = memo(() => {
+export const useSearchAdvancedVisibility = () => {
   const agentId = useAgentId();
-  const { allowed: canCreate } = usePermission('create_content');
-
   const { model, provider } = useEffectiveModel(agentId);
   const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
@@ -136,11 +120,28 @@ export const SearchAdvancedControls = memo(() => {
     !supportFC &&
     (!modelBuiltinSearchImpl || (!isModelBuiltinSearchInternal && !useModelBuiltinSearch));
 
-  if (!showModelBuiltinSearch && !showFCSearchModel) return null;
+  return {
+    hasControls: showModelBuiltinSearch || showFCSearchModel,
+    showFCSearchModel,
+    showModelBuiltinSearch,
+  };
+};
+
+/**
+ * Search settings that are only meaningful once web search is on: which engine
+ * answers (app tool vs the model's built-in search) and which model runs the
+ * function-calling search. Extracted so both the Tools popover and the agent
+ * Tools settings page can host it cleanly.
+ */
+export const SearchAdvancedControls = memo<{ showDivider?: boolean }>(({ showDivider = true }) => {
+  const { allowed: canCreate } = usePermission('create_content');
+  const { hasControls, showFCSearchModel, showModelBuiltinSearch } = useSearchAdvancedVisibility();
+
+  if (!hasControls) return null;
 
   return (
     <>
-      <Divider style={{ margin: 0 }} />
+      {showDivider && <Divider style={{ margin: 0 }} />}
       {showModelBuiltinSearch && <ModelBuiltinSearch disabled={!canCreate} />}
       {showFCSearchModel && <FCSearchModel disabled={!canCreate} />}
     </>

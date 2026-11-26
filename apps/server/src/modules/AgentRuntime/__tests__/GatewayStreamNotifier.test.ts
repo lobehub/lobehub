@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
-import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
+import { sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
 import { createMockInner } from '../testUtils';
 
@@ -187,7 +187,7 @@ describe('GatewayStreamNotifier', () => {
         initialContext: { prompt: 'context' },
         status: 'done',
       });
-      expect(sanitizeGatewayEventData(data, FULL_STRIP_REDACTION, 'step_complete')).toEqual({
+      expect(sanitizeGatewayEventData(data, true, 'step_complete')).toEqual({
         phase: 'execution_complete',
         reason: 'done',
       });
@@ -301,19 +301,6 @@ describe('GatewayStreamNotifier', () => {
       await notifier.drainPushes('op-1');
 
       expect(order).toEqual(['stream_chunk', 'stream_end', 'step_start']);
-    });
-
-    it('still returns inner result even if gateway fails', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('network error'));
-
-      const result = await notifier.publishStreamEvent('op-1', {
-        data: {},
-        stepIndex: 0,
-        type: 'step_start' as const,
-      });
-
-      expect(result).toBe('publishStreamEvent-result');
-      expect(inner.calls.publishStreamEvent).toHaveLength(1);
     });
   });
 

@@ -7,13 +7,13 @@
 
 回流的是**判据**，不是某个项目的具体取值。
 
-| 该回流 | 不该回流 |
-| --- | --- |
-| 一类可复现的坑，以及可机械校验的判据 | 只对某个项目成立的业务规则 |
-| 能被正则 / 计数 / 共现关系判断的规则 | 依赖某个产品品牌、内部代号、专有名词的场景 |
-| 通用的 stage 契约、路由信号、模型挂载方式 | 某个团队的口味偏好（「我们喜欢圆角小一点」） |
-| 真实代码上发现的误报与漏报 | 未经验证的一次性尝试 |
-| 模型的新挂载点与必须产出的字段 | 把某个模型当成口号到处引用 |
+| 该回流                                       | 不该回流                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| 一类可复现的坑，以及可机械校验的判据         | 只对某个项目成立的业务规则                                             |
+| 能被正则 / 计数 / 共现关系判断的规则         | 依赖某个产品品牌、内部代号、专有名词的场景                             |
+| 通用的 stage 契约、路由信号、模型挂载方式    | 某个团队的口味偏好（「我们喜欢圆角小一点」）                           |
+| 真实代码上发现的误报与漏报                   | 未经验证的一次性尝试                                                   |
+| 模型的新挂载点与必须产出的字段               | 把某个模型当成口号到处引用                                             |
 | 通用的设计判据：信息优先级、流程、文案、状态 | 组件自身的 bug、默认值缺陷和对应的绕法（归 lobe-ui，去组件库提 issue） |
 
 **一句话自检：把项目名去掉之后，这条判据还成立吗？** 不成立就不要提。
@@ -32,9 +32,9 @@
 6. 不是组件问题：条目带 `scope: component-bug`，或 `root_cause` / `layer_reason` 写明是组件 bug、组件缺陷、组件默认值问题的，不回流（归 lobe-ui）
 
 ```bash
-node scripts/upstream.mjs                                  # 列出候选与不回流的原因
-node scripts/upstream.mjs --write upstream-candidates.md   # 生成可直接提 PR 的清单
-node scripts/upstream.mjs --deny "内部代号,某产品名"          # 追加品牌词检查
+node scripts/upstream.mjs                                # 列出候选与不回流的原因
+node scripts/upstream.mjs --write upstream-candidates.md # 生成可直接提 PR 的清单
+node scripts/upstream.mjs --deny "内部代号,某产品名"             # 追加品牌词检查
 ```
 
 ## 提交流程
@@ -54,7 +54,7 @@ node scripts/upstream.mjs --deny "内部代号,某产品名"          # 追加�
 3. 在 `lint-lobe.mjs` 的 `RULES` 里加规则：`{ id, level, ref, stage, since, msg, test }`。
    - 新规则默认 **WARN**；连续两个版本无误报后再升 FAIL。
    - `ref` 必须指向 `references/` 里真实存在的编号；`stage` 决定由哪个 stage 处理它。
-4. 在对应 reference 规则旁写 `lint：\`<ID>\``；detail 规则同步 `detail-checklist.md` 的「检出」列。
+4. 在对应 reference 规则旁写 `lint：\`<ID>\``；detail 规则同步 `detail-checklist.md\` 的「检出」列。
 5. bump `SKILL.md` / `pipeline.json` 的 version，在 `CHANGELOG.md` 新版本下**点名该规则 id**。
 
 ### rule 层（references 编号规则）
@@ -69,22 +69,28 @@ node scripts/upstream.mjs --deny "内部代号,某产品名"          # 追加�
 
 ```markdown
 ## 问题
+
 <一类可复现的现象，去掉项目名仍然成立>
 
 ## 根因
+
 <为什么现在的 skill 挡不住它>
 
 ## 落地层与理由
+
 layer: <structure|lint|rule>
 layer_reason: <为什么不能落在更强的一层>
 
 ## 改动
+
 <规则 id / 编号 / 文件>
 
 ## 回归
+
 <新增或修改的 fixture、route-case>
 
 ## 自检
+
 - [ ] 去掉项目名后判据仍成立
 - [ ] 不含品牌 / 内部代号
 - [ ] 不是组件 bug 或绕法（组件修好后仍然成立）

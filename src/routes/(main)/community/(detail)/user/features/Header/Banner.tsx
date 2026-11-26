@@ -59,7 +59,7 @@ const Banner = memo<BannerProps>(({ avatar, bannerUrl }) => {
         <Center className={stylex.props(styles.bannerInner).className}>
           {backgroundImage && (
             <div
-              {...sx(shouldBlur && styles.bannerAvatar, undefined, {
+              {...sx(shouldBlur && styles.bannerAvatar, {
                 backgroundImage: `url(${backgroundImage})`,
                 backgroundPosition: 'center',
                 backgroundSize: 'cover',

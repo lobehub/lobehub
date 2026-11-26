@@ -1,7 +1,9 @@
 'use client';
 
 import type { NotificationMetadata } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BellOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,29 +13,25 @@ import { VList } from 'virtua';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { PENDING_TRANSFERS_SWR_KEY, TransferRequestItem } from '@/features/ResourceTransferRequest';
-import { useClientDataSWR } from '@/libs/swr';
+import { TransferRequestItem } from '@/features/ResourceTransferRequest';
 import type { PendingTransferRequest } from '@/services/resourceTransferRequest';
-import { resourceTransferRequestService } from '@/services/resourceTransferRequest';
+import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import NotificationItem from './NotificationItem';
-import type { NotificationListHandle } from './useNotificationList';
-import { PAGE_SIZE, useNotificationList } from './useNotificationList';
+import { useNotificationList } from './useNotificationList';
+import { usePendingTransfers } from './usePendingTransfers';
 
-const styles = createStaticStyles(({ css }) => ({
-  // colorFillSecondary rather than colorBorderSecondary: see the note in
-  // ../InboxModal/index.tsx — the border token collapses into the modal's own
-  // surface in dark mode, which erased the separator between rows.
-  item: css`
-    border-block-end: 1px solid ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFillSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ContentProps {
   category?: string;
@@ -46,28 +44,30 @@ interface ContentProps {
    * after a transfer action that has no loaded notification row to mark read.
    */
   onRefreshInbox: () => void;
-  /** See {@link useNotificationList} for why the list handle is registered. */
-  registerHandle: (handle: NotificationListHandle) => void;
 }
 
 const getLinkedRequestId = (item: { metadata?: NotificationMetadata | null }) =>
   item.metadata?.transfer?.requestId;
 
 const Content = memo<ContentProps>(
-  ({ category, isRead, onMarkAsRead, onArchive, onRefreshInbox, registerHandle }) => {
+  ({ category, isRead, onMarkAsRead, onArchive, onRefreshInbox }) => {
     const { t } = useTranslation('notification');
     const virtuaRef = useRef<VListHandle>(null);
     const workspaceId = useActiveWorkspaceId();
     const currentUserId = useUserStore(userProfileSelectors.userId);
 
     const {
-      data: pages,
       error,
-      isLoading,
-      isValidating,
-      mutate,
-      setSize,
-    } = useNotificationList({ category, isRead, registerHandle });
+      hasMore,
+      headError,
+      isConfirmed: isFeedConfirmed,
+      isHeadValidating,
+      isLoadingMore,
+      loadMore,
+      loadMoreError,
+      notifications: loadedNotifications,
+      retry,
+    } = useNotificationList({ category, isRead });
 
     // Cross-resource transfer inbox: live pending requests rendered as
     // notification-style items pinned above the immutable stream. Driven by
@@ -78,20 +78,21 @@ const Content = memo<ContentProps>(
     // because row suppression below must hold on all of them (a linked row
     // must never show alongside, or instead of, its live item).
     const showTransfers = isRead !== true && (!category || category === 'pending');
-    const { data: transferRequests, mutate: mutateTransfers } = useClientDataSWR<
-      PendingTransferRequest[]
-    >(workspaceId ? [PENDING_TRANSFERS_SWR_KEY, workspaceId] : null, () =>
-      resourceTransferRequestService.listMine(),
-    );
+    const {
+      error: transfersError,
+      isConfirmed: isTransfersConfirmed,
+      isValidating: isTransfersValidating,
+      requests: transferRequests,
+      retry: retryTransfers,
+    } = usePendingTransfers(!!workspaceId);
 
-    // Reset scroll position and pagination when filter changes
+    // Each filter is its own replica entry; only the scroll position resets.
     useEffect(() => {
-      setSize(1);
       virtuaRef.current?.scrollTo(0);
-    }, [category, isRead, setSize]);
+    }, [category, isRead]);
 
-    const notifications = pages?.flat() ?? [];
-    const hasMore = pages ? pages.at(-1)?.length === PAGE_SIZE : false;
+    const notifications = loadedNotifications ?? [];
+    const isValidating = isLoadingMore || (!loadedNotifications && isHeadValidating);
 
     const liveRequests = (showTransfers && currentUserId && transferRequests) || [];
     // While a request is live its actionable item replaces the immutable
@@ -116,7 +117,7 @@ const Content = memo<ContentProps>(
         // "request no longer live" so the conservative path (refresh) runs.
         let next: PendingTransferRequest[] | undefined;
         try {
-          next = await mutateTransfers();
+          next = await useHomeStore.getState().settleTransferRequest(request.id, succeeded);
         } catch (error) {
           console.error('[InboxNotificationList] transfer revalidation failed', error);
         }
@@ -129,7 +130,7 @@ const Content = memo<ContentProps>(
         const stillLive = !!next?.some((item) => item.id === request.id);
         if (succeeded || !stillLive) onRefreshInbox();
       },
-      [mutateTransfers, onRefreshInbox],
+      [onRefreshInbox],
     );
 
     // The VList renders the live transfer items followed by
@@ -140,25 +141,28 @@ const Content = memo<ContentProps>(
     const renderedCount = liveRequests.length + visibleCount;
     const handleScroll = useCallback(() => {
       const ref = virtuaRef.current;
-      if (!ref || !hasMore || isValidating || error) return;
+      if (!ref || !hasMore || isLoadingMore || loadMoreError) return;
 
       const bottomVisibleIndex = ref.findItemIndex(ref.scrollOffset + ref.viewportSize);
-      if (bottomVisibleIndex + 5 > renderedCount) {
-        setSize((prev) => prev + 1);
-      }
-    }, [error, hasMore, isValidating, renderedCount, setSize]);
+      if (bottomVisibleIndex + 5 > renderedCount) loadMore();
+    }, [hasMore, isLoadingMore, loadMore, loadMoreError, renderedCount]);
 
     // When every loaded row is suppressed by a live request there is no VList
     // to scroll, so pagination would never advance — fetch the next page until
     // something renders or the stream ends.
     const allLoadedSuppressed = visibleCount === 0 && notifications.length > 0;
     useEffect(() => {
-      if (allLoadedSuppressed && hasMore && !isValidating && !error) {
-        setSize((prev) => prev + 1);
-      }
-    }, [allLoadedSuppressed, error, hasMore, isValidating, setSize]);
+      if (allLoadedSuppressed && hasMore && !isLoadingMore && !loadMoreError) loadMore();
+    }, [allLoadedSuppressed, hasMore, isLoadingMore, loadMore, loadMoreError]);
 
-    if (isLoading) {
+    // A restored snapshot can be empty or stale: "nothing here" is only said
+    // once the server answered (for the stream, and for the live transfers
+    // that would render above it).
+    const isEmptyConfirmed =
+      isFeedConfirmed &&
+      (!workspaceId || !showTransfers || isTransfersConfirmed || !!transfersError);
+
+    if (!loadedNotifications && !headError) {
       return (
         <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
           <SkeletonList rows={5} />
@@ -166,14 +170,9 @@ const Content = memo<ContentProps>(
       );
     }
 
-    if (error && notifications.length === 0) {
+    if (headError) {
       return (
-        <AsyncError
-          error={error}
-          retrying={isValidating}
-          variant="page"
-          onRetry={() => void mutate()}
-        />
+        <AsyncError error={headError} retrying={isHeadValidating} variant="page" onRetry={retry} />
       );
     }
 
@@ -182,7 +181,7 @@ const Content = memo<ContentProps>(
     // clip once several transfers (with their manifest rows) stack up.
     const transferItems = currentUserId
       ? liveRequests.map((request) => (
-          <Flexbox className={styles.item} key={request.id}>
+          <Flexbox className={stylex.props(styles.item).className} key={request.id}>
             <TransferRequestItem
               currentUserId={currentUserId}
               request={request}
@@ -193,6 +192,25 @@ const Content = memo<ContentProps>(
       : [];
 
     if (visibleNotifications.length === 0 && transferItems.length === 0) {
+      // A failed read — of a restored snapshot, or a refresh after a settled
+      // empty answer — shows with its Retry rather than as "nothing here".
+      if (error) {
+        return (
+          <AsyncError
+            error={error}
+            retrying={isHeadValidating || isLoadingMore}
+            variant="page"
+            onRetry={retry}
+          />
+        );
+      }
+      if (!isEmptyConfirmed) {
+        return (
+          <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
+            <SkeletonList rows={5} />
+          </Flexbox>
+        );
+      }
       return (
         <Flexbox height="100%">
           <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
@@ -214,9 +232,18 @@ const Content = memo<ContentProps>(
     return (
       <Flexbox height="100%">
         <VList ref={virtuaRef} style={{ flex: 1 }} onScroll={handleScroll}>
+          {transferItems.length > 0 && transfersError ? (
+            // The cards above stay; their actions wait for a confirmed list.
+            <AsyncError
+              error={transfersError}
+              retrying={isTransfersValidating}
+              variant="inline"
+              onRetry={() => void retryTransfers()}
+            />
+          ) : null}
           {transferItems}
           {visibleNotifications.map((item) => (
-            <Flexbox className={styles.item} key={item.id}>
+            <Flexbox className={stylex.props(styles.item).className} key={item.id}>
               <NotificationItem
                 actionUrl={item.actionUrl}
                 content={item.content}
@@ -233,12 +260,7 @@ const Content = memo<ContentProps>(
             </Flexbox>
           ))}
           {error ? (
-            <AsyncError
-              error={error}
-              retrying={isValidating}
-              variant="inline"
-              onRetry={() => void mutate()}
-            />
+            <AsyncError error={error} retrying={isValidating} variant="inline" onRetry={retry} />
           ) : isValidating ? (
             <Flexbox padding="4px 8px">
               <SkeletonList rows={2} />

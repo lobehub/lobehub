@@ -1,4 +1,8 @@
-import { convertIpynbToMarkdown, scrubIpynbFallbackText } from '@lobechat/file-loaders';
+import {
+  convertIpynbToMarkdown,
+  isFileParseBudgetError,
+  scrubIpynbFallbackText,
+} from '@lobechat/file-loaders';
 
 import { getChunkingLoaderType } from '../loaderType';
 import { type DocumentChunk } from '../types';
@@ -23,47 +27,54 @@ class DocumentLoaderError extends Error {
 export class ChunkingLoader {
   partitionContent = async (filename: string, content: Uint8Array): Promise<DocumentChunk[]> => {
     try {
-      const fileBlob = new Blob([Buffer.from(content)]);
-      const txt = this.uint8ArrayToString(content);
+      // Both copy the whole file: built on first use, so a binary format does not also pay for
+      // a text decode of itself (a 64MiB xlsx decoded as text is a ~100MB string of nothing).
+      const blob = () => new Blob([Buffer.from(content)]);
+      const text = () => this.uint8ArrayToString(content);
 
       const type = getChunkingLoaderType(filename ?? '');
 
       switch (type) {
         case 'code': {
-          const ext = filename.split('.').pop();
-          return await CodeLoader(txt, ext!);
+          const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+          return await CodeLoader(text(), extension);
         }
 
         case 'ppt': {
-          return await PPTXLoader(fileBlob);
+          return await PPTXLoader(blob());
         }
 
         case 'latex': {
-          return await LatexLoader(txt);
+          return await LatexLoader(text());
         }
 
         case 'pdf': {
-          return await PdfLoader(fileBlob);
+          return await PdfLoader(blob());
         }
 
         case 'markdown': {
-          return await MarkdownLoader(txt);
+          return await MarkdownLoader(text());
         }
 
         case 'doc': {
-          return await DocxLoader(fileBlob);
+          const { extractDocText } = await import('@lobechat/file-loaders/src/loaders/doc');
+          return await TextLoader(await extractDocText(Buffer.from(content)));
+        }
+
+        case 'docx': {
+          return await DocxLoader(blob());
         }
 
         case 'excel': {
-          return await ExcelLoader(fileBlob);
+          return await ExcelLoader(blob());
         }
 
         case 'text': {
-          return await TextLoader(txt);
+          return await TextLoader(text());
         }
 
         case 'csv': {
-          return await CsVLoader(fileBlob);
+          return await CsVLoader(blob());
         }
 
         case 'epub': {
@@ -73,9 +84,10 @@ export class ChunkingLoader {
         case 'ipynb': {
           // Notebook JSON → markdown so chunks carry semantic text instead
           // of base64 payloads; non-nbformat-v4 files fall back to raw text.
-          const markdown = convertIpynbToMarkdown(txt);
+          const source = text();
+          const markdown = convertIpynbToMarkdown(source);
           return markdown === null
-            ? await TextLoader(scrubIpynbFallbackText(txt))
+            ? await TextLoader(scrubIpynbFallbackText(source))
             : await MarkdownLoader(markdown);
         }
 
@@ -86,6 +98,9 @@ export class ChunkingLoader {
         }
       }
     } catch (e) {
+      // A structural refusal is a deliberate "too large", not a loader failure: keep its type so
+      // callers can tell the user, and so it is not retried as if the file were merely broken.
+      if (isFileParseBudgetError(e)) throw e;
       throw new DocumentLoaderError((e as Error).message);
     }
   };

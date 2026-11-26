@@ -9,6 +9,7 @@ import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModel
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSingleton } from '@/hooks/useSingleton';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
 import { useBuildListItems } from '../../hooks/useBuildListItems';
@@ -50,12 +51,26 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
-  const { isModelRestricted, onBeforeModelSelect, onRestrictedModelClick, sortModelLast } =
-    useBusinessModelListGuard();
-  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
+  const {
+    isModelHidden,
+    isModelRestricted,
+    onBeforeModelSelect,
+    onRestrictedModelClick,
+    restrictedBadgeLabel,
+    sortModelLast,
+  } = useBusinessModelListGuard();
+  const proLabel = tCommon('pro');
+  const getRestrictedLabel = useCallback(
+    (modelId: string, providerId: string) =>
+      restrictedBadgeLabel?.(modelId, providerId) ?? proLabel,
+    [proLabel, restrictedBadgeLabel],
+  );
 
   const chatEnabledList = useEnabledChatModels();
-  const enabledList = enabledListProp ?? chatEnabledList;
+  const enabledList = useMemo(
+    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isModelHidden),
+    [chatEnabledList, enabledListProp, isModelHidden],
+  );
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
@@ -162,11 +177,11 @@ export const List: FC<ListProps> = ({
               <ListItemRenderer
                 activeKey={activeKey}
                 activeSecondaryText={activeSecondaryText}
+                getRestrictedLabel={getRestrictedLabel}
                 isModelRestricted={isModelRestricted}
                 item={item}
                 key={key}
                 newLabel={newLabel}
-                proLabel={proLabel}
                 subscribeScroll={subscribeScroll}
                 onBeforeModelSelect={onBeforeModelSelect}
                 onClose={handleClose}

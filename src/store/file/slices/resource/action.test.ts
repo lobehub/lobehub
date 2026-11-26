@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { setScopedMutate } from '@/libs/swr/mutate';
+import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
+import { useTreeStore } from '@/store/tree';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
 import type { ResourceMoveCachePatch, ResourceMoveCacheScope } from './hooks';
@@ -41,6 +44,7 @@ vi.mock('@/services/resource', () => ({
 
 vi.mock('@/services/knowledgeBase', () => ({
   knowledgeBaseService: {
+    reorderKnowledgeItems: vi.fn(),
     addFilesToKnowledgeBase: mockAddFilesToKnowledgeBase,
     removeFilesFromKnowledgeBase: mockRemoveFilesFromKnowledgeBase,
   },
@@ -109,6 +113,56 @@ describe('resource actions', () => {
     vi.clearAllMocks();
     mockGetActiveWorkspaceId.mockReturnValue(null);
     useFileStore.setState(initialState);
+  });
+
+  it('reorders the Explorer immediately, preserves metadata and rolls back exactly', () => {
+    const original = [
+      createResource({ id: 'a', metadata: { emoji: '📚' } }),
+      createResource({ id: 'b', metadata: { sortOrder: 500 } }),
+    ];
+    seedList({ libraryId: 'kb-1' }, original);
+    const overlay = useFileStore.getState().reorderCurrentResources(['b', 'a']);
+    expect(listIds()).toEqual(['b', 'a']);
+    expect(useFileStore.getState().resourceMap.get('a')?.metadata).toEqual({
+      emoji: '📚',
+      sortOrder: 2000,
+    });
+    overlay.rollback();
+    expect(useFileStore.getState().resourceList).toEqual(original);
+  });
+
+  it('commits custom weights after successful reorder', () => {
+    seedList({ libraryId: 'kb-1' }, [createResource({ id: 'a' }), createResource({ id: 'b' })]);
+    const overlay = useFileStore.getState().reorderCurrentResources(['b', 'a']);
+    overlay.commit();
+    expect(listIds()).toEqual(['b', 'a']);
+    expect(useFileStore.getState().resourceList.map((item) => item.metadata?.sortOrder)).toEqual([
+      1000, 2000,
+    ]);
+  });
+
+  it('rolls back both real stores when Explorer reconciliation runs during a rejected reorder', async () => {
+    useTreeStore.getState().reset();
+    useResourceManagerStore.getState().setLibraryId('kb-reorder');
+    useTreeStore.setState({ knowledgeBaseId: 'kb-reorder' });
+    seedList({ libraryId: 'kb-reorder' }, [
+      createResource({ id: 'a', name: 'a' }),
+      createResource({ id: 'b', name: 'b' }),
+    ]);
+    const originalTree = useTreeStore.getState().children[''];
+    vi.mocked(knowledgeBaseService.reorderKnowledgeItems).mockRejectedValue(
+      new Error('reorder rejected'),
+    );
+    try {
+      await expect(useTreeStore.getState().reorderItems('', ['b'], 'a', 'before')).rejects.toThrow(
+        'reorder rejected',
+      );
+      expect(listIds()).toEqual(['a', 'b']);
+      expect(useTreeStore.getState().children['']).toEqual(originalTree);
+    } finally {
+      useTreeStore.getState().reset();
+      useResourceManagerStore.getState().setLibraryId(undefined);
+    }
   });
 
   it('keeps a completed background upload out of the visible list when it is off-screen', () => {

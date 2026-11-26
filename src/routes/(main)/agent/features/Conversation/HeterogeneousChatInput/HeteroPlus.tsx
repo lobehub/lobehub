@@ -3,25 +3,16 @@
 import { cssVar, Icon, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import {
-  CalendarClockIcon,
-  CheckIcon,
-  ChevronRight,
-  FileUp,
-  PlusIcon,
-  TargetIcon,
-  TypeIcon,
-} from 'lucide-react';
+import { CalendarClockIcon, CheckIcon, FileUp, PlusIcon, TargetIcon, TypeIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ActionDropdownMenuItems } from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import { ChatInputAction } from '@/features/ChatInput/ActionBar/components/ChatInputAction';
+import SubmenuChevron from '@/features/ChatInput/ActionBar/components/SubmenuChevron';
 import { insertGoalTag } from '@/features/ChatInput/InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 import { useHeteroUpload } from './useHeteroUpload';
@@ -71,7 +62,6 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
 
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const closeMenu = useCallback(() => setOpen(false), []);
   const { beforeUpload, onFiles } = useHeteroUpload(providerType, closeMenu);
@@ -121,7 +111,7 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
         })),
         // Trailing chevron (replaces base-ui's default triangle submenu arrow,
         // which ActionDropdown hides via the .lobe-submenu-chevron rule).
-        extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+        extra: <SubmenuChevron />,
         icon: CalendarClockIcon,
         key: 'scheduleSend',
         label: t('input.schedule.title'),
@@ -137,21 +127,17 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
         type: 'switch',
       },
       // Goal creation shares the standard input's goal chip.
-      ...(enableGoals
-        ? ([
-            { type: 'divider' },
-            {
-              icon: TargetIcon,
-              key: 'set-topic-goal',
-              // Same string as the chip it inserts — see the agent composer's Plus.
-              label: tEditor('slash.goal'),
-              onClick: () => {
-                setOpen(false);
-                insertGoalTag(editor, tEditor('slash.goal'));
-              },
-            },
-          ] as ActionDropdownMenuItems)
-        : []),
+      { type: 'divider' },
+      {
+        icon: TargetIcon,
+        key: 'set-topic-goal',
+        // Same string as the chip it inserts — see the agent composer's Plus.
+        label: tEditor('slash.goal'),
+        onClick: () => {
+          setOpen(false);
+          insertGoalTag(editor, tEditor('slash.goal'));
+        },
+      },
     ];
   }, [
     t,
@@ -160,7 +146,6 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
     setShowTypoBar,
     armSchedule,
     scheduledSendAt,
-    enableGoals,
     editor,
     beforeUpload,
     onFiles,

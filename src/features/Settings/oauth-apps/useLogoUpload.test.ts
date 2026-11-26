@@ -4,11 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLogoUpload } from './useLogoUpload';
 
 const mocks = vi.hoisted(() => ({
-  toastError: vi.fn(),
   uploadWithProgress: vi.fn(),
 }));
-
-vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.toastError } }));
 
 vi.mock('@/store/file', () => ({
   useFileStore: (selector: (s: unknown) => unknown) =>
@@ -34,7 +31,6 @@ describe('useLogoUpload', () => {
     });
 
     expect(url).toBe('https://files.lobehub.com/logo.png');
-    expect(url?.startsWith('data:')).toBe(false);
   });
 
   it('turns a storage path into an absolute URL the provider accepts', async () => {
@@ -59,7 +55,7 @@ describe('useLogoUpload', () => {
 
     expect(url).toBeUndefined();
     expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
-    expect(mocks.toastError).toHaveBeenCalledWith('oauthApp.form.logo.tooLarge');
+    expect(result.current.error).toBe('oauthApp.form.logo.tooLarge');
   });
 
   it('reports a failed upload and returns nothing', async () => {
@@ -73,7 +69,22 @@ describe('useLogoUpload', () => {
     });
 
     expect(url).toBeUndefined();
-    expect(mocks.toastError).toHaveBeenCalledWith('oauthApp.form.logo.uploadFailed');
+    expect(result.current.error).toBe('oauthApp.form.logo.uploadFailed');
     expect(result.current.uploading).toBe(false);
+  });
+
+  it('clears the error when the next upload starts', async () => {
+    mocks.uploadWithProgress.mockResolvedValue({ url: 'https://files.lobehub.com/logo.png' });
+    const { result } = renderHook(() => useLogoUpload());
+
+    await act(async () => {
+      await result.current.upload(file(2 * 1024 * 1024 + 1));
+    });
+    expect(result.current.error).toBe('oauthApp.form.logo.tooLarge');
+
+    await act(async () => {
+      await result.current.upload(file());
+    });
+    expect(result.current.error).toBe('');
   });
 });

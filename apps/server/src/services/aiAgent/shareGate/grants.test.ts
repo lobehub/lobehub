@@ -1,7 +1,9 @@
 import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import { AuvIdentifier } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { WorkIdentifier } from '@lobechat/builtin-tool-work';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -26,9 +28,24 @@ describe('filterPluginsByShareGate', () => {
     ]);
   });
 
+  it('keeps the Works tool without any grant', () => {
+    expect(filterPluginsByShareGate([WorkIdentifier, 'web-search'], buildGate())).toEqual([
+      WorkIdentifier,
+    ]);
+  });
+
   it('exposes no tools when the allowlist is missing or empty', () => {
     expect(filterPluginsByShareGate(['web-search'], buildGate())).toEqual([]);
     expect(filterPluginsByShareGate(['web-search'], buildGate({ toolGrants: [] }))).toEqual([]);
+  });
+
+  it('keeps a pinned device builtin only under the device grant', () => {
+    const ids = [AuvIdentifier, 'mcp-github'];
+
+    expect(filterPluginsByShareGate(ids, buildGate())).toEqual([]);
+    expect(filterPluginsByShareGate(ids, { ...buildGate(), canUseDevice: true })).toEqual([
+      AuvIdentifier,
+    ]);
   });
 
   it('treats a per-API grant as candidacy for the whole identifier', () => {
@@ -72,12 +89,21 @@ describe('filterSkillsByShareGate', () => {
 
 describe('getShareGrantActivatedPluginIds', () => {
   it('activates Agent Documents only after the owner grants it for this Share', () => {
-    expect(getShareGrantActivatedPluginIds(buildGate())).toEqual([]);
+    expect(getShareGrantActivatedPluginIds(buildGate())).not.toContain(AgentDocumentsIdentifier);
     expect(
       getShareGrantActivatedPluginIds(
         buildGate({ toolGrants: [{ identifier: AgentDocumentsIdentifier }] }),
       ),
-    ).toEqual([AgentDocumentsIdentifier]);
+    ).toContain(AgentDocumentsIdentifier);
+  });
+
+  it('activates the Works tool in every visitor run, granted or not', () => {
+    expect(getShareGrantActivatedPluginIds(buildGate())).toEqual([WorkIdentifier]);
+    expect(
+      getShareGrantActivatedPluginIds(
+        buildGate({ toolGrants: [{ identifier: AgentDocumentsIdentifier }] }),
+      ),
+    ).toEqual([AgentDocumentsIdentifier, WorkIdentifier]);
   });
 });
 
@@ -132,11 +158,18 @@ describe('resolveEffectiveShareToolGrants — lobe-activator', () => {
   });
 
   it('does not imply the activator when the share grants no tool', () => {
+    // The implied Works grant is enabled directly; it never needs the activator.
     expect(resolveEffectiveShareToolGrants({}).has(LobeActivatorIdentifier)).toBe(false);
     // A skill-only share already has lobe-skills to load what it granted.
     expect(
       resolveEffectiveShareToolGrants({ skillGrants: ['pdf-report'] }).has(LobeActivatorIdentifier),
     ).toBe(false);
+  });
+
+  it('implies the activator from the device grant alone', () => {
+    expect(
+      resolveEffectiveShareToolGrants({ canUseDevice: true }).get(LobeActivatorIdentifier),
+    ).toEqual(new Set([ActivatorApiName.activateTools]));
   });
 
   it('never lets a stored activator entry widen the implied scope or stand alone', () => {
@@ -150,5 +183,24 @@ describe('resolveEffectiveShareToolGrants — lobe-activator', () => {
       toolGrants: [{ identifier: LobeActivatorIdentifier }],
     });
     expect(alone.has(LobeActivatorIdentifier)).toBe(false);
+  });
+});
+
+describe('resolveEffectiveShareToolGrants — lobe-work', () => {
+  it('grants the Works tool to every share, whatever the owner picked', () => {
+    expect(resolveEffectiveShareToolGrants({}).get(WorkIdentifier)).toBe('all');
+    expect(
+      resolveEffectiveShareToolGrants({ toolGrants: [{ identifier: 'mcp-github' }] }).get(
+        WorkIdentifier,
+      ),
+    ).toBe('all');
+  });
+
+  it('widens a stored per-API Works entry to the whole tool', () => {
+    expect(
+      resolveEffectiveShareToolGrants({
+        toolGrants: [{ apis: ['createWork'], identifier: WorkIdentifier }],
+      }).get(WorkIdentifier),
+    ).toBe('all');
   });
 });

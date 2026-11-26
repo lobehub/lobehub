@@ -1,4 +1,4 @@
-import { siteReviewFromResource } from '@lobechat/const';
+import { acceptanceReviewFromResource, siteReviewFromResource } from '@lobechat/const';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -16,7 +16,7 @@ const page = (script: string) =>
     { headers: { 'cache-control': 'no-store', 'content-type': 'text/html; charset=utf-8' } },
   );
 
-const REPORTED_ERRORS = ['access_denied', 'invalid_target'];
+const REPORTED_ERRORS = ['access_denied', 'invalid_target', 'wrong_origin'];
 
 // Query values never enter the HTML: the page reads `code`, `state` and `error` from its own URL,
 // so nothing the requester controls is reflected into the response.
@@ -39,12 +39,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const oidcService = await OIDCService.initialize();
-    const site = siteReviewFromResource(await oidcService.findAuthorizationCodeResource(code));
-    if (!site) return page('');
+    const resource = await oidcService.findAuthorizationCodeResource(code);
+    const targetOrigin =
+      siteReviewFromResource(resource)?.origin ?? acceptanceReviewFromResource(resource)?.origin;
+    if (!targetOrigin) return page('');
     // The target origin comes from the authorization code itself, never from
     // the query, so a copied tag on another origin cannot receive the code.
     return page(
-      `${READ_QUERY};window.opener&&window.opener.postMessage({code:q.get("code"),state:q.get("state"),type:"lobehub-acceptance:authorized"},${scriptJson(site.origin)})`,
+      `${READ_QUERY};window.opener&&window.opener.postMessage({code:q.get("code"),state:q.get("state"),type:"lobehub-acceptance:authorized"},${scriptJson(targetOrigin)})`,
     );
   } catch (error) {
     log('acceptance callback failed: %O', error);

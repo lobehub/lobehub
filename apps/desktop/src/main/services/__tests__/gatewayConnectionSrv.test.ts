@@ -74,7 +74,9 @@ describe('GatewayConnectionService system_info_request', () => {
     // Probe that bundled runtime instead of a potentially older global lh binary.
     getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
     execFileMock.mockResolvedValue({
-      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+      stdout: JSON.stringify({
+        supportedAgentRuntimes: ['codex-app-server-v1', 'codex-collaboration-mode-v1', 'future'],
+      }),
     });
     const client = createClient();
     await service['handleSystemInfoRequest'](client, {
@@ -86,7 +88,10 @@ describe('GatewayConnectionService system_info_request', () => {
       expect.objectContaining({
         result: {
           success: true,
-          systemInfo: expect.objectContaining({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+          // The Plan switch capability passes through; one this build does not know does not.
+          systemInfo: expect.objectContaining({
+            supportedAgentRuntimes: ['codex-app-server-v1', 'codex-collaboration-mode-v1'],
+          }),
         },
       }),
     );
@@ -128,6 +133,43 @@ describe('GatewayConnectionService system_info_request', () => {
         },
       }),
     );
+  });
+
+  /** @example Topics archived while this device was offline get their worktrees cleaned on reconnect. */
+  it('runs the connected handler with the registered device id on every (re)connect', async () => {
+    vi.spyOn(service as any, 'syncPowerSaveBlocker').mockImplementation(() => {});
+    vi.spyOn(service as any, 'scheduleStatusBroadcast').mockImplementation(() => {});
+    const handler = vi.fn(async () => {});
+    service.setConnectedHandler(handler);
+
+    // Not registered yet (signed out): nothing to name the device by.
+    service['setStatus']('connected');
+    expect(handler).not.toHaveBeenCalled();
+
+    service['connectedDeviceId'] = 'device-1';
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenLastCalledWith({ deviceId: 'device-1' });
+  });
+
+  /** @example A workspace share connection drains the cleanups waiting on its own device id. */
+  it('runs the connected handler for a workspace share connection with its workspace', async () => {
+    const handler = vi.fn(async () => {});
+    service.setConnectedHandler(handler);
+    const listeners: Record<string, () => void> = {};
+    const shareClient = {
+      currentDeviceId: 'ws-device-1',
+      on: (event: string, listener: () => void) => {
+        listeners[event] = listener;
+      },
+    };
+    service['setupClientEvents'](shareClient as any, { workspaceId: 'ws-1' });
+
+    listeners.connected();
+    expect(handler).toHaveBeenCalledWith({ deviceId: 'ws-device-1', workspaceId: 'ws-1' });
   });
 
   /** @example Updating or removing Codex changes the capability after reconnecting. */

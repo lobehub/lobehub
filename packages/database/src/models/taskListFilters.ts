@@ -9,6 +9,7 @@ import {
 import {
   and,
   eq,
+  exists,
   gt,
   gte,
   ilike,
@@ -26,6 +27,7 @@ import {
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { tasks } from '../schemas/task';
+import { taskLabelLinks, taskLabels } from '../schemas/taskLabel';
 
 /**
  * A task the automation runtime would still act on.
@@ -202,6 +204,40 @@ const buildCreatorCondition = (set: TaskListFilterSet<string> | undefined): SQL 
   return set.operator === 'isNot' ? not(sql`coalesce(${matches}, false)`) : matches;
 };
 
+/**
+ * A label value matches a task carrying that label, or — for a group id — any
+ * label of that group; "none" matches a task with no labels. Links are joined
+ * back to `tasks.id`, so the outer ownership predicate still decides which
+ * tasks are reachable. Mirrors `matchesLabels` in `@lobechat/types`.
+ */
+const buildLabelCondition = (set: TaskListFilterSet<string> | undefined): SQL | undefined => {
+  if (!set || set.values.length === 0) return undefined;
+  const includesNone = set.values.includes(TASK_LIST_FILTER_NONE);
+  const values = set.values.filter((value) => value !== TASK_LIST_FILTER_NONE);
+
+  const linked = (extra?: SQL) =>
+    exists(
+      sql`(select 1 from ${taskLabelLinks} inner join ${taskLabels} on ${taskLabels.id} = ${taskLabelLinks.labelId} where ${taskLabelLinks.taskId} = ${tasks.id}${extra ? sql` and ${extra}` : sql``})`,
+    );
+  const matches = or(
+    ...[
+      values.length > 0
+        ? linked(
+            // Compared as text: a malformed value must match nothing, not
+            // abort the query with an invalid-uuid cast error.
+            or(
+              inArray(sql`${taskLabels.id}::text`, values),
+              inArray(sql`${taskLabels.parentId}::text`, values),
+            ),
+          )
+        : undefined,
+      includesNone ? not(linked()) : undefined,
+    ].filter((condition): condition is SQL => !!condition),
+  )!;
+
+  return set.operator === 'isNot' ? not(matches) : matches;
+};
+
 /** A NULL timestamp (an unfinished task's `completedAt`) matches neither side. */
 const buildDateCondition = (
   column: PgColumn,
@@ -228,6 +264,7 @@ export const buildTaskFilterConditions = (filter: TaskListFilter, now?: number):
     buildSetCondition(tasks.assigneeUserId, filter.assignee),
     buildCreatorCondition(filter.creator),
     buildSetCondition(tasks.projectId, filter.project),
+    buildLabelCondition(filter.label),
     buildDateCondition(tasks.createdAt, filter.createdAt, now),
     buildDateCondition(tasks.updatedAt, filter.updatedAt, now),
     buildDateCondition(tasks.completedAt, filter.completedAt, now),

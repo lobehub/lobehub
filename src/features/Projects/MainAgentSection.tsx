@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 
+import type { MainAgentMode } from './createProjectForm';
 import MainAgentField from './MainAgentField';
-import type { MainAgentMode } from './mainAgentStorage';
 
 const styles = stylex.create({
   preview: {
@@ -26,6 +26,8 @@ const styles = stylex.create({
 
 interface MainAgentSectionProps {
   agentId?: string;
+  /** Id reserved for the dedicated agent: seeds the character it keeps after creation. */
+  dedicatedAgentId: string;
   disabled?: boolean;
   mode: MainAgentMode;
   onAgentChange: (agentId: string) => void;
@@ -36,12 +38,21 @@ interface MainAgentSectionProps {
 }
 
 /**
- * Lead the project with an agent created for it, or pick one the workspace
- * already has. The dedicated agent does not exist until the project is
+ * Lead the project with an agent the workspace already has (the default,
+ * listed first), or with one created for it. The dedicated agent does not exist until the project is
  * created, so its row previews the agent the server will create.
  */
 const MainAgentSection = memo<MainAgentSectionProps>(
-  ({ agentId, disabled, mode, onAgentChange, onModeChange, projectAvatar, projectName }) => {
+  ({
+    agentId,
+    dedicatedAgentId,
+    disabled,
+    mode,
+    onAgentChange,
+    onModeChange,
+    projectAvatar,
+    projectName,
+  }) => {
     const { t } = useTranslation('project');
     const name = projectName.trim();
     const dedicatedTitle = name ? createProjectCoordinatorAgentConfig({ name }).title : undefined;
@@ -56,15 +67,17 @@ const MainAgentSection = memo<MainAgentSectionProps>(
           disabled={disabled}
           value={mode}
           options={[
-            { label: t('create.mainAgentMode.dedicated'), value: 'dedicated' },
             { label: t('create.mainAgentMode.existing'), value: 'existing' },
+            { label: t('create.mainAgentMode.dedicated'), value: 'dedicated' },
           ]}
           onChange={(value) => onModeChange(value as MainAgentMode)}
         />
         {mode === 'dedicated' ? (
           <div {...stylex.props(styles.preview)}>
-            {/* Without a project avatar the agent draws a generated character. */}
+            {/* Without a project avatar the agent draws the generated character
+                its reserved id seeds, the one it keeps after creation. */}
             <AgentAvatar
+              agentId={dedicatedAgentId}
               avatar={projectAvatar}
               name={dedicatedTitle}
               size={22}

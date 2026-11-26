@@ -1,21 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRuntimeProcessorContext } from '../../../runtime/context';
 import type { SignalFeedbackSatisfaction } from '../../types';
 import { createFeedbackDomainJudgeSignalHandler } from '../feedbackDomain';
+import { createFeedbackTestContext } from './testUtils';
 
-const context = createRuntimeProcessorContext({
-  backend: {
-    async getGuardState() {
-      return {};
-    },
-    async touchGuardState() {
-      return {};
-    },
-  },
-  scopeKey: 'topic:thread_1',
-});
+const context = createFeedbackTestContext();
 
 const createSatisfactionSignal = (input: {
   message: string;

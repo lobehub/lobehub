@@ -22,14 +22,14 @@ export const lobehubPipelines: PipelineEntry[] = [
   {
     exts: ['.mjs', '.cjs'],
     tools: [
-      ['oxlint', '--fix'],
+      ['oxlint', '--fix', '--no-error-on-unmatched-pattern'],
       ['prettier', '--write'],
     ],
   },
   {
     exts: ['.js', '.jsx'],
     tools: [
-      ['oxlint', '--fix'],
+      ['oxlint', '--fix', '--no-error-on-unmatched-pattern'],
       ['prettier', '--write'],
     ],
   },
@@ -37,7 +37,7 @@ export const lobehubPipelines: PipelineEntry[] = [
     // .mts/.cts are outside lint-staged's globs but belong to the same pipeline
     exts: ['.ts', '.tsx', '.mts', '.cts'],
     tools: [
-      ['oxlint', '--fix'],
+      ['oxlint', '--fix', '--no-error-on-unmatched-pattern'],
       ['prettier', '--write'],
     ],
   },

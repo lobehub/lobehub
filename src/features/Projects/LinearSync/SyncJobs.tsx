@@ -9,10 +9,12 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { linearService } from '@/services/linear';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
+  linearScopeProjectLabel,
   linearSyncJobErrorMessage,
   linearSyncJobProgress,
 } from './utils';
@@ -28,7 +30,7 @@ const styles = stylex.create({
   row: {
     minHeight: 44,
     paddingBlock: 10,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   rowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -78,7 +80,7 @@ const SyncJobs = memo<SyncJobsProps>(({ canStop, jobs, onChanged, projectId, rul
     const rule = rules.find((item) => item.id === job.ruleId);
     return rule
       ? t('linear.sync.job.titleRule', {
-          rule: [rule.teamName, rule.linearProjectName].filter(Boolean).join(' › '),
+          rule: [rule.teamName, linearScopeProjectLabel(rule, t)].filter(Boolean).join(' › '),
         })
       : t('linear.sync.job.titleRuleDeleted');
   };

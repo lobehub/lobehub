@@ -32,7 +32,7 @@ vi.mock('@/services/topic', () => ({
 }));
 
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
+  getFileStoreState: () => ({ moveChatComposerAttachments: vi.fn() }),
 }));
 
 const mockUserState = vi.hoisted(() => ({

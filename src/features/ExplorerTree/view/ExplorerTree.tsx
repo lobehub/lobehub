@@ -69,6 +69,11 @@ export const buildFileAppearanceCSS = (paths: string[], declarations: string): s
         )
         .join(',\n')} {\n${declarations}\n}`;
 
+// Folder paths are the only ones ending in a slash (see buildSegment). Expansion
+// scans skip the files up front: asking the model about every file of a large
+// project costs tens of milliseconds per scan, on every expand and every reset.
+const isDirectoryPath = (path: string): boolean => path.endsWith('/');
+
 const getItemSafely = (model: FileTreeModel, path: string): FileTreeItemHandle | null => {
   try {
     return model.getItem(path);
@@ -301,6 +306,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
     const a = adapterRef.current;
     const expandedPaths: string[] = [];
     for (const path of a.paths) {
+      if (!isDirectoryPath(path)) continue;
       if (asDirectory(getItemSafely(model, path))?.isExpanded()) expandedPaths.push(path);
     }
     const selectedPaths = model.getSelectedPaths().filter((path) => a.idByPath.has(path));
@@ -349,6 +355,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
       const a = adapterRef.current;
       const nextExpanded: string[] = [];
       for (const [id, path] of a.pathById) {
+        if (!isDirectoryPath(path)) continue;
         const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpanded.push(id);
       }
@@ -396,6 +403,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
     const nextExpandedIds: string[] = [];
     const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
     for (const [id, path] of a.pathById) {
+      if (!isDirectoryPath(path)) continue;
       const dir = asDirectory(getItemSafely(model, path));
       if (!dir) continue;
       const shouldExpand = nextExpandedIdSet.has(id);
@@ -450,6 +458,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
         const nextExpandedIds: string[] = [];
         const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
         for (const [id, path] of next.pathById) {
+          if (!isDirectoryPath(path)) continue;
           const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = nextExpandedIdSet.has(id);
@@ -473,6 +482,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
     if (!nextExpandedIds) {
       nextExpandedIds = [];
       for (const [id, path] of prev.pathById) {
+        if (!isDirectoryPath(path)) continue;
         const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpandedIds.push(id);
       }
@@ -612,6 +622,7 @@ function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
         const want = new Set(ids);
         const a = adapterRef.current;
         for (const [nodeId, path] of a.pathById) {
+          if (!isDirectoryPath(path)) continue;
           const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = want.has(nodeId);
@@ -749,7 +760,7 @@ function ExplorerTree<TData>({ ref, ...props }: ExplorerTreeProps<TData>) {
 
   return (
     <ExplorerTreeInner
-      key={generation}
+      key={`${generation}:${props.itemHeight ?? ''}:${props.density ?? ''}`}
       {...props}
       ref={ref}
       requestTreeRebuild={requestTreeRebuild}

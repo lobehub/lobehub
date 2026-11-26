@@ -16,6 +16,7 @@ import {
 } from '../../../schemas/userMemories';
 import { workspaces } from '../../../schemas/workspace';
 import type { LobeChatDatabase } from '../../../type';
+import { describeFtsSearchFileContentBehavior } from '../__tests__/fileContentBehavior';
 import {
   describeFtsSearchProductBehavior,
   otherUserId,
@@ -49,6 +50,7 @@ const createRepo = (
 describe('FtsSearchRepo (pg_like)', () => {
   describeFtsSearchProductBehavior({ createRepo, db: serverDB });
   describeFtsSearchTimeRangeBehavior({ createRepo, db: serverDB, supportsCandidates: true });
+  describeFtsSearchFileContentBehavior({ createRepo, db: serverDB });
 
   describe('LIKE wildcard escaping', () => {
     beforeEach(async () => {
@@ -418,7 +420,7 @@ describe('FtsSearchRepo (pg_like)', () => {
           { lastAccessedAt: now, tags: ['personal'], title: 'Kubernetes hobby', userId },
         ])
         .returning({ id: userMemories.id });
-      const [split, ownOnly, mismatch, untagged] = await serverDB
+      const [split, , , untagged] = await serverDB
         .insert(userMemoriesActivities)
         .values([
           // typescript on the layer, project on the parent: every tag is present
@@ -464,7 +466,6 @@ describe('FtsSearchRepo (pg_like)', () => {
         query: { text: 'kubernetes' },
       });
       expect(all.candidates.map((candidate) => candidate.id)).toEqual([split.id]);
-      expect(all.candidates.map((candidate) => candidate.id)).not.toContain(ownOnly.id);
 
       const any = await repo.ftsSearchCandidates({
         entity: 'memoryActivities',
@@ -475,8 +476,6 @@ describe('FtsSearchRepo (pg_like)', () => {
       expect(any.candidates.map((candidate) => candidate.id).sort()).toEqual(
         [split.id, untagged.id].sort(),
       );
-      expect(any.candidates.map((candidate) => candidate.id)).not.toContain(mismatch.id);
-      expect(any.candidates.map((candidate) => candidate.id)).not.toContain(ownOnly.id);
     });
 
     it('applies the memory time range before the candidate limit', async () => {
@@ -504,7 +503,7 @@ describe('FtsSearchRepo (pg_like)', () => {
 
     it('applies an activity time range on the requested field', async () => {
       const day = (offset: number) => new Date(Date.UTC(2026, 0, 1 + offset));
-      const [early, late] = await serverDB
+      const [, late] = await serverDB
         .insert(userMemoriesActivities)
         .values([
           { narrative: 'Kubernetes early', startsAt: day(1), type: 'event', userId },
@@ -521,7 +520,6 @@ describe('FtsSearchRepo (pg_like)', () => {
       });
 
       expect(response.candidates.map((candidate) => candidate.id)).toEqual([late.id]);
-      expect(response.candidates.map((candidate) => candidate.id)).not.toContain(early.id);
     });
 
     it('reports a bounded pool as cut only when matches lie past its cutoff', async () => {
@@ -611,7 +609,7 @@ describe('FtsSearchRepo (pg_like)', () => {
         .insert(sessions)
         .values([{ userId }])
         .returning({ id: sessions.id });
-      const [topicA, topicB, topicGroup, topicSession] = await serverDB
+      const [topicA, , topicGroup, topicSession] = await serverDB
         .insert(topics)
         .values([
           { agentId: agentA.id, title: 'Kubernetes topic A', userId },
@@ -656,7 +654,6 @@ describe('FtsSearchRepo (pg_like)', () => {
         query: { text: 'kubernetes' },
       });
       expect(ids(topicsByContainer)).toEqual([topicSession.id]);
-      expect(ids(topicsByContainer)).not.toContain(topicB.id);
 
       // Topic-bound messages may carry no agent id; they survive scope pruning so
       // the consumer can resolve their parent topic.

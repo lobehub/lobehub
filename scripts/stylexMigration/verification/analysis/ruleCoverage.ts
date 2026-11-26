@@ -8,7 +8,6 @@ export interface RuleProbeEvidence {
   variant: string;
 }
 
-/** Diagnostic activation coverage, never a substitute for all required gate keys. */
 export const summarizeRuleCoverage = (
   plans: Array<{ plan: RuleWitnessPlan; side: 'base' | 'candidate'; variant: string }>,
   evidence: RuleProbeEvidence[],
@@ -92,7 +91,6 @@ export const summarizeRuleCoverage = (
       variants: group.map((rule) => rule.variant),
     }));
   return {
-    gateEligible: false as const,
     gaps,
     mode: 'diagnostic-source-slot-cssom-activation' as const,
     rules,

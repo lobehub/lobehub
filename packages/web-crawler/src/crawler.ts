@@ -3,7 +3,9 @@ import { crawlImpls } from './crawImpl';
 import type { CrawlErrorResult, CrawlUniformResult, CrawlUrlRule } from './type';
 import { crawUrlRules } from './urlRules';
 import { applyUrlRules } from './utils/appUrlRules';
+import { isChallengePage } from './utils/challengePage';
 import {
+  BlockedPageError,
   InvalidUrlError,
   isRetryableCrawlError,
   PageNotFoundError,
@@ -55,6 +57,8 @@ const buildErrorData = (error: Error | undefined): CrawlErrorResult => {
     content = `Dead link: the server confirmed this page does not exist (HTTP ${error.status}). This is a final answer — do not retry this URL; find a different source instead.`;
   } else if (error instanceof InvalidUrlError) {
     content = `Invalid URL: ${errorMessage}. Nothing was fetched — pass an absolute http(s) URL.`;
+  } else if (error instanceof BlockedPageError) {
+    content = `Blocked by anti-bot verification: the site answered with a challenge page instead of its content, so nothing was read. Crawling this URL again will meet the same wall.`;
   } else if (error instanceof UnsupportedContentError) {
     content = `Unsupported content: ${errorMessage}. Nothing to read here — only crawl HTML/text document pages.`;
   } else {
@@ -132,6 +136,7 @@ export class Crawler {
 
     let finalCrawler: string | undefined;
     let finalError: Error | undefined;
+    let blocked: { crawler: string; error: BlockedPageError } | undefined;
 
     const filteredRuleImpls = ruleImpls
       ? (ruleImpls.filter((impl) =>
@@ -152,6 +157,11 @@ export class Crawler {
         const res = await crawlImpls[impl](transformedUrl, { filterOptions: mergedFilterOptions });
 
         if (res && res.content && res.content.length > 100) {
+          // Providers answer an anti-bot wall with a normal success response. Reject
+          // it here, for every impl, so the next one gets a turn and the wall is never
+          // handed to the model or saved as the page's content.
+          if (res.contentType === 'text' && isChallengePage(res)) throw new BlockedPageError();
+
           return {
             crawler: impl,
             data: res,
@@ -171,10 +181,20 @@ export class Crawler {
         finalError = error as Error;
         finalCrawler = impl;
 
+        if (error instanceof BlockedPageError) blocked ??= { crawler: impl, error };
+
         // A confirmed 404/410 is the page's final answer; asking the next provider
         // only buys the same "not found" again.
         if (error instanceof PageNotFoundError) break;
       }
+    }
+
+    // Once a wall was seen, what the remaining impls failed with (a missing API key,
+    // an empty body) says less about the page than the wall does. A confirmed dead
+    // link is still the final answer.
+    if (blocked && !(finalError instanceof PageNotFoundError)) {
+      finalCrawler = blocked.crawler;
+      finalError = blocked.error;
     }
 
     return {

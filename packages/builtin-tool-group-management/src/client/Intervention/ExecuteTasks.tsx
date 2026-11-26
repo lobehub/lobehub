@@ -7,7 +7,6 @@ import {
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
-  createStaticStyles,
   Flexbox,
   Icon,
   Input,
@@ -17,6 +16,8 @@ import {
   Tooltip,
   useTheme,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -29,46 +30,23 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams, TaskItem } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  assignee: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  container: css`
-    padding-block: 12px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  deleteButton: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextTertiary};
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorError};
-    }
-  `,
-  index: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  taskTitle: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  timeoutInput: css`
-    width: 100px;
-  `,
-}));
+const styles = stylex.create({
+  assignee: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  container: { paddingBlock: '12px', borderRadius: cssVar.borderRadius },
+  deleteButton: {
+    cursor: 'pointer',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
+    transition: 'color 0.2s',
+  },
+  timeoutInput: { width: '100px' },
+});
 
 const DEFAULT_TIMEOUT = 1_800_000; // 30 minutes
 
@@ -124,7 +102,7 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
         <AccordionHeader style={{ paddingBlock: 4, paddingInline: 2 }}>
           <AccordionTrigger>
             <Flexbox horizontal align={'center'} gap={8}>
-              <div className={styles.assignee}>
+              <div {...stylex.props(styles.assignee)}>
                 <AgentAvatar
                   agentId={task.agentId}
                   avatar={agent?.avatar}
@@ -153,7 +131,7 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
                   <Clock size={14} />
                 </Tooltip>
                 <InputNumber
-                  className={styles.timeoutInput}
+                  className={stylex.props(styles.timeoutInput).className}
                   max={120}
                   min={1}
                   size={'small'}
@@ -163,7 +141,7 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
                   onChange={handleTimeoutChange}
                 />
                 <Icon
-                  className={styles.deleteButton}
+                  className={stylex.props(styles.deleteButton).className}
                   icon={Trash2}
                   size={{ size: 16 }}
                   onClick={handleDelete}
@@ -234,7 +212,7 @@ const ExecuteTasksIntervention = memo<BuiltinInterventionProps<ExecuteTasksParam
     }, [registerBeforeApprove, hasChanges, tasks, args, onArgsChange]);
 
     return (
-      <Flexbox className={styles.container} gap={0}>
+      <Flexbox className={stylex.props(styles.container).className} gap={0}>
         {tasks.map((task, index) => (
           <TaskEditor
             index={index}

@@ -1,3 +1,4 @@
+import type { HeterogeneousAgentModel } from './agencyConfig';
 import {
   getAnyCliFlagValue,
   getCliConfigValue,
@@ -8,7 +9,11 @@ import {
   stripCliConfigKey,
   stripCliFlags,
 } from './heteroCliArgs';
-import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentType,
+} from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -32,6 +37,15 @@ export type HeterogeneousAgentMode = AmpAgentMode | HeterogeneousAgentDefaultSel
  * `--effort <level>` flag.
  */
 const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+/** Antigravity CLI accepts the same five values on its native --effort flag. */
+export const ANTIGRAVITY_REASONING_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
@@ -113,32 +127,16 @@ export type HeterogeneousReasoningEffortLevel =
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
 
-/**
- * Codex speed modes, mirrored to the CLI config key `service_tier`.
- *
- * `fast` maps to the Fast service tier (request value `priority`): ~1.5x
- * faster inference at a higher credit-consumption rate. Requires ChatGPT
- * sign-in; the Codex CLI silently omits the tier for unsupported models, so
- * passing it is always safe.
- */
-export type CodexSpeedMode = 'fast';
+/** Explicit Codex speed selections; normal sends the standard service tier. */
+export type CodexSpeedMode = 'normal' | 'fast' | 'ultrafast';
 
 export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
 
 export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
-/**
- * Codex models whose catalog exposes the Fast (`priority`) service tier.
- * Sourced from the model catalog embedded in codex-cli.
- */
-const CODEX_FAST_SPEED_MODELS = [
-  'gpt-5.6',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.5',
-  'gpt-5.4',
-] as const;
+/** Default is a selector sentinel; Normal explicitly requests standard processing. */
+export const toCodexServiceTier = (speed: string): string =>
+  speed === 'normal' ? 'default' : speed;
 
 /**
  * `service_tier` values the Codex CLI resolves to the Fast tier
@@ -204,15 +202,6 @@ export const getCodexReasoningEffortLevels = (model: string): readonly CodexReas
   return CODEX_COMMON_REASONING_EFFORT_LEVELS;
 };
 
-/**
- * Whether the Fast speed toggle applies to a selector model value. `default`
- * counts as supported so the CLI remains free to resolve its own model; an
- * unsupported resolved model simply ignores the tier.
- */
-export const codexModelSupportsFastSpeed = (model: string): boolean =>
-  model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
-  CODEX_FAST_SPEED_MODELS.includes(model as (typeof CODEX_FAST_SPEED_MODELS)[number]);
-
 export interface HeteroSelectionSource {
   args?: string[];
   effort?: string | null;
@@ -275,6 +264,12 @@ export const resolveCodexSpeedMode = (
     getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) ?? source?.speed
   )?.trim();
 
+  if (
+    tier === 'default' &&
+    getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) !== undefined
+  )
+    return 'normal';
+  if (tier === 'normal' || tier === 'ultrafast') return tier;
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
@@ -318,6 +313,34 @@ const resolvePersistedModel = (source: HeteroSelectionSource | null | undefined)
     : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
+export interface ParsedModelTuple {
+  modelId: string;
+  providerId: string;
+}
+
+/**
+ * Decode a persisted `[provider, model]` selection value. Catalog providers use
+ * this encoding when two providers can offer the same model name; opaque values
+ * return undefined so callers can keep the raw value.
+ */
+export const parseModelTuple = (value: string): ParsedModelTuple | undefined => {
+  if (!value.startsWith('[')) return;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length === 2 &&
+      typeof parsed[0] === 'string' &&
+      typeof parsed[1] === 'string'
+    ) {
+      return { modelId: parsed[1], providerId: parsed[0] };
+    }
+  } catch {
+    // Not the encoded pair; callers fall back to the raw value.
+  }
+};
+
 export type HeteroCliEncoding =
   { flags: readonly string[]; kind: 'flag' } | { key: string; kind: 'config' };
 
@@ -345,14 +368,16 @@ export interface HeteroSelectorModelCapability {
 
 export interface HeteroSelectorEffortCapability {
   encodings: readonly HeteroCliEncoding[];
-  levels: (model: string) => readonly HeterogeneousReasoningEffortLevel[];
+  levels: (
+    model: string,
+    models?: readonly HeterogeneousAgentModel[],
+  ) => readonly HeterogeneousReasoningEffortLevel[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousReasoningEffort;
 }
 
 export interface HeteroSelectorSpeedCapability {
   encodings: readonly HeteroCliEncoding[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousSpeedMode;
-  supported: (model: string) => boolean;
 }
 
 export interface HeteroSelectorModeCapability {
@@ -380,6 +405,21 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
+  'antigravity': {
+    effort: {
+      encodings: [{ flags: ['--effort'], kind: 'flag' }],
+      levels: (model, models) =>
+        models
+          ? (models.find((entry) => entry.id === model)?.effortLevels ?? [])
+          : ANTIGRAVITY_REASONING_EFFORT_LEVELS,
+      resolve: resolveClaudeCodeReasoningEffort,
+    },
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolveClaudeCodeModel,
+      source: 'catalog',
+    },
+  },
   'amp': {
     mode: {
       encodings: [{ flags: ['--mode'], kind: 'flag' }],
@@ -425,7 +465,6 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     speed: {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],
       resolve: resolveCodexSpeedMode,
-      supported: codexModelSupportsFastSpeed,
     },
   },
   'copilot': {
@@ -446,6 +485,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       resolve: resolvePersistedModel,
       source: 'catalog',
     },
+  },
+  'deepseek-harness': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
   'droid': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
@@ -494,12 +536,17 @@ export const HETERO_SELECTOR_CAPABILITIES = {
   'trae': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
-} satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
+} satisfies Record<
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
+  HeteroSelectorCapability
+>;
 
 export const getHeteroSelectorCapability = (
   type: string | undefined,
 ): HeteroSelectorCapability | undefined =>
-  HETERO_SELECTOR_CAPABILITIES[type as LocalHeterogeneousAgentType];
+  HETERO_SELECTOR_CAPABILITIES[
+    type as LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType
+  ];
 
 export const isHeteroSelectorAvailable = (type: string | undefined): boolean =>
   Object.keys(getHeteroSelectorCapability(type) ?? {}).length > 0;
@@ -672,6 +719,7 @@ const getExplicitCodexSpeedMode = (
   source: HeteroSelectionSource | null | undefined,
 ): CodexSpeedMode | undefined => {
   const speed = source?.speed?.trim();
+  if (speed === 'normal' || speed === 'ultrafast') return speed;
   return isCodexFastServiceTier(speed) ? 'fast' : undefined;
 };
 
@@ -682,24 +730,7 @@ export const buildHeteroSpawnArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
@@ -709,7 +740,11 @@ export const buildHeteroSpawnArgs = (
     if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -733,7 +768,7 @@ export const buildHeteroSpawnArgs = (
 
     const speed = getExplicitCodexSpeedMode(provider);
     if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
-      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
+      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(speed)}"`);
     }
   }
 
@@ -837,24 +872,7 @@ export const buildHeteroExecArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
@@ -870,7 +888,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -1001,7 +1023,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'droid' || provider.type === 'trae') {
+  if (
+    provider.type === 'droid' ||
+    provider.type === 'trae' ||
+    provider.type === 'deepseek-harness'
+  ) {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);

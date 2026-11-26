@@ -11,7 +11,6 @@ import {
   GoalManagerService,
   goalPlanSchema,
   managerSnapshot,
-  MAX_FAILED_MANAGER_TURNS,
   problemKey,
 } from './index';
 
@@ -31,7 +30,6 @@ describe('goal manager public surface', () => {
       'managerSnapshot',
       'problemKey',
     ]);
-    expect(MAX_FAILED_MANAGER_TURNS).toBe(5);
   });
 
   it('exposes the same public members on the service', () => {
@@ -54,8 +52,6 @@ describe('goal manager public surface', () => {
     ];
     for (const member of members)
       expect(typeof (service as unknown as Record<string, unknown>)[member]).toBe('function');
-    // `planInstead` stays a prototype method: tests spy on it there.
-    expect(Object.hasOwn(GoalManagerService.prototype, 'planInstead')).toBe(true);
   });
 
   it('keys a takeover problem by its task, and reads the answered one back', () => {

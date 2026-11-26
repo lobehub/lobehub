@@ -4,6 +4,8 @@ import {
   type ModifyOperation,
 } from '@lobechat/editor-runtime';
 import type { HeadlessEditor, HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
+import { TRPCError } from '@trpc/server';
+import * as Y from 'yjs';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
@@ -11,13 +13,15 @@ import {
   createDocumentHeadlessEditor,
   withHeadlessEditorLock,
 } from '@/server/services/agentDocuments/headlessEditor';
-import type { DocumentService } from '@/server/services/document';
+import { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
+import { redisService } from '@/server/services/redis';
 
-import { isPageCollabEnabled } from './config';
+import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
 import { runPageExclusive } from './queue';
-import { RoomPageSessions } from './roomSession';
+import { PageRoomStaleBaseError } from './roomClient';
+import { type RoomPageSession, RoomPageSessions } from './roomSession';
 import type { PageWriter } from './session';
 
 export interface PageBody {
@@ -26,6 +30,33 @@ export interface PageBody {
   /** The room carries the title too; one written only to the row would be projected over. */
   title?: string;
 }
+
+export interface PageBodyWriteOptions {
+  /**
+   * Write only while the page is still at this stored version (`updatedAt`). It
+   * is checked against the room the body lands in, on every attempt; otherwise
+   * the write rejects with `DocumentVersionMismatch`, as a row write would.
+   */
+  expectedUpdatedAt?: Date;
+}
+
+// A stale base means another server instance wrote the room after this one
+// read it; writing anyway would merge both block replacements as duplicates.
+const MAX_STALE_BASE_RETRIES = 5;
+const STALE_BASE_BACKOFF_MS = 40;
+
+// Only workspace pages have rooms, unless older clients may still hold one open
+// on a personal page; a write around that room would be projected over.
+const mayHaveRoom = async (db: LobeChatDatabase, documentId: string, writer: PageWriter) => {
+  if (!isPageCollabEnabled()) return false;
+  if (isLegacyPageCollabEnabled()) return true;
+  const row = await new DocumentService(db, writer.userId, writer.workspaceId).getDocumentById(
+    documentId,
+  );
+  return !!row?.workspaceId;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toHeadlessOperation = (operation: ModifyOperation): HeadlessLiteXMLOperation => {
   if (operation.action === 'modify') return { action: 'replace', litexml: operation.litexml };
@@ -61,6 +92,57 @@ const applyBody = async (editor: HeadlessEditor, body: PageBody) => {
   }
 };
 
+const versionMismatch = () =>
+  new TRPCError({
+    cause: { data: { code: 'DocumentVersionMismatch' } },
+    code: 'CONFLICT',
+    message: 'Document has been updated by another session',
+  });
+
+/**
+ * The room is at the stored version when the stored page still is and the room
+ * holds nothing the page does not show: it is still at the state the page was
+ * last written from. Runs where the body is about to enter the room, so a write
+ * queued behind another, or retried, sees what came before it.
+ */
+const assertRoomAtVersion = async (
+  db: LobeChatDatabase,
+  documentId: string,
+  session: RoomPageSession,
+  expectedUpdatedAt: Date,
+  writer: PageWriter,
+) => {
+  // The push is what makes the check hold against another server instance.
+  if (session.serverWriteSeq === undefined) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'This page is open in a room that cannot take conditional writes; send no version',
+    });
+  }
+
+  // Without Redis nobody can tell what the room holds beyond the stored page.
+  const written = await redisService.pageCollab.lastPersistedRoomState(documentId);
+  if (written !== undefined) {
+    const read = Y.decodeStateVector(session.stateVector);
+    const recorded = written && Y.decodeStateVector(written);
+    const roomIsStored =
+      !!recorded &&
+      recorded.size === read.size &&
+      [...read].every(([client, clock]) => recorded.get(client) === clock);
+    if (!roomIsStored) {
+      // Edits typed in the room that the stored page does not show yet (or a room
+      // nobody recorded). Storing them gives the caller a version to read them at.
+      await session.projectAsRead();
+      throw versionMismatch();
+    }
+  }
+
+  const row = await new DocumentService(db, writer.userId, writer.workspaceId).getDocumentById(
+    documentId,
+  );
+  if (row?.updatedAt?.getTime() !== expectedUpdatedAt.getTime()) throw versionMismatch();
+};
+
 /**
  * Writes a page body that a server-side writer (the CLI, an agent tool, a
  * rollback, a client that predates rooms) would otherwise put straight into the
@@ -76,15 +158,19 @@ export const writePageBodyThroughRoom = async (
   documentId: string,
   body: PageBody,
   writer: PageWriter,
+  { expectedUpdatedAt }: PageBodyWriteOptions = {},
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
-  return runPageExclusive(documentId, () =>
+  const writeOnce = () =>
     withHeadlessEditorLock(async () => {
       const session = await new RoomPageSessions(db, writer).openLiveSession(documentId);
       if (!session) return false;
 
       try {
+        if (expectedUpdatedAt) {
+          await assertRoomAtVersion(db, documentId, session, expectedUpdatedAt, writer);
+        }
         if (body.editorData !== undefined || body.markdown !== undefined) {
           await applyBody(session.draft.editor, body);
         }
@@ -95,8 +181,23 @@ export const writePageBodyThroughRoom = async (
       } finally {
         session.draft.destroy();
       }
-    }),
-  );
+    });
+
+  return runPageExclusive(documentId, async () => {
+    for (let retry = 0; ; retry++) {
+      try {
+        return await writeOnce();
+      } catch (error) {
+        if (!(error instanceof PageRoomStaleBaseError) || retry >= MAX_STALE_BASE_RETRIES) {
+          throw error;
+        }
+        // Another server wrote the room after this one read it: the page is past
+        // the version the caller named, whatever the stored page says yet.
+        if (expectedUpdatedAt) throw versionMismatch();
+        await sleep(STALE_BASE_BACKOFF_MS * (retry + 1) * (0.5 + Math.random()));
+      }
+    }
+  });
 };
 
 /**
@@ -106,7 +207,7 @@ export const writePageBodyThroughRoom = async (
  */
 export const updateDocumentThroughRoom = async (
   db: LobeChatDatabase,
-  service: Pick<DocumentService, 'updateDocument'>,
+  service: Pick<DocumentService, 'assertCanWriteBody' | 'updateDocument'>,
   documentId: string,
   params: UpdateDocumentParams,
   writer: Omit<PageWriter, 'saveSource' | 'writeSource'>,
@@ -117,6 +218,10 @@ export const updateDocumentThroughRoom = async (
     return service.updateDocument(documentId, params);
   }
 
+  // An editor outside the room carries its lock session. The room's members share
+  // the page lock, so this save must not merge over their edits while they hold it.
+  if (params.lockOwnerId) await service.assertCanWriteBody(documentId, params.lockOwnerId);
+
   const routed = await writePageBodyThroughRoom(
     db,
     documentId,
@@ -126,11 +231,12 @@ export const updateDocumentThroughRoom = async (
       saveSource: params.saveSource ?? 'system',
       writeSource: params.writeSource ?? 'user',
     },
+    { expectedUpdatedAt: params.expectedUpdatedAt },
   );
   if (!routed) return service.updateDocument(documentId, params);
 
-  // The room merged and persisted the body (and title); the version predicate
-  // guarded a row write that no longer happens.
+  // The room took the body (and title) under the version predicate, and its write
+  // moved the stored version on: the rest of the update lands on the new one.
   const {
     content: _content,
     editorData: _editorData,
@@ -151,7 +257,7 @@ export const snapshotPageThroughRoom = async (
   documentId: string,
   writer: PageWriter,
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
   return runPageExclusive(documentId, () =>
     withHeadlessEditorLock(async () => {

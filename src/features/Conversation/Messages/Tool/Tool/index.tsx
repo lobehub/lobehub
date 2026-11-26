@@ -5,7 +5,9 @@ import { memo, useState } from 'react';
 
 import Actions from '@/features/Conversation/Messages/AssistantGroup/Tool/Actions';
 import dynamic from '@/libs/next/dynamic';
+import { useDensity } from '@/styles/density';
 
+import { STEP_TRIGGER_STYLES } from '../../../components/stepTriggerStyles';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import Inspectors from '../../AssistantGroup/Tool/Inspector';
 
@@ -48,6 +50,7 @@ const Tool = memo<InspectorProps>(
     const [showDebug, setShowDebug] = useState(false);
     const [showCustomToolRender, setShowCustomToolRender] = useState(true);
     const [expand, setExpand] = useState(true);
+    const { density } = useDensity();
 
     // Fetch tool message from store
     const toolMessage = useConversationStore(dataSelectors.getDbMessageByToolCallId(toolCallId));
@@ -77,7 +80,7 @@ const Tool = memo<InspectorProps>(
       <Accordion
         gap={8}
         indicatorPlacement="inline"
-        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        styles={STEP_TRIGGER_STYLES[density]}
         value={expand ? ['tool'] : []}
         items={[
           {

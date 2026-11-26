@@ -1,9 +1,10 @@
 import {
   ActionIcon,
-  Avatar,
   Button,
   Center,
   CopyButton,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- ActionIcon renders its svg without a slot
+  createStaticStyles,
   Flexbox,
   Icon,
   Input,
@@ -19,11 +20,12 @@ import { type ComponentProps, type ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import ImperativeModal from '@/components/ImperativeModal';
+import SocialShare from '@/features/SocialShare';
 import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
-import iconStyles from './ShareButton.module.css';
 
 const styles = stylex.create({
   banner: {
@@ -53,8 +55,27 @@ interface ShareButtonProps extends ComponentProps<typeof Button> {
   };
 }
 
+const fallback = createStaticStyles(({ css }) => ({
+  icon: css`
+    border: 1px solid var(--lobe-color-fill-secondary);
+
+    svg {
+      fill: var(--lobe-color-text-secondary);
+    }
+
+    &:hover {
+      border: 1px solid var(--lobe-color-border-secondary);
+
+      svg {
+        fill: var(--lobe-color-text);
+      }
+    }
+  `,
+}));
+
 const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
-  const { x, reddit, telegram, whatsapp, mastodon, weibo } = useShare({
+  // X and Weibo go through the four-channel SocialShare above; these are the extras.
+  const { reddit, telegram, whatsapp, mastodon } = useShare({
     avatar: '',
     desc: '',
     hashtags: [],
@@ -100,13 +121,20 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
             {meta.tags}
           </Center>
         </Flexbox>
+        <SocialShare
+          description={meta.desc}
+          shareUrl={meta.url}
+          style={{ width: '100%' }}
+          title={meta.title || meta.url}
+          onLeave={() => setOpen(false)}
+        />
         <Flexbox horizontal align={'center'} gap={8} justify={'center'} wrap={'wrap'}>
-          {[x, reddit, telegram, whatsapp, mastodon, weibo].map(
+          {[reddit, telegram, whatsapp, mastodon].map(
             (item) =>
               item.icon && (
                 <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
-                    className={iconStyles.icon}
+                    className={fallback.icon}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}
@@ -134,6 +162,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
   return (
     <>
       <Button
+        aria-label={t('share')}
         icon={<Icon icon={Share2Icon} />}
         size={'large'}
         onClick={() => setOpen(true)}

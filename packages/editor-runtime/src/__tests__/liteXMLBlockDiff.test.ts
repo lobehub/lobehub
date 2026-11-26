@@ -300,6 +300,48 @@ describe('diffLiteXMLBlocks', () => {
     expect(result.ok).toBe(false);
   });
 
+  describe('CDATA sections', () => {
+    const chart = (id: string, json: string) => `<chart id="${id}"><![CDATA[${json}]]></chart>`;
+    const spec = '{"type":"bar","note":"a < b && c > d"}';
+
+    it('inserts a chart with its CDATA section intact', () => {
+      const result = ok(doc(A, B), doc(A, chart('c1', spec), B));
+
+      expect(result.operations).toEqual([
+        { action: 'insert', afterId: 'a', litexml: `<chart><![CDATA[${spec}]]></chart>` },
+      ]);
+    });
+
+    it('modifies a chart whose CDATA body changed', () => {
+      const next = '{"type":"line"}';
+      const result = ok(doc(A, chart('c1', spec)), doc(A, chart('c1', next)));
+
+      expect(result.operations).toEqual([
+        { action: 'modify', litexml: `<chart id="c1"><![CDATA[${next}]]></chart>` },
+      ]);
+    });
+
+    it('returns no operations for an unchanged chart', () => {
+      const result = ok(doc(A, chart('c1', spec)), doc(A, chart('c1', spec)));
+
+      expect(result.operations).toEqual([]);
+    });
+
+    it('keeps a body split across adjacent CDATA sections', () => {
+      const split = '<chart><![CDATA[{"note":"]]]]><![CDATA[>"}]]></chart>';
+      const result = ok(doc(A), doc(A, split));
+
+      expect(result.operations).toEqual([{ action: 'insert', afterId: 'a', litexml: split }]);
+    });
+
+    it('does not read markup inside a CDATA section as tags', () => {
+      const markup = '<chart><![CDATA[<p id="x">not a block</p>]]></chart>';
+      const result = ok(doc(A), doc(A, markup));
+
+      expect(result.operations).toEqual([{ action: 'insert', afterId: 'a', litexml: markup }]);
+    });
+  });
+
   it('rejects an edit that strips most ids from a similar-length document', () => {
     const result = diffLiteXMLBlocks(doc(A, B, C), doc('<p>A</p>', '<p>B</p>', '<p>C2</p>'));
 

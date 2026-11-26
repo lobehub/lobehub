@@ -5,8 +5,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import SortDropdown from '@/features/ResourceManager/components/Explorer/ToolBar/SortDropdown';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
 
+import LibraryFavoriteButton from './LibraryFavoriteButton';
 import LibraryHead from './LibraryHead';
 import LibrarySearchBar from './LibrarySearchBar';
 import { useActiveLibraryId } from './useActiveLibraryId';
@@ -19,6 +21,7 @@ const Header = memo(() => {
       <SideBarHeaderLayout
         backTo="/resource"
         left={<LibraryHead id={id} />}
+        right={<LibraryFavoriteButton id={id} />}
         breadcrumb={[
           {
             href: `/resource/library/${id}`,
@@ -36,8 +39,9 @@ const Header = memo(() => {
         root rather than in whatever folder the URL happens to be in; each
         folder row carries its own "+" for creating inside that folder.
       */}
-      <Flexbox horizontal align={'center'} gap={8} paddingBlock={'0 8px'} paddingInline={8}>
+      <Flexbox horizontal align={'center'} gap={4} paddingBlock={'0 8px'} paddingInline={8}>
         <LibrarySearchBar />
+        <SortDropdown />
         <AddButton iconOnly rootLevel />
       </Flexbox>
     </>

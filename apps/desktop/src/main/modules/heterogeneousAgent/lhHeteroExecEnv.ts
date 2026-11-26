@@ -8,6 +8,8 @@ import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
 export interface LhHeteroExecEnvParams {
   /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
   accountEnv?: Record<string, string>;
+  /** Inherited env keys that would outrank `accountEnv`'s installed credential. */
+  accountUnsetEnv?: readonly string[];
   agentId?: string;
   assistantMessageId?: string;
   jwt: string;
@@ -20,10 +22,20 @@ export interface LhHeteroExecEnvParams {
   workspaceId?: string;
 }
 
+const withoutKeys = <T extends Record<string, unknown>>(env: T, keys?: readonly string[]): T => {
+  if (!keys?.length) return env;
+  const next = { ...env };
+  for (const key of keys) delete next[key];
+  return next;
+};
+
 /** Env for the embedded `lh hetero exec` a gateway-dispatched run spawns. */
 export const buildLhHeteroExecEnv = (params: LhHeteroExecEnvParams) => ({
   // Never inherit the launcher's run identity (or JWT file) for a dispatched run.
-  ...withEmbeddedCliEnv(stripInheritedRunIdentity(process.env)),
+  ...withoutKeys(
+    withEmbeddedCliEnv(stripInheritedRunIdentity(process.env)),
+    params.accountUnsetEnv,
+  ),
   ...params.proxyEnv,
   ELECTRON_RUN_AS_NODE: '1',
   [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',

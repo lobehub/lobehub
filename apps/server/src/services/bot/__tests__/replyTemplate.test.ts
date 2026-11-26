@@ -417,6 +417,15 @@ describe('replyTemplate', () => {
       expect(zh).not.toContain('Agent 执行失败');
     });
 
+    it('tells the user the model is above their workspace tier', () => {
+      const output = renderAgentError('WorkspaceModelRestricted', undefined, 'op-restricted');
+      expect(output).toContain('Model above your tier');
+      expect(output).not.toContain('Agent Execution Failed');
+
+      const zh = renderAgentError('WorkspaceModelRestricted', undefined, 'op-restricted', 'zh-CN');
+      expect(zh).toContain('模型超出了你的可用档位');
+    });
+
     it('classifies a legacy envelope before choosing IM copy', () => {
       const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
       expect(output).toContain('Provider quota exhausted');
@@ -745,6 +754,25 @@ describe('replyTemplate', () => {
       expect(en).not.toContain('**Agent Execution Failed**\nOperation ID');
 
       const zh = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net', 'zh-CN');
+      expect(zh).toContain('网络连接异常');
+    });
+
+    it('treats a provider-closed stream as a transient network drop, not an internal error', () => {
+      const en = renderAgentError(
+        'ProviderStreamInterrupted',
+        'Stream ended unexpectedly',
+        'op-stream',
+      );
+      expect(en).toContain('Network error talking to the model provider');
+      expect(en).toContain('E6005');
+      expect(en).not.toContain('Something went wrong on our side');
+
+      const zh = renderAgentError(
+        'ProviderStreamInterrupted',
+        'Stream ended unexpectedly',
+        'op-stream',
+        'zh-CN',
+      );
       expect(zh).toContain('网络连接异常');
     });
 

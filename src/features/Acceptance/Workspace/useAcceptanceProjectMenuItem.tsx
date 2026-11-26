@@ -7,19 +7,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { projectService } from '@/services/project';
+import { type ProjectListItem, useLoadedProjectList, useProjectStore } from '@/store/project';
+import { PROJECT_LIST_KEY } from '@/store/project/projection';
 
 import { buildAcceptanceProjectMenuState } from './acceptanceProjectOptions';
-
-/**
- * Read and invalidation go through the same pair on purpose: `useClientDataSWR`
- * and the scoped `mutate` both run the key through `augmentKey`, so workspace
- * scoping stays symmetric. Plain `swr`'s global mutate cannot reach this cache
- * at all (the app installs a custom provider), and hand-scoping the key here
- * would double-augment it.
- */
-const PROJECT_OPTIONS_KEY = ['acceptance:projectOptions'];
 
 interface AcceptanceProjectMenuParams {
   /** The project the acceptance is filed under, if any. */
@@ -55,13 +46,23 @@ interface AcceptanceProjectMenu {
  * menu offers.
  */
 /**
- * The caller's projects for acceptance menus, read only once `requested` — the
- * filing submenu and the list's project filter share one cache entry.
+ * The caller's projects for acceptance menus: the project store's list replica,
+ * which the sidebar already keeps (and persists), synced only once `requested`.
+ * A restored empty list is not "no projects" until the server confirms it.
  */
-export const useAcceptanceProjectOptions = (requested: boolean) =>
-  useClientDataSWR(requested ? PROJECT_OPTIONS_KEY : null, () => projectService.listAll(), {
-    revalidateOnFocus: false,
-  });
+export const useAcceptanceProjectOptions = (
+  requested: boolean,
+): { error: unknown; projects: ProjectListItem[] | undefined } => {
+  const useFetchProjectList = useProjectStore((s) => s.useFetchProjectList);
+  const { error } = useFetchProjectList(requested);
+  const loaded = useLoadedProjectList();
+  const confirmed = useProjectStore(
+    (s) => s.projectListReplica.entries[PROJECT_LIST_KEY]?.source === 'server',
+  );
+  const projects = loaded && (loaded.length > 0 || confirmed) ? loaded : undefined;
+  // A failed background refresh keeps the last list on screen.
+  return { error: projects ? undefined : error, projects };
+};
 
 export const useAcceptanceProjectMenu = ({
   currentProjectId,
@@ -71,13 +72,9 @@ export const useAcceptanceProjectMenu = ({
   const { t } = useTranslation('verify');
   const [requested, setRequested] = useState(false);
 
-  const { data, error } = useAcceptanceProjectOptions(requested);
+  const { error, projects } = useAcceptanceProjectOptions(requested);
 
-  const state = buildAcceptanceProjectMenuState({
-    currentProjectId,
-    error,
-    projects: data?.data,
-  });
+  const state = buildAcceptanceProjectMenuState({ currentProjectId, error, projects });
 
   const placeholder = (key: string, label: string): DropdownItem[] => [
     { disabled: true, key, label },
@@ -107,9 +104,7 @@ export const useAcceptanceProjectMenu = ({
     onClick: () =>
       openCreateProjectModal({
         onCreated: (project) => {
-          // This row's submenu is already subscribed, so nothing refetches it
-          // on the next open — the new project has to be pushed into the cache.
-          void mutate(PROJECT_OPTIONS_KEY);
+          // `createProject` already put the new project into the list replica.
           onSelect(project.id);
         },
       }),

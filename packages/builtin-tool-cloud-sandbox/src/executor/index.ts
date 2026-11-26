@@ -8,6 +8,8 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { CloudSandboxExecutionRuntime } from '../ExecutionRuntime';
 import { CloudSandboxIdentifier } from '../manifest';
 import type {
+  AnalyzeStorageParams,
+  DeleteFilesParams,
   EditLocalFileParams,
   ExecuteCodeParams,
   ExportFileParams,
@@ -139,6 +141,24 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
   };
 
   // ==================== Code Execution ====================
+
+  analyzeStorage = async (
+    params: AnalyzeStorageParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const runtime = this.getRuntime(ctx);
+    const result = await runtime.analyzeStorage(params);
+    return this.toBuiltinResult(result);
+  };
+
+  deleteFiles = async (
+    params: DeleteFilesParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const runtime = this.getRuntime(ctx);
+    const result = await runtime.deleteFiles(params);
+    return this.toBuiltinResult(result);
+  };
 
   executeCode = async (
     params: ExecuteCodeParams,

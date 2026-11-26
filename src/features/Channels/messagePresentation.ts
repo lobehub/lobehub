@@ -10,8 +10,15 @@ const itemDate = (item: TimelineItem) =>
 const sameAuthor = (a: ChannelPublicMessage, b: ChannelPublicMessage) =>
   !!a.author.id && a.author.id === b.author.id && a.author.type === b.author.type;
 
-/** Group only adjacent speech; system events, dates and reply contexts break a group. */
-export const presentChannelTimeline = (items: TimelineItem[]) =>
+/**
+ * Group only adjacent speech; system events, dates and reply contexts break a group. So does a
+ * row shown between two messages (`breaksAfter`, by the message it follows), or the second one
+ * would read as said by whoever wrote that row.
+ */
+export const presentChannelTimeline = (
+  items: TimelineItem[],
+  breaksAfter: ReadonlySet<string> = new Set(),
+) =>
   items.map((item, index) => {
     const previous = items[index - 1];
     const date = itemDate(item);
@@ -24,6 +31,7 @@ export const presentChannelTimeline = (items: TimelineItem[]) =>
       elapsed <= GROUP_WINDOW_MS &&
       item.kind === 'message' &&
       previous?.kind === 'message' &&
+      !breaksAfter.has(previous.message.id) &&
       sameAuthor(item.message, previous.message) &&
       item.message.threadId === previous.message.threadId &&
       item.message.replyToId === previous.message.replyToId;
@@ -37,3 +45,44 @@ export const channelTimeFormatters = (locale: string) => ({
   full: new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'medium' }),
   time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }),
 });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole calendar days from `date` to `now`, in local time, unaffected by daylight-saving shifts. */
+const calendarDaysAgo = (date: Date, now: Date) =>
+  Math.round(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) /
+      DAY_MS,
+  );
+
+/**
+ * A message's header time, the way Discord stamps it: the time alone today (the day divider above
+ * names the date), "Yesterday" with the time, and the numeric date with the time before that, so a
+ * message read away from its divider still says which day it was sent.
+ */
+export const channelMessageTime = (
+  date: Date,
+  {
+    locale,
+    now = new Date(),
+    yesterday,
+  }: {
+    locale: string;
+    now?: Date;
+    yesterday: string;
+  },
+) => {
+  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date);
+  const days = calendarDaysAgo(date, now);
+  if (days === 0) return time;
+  const day =
+    days === 1
+      ? yesterday
+      : new Intl.DateTimeFormat(locale, {
+          day: 'numeric',
+          month: 'numeric',
+          year: 'numeric',
+        }).format(date);
+  return `${day} ${time}`;
+};

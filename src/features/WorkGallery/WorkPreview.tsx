@@ -2,12 +2,12 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { CheckCircle2Icon, GitPullRequestIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { getCollectionCoverUrl, getWorkTypeDescriptor } from '@/features/Work/descriptors';
 import LinearIcon from '@/features/Work/icons/LinearIcon';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -63,6 +63,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 88%, transparent);
     backdrop-filter: blur(12px);
+  `,
+  collectionImage: css`
+    position: absolute;
+    inset: 0;
+
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
   `,
   grid: css`
     position: absolute;
@@ -169,8 +180,11 @@ interface WorkPreviewProps {
 
 const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
   const { t } = useTranslation('file');
+  const { t: tTopic } = useTranslation('topic');
   const descriptor = getWorkTypeDescriptor(item);
   const DescriptorIcon = descriptor.getIcon(item);
+  // The PR state is drawn by its glyph; the description no longer falls back to it.
+  const stateLabelKey = descriptor.getStateLabelKey?.(item);
   const description = descriptor.getDescription(item);
   const identifier = descriptor.getIdentifier(item);
   const displayIdentifier =
@@ -183,6 +197,17 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
   const isLinear = item.resourceType.startsWith('linear_');
   const taskStatus = item.resourceType === 'task' ? item.task.status : null;
   const status = item.status || taskStatus;
+  const collectionCover = item.type === 'collection' ? getCollectionCoverUrl(item) : null;
+
+  if (collectionCover)
+    return (
+      <div className={styles.cover}>
+        <img alt={title} className={styles.collectionImage} src={collectionCover} />
+        <div className={styles.coverBadge}>
+          <DescriptorIcon size={17} />
+        </div>
+      </div>
+    );
 
   return (
     <div className={styles.cover}>
@@ -207,9 +232,14 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
         ) : (
           <div className={styles.previewBody}>
             <Flexbox horizontal align={'center'} gap={6}>
-              {item.resourceType === 'github_pull_request' && (
-                <GitPullRequestIcon color={cssVar.colorTextTertiary} size={11} />
-              )}
+              {item.resourceType === 'github_pull_request' &&
+                (stateLabelKey ? (
+                  <Center title={tTopic(stateLabelKey)}>
+                    <DescriptorIcon size={11} />
+                  </Center>
+                ) : (
+                  <GitPullRequestIcon color={cssVar.colorTextTertiary} size={11} />
+                ))}
               <span className={styles.previewIdentifier}>
                 {previewIdentifier || item.resourceType}
               </span>

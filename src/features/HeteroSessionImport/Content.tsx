@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { electronHeteroSessionService } from '@/services/electron/heteroSession';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 import { SessionRow } from './SessionList';
 import SidebarTree, { type TreeScope } from './SidebarTree';
@@ -33,8 +34,8 @@ import { deriveSessionStatus, dirKeyOf, fmtTokens, type ImportRowState, selectab
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

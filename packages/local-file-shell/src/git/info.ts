@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { createLogger } from '../logger';
+import { isInvalidBranchRef } from './branches';
 import { resolveGitDir } from './repoType';
 import type {
   DeviceGitInfo,
@@ -14,7 +15,13 @@ import type {
   GitUpstreamRef,
   GitWorkingTreeStatus,
 } from './types';
-import { getDefaultRemote, isCommitSafeForPullRequestLookup, resolveUpstream } from './upstream';
+import {
+  getDefaultRemote,
+  getPushRemote,
+  getRemoteGithubRepo,
+  isCommitSafeForPullRequestLookup,
+  resolveUpstream,
+} from './upstream';
 
 const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
@@ -28,6 +35,8 @@ type GithubStatusCheckRollupNode = {
 type GithubPullRequestPayload = {
   /** The PR's head branch ON GitHub — the authoritative remote ref for this branch. */
   headRefName?: string | null;
+  headRepository?: { name?: string | null } | null;
+  headRepositoryOwner?: { login?: string | null } | null;
   isDraft?: boolean;
   mergeable?: string | null;
   mergeStateStatus?: string | null;
@@ -41,7 +50,7 @@ type GithubPullRequestPayload = {
 };
 
 const GITHUB_PULL_REQUEST_FIELDS =
-  'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup,headRefName';
+  'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup,headRefName,headRepository,headRepositoryOwner';
 
 const failureConclusions = new Set([
   'action_required',
@@ -106,9 +115,15 @@ const normalizeGithubPullRequest = (pr: GithubPullRequestPayload): GitLinkedPull
   const mergeable = compactString(pr.mergeable);
   const mergeStateStatus = compactString(pr.mergeStateStatus);
   const reviewDecision = compactString(pr.reviewDecision);
+  const headRefName = compactString(pr.headRefName);
+  const headOwner = pr.headRepositoryOwner?.login;
+  const headName = pr.headRepository?.name;
+  const headRepoFullName = headOwner && headName ? `${headOwner}/${headName}` : undefined;
 
   return {
     ...(ciStatus ? { ciStatus } : {}),
+    ...(headRefName ? { headRefName } : {}),
+    ...(headRepoFullName ? { headRepoFullName } : {}),
     ...(pr.isDraft === undefined ? {} : { isDraft: pr.isDraft }),
     ...(mergeable ? { mergeable } : {}),
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
@@ -221,8 +236,10 @@ export const getLinkedPullRequest = async (payload: {
   branch: string;
   path: string;
   pullRequestNumber?: number;
+  /** `open` lists only open PRs (discovery); default `all` also refreshes merged / closed ones. */
+  state?: 'all' | 'open';
 }): Promise<GitLinkedPullRequestResult> => {
-  const { path: dirPath, branch, pullRequestNumber } = payload;
+  const { path: dirPath, branch, pullRequestNumber, state = 'all' } = payload;
   if (!branch && pullRequestNumber === undefined) return { pullRequest: null, status: 'ok' };
 
   const viewPullRequest = async (number: number): Promise<GithubPullRequestPayload> => {
@@ -240,15 +257,24 @@ export const getLinkedPullRequest = async (payload: {
     const { sha, upstream: localUpstream } = branch
       ? await resolveUpstream(dirPath, branch)
       : { sha: undefined, upstream: undefined };
+    // The repository this checkout publishes to: a found PR whose head lives
+    // here was pushed from here, not a same-named branch in another fork.
+    const remote =
+      (await getPushRemote(dirPath, branch || undefined)) ??
+      localUpstream?.remote ??
+      (await getDefaultRemote(dirPath));
+    const remoteRepoFullName = remote ? await getRemoteGithubRepo(dirPath, remote) : undefined;
+    const answer = (result: GitLinkedPullRequestResult): GitLinkedPullRequestResult =>
+      remoteRepoFullName ? { ...result, remoteRepoFullName } : result;
 
     if (pullRequestNumber !== undefined) {
       const parsed = await viewPullRequest(pullRequestNumber);
       const upstream = await toUpstreamRef(dirPath, parsed.headRefName, localUpstream);
-      return {
+      return answer({
         pullRequest: normalizeGithubPullRequest(parsed),
         status: 'ok',
         ...(upstream ? { upstream } : {}),
-      };
+      });
     }
 
     const { stdout } = await execFileAsync(
@@ -259,7 +285,7 @@ export const getLinkedPullRequest = async (payload: {
         '--head',
         localUpstream?.branch ?? branch,
         '--state',
-        'all',
+        state,
         '--limit',
         '5',
         '--json',
@@ -272,12 +298,12 @@ export const getLinkedPullRequest = async (payload: {
     if (parsed.length > 0) {
       const [primaryRaw, ...rest] = parsed;
       const upstream = await toUpstreamRef(dirPath, primaryRaw.headRefName, localUpstream);
-      return {
+      return answer({
         extraCount: rest.length,
         pullRequest: normalizeGithubPullRequest(primaryRaw),
         status: 'ok',
         ...(upstream ? { upstream } : {}),
-      };
+      });
     }
 
     // Empty. With a resolved remote ref that is a real answer — the branch has no PR.
@@ -288,19 +314,19 @@ export const getLinkedPullRequest = async (payload: {
       const recovered = await findPullRequestByCommit(dirPath, sha);
       if (recovered) {
         const upstream = await toUpstreamRef(dirPath, recovered.headRefName);
-        return {
+        return answer({
           pullRequest: normalizeGithubPullRequest(await viewPullRequest(recovered.number)),
           status: 'ok',
           ...(upstream ? { upstream } : {}),
-        };
+        });
       }
     }
 
-    return {
+    return answer({
       pullRequest: null,
       status: 'ok',
       ...(localUpstream ? { upstream: localUpstream } : {}),
-    };
+    });
   } catch (error: any) {
     const code = error?.code;
     const stderr: string = error?.stderr ?? '';
@@ -353,11 +379,25 @@ export const getGitWorkingTreeStatus = async (dirPath: string): Promise<GitWorki
 };
 
 /**
- * Count commits HEAD is ahead/behind its upstream. Does a best-effort `git fetch`
- * first; swallows fetch failures (offline / no creds) and computes against cached
- * refs. Returns `hasUpstream: false` when no upstream is configured.
+ * Count commits a branch is ahead/behind its upstream. Does a best-effort
+ * `git fetch` first; swallows fetch failures (offline / no creds) and computes
+ * against cached refs. Returns `hasUpstream: false` when no upstream is
+ * configured.
+ *
+ * Without `branch` this describes HEAD (`@{u}...HEAD`). With one it describes
+ * that local branch wherever HEAD is (`<branch>@{upstream}...refs/heads/<branch>`)
+ * and echoes the branch back, so a caller can tell an older device — which
+ * ignores the option and counts HEAD — from one that answered for the branch.
  */
-export const getGitAheadBehind = async (dirPath: string): Promise<GitAheadBehind> => {
+export const getGitAheadBehind = async (
+  dirPath: string,
+  options: { branch?: string } = {},
+): Promise<GitAheadBehind> => {
+  const { branch: requested } = options;
+  const echo = requested === undefined ? {} : { branch: requested };
+  const none: GitAheadBehind = { ahead: 0, behind: 0, hasUpstream: false, ...echo };
+  if (requested !== undefined && (!requested.trim() || isInvalidBranchRef(requested))) return none;
+
   try {
     await execFileAsync('git', ['fetch', '--no-tags', '--quiet', 'origin'], {
       cwd: dirPath,
@@ -369,52 +409,66 @@ export const getGitAheadBehind = async (dirPath: string): Promise<GitAheadBehind
   try {
     const { stdout: upstreamOut } = await execFileAsync(
       'git',
-      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+      [
+        'rev-parse',
+        '--abbrev-ref',
+        '--symbolic-full-name',
+        requested ? `${requested}@{upstream}` : '@{u}',
+      ],
       { cwd: dirPath, timeout: 5000 },
     );
     const upstream = upstreamOut.trim();
-    if (!upstream) return { ahead: 0, behind: 0, hasUpstream: false };
+    if (!upstream) return none;
 
     const { stdout } = await execFileAsync(
       'git',
-      ['rev-list', '--left-right', '--count', `${upstream}...HEAD`],
+      [
+        'rev-list',
+        '--left-right',
+        '--count',
+        `${upstream}...${requested ? `refs/heads/${requested}` : 'HEAD'}`,
+      ],
       { cwd: dirPath, timeout: 5000 },
     );
     const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
     const behind = Number.parseInt(behindStr ?? '0', 10) || 0;
     const ahead = Number.parseInt(aheadStr ?? '0', 10) || 0;
 
-    // `git push -u origin HEAD` always targets origin/<current-branch-name>,
-    // which may differ from upstream (the branched-off-canary case).
+    // The push action targets origin/<branch-name> (`git push -u origin HEAD`,
+    // or `… origin <branch>` for a named branch), which may differ from
+    // upstream (the branched-off-canary case).
     let pushTarget: string | undefined;
     let pushTargetExists = false;
-    try {
-      const { stdout: branchOut } = await execFileAsync(
-        'git',
-        ['symbolic-ref', '--short', 'HEAD'],
-        { cwd: dirPath, timeout: 5000 },
-      );
-      const branch = branchOut.trim();
-      if (branch) {
-        pushTarget = `origin/${branch}`;
-        try {
-          await execFileAsync(
-            'git',
-            ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
-            { cwd: dirPath, timeout: 5000 },
-          );
-          pushTargetExists = true;
-        } catch {
-          pushTargetExists = false;
-        }
+    let branch = requested;
+    if (!branch) {
+      try {
+        const { stdout: branchOut } = await execFileAsync(
+          'git',
+          ['symbolic-ref', '--short', 'HEAD'],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        branch = branchOut.trim() || undefined;
+      } catch {
+        // detached HEAD — leave pushTarget undefined
       }
-    } catch {
-      // detached HEAD — leave pushTarget undefined
+    }
+    if (branch) {
+      pushTarget = `origin/${branch}`;
+      try {
+        await execFileAsync(
+          'git',
+          ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        pushTargetExists = true;
+      } catch {
+        pushTargetExists = false;
+      }
     }
 
-    return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream };
+    return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream, ...echo };
   } catch {
-    return { ahead: 0, behind: 0, hasUpstream: false };
+    return none;
   }
 };
 

@@ -2,9 +2,10 @@ import { z } from 'zod';
 
 import type { AiProviderConfig, AiProviderSettings } from '@/types/aiProvider';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicProvider } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
 
 // ==================== Provider Common Types ====================
 
@@ -110,3 +111,32 @@ export const ProviderIdParamSchema = z.object({
 });
 
 export type ProviderIdParam = z.infer<typeof ProviderIdParamSchema>;
+
+// ==================== Response Schemas ====================
+
+/**
+ * A provider row projected through `PUBLIC_PROVIDER_FIELDS`; every field is
+ * always present. The encrypted key vault is never part of the response.
+ */
+export const ProviderSchema = z
+  .object({
+    checkModel: z.string().nullable(),
+    config: jsonObjectSchema.nullable(),
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    enabled: z.boolean().nullable(),
+    fetchOnClient: z.boolean().nullable(),
+    id: z.string(),
+    logo: z.string().nullable(),
+    name: z.string().nullable(),
+    settings: jsonObjectSchema.nullable(),
+    sort: z.number().int().nullable(),
+    source: z.enum(['builtin', 'custom']).nullable(),
+    updatedAt: dateTimeSchema,
+  } satisfies Record<keyof PublicProvider, z.ZodType>)
+  .strict()
+  .meta({ id: 'Provider' });
+
+export const ProviderListSchema = z
+  .object({ ...pageInfoShape, providers: z.array(ProviderSchema), ...totalShape })
+  .strict();

@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCw, Trash } from 'lucide-react';
 import { memo } from 'react';
 
@@ -7,37 +9,30 @@ import FileIcon from '@/components/FileIcon';
 import UploadDetail from '@/features/ChatInput/components/UploadDetail';
 import { type UploadFileItem } from '@/types/files';
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-  `,
-  container: css`
-    cursor: pointer;
-
-    position: relative;
-
-    overflow: hidden;
-
-    width: 250px;
-    height: 64px;
-    padding-block: 4px;
-    padding-inline: 8px 24px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  deleteButton: css`
-    color: #fff;
-    background: ${cssVar.colorBgMask};
-
-    &:hover {
-      background: ${cssVar.colorError};
-    }
-  `,
-}));
+const styles = stylex.create({
+  actions: { position: 'absolute', insetBlockStart: '0', insetInlineEnd: '0' },
+  container: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    width: '250px',
+    height: '64px',
+    paddingBlock: '4px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  deleteButton: {
+    color: '#fff',
+    backgroundColor: { 'default': cssVar.colorBgMask, ':hover': cssVar.colorError },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 interface FileItemProps extends UploadFileItem {
   onRemove?: () => void;
@@ -47,7 +42,13 @@ interface FileItemProps extends UploadFileItem {
 const FileItem = memo<FileItemProps>(
   ({ error, errorCode, id, onRemove, onRetry, file, status, uploadState, tasks }) => {
     return (
-      <Flexbox horizontal align={'center'} className={styles.container} gap={12} key={id}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.container).className}
+        gap={12}
+        key={id}
+      >
         <FileIcon fileName={file.name} fileType={file.type} />
         <Flexbox style={{ overflow: 'hidden' }}>
           <Text ellipsis>{file.name}</Text>
@@ -59,13 +60,13 @@ const FileItem = memo<FileItemProps>(
             uploadState={uploadState}
           />
         </Flexbox>
-        <Flexbox horizontal className={styles.actions}>
+        <Flexbox horizontal className={stylex.props(styles.actions).className}>
           {status === 'error' && errorCode ? (
             <FileUploadErrorActions compact code={errorCode} />
           ) : status === 'error' ? (
             <ActionIcon
               glass
-              className={styles.deleteButton}
+              className={stylex.props(styles.deleteButton).className}
               icon={RotateCw}
               size={'small'}
               onClick={(e) => {
@@ -76,7 +77,7 @@ const FileItem = memo<FileItemProps>(
           ) : null}
           <ActionIcon
             glass
-            className={styles.deleteButton}
+            className={stylex.props(styles.deleteButton).className}
             icon={Trash}
             size={'small'}
             onClick={(e) => {

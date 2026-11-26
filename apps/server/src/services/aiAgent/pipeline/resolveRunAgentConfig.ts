@@ -1,10 +1,18 @@
+import { getUserDisabledToolIds, isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
-import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
+import type {
+  AgentModelOverride,
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  MessageMapScope,
+} from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
-  getDisabledPluginIds,
+  getAutoPluginIds,
+  getBuiltinOverrides,
+  getPinnedPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
 } from '@lobechat/types';
@@ -42,9 +50,21 @@ export interface ResolveRunAgentConfigInput {
    * language appended to the system role) must be read for this user instead.
    */
   shareVisitorUserId?: string;
+  snapshotFollowsCallerDevice?: InternalExecAgentParams['snapshotFollowsCallerDevice'];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   toolModeOverride?: InternalExecAgentParams['toolModeOverride'];
 }
+
+// The IM /mode switch controls both the toolset and agentic context injection.
+// Returning to Agent mode keeps an explicitly custom toolset instead of widening it.
+const withConversationMode = (
+  config: LobeAgentChatConfig,
+  mode: NonNullable<ResolveRunAgentConfigInput['toolModeOverride']>,
+): LobeAgentChatConfig => ({
+  ...config,
+  enableAgentMode: mode === 'agent',
+  toolMode: mode === 'agent' && config?.toolMode === 'custom' ? 'custom' : mode,
+});
 
 export interface ResolvedRunAgentConfig {
   /**
@@ -56,6 +76,9 @@ export interface ResolvedRunAgentConfig {
   agentSlug?: string | null;
   /** Agent id stamped on the assistant row (conversation-aware). */
   assistantAgentId: string;
+  /** Library skills the agent set to `auto`, captured before pinned-id collapse. */
+  autoSkillIds: string[];
+  builtinOverrides: string[];
   canManageAgent: boolean;
   /** Agent id stamped on the user row (conversation-aware). */
   conversationAgentId: string;
@@ -69,7 +92,7 @@ export interface ResolvedRunAgentConfig {
   resolvedAgentId: string;
 }
 
-interface WorkspaceMemberOverrides {
+export interface WorkspaceMemberOverrides {
   device?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   mode?: boolean;
   model?: AgentModelOverride;
@@ -81,8 +104,8 @@ interface WorkspaceMemberOverrides {
  * never mutate the shared Agent config. Losing them is non-fatal: execution
  * falls back to the shared row.
  */
-const loadWorkspaceMemberOverrides = async (
-  deps: ResolveRunAgentConfigDeps,
+export const loadWorkspaceMemberOverrides = async (
+  deps: Pick<ResolveRunAgentConfigDeps, 'db' | 'userId' | 'workspaceId'>,
   agentId: string,
 ): Promise<WorkspaceMemberOverrides> => {
   if (!deps.workspaceId) return {};
@@ -111,9 +134,9 @@ const loadWorkspaceMemberOverrides = async (
  * fail-closed: applying member policy is safer than accidentally granting
  * shared-config semantics.
  */
-const resolveCanManage = async (
-  deps: ResolveRunAgentConfigDeps,
-  agentConfig: AgentConfigWithId,
+export const resolveCanManage = async (
+  deps: Pick<ResolveRunAgentConfigDeps, 'db' | 'userId'>,
+  agentConfig: Pick<AgentConfigWithId, 'userId' | 'visibility'>,
   agentWorkspaceId: string | undefined,
   isPublicWorkspaceAgent: boolean,
 ): Promise<boolean> => {
@@ -143,7 +166,7 @@ const loadUserLocale = async (
 ): Promise<string | undefined> => {
   try {
     const userInfo = await UserModel.getInfoForAIGeneration(deps.db, userId);
-    return userInfo.responseLanguage;
+    return userInfo.preferredReplyLanguage;
   } catch (error) {
     log('execAgent: failed to load user locale for agent config resolution: %O', error);
     return undefined;
@@ -198,7 +221,12 @@ export const resolveRunAgentConfig = async (
   const scope = (appContext?.scope ?? undefined) as MessageMapScope | undefined;
   const [overrides, canManageAgent, userLocale, pageSandboxAvailable] = await Promise.all([
     input.agentConfigSnapshot
-      ? Promise.resolve({} as WorkspaceMemberOverrides)
+      ? // The snapshot decided model and mode; only the caller's device may still follow them.
+        input.snapshotFollowsCallerDevice
+        ? loadWorkspaceMemberOverrides(deps, resolvedAgentId).then(
+            ({ device }): WorkspaceMemberOverrides => ({ device }),
+          )
+        : Promise.resolve({} as WorkspaceMemberOverrides)
       : loadWorkspaceMemberOverrides(deps, resolvedAgentId),
     resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
     // A share visitor replies in their own language, not the owner's.
@@ -229,7 +257,14 @@ export const resolveRunAgentConfig = async (
     },
     agentConfig: row,
     canManage: canManageAgent,
-    chatConfig: row.chatConfig,
+    // The shared resolver filters saved pins before composing runtime tools.
+    // Give it the conversation's mode now; filtered pins cannot be recovered later.
+    chatConfig: toolModeOverride
+      ? withConversationMode(
+          resolveSubAgentChatConfig(row.chatConfig, chatConfigOverride) ?? row.chatConfig,
+          toolModeOverride,
+        )
+      : row.chatConfig,
     memberModeOverride: overrides.mode,
     memberModelOverride: overrides.model,
     slug: row.slug ?? undefined,
@@ -255,7 +290,14 @@ export const resolveRunAgentConfig = async (
   // Capture disabled identifiers off the row before the resolved config
   // collapses plugins to pinned ids: they later filter the auto-discovery
   // candidate pool so a disabled plugin can't be rediscovered.
-  const disabledPluginIds = getDisabledPluginIds(row.plugins);
+  const builtinOverrides = getBuiltinOverrides(row.plugins);
+  const disabledPluginIds = getUserDisabledToolIds(row.plugins, resolved.chatConfig);
+  // Same for the explicit `auto` entries: a library skill is opt-in per agent,
+  // so the skill pool needs the ones this agent opted into without pinning.
+  const autoSkillIds = [
+    ...getAutoPluginIds(row.plugins),
+    ...getPinnedPluginIds(row.plugins).filter(isOnDemandBuiltinTool),
+  ];
 
   // One mutable object from here on — later stages append to `systemRole` and
   // `createOperation` must see those writes.
@@ -303,26 +345,10 @@ export const resolveRunAgentConfig = async (
     agentConfig.subAgentChatConfigOverride = chatConfigOverride;
   }
 
-  // Explicit per-conversation mode switch (IM `/mode` command). Applied last
-  // so it wins over the agent's own chatConfig, workspace member-mode
-  // overrides, and sub-agent chatConfig patches alike. `enableAgentMode` is
-  // kept in sync because the context engine gates agentic-only injectors
-  // (skill discovery, agent documents, agent-management context) on it, not
-  // on `toolMode` — otherwise `/mode chat` would keep agentic context while
-  // `/mode agent` on a chat-default agent would run tools without it.
-  if (toolModeOverride) {
-    // `custom` is agent-side (the `/mode` picker reports it as Agent Mode)
-    // but means "exactly the agent's declared plugins". Returning to Agent
-    // Mode must restore that hand-picked set, not widen it to the full
-    // default toolset by overwriting `custom` with `agent`.
-    const storedToolMode = agentConfig.chatConfig?.toolMode;
-    agentConfig.chatConfig = {
-      ...agentConfig.chatConfig,
-      enableAgentMode: toolModeOverride === 'agent',
-      toolMode:
-        toolModeOverride === 'agent' && storedToolMode === 'custom' ? 'custom' : toolModeOverride,
-    };
-  }
+  // Builtin and sub-agent patches can also declare a mode. The conversation
+  // switch wins for the final context just as it does for saved pin selection.
+  if (toolModeOverride)
+    agentConfig.chatConfig = withConversationMode(agentConfig.chatConfig, toolModeOverride);
 
   // Persistence-attribution agent id. Background Agent Signal runs (memory /
   // skill / self-reflection) execute under a builtin slug, so `resolvedAgentId`
@@ -357,6 +383,8 @@ export const resolveRunAgentConfig = async (
     agentConfig,
     agentSlug: row.slug,
     assistantAgentId,
+    autoSkillIds,
+    builtinOverrides,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,

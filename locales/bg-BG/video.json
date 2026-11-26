@@ -40,7 +40,6 @@
   "generation.editing.hint": "Опишете какво да се промени; всичко останало остава същото",
   "generation.editing.modelLocked": "Редакциите запазват модела на оригиналното видео",
   "generation.editing.title": "Редактиране V{{version}}",
-  "generation.freeQuota.remaining": "🎁 {{remaining}} безплатни видеа днес",
   "generation.status.editing": "Генериране на редакция...",
   "generation.status.failed": "Генерирането неуспешно",
   "generation.status.generating": "Генериране...",

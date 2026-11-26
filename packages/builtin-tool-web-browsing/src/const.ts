@@ -46,4 +46,11 @@ export const ENGINE_ICON_MAP: Record<string, string> = {
 /** Characters of a crawled page returned to the model; longer pages end with the shared window notice. */
 export const CRAWL_CONTENT_LIMITED_COUNT = 25_000;
 
+/**
+ * Largest crawled page saved as a document. Saving parses the page into an editor
+ * snapshot synchronously, so a multi-megabyte body (a JS bundle, a data dump) blocks
+ * the event loop; such a page is still returned to the model, just not saved.
+ */
+export const CRAWL_SAVE_MAX_CHARS = 1_000_000;
+
 export const SEARCH_ITEM_LIMITED_COUNT = 30;

@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "تازه‌سازی پوشه‌ها",
   "workingDirectory.refreshGitStatus": "وضعیت شاخه و درخواست‌ها را تازه‌سازی کنید",
   "workingDirectory.removeRecent": "حذف از موارد اخیر",
+  "workingDirectory.removeRecentFailed": "امکان حذف این پوشه وجود ندارد. لطفاً دوباره تلاش کنید.",
   "workingDirectory.removeWorktreeAction": "حذف ورک‌تری",
   "workingDirectory.removeWorktreeConfirm": "آیا می‌خواهید ورک‌تری «{{name}}» را حذف کنید؟ این کار دایرکتوری ورک‌تری را حذف می‌کند اما شاخه آن را نگه می‌دارد. گیت در صورت وجود تغییرات ذخیره‌نشده اجازه این کار را نمی‌دهد.",
   "workingDirectory.removeWorktreeFailed": "حذف ورک‌تری ناموفق بود",

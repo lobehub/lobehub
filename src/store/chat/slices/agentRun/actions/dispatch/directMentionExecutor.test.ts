@@ -72,7 +72,7 @@ describe('executeDirectMention', () => {
     expect(store.refreshMessages).toHaveBeenCalledWith({ agentId: 'agt_xw', topicId: 'tpc_1' });
   });
 
-  it('shows the running thread at once and streams the child while it runs', async () => {
+  it('shows the running thread and watches the child until execution finishes', async () => {
     const { ClientSubAgentTransport } =
       await import('@/store/chat/agents/transports/ClientSubAgentTransport');
     const stopWatching = vi.fn();

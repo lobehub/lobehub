@@ -2,9 +2,9 @@
 
 import { TodoPanelHeader } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Icon } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Block, Checkbox, cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleArrowRight } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,33 +12,20 @@ import { useTranslation } from 'react-i18next';
 import type { ClaudeCodeTodoItem, TodoWriteArgs } from '../../../types';
 import { computeTodoSummary, TODO_SUMMARY_LABEL_KEYS } from '../../todoSummary';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  itemRow: css`
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  processingRow: css`
-    display: flex;
-    gap: 7px;
-    align-items: center;
-  `,
-  textCompleted: css`
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: line-through;
-  `,
-  textPending: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  textProcessing: css`
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  itemRow: {
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'dashed', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  processingRow: { display: 'flex', gap: '7px', alignItems: 'center' },
+  textCompleted: { color: cssVar.colorTextQuaternary, textDecoration: 'line-through' },
+  textPending: { color: cssVar.colorTextSecondary },
+  textProcessing: { color: cssVar.colorText },
+});
 
 interface TodoRowProps {
   item: ClaudeCodeTodoItem;
@@ -49,9 +36,9 @@ const TodoRow = memo<TodoRowProps>(({ item }) => {
 
   if (status === 'in_progress') {
     return (
-      <div className={cx(styles.itemRow, styles.processingRow)}>
+      <div {...stylex.props(styles.itemRow, styles.processingRow)}>
         <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorInfo }} />
-        <span className={styles.textProcessing}>{activeForm || content}</span>
+        <span {...stylex.props(styles.textProcessing)}>{activeForm || content}</span>
       </div>
     );
   }
@@ -65,8 +52,8 @@ const TodoRow = memo<TodoRowProps>(({ item }) => {
       shape={'circle'}
       style={{ borderWidth: 1.5, cursor: 'default' }}
       classNames={{
-        text: cx(styles.textPending, isCompleted && styles.textCompleted),
-        wrapper: styles.itemRow,
+        text: cx(stylex.props(styles.textPending, isCompleted && styles.textCompleted).className),
+        wrapper: stylex.props(styles.itemRow).className,
       }}
       textProps={{
         type: isCompleted ? 'secondary' : undefined,

@@ -71,7 +71,28 @@ tool does not ship):
   through `deviceGateway` to the creator's own registered physical
   device(s). A visitor executing arbitrary commands or driving a live
   browser session on the CREATOR's own machine is a far larger blast radius
-  than any single data store.
+  than any single data store, so they are never offered through the tool
+  picker. They are granted only by `shareConfig.deviceAccess`: `contacts`
+  admits everyone currently in the address book of the Agent's scope
+  (personal contacts, or the workspace's members and external contacts),
+  including people added later; `allowlist` admits only visitors named in
+  `deviceAllowUserIds`, and only while they are still in that address book.
+  A listed visitor the owner admitted by approving their request to use the
+  Agent (a live `request` share grant) is admitted outside the book, under
+  either setting, until the grant is revoked.
+  `everyone` admits every signed-in visitor holding the link, set only
+  after the creator confirms that it reaches strangers; a legacy stored `all`
+  stays denied. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  `canUseDevice` and re-applied at dispatch. The same grant admits
+  device-only MCP servers (which still need their own tool grant). The device
+  is always the Agent's configured execution environment; a visitor never
+  picks it, and project directories stay denied. The grant covers the
+  engine's device tools (`DEVICE_TOOL_IDENTIFIERS`, so computer use too)
+  except the `lobe-remote-device` picker: with it the visitor's model could
+  list and activate the creator's other machines, so it stays default-denied
+  even under the grant. The same grant lets the visitor run a heterogeneous
+  Agent that runs locally (Claude Code, Codex and the other local CLIs) on that device; without it the run is refused,
+  and a share run never falls back to the cloud sandbox.
 
 - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding
   `SOUL.md` document and persona.
@@ -92,11 +113,12 @@ tool does not ship):
 
 - Device-only MCP servers (stdio, or an HTTP endpoint on localhost / a
   private network): not builtin identifiers, so the allowlist above never
-  sees them, but a visitor run must still never reach them — the server can
-  only call them by tunneling to the creator's online desktop app (or, with
-  no device gateway, by spawning the binary on the server itself).
-  `applyShareGateToToolSet` drops them regardless of `toolGrants`, and
-  `ToolExecutionService.executeMCPTool` refuses the dispatch.
+  sees them — the server can only call them by tunneling to the creator's
+  online desktop app (or, with no device gateway, by spawning the binary on
+  the server itself), exactly as it would for the creator. Without the
+  share's device grant, `applyShareGateToToolSet` drops them regardless of
+  `toolGrants` and `ToolExecutionService.executeMCPTool` refuses the
+  dispatch; with it, they follow their ordinary `toolGrants` entry.
 
 ## Allowed builtins with general reach
 
@@ -122,16 +144,17 @@ absence of a known exploit.
 
 - `lobe-activator`: widens the run's tool surface at runtime, so it is
   allowed only because every source it reads is already the gated set.
-  Never picked by the owner: any tool grant implies it, scoped to
+  Never picked by the owner: any tool grant implies it, and so does the
+  device grant (Computer Use is discoverable, not enabled), scoped to
   `activateTools` (`shareGate/grants.ts:132`, which also overrides a stored entry so
   nothing widens it to the runtime's unlisted `activateSkill`), and assembly
   drops it again when no granted tool is left to activate, counting restored
   historical activations as already enabled (`shareGate/toolSet.ts:166`). A
   kept activator gets the share-visitor `systemRole`
   (`getSystemPromptForShareVisitor`), which omits the default prompt's push
-  to activate `lobe-skill-store` / `lobe-creds` first (both stay denied
-  above) and keeps its `activateSkill` lines only when `lobe-skills` itself
-  survived the gate.
+  to activate `lobe-skill-store` first and keeps its `activateSkill` lines
+  only when `lobe-skills` itself survived the gate. Credential discovery
+  lives in the `lobe-creds` manifest, which the gate excludes.
 
   1. What it can see. `<available_tools>` is the operation's `manifestMap`
      minus enabled tools (`apps/server/src/modules/AgentRuntime/executorHelpers.ts:644`), and
@@ -189,3 +212,26 @@ absence of a known exploit.
   a creator who opens a skill opens that skill's instructions, and that is
   the premise of Agent Share, not a hole in it. The gate's job is to execute
   the grant exactly, not to second-guess which skills a creator should share.
+
+- `lobe-work`: the one builtin a visitor run gets WITHOUT a creator grant
+  (`AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS`): `resolveEffectiveShareToolGrants`
+  implies it, `getShareGrantActivatedPluginIds` enables it, and
+  `filterPluginsByShareGate` keeps it, so the owner's picker shows no toggle
+  for it. It only registers what the run produced as Work cards:
+
+  1. the run (operation, topic, tool call, assistant message) comes from the
+     execution context, never from model arguments;
+  2. writes go through `WorkModel` under the share scope pinned to the
+     visitor topic (`resolveRunWorkAccessScope`), so the Works never reach the
+     creator's ordinary lists; a visitor run without a topic is refused;
+  3. `updateWork` / `deleteWork` reach only Works this conversation created
+     through the tool or `lh work` (`agentEditable`), never ones collected
+     automatically or made in another conversation;
+  4. collection images must be images of the run's account
+     (`resolveAgentWorkCollectionItems`): a generated image or run output must
+     also appear in a tool result of the visitor topic, and any other image must
+     come from an `exportFile` call of that topic (its state's `fileId`), so a
+     guessed id of another creator image is refused as not found.
+
+  Its implied grant is added after the activator check, so it never implies
+  `lobe-activator` on its own.

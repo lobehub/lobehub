@@ -1,5 +1,4 @@
 import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
-import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import {
   chainInputCompletion,
@@ -11,11 +10,12 @@ import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { combineKeys, css, cx } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Lexical editor paragraphs take no className
+import { createStaticStyles, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useHotkeysContext } from 'react-hotkeys-hook';
 import { useTranslation } from 'react-i18next';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
@@ -34,7 +34,6 @@ import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
-  settingsSelectors,
   systemAgentSelectors,
   userGeneralSettingsSelectors,
   userProfileSelectors,
@@ -44,6 +43,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useChatInputUploadKey } from '../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../hooks/useLargeFileLocalPath';
 import { useChatInputStore, useStoreApi } from '../store';
@@ -52,6 +52,7 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
+import { useImageRefTagSync } from './ImageRefTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
@@ -71,23 +72,21 @@ import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
-const className = cx(
-  css`
+const fallback = createStaticStyles(({ css }) => ({
+  editor: css`
     p {
       margin-block-end: 0;
     }
   `,
-  mentionPlainClassName,
-);
+}));
+
+const className = cx(fallback.editor, mentionPlainClassName);
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
 // editor's placeholder slot while the input is empty (history popup open).
-const ghostClassName = cx(css`
-  overflow: hidden;
-  display: block;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`);
+const ghostStyles = stylex.create({
+  root: { overflow: 'hidden', display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
@@ -131,9 +130,7 @@ const InputEditor = memo<{
   // view-level General access on the bound agent/group = full read-only input,
   // matching the workspace-viewer treatment (ChatInputNotice explains why).
   const { canUseResource } = useChatInputResourceAccess();
-  const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const userId = useUserStore(userProfileSelectors.userId);
-  const { enableScope, disableScope } = useHotkeysContext();
   const agentId = useAgentId();
   const inputHistoryScope = useMemo(() => ({ agentId, userId }), [agentId, userId]);
 
@@ -276,7 +273,13 @@ const InputEditor = memo<{
     isMentionEnabled &&
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const uploadContextKey = useChatInputUploadKey();
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: uploadContextKey,
+    model,
+    provider,
+  });
   const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const handlePasteFiles = useCallback(
     (files: File[]) => handleUploadFiles(routeLargeFilesToLocalPaths(files)),
@@ -285,6 +288,9 @@ const InputEditor = memo<{
 
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handlePasteFiles);
+  // Attaching an image inserts no inline reference; references saved in older drafts and
+  // messages still follow removals and renumbering.
+  useImageRefTagSync(editor);
 
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {
@@ -626,7 +632,7 @@ const InputEditor = memo<{
               />
             ))
           ) : (
-            <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
+            <span {...stylex.props(ghostStyles.root)}>{getHistoryPreviewText(ghostMarkdown)}</span>
           )
         }
         style={{
@@ -636,7 +642,6 @@ const InputEditor = memo<{
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
         onInit={handleEditorInit}
         onBlur={() => {
-          disableScope(HotkeyEnum.AddUserMessage);
           saveDraftDebounced.flush();
         }}
         onChange={() => {
@@ -667,9 +672,6 @@ const InputEditor = memo<{
             });
           }
         }}
-        onFocus={() => {
-          enableScope(HotkeyEnum.AddUserMessage);
-        }}
         onKeyDown={({ event }) => {
           if (inputHistory.handleKeyDown(event)) return true;
         }}
@@ -682,8 +684,6 @@ const InputEditor = memo<{
             return true;
           }
           if (e.shiftKey || isComposingRef.current) return;
-          // when user like alt + enter to add ai message
-          if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
           // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
           if (expand) {
             if (isCommandPressed(e)) {

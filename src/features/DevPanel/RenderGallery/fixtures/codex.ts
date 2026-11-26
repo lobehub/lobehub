@@ -103,17 +103,32 @@ export default defineFixtures({
       },
       content: 'Completed error.',
     }),
-    command_execution: single({
-      args: { command: "/bin/zsh -lc 'bun run type-check'" },
-      content: 'Checked 1247 files in 2.3s\nNo type errors found.',
-      pluginState: {
-        exitCode: 0,
-        isBackground: false,
-        output: 'Checked 1247 files in 2.3s\nNo type errors found.',
-        stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
-        success: true,
+    // Current rows persist `stdout` alone; legacy rows also repeat it in `output`.
+    command_execution: variants([
+      {
+        args: { command: "/bin/zsh -lc 'bun run type-check'" },
+        content: 'Checked 1247 files in 2.3s\nNo type errors found.',
+        label: 'Default',
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
+          success: true,
+        },
       },
-    }),
+      {
+        args: { command: "/bin/zsh -lc 'bun run type-check'" },
+        content: 'Checked 1247 files in 2.3s\nNo type errors found.',
+        label: 'Legacy output and stdout',
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          output: 'Checked 1247 files in 2.3s\nNo type errors found.',
+          stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
+          success: true,
+        },
+      },
+    ]),
     file_change: single({
       args: {
         changes: [

@@ -1,3 +1,4 @@
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -35,6 +36,14 @@ const isCarriedEvidence = (row: { metadata?: unknown }): boolean =>
  * repair round instead. The repair round still holds a complete, judged
  * checklist, so its rollup, the acceptance union and the Goal review all read
  * real evidence for every check.
+ *
+ * A waived check is carried for the same reason. Its ruling is an upheld
+ * `invalid_criterion` dispute, so it is not a repair target either, but its
+ * result still reads `failed` — skipping it planned the check fresh in the
+ * repair round, where the executor judged the waived blocker again and spent
+ * the round's budget on a check a panel had already dismissed. Carry it with its
+ * verdict and dispute metadata intact; every reader (rollup, status service,
+ * settle, Goal review) already excludes waived results from gating.
  */
 export const carryPassedResultsForward = async (
   db: LobeChatDatabase,
@@ -59,7 +68,8 @@ export const carryPassedResultsForward = async (
   for (const source of sourceResults) {
     const item = planned.get(source.checkItemId);
     if (!item || excluded.has(item.id)) continue;
-    if (source.status !== 'passed' || source.verdict !== 'passed') continue;
+    const waived = isCheckWaivedByDispute(source.metadata);
+    if (!waived && (source.status !== 'passed' || source.verdict !== 'passed')) continue;
     if (source.userDecision === 'rejected') continue;
 
     const carriedFrom: CarriedFromMetadata = {
@@ -77,17 +87,19 @@ export const carryPassedResultsForward = async (
       operationId: params.operationId,
       required: item.required,
       startedAt: source.startedAt,
-      status: 'passed',
+      status: waived ? source.status : 'passed',
       toulmin: {
         ...source.toulmin,
         limitation: [
           source.toulmin?.limitation,
-          `Carried forward from round ${params.sourceRoundIndex ?? '?'}: this repair round was not asked to change it.`,
+          waived
+            ? `Carried forward from round ${params.sourceRoundIndex ?? '?'} with its upheld dispute: this repair round was not asked to revisit it.`
+            : `Carried forward from round ${params.sourceRoundIndex ?? '?'}: this repair round was not asked to change it.`,
         ]
           .filter(Boolean)
           .join(' '),
       },
-      verdict: 'passed',
+      verdict: waived ? source.verdict : 'passed',
       verifierType: item.verifierType,
       verifyRunId: params.targetRunId,
     });
@@ -125,7 +137,10 @@ export const settledCarriedItemIds = (
   const reopened: string[] = [];
   for (const result of results) {
     if (!readCarriedFrom(result)) continue;
-    if (result.status === 'passed' && !fresh.has(result.checkItemId)) {
+    // A carried waiver is settled too: re-judging it would ask the verifier to
+    // settle a check a panel already dismissed.
+    const settledVerdict = result.status === 'passed' || isCheckWaivedByDispute(result.metadata);
+    if (settledVerdict && !fresh.has(result.checkItemId)) {
       settled.add(result.checkItemId);
     } else reopened.push(result.checkItemId);
   }

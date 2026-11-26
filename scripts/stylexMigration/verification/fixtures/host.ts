@@ -44,7 +44,7 @@ export const prepareFixtureHost = async (
   );
   await writeFile(
     path.join(host, 'entry.tsx'),
-    `import {startFixture} from ${JSON.stringify('./' + fixture.host)}; import {Fixture} from ${JSON.stringify('./' + fixture.render)}; import {__styleVerificationBindings,__styleVerificationCompositions} from "verification:component"; Object.defineProperty(globalThis,"__styleVerificationBindings",{value:__styleVerificationBindings}); Object.defineProperty(globalThis,"__styleVerificationCompositions",{value:__styleVerificationCompositions}); startFixture(Fixture,${JSON.stringify(fixture.styleVariants.map((variant) => variant.id))},${JSON.stringify(fixture.containerMode)});\n`,
+    `import {startFixture} from ${JSON.stringify('./' + fixture.host)}; import {Fixture} from ${JSON.stringify('./' + fixture.render)}; import {__styleVerificationBindings,__styleVerificationCompositions} from "verification:component"; Object.defineProperty(globalThis,"__styleVerificationBindings",{value:__styleVerificationBindings}); Object.defineProperty(globalThis,"__styleVerificationCompositions",{value:__styleVerificationCompositions}); startFixture(Fixture,${JSON.stringify(fixture.styleVariants.map((variant) => variant.id))},${JSON.stringify(fixture.containerMode)},${JSON.stringify(Object.fromEntries(fixture.styleVariants.map((variant) => [variant.id, variant.appearance])))});\n`,
     { flag: 'wx' },
   );
   return { componentSource: component.source, fixtureHashes, host, relativeTools, tools };

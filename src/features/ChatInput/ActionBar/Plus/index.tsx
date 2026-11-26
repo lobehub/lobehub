@@ -1,12 +1,11 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
+import { Icon, toast, Upload } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
-  ChevronRight,
-  Cloud,
   FileUp,
   LibraryBig,
   PlusIcon,
@@ -14,236 +13,92 @@ import {
   TargetIcon,
   TypeIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useInRouterContext, useLocation } from 'react-router';
 
-import { imageUrl } from '@/const/url';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { useIsDark } from '@/hooks/useIsDark';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useFileStore } from '@/store/file';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useChatInputUpload } from '../../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
-import { useDetailPopoverState } from '../components/useDetailPopoverState';
+import SubmenuChevron from '../components/SubmenuChevron';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
-import { useControls as useToolsControls } from '../Tools/useControls';
+import { usePopupToolsMenuItem } from './usePopupToolsMenuItem';
+import { useSkillsMenuItem } from './useSkillsMenuItem';
+import { useToolsMenuItem } from './useToolsMenuItem';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: transparent;
-  }
-`;
-
-const activeLabel = css`
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-
-  color: inherit;
-
-  span {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`;
-
-const labelWithChip = css`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-`;
-
-const countChip = css`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  min-width: 18px;
-  height: 18px;
-  padding-block: 0;
-  padding-inline: 6px;
-  border-radius: 9px;
-
-  font-size: 11px;
-  line-height: 18px;
-  color: ${cssVar.colorTextSecondary};
-
-  background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeInfoCard = css`
-  overflow: hidden;
-  width: 280px;
-  border-radius: 8px;
-
-  .cover {
-    display: block;
-
-    width: 100%;
-    height: 148px;
-
-    object-fit: cover;
-    background: ${cssVar.colorFillTertiary};
-  }
-
-  .body {
-    padding: 12px;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.35;
-  }
-
-  .desc {
-    margin-block-start: 6px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  }
-`;
-
-type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
-  label?: ReactNode;
-  popoverContent?: unknown;
-};
-
-interface PopoverLabelProps {
-  disabled?: boolean;
-  label: ReactNode;
-  popoverContent: ReactNode;
-}
-
-/**
- * The detail card must anchor past the whole menu row, not the label cell:
- * anchored to the label, it opens exactly over the item's trailing `extra`
- * slot ("..." menu, re-authorize link, switches), and a press landing on the
- * portal'd card is read by base-ui as an outside press that dismisses the
- * whole submenu. The card is also rendered inert (pointer-events: none) — it
- * is a hover information surface, so it must never swallow a press meant for
- * the controls beneath it.
- */
-const PopoverLabel = memo<PopoverLabelProps>(({ disabled, label, popoverContent }) => {
-  const { close, onOpenChange, open } = useDetailPopoverState(disabled);
-  const wrapperRef = useRef<HTMLSpanElement>(null);
-  const rowAnchorRef = useMemo(
-    () => ({
-      get current() {
-        const wrapper = wrapperRef.current;
-        return (wrapper?.closest('[role="menuitem"]') as HTMLElement | null) ?? wrapper;
-      },
-    }),
-    [],
-  );
-
-  return (
-    <Popover
-      arrow={false}
-      content={popoverContent}
-      disabled={disabled}
-      mouseEnterDelay={0.25}
-      open={open}
-      placement={'rightTop'}
-      positionerProps={{ anchor: rowAnchorRef, sideOffset: 8 }}
-      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
-      onOpenChange={onOpenChange}
-    >
-      <span
-        ref={wrapperRef}
-        style={{ display: 'block', width: '100%' }}
-        onClickCapture={close}
-        onContextMenuCapture={close}
-      >
-        {label}
-      </span>
-    </Popover>
-  );
+const styles = stylex.create({
+  activeLabel: {
+    display: 'flex',
+    gap: densityTokens['--lobe-density-section-gap'],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    color: 'inherit',
+  },
+  activeLabelText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  countChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '18px',
+    height: '18px',
+    paddingBlock: '0',
+    paddingInline: '6px',
+    borderRadius: '9px',
+    fontSize: '11px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  hotArea: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'transparent',
+    },
+  },
+  labelWithChip: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
 });
 
-PopoverLabel.displayName = 'PopoverLabel';
-
-const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown, disabled?: boolean) => {
-  if (!popoverContent) return label;
-
-  return (
-    <PopoverLabel disabled={disabled} label={label} popoverContent={popoverContent as ReactNode} />
-  );
-};
-
-const stripPopoverContent = (
-  items?: ActionDropdownMenuItems,
-  detailPopoverDisabled?: boolean,
-): ActionDropdownMenuItems =>
-  items?.map((item) => {
-    if (!item) return item;
-    if ('type' in item && item.type === 'divider') return item;
-
-    const nextItem = { ...(item as DropdownItemWithPopover) };
-    const popoverContent = nextItem.popoverContent;
-    delete nextItem.popoverContent;
-
-    if ('children' in nextItem && nextItem.children) {
-      return {
-        ...nextItem,
-        children: stripPopoverContent(nextItem.children, detailPopoverDisabled),
-      } as ActionDropdownMenuItems[number];
-    }
-
-    if ('label' in nextItem) {
-      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent, detailPopoverDisabled);
-    }
-
-    return nextItem;
-  }) ?? [];
-
-const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+const usePlusMenuItemsBase = ({
+  close,
+  toolsMenuItem,
+}: {
+  close: () => void;
+  toolsMenuItem: ActionDropdownMenuItems[number];
+}): ActionDropdownMenuItems => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
-  const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
 
-  // Goal creation is lab-gated while the product surface is being rolled out.
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
-
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
-  const defaultDisableGatewayMode = useUserStore(
-    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
-  );
 
   const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
@@ -256,13 +111,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     ],
   );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
-  const skillActivateMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-  );
-  const disableGatewayMode = useAgentStore(
-    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  );
-  const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
@@ -283,21 +131,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     items: knowledgeItems,
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
   const closeDropdown = useCallback(() => close(), [close]);
-  const {
-    autoCount: skillAutoCount,
-    isPolicyMenuOpen: isSkillPolicyMenuOpen,
-    marketFooter: skillMarketFooter,
-    marketHeader: skillMarketHeader,
-    marketItems: skillItems,
-    pinnedCount: skillPinnedCount,
-  } = useToolsControls({ closeDropdown });
-
-  const handleToggleGatewayMode = useCallback(
-    async (checked: boolean) => {
-      await updateAgentChatConfig({ disableGatewayMode: checked ? false : true });
-    },
-    [updateAgentChatConfig],
-  );
+  const skillsMenuItem = useSkillsMenuItem(closeDropdown);
 
   const handleToggleParams = useCallback(() => {
     close();
@@ -311,45 +145,23 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
       active ? (
-        <div className={cx(activeLabel)}>
-          <span>{label}</span>
+        <div {...stylex.props(styles.activeLabel)}>
+          <span {...stylex.props(styles.activeLabelText)}>{label}</span>
           <Icon icon={CheckIcon} size={14} />
         </div>
       ) : (
         label
       );
 
-    const renderLabelWithCount = (label: string, count: number, prefix?: string) =>
-      count > 0 || prefix ? (
-        <span className={cx(labelWithChip)}>
+    const renderLabelWithCount = (label: string, count: number) =>
+      count > 0 ? (
+        <span {...stylex.props(styles.labelWithChip)}>
           <span>{label}</span>
-          <span className={cx(countChip)}>{prefix ? `${prefix} | ${count}` : count}</span>
+          <span {...stylex.props(styles.countChip)}>{count}</span>
         </span>
       ) : (
         label
       );
-
-    const gatewayModeInfo = (
-      <div className={cx(gatewayModeInfoCard)}>
-        <img
-          alt=""
-          className="cover"
-          src={imageUrl(isDark ? 'agent_gateway_dark.webp' : 'agent_gateway_light.webp')}
-        />
-        <div className="body">
-          <div className="title">{t('gatewayMode.cardTitle')}</div>
-          <div className="desc">{t('gatewayMode.desc')}</div>
-        </div>
-      </div>
-    );
-
-    // The row detail card and the "..." policy menu anchor to the same right edge,
-    // so leaving hover live lets a neighbouring row's card open on top of the menu
-    // and swallow the click meant for it.
-    const skillMenuItems = stripPopoverContent(
-      skillItems as ActionDropdownMenuItems,
-      isSkillPolicyMenuOpen,
-    );
 
     const uploadItems: ActionDropdownMenuItems = [
       {
@@ -383,66 +195,27 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
             }}
           >
-            <div className={cx(hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
+            <div {...stylex.props(styles.hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
           </Upload>
         ),
       },
     ];
 
-    // In auto mode every installed skill is callable, so show pinned + auto.
-    // In manual mode only the pinned ones are active, so show pinned only.
-    const activeSkillCount =
-      skillActivateMode === 'auto' ? skillPinnedCount + skillAutoCount : skillPinnedCount;
-
     const toolsItems: ActionDropdownMenuItems =
-      isAgentModeEnabled && enableFC
-        ? [
-            {
-              children: skillMenuItems,
-              // Trailing chevron (replaces base-ui's default triangle submenu arrow,
-              // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
-              footer: skillMarketFooter,
-              header: skillMarketHeader,
-              icon: SkillsIcon,
-              key: 'tools',
-              label: renderLabelWithCount(
-                tSetting('tools.title'),
-                activeSkillCount,
-                tSetting(
-                  skillActivateMode === 'auto'
-                    ? 'tools.skillActivateMode.auto.title'
-                    : 'tools.skillActivateMode.manual.title',
-                ),
-              ),
-            } as ActionDropdownMenuItems[number],
-          ]
-        : [];
-
-    // Agent Gateway sits below the formatting toolbar (grouped with advanced
-    // params), gated on the resource-configuration permission.
-    const gatewayItem: ActionDropdownMenuItems =
-      canConfigureResource && enableGatewayMode
-        ? [
-            {
-              checked: isGatewayModeEnabled,
-              icon: Cloud,
-              key: 'gateway-mode',
-              // Brand name — same in every language, so no i18n.
-              label: <PopoverLabel label={'Agent Gateway'} popoverContent={gatewayModeInfo} />,
-              onCheckedChange: handleToggleGatewayMode,
-              type: 'switch',
-            } as ActionDropdownMenuItems[number],
-          ]
-        : [];
+      isAgentModeEnabled && enableFC ? [toolsMenuItem] : [];
 
     // Memory and web search are activation entries of the Tools popover now: they
     // live in its "Auto" group, can be disabled there, and carry their own settings,
     // so this menu only owns the route to them.
-    const coreItems: ActionDropdownMenuItems = canConfigureResource ? [...toolsItems] : [];
+    // Selecting a skill adds composer context; unlike tool configuration, it
+    // does not require resource-edit permission or model function calling.
+    const coreItems: ActionDropdownMenuItems = [
+      ...(canConfigureResource ? toolsItems : []),
+      skillsMenuItem,
+    ];
 
-    // Formatting toolbar is always available; Agent Gateway + advanced params
-    // only when the user can configure resources.
+    // Formatting toolbar is always available; advanced params only when the
+    // user can configure resources.
     const formatItems: ActionDropdownMenuItems = [
       // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
       {
@@ -453,8 +226,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
         type: 'switch',
       },
-      // Agent Gateway directly below the formatting toolbar.
-      ...gatewayItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -489,7 +260,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
             ],
             // Trailing chevron (replaces base-ui's default triangle submenu arrow,
             // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+            extra: <SubmenuChevron />,
             footer: canConfigureResource ? knowledgeFooter : undefined,
             icon: LibraryBig,
             key: 'attachments',
@@ -504,27 +275,25 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     // Goal creation has one canonical entry: drop the goal chip at the head of
     // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
-    const acceptanceItems: ActionDropdownMenuItems = enableGoals
-      ? [
-          {
-            icon: TargetIcon,
-            key: 'set-topic-goal',
-            // Same string as the chip it inserts: one label for the affordance,
-            // so the menu row and the chip can never drift apart.
-            label: tEditor('slash.goal'),
-            onClick: () => {
-              insertGoalTag(editor, tEditor('slash.goal'));
-            },
-          },
-        ]
-      : [];
+    const goalItems: ActionDropdownMenuItems = [
+      {
+        icon: TargetIcon,
+        key: 'set-topic-goal',
+        // Same string as the chip it inserts: one label for the affordance,
+        // so the menu row and the chip can never drift apart.
+        label: tEditor('slash.goal'),
+        onClick: () => {
+          insertGoalTag(editor, tEditor('slash.goal'));
+        },
+      },
+    ];
 
     // Grouped with a single divider only between non-empty groups:
-    // [attachments] | [memory · search · skills] | [set goal] | [formatting · gateway · params]
+    // [attachments] | [tools · skills] | [set goal] | [formatting · params]
     const menuGroups: ActionDropdownMenuItems[] = [
       attachmentsItems,
       coreItems,
-      acceptanceItems,
+      goalItems,
       formatItems,
     ];
     return menuGroups
@@ -533,35 +302,25 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   }, [
     agentId,
     canConfigureResource,
-    enableGoals,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
     editor,
     enableFC,
-    enableGatewayMode,
     enableKnowledgeBase,
-    handleToggleGatewayMode,
     handleToggleParams,
     isAgentModeEnabled,
-    isDark,
-    isGatewayModeEnabled,
     isParamsPanelActive,
-    isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
     showTypoBar,
-    skillActivateMode,
-    skillAutoCount,
-    skillPinnedCount,
     knowledgeItems,
     knowledgeFooter,
     t,
     tEditor,
     tSetting,
-    skillItems,
-    skillMarketFooter,
-    skillMarketHeader,
+    skillsMenuItem,
+    toolsMenuItem,
     upload,
     routeLargeFilesToLocalPaths,
     close,
@@ -570,44 +329,80 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   return items;
 };
 
+const useMainPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = useToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
+const usePopupPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = usePopupToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
 /**
  * The trigger stays hook-free: every store subscription and the whole item tree
- * live in `usePlusMenuItems`, which ActionDropdown only invokes from inside the
- * popup — so opening a conversation no longer pays for a menu nobody opened.
+ * live in `useMainPlusMenuItems` / `usePopupPlusMenuItems`, which ActionDropdown
+ * only invokes from inside the popup — so opening a conversation no longer pays
+ * for a menu nobody opened.
  */
-const PlusAction = memo(() => {
+const PlusActionBase = memo<{ isPopup: boolean }>(({ isPopup }) => {
   const { t } = useTranslation('chat');
+  const { controlHeight, iconSize } = useDensityTokens();
 
   return (
     <ChatInputAction
       icon={PlusIcon}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-      title={t('plus.tooltip')}
+      size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
+      title={t('plus.contextTooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
-        menu: { useItems: usePlusMenuItems },
-        minWidth: 220,
+        menu: { useItems: isPopup ? usePopupPlusMenuItems : useMainPlusMenuItems },
+        minWidth: 196,
         placement: 'topLeft',
       }}
     />
   );
 });
 
+PlusActionBase.displayName = 'PlusActionBase';
+
+const PlusActionInRouter = memo(() => {
+  const { pathname } = useLocation();
+
+  return <PlusActionBase isPopup={pathname.startsWith('/popup')} />;
+});
+
+PlusActionInRouter.displayName = 'PlusActionInRouter';
+
+const PlusAction = memo(() => {
+  const inRouter = useInRouterContext();
+
+  return inRouter ? <PlusActionInRouter /> : <PlusActionBase isPopup={false} />;
+});
+
 PlusAction.displayName = 'PlusAction';
 
-const Plus = () => (
-  <Suspense
-    fallback={
-      <ChatInputAction
-        disabled
-        icon={PlusIcon}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title=""
-      />
-    }
-  >
-    <PlusAction />
-  </Suspense>
-);
+const Plus = () => {
+  const { controlHeight, iconSize } = useDensityTokens();
+
+  return (
+    <Suspense
+      fallback={
+        <ChatInputAction
+          disabled
+          icon={PlusIcon}
+          size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
+          title=""
+        />
+      }
+    >
+      <PlusAction />
+    </Suspense>
+  );
+};
 
 export default Plus;

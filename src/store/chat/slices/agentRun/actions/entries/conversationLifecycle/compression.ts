@@ -7,8 +7,8 @@ import { t } from 'i18next';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -58,7 +58,10 @@ export const executeContextCompression = async (
 
   const contextKey = messageMapKey(context as any);
   const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(get()) || [];
-  const messageIds = getCompressionCandidateMessageIds(dbMessages, options);
+  const messageIds = getCompressionCandidateMessageIds(dbMessages, {
+    ...options,
+    threadId: context.threadId,
+  });
   if (messageIds.length === 0) return false;
 
   const tempId = 'tmp_compress_' + nanoid();
@@ -75,6 +78,9 @@ export const executeContextCompression = async (
       agentId,
       groupId: context.groupId,
       id: tempId,
+      // Without `beforeMessageId` every message above is folded, so the group
+      // belongs at the end, not above the last question.
+      keepPosition: !options.beforeMessageId,
       threadId: context.threadId,
       topicId,
     }) as any,
@@ -85,9 +91,13 @@ export const executeContextCompression = async (
 
   try {
     // 1. Create compression group on server
+    // Scope the group to the open conversation: without `threadId` the server reads the main
+    // conversation, so a thread compaction summarized and returned the wrong messages.
     const result = await messageService.createCompressionGroup({
       agentId,
+      groupId: context.groupId,
       messageIds,
+      threadId: context.threadId,
       topicId,
     });
     const { messages: serverMessages, messagesToSummarize } = result;
@@ -98,8 +108,18 @@ export const executeContextCompression = async (
     get().replaceMessages(serverMessages, { context: context as any });
     get().associateMessageWithOperation(messageGroupId, operationId);
 
-    // 2. Generate summary via LLM
-    const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    // 2. Generate summary via LLM. Match the runtime's auto-compression model resolution: a model
+    // pinned to the topic wins over the agent default (see streamingExecutor).
+    // The summary goes through the regular chat endpoint, so only an API pin is usable:
+    // heterogeneous topics pin the CLI runtime (e.g. `cursor/default`), and a model-only legacy
+    // pin has no provider to route to. Both keep the agent default.
+    const agentState = getAgentStoreState();
+    const topicModel = agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState)
+      ? undefined
+      : topicSelectors.getTopicModelById(topicId)(get());
+    const { model, provider } = topicModel?.provider
+      ? topicModel
+      : agentSelectors.getAgentConfigById(agentId)(agentState);
     const compressionPayload = chainCompressContext(messagesToSummarize);
     let summaryContent = '';
     let summaryError: Error | undefined;
@@ -133,7 +153,9 @@ export const executeContextCompression = async (
     const finalResult = await messageService.finalizeCompression({
       agentId,
       content: summaryContent,
+      groupId: context.groupId,
       messageGroupId: groupId,
+      threadId: context.threadId,
       topicId,
     });
 

@@ -1,9 +1,14 @@
 'use client';
 
+import { Settings } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
+import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
+import { legacySettingsMarketplaceRedirects } from '@/spa/router/marketplaceRoutes';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement } from '@/utils/router';
 
 /**
@@ -19,6 +24,7 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
       () => import('@/routes/(mobile)/[workspaceSlug]/settings'),
       'Mobile > Workspace > Settings > Index',
     ),
+    handle: { meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }) },
     index: true,
   },
   ...(workspaceSettingsContentRoute.children ?? []),
@@ -30,24 +36,13 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
         ),
       'Mobile > Workspace > Settings > Provider',
     ),
+    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Provider) },
     path: 'provider',
   },
   // Path-shaped provider deep-links (`/:slug/settings/provider/:id`) redirect
   // to the query form the workspace provider page uses. Static element: the
   // redirect is tiny and lazy-loading it would flash the brand loader first.
   { element: <WorkspaceProviderRedirect />, path: 'provider/:providerId' },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),
-      'Mobile > Workspace > Settings > Skill',
-    ),
-    path: 'skill',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
-      'Mobile > Workspace > Settings > Connector',
-    ),
-    path: 'connector',
-  },
+  // Moved to `/:slug/marketplace/skill/installed` and `/:slug/marketplace/connector`.
+  ...legacySettingsMarketplaceRedirects,
 ];

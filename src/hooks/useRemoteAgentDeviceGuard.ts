@@ -1,4 +1,5 @@
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import { isWakeableManagedDevice } from '@lobechat/types';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
@@ -75,7 +76,11 @@ export const useRemoteAgentDeviceGuard = ({
     // which is intentionally absent from the caller-scoped device list. The
     // server owns that routing decision; absence here is not proof of offline.
     if (!device) return 'ok';
-    if (!device.online) return 'device-offline';
+    // A sleeping managed cloud device is woken by the dispatch itself. A
+    // notify-based platform still needs a live device to probe and run on.
+    if (!device.online) {
+      return isWakeableManagedDevice(device) && !remoteType ? 'ok' : 'device-offline';
+    }
     return remoteType ? 'capability' : 'ok';
   })();
 

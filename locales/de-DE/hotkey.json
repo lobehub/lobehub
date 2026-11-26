@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Füge die aktuelle Eingabe als Benutzernachricht hinzu, ohne die Generierung auszulösen",
-  "addUserMessage.title": "Benutzernachricht hinzufügen",
   "commandPalette.desc": "Öffne die globale Befehlspalette für schnellen Zugriff auf Funktionen",
   "commandPalette.title": "Befehlspalette",
   "deleteAndRegenerateMessage.desc": "Lösche die letzte Nachricht und generiere sie neu",
@@ -27,6 +25,8 @@
   "openChatSettings.title": "Chat-Einstellungen öffnen",
   "openHotkeyHelper.desc": "Anleitung für alle Tastenkombinationen anzeigen",
   "openHotkeyHelper.title": "Tastenkürzel-Hilfe öffnen",
+  "openTaskFilter.desc": "Öffne das Filtermenü auf der Seite Aufgaben",
+  "openTaskFilter.title": "Aufgaben filtern",
   "prevTab.desc": "Wechseln Sie zur vorherigen Registerkarte in der Desktop-App; springt am Anfang zur letzten Registerkarte zurück",
   "prevTab.title": "Vorherige Registerkarte",
   "regenerateMessage.desc": "Letzte Nachricht neu generieren",

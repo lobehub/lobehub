@@ -4,8 +4,10 @@ import {
   consumePendingSandboxSelection,
   getPendingSandboxSelection,
   resolvePendingSandboxSelection,
+  seedPendingSandboxSelection,
   setPendingSandboxSelection,
   setSandboxDefaultSelection,
+  setSandboxTemporaryDefaultSelection,
   subscribePendingSandboxSelection,
   toSandboxTopicMetadata,
 } from './pendingSandboxSelection';
@@ -66,6 +68,29 @@ describe('pendingSandboxSelection', () => {
       sandboxWorkingDirectory: 'app',
     });
     expect(toSandboxTopicMetadata(undefined)).toBeUndefined();
+  });
+
+  // An explicit temporary-sandbox pick serialized to no fields at all, the same
+  // as no pick, so a project conversation was given the project's checkout.
+  // The server must tell a default the composer filled in from a pick: a
+  // project conversation gives the project's checkout the default's place.
+  it('marks a seeded default, and not a pick of the same place', () => {
+    seedPendingSandboxSelection('agent-seeded', { workingDirectory: '.' });
+
+    expect(toSandboxTopicMetadata(getPendingSandboxSelection('agent-seeded'))).toMatchObject({
+      sandboxSeeded: true,
+    });
+    expect(toSandboxTopicMetadata({ workingDirectory: '.' })).not.toHaveProperty('sandboxSeeded');
+  });
+
+  it('marks an explicit temporary-sandbox pick, and only that', () => {
+    expect(toSandboxTopicMetadata({})).toMatchObject({ sandboxTemporary: true });
+    expect(toSandboxTopicMetadata({ workingDirectory: 'app' })).not.toHaveProperty(
+      'sandboxTemporary',
+    );
+    expect(toSandboxTopicMetadata({ environmentId: 'env_1' })).not.toHaveProperty(
+      'sandboxTemporary',
+    );
   });
 
   // The entitlement loads after the composer does. A first message sent while
@@ -145,6 +170,40 @@ describe('pendingSandboxSelection', () => {
       await expect(resolvePendingSandboxSelection('agent-none')).resolves.toBeUndefined();
 
       setSandboxDefaultSelection('agent-offline');
+    });
+  });
+
+  // A plan without a drive learns so only from the entitlement; a first send
+  // made before then still starts from the remembered repository.
+  describe('temporary-sandbox default', () => {
+    it('is carried by a first send once the plan turns out to have no drive', async () => {
+      mocks.cachedEntitlement = undefined;
+      mocks.getEntitlement.mockResolvedValueOnce({ entitled: false });
+      setSandboxDefaultSelection('agent-nodrive', { workingDirectory: '.' });
+      setSandboxTemporaryDefaultSelection('agent-nodrive', { environmentId: 'env_repo' });
+
+      await expect(resolvePendingSandboxSelection('agent-nodrive')).resolves.toEqual({
+        environmentId: 'env_repo',
+      });
+
+      consumePendingSandboxSelection('agent-nodrive');
+      setSandboxDefaultSelection('agent-nodrive');
+      setSandboxTemporaryDefaultSelection('agent-nodrive');
+    });
+
+    it('gives way to the drive default when the plan has a drive', async () => {
+      mocks.cachedEntitlement = { entitled: true };
+      setSandboxDefaultSelection('agent-drive', { workingDirectory: 'notes' });
+      setSandboxTemporaryDefaultSelection('agent-drive', { environmentId: 'env_repo' });
+
+      await expect(resolvePendingSandboxSelection('agent-drive')).resolves.toEqual({
+        workingDirectory: 'notes',
+      });
+
+      mocks.cachedEntitlement = undefined;
+      consumePendingSandboxSelection('agent-drive');
+      setSandboxDefaultSelection('agent-drive');
+      setSandboxTemporaryDefaultSelection('agent-drive');
     });
   });
 });

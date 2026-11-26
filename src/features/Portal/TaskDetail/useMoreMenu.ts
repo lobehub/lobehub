@@ -4,9 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { openRenameModal } from '@/components/RenameModal';
 import { useTaskCopyActions } from '@/features/AgentTasks/AgentTaskDetail/useTaskCopyActions';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { useTaskStore } from '@/store/task';
+
+import { getTaskDetailPageUrl } from './url';
+import { useForeignTaskDetail } from './useForeignTaskDetail';
 
 export const useTaskDetailMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const { t } = useTranslation('chat');
@@ -24,6 +28,27 @@ export const useTaskDetailMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   // Same gate as the task page's header menu.
   const { allowed: canEdit } = usePermission('create_content');
+  const appOrigin = useAppOrigin();
+  const foreign = useForeignTaskDetail();
+
+  // A task from another workspace is shown read-only: the edit actions here
+  // write through the active scope, where its identifier can name another task.
+  if (foreign.workspace) {
+    if (!foreign.taskId) return;
+    const detail = foreign.data;
+
+    return {
+      copyId: detail?.identifier ?? foreign.taskId,
+      copyLink: getTaskDetailPageUrl({
+        agentId: detail?.agentId ?? undefined,
+        appOrigin,
+        identifier: detail?.identifier,
+        title: detail?.name,
+        workspaceSlug: foreign.workspace.slug,
+      }),
+      refresh: () => foreign.mutate(),
+    };
+  }
 
   if (!taskId) return;
 

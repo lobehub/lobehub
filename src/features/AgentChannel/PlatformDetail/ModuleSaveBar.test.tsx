@@ -52,4 +52,27 @@ describe('ModuleSaveBar', () => {
     expect(screen.getByRole('button', { name: en['channel.module.save'] })).toBeDisabled();
     expect(screen.getByRole('button', { name: en['channel.discard'] })).toBeDisabled();
   });
+
+  it('shows why a save failed beside the buttons while the change is still unsaved', () => {
+    const { rerender } = render(
+      <ModuleSaveBar
+        dirty
+        error={'Lists hold at most 50 entries'}
+        onDiscard={noop}
+        onSave={noop}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Lists hold at most 50 entries');
+
+    rerender(
+      <ModuleSaveBar
+        dirty={false}
+        error={'Lists hold at most 50 entries'}
+        onDiscard={noop}
+        onSave={noop}
+      />,
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

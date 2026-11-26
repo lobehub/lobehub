@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceScope } from '@lobechat/types';
-import { Button, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowLeftIcon, MonitorXIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,21 +13,7 @@ import { useElectronStore } from '@/store/electron';
 
 import DeviceDetail from './DeviceDetail';
 import { deviceDetailKey, getDeviceListBoundary } from './deviceListBoundary';
-
-const DetailSkeleton = memo(() => (
-  <Flexbox gap={24}>
-    <Skeleton height={24} width={120} />
-    <Flexbox horizontal align={'center'} gap={16}>
-      <Skeleton.Avatar shape={'square'} size={56} />
-      <Flexbox flex={1} gap={8}>
-        <Skeleton height={20} width={200} />
-        <Skeleton height={14} width={120} />
-      </Flexbox>
-    </Flexbox>
-    <Skeleton height={32} width={'100%'} />
-    <Skeleton.Text rows={6} />
-  </Flexbox>
-));
+import { DeviceDetailSkeleton } from './Skeleton';
 
 interface DeviceDetailPageProps {
   deviceId: string;
@@ -81,7 +67,7 @@ const DeviceDetailPage = memo<DeviceDetailPageProps>(({ deviceId, onBack, scope 
       errorVariant={'block'}
       isEmpty={!device}
       isLoading={boundary.isLoading}
-      loading={<DetailSkeleton />}
+      loading={<DeviceDetailSkeleton />}
       onRetry={() => mutate()}
     >
       {device && (

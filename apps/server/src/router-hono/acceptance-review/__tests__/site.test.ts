@@ -18,9 +18,9 @@ let serverDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => serverDB }));
 vi.mock('@/libs/oidc-provider/jwt', () => ({
   verifyAcceptanceReviewJWT: async (token: string) => {
-    const [userId, siteId, origin] = token.split('|');
+    const [userId, siteId, origin, clientId = 'lobehub-acceptance'] = token.split('|');
     if (!origin) throw new Error('invalid');
-    return { expiresAt: 2_000_000_000, site: { origin, siteId }, userId };
+    return { clientId, expiresAt: 2_000_000_000, site: { origin, siteId }, userId };
   },
 }));
 vi.mock('@/server/workflows/expertiseRejection', () => ({
@@ -102,6 +102,43 @@ describe('site review tokens', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
 
+  describe('from the browser extension', () => {
+    const EXTENSION_ORIGIN = 'chrome-extension://fjgpjfdackkmgdldjiebkhkdacbibhnb';
+    const extensionCall = (userId: string, clientId: string, origin?: string) =>
+      app.request(`${BASE}/session`, {
+        headers: {
+          authorization: `Bearer ${userId}|${site.id}|${ORIGIN}|${clientId}`,
+          ...(origin ? { origin } : {}),
+        },
+      });
+
+    it('checks the Origin of a site token the extension handed to the page', async () => {
+      const onSite = await extensionCall(ownerId, 'lobehub-acceptance-extension', ORIGIN);
+      expect(onSite.status).toBe(200);
+      expect(await onSite.json()).toMatchObject({ site: { id: site.id } });
+      const elsewhere = await extensionCall(
+        ownerId,
+        'lobehub-acceptance-extension',
+        EXTENSION_ORIGIN,
+      );
+      expect(elsewhere.status).toBe(403);
+      expect(await elsewhere.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      expect((await extensionCall(ownerId, 'lobehub-acceptance-extension')).status).toBe(403);
+    });
+
+    it('still checks access for an extension-minted token', async () => {
+      const response = await extensionCall(guestId, 'lobehub-acceptance-extension', ORIGIN);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'SITE_ACCESS_REVOKED' } });
+    });
+
+    it('keeps the Origin check for tokens the page signed in for', async () => {
+      expect((await extensionCall(ownerId, 'lobehub-acceptance', EXTENSION_ORIGIN)).status).toBe(
+        403,
+      );
+    });
+  });
+
   describe('on the LobeHub app origin itself', () => {
     const sameOriginCall = (headers: Record<string, string>) =>
       app.request(`${BASE}/session`, {
@@ -134,6 +171,42 @@ describe('site review tokens', () => {
         },
       });
       expect(response.status).toBe(403);
+    });
+  });
+
+  describe('install beacon', () => {
+    const beacon = (siteId: string, headers: Record<string, string> = {}) =>
+      app.request(`${BASE}/sites/${siteId}/beacon`, {
+        body: '',
+        headers: { 'content-type': 'text/plain', ...headers },
+        method: 'POST',
+      });
+    const lastSeen = async () =>
+      (await serverDB.select().from(projectSites).where(eq(projectSites.id, site.id)))[0]
+        .lastSeenAt;
+
+    it('records a load from a registered origin without any sign-in', async () => {
+      const response = await beacon(site.id, { origin: ORIGIN });
+      expect(response.status).toBe(204);
+      expect(await response.text()).toBe('');
+      expect(await lastSeen()).toBeInstanceOf(Date);
+    });
+
+    it('ignores a load from an origin the site does not list', async () => {
+      const response = await beacon(site.id, { origin: 'https://fieldnotes-mirror.net' });
+      expect(response.status).toBe(204);
+      expect(await lastSeen()).toBeNull();
+    });
+
+    it('ignores a request without an Origin header', async () => {
+      expect((await beacon(site.id)).status).toBe(204);
+      expect(await lastSeen()).toBeNull();
+    });
+
+    it('answers the same way for a site that does not exist', async () => {
+      const response = await beacon('psite_missing', { origin: ORIGIN });
+      expect(response.status).toBe(204);
+      expect(await response.text()).toBe('');
     });
   });
 

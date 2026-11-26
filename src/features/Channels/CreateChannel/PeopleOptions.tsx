@@ -17,7 +17,7 @@ import { pickerStyles } from './pickerStyles';
 const CANDIDATE_LIMIT = 50;
 
 export interface PeopleSelection {
-  /** Unset while creating a Channel: every workspace member except the creator. */
+  /** Unset while creating a Channel: everyone the creator can bring in, except themselves. */
   channelId?: string;
   onChange: Dispatch<SetStateAction<ChannelPersonOption[]>>;
   value: ChannelPersonOption[];
@@ -29,10 +29,10 @@ export const usePersonName = () => {
 };
 
 const PersonAvatar = ({ name, person }: { name: string; person: ChannelPersonOption }) => (
-  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={28} title={name} />
+  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} shape={'circle'} size={28} title={name} />
 );
 
-/** Workspace members who are not in the Channel yet, searched on the server. */
+/** People who can join and are not in the Channel yet, searched on the server. */
 export const PeopleOptions = ({ people, search }: { people: PeopleSelection; search: string }) => {
   const { t } = useTranslation('channel');
   const nameOf = usePersonName();

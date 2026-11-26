@@ -12,7 +12,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { useFileStore } from '@/store/file';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { useImageStage } from '../context';
 import { buildDerivedFileName } from '../geometry';
@@ -48,10 +49,15 @@ export const useSendMarkupToChat = () => {
   const send = useCallback(
     async (markup: ImageMarkup): Promise<boolean> => {
       if (isMarkupEmpty(markup)) return false;
-      const attached = useComposerDraftBus.getState().attached;
+      const { attached, contextKey: attachedContextKey } = useComposerDraftBus.getState();
       const { activeAgentId, activeTopicId } = useChatStore.getState();
       const agentId = attached ? activeAgentId : inboxAgentId;
-      if (!agentId) {
+      // The attachment goes to the input it is handed to: the open
+      // conversation's, or the new inbox conversation the viewer navigates to.
+      const contextKey = attached
+        ? attachedContextKey
+        : agentId && messageMapKey({ agentId, topicId: null });
+      if (!agentId || !contextKey) {
         toast.error(t('imageViewer.markup.noConversation'));
         return false;
       }
@@ -77,23 +83,30 @@ export const useSendMarkupToChat = () => {
         // under the same name; only the item this upload adds counts.
         // The export and upload take a while; if the user moved to another
         // conversation meanwhile, the marks must not land there.
+        // The composer key also tells threads of one topic apart, so the image
+        // and its text cannot split across two of them.
         const isStillTarget = () => {
           const chat = useChatStore.getState();
+          const bus = useComposerDraftBus.getState();
           return (
             aliveRef.current &&
-            useComposerDraftBus.getState().attached === attached &&
+            bus.attached === attached &&
             (!attached ||
-              (chat.activeAgentId === activeAgentId && chat.activeTopicId === activeTopicId))
+              (bus.contextKey === contextKey &&
+                chat.activeAgentId === activeAgentId &&
+                chat.activeTopicId === activeTopicId))
           );
         };
         if (!isStillTarget())
           throw new Error('The conversation changed before the image was ready');
 
-        const before = new Set(useFileStore.getState().chatUploadFileList.map((item) => item.id));
-        await useFileStore.getState().uploadChatFiles([file], agentId);
-        const staged = useFileStore
-          .getState()
-          .chatUploadFileList.find((item) => !before.has(item.id) && item.file?.name === file.name);
+        const stagedList = () =>
+          fileChatSelectors.chatUploadFileList(contextKey)(useFileStore.getState());
+        const before = new Set(stagedList().map((item) => item.id));
+        await useFileStore.getState().uploadChatFiles(contextKey, [file], agentId);
+        const staged = stagedList().find(
+          (item) => !before.has(item.id) && item.file?.name === file.name,
+        );
         // Only a finished upload counts: a failed upload can also leave the
         // chip pending without throwing.
         if (!staged || staged.status !== 'success') {
@@ -101,11 +114,13 @@ export const useSendMarkupToChat = () => {
           if (staged)
             useFileStore
               .getState()
-              .dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+              .dispatchChatUploadFileList(contextKey, { id: staged.id, type: 'removeFile' });
           throw new Error(staged?.error ?? 'The annotated image did not reach the input');
         }
         if (!isStillTarget()) {
-          useFileStore.getState().dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+          useFileStore
+            .getState()
+            .dispatchChatUploadFileList(contextKey, { id: staged.id, type: 'removeFile' });
           throw new Error('The conversation changed while the image was uploading');
         }
 

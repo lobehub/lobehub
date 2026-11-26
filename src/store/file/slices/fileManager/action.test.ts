@@ -60,6 +60,27 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
+const createFileBackedDocumentState = (): Pick<
+  ReturnType<typeof useStore.getState>,
+  'resourceMap'
+> => ({
+  resourceMap: new Map([
+    [
+      'docs_1',
+      {
+        createdAt: new Date(),
+        fileId: 'file_1',
+        fileType: 'text/plain',
+        id: 'docs_1',
+        name: 'Document-backed file',
+        size: 1,
+        sourceType: 'file',
+        updatedAt: new Date(),
+      },
+    ],
+  ]),
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   useStore.setState(
@@ -176,19 +197,6 @@ describe('FileManagerActions', () => {
       expect(result.current.dockUploadFileList[0].id).toBe('file-1');
     });
 
-    it('should not update state if reducer returns same value', () => {
-      const { result } = renderHook(() => useStore());
-
-      const initialList = result.current.dockUploadFileList;
-
-      // This tests the early return when value hasn't changed
-      act(() => {
-        useStore.setState({ dockUploadFileList: initialList });
-      });
-
-      expect(result.current.dockUploadFileList).toBe(initialList);
-    });
-
     it('should handle updateFileStatus dispatch', () => {
       const { result } = renderHook(() => useStore());
 
@@ -302,23 +310,7 @@ describe('FileManagerActions', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({
-          resourceMap: new Map([
-            [
-              'docs_1',
-              {
-                createdAt: new Date(),
-                fileId: 'file_1',
-                fileType: 'text/plain',
-                id: 'docs_1',
-                name: 'Document-backed file',
-                size: 1,
-                sourceType: 'file',
-                updatedAt: new Date(),
-              },
-            ],
-          ]),
-        });
+        useStore.setState(createFileBackedDocumentState());
       });
 
       const createTaskSpy = vi
@@ -379,23 +371,7 @@ describe('FileManagerActions', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({
-          resourceMap: new Map([
-            [
-              'docs_1',
-              {
-                createdAt: new Date(),
-                fileId: 'file_1',
-                fileType: 'text/plain',
-                id: 'docs_1',
-                name: 'Document-backed file',
-                size: 1,
-                sourceType: 'file',
-                updatedAt: new Date(),
-              },
-            ],
-          ]),
-        });
+        useStore.setState(createFileBackedDocumentState());
       });
 
       const createTaskSpy = vi
@@ -846,23 +822,7 @@ describe('FileManagerActions', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({
-          resourceMap: new Map([
-            [
-              'docs_1',
-              {
-                createdAt: new Date(),
-                fileId: 'file_1',
-                fileType: 'text/plain',
-                id: 'docs_1',
-                name: 'Document-backed file',
-                size: 1,
-                sourceType: 'file',
-                updatedAt: new Date(),
-              },
-            ],
-          ]),
-        });
+        useStore.setState(createFileBackedDocumentState());
       });
 
       const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
@@ -908,23 +868,7 @@ describe('FileManagerActions', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({
-          resourceMap: new Map([
-            [
-              'docs_1',
-              {
-                createdAt: new Date(),
-                fileId: 'file_1',
-                fileType: 'text/plain',
-                id: 'docs_1',
-                name: 'Document-backed file',
-                size: 1,
-                sourceType: 'file',
-                updatedAt: new Date(),
-              },
-            ],
-          ]),
-        });
+        useStore.setState(createFileBackedDocumentState());
       });
 
       const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
@@ -1004,131 +948,70 @@ describe('FileManagerActions', () => {
     });
   });
 
-  describe('toggleEmbeddingIds', () => {
+  describe.each([
+    { action: 'toggleEmbeddingIds', stateKey: 'creatingEmbeddingTaskIds' },
+    { action: 'toggleParsingIds', stateKey: 'creatingChunkingTaskIds' },
+  ] as const)('$action', ({ action, stateKey }) => {
     it('should add ids when loading is true', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        result.current.toggleEmbeddingIds(['file-1', 'file-2'], true);
+        result.current[action](['file-1', 'file-2'], true);
       });
 
-      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1', 'file-2']);
+      expect(result.current[stateKey]).toEqual(['file-1', 'file-2']);
     });
 
     it('should remove ids when loading is false', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({ creatingEmbeddingTaskIds: ['file-1', 'file-2', 'file-3'] });
+        useStore.setState({ [stateKey]: ['file-1', 'file-2', 'file-3'] });
       });
 
       act(() => {
-        result.current.toggleEmbeddingIds(['file-1', 'file-2'], false);
+        result.current[action](['file-1', 'file-2'], false);
       });
 
-      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-3']);
+      expect(result.current[stateKey]).toEqual(['file-3']);
     });
 
     it('should toggle ids when loading is undefined', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({ creatingEmbeddingTaskIds: ['file-1'] });
+        useStore.setState({ [stateKey]: ['file-1'] });
       });
 
       act(() => {
-        result.current.toggleEmbeddingIds(['file-1', 'file-2']);
+        result.current[action](['file-1', 'file-2']);
       });
 
-      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-2']);
+      expect(result.current[stateKey]).toEqual(['file-2']);
     });
 
     it('should handle empty initial state', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        result.current.toggleEmbeddingIds(['file-1'], true);
+        result.current[action](['file-1'], true);
       });
 
-      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1']);
+      expect(result.current[stateKey]).toEqual(['file-1']);
     });
 
     it('should not duplicate ids', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({ creatingEmbeddingTaskIds: ['file-1'] });
+        useStore.setState({ [stateKey]: ['file-1'] });
       });
 
       act(() => {
-        result.current.toggleEmbeddingIds(['file-1'], true);
+        result.current[action](['file-1'], true);
       });
 
-      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1']);
-    });
-  });
-
-  describe('toggleParsingIds', () => {
-    it('should add ids when loading is true', () => {
-      const { result } = renderHook(() => useStore());
-
-      act(() => {
-        result.current.toggleParsingIds(['file-1', 'file-2'], true);
-      });
-
-      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1', 'file-2']);
-    });
-
-    it('should remove ids when loading is false', () => {
-      const { result } = renderHook(() => useStore());
-
-      act(() => {
-        useStore.setState({ creatingChunkingTaskIds: ['file-1', 'file-2', 'file-3'] });
-      });
-
-      act(() => {
-        result.current.toggleParsingIds(['file-1', 'file-2'], false);
-      });
-
-      expect(result.current.creatingChunkingTaskIds).toEqual(['file-3']);
-    });
-
-    it('should toggle ids when loading is undefined', () => {
-      const { result } = renderHook(() => useStore());
-
-      act(() => {
-        useStore.setState({ creatingChunkingTaskIds: ['file-1'] });
-      });
-
-      act(() => {
-        result.current.toggleParsingIds(['file-1', 'file-2']);
-      });
-
-      expect(result.current.creatingChunkingTaskIds).toEqual(['file-2']);
-    });
-
-    it('should handle empty initial state', () => {
-      const { result } = renderHook(() => useStore());
-
-      act(() => {
-        result.current.toggleParsingIds(['file-1'], true);
-      });
-
-      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1']);
-    });
-
-    it('should not duplicate ids', () => {
-      const { result } = renderHook(() => useStore());
-
-      act(() => {
-        useStore.setState({ creatingChunkingTaskIds: ['file-1'] });
-      });
-
-      act(() => {
-        result.current.toggleParsingIds(['file-1'], true);
-      });
-
-      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1']);
+      expect(result.current[stateKey]).toEqual(['file-1']);
     });
   });
 

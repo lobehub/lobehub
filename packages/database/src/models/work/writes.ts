@@ -7,6 +7,7 @@ import type {
   WorkMetadata,
   WorkResourceType,
   WorkType,
+  WorkVersionMetadata,
   WorkVisibility,
 } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -111,6 +112,20 @@ const buildVersionSnapshot = (
 };
 
 /**
+ * Version metadata follows the display snapshot: a partial registration keeps
+ * the current version's keys and overrides only the ones it carries, so a
+ * `gh pr edit` without `--head` does not drop the branch captured at create.
+ */
+const buildVersionMetadata = (
+  input: CreateVersionInput,
+  currentMetadata?: WorkVersionMetadata | null,
+): WorkVersionMetadata | null => {
+  if (!input.patchFields || !currentMetadata) return input.metadata ?? null;
+
+  return { ...currentMetadata, ...input.metadata };
+};
+
+/**
  * Shared registration pipeline: find-or-create the Work identity, dedupe by
  * toolCallId, allocate the next version number, insert the complete immutable
  * snapshot, and update the Work's current projection in ONE transaction. Retry
@@ -126,17 +141,23 @@ const buildVersionSnapshot = (
  * `buildInput` receives.
  */
 /** Server-owned `works.metadata` for a fresh identity row under `ctx`'s scope. */
-const buildWorkMetadata = (ctx: WorkContext): WorkMetadata | null => {
+const buildWorkMetadata = (
+  ctx: WorkContext,
+  params: Pick<WorkVersionEventParams, 'agentEditable'>,
+): WorkMetadata | null => {
   const scope = resolveWorkAccessScope(ctx);
-  if (scope.type !== 'agentShare') return null;
-
-  return {
-    agentShare: {
-      shareId: scope.shareId,
-      topicId: scope.topicId,
-      visitorUserId: scope.visitorUserId,
-    },
+  const metadata: WorkMetadata = {
+    ...(params.agentEditable && { agentEditable: true }),
+    ...(scope.type === 'agentShare' && {
+      agentShare: {
+        shareId: scope.shareId,
+        topicId: scope.topicId,
+        visitorUserId: scope.visitorUserId,
+      },
+    }),
   };
+
+  return Object.keys(metadata).length > 0 ? metadata : null;
 };
 
 export const registerWorkVersion = async (
@@ -161,7 +182,9 @@ export const registerWorkVersion = async (
             // from a visitor's share topic carries that topic's scope for its
             // whole life, so the creator's ordinary reads (and any other
             // visitor topic) never resolve it — see `workMatchesAccessScope`.
-            metadata: buildWorkMetadata(ctx),
+            // `agentEditable` follows the same rule: a Work's editability by
+            // the agent is fixed by whoever registered it first.
+            metadata: buildWorkMetadata(ctx, params),
             // Origin provenance is stamped ONLY here: it records where the Work
             // identity was first registered and stays immutable through every
             // later version (the current-projection UPDATE below never touches it).
@@ -201,9 +224,9 @@ export const registerWorkVersion = async (
         if (dedupedUnderLock) return locked;
 
         const input = await buildInput(txCtx);
-        const [currentSnapshot] = locked.currentVersionId
+        const [currentVersion] = locked.currentVersionId
           ? await tx
-              .select(versionSnapshotSelection)
+              .select({ ...versionSnapshotSelection, metadata: workVersions.metadata })
               .from(workVersions)
               .where(
                 and(
@@ -213,6 +236,7 @@ export const registerWorkVersion = async (
               )
               .limit(1)
           : [];
+        const { metadata: currentMetadata, ...currentSnapshot } = currentVersion ?? {};
         const snapshot = buildVersionSnapshot(input, currentSnapshot);
 
         const now = new Date();
@@ -238,7 +262,7 @@ export const registerWorkVersion = async (
             description: snapshot.description,
             identifier: snapshot.identifier,
             messageId: params.messageId ?? null,
-            metadata: input.metadata ?? null,
+            metadata: buildVersionMetadata(input, currentMetadata),
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
             status: snapshot.status,

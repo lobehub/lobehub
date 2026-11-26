@@ -130,7 +130,7 @@ const ProcessingView = memo<{
   totalToolCalls: number;
 }>(({ messages, startTime, model, provider, totalToolCalls, accumulatedUsage }) => {
   const { t } = useTranslation('chat');
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const showMessageUsage = useUserStore(userGeneralSettingsSelectors.showMessageUsage);
   const [elapsedTime, setElapsedTime] = useState(0);
   const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
     deps: [messages],
@@ -198,7 +198,7 @@ const ProcessingView = memo<{
       />
 
       {/* Usage display */}
-      {isDevMode && model && provider && (
+      {showMessageUsage && model && provider && (
         <Usage model={model} provider={provider} usage={accumulatedUsage} />
       )}
     </Flexbox>
@@ -221,7 +221,7 @@ const CompletedView = memo<{
   totalToolCalls: number;
 }>(({ blocks, assistantId, duration, totalToolCalls, model, provider, totalTokens, totalCost }) => {
   const { t } = useTranslation('chat');
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const showMessageUsage = useUserStore(userGeneralSettingsSelectors.showMessageUsage);
 
   // Split blocks: intermediate steps (all but last) and final result (last)
   const { intermediateBlocks, finalBlock } = useMemo(() => {
@@ -302,7 +302,7 @@ const CompletedView = memo<{
       <ContentBlock {...finalBlock} disableEditing assistantId={assistantId} />
 
       {/* Usage display */}
-      {isDevMode && model && provider && (
+      {showMessageUsage && model && provider && (
         <Usage model={model} provider={provider} usage={{ cost: totalCost, totalTokens }} />
       )}
     </Flexbox>

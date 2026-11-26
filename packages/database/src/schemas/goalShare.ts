@@ -1,7 +1,7 @@
 import type { GoalShareConfig, ShareVisibility } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { createNanoId } from '../utils/idGenerator';
+import { generateShareToken } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { goals } from './goal';
 import { users } from './user';
@@ -15,9 +15,7 @@ import { workspaces } from './workspace';
 export const goalShares = pgTable(
   'goal_shares',
   {
-    id: text('id')
-      .$defaultFn(() => createNanoId(16)())
-      .primaryKey(),
+    id: text('id').$defaultFn(generateShareToken).primaryKey(),
 
     goalId: text('goal_id')
       .notNull()

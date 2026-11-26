@@ -1,5 +1,6 @@
 import type { WorkingDirEntry } from '@lobechat/types';
-import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 
 import type { DeviceItem } from '../schemas';
 import { agents, devices, workspaces } from '../schemas';
@@ -24,6 +25,30 @@ export class WorkspaceDevicePrivateConflictError extends Error {
     this.name = 'WorkspaceDevicePrivateConflictError';
   }
 }
+
+/**
+ * A registration named the `deviceId` of an existing managed cloud device.
+ * The platform owns that row — its identity and machine-reported fields come
+ * from the managed device provider, not from a client — so `register` and
+ * `registerWorkspaceDevice` leave it untouched and fail with this instead.
+ * Routers map it to a CONFLICT response.
+ */
+export class ManagedDeviceRegistrationConflictError extends Error {
+  constructor(deviceId: string) {
+    super(
+      `Device "${deviceId}" is a managed cloud device and cannot be registered by a client — use a different device id.`,
+    );
+    this.name = 'ManagedDeviceRegistrationConflictError';
+  }
+}
+
+/**
+ * Upsert guard for both registration paths: the conflict update applies only
+ * when the stored row is not a managed cloud device. Checked in the same
+ * statement as the write, so no registration racing a managed device's
+ * creation can overwrite it.
+ */
+const notManagedRow = ne(devices.identitySource, MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE);
 
 export interface RegisterDeviceParams {
   /** CPU architecture reported by the client (`process.arch`); optional for older clients. */
@@ -108,7 +133,8 @@ export class DeviceModel {
    * Auto-register from desktop/CLI. Upserts on the (userId, deviceId) unique
    * index. On conflict only the machine-reported fields + lastSeenAt are
    * refreshed — friendlyName / defaultCwd / workingDirs are user-owned and
-   * must survive re-registration.
+   * must survive re-registration. A conflict with a managed cloud device
+   * changes nothing and throws {@link ManagedDeviceRegistrationConflictError}.
    */
   register = async (params: RegisterDeviceParams) => {
     const now = new Date();
@@ -133,10 +159,15 @@ export class DeviceModel {
           metadata: mergeReportedMetadata(params.metadata),
           platform: params.platform,
         },
+        setWhere: notManagedRow,
         target: [devices.userId, devices.deviceId],
         targetWhere: sql`${devices.workspaceId} IS NULL`,
       })
       .returning();
+
+    // No row back means the conflict update was skipped: the id is taken by a
+    // managed cloud device.
+    if (!result) throw new ManagedDeviceRegistrationConflictError(params.deviceId);
 
     return result;
   };
@@ -145,7 +176,9 @@ export class DeviceModel {
    * Enroll a machine as a WORKSPACE device (admin-driven). Upserts on
    * `(userId, deviceId)` like {@link register}, but stamps `workspace_id` so the
    * row belongs to the workspace and surfaces to all its members. `userId`
-   * records the enrolling admin.
+   * records the enrolling admin. Like {@link register}, a conflict with a
+   * managed cloud device changes nothing and throws
+   * {@link ManagedDeviceRegistrationConflictError}.
    */
   /**
    * Fail closed when `deviceId` collides with ANOTHER member's PRIVATE
@@ -230,10 +263,14 @@ export class DeviceModel {
           platform: params.platform,
           visibility: params.visibility === 'public' ? 'public' : sql`${devices.visibility}`,
         },
+        setWhere: notManagedRow,
         target: [devices.workspaceId, devices.deviceId],
         targetWhere: sql`${devices.workspaceId} IS NOT NULL`,
       })
       .returning();
+
+    // Skipped conflict update: the id is taken by a managed cloud device.
+    if (!result) throw new ManagedDeviceRegistrationConflictError(params.deviceId);
 
     return result;
   };
@@ -307,6 +344,36 @@ export class DeviceModel {
     });
   };
 
+  /**
+   * Stamp `lastSeenAt` on rows the device gateway currently reports online.
+   *
+   * Registration stamps the column once per connect, so a device holding one
+   * session for weeks would otherwise go offline showing the time it last
+   * registered. Writes only rows the caller can read (its personal rows, or
+   * visible rows of the current workspace) and never moves the stamp back.
+   * `updatedAt` stays as it is: liveness is not an edit of the row.
+   *
+   * Only rows whose stored stamp is still older than `staleBefore` (at most
+   * `seenAt`) are written. The check sits in the UPDATE itself, so concurrent
+   * reads that all saw the same stale snapshot write the row once, not once each.
+   */
+  markSeen = async (rowIds: string[], seenAt: Date, staleBefore: Date): Promise<void> => {
+    if (rowIds.length === 0) return;
+
+    const personal = and(eq(devices.userId, this.userId), isNull(devices.workspaceId));
+    const readable = this.workspaceId
+      ? or(
+          personal,
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, devices),
+        )
+      : personal;
+
+    await this.db
+      .update(devices)
+      .set({ lastSeenAt: seenAt, updatedAt: sql`${devices.updatedAt}` })
+      .where(and(inArray(devices.id, rowIds), lt(devices.lastSeenAt, staleBefore), readable));
+  };
+
   findByDeviceId = async (deviceId: string) => {
     return this.db.query.devices.findFirst({
       where: and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)),
@@ -347,16 +414,28 @@ export class DeviceModel {
           eq(devices.userId, this.userId),
           eq(devices.deviceId, deviceId),
           isNull(devices.workspaceId),
+          notManagedRow,
         ),
       )
       .returning();
     return device;
   };
 
-  delete = async (deviceId: string) => {
+  /**
+   * Remove a PERSONAL device. Workspace devices the user enrolled keep their
+   * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   */
+  delete = async (deviceId: string): Promise<DeviceItem[]> => {
     return this.db
       .delete(devices)
-      .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
   };
 
   /**
@@ -403,13 +482,15 @@ export class DeviceModel {
   /**
    * Remove a WORKSPACE device, scoped by `workspace_id`. Permission
    * (workspace owner, or the enroller acting on their own device) is enforced
-   * at the router via `canEditWorkspaceDevice`.
+   * at the router via `canEditWorkspaceDevice`. Returns the removed rows, or
+   * `undefined` without a current workspace.
    */
-  deleteWorkspaceDevice = async (deviceId: string) => {
+  deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
     if (!this.workspaceId) return;
     return this.db
       .delete(devices)
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)));
+      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .returning();
   };
 
   /**
@@ -459,7 +540,13 @@ export class DeviceModel {
         userId: this.userId,
         visibility: params.visibility,
       })
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .where(
+        and(
+          eq(devices.workspaceId, this.workspaceId),
+          eq(devices.deviceId, deviceId),
+          notManagedRow,
+        ),
+      )
       .returning();
     return row;
   };

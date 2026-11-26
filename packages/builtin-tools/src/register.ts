@@ -1,3 +1,4 @@
+import { A2uiInspectors, A2uiManifest, A2uiRenders } from '@lobechat/builtin-tool-a2ui/client';
 import {
   LobeActivatorInspectors,
   LobeActivatorManifest,
@@ -23,6 +24,7 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
+import { ArtboardInspectors, ArtboardManifest } from '@lobechat/builtin-tool-artboard/client';
 import { AuvIdentifier, AuvInspectors } from '@lobechat/builtin-tool-auv/client';
 import {
   BrowserInspectors,
@@ -110,6 +112,12 @@ import {
   LocalSystemStreamings,
 } from '@lobechat/builtin-tool-local-system/client';
 import {
+  McpEventsIdentifier,
+  McpEventsInspectors,
+  McpEventsInterventions,
+  McpEventsRenders,
+} from '@lobechat/builtin-tool-mcp-events/client';
+import {
   MemoryInspectors,
   MemoryInterventions,
   MemoryManifest,
@@ -129,6 +137,7 @@ import {
   PageAgentRenders,
   PageAgentStreamings,
 } from '@lobechat/builtin-tool-page-agent/client';
+import { ProjectInspectors, ProjectManifest } from '@lobechat/builtin-tool-project/client';
 import {
   RemoteDeviceInspectors,
   RemoteDeviceManifest,
@@ -181,6 +190,13 @@ import {
   WebOnboardingRenders,
 } from '@lobechat/builtin-tool-web-onboarding/client';
 import {
+  WebhookIdentifier,
+  WebhookInspectors,
+  WebhookInterventions,
+  WebhookRenders,
+} from '@lobechat/builtin-tool-webhook/client';
+import { WorkIdentifier, WorkInspectors } from '@lobechat/builtin-tool-work/client';
+import {
   createEditLocalFileInspector,
   createReadLocalFileInspector,
   createRunCommandInspector,
@@ -211,6 +227,7 @@ import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
 const COPILOT_IDENTIFIER = 'copilot';
+const ANTIGRAVITY_IDENTIFIER = 'antigravity';
 const DROID_IDENTIFIER = 'droid';
 const DEVIN_IDENTIFIER = 'devin';
 const QODER_IDENTIFIER = 'qoder';
@@ -270,11 +287,15 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [A2uiManifest.identifier]: A2uiRenders as Record<string, BuiltinRender>,
     [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
     [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
+    [ANTIGRAVITY_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [COPILOT_IDENTIFIER]: {
       execute: RunCommandRender as BuiltinRender,
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
@@ -302,6 +323,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
     [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
     [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
+    [McpEventsIdentifier]: McpEventsRenders,
+    [WebhookIdentifier]: WebhookRenders,
     [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
     [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
     [NotebookIdentifier]: NotebookRenders,
@@ -325,6 +348,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
       command_execution: RunCommandRender as BuiltinRender,
     },
     [GithubIdentifier]: GithubRenders,
@@ -332,6 +356,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [A2uiManifest.identifier]: A2uiInspectors as Record<string, BuiltinInspector>,
     [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
@@ -347,6 +372,9 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
+    [ANTIGRAVITY_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [COPILOT_IDENTIFIER]: {
       execute: createRunCommandInspector(
         'builtins.lobe-local-system.apiName.runCommand',
@@ -386,6 +414,9 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
     [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
+    [McpEventsIdentifier]: McpEventsInspectors,
+    [WebhookIdentifier]: WebhookInspectors,
+    [WorkIdentifier]: WorkInspectors,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
@@ -397,6 +428,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+    [ArtboardManifest.identifier]: ArtboardInspectors,
+    [ProjectManifest.identifier]: ProjectInspectors,
     [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
@@ -411,7 +444,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     },
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
-    'codex': CodexInspectors,
+    'codex': {
+      ...CodexInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,
@@ -458,6 +494,14 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [ANTIGRAVITY_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
+    codex: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [COPILOT_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
@@ -489,6 +533,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LegacyGoalIdentifier]: GoalInterventions as Record<string, BuiltinIntervention>,
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
+    [McpEventsIdentifier]: McpEventsInterventions,
+    [WebhookIdentifier]: WebhookInterventions,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
     [DashboardManifest.identifier]: DashboardInterventions as Record<string, BuiltinIntervention>,

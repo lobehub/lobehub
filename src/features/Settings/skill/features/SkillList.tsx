@@ -1,159 +1,207 @@
 'use client';
 
-import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
-import {
-  getConnectorCatalog,
-  RECOMMENDED_SKILLS,
-  RecommendedSkillType,
-  resolveConnectorCatalogItem,
-} from '@lobechat/const';
-import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
-import { Center, createStaticStyles, cx, Empty } from '@lobehub/ui';
+import { hasCallableMcpEndpoint } from '@lobechat/const';
+import type { ConnectorVisibility } from '@lobechat/types';
+import { Button, Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, LockIcon, SearchX } from 'lucide-react';
 import type React from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
+import { CONNECTOR_PAGE_IDS, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
-  builtinToolSelectors,
   composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import {
+  connectorSelectors,
+  isInConnectorTab,
+  isIntegrationInConnectorTab,
+} from '@/store/tool/slices/connector';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { densityTokens } from '@/styles/density.stylex';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
-import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
+import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
+import {
+  buildIntegrationItems,
+  countConnectorTabItems,
+  getVisibleSectionItems,
+  type IntegrationItem,
+  isIntegrationConnected,
+  isSectionExpandable,
+  matchesConnectorKeyword,
+  matchesIntegrationKeyword,
+  partitionByInstalled,
+} from './connectorSections';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import PageSectionHeading from './PageSectionHeading';
+import { privateTabState } from './privateTabState';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  description: css`
-    margin-block-end: 8px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  empty: css`
-    padding: 24px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-    user-select: none;
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  sectionHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
+    paddingBlockEnd: '4px',
+    paddingInline: '4px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  // Page groups (the Codex Plugins catalog): a 16px heading, then a
+  // two-column catalog of borderless rows; groups are separated by 32px of
+  // whitespace, not rules. The rows' 12px inset plus the 16px column gap
+  // leave ~40px between the two columns' content.
+  // 12px + the row's 14px tile inset ≈ the Codex 24px from heading to icon tile.
+  pageSection: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  pageSections: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '32px',
+    paddingBlockStart: '24px',
+  },
+  pageGrid: {
+    display: 'grid',
+    gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.lg]: 'minmax(0, 1fr)' },
+    columnGap: '16px',
+    rowGap: '4px',
+  },
+});
 
-    display: flex;
-    gap: 4px;
-    align-items: center;
+/** What the page header can drive in the list: re-fetch every source it shows. */
+export interface SkillListHeaderContext {
+  onRefresh: () => void;
+  refreshing: boolean;
+}
 
-    padding-block: 12px 4px;
-    padding-inline: 4px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  sectionHeaderPage: css`
-    gap: 8px;
-
-    padding-block: 24px 8px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    font-weight: 600;
-  `,
-  sectionCount: css`
-    font-weight: 400;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
-
-export type SkillViewMode = 'connector' | 'skill';
+export type SkillViewMode = 'connector' | 'mcp' | 'skill';
 
 interface SkillListProps {
+  /** Page search: filters every group by name, identifier and description. */
+  keyword?: string;
+  onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
+  /** Page header above the groups. */
+  renderHeader?: (context: SkillListHeaderContext) => React.ReactNode;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
+  /**
+   * Workspace connector tab: `public` lists the shared pool (every catalog
+   * section); `private` lists only the caller's private connectors. Unset
+   * outside a workspace.
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const SkillList = memo<SkillListProps>(
-  ({ onSelect, onDeleteSelected, selectedIdentifier, viewMode = 'connector' }) => {
+  ({
+    keyword,
+    onClearKeyword,
+    onSelect,
+    onDeleteSelected,
+    renderHeader,
+    selectedIdentifier,
+    viewMode = 'connector',
+    visibility,
+  }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [refreshing, setRefreshing] = useState(false);
     const isPage = useSkillListVariant() === 'page';
 
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
+    const { showMarket } = useServerConfigStore(featureFlagsSelectors);
     const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-    const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
-    const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
-    const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
-    const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
-    const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
-    const uninstalledBuiltinTools = useToolStore(
-      builtinToolSelectors.uninstalledBuiltinTools,
+    const allCustomConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const allMarketplaceConnectors = useToolStore(
+      connectorSelectors.marketplaceMcpConnectors,
       isEqual,
     );
-
-    const [
-      useFetchLobehubSkillConnections,
-      useFetchUserComposioConnections,
-      useFetchAgentSkills,
-      useFetchUninstalledBuiltinTools,
-    ] = useToolStore((s) => [
-      s.useFetchLobehubSkillConnections,
-      s.useFetchUserComposioConnections,
-      s.useFetchAgentSkills,
-      s.useFetchUninstalledBuiltinTools,
-    ]);
+    const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+    const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    // The Private tab reads only this list: keep its load's failure for Retry
+    const connectorsSWR = useToolStore((s) => s.useFetchConnectors)(true);
+    const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // What an OAuth integration's tab is decided by: its rows' visibility, and
+    // which of them holds the account its actions act on
+    const connectorTabRows = useToolStore(
+      (s) =>
+        connectorSelectors.connectorList(s).map(({ identifier, metadata, visibility }) => ({
+          identifier,
+          metadata: metadata?.composio ? { composio: metadata.composio } : null,
+          visibility,
+        })),
+      isEqual,
+    );
+    const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+    const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
+    const [useFetchLobehubSkillConnections, useFetchUserComposioConnections, useFetchAgentSkills] =
+      useToolStore((s) => [
+        s.useFetchLobehubSkillConnections,
+        s.useFetchUserComposioConnections,
+        s.useFetchAgentSkills,
+      ]);
 
     useFetchInstalledPlugins();
     // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
     // of a fake-empty list (each hook syncs into the store only on success —
     //
-    const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-    const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
-    const agentSkillsSWR = useFetchAgentSkills(true);
-    const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
+    const isConnectorView = viewMode !== 'skill';
+    const lobehubSkillsSWR = useFetchLobehubSkillConnections(
+      isLobehubSkillEnabled && viewMode !== 'mcp',
+    );
+    const composioSWR = useFetchUserComposioConnections(isComposioEnabled && viewMode !== 'mcp');
+    const agentSkillsSWR = useFetchAgentSkills(viewMode === 'skill');
     const skillsError =
-      lobehubSkillsSWR.error ?? composioSWR.error ?? agentSkillsSWR.error ?? builtinToolsSWR.error;
+      viewMode === 'skill'
+        ? agentSkillsSWR.error
+        : (lobehubSkillsSWR.error ?? composioSWR.error ?? connectorsSWR.error);
     const reloadSkills = () => {
-      void lobehubSkillsSWR.mutate();
-      void composioSWR.mutate();
-      void agentSkillsSWR.mutate();
-      // The uninstalled-builtin list is a replica now: revalidate re-runs its
-      // network sync without blanking the painted list.
-      void builtinToolsSWR.revalidate();
+      if (!isConnectorView) {
+        void agentSkillsSWR.mutate();
+        return;
+      }
+      if (viewMode !== 'mcp') {
+        void lobehubSkillsSWR.mutate();
+        void composioSWR.mutate();
+      }
+      void connectorsSWR.mutate();
     };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
@@ -164,7 +212,6 @@ const SkillList = memo<SkillListProps>(
 
     // Load agent-owned connectors (across all agents) for the Agent Connectors
     // section — connector view only.
-    const isConnectorView = viewMode === 'connector';
     useEffect(() => {
       if (isConnectorView && !isAgentBoundInit) fetchAgentBoundConnectors();
     }, [isConnectorView, isAgentBoundInit, fetchAgentBoundConnectors]);
@@ -177,182 +224,168 @@ const SkillList = memo<SkillListProps>(
       return allComposioServers.find((server) => server.identifier === identifier);
     };
 
-    const getBuiltinToolByIdentifier = (identifier: string) => {
-      return allBuiltinTools.find((tool) => tool.identifier === identifier);
+    const connectionState = {
+      isComposioActive: (identifier: string) =>
+        getComposioServerByIdentifier(identifier)?.status === ComposioServerStatus.ACTIVE,
+      isLobehubConnected: (providerId: string) =>
+        getLobehubSkillServerByProvider(providerId)?.status === LobehubSkillStatus.CONNECTED,
     };
 
-    const isBuiltinToolInstalled = (identifier: string) => {
-      return !uninstalledBuiltinTools.includes(identifier);
-    };
+    // The connector catalog contains OAuth integrations, connected first.
+    // A few dozen entries: cheap enough to derive on each render.
+    const allIntegrations =
+      viewMode === 'mcp'
+        ? []
+        : buildIntegrationItems({
+            ...connectionState,
+            pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
+            connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
+          });
 
-    // Separate skills into three categories:
-    // 1. Integrations (Builtin, LobeHub and Composio skills)
-    // 2. Community MCP Tools (type === 'plugin')
-    // 3. Custom MCP Tools (type === 'customPlugin')
-    const { integrations, communityMCPs, customMCPs } = useMemo(() => {
-      type IntegrationItem =
-        | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
-        | { builtinTool: LobeBuiltinTool; type: 'builtin' }
-        | { provider: LobehubSkillProviderType; type: 'lobehub' }
-        | { serverType: ComposioAppType; type: 'composio' };
+    // Each workspace tab lists its own pool. Built-in tools, plugins and agent
+    // connectors carry no visibility and stay with the shared pool; a connector
+    // row lists under the tab of its visibility, and an OAuth integration
+    // (Composio, LobeHub) under the tabs of its connector rows.
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    const inTab = (c: ConnectorWithTools) => isInConnectorTab(c, visibility);
+    const customConnectors = allCustomConnectors.filter(inTab);
+    const marketplaceConnectors = allMarketplaceConnectors.filter(inTab);
+    const tabVisibility = isConnectorView ? visibility : undefined;
+    const integrations = allIntegrations.filter((item) => {
+      if (item.type === 'composio')
+        return isIntegrationInConnectorTab(
+          item.serverType.identifier,
+          connectorTabRows,
+          tabVisibility,
+          getComposioServerByIdentifier(item.serverType.identifier)?.connectedAccountId,
+        );
+      return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
+    });
+    const communityMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'plugin');
+    const customMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+    const agentBoundConnectors = isPrivateTab
+      ? []
+      : viewMode === 'mcp'
+        ? allAgentBoundConnectors.filter(hasCallableMcpEndpoint)
+        : allAgentBoundConnectors;
 
-      let integrationItems: IntegrationItem[] = [];
-
-      // Add builtin agent skills first so they appear early in the list
-      for (const skill of builtinSkills) {
-        integrationItems.push({ builtinAgentSkill: skill, type: 'builtinAgent' });
-      }
-
-      const addedBuiltinIds = new Set<string>();
-      const addedConnectorIds = new Set<string>();
-      const connectorAvailability = {
-        composio: isComposioEnabled,
-        lobehub: isLobehubSkillEnabled,
-      };
-
-      // If RECOMMENDED_SKILLS is configured, use it to build the list
-      if (RECOMMENDED_SKILLS.length > 0) {
-        for (const skill of RECOMMENDED_SKILLS) {
-          if (skill.type === RecommendedSkillType.Builtin) {
-            const builtinTool = getBuiltinToolByIdentifier(skill.id);
-            if (builtinTool && !builtinTool.hidden) {
-              integrationItems.push({ builtinTool, type: 'builtin' });
-              addedBuiltinIds.add(skill.id);
-            }
-          } else {
-            const connector = resolveConnectorCatalogItem(skill.id, connectorAvailability);
-            if (connector && !addedConnectorIds.has(skill.id)) {
-              integrationItems.push(connector);
-              addedConnectorIds.add(skill.id);
-            }
-          }
-        }
-
-        // Also add installed builtin tools that are not in RECOMMENDED_SKILLS
-        for (const tool of allBuiltinTools) {
-          if (
-            !tool.hidden &&
-            isBuiltinToolInstalled(tool.identifier) &&
-            !addedBuiltinIds.has(tool.identifier)
-          ) {
-            integrationItems.push({ builtinTool: tool, type: 'builtin' });
-          }
-        }
-
-        // Add every remaining connector through the shared ownership resolver.
-        // This keeps discovery complete without rendering one identifier through
-        // both LobeHub and Composio authorization systems.
-        for (const connector of getConnectorCatalog(connectorAvailability)) {
-          const identifier =
-            connector.type === 'lobehub' ? connector.provider.id : connector.serverType.identifier;
-          if (!addedConnectorIds.has(identifier)) {
-            integrationItems.push(connector);
-            addedConnectorIds.add(identifier);
-          }
-        }
-      } else {
-        // Default behavior: add all non-hidden builtin tools
-        for (const tool of allBuiltinTools) {
-          if (!tool.hidden) {
-            integrationItems.push({ builtinTool: tool, type: 'builtin' });
-          }
-        }
-
-        integrationItems.push(...getConnectorCatalog(connectorAvailability));
-
-        // Filter integrations: show all builtin and lobehub skills, but only connected composio
-        integrationItems = integrationItems.filter((item) => {
-          if (item.type === 'builtinAgent' || item.type === 'builtin' || item.type === 'lobehub') {
-            return true;
-          }
-          return (
-            getComposioServerByIdentifier(item.serverType.identifier)?.status ===
-            ComposioServerStatus.ACTIVE
-          );
-        });
-      }
-
-      // Sort integrations: installed/connected ones first
-      const getIsConnected = (item: IntegrationItem) => {
-        switch (item.type) {
-          case 'builtinAgent': {
-            return isBuiltinToolInstalled(item.builtinAgentSkill.identifier);
-          }
-          case 'builtin': {
-            return isBuiltinToolInstalled(item.builtinTool.identifier);
-          }
-          case 'lobehub': {
-            return (
-              getLobehubSkillServerByProvider(item.provider.id)?.status ===
-              LobehubSkillStatus.CONNECTED
-            );
-          }
-          case 'composio': {
-            return (
-              getComposioServerByIdentifier(item.serverType.identifier)?.status ===
-              ComposioServerStatus.ACTIVE
-            );
-          }
-        }
-      };
-      const sortedIntegrations = integrationItems.sort((a, b) => {
-        const isConnectedA = getIsConnected(a);
-        const isConnectedB = getIsConnected(b);
-
-        if (isConnectedA && !isConnectedB) return -1;
-        if (!isConnectedA && isConnectedB) return 1;
-        return 0;
-      });
-
-      // Separate installed plugins into community and custom
-      const communityPlugins = installedPluginList.filter((plugin) => plugin.type === 'plugin');
-      const customPlugins = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
-
-      return {
-        communityMCPs: communityPlugins,
-        customMCPs: customPlugins,
-        integrations: sortedIntegrations,
-      };
-    }, [
-      installedPluginList,
-      isLobehubSkillEnabled,
-      isComposioEnabled,
-      allLobehubSkillServers,
-      allComposioServers,
-      allBuiltinTools,
-      uninstalledBuiltinTools,
-      builtinSkills,
-    ]);
-
+    const connectorTabCount = countConnectorTabItems({
+      customConnectors,
+      integrations,
+      marketplaceConnectors,
+    });
     const hasAnySkills =
-      builtinSkills.length > 0 ||
-      integrations.length > 0 ||
-      marketAgentSkills.length > 0 ||
-      userAgentSkills.length > 0 ||
-      communityMCPs.length > 0 ||
-      customMCPs.length > 0 ||
-      agentBoundConnectors.length > 0;
+      viewMode === 'skill'
+        ? marketAgentSkills.length > 0 || userAgentSkills.length > 0
+        : connectorTabCount > 0 ||
+          communityMCPs.length > 0 ||
+          customMCPs.length > 0 ||
+          agentBoundConnectors.length > 0;
+
+    // The page header's refresh re-fetches every list this view shows, keeping
+    // the painted rows until the new data lands.
+    const refreshAll = () => {
+      if (refreshing) return;
+      setRefreshing(true);
+      const requests = isConnectorView
+        ? [
+            ...(viewMode === 'mcp' ? [] : [lobehubSkillsSWR.mutate(), composioSWR.mutate()]),
+            connectorsSWR.mutate(),
+            fetchAgentBoundConnectors(),
+          ]
+        : [agentSkillsSWR.mutate()];
+      void Promise.allSettled(requests).finally(() => setRefreshing(false));
+    };
+    const header = isPage ? renderHeader?.({ onRefresh: refreshAll, refreshing }) : undefined;
+
+    const privateState = isPrivateTab
+      ? privateTabState({
+          count: connectorTabCount,
+          error: connectorsSWR.error,
+          isConnectorsInit,
+        })
+      : undefined;
+    if (
+      privateState === 'loading' ||
+      (viewMode === 'skill' && !hasAnySkills && agentSkillsSWR.isLoading && !skillsError)
+    )
+      return (
+        <>
+          {header}
+          <SkeletonList aria-busy paddingBlock={12} rows={4} />
+        </>
+      );
+    if (privateState === 'error') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <AsyncError
+              error={connectorsSWR.error}
+              variant={'block'}
+              onRetry={() => void connectorsSWR.mutate()}
+            />
+          </Center>
+        </>
+      );
+    }
+    if (privateState === 'empty') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <Empty
+              description={t('skillView.privateConnectorsEmpty.desc')}
+              icon={LockIcon}
+              title={t('skillView.privateConnectorsEmpty.title')}
+            />
+          </Center>
+        </>
+      );
+    }
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
     // empty (error gated ahead of empty).
     if (skillsError && !hasAnySkills) {
       return (
-        <Center className={styles.container} paddingBlock={48}>
-          <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
-        </Center>
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
+          </Center>
+        </>
       );
     }
 
     if (!hasAnySkills) {
       return (
-        <Center className={styles.container} paddingBlock={48}>
-          <Empty description={t('tab.skillDesc')} icon={SkillsIcon} title={t('tab.skillEmpty')} />
-        </Center>
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <Empty
+              icon={SkillsIcon}
+              description={
+                viewMode === 'mcp'
+                  ? t('apps.mcpDescription', { ns: 'discover' })
+                  : t(viewMode === 'skill' ? 'skillView.empty.description' : 'tab.skillDesc')
+              }
+              title={
+                viewMode === 'mcp'
+                  ? t('apps.noInstalledMcp', { ns: 'discover' })
+                  : t(viewMode === 'skill' ? 'skillView.empty.title' : 'tab.skillEmpty')
+              }
+            />
+          </Center>
+        </>
       );
     }
 
-    const renderMarketAgentSkills = () =>
-      marketAgentSkills.map((skill) => (
+    const renderAgentSkills = (skills: typeof marketAgentSkills) =>
+      skills.map((skill) => (
         <AgentSkillItem
           isSelected={selectedIdentifier === skill.id}
           key={skill.id}
@@ -361,18 +394,63 @@ const SkillList = memo<SkillListProps>(
         />
       ));
 
-    const renderUserAgentSkills = () =>
-      userAgentSkills.map((skill) => (
-        <AgentSkillItem
-          isSelected={selectedIdentifier === skill.id}
-          key={skill.id}
-          skill={skill}
-          onSelect={onSelect ? () => onSelect(skill.id, 'agent-skill') : undefined}
-        />
-      ));
+    // ── Connector entries, filtered by the page search ───────────────────────
+    const match = (...fields: Array<string | null | undefined>) =>
+      matchesConnectorKeyword(keyword, fields);
 
-    const renderCommunityMCPs = () =>
-      communityMCPs.map((plugin) => (
+    const communitySkillItems = integrations.filter((item) =>
+      matchesIntegrationKeyword(item, keyword, t),
+    );
+    const visibleCommunityMCPs = communityMCPs.filter((p) =>
+      match(p.title, p.identifier, p.author),
+    );
+    const visibleMarketplaceConnectors = marketplaceConnectors.filter((c) =>
+      match(c.name, c.identifier),
+    );
+    const visibleCustomMCPs = customMCPs.filter((p) => match(p.title, p.identifier));
+    const visibleCustomConnectors = customConnectors.filter((c) => match(c.name, c.identifier));
+    const visibleAgentConnectors = agentBoundConnectors.filter((c) =>
+      match(c.name, c.identifier, c.agentTitle),
+    );
+
+    const renderIntegration = (item: IntegrationItem) => {
+      switch (item.type) {
+        case 'lobehub': {
+          return (
+            <LobehubSkillItem
+              connectable={isLobehubSkillEnabled}
+              isSelected={selectedIdentifier === item.provider.id}
+              key={item.provider.id}
+              openWhenDisconnected={hasConnectorPage(item.provider.id)}
+              provider={item.provider}
+              server={getLobehubSkillServerByProvider(item.provider.id)}
+              onDelete={onDeleteSelected}
+              onSelect={
+                onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
+              }
+            />
+          );
+        }
+        case 'composio': {
+          return (
+            <ComposioSkillItem
+              isSelected={selectedIdentifier === item.serverType.identifier}
+              key={item.serverType.identifier}
+              server={getComposioServerByIdentifier(item.serverType.identifier)}
+              serverType={item.serverType}
+              onDelete={onDeleteSelected}
+              onSelect={onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined}
+            />
+          );
+        }
+        default: {
+          return null;
+        }
+      }
+    };
+
+    const renderCommunityMCPs = () => [
+      ...visibleCommunityMCPs.map((plugin) => (
         <McpSkillItem
           author={plugin.author}
           avatar={plugin.avatar}
@@ -384,10 +462,43 @@ const SkillList = memo<SkillListProps>(
           type={plugin.type as LobeToolType}
           onSelect={onSelect ? () => onSelect(plugin.identifier, 'plugin') : undefined}
         />
-      ));
+      )),
+      // Marketplace installs made on the connector path (no legacy plugin row)
+      ...visibleMarketplaceConnectors.map((c) => (
+        <McpSkillItem
+          avatar={c.metadata?.avatar as string | undefined}
+          identifier={c.identifier}
+          isSelected={selectedIdentifier === c.identifier}
+          key={c.id}
+          runtimeType="mcp"
+          title={c.name || c.identifier}
+          type={'plugin' as LobeToolType}
+          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+        />
+      )),
+    ];
 
-    const renderCustomMCPs = () =>
-      customMCPs.map((plugin) => (
+    // Custom connectors from the connector store (user-added OAuth MCP servers),
+    // then legacy custom MCP plugins.
+    const renderCustomConnectors = () => [
+      ...visibleCustomConnectors.map((c) => {
+        const brokenAccounts = countAccountsNeedingReauth(c.links);
+        return (
+          <McpSkillItem
+            identifier={c.identifier}
+            isSelected={selectedIdentifier === c.identifier}
+            key={c.id}
+            runtimeType="mcp"
+            title={c.name || c.identifier}
+            type={'customPlugin' as LobeToolType}
+            description={
+              brokenAccounts > 0 ? <AccountsNeedReauth count={brokenAccounts} /> : undefined
+            }
+            onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+          />
+        );
+      }),
+      ...visibleCustomMCPs.map((plugin) => (
         <McpSkillItem
           author={plugin.author}
           avatar={plugin.avatar}
@@ -399,60 +510,163 @@ const SkillList = memo<SkillListProps>(
           type={plugin.type as LobeToolType}
           onSelect={onSelect ? () => onSelect(plugin.identifier, 'mcp-connector') : undefined}
         />
-      ));
+      )),
+    ];
 
-    // Custom connectors from the connector store (user-added OAuth MCP servers)
-    const renderCustomConnectors = () =>
-      customConnectors.map((c) => (
-        <McpSkillItem
-          identifier={c.identifier}
-          isSelected={selectedIdentifier === c.identifier}
+    const renderAgentConnectors = () =>
+      visibleAgentConnectors.map((c) => (
+        <AgentConnectorItem
+          connector={c}
+          isSelected={selectedIdentifier === c.id}
           key={c.id}
-          runtimeType="mcp"
-          title={c.name || c.identifier}
-          type={'customPlugin' as LobeToolType}
-          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+          onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
         />
       ));
 
-    // Split integrations into builtin tools vs builtin skills
-    const builtinToolItems = integrations.filter((i) => i.type === 'builtin');
-    const builtinSkillItems = integrations.filter((i) => i.type === 'builtinAgent');
-    const communitySkillItems = integrations.filter(
-      (i) => i.type === 'lobehub' || i.type === 'composio',
-    );
-
-    const toggleSection = (key: string) => {
-      setCollapsed((prev) => {
+    const toggle = (setter: typeof setCollapsed) => (key: string) =>
+      setter((prev) => {
         const next = new Set(prev);
         if (next.has(key)) next.delete(key);
         else next.add(key);
         return next;
       });
-    };
+    const toggleSection = toggle(setCollapsed);
+    const toggleExpanded = toggle(setExpanded);
 
-    const renderSection = (
-      key: string,
-      label: string,
-      children: React.ReactNode,
-      count?: number,
-    ) => {
-      const isCollapsed = collapsed.has(key);
-      // The page list is short enough to scan whole, so its groups are plain
-      // headings with a count instead of collapsible sidebar sections.
-      if (isPage)
-        return (
-          <>
-            <div className={cx(styles.sectionHeader, styles.sectionHeaderPage)}>
-              {label}
-              {count !== undefined && <span className={styles.sectionCount}>{count}</span>}
-            </div>
-            {children}
-          </>
-        );
+    // Page catalogs share the layout, but keep their own sources and search fields.
+    if (isPage) {
+      // Installed groups what is already added (enabled built-ins, connected
+      // OAuth apps), so the type groups below read as what is left to add.
+      const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
+      const oauth = partitionByInstalled(communitySkillItems, isConnected);
+
+      const sections = (
+        isConnectorView
+          ? [
+              {
+                items: oauth.installed.map(renderIntegration),
+                key: 'installed',
+                label: t('connectorMarket.section.installed'),
+              },
+              {
+                // With the market on, the ones left to connect lead the
+                // Connectors Discover page instead.
+                items: showMarket ? [] : oauth.available.map(renderIntegration),
+                key: 'communityConnectors',
+                label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
+              },
+              {
+                items: renderCommunityMCPs(),
+                key: 'communityTools',
+                label: t('skillGroup.communityTools', 'Marketplace Tools'),
+              },
+              {
+                items: renderCustomConnectors(),
+                key: 'customConnectors',
+                label: t('skillGroup.customConnectors', 'Custom Connectors'),
+              },
+              {
+                items: renderAgentConnectors(),
+                key: 'agentConnectors',
+                label: t('skillGroup.agentConnectors', 'Agent Connectors'),
+              },
+            ]
+          : [
+              {
+                items: renderAgentSkills(
+                  marketAgentSkills.filter((skill) =>
+                    match(skill.name, skill.identifier, skill.description),
+                  ),
+                ),
+                key: 'communitySkills',
+                label: t('skillGroup.communitySkills'),
+              },
+              {
+                items: renderAgentSkills(
+                  userAgentSkills.filter((skill) =>
+                    match(skill.name, skill.identifier, skill.description),
+                  ),
+                ),
+                key: 'customSkills',
+                label: t('skillGroup.customSkills'),
+              },
+            ]
+      ).filter((section) => section.items.length > 0);
+
       return (
         <>
-          <div className={styles.sectionHeader} onClick={() => toggleSection(key)}>
+          {header}
+          {sections.length === 0 ? (
+            // Searching found nothing: say what was searched and offer the way back.
+            <Center paddingBlock={64}>
+              <Empty
+                description={t('connectorMarket.empty.searchDesc')}
+                icon={SearchX}
+                action={
+                  onClearKeyword && (
+                    <Button onClick={onClearKeyword}>{t('connectorMarket.empty.clear')}</Button>
+                  )
+                }
+                title={t(
+                  isConnectorView ? 'connectorMarket.empty.search' : 'skillView.empty.search',
+                  { keyword: keyword?.trim() },
+                )}
+              />
+            </Center>
+          ) : (
+            <div {...stylex.props(styles.pageSections)}>
+              {sections.map(({ items, key, label }) => {
+                const isExpanded = expanded.has(key);
+                // A search shows every hit; otherwise long groups preview their first rows.
+                const searching = !!keyword?.trim();
+                const { hiddenCount, visible } = getVisibleSectionItems(
+                  items,
+                  isExpanded || searching,
+                );
+                const expandable = isSectionExpandable({
+                  expanded: isExpanded,
+                  hiddenCount,
+                  searching,
+                });
+                const toggleLabel = isExpanded
+                  ? t('connectorMarket.section.showLess')
+                  : `${t('connectorMarket.section.showAll')} (${items.length})`;
+                return (
+                  <section key={key} {...stylex.props(styles.pageSection)}>
+                    <PageSectionHeading
+                      expandable={expandable}
+                      expanded={isExpanded}
+                      label={label}
+                      toggleLabel={toggleLabel}
+                      onToggle={() => toggleExpanded(key)}
+                    />
+                    <div {...stylex.props(styles.pageGrid)}>{visible}</div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // ── Sidebar list (skills page, mobile) ───────────────────────────────────
+    const renderSection = (key: string, label: string, children: React.ReactNode) => {
+      const isCollapsed = collapsed.has(key);
+      return (
+        <>
+          <div
+            {...stylex.props(styles.sectionHeader)}
+            aria-expanded={!isCollapsed}
+            role={'button'}
+            tabIndex={0}
+            onClick={() => toggleSection(key)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              toggleSection(key);
+            }}
+          >
             {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
             {label}
           </div>
@@ -461,156 +675,62 @@ const SkillList = memo<SkillListProps>(
       );
     };
 
-    // Connectors tab: tools/MCP items (provide API-level permissions)
-    // Skills tab: prompt/agent-based skills (show description/content)
-    const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
-    const hasBuiltinSkills = builtinSkillItems.length > 0 && !isConnectorView;
-    // Skills tab only shows agent-based community skills; Lobehub/Composio OAuth
-    // connectors live exclusively in the Connectors view (hasCommunityConnectors).
+    // Connectors view: tools / MCP items (API-level permissions).
+    // Skills view: prompt / agent-based skills.
+    // Skills view only shows agent-based community skills; LobeHub / Composio
+    // OAuth connectors live exclusively in the Connectors view.
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
-    const hasCommunityTools = communityMCPs.length > 0 && isConnectorView;
-    // In connector view: custom MCPs (old plugins) + custom connectors (new store).
-    // In skill view: user agent skills
-    const hasCustomConnectors =
-      isConnectorView && (customMCPs.length > 0 || customConnectors.length > 0);
+    const communityToolCount = visibleCommunityMCPs.length + visibleMarketplaceConnectors.length;
+    const hasCommunityTools = communityToolCount > 0 && isConnectorView;
+    const customConnectorCount = visibleCustomConnectors.length + visibleCustomMCPs.length;
+    const hasCustomConnectors = isConnectorView && customConnectorCount > 0;
     const hasCustomSkills = userAgentSkills.length > 0 && !isConnectorView;
-    // Lobehub/Composio OAuth skills go in Connectors tab (they provide tools)
     const hasCommunityConnectors = communitySkillItems.length > 0 && isConnectorView;
-    // Agent-owned connectors (across all agents) — connector view only.
-    const hasAgentConnectors = isConnectorView && agentBoundConnectors.length > 0;
+    const hasAgentConnectors = isConnectorView && visibleAgentConnectors.length > 0;
 
     return (
-      <div className={styles.container}>
-        {hasBuiltinTools &&
-          renderSection(
-            'builtinTools',
-            t('skillGroup.builtinTools', 'Built-in Tools'),
-            builtinToolItems.map((item) => {
-              if (item.type !== 'builtin') return null;
-              const localizedTitle = t(`tools.builtins.${item.builtinTool.identifier}.title`, {
-                defaultValue: item.builtinTool.title || item.builtinTool.identifier,
-              });
-              return (
-                <BuiltinSkillItem
-                  avatar={item.builtinTool.avatar}
-                  description={item.builtinTool.description}
-                  identifier={item.builtinTool.identifier}
-                  isSelected={selectedIdentifier === item.builtinTool.identifier}
-                  key={item.builtinTool.identifier}
-                  title={localizedTitle}
-                  onSelect={
-                    onSelect ? () => onSelect(item.builtinTool.identifier, 'builtin') : undefined
-                  }
-                />
-              );
-            }),
-            builtinToolItems.length,
-          )}
-
-        {hasBuiltinSkills &&
-          renderSection(
-            'builtinSkills',
-            t('skillGroup.builtinSkills', 'Built-in Skills'),
-            builtinSkillItems.map((item) => {
-              if (item.type !== 'builtinAgent') return null;
-              return (
-                <AgentSkillItem
-                  isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
-                  key={item.builtinAgentSkill.identifier}
-                  skill={item.builtinAgentSkill}
-                  onSelect={
-                    onSelect
-                      ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
-                      : undefined
-                  }
-                />
-              );
-            }),
-          )}
-
-        {/* Connector view: Lobehub/Composio OAuth connectors */}
+      <div {...stylex.props(styles.container)}>
+        {header}
         {hasCommunityConnectors &&
           renderSection(
             'communityConnectors',
             t('skillGroup.communityConnectors', 'OAuth Connectors'),
-            communitySkillItems.map((item) => {
-              if (item.type === 'lobehub') {
-                return (
-                  <LobehubSkillItem
-                    isSelected={selectedIdentifier === item.provider.id}
-                    key={item.provider.id}
-                    provider={item.provider}
-                    server={getLobehubSkillServerByProvider(item.provider.id)}
-                    onDelete={onDeleteSelected}
-                    onSelect={
-                      onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
-                    }
-                  />
-                );
-              }
-              return (
-                <ComposioSkillItem
-                  isSelected={selectedIdentifier === item.serverType.identifier}
-                  key={item.serverType.identifier}
-                  server={getComposioServerByIdentifier(item.serverType.identifier)}
-                  serverType={item.serverType}
-                  onDelete={onDeleteSelected}
-                  onSelect={
-                    onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined
-                  }
-                />
-              );
-            }),
-            communitySkillItems.length,
+            communitySkillItems.map(renderIntegration),
           )}
 
-        {/* Skill view: community agent skills only (OAuth connectors are in the Connectors view) */}
         {hasCommunitySkills &&
           renderSection(
             'communitySkills',
-            t('skillGroup.communitySkills', 'Community Skills'),
-            renderMarketAgentSkills(),
+            t('skillGroup.communitySkills', 'Marketplace Skills'),
+            renderAgentSkills(marketAgentSkills),
           )}
 
         {hasCommunityTools &&
           renderSection(
             'communityTools',
-            t('skillGroup.communityTools', 'Community Tools'),
+            t('skillGroup.communityTools', 'Marketplace Tools'),
             renderCommunityMCPs(),
-            communityMCPs.length,
           )}
 
         {hasCustomConnectors &&
           renderSection(
             'customConnectors',
             t('skillGroup.customConnectors', 'Custom Connectors'),
-            <>
-              {renderCustomConnectors()}
-              {renderCustomMCPs()}
-            </>,
-            customConnectors.length + customMCPs.length,
+            renderCustomConnectors(),
           )}
 
         {hasAgentConnectors &&
           renderSection(
             'agentConnectors',
             t('skillGroup.agentConnectors', 'Agent Connectors'),
-            agentBoundConnectors.map((c) => (
-              <AgentConnectorItem
-                connector={c}
-                isSelected={selectedIdentifier === c.id}
-                key={c.id}
-                onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
-              />
-            )),
-            agentBoundConnectors.length,
+            renderAgentConnectors(),
           )}
 
         {hasCustomSkills &&
           renderSection(
             'customSkills',
             t('skillGroup.customSkills', 'Custom Skills'),
-            renderUserAgentSkills(),
+            renderAgentSkills(userAgentSkills),
           )}
       </div>
     );

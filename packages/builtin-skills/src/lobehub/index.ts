@@ -6,6 +6,7 @@ import { LobeHubIdentifier, LobeHubManifest } from './manifest';
 import agent from './references/agent';
 import agentGroup from './references/agent-group';
 import { artifact } from './references/artifact';
+import automation from './references/automation';
 import bot from './references/bot';
 import botDiscord from './references/bot-discord';
 import botFeishu from './references/bot-feishu';
@@ -15,6 +16,7 @@ import botSlack from './references/bot-slack';
 import botTelegram from './references/bot-telegram';
 import botWechat from './references/bot-wechat';
 import config from './references/config';
+import connector from './references/connector';
 import dashboard from './references/dashboard';
 import doc from './references/doc';
 import eval_ from './references/eval';
@@ -28,10 +30,14 @@ import model from './references/model';
 import plugin from './references/plugin';
 import project from './references/project';
 import provider from './references/provider';
+import quota from './references/quota';
 import search from './references/search';
 import skill from './references/skill';
+import task from './references/task.md';
 import topic from './references/topic';
 import trace from './references/trace';
+import webhook from './references/webhook';
+import work from './references/work';
 import workspace from './references/workspace';
 
 export { LobeHubIdentifier };
@@ -43,6 +49,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/agent': agent,
     'references/agent-group': agentGroup,
     'references/artifact': artifact,
+    'references/automation': automation,
     'references/bot': bot,
     'references/bot/discord': botDiscord,
     'references/bot/feishu': botFeishu,
@@ -52,6 +59,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/bot/telegram': botTelegram,
     'references/bot/wechat': botWechat,
     'references/config': config,
+    'references/connector': connector,
     'references/dashboard': dashboard,
     'references/doc': doc,
     'references/eval': eval_,
@@ -65,10 +73,14 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/plugin': plugin,
     'references/project': project,
     'references/provider': provider,
+    'references/quota': quota,
     'references/search': search,
     'references/skill': skill,
+    'references/task': task,
     'references/topic': topic,
     'references/trace': trace,
+    'references/webhook': webhook,
+    'references/work': work,
     'references/workspace': workspace,
   }),
 };

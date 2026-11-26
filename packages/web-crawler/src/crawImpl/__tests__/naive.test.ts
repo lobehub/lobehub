@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  BlockedPageError,
   NetworkConnectionError,
   PageNotFoundError,
   TimeoutError,
@@ -75,6 +76,50 @@ describe('naive crawler', () => {
       await expect(naive('https://example.com/asset', { filterOptions: {} })).rejects.toThrow(
         UnsupportedContentError,
       );
+    }
+
+    expect(htmlToMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('should skip PDF responses without downloading or parsing them as HTML', async () => {
+    const { withTimeout } = await import('../../utils/withTimeout');
+    const { htmlToMarkdown } = await import('../../utils/htmlToMarkdown');
+    const text = vi.fn().mockResolvedValue('%PDF-1.7\n...');
+
+    vi.mocked(withTimeout).mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Map([['content-type', 'application/pdf; qs=0.001']]),
+      text,
+    } as any);
+
+    const result = await naive('https://example.com/report.pdf', { filterOptions: {} });
+
+    expect(result).toBeUndefined();
+    expect(text).not.toHaveBeenCalled();
+    expect(htmlToMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('should skip binary bodies served under a text or missing content type', async () => {
+    const { withTimeout } = await import('../../utils/withTimeout');
+    const { htmlToMarkdown } = await import('../../utils/htmlToMarkdown');
+
+    const cases: [string | undefined, string][] = [
+      ['text/html', '%PDF-1.4\n%âãÏÓ\n1 0 obj'],
+      [undefined, '<html>\u0000\u0001\u0002 stream bytes'],
+    ];
+
+    for (const [contentType, body] of cases) {
+      vi.mocked(withTimeout).mockResolvedValue({
+        status: 200,
+        ok: true,
+        headers: new Map(contentType ? [['content-type', contentType]] : []),
+        text: vi.fn().mockResolvedValue(body),
+      } as any);
+
+      const result = await naive('https://example.com/download', { filterOptions: {} });
+
+      expect(result).toBeUndefined();
     }
 
     expect(htmlToMarkdown).not.toHaveBeenCalled();
@@ -168,7 +213,14 @@ describe('naive crawler', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should return undefined when blocked by Cloudflare', async () => {
+  it.each([
+    ['a full-length challenge page', 'Test content'.padEnd(101, ' ')],
+    [
+      'a challenge page shorter than the minimum length',
+      'Enable JavaScript and cookies to continue',
+    ],
+    ['a challenge page with an empty body', ''],
+  ])('should throw BlockedPageError for %s', async (_, content) => {
     const mockResponse = {
       status: 200,
       ok: true,
@@ -181,16 +233,13 @@ describe('naive crawler', () => {
 
     const { htmlToMarkdown } = await import('../../utils/htmlToMarkdown');
     vi.mocked(htmlToMarkdown).mockReturnValue({
-      content: 'Test content'.padEnd(101, ' '),
+      content,
       title: 'Just a moment...', // Cloudflare blocking page
-      description: 'Test description',
-      siteName: 'Test Site',
-      length: 101,
     });
 
-    const result = await naive('https://example.com', { filterOptions: {} });
-
-    expect(result).toBeUndefined();
+    await expect(naive('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should throw error for non-ok status codes', async () => {

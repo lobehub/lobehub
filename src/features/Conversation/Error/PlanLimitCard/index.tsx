@@ -1,10 +1,13 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ErrorActionContainer, FormAction } from '../style';
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   formatCreditAmount,
   getBudgetContextFromErrorBody,
@@ -16,6 +19,7 @@ import {
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
+  [Plans.Basic]: 'plans.plan.basic.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
   [Plans.Max]: 'plans.plan.max.title',
   [Plans.Plus]: 'plans.plan.plus.title',
@@ -25,32 +29,32 @@ const PLAN_TITLE_KEYS = {
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  budgetFact: css`
-    display: flex;
-    justify-content: space-between;
-
-    width: 100%;
-
-    font-size: 13px;
-    line-height: 1.4;
-  `,
-  budgetFactLabel: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  budgetFactValue: css`
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-  `,
-  budgetFactWarningValue: css`
-    font-weight: 700;
-    color: ${cssVar.colorError};
-  `,
-  budgetFacts: css`
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  centered: { textAlign: 'center', textWrap: 'balance' },
+  fact: {
+    display: 'flex',
+    gap: densityTokens['--lobe-density-content-gap'],
+    justifyContent: 'space-between',
+    width: '100%',
+    fontSize: '13px',
+    lineHeight: 1.4,
+  },
+  factLabel: { color: cssVar.colorTextSecondary },
+  factValue: {
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorText,
+    textAlign: 'end',
+    whiteSpace: 'nowrap',
+  },
+  factWarningValue: { fontWeight: 700, color: cssVar.colorError },
+  facts: { width: '100%' },
+  form: {
+    width: '100%',
+    maxWidth: { 'default': '360px', '@media (width <= 768px)': '90%' },
+  },
+  title: { fontSize: densityTokens['--lobe-density-page-title-font-size'], fontWeight: 'bold' },
+});
 
 const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
   switch (pricingBasis) {
@@ -118,18 +122,32 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
   ).filter((fact) => fact.value !== undefined && fact.value > 0);
 
   return (
-    <ErrorActionContainer>
-      <FormAction animation avatar={'💰'} description={description} title={title}>
+    <Center paddingBlock={12} width={'100%'}>
+      <Flexbox className={stylex.props(styles.form).className} gap={16}>
+        <Center gap={8}>
+          <Avatar animation avatar={'💰'} background={'transparent'} size={40} />
+          <Center gap={4}>
+            <Text className={stylex.props(styles.title).className}>{title}</Text>
+            <Text
+              className={stylex.props(styles.centered).className}
+              fontSize={13}
+              type={'secondary'}
+            >
+              {description}
+            </Text>
+          </Center>
+        </Center>
+
         {facts.length > 0 && (
-          <Flexbox className={styles.budgetFacts} gap={8}>
+          <Flexbox className={stylex.props(styles.facts).className} gap={8}>
             {facts.map((fact) => (
-              <div className={styles.budgetFact} key={fact.label}>
-                <span className={styles.budgetFactLabel}>{fact.label}</span>
+              <div {...stylex.props(styles.fact)} key={fact.label}>
+                <span {...stylex.props(styles.factLabel)}>{fact.label}</span>
                 <span
                   className={
                     fact.warning
-                      ? `${styles.budgetFactValue} ${styles.budgetFactWarningValue}`
-                      : styles.budgetFactValue
+                      ? stylex.props(styles.factValue, styles.factWarningValue).className
+                      : stylex.props(styles.factValue).className
                   }
                 >
                   {formatCreditAmount(fact.value!)}
@@ -141,23 +159,23 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
         <Flexbox gap={8} width={'100%'}>
           {BRANDING_URL.subscription && (
-            <a
+            <Button
+              block
               href={BRANDING_URL.subscription}
               rel={'noopener noreferrer'}
-              style={{ width: '100%' }}
+              size={'large'}
               target={'_blank'}
+              type={'primary'}
             >
-              <Button block size={'large'} type={'primary'}>
-                {upgradeLabel}
-              </Button>
-            </a>
+              {upgradeLabel}
+            </Button>
           )}
           <Button block size={'large'} onClick={onRetry}>
             {t('limitation.insufficientBudget.retry')}
           </Button>
         </Flexbox>
-      </FormAction>
-    </ErrorActionContainer>
+      </Flexbox>
+    </Center>
   );
 });
 

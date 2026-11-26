@@ -7,7 +7,13 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import {
+  benchmarkSelectors,
+  datasetSelectors,
+  experimentSelectors,
+  useEvalStore,
+} from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import BenchmarkCard from './features/BenchmarkCard';
 import { createCreateBenchmarkModal } from './features/CreateBenchmarkModal';
@@ -26,11 +32,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   datasetRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -88,13 +94,16 @@ const SkeletonGrid = memo(() => (
 
 const EvalOverview = memo(() => {
   const { t } = useTranslation('eval');
-  const benchmarkList = useEvalStore((s) => s.benchmarkList);
+  // The Evaluation Lab shows its own benchmarks, datasets and experiments;
+  // Lobe Bench's live in the same tables and have their own pages.
+  const benchmarkList = useEvalStore(benchmarkSelectors.agentBenchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   const useFetchAllDatasets = useEvalStore((s) => s.useFetchAllDatasets);
   const { data, isLoading, error, mutate } = useFetchBenchmarks();
-  const { data: allDatasets } = useFetchAllDatasets();
+  useFetchAllDatasets();
+  const allDatasets = useEvalStore(datasetSelectors.agentDatasets);
 
-  const experimentList = useEvalStore((s) => s.experimentList);
+  const experimentList = useEvalStore(experimentSelectors.agentExperimentList);
   const useFetchExperiments = useEvalStore((s) => s.useFetchExperiments);
   const {
     data: experimentData,

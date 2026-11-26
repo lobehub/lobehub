@@ -11,6 +11,16 @@ vi.mock('@/database/models/generationTopic');
 vi.mock('@/server/services/file');
 vi.mock('@/server/services/generation');
 
+const deletedTopicWithCover = (mockTopicId: string, mockCoverUrl: string) => ({
+  id: mockTopicId,
+  title: 'Deleted Topic',
+  userId: 'test-user',
+  coverUrl: mockCoverUrl,
+  accessedAt: new Date(),
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
 describe('generationTopicRouter', () => {
   const mockCtx = {
     userId: 'test-user',
@@ -302,15 +312,7 @@ describe('generationTopicRouter', () => {
   it('should delete a topic with cover and remove the cover file', async () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     // Fix Mock return structure to match the new implementation
     const mockDelete = vi.fn().mockResolvedValue({
@@ -343,15 +345,7 @@ describe('generationTopicRouter', () => {
   it('should still return deleted topic when file deletion fails', async () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedTopic: mockDeletedTopic,
@@ -432,15 +426,7 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
     const mockThumbnailUrls = ['thumb1.jpg', 'thumb2.jpg'];
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedTopic: mockDeletedTopic,

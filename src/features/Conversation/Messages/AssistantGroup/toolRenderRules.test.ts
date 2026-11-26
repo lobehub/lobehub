@@ -4,7 +4,16 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { describe, expect, it } from 'vitest';
 
-import { isImageBearingTool, isImageOutputTool, shouldRenderToolCall } from './toolRenderRules';
+import {
+  getBreakoutPredicate,
+  isBreakoutTool,
+  isDeliverableTool,
+  isImageBearingTool,
+  isImageOutputTool,
+  isImageReadTool,
+  isMcpAppTool,
+  shouldRenderToolCall,
+} from './toolRenderRules';
 
 describe('shouldRenderToolCall', () => {
   it('hides the onboarding completion tool call', () => {
@@ -115,5 +124,74 @@ describe('isImageOutputTool', () => {
         result: { content: 'x', id: 'r', state: { generations: [{ asset: null }] } },
       } as any),
     ).toBe(false);
+  });
+});
+
+describe('isMcpAppTool', () => {
+  const mcp = (state?: unknown) =>
+    ({
+      apiName: 'get_weather',
+      id: 't',
+      identifier: 'weather-demo',
+      result: { content: 'x', id: 'r', state },
+    }) as any;
+  const view = { mcpApp: { resourceUri: 'ui://weather/view' }, content: [] };
+
+  it('is true once the result carries an MCP App view, on client and server-runtime shapes', () => {
+    expect(isMcpAppTool(mcp(view))).toBe(true);
+    expect(isMcpAppTool(mcp({ content: 'x', state: view, success: true }))).toBe(true);
+  });
+
+  it('is false while the result is missing or declares no ui:// view', () => {
+    expect(isMcpAppTool(mcp())).toBe(false);
+    expect(isMcpAppTool(mcp({ content: [] }))).toBe(false);
+    expect(isMcpAppTool(mcp({ content: [], mcpApp: { resourceUri: 'https://x' } }))).toBe(false);
+  });
+
+  it('breaks out of collapsed workflow runs', () => {
+    expect(isBreakoutTool(mcp(view))).toBe(true);
+    expect(isBreakoutTool(mcp({ content: [] }))).toBe(false);
+  });
+});
+
+describe('getBreakoutPredicate', () => {
+  const imageRead = {
+    apiName: 'Read',
+    id: 't',
+    identifier: 'claude-code',
+    result: { content: 'x', id: 'r', state: { images: [{ url: 'https://x/a.png' }] } },
+  } as any;
+  const mcpApp = {
+    apiName: 'get_weather',
+    id: 't',
+    identifier: 'weather-demo',
+    result: { content: 'x', id: 'r', state: { mcpApp: { resourceUri: 'ui://weather/view' } } },
+  } as any;
+
+  it('breaks out image reads unless the user turned them off', () => {
+    expect(isImageReadTool(imageRead)).toBe(true);
+    expect(getBreakoutPredicate({})(imageRead)).toBe(true);
+    expect(getBreakoutPredicate({ showImageReads: false })(imageRead)).toBe(false);
+  });
+
+  it('breaks out MCP App views only behind the runtime flag', () => {
+    expect(getBreakoutPredicate({ showImageReads: false })(mcpApp)).toBe(false);
+    expect(getBreakoutPredicate({ enableMcpApps: true, showImageReads: false })(mcpApp)).toBe(true);
+  });
+});
+
+describe('Codex proposed plan', () => {
+  const plan = { apiName: 'proposed_plan', id: 'plan-1', identifier: 'codex' } as any;
+
+  it('is the turn deliverable, so a finished turn keeps it out of the fold', () => {
+    expect(isDeliverableTool(plan)).toBe(true);
+    expect(isDeliverableTool({ ...plan, apiName: 'command_execution' })).toBe(false);
+  });
+
+  it('breaks out of a collapsed run whatever the image setting', () => {
+    expect(isBreakoutTool(plan)).toBe(true);
+    expect(getBreakoutPredicate({ showImageReads: false })(plan)).toBe(true);
+    expect(getBreakoutPredicate({ enableMcpApps: true })(plan)).toBe(true);
+    expect(getBreakoutPredicate({})({ ...plan, identifier: 'claude-code' })).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ScopeInventory } from '../types';
+import { migrationFixtures, migrationProfiles } from './migrationProfiles';
 
 const relativePath = z
   .string()
@@ -24,6 +25,15 @@ export const styleFixtureSchema = z
     containerMode: z.enum(['component-root', 'fixture-wrapper']).default('fixture-wrapper'),
     defaultInteractionSelector: z.string().min(1).optional(),
     dependencyRoots: z.array(z.string().min(1)).default([]),
+    moduleBoundaries: z
+      .array(
+        z.strictObject({
+          importer: relativePath,
+          source: z.string().min(1),
+          replacement: relativePath,
+        }),
+      )
+      .default([]),
     host: relativePath,
     fontContract: z.strictObject({
       family: z.literal('Arial, sans-serif'),
@@ -52,6 +62,7 @@ export const styleFixtureSchema = z
         z.strictObject({
           expectedUnits: z.array(z.string().min(1)),
           id: z.string().min(1),
+          appearance: z.enum(['light', 'dark']).optional(),
           states: z.array(pseudo).min(1).optional(),
         }),
       )
@@ -62,11 +73,15 @@ export const styleFixtureSchema = z
           id: z.string().min(1),
           kind: z.enum(['component', 'host', 'portal']),
           selector: z.string().min(1),
+          variants: z.array(z.string().min(1)).min(1).optional(),
         }),
       )
       .min(1),
   })
   .superRefine((fixture, context) => {
+    for (const boundary of fixture.moduleBoundaries)
+      if (!fixture.assets.includes(boundary.replacement))
+        context.addIssue({ code: 'custom', message: 'UNDECLARED_BOUNDARY_ASSET' });
     if (
       new Set(fixture.styleVariants.map((variant) => variant.id)).size !==
       fixture.styleVariants.length
@@ -74,6 +89,17 @@ export const styleFixtureSchema = z
       context.addIssue({ code: 'custom', message: 'DUPLICATE_FIXTURE_VARIANT' });
     if (new Set(fixture.probeWidths).size !== fixture.probeWidths.length)
       context.addIssue({ code: 'custom', message: 'DUPLICATE_PROBE_WIDTH' });
+    if (new Set(fixture.surfaces.map((surface) => surface.id)).size !== fixture.surfaces.length)
+      context.addIssue({ code: 'custom', message: 'DUPLICATE_SURFACE_ID' });
+    for (const surface of fixture.surfaces)
+      if (
+        surface.variants &&
+        (new Set(surface.variants).size !== surface.variants.length ||
+          surface.variants.some(
+            (id) => !fixture.styleVariants.some((variant) => variant.id === id),
+          ))
+      )
+        context.addIssue({ code: 'custom', message: 'INVALID_SURFACE_VARIANTS' });
     if (
       fixture.sizeContract &&
       fixture.probeWidths.some(
@@ -113,21 +139,27 @@ export const experimentalFixtures = [
   ['TailMarquee', 'src/components/TailMarquee/index.tsx'],
   ['UnreadDot', 'src/components/UnreadDot/index.tsx'],
   ['VersionTag', 'src/components/ChangelogModal/VersionTag.tsx'],
+  ...migrationFixtures,
 ] as const;
 
 export const fixtureIds = experimentalFixtures.map(([id]) => id);
 const interactive = ['default', 'hover', 'focus-visible'] as const;
-const profiles: Record<
-  string,
-  {
-    dependencies?: string[];
-    i18n?: boolean;
-    selector?: string;
-    selectors?: { 'hover'?: string; 'focus-visible'?: string };
-    settleFrames?: 2;
-    variants: Array<{ id: string; states?: readonly (typeof interactive)[number][] }>;
-  }
-> = {
+export type FixtureProfile = {
+  assets?: string[];
+  exportName?: string;
+  boundaries?: Array<{ importer: string; source: string; replacement: string }>;
+  dependencies?: string[];
+  i18n?: boolean;
+  selector?: string;
+  selectors?: { 'hover'?: string; 'focus-visible'?: string };
+  settleFrames?: 2;
+  variants: Array<{
+    id: string;
+    appearance?: 'light' | 'dark';
+    states?: readonly (typeof interactive)[number][];
+  }>;
+};
+const profiles: Record<string, FixtureProfile> = {
   CollapsibleContent: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,
@@ -178,6 +210,10 @@ const profiles: Record<
       { id: 'selected', states: interactive },
       { id: 'highlighted', states: interactive },
       { id: 'disabled', states: interactive },
+      { id: 'selected-highlighted', states: interactive },
+      { id: 'selected-disabled', states: interactive },
+      { id: 'dark-normal', appearance: 'dark', states: interactive },
+      { id: 'dark-selected', appearance: 'dark', states: interactive },
     ],
   },
   OptionRow: {
@@ -225,15 +261,25 @@ const profiles: Record<
   },
   UnreadDot: { variants: [{ id: 'normal' }] },
   VersionTag: { variants: [{ id: 'normal' }] },
+  ...migrationProfiles,
 };
 
 export const getStyleFixture = (id: string): StyleFixture => {
   const entry = experimentalFixtures.find(([name]) => name === id);
   const profile = profiles[id];
   if (!entry || !profile) throw new Error(`FIXTURE_ADAPTER_UNAVAILABLE:${id}`);
-  const component = { exportName: id === 'FilePathDisplay' ? id : 'default', source: entry[1] };
+  const component = {
+    exportName: profile.exportName ?? (id === 'FilePathDisplay' ? id : 'default'),
+    source: entry[1],
+  };
   return styleFixtureSchema.parse({
-    assets: profile.i18n ? ['fixtures/FixtureI18n.tsx'] : [],
+    assets: [
+      ...(profile.assets ?? []),
+      ...(profile.i18n ? ['fixtures/FixtureI18n.tsx'] : []),
+      ...new Set(profile.boundaries?.map((boundary) => boundary.replacement) ?? []),
+      ...(id === 'ToolbarActionButton' ? ['fixtures/FixtureBusinessData.ts'] : []),
+    ],
+    moduleBoundaries: profile.boundaries,
     component: { base: component, candidate: component, id },
     containerMode: id === 'LiteTable' ? 'component-root' : 'fixture-wrapper',
     defaultInteractionSelector: profile.selector,
@@ -246,14 +292,20 @@ export const getStyleFixture = (id: string): StyleFixture => {
     host: 'fixtures/FixtureHost.tsx',
     id,
     interactionSelectors: profile.selectors,
-    probeWidths: id === 'LiteTable' ? [320, 599, 600, 601, 799, 800, 801, 920] : [320, 600, 920],
+    probeWidths:
+      id === 'LiteTable'
+        ? [320, 599, 600, 601, 799, 800, 801, 920]
+        : id === 'PreviewToolbar'
+          ? [319, 320, 321, 459, 460, 461, 920]
+          : [320, 600, 920],
     render: `fixtures/${id}Fixture.tsx`,
     settleFrames: profile.settleFrames ?? 0,
-    sizeContract: { host: [320, 920], viewport: [320, 1200] },
+    sizeContract: { host: [id === 'PreviewToolbar' ? 280 : 320, 920], viewport: [320, 1200] },
     styleVariants: profile.variants.map((variant) => ({ ...variant, expectedUnits: [] })),
     surfaces: [
       { id: 'host', kind: 'host', selector: '[data-verification-host]' },
       { id: 'component', kind: 'component', selector: '[data-component-mount] > *' },
+      { id: 'lobe-portals', kind: 'portal', selector: '[data-lobe-portal-host]' },
     ],
   });
 };

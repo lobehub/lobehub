@@ -63,19 +63,26 @@ describe('GoalArchiveModel', () => {
     expect(archived?.status).toBe('canceled');
   });
 
-  it('archives an achieved goal once its owner signed it off', async () => {
+  it('archives an achieved goal its owner signed off', async () => {
     const goal = await createListedGoal('Delivered', 'achieved');
     await signOff(goal.id, 'accepted');
 
     expect((await archiveModel.archive(goal.id))?.archivedAt).toBeInstanceOf(Date);
   });
 
-  it('refuses an achieved goal whose sign-off is still open', async () => {
+  // The owner has no way to sign off a goal marked completed by hand, so
+  // archiving cannot wait on a sign-off.
+  it('archives an achieved goal with no Goal-level acceptance to sign off', async () => {
+    const goal = await createListedGoal('Marked completed', 'achieved');
+
+    expect((await archiveModel.archive(goal.id))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('archives an achieved goal whose sign-off is still open', async () => {
     const goal = await createListedGoal('Awaiting sign-off', 'achieved');
     await signOff(goal.id, 'delivered');
 
-    expect(await archiveModel.archive(goal.id)).toBeNull();
-    expect((await goalModel.findById(goal.id))?.archivedAt).toBeNull();
+    expect((await archiveModel.archive(goal.id))?.archivedAt).toBeInstanceOf(Date);
   });
 
   it.each(['draft', 'planning', 'running', 'verifying', 'review', 'paused', 'failed'])(

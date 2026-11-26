@@ -54,6 +54,7 @@ function expected(): Array<
     ['initializeFromTemplate', 'mutation', 13],
     ['listDocuments', 'query', 12],
     ['listDocumentsByPath', 'query', 12],
+    ['listRevokedDocumentReads', 'query', 12],
     ['listTrashDocumentsByPath', 'query', 12],
     ['mkdirDocumentByPath', 'mutation', 13],
     ['modifyNodes', 'mutation', 13],

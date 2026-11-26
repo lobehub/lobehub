@@ -1,9 +1,54 @@
+import { isManagedCloudDevice } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
 
 import { type WorkspaceRole } from '@/business/server/trpc-middlewares/workspaceAuth';
-import type { DeviceModel } from '@/database/models/device';
+import {
+  type DeviceModel,
+  ManagedDeviceRegistrationConflictError,
+  WorkspaceDevicePrivateConflictError,
+} from '@/database/models/device';
 
 import { canOperateWorkspaceDevice } from '../deviceWorkspaceGuard';
+
+/**
+ * Identity sources a client may claim for itself. The managed cloud device
+ * source is written only by the server that creates such a device.
+ */
+export const clientIdentitySourceSchema = z.enum(['machine-id', 'fallback']);
+
+/** Check an identity source a device reported over RPC (share flow). */
+export const parseReportedIdentitySource = (value: unknown) => {
+  const parsed = clientIdentitySourceSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Device reported an identity source it may not claim.',
+    });
+  }
+  return parsed.data;
+};
+
+/**
+ * Refuse a client action on a managed cloud device's row with CONFLICT. The
+ * platform owns that row, so a client cannot share or overwrite it.
+ */
+export const assertNotManagedDevice = (
+  device: { identitySource: string | null },
+  message: string,
+) => {
+  if (isManagedCloudDevice(device)) throw new TRPCError({ code: 'CONFLICT', message });
+};
+
+/**
+ * The tRPC error for a failed device registration: CONFLICT for the
+ * `DeviceModel` registration conflicts, the error itself for anything else.
+ */
+export const toRegistrationError = (error: unknown) =>
+  error instanceof WorkspaceDevicePrivateConflictError ||
+  error instanceof ManagedDeviceRegistrationConflictError
+    ? new TRPCError({ code: 'CONFLICT', message: error.message })
+    : error;
 
 /**
  * A workspace device's user-editable fields (rename, working dirs, remove) may

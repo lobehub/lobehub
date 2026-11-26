@@ -7,9 +7,11 @@ import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
@@ -100,6 +102,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
   // `local` selection to this device.
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const localMachineDeviceIds = useLocalMachineDeviceIds();
 
   return useCallback(
     async (
@@ -158,8 +161,18 @@ export const useSelectExecutionTarget = (agentId: string) => {
       // A `local` pick on a workspace agent is always this caller's own
       // machine — a personal device the workspace-shared row must never
       // reference (the server rejects it) — so it routes to the per-user
-      // override even for managers and private-agent owners.
-      if (usesWorkspaceMemberSelection || (isWorkspaceAgent && target === 'local')) {
+      // override even for managers and private-agent owners. Picking this
+      // machine's own PRIVATE workspace row is the same choice made through
+      // the gateway: binding it on the shared row would point every other
+      // member at a device they cannot see. A row shared as public stays a
+      // shared pick, like any other workspace device.
+      const picksThisMachine =
+        target === 'local' ||
+        (target === 'device' &&
+          !!deviceId &&
+          localMachineDeviceIds.includes(deviceId) &&
+          deviceSelectors.getDeviceById(deviceId)(getDeviceStoreState())?.visibility === 'private');
+      if (usesWorkspaceMemberSelection || (isWorkspaceAgent && picksThisMachine)) {
         const nextOverrides = {
           ...workspaceUserPreference.agentDeviceOverrides,
           [agentId]: {
@@ -247,6 +260,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
       isHetero,
       isAccessLoading,
       isWorkspaceAgent,
+      localMachineDeviceIds,
       updateAgentConfigById,
       updateWorkspaceUserPreference,
       usesWorkspaceMemberSelection,

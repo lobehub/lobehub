@@ -1,10 +1,19 @@
-import type { WidgetEnvRequirement } from '@lobechat/types';
+import { needsConnectorReauthorization, type WidgetEnvRequirement } from '@lobechat/types';
 
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
+import type { DecryptedConnectorLink } from '@/database/models/connectorLink';
 import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import {
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+} from '@/server/services/connector/tokens';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import {
@@ -197,6 +206,23 @@ const mayInject = async (
 };
 
 /**
+ * The OAuth account whose token a script may receive. A script can read and
+ * send its environment anywhere, so an account's token goes only to the member
+ * who authorized it, or to the workspace owner, who may use any workspace
+ * credential. Creating the connector does not make a teammate's account yours.
+ */
+const pickInjectableAccount = async (
+  connector: DecryptedConnector,
+  accounts: DecryptedConnectorLink[],
+  scope: WidgetCredentialScope,
+  isOwner: () => Promise<boolean>,
+): Promise<DecryptedConnectorLink | undefined> => {
+  const own = accounts.filter((account) => account.userId === scope.authorUserId);
+  if (own.length) return pickPrimaryLink(own);
+  return connector.workspaceId && (await isOwner()) ? pickPrimaryLink(accounts) : undefined;
+};
+
+/**
  * Resolve the environment a widget script declares in `manifest.env`.
  *
  * Credentials come from `user_connectors` through the same agent-aware chain
@@ -246,7 +272,11 @@ export const resolveWidgetEnv = async (
     ...new Set(requirements.map((r) => r.connector).filter((c): c is string => !!c)),
   ];
   const resolved = identifiers.length
-    ? await connectorModel.resolveByIdentifiers(identifiers, scope.agentId ?? undefined)
+    ? // No topic: a widget renders for whoever views it, so it only ever
+      // resolves shared connectors, never a member's private one.
+      await connectorModel.resolveByIdentifiers(identifiers, {
+        agentId: scope.agentId ?? undefined,
+      })
     : [];
 
   const byIdentifier = new Map<string, DecryptedConnector>();
@@ -270,9 +300,22 @@ export const resolveWidgetEnv = async (
       : isWorkspacePrimaryOwner({ db, userId: scope.authorUserId, workspaceId: scope.workspaceId });
     return ownerCheck;
   };
+  const model = connectorModel as ConnectorModel;
+  const accountsByConnector = await loadConnectorLinksMap([...byIdentifier.values()], {
+    connectorModel: model,
+  });
   const forbidden: string[] = [];
+  const accountOf = new Map<string, DecryptedConnectorLink>();
   for (const connector of byIdentifier.values()) {
-    if (!(await mayInject(connector, scope, isOwner))) forbidden.push(connector.identifier);
+    if (!(await mayInject(connector, scope, isOwner))) {
+      forbidden.push(connector.identifier);
+      continue;
+    }
+    const accounts = accountsByConnector.get(connector.id) ?? [];
+    if (!accounts.length) continue;
+    const account = await pickInjectableAccount(connector, accounts, scope, isOwner);
+    if (account) accountOf.set(connector.id, account);
+    else forbidden.push(connector.identifier);
   }
   if (forbidden.length > 0) throw new ForbiddenWidgetCredentialsError(forbidden);
 
@@ -286,9 +329,17 @@ export const resolveWidgetEnv = async (
 
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
-      connector = await ensureFreshConnectorToken(connector, connectorModel as ConnectorModel);
+      const link = accountOf.get(connector.id);
+      // The refresh writes through the row's own scope (`tokens.refreshSlot`)
+      connector = link
+        ? withLinkCredentials(connector, await ensureFreshLinkToken(connector, link, model))
+        : await ensureFreshConnectorToken(connector, model);
     }
-    const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
+    const credentials = connector?.credentials ?? null;
+    const selection = selectConnectorSecret(
+      needsConnectorReauthorization(credentials) ? null : credentials,
+      requirement.field,
+    );
     if ('error' in selection) {
       // A manifest that does not pick one header is wrong whether or not the
       // variable is optional: report it rather than silently dropping it.

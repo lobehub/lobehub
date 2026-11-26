@@ -8,8 +8,8 @@ import {
   CONVERSATION_LOG_MAX_LINES,
   parseLine,
   serializeLine,
-} from '@/server/services/agentSignal/scenarios/botWake/conversation';
-import type { WakeConversationLine } from '@/server/services/agentSignal/scenarios/botWake/types';
+} from '@/server/services/conversationWake/conversation';
+import type { WakeConversationLine } from '@/server/services/conversationWake/types';
 
 import { getRedisServiceClient } from './client';
 

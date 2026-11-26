@@ -1,11 +1,9 @@
+import { clampSheetRefToData } from '@lobechat/file-loaders/src/xlsxBudget';
 import * as XLSX from 'xlsx';
 
 import type { ParseOptions, ParseResult } from '../types';
 
-export function parseXLSX(
-  data: Buffer | Uint8Array,
-  options?: ParseOptions,
-): ParseResult {
+export function parseXLSX(data: Buffer | Uint8Array, options?: ParseOptions): ParseResult {
   const workbook = XLSX.read(data, { type: 'array' });
 
   // Select sheet
@@ -22,6 +20,9 @@ export function parseXLSX(
   if (!worksheet) {
     return { format: 'xlsx', headers: [], metadata: { sheetName }, rows: [], totalCount: 0 };
   }
+
+  // A declared used range can span a million styled-but-empty rows: clamp it to the real data
+  clampSheetRefToData(worksheet);
 
   const allRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, {
     defval: '',

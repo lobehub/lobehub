@@ -141,7 +141,7 @@ export const createHarness = (
         return match?.id;
       },
     ),
-    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
+    listToolCallIndexByTopic: vi.fn(async (_topicId: string) => []),
     updateMessagePlugin: vi.fn(async (id: string, patch: Record<string, unknown>) => {
       const existing = messages.get(id);
       if (existing) messages.set(id, { ...existing, plugin: { ...existing.plugin, ...patch } });

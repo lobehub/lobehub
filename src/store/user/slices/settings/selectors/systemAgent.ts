@@ -19,7 +19,6 @@ const topicAutoSummary = (s: UserStore) => currentSystemAgent(s).topicAutoSummar
 const thread = (s: UserStore) => currentSystemAgent(s).thread;
 const agentMeta = (s: UserStore) => currentSystemAgent(s).agentMeta;
 const promptRewrite = (s: UserStore) => currentSystemAgent(s).promptRewrite;
-const historyCompress = (s: UserStore) => currentSystemAgent(s).historyCompress;
 const generationTopic = (s: UserStore) => currentSystemAgent(s).generationTopic;
 const inputCompletion = (s: UserStore) => currentSystemAgent(s).inputCompletion;
 const followUpAction = (s: UserStore) => currentSystemAgent(s).followUpAction;
@@ -33,7 +32,6 @@ export const systemAgentSelectors = {
   followUpAction,
   generationTopic,
   goal,
-  historyCompress,
   inputCompletion,
   isAsrConfigured,
   promptRewrite,

@@ -4,11 +4,17 @@ import { Button, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+
 interface ModuleSaveBarProps {
   dirty: boolean;
   disabled?: boolean;
+  /** Why the last Save failed; shown under the buttons while the block still holds the unsaved change. */
+  error?: string;
   onDiscard: () => void;
   onSave: () => void;
+  /** Blocks only Save, e.g. while a field is invalid; Discard stays available. */
+  saveDisabled?: boolean;
   saving?: boolean;
 }
 
@@ -20,31 +26,34 @@ interface ModuleSaveBarProps {
  * With a change pending it says so and offers to put the block back.
  */
 export const ModuleSaveBar = memo<ModuleSaveBarProps>(
-  ({ dirty, disabled, onDiscard, onSave, saving }) => {
+  ({ dirty, disabled, error, onDiscard, onSave, saveDisabled, saving }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
     return (
-      <Flexbox horizontal align={'center'} gap={8}>
-        {dirty && (
-          <Text fontSize={12} type={'warning'}>
-            {t('channel.module.unsaved')}
-          </Text>
-        )}
-        {dirty && (
-          <Button disabled={disabled || saving} size={'small'} type={'text'} onClick={onDiscard}>
-            {t('channel.discard')}
+      <Flexbox align={'flex-end'} gap={4}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {dirty && (
+            <Text fontSize={12} type={'warning'}>
+              {t('channel.module.unsaved')}
+            </Text>
+          )}
+          {dirty && (
+            <Button disabled={disabled || saving} size={'small'} type={'text'} onClick={onDiscard}>
+              {t('channel.discard')}
+            </Button>
+          )}
+          <Button
+            disabled={disabled || saveDisabled || !dirty}
+            loading={saving}
+            size={'small'}
+            type={dirty ? 'primary' : 'default'}
+            onClick={onSave}
+          >
+            {t('channel.module.save')}
           </Button>
-        )}
-        <Button
-          disabled={disabled || !dirty}
-          loading={saving}
-          size={'small'}
-          type={dirty ? 'primary' : 'default'}
-          onClick={onSave}
-        >
-          {t('channel.module.save')}
-        </Button>
+        </Flexbox>
+        {dirty && error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
     );
   },

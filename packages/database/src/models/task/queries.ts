@@ -14,7 +14,9 @@ import {
 } from 'drizzle-orm';
 
 import { tasks, taskTopics } from '../../schemas/task';
+import { taskLabelLinks, taskLabels } from '../../schemas/taskLabel';
 import { topics } from '../../schemas/topic';
+import { TaskLabelModel } from '../taskLabel';
 import {
   buildTaskListFilters,
   type TaskListFilterOptions,
@@ -43,13 +45,15 @@ export const groupList = async (
   ctx: TaskModelContext,
   options: TaskListFilterOptions & {
     excludeStatuses?: string[];
-    groupBy?: 'agent' | 'assignee' | 'member' | 'priority';
+    groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
       statuses: string[];
     }>;
+    /** The label group whose labels become the columns of a `label` board. */
+    labelGroupId?: string;
   },
 ): Promise<
   Array<{
@@ -57,14 +61,18 @@ export const groupList = async (
     assigneeUserId?: string | null;
     hasMore: boolean;
     key: string;
+    /** Label column of a `label` board; null is the "no label" column. */
+    labelId?: string | null;
     limit: number;
     offset: number;
     priority?: number;
+    /** Project column of a `project` board; null is the "no project" column. */
+    projectId?: string | null;
     tasks: TaskItem[];
     total: number;
   }>
 > => {
-  const { assigneeAgentId, excludeStatuses, groupBy, groups } = options;
+  const { assigneeAgentId, excludeStatuses, groupBy, groups, labelGroupId } = options;
 
   if ((!groups || groups.length === 0) && !groupBy) {
     throw new Error('Task groups or a grouping dimension are required');
@@ -80,10 +88,12 @@ export const groupList = async (
     assigneeUserId?: string | null;
     conditions: SQL[];
     key: string;
+    labelId?: string | null;
     limit: number;
     offset: number;
     prefetchedTasks?: TaskItem[];
     priority?: number;
+    projectId?: string | null;
     total: number;
   }
 
@@ -169,11 +179,15 @@ export const groupList = async (
         total,
       };
     });
-  } else if (groupBy === 'agent' || groupBy === 'member') {
+  } else if (groupBy === 'agent' || groupBy === 'member' || groupBy === 'project') {
     const limit = 50;
-    const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
-    const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
-    const unassignedKey = `${groupPrefix}unassigned`;
+    const groupColumn = {
+      agent: tasks.assigneeAgentId,
+      member: tasks.assigneeUserId,
+      project: tasks.projectId,
+    }[groupBy];
+    const groupPrefix = { agent: 'assignee:', member: 'member:', project: 'project:' }[groupBy];
+    const unassignedKey = groupBy === 'project' ? 'project:none' : `${groupPrefix}unassigned`;
     const assigneeGroupKey = sql<string>`case
       when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
       else ${unassignedKey}
@@ -221,8 +235,12 @@ export const groupList = async (
 
     // Keep an empty Unassigned column as a stable drop target. Agent-scoped
     // boards omit the Agent-unassigned column because their base filter
-    // guarantees one assignee, while Member grouping remains independent.
-    if ((groupBy === 'member' || !assigneeAgentId) && !assigneeCounts.has(unassignedKey)) {
+    // guarantees one assignee, while Member grouping remains independent. A
+    // project board likewise keeps "No project" as the way out of a project.
+    if (
+      (groupBy === 'member' || groupBy === 'project' || !assigneeAgentId) &&
+      !assigneeCounts.has(unassignedKey)
+    ) {
       assigneeCounts.set(unassignedKey, 0);
     }
 
@@ -241,9 +259,12 @@ export const groupList = async (
         limit,
         offset: 0,
         prefetchedTasks: tasksByAssignee.get(key) ?? [],
+        projectId: groupBy === 'project' ? assigneeId : undefined,
         total,
       };
     });
+  } else if (groupBy === 'label') {
+    groupQueries = await buildLabelGroupQueries(ctx, baseConditions, labelGroupId);
   } else if (groupBy === 'priority') {
     const priorities = [1, 2, 3, 4, 0];
     const countQuery = ctx.db
@@ -349,11 +370,13 @@ export const groupList = async (
       return {
         ...(group.assigneeAgentId !== undefined ? { assigneeAgentId: group.assigneeAgentId } : {}),
         ...(group.assigneeUserId !== undefined ? { assigneeUserId: group.assigneeUserId } : {}),
+        ...(group.labelId !== undefined ? { labelId: group.labelId } : {}),
         hasMore: group.offset + groupTasks.length < group.total,
         key: group.key,
         limit: group.limit,
         offset: group.offset,
         ...(group.priority !== undefined ? { priority: group.priority } : {}),
+        ...(group.projectId !== undefined ? { projectId: group.projectId } : {}),
         tasks: groupTasks,
         total: group.total,
       };
@@ -362,9 +385,10 @@ export const groupList = async (
   );
 
   const taskIds = Array.from(new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))));
-  const [runStats, subtaskProgressByTaskId] = await Promise.all([
+  const [runStats, subtaskProgressByTaskId, labelsByTaskId] = await Promise.all([
     runStatsByTaskIds(ctx, taskIds),
     subtaskProgressByTaskIds(ctx, taskIds),
+    labelsByTaskIds(ctx, taskIds),
   ]);
   const runStatsByTaskId = new Map(
     runStats.map((stats) => [
@@ -380,11 +404,99 @@ export const groupList = async (
     ...group,
     tasks: group.tasks.map((task) => ({
       ...task,
+      labels: labelsByTaskId[task.id] ?? [],
       subtaskProgress: subtaskProgressByTaskId.get(task.id),
       totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
       totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
     })),
   }));
+};
+
+/** Labels per task for list rows; tasks without labels are absent from the map. */
+export const labelsByTaskIds = (ctx: TaskModelContext, taskIds: string[]) =>
+  new TaskLabelModel(ctx.db, ctx.userId, ctx.workspaceId).getLabelsForTasks(taskIds);
+
+/**
+ * Columns of a board grouped by one label group: one per label of the group
+ * (empty ones included, as drop targets) in the registry order, then "No
+ * label". A task carries at most one label per group, so each task lands in
+ * exactly one column.
+ */
+const buildLabelGroupQueries = async (
+  ctx: TaskModelContext,
+  baseConditions: SQL[],
+  labelGroupId: string | undefined,
+) => {
+  const labelModel = new TaskLabelModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const group = labelGroupId ? await labelModel.findById(labelGroupId) : undefined;
+  if (!group?.isGroup) throw new Error('A label group is required to group tasks by label');
+
+  const groupLabels = (await labelModel.query()).filter((label) => label.parentId === group.id);
+  const limit = 50;
+  const noneKey = 'label:none';
+  // The single label of this group the task carries, or NULL.
+  const labelColumn = sql<string | null>`(
+    select ${taskLabelLinks.labelId}::text from ${taskLabelLinks}
+    inner join ${taskLabels} on ${taskLabels.id} = ${taskLabelLinks.labelId}
+    where ${taskLabelLinks.taskId} = ${tasks.id} and ${taskLabels.parentId} = ${group.id}
+    order by ${taskLabelLinks.createdAt} desc
+    limit 1
+  )`;
+  const labelGroupKey = sql<string>`coalesce('label:' || ${labelColumn}, ${noneKey})`;
+
+  const rankedTasks = ctx.db
+    .select({
+      ...getTableColumns(tasks),
+      groupRank:
+        sql<number>`row_number() over (partition by ${labelGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
+          'group_rank',
+        ),
+      labelGroupKey: labelGroupKey.as('label_group_key'),
+    })
+    .from(tasks)
+    .where(and(...baseConditions))
+    .as('ranked_label_tasks');
+  // Grouped over a subquery: repeating the parameterized key expression in
+  // GROUP BY binds fresh parameters, which Postgres does not treat as the
+  // same expression as the one selected.
+  const keyedTasks = ctx.db
+    .select({ key: labelGroupKey.as('label_group_key') })
+    .from(tasks)
+    .where(and(...baseConditions))
+    .as('keyed_label_tasks');
+  const [countResult, rankedTaskRows] = await Promise.all([
+    ctx.db
+      .select({ count: sql<number>`count(*)`, key: keyedTasks.key })
+      .from(keyedTasks)
+      .groupBy(keyedTasks.key),
+    ctx.db
+      .select()
+      .from(rankedTasks)
+      .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+      .orderBy(rankedTasks.labelGroupKey, rankedTasks.groupRank),
+  ]);
+
+  const counts = new Map(countResult.map((row) => [row.key, Number(row.count)]));
+  const tasksByKey = new Map<string, TaskItem[]>();
+  for (const row of rankedTaskRows) {
+    const { labelGroupKey: key, groupRank: _groupRank, ...task } = row;
+    const groupTasks = tasksByKey.get(key) ?? [];
+    groupTasks.push(task);
+    tasksByKey.set(key, groupTasks);
+  }
+
+  return [...groupLabels.map((label) => label.id), null].map((labelId) => {
+    const key = labelId ? `label:${labelId}` : noneKey;
+    return {
+      conditions: [labelId ? sql`${labelColumn} = ${labelId}` : sql`${labelColumn} is null`],
+      key,
+      labelId,
+      limit,
+      offset: 0,
+      prefetchedTasks: tasksByKey.get(key) ?? [],
+      total: counts.get(key) ?? 0,
+    };
+  });
 };
 
 export const runStatsByTaskIds = async (
@@ -493,14 +605,16 @@ export const list = async (
     .limit(limit)
     .offset(offset);
   const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);
-  const subtaskProgressByTaskId = await subtaskProgressByTaskIds(
-    ctx,
-    taskList.map(({ id }) => id),
-  );
+  const taskIds = taskList.map(({ id }) => id);
+  const [subtaskProgressByTaskId, labelsByTaskId] = await Promise.all([
+    subtaskProgressByTaskIds(ctx, taskIds),
+    labelsByTaskIds(ctx, taskIds),
+  ]);
 
   return {
     tasks: taskList.map((task) => ({
       ...task,
+      labels: labelsByTaskId[task.id] ?? [],
       subtaskProgress: subtaskProgressByTaskId.get(task.id),
     })),
     total: Number(countResult[0].count),

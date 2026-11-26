@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import type { NewUserConnector } from '../../schemas';
 import {
+  agentEvalDatasets,
   ConnectorToolPermission,
   ToolCRUDType,
   userConnectors,
@@ -64,6 +65,29 @@ const tool = (overrides: Partial<SyncToolInput>): SyncToolInput => ({
 });
 
 describe('ConnectorToolModel', () => {
+  it('isolates eval tool IDs and mutations behind their owned Dataset scope', async () => {
+    await serverDB
+      .insert(agentEvalDatasets)
+      .values({ id: 'eval-dataset', identifier: 'eval-dataset', name: 'Eval', userId });
+    const id = await insertConnector({ metadata: { agentEval: { datasetId: 'eval-dataset' } } });
+    const evaluation = ConnectorToolModel.forEvaluation(serverDB, userId, 'eval-dataset');
+    const normal = new ConnectorToolModel(serverDB, userId);
+    await evaluation.upsertMany(id, [tool({ toolName: 'private-read' })]);
+    const [row] = await evaluation.queryByConnector(id);
+    expect(await normal.findById(row.id)).toBeUndefined();
+    expect(await normal.queryByConnector(id)).toEqual([]);
+    await expect(normal.upsertMany(id, [tool({ toolName: 'injected' })])).rejects.toThrow(
+      'Connection not available',
+    );
+    await normal.deleteToolsNotIn(id, []);
+    expect(await evaluation.queryByConnector(id)).toHaveLength(1);
+    expect(
+      await ConnectorToolModel.forEvaluation(serverDB, userId, 'wrong-dataset').queryByConnector(
+        id,
+      ),
+    ).toEqual([]);
+  });
+
   describe('upsertMany', () => {
     it('returns early without inserting when the tool list is empty', async () => {
       const model = new ConnectorToolModel(serverDB, userId);
@@ -175,6 +199,21 @@ describe('ConnectorToolModel', () => {
       // user-controlled fields preserved
       expect(row.permission).toBe(ConnectorToolPermission.disabled);
       expect(row.isWorkArtifact).toBe(true);
+    });
+
+    it('stores the synced metadata and replaces it on every re-sync', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+
+      await model.upsertMany(connectorId, [
+        tool({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+      ]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toEqual({
+        visibility: ['app'],
+      });
+
+      // The server dropped its visibility: the tool is visible to the model again
+      await model.upsertMany(connectorId, [tool({ toolName: 'load_page' })]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toBeNull();
     });
 
     it('writes workspaceId when the model is workspace-scoped', async () => {
@@ -307,6 +346,56 @@ describe('ConnectorToolModel', () => {
     });
   });
 
+  describe('stable tool order', () => {
+    const toolKeys = (rows: { toolName: string; userConnectorId: string }[]) =>
+      rows.map((r) => `${r.userConnectorId}:${r.toolName}`);
+
+    it('groups tools by connector and sorts by toolName, unchanged after an upsert rewrites rows', async () => {
+      const secondConnectorId = await insertConnector({ identifier: 'notion' });
+      const model = new ConnectorToolModel(serverDB, userId);
+      // insert in reverse order so the physical row order differs from the sorted order
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'zeta' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'zeta' }), tool({ toolName: 'beta' })]);
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'alpha' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'alpha' })]);
+
+      const ids = [connectorId, secondConnectorId];
+      const expected = [
+        ...['alpha', 'beta', 'zeta'].map((name) => `${connectorId}:${name}`),
+        ...['alpha', 'zeta'].map((name) => `${secondConnectorId}:${name}`),
+      ].sort((a, b) => {
+        const [connA, nameA] = a.split(':');
+        const [connB, nameB] = b.split(':');
+        if (connA !== connB) return connA < connB ? -1 : 1;
+        return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+      });
+
+      const firstAll = toolKeys(await model.queryAllByConnectorIds(ids));
+      const firstEnabled = toolKeys(await model.queryByConnectorIds(ids));
+      const firstSingle = (await model.queryByConnector(connectorId)).map((r) => r.toolName);
+      expect(firstAll).toEqual(expected);
+      expect(firstEnabled).toEqual(expected);
+      expect(firstSingle).toEqual(['alpha', 'beta', 'zeta']);
+
+      // a background refresh re-upserts existing rows (ON CONFLICT DO UPDATE writes new tuples)
+      await model.upsertMany(connectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+        tool({ description: 'refreshed', toolName: 'zeta' }),
+      ]);
+      await model.upsertMany(secondConnectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+      ]);
+
+      expect(toolKeys(await model.queryAllByConnectorIds(ids))).toEqual(firstAll);
+      expect(toolKeys(await model.queryByConnectorIds([secondConnectorId, connectorId]))).toEqual(
+        firstEnabled,
+      );
+      expect((await model.queryByConnector(connectorId)).map((r) => r.toolName)).toEqual(
+        firstSingle,
+      );
+    });
+  });
+
   describe('findByToolName', () => {
     it('returns the tool matching the name for the current user', async () => {
       const model = new ConnectorToolModel(serverDB, userId);
@@ -419,6 +508,14 @@ describe('ConnectorToolModel', () => {
 
       const otherModel = new ConnectorToolModel(serverDB, otherUserId);
       expect(await otherModel.findById(stored.id)).toBeUndefined();
+    });
+  });
+
+  describe('forEvaluation', () => {
+    it('requires a dataset id', () => {
+      expect(() => ConnectorToolModel.forEvaluation(serverDB, userId, '')).toThrow(
+        'A Dataset is required for evaluation tools',
+      );
     });
   });
 });

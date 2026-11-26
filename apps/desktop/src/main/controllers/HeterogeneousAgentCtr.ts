@@ -1,5 +1,8 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
+
 import type { ClaudeCodeAccountProfiles } from '@/modules/heterogeneousAgent/claudeCodeAccounts';
 import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePort';
+import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 
 import type HeterogeneousAgentImplementation from './HeterogeneousAgentImpl';
 import type { LhHeteroExecCancellationResult } from './HeterogeneousAgentImpl';
@@ -104,6 +107,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getAntigravityQuota(params: AntigravityQuotaParams = {}) {
+    const [{ getAntigravityQuota }, { buildInheritedSpawnEnv }] = await Promise.all([
+      import('@lobechat/device-control'),
+      import('./HeterogeneousAgentImpl'),
+    ]);
+    return getAntigravityQuota({
+      ...params,
+      env: {
+        ...buildInheritedSpawnEnv(),
+        ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+        ...params.env,
+      },
+    });
+  }
+
+  @IpcMethod()
   async getCodexQuota(...args: Parameters<Implementation['getCodexQuota']>) {
     return (await this.getImplementation()).getCodexQuota(...args);
   }
@@ -175,8 +194,18 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async steerSession(...args: Parameters<Implementation['steerSession']>) {
+    return (await this.getImplementation()).steerSession(...args);
+  }
+
+  @IpcMethod()
   async cancelSession(...args: Parameters<Implementation['cancelSession']>) {
     return (await this.getImplementation()).cancelSession(...args);
+  }
+
+  @IpcMethod()
+  async stopBackgroundTask(...args: Parameters<Implementation['stopBackgroundTask']>) {
+    return (await this.getImplementation()).stopBackgroundTask(...args);
   }
 
   @IpcMethod()
@@ -185,8 +214,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async respondPermission(...args: Parameters<Implementation['respondPermission']>) {
-    return (await this.getImplementation()).respondPermission(...args);
+  async setPermissionMode(...args: Parameters<Implementation['setPermissionMode']>) {
+    return (await this.getImplementation()).setPermissionMode(...args);
+  }
+
+  @IpcMethod()
+  async setCollaborationMode(...args: Parameters<Implementation['setCollaborationMode']>) {
+    return (await this.getImplementation()).setCollaborationMode(...args);
   }
 
   @IpcMethod()

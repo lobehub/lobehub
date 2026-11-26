@@ -18,11 +18,10 @@ import {
 } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import FileIcon from '@/components/FileIcon';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import InlineErrorText from '@/components/InlineErrorText';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { formatSize } from '@/utils/format';
 
 import type { MessengerPlatform } from '../constants';
@@ -30,8 +29,6 @@ import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from '../IntegrationDetail/MessengerPushWindowState';
 import { resolveAttachmentType } from './resolveAttachmentType';
 import { resolveOversizePlan } from './resolveOversizePlan';
-
-const PUSH_WINDOW_REFRESH_INTERVAL = 5000;
 
 export interface PushResourceFile {
   fileType?: string;
@@ -70,20 +67,14 @@ export const PushResourceContent = memo<PushResourceModalProps>(
     const { close } = useModalContext();
     const [content, setContent] = useState('');
     const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
     const [tenantId, setTenantId] = useState(targets?.[0]?.tenantId);
     const [oversizeImageStrategy, setOversizeImageStrategy] =
       useState<MessengerOversizeImageStrategy>(DEFAULT_OVERSIZE_IMAGE_STRATEGY);
 
-    const windowSWR = useSWR(
-      messengerKeys.pushWindow(platform, tenantId),
-      () => messengerService.getMessengerPushWindow(platform, tenantId),
-      {
-        refreshInterval: platform === 'wechat' ? PUSH_WINDOW_REFRESH_INTERVAL : 0,
-        refreshWhenHidden: false,
-        refreshWhenOffline: false,
-      },
-    );
-    const status = windowSWR.data;
+    const windowSync = messengerActions.useFetchPushWindow({ platform, tenantId });
+    // Live status, never restored from disk: undefined until the server answers.
+    const status = useMessengerStore(messengerSelectors.pushWindow({ platform, tenantId }));
 
     const canPush = status?.deliverability === 'always' ? status.linked : !!status?.windowOpen;
 
@@ -134,12 +125,13 @@ export const PushResourceContent = memo<PushResourceModalProps>(
       if (sending || !canPush) return;
 
       setSending(true);
+      setSendError(null);
       try {
         // Send the file by id — the server resolves it to a stable access URL
         // and reads the name/MIME type off the owned row (a client-side
         // presigned URL can expire before the platform sender downloads it,
         // silently dropping the attachment).
-        const result = await messengerService.sendMessengerPush({
+        const result = await messengerActions.sendPush({
           attachments: [
             {
               fileId: file.id,
@@ -179,9 +171,9 @@ export const PushResourceContent = memo<PushResourceModalProps>(
             toast.warning(t('messenger.push.unavailableToast'));
           }
         }
-        await windowSWR.mutate();
       } catch (error) {
-        toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
+        console.error('[Messenger] Failed to push resource:', error);
+        setSendError(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
         setSending(false);
       }
@@ -267,16 +259,21 @@ export const PushResourceContent = memo<PushResourceModalProps>(
                     label: target.label,
                     value: target.tenantId,
                   }))}
-                  onChange={(value) => setTenantId(value as string)}
+                  onChange={(value) => {
+                    setTenantId(value as string);
+                    setSendError(null);
+                  }}
                 />
               </Flexbox>
             )}
 
             <MessengerPushWindowState
-              error={windowSWR.error}
+              error={windowSync.error}
               name={platformName}
               status={status}
-              onRetry={() => windowSWR.mutate()}
+              onRetry={() => {
+                void windowSync.revalidate();
+              }}
             />
 
             {!!status?.queued && (
@@ -294,9 +291,13 @@ export const PushResourceContent = memo<PushResourceModalProps>(
               disabled={sending}
               placeholder={t('messenger.push.resource.placeholder')}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
               onPressEnter={handleSend}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setSendError(null);
+              }}
             />
+            {sendError && <InlineErrorText>{sendError}</InlineErrorText>}
           </Flexbox>
         </Flexbox>
 

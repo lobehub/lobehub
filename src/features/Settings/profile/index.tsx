@@ -6,7 +6,8 @@ import { Form } from '@lobehub/ui/form';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SettingsProfileRowSkeleton } from '@/components/Skeleton/Settings/Profile';
+import SkeletonBar from '@/components/Skeleton/Bar';
+import ProfileSkeleton from '@/components/Skeleton/Settings/tabs/Profile';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -63,20 +64,21 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
 
   const { t } = useTranslation('auth');
 
+  // Same account group the route and chunk fallbacks draw, so the tab never
+  // swaps between two differently shaped skeletons.
+  if (isLoading)
+    return (
+      <>
+        {showSettingHeader && <SettingHeader title={t('profile.title')} />}
+        <ProfileSkeleton.Body />
+      </>
+    );
+
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('profile.title')} />}
       <Form.Group collapsible={false} title={t('profile.account')} variant={'filled'}>
-        <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
-          <SettingsProfileRowSkeleton />
-          <Divider style={{ margin: 0 }} />
-          <SettingsProfileRowSkeleton />
-          <Divider style={{ margin: 0 }} />
-          <SettingsProfileRowSkeleton />
-          <Divider style={{ margin: 0 }} />
-          <SettingsProfileRowSkeleton />
-        </Flexbox>
-        <Flexbox style={{ display: isLoading ? 'none' : 'flex' }}>
+        <Flexbox>
           <AvatarRow />
 
           <Divider style={{ margin: 0 }} />
@@ -105,11 +107,17 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
             </>
           )}
 
-          {isLogin && !isDesktop && isLoadedAuthProviders && (
+          {/* The row is known up front; only its provider list waits on the
+              slower auth-providers fetch, so the row does not pop in. */}
+          {isLogin && !isDesktop && (
             <>
               <Divider style={{ margin: 0 }} />
               <ProfileRow anchor={'profile-connected-accounts'} label={t('profile.sso.providers')}>
-                <SSOProvidersList />
+                {isLoadedAuthProviders ? (
+                  <SSOProvidersList />
+                ) : (
+                  <SkeletonBar height={22} width={120} />
+                )}
               </ProfileRow>
             </>
           )}

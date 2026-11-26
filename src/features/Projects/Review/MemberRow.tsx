@@ -1,21 +1,25 @@
 import { PROJECT_MEMBER_ROLES, type ProjectMemberRole } from '@lobechat/types';
-import { Flexbox, Select, Text } from '@lobehub/ui';
+import { Flexbox, Select, Tag, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
 import type { ProjectMemberItem } from '@/services/projectReview';
+import { useInterfaceDensity } from '@/styles/density';
 
 interface MemberRowProps {
   busy: boolean;
+  /** Tags the project creator, whose row would otherwise look like any member's. */
+  isCreator?: boolean;
   member: ProjectMemberItem;
   onRoleChange: (role: ProjectMemberRole | null) => void;
 }
 
-export function MemberRow({ busy, member, onRoleChange }: MemberRowProps) {
+export function MemberRow({ busy, isCreator, member, onRoleChange }: MemberRowProps) {
   const { t } = useTranslation('project');
   const name = member.user?.name ?? member.userId;
+  const compact = useInterfaceDensity() === 'compact';
   return (
-    <Flexbox horizontal align="center" gap={12} paddingBlock={12} paddingInline={16}>
+    <Flexbox horizontal align="center" gap={12} paddingBlock={compact ? 8 : 12} paddingInline={16}>
       <UserAvatar avatar={member.user?.avatar} name={name} size={28} />
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Text ellipsis>{name}</Text>
@@ -25,6 +29,7 @@ export function MemberRow({ busy, member, onRoleChange }: MemberRowProps) {
           </Text>
         )}
       </Flexbox>
+      {isCreator && <Tag>{t('settings.creator')}</Tag>}
       <Select
         aria-label={t('review.members.roleOf', { name })}
         disabled={busy}

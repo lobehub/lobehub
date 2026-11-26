@@ -6,25 +6,30 @@ import SiRss from '@icons-pack/react-simple-icons/icons/SiRss';
 import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 import SiYoutube from '@icons-pack/react-simple-icons/icons/SiYoutube';
 import { BRANDING_EMAIL, BRANDING_NAME, SOCIAL_URL } from '@lobechat/business-const';
-import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
+import { isDesktop } from '@lobechat/const';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BLOG, mailTo, OFFICIAL_SITE, PRIVACY_URL, TERMS_URL } from '@/const/url';
+import { densityTokens } from '@/styles/density.stylex';
 
 import AboutList from './AboutList';
 import ItemCard from './ItemCard';
 import ItemLink from './ItemLink';
+import UpdateChannel from './UpdateChannel';
 import Version from './Version';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    font-size: 14px;
-    font-weight: bold;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 'bold',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 const About = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('common');
@@ -38,6 +43,7 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
     >
       <Flexbox gap={20} paddingBlock={20} width={'100%'}>
         <Version mobile={mobile} />
+        {isDesktop && <UpdateChannel mobile={mobile} />}
         <Divider style={{ marginBlock: 0 }} />
         <AboutList
           grid
@@ -77,7 +83,7 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
           ]}
         />
         <Divider style={{ marginBlock: 0 }} />
-        <div className={styles.title}>{t('contact')}</div>
+        <div {...stylex.props(styles.title)}>{t('contact')}</div>
         <AboutList
           ItemRender={ItemLink}
           items={[
@@ -99,7 +105,7 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
           ]}
         />
         <Divider style={{ marginBlock: 0 }} />
-        <div className={styles.title}>{t('legal')}</div>
+        <div {...stylex.props(styles.title)}>{t('legal')}</div>
         <AboutList
           ItemRender={ItemLink}
           items={[

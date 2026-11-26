@@ -4,6 +4,7 @@ import { casdoorWebhook } from './handlers/casdoor';
 import { githubWebhook } from './handlers/github';
 import { githubInstall } from './handlers/githubInstall';
 import { githubSetup } from './handlers/githubSetup';
+import { inboundWebhook, inboundWebhookBodyLimit } from './handlers/inbound';
 import { linearCallback } from './handlers/linearCallback';
 import { linearInstall } from './handlers/linearInstall';
 import { logtoWebhook } from './handlers/logto';
@@ -12,6 +13,7 @@ import { memoryExtractionBenchmarkLocomo } from './handlers/memoryExtractionBenc
 import { memoryUserMemoryChatTopicCancel } from './handlers/memoryUserMemoryChatTopicCancel';
 import { memoryUserMemoryConsolidation } from './handlers/memoryUserMemoryConsolidation';
 import { memoryUserMemoryPersonaUpdateWriting } from './handlers/memoryUserMemoryPersonaUpdateWriting';
+import { musicWebhook } from './handlers/music';
 import { videoWebhook } from './handlers/video';
 import { memoryWebhookAuth } from './middlewares/memoryWebhookAuth';
 
@@ -20,6 +22,7 @@ const app = new Hono().basePath('/api/webhooks');
 // Identity provider webhooks — each verifies its own provider signature.
 app.post('/casdoor', casdoorWebhook);
 app.post('/logto', logtoWebhook);
+app.post('/inbound/:id', inboundWebhookBodyLimit, inboundWebhook);
 
 // Memory pipeline webhooks — share the configured static-header guard.
 app.post('/memory-extraction', memoryWebhookAuth(), memoryExtractionWebhook);
@@ -42,6 +45,9 @@ app.post(
 
 // Async video generation callback; the token is verified per asyncTask.
 app.post('/video/:provider', videoWebhook);
+
+// Music gateway callback; acknowledged only, completion is polled by the async music router.
+app.post('/music/:provider', musicWebhook);
 
 // GitHub App: signed event ingress plus the install / setup redirects GitHub
 // sends the user through. The GET routes share the prefix because the App's

@@ -1,7 +1,11 @@
-import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
+import {
+  type MessageContextAccounting,
+  type OpenAIChatMessage,
+  type UIChatMessage,
+  type VoiceMessageRecording,
+} from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
-import { type DropdownItem } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -17,6 +21,17 @@ export type VoiceMessageSendHandler = (recording: VoiceMessageRecording) => bool
 export interface SendButtonProps {
   disabled?: boolean;
   generating: boolean;
+  /**
+   * The host already shows the run elsewhere (e.g. the conversation status tray),
+   * so the send area skips its own running spinner.
+   */
+  hideRunningIndicator?: boolean;
+  /**
+   * A send was committed but has not reached the agent yet (the message and its
+   * topic are still being created). Send shows as loading instead of Stop: there
+   * is no run to stop until the message is accepted.
+   */
+  loading?: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
   /**
@@ -36,8 +51,28 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
-export interface ContextWindowMessage {
-  content: string;
+/**
+ * What the conversation's next request carries before the composer draft, for
+ * the context breakdown (see `getContextWindow`).
+ */
+export interface ContextWindow {
+  /** The history window the next request includes, as the history count slices it. */
+  history: UIChatMessage[];
+  /** The latest request the agent runtime recorded in this conversation. */
+  request?: {
+    accounting: MessageContextAccounting;
+    /** Provider-reported input tokens of that request, when known. */
+    inputTokens?: number;
+    /**
+     * Messages added since: the recorded reply itself and everything after it.
+     * Absent when a history count re-truncates every request; the recorded
+     * messages may then drop out, so count `history` instead.
+     */
+    messages?: UIChatMessage[];
+    /** Model and provider that request went to. */
+    model?: string;
+    provider?: string;
+  };
 }
 
 export interface ChatInputFeature {
@@ -67,7 +102,7 @@ export interface PublicState {
   allowExpand?: boolean;
   canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
-  contextWindowMessages?: ContextWindowMessage[];
+  contextWindow?: ContextWindow;
   draftKey?: string;
   expand?: boolean;
   feature?: ChatInputFeature;
@@ -79,6 +114,13 @@ export interface PublicState {
   onSend?: SendButtonHandler;
   onVoiceMessageSend?: VoiceMessageSendHandler;
   /**
+   * Accept a send while this composer's attachments are still uploading: the
+   * send is queued (Send shows loading) and commits once every upload settles,
+   * with whatever the composer holds by then. Only hosts whose `onSend` leaves
+   * failed uploads out of the message should enable this.
+   */
+  queueSendWhileUploading?: boolean;
+  /**
    * Live send gate consulted by `handleSendButton` instead of
    * `sendButtonProps.disabled`. The disabled flag mirrors editor content
    * through the editor's debounced onChange, so a fast type→Enter arrives
@@ -89,7 +131,6 @@ export interface PublicState {
   resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
-  sendMenu?: { items: DropdownItem[] };
   showTypoBar?: boolean;
   /**
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
@@ -105,6 +146,13 @@ export interface PublicState {
    * topic than the surrounding page.
    */
   topicId?: string | null;
+  /**
+   * Key of this composer's upload list in the file store. Defaults to
+   * `contextSelectionKey`; a host whose text draft outlives that key (Home
+   * keeps its text across mode and agent switches) passes a steadier one so
+   * attachments stay alongside the text.
+   */
+  uploadContextKey?: string;
 }
 
 export interface State extends PublicState {
@@ -117,6 +165,13 @@ export interface State extends PublicState {
   isContentEmpty: boolean;
   markdownContent: string;
   slashMenuRef: ChatInputProps['slashMenuRef'];
+  /**
+   * The send queued until the composer's uploads settle (see
+   * `queueSendWhileUploading`), tagged with the draft it was made from: the
+   * composer outlives a conversation switch, and the conversation it shows next
+   * has nothing queued.
+   */
+  uploadQueuedSend?: { draftKey?: string; unsubscribe: () => void };
 }
 
 export const initialState: State = {

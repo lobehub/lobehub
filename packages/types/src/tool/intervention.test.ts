@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { classifyToolInterventionPresentation } from './intervention';
 
 describe('classifyToolInterventionPresentation', () => {
-  it('renders Devin questions and provider-specific interactions as forms', () => {
+  it('renders native Codex questions as a form', () => {
+    expect(classifyToolInterventionPresentation('codex', 'askUserQuestion')).toEqual({
+      interactionKind: 'question',
+      surface: 'form',
+    });
+  });
+  it('renders Copilot and Devin questions and Devin permissions as forms', () => {
     expect(classifyToolInterventionPresentation('copilot', 'askUserQuestion')).toEqual({
       interactionKind: 'question',
       surface: 'form',

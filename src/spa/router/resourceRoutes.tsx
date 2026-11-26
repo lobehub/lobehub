@@ -19,6 +19,10 @@ import { BusinessResourceRoutes } from '@/business/client/BusinessDesktopRoutes'
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
+import {
+  createDocsItemRouteMeta,
+  createLibraryRouteMeta,
+} from '@/features/ResourceManager/routeMeta';
 import { libraryTreeLoader } from '@/spa/router/libraryTreeLoader';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { worksLoader } from '@/spa/router/worksLoader';
@@ -138,7 +142,7 @@ export const resourceRoute: RouteObject = {
             `Desktop > Resource > Home > ${path}`,
             { preloadId: 'resource' },
           ),
-          handle: { meta: routeMeta({ icon, titleKey }) },
+          handle: { meta: createDocsItemRouteMeta(icon, titleKey) },
           path,
         })),
         // Legacy category paths (/resource/documents, /resource/all, …)
@@ -171,9 +175,7 @@ export const resourceRoute: RouteObject = {
             () => import('@/routes/(main)/resource/library'),
             'Desktop > Resource > Library',
           ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
+          handle: { meta: createLibraryRouteMeta({ icon: LibraryBigIcon }) },
           index: true,
         },
         {
@@ -182,10 +184,9 @@ export const resourceRoute: RouteObject = {
             'Desktop > Resource > Library > Permission',
           ),
           handle: {
-            meta: routeMeta({
+            meta: createLibraryRouteMeta({
               icon: LibraryBigIcon,
               Skeleton: createSurfaceSkeleton('form'),
-              titleKey: 'navigation.knowledgeBase',
             }),
           },
           path: 'permission',
@@ -203,7 +204,7 @@ export const resourceRoute: RouteObject = {
             () => import('@/routes/(main)/resource/library'),
             `Desktop > Resource > Library > ${path}`,
           ),
-          handle: { meta: routeMeta({ icon, titleKey: 'navigation.knowledgeBase' }) },
+          handle: { meta: createLibraryRouteMeta({ icon }) },
           path,
         })),
         // Legacy folder links (`/resource/library/<id>/<folderSlug>`) redirect to `folder/<id>`.
@@ -212,9 +213,7 @@ export const resourceRoute: RouteObject = {
             () => import('@/routes/(main)/resource/library/[slug]'),
             'Desktop > Resource > Library > Slug',
           ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
+          handle: { meta: createLibraryRouteMeta({ icon: LibraryBigIcon }) },
           path: ':slug',
         },
       ],

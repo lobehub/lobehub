@@ -8,6 +8,7 @@ export const typeSafeModels: AIDecisionModelCard[] = [
     displayName: 'Jev 1.14',
     enabled: true,
     id: 'jev-1.14.0',
+    isOfficial: true,
     pricing: {
       currency: 'USD',
       units: [{ name: 'textInput', rate: 0.042, strategy: 'fixed', unit: 'millionTokens' }],

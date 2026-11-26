@@ -1,8 +1,16 @@
 import type { Page } from '@playwright/test';
 
+import type {
+  RuleInventory,
+  StyleDifference,
+  StyleSnapshot,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
+import {
+  captureInPage,
+  compareSnapshots,
+  inventoryInPage,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { createFastCapture } from './fastCapture';
-import type { RuleInventory, StyleDifference, StyleSnapshot } from './snapshot';
-import { captureInPage, compareSnapshots, inventoryInPage } from './snapshot';
 import { createWitness } from './witness';
 
 export interface Probe {

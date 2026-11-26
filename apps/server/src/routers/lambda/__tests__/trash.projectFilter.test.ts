@@ -8,7 +8,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentModel } from '@/database/models/agent';
 import { ProjectModel } from '@/database/models/project';
 import { TopicModel } from '@/database/models/topic';
-import { agents, topics, trashItems, users, workspaces } from '@/database/schemas';
+import { ProjectRepository } from '@/database/repositories/project';
+import {
+  agents,
+  environments,
+  projectEnvironments,
+  topics,
+  trashItems,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import { TrashService } from '@/server/services/trash';
 
 let testDB: LobeChatDatabase;
@@ -39,7 +48,7 @@ const createProject = (
   ws: string | undefined,
   identifier: string,
   visibility?: 'private' | 'public',
-) => new ProjectModel(testDB, userId, ws).create({ identifier, name: identifier, visibility });
+) => new ProjectRepository(testDB, userId, ws).create({ identifier, name: identifier, visibility });
 
 /** Create topics under a project (or none) and trash each as its own root, oldest first. */
 const trashTopics = async (
@@ -90,6 +99,8 @@ const caller = (ctx: any) => trashRouter.createCaller(ctx);
 
 beforeEach(async () => {
   testDB = await getTestDB();
+  await testDB.delete(projectEnvironments);
+  await testDB.delete(environments);
   await testDB.delete(users);
   await testDB.insert(users).values([{ id: ownerId }, { id: memberId }, { id: strangerId }]);
   await testDB.insert(workspaces).values([
@@ -100,6 +111,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.clearAllMocks();
+  // Every project made here has an environment, which holds its user back.
+  await testDB.delete(projectEnvironments);
+  await testDB.delete(environments);
   await testDB.delete(users);
 });
 

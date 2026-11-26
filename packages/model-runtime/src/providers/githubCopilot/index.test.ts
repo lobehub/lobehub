@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as openAIContextBuilders from '../../core/contextBuilders/openai';
+import * as chatCompletionsMessages from '../../core/protocols/openaiChatCompletions/messages';
+import * as responsesInputs from '../../core/protocols/openaiResponses/inputs';
 import { isResponsesAPIModel } from '../openai/modelId';
 import { LobeGithubCopilotAI } from './index';
 
@@ -22,7 +23,7 @@ describe('LobeGithubCopilotAI', () => {
   describe('image payload conversion', () => {
     it('should force image base64 conversion in responses mode', async () => {
       const convertResponseInputsSpy = vi
-        .spyOn(openAIContextBuilders, 'convertOpenAIResponseInputs')
+        .spyOn(responsesInputs, 'convertOpenAIResponseInputs')
         .mockRejectedValue({ status: 400 });
 
       const futureTime = Date.now() + 600_000;
@@ -50,7 +51,7 @@ describe('LobeGithubCopilotAI', () => {
 
     it('should force image base64 conversion in chat completions mode', async () => {
       const convertMessagesSpy = vi
-        .spyOn(openAIContextBuilders, 'convertOpenAIMessages')
+        .spyOn(chatCompletionsMessages, 'convertOpenAIMessages')
         .mockRejectedValue({ status: 400 });
 
       const futureTime = Date.now() + 600_000;
@@ -77,7 +78,7 @@ describe('LobeGithubCopilotAI', () => {
 
     it('should bind signature scopes to the Copilot account', async () => {
       const convertMessagesSpy = vi
-        .spyOn(openAIContextBuilders, 'convertOpenAIMessages')
+        .spyOn(chatCompletionsMessages, 'convertOpenAIMessages')
         .mockRejectedValue({ status: 400 });
       const futureTime = Date.now() + 600_000;
 

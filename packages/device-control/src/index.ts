@@ -1,3 +1,4 @@
+export { getAntigravityQuota } from './antigravityQuota';
 export {
   listClaudeCodeMemory,
   resolveClaudeCodeMemoryDir,
@@ -6,6 +7,7 @@ export {
 } from './claudeCodeMemory';
 export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 export {
+  AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE,
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,

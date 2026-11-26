@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Videorekognition unterstützen",
   "providerModels.item.modelConfig.vision.extra": "Diese Konfiguration aktiviert nur die Bild-Upload-Funktion in der Anwendung. Ob Erkennung unterstützt wird, hängt vom Modell ab. Bitte testen Sie die visuellen Fähigkeiten des Modells selbst.",
   "providerModels.item.modelConfig.vision.title": "Visuelle Erkennung unterstützen",
+  "providerModels.item.pricing.audioOutputTokens": "Audio-Ausgabe ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/Bild",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M Zeichen",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Minute",

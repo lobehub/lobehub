@@ -7,14 +7,17 @@ import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import LinearIcon from '@/features/Integrations/Linear/LinearIcon';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { type LinearIssueFilterParams, linearService } from '@/services/linear';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import StateIcon from './StateIcon';
-import { linearSyncErrorMessage } from './utils';
+import { linearIssueListCounts, linearSyncErrorMessage } from './utils';
 
 const styles = stylex.create({
   body: {
@@ -24,6 +27,13 @@ const styles = stylex.create({
   // Without the 40px header the frame keeps the same height, so picking a team does not move the footer.
   bodyWithoutHead: {
     height: 360,
+  },
+  // Compact: 32px header and rows; the headless body still adds the header back.
+  bodyWithoutHeadCompact: {
+    height: 352,
+  },
+  compactLine: {
+    height: 32,
   },
   frame: {
     borderColor: cssVar.colorBorder,
@@ -38,7 +48,11 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     height: 40,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
+  // Total and loaded counts sit at the far end of the header, apart from the selection.
+  headNote: {
+    marginInlineStart: 'auto',
   },
   identifier: {
     color: cssVar.colorTextTertiary,
@@ -51,7 +65,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     cursor: 'pointer',
     height: 40,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   rowDisabled: {
     cursor: 'default',
@@ -75,13 +89,14 @@ interface IssueListProps {
 /** The issues matching the filter, pick-able one by one, newest activity first. */
 const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, selected }) => {
   const { t } = useTranslation('integration');
+  const compact = useInterfaceDensity() === 'compact';
 
   const { data, error, isLoading, isValidating, setSize, size } = useSWRInfinite(
     (index: number, previous: LinearIssuePage | null) => {
       if (!filter || (previous && !previous.hasMore)) return null;
       return [...linearKeys.issues(filter), index === 0 ? null : previous?.cursor] as const;
     },
-    ([, , , , , cursor]) => linearService.listIssues({ ...filter!, cursor: cursor ?? undefined }),
+    ([, , , , , , cursor]) => linearService.listIssues({ ...filter!, cursor: cursor ?? undefined }),
     // The first page is refetched even when cached: an import since it was read
     // changes which issues show as synced.
     { revalidateOnFocus: false },
@@ -92,6 +107,15 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
   const selectedCount = ids.filter((id) => selected.has(id)).length;
   const allSelected = ids.length > 0 && selectedCount === ids.length;
   const hasMore = data?.at(-1)?.hasMore;
+
+  // Counted only when the first page is not everything; the list does not wait for it.
+  const { data: total } = useSWR(
+    filter && data?.[0]?.hasMore ? linearKeys.issueCount(filter) : null,
+    () => linearService.countIssues(filter!),
+    { revalidateOnFocus: false },
+  );
+  const counts = linearIssueListCounts({ hasMore: !!hasMore, loaded: issues.length, total }, t);
+  const headNote = [selectedCount > 0 && counts.total, counts.loaded].filter(Boolean).join(' · ');
 
   const placeholder = (content: ReactNode) => (
     <Center gap={8} height={'100%'} paddingInline={24}>
@@ -111,7 +135,8 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
     body = placeholder(<Text type={'danger'}>{linearSyncErrorMessage(error, t)}</Text>);
   } else if (isLoading || !data) {
     body = (
-      <Flexbox gap={12} padding={12}>
+      // Compact: 16px bars on a 32px pitch, centred on the rows they stand in for.
+      <Flexbox gap={compact ? 16 : 12} padding={compact ? 8 : 12}>
         {[0, 1, 2, 3].map((index) => (
           <Skeleton height={16} key={index} />
         ))}
@@ -130,7 +155,11 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
               align={'center'}
               gap={12}
               key={issue.id}
-              {...stylex.props(styles.row, disabled && styles.rowDisabled)}
+              {...stylex.props(
+                styles.row,
+                compact && styles.compactLine,
+                disabled && styles.rowDisabled,
+              )}
               onClick={(event) => {
                 // The checkbox and the Linear link handle their own clicks.
                 const target = event.target as HTMLElement;
@@ -193,7 +222,12 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
   return (
     <div {...stylex.props(styles.frame)}>
       {filter ? (
-        <Flexbox horizontal align={'center'} gap={12} {...stylex.props(styles.head)}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          {...stylex.props(styles.head, compact && styles.compactLine)}
+        >
           <Checkbox
             aria-label={t('linear.sync.list.selectAll', { count: issues.length })}
             checked={allSelected}
@@ -204,11 +238,23 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
           <Text fontSize={12} type={'secondary'}>
             {selectedCount > 0
               ? t('linear.sync.list.selected', { count: selectedCount })
-              : t('linear.sync.list.count', { count: issues.length })}
+              : counts.total}
           </Text>
+          {headNote ? (
+            <Text fontSize={12} type={'secondary'} {...stylex.props(styles.headNote)}>
+              {headNote}
+            </Text>
+          ) : null}
         </Flexbox>
       ) : null}
-      <div {...stylex.props(styles.body, !filter && styles.bodyWithoutHead)}>{body}</div>
+      <div
+        {...stylex.props(
+          styles.body,
+          !filter && (compact ? styles.bodyWithoutHeadCompact : styles.bodyWithoutHead),
+        )}
+      >
+        {body}
+      </div>
     </div>
   );
 });

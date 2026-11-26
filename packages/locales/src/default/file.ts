@@ -60,6 +60,11 @@ export default {
   'docs.home.tabs.mine': 'Created by me',
   'docs.home.tabs.recent': 'Recently updated',
   'docs.home.tabs.shared': 'Shared with me',
+  'docs.library.agentSpaces.emptyDesc': "An Agent's documents appear here once you open that Agent",
+  'docs.library.agentSpaces.emptyTitle': 'No Agent knowledge bases yet',
+  'docs.library.agentSpaces.untitled': 'Untitled Agent',
+  'docs.library.tabs.agents': 'Agents',
+  'docs.library.tabs.mine': 'My knowledge bases',
   'docs.library.emptyDesc':
     'Gather related files and pages into a knowledge base to share them with your team and Agents',
   'docs.library.emptyTitle': 'No knowledge bases yet',
@@ -70,17 +75,17 @@ export default {
     'Every file you uploaded, sorted by type, including files filed into knowledge bases.',
   'docs.mergeNotice.drive.title': 'Files are in Drive',
   'docs.mergeNotice.intro':
-    'Pages and Resources are now one place: Docs. Here is where everything moved.',
+    'Pages and Resources now live in one place: Library. Here is where everything moved.',
   'docs.mergeNotice.knowledgeBase.desc':
-    'Your libraries are now called knowledge bases, each with its own cover.',
-  'docs.mergeNotice.knowledgeBase.title': 'Libraries are Knowledge Bases',
+    'The libraries you kept in Resources are now called knowledge bases, each with its own cover.',
+  'docs.mergeNotice.knowledgeBase.title': 'Resource libraries are Knowledge Bases',
   'docs.mergeNotice.links.desc':
-    'Links you saved to pages and resources open the same content in Docs.',
+    'Links you saved to pages and resources open the same content in Library.',
   'docs.mergeNotice.links.title': 'Old links still work',
   'docs.mergeNotice.pages.desc':
     'Pages you wrote are under My docs in the sidebar; pages teammates shared are under Shared docs.',
   'docs.mergeNotice.pages.title': 'Pages are in My docs',
-  'docs.mergeNotice.title': 'Pages and Resources are now Docs',
+  'docs.mergeNotice.title': 'Pages and Resources now live in Library',
   'docs.myDocs.empty': 'Create a page',
   'docs.myDocs.title': 'My docs',
   'docs.recentLibraries': 'Recent knowledge bases',
@@ -109,6 +114,7 @@ export default {
   'docs.shared.title': 'Shared docs',
   'docs.viewAllPages': 'View all',
   'docs.works.all': 'All',
+  'docs.works.artboard': 'Artboard',
   'docs.works.canvas': 'Canvas',
   'docs.works.document': 'Documents',
   'docs.works.task': 'Tasks',
@@ -177,7 +183,7 @@ export default {
   'library.list.transferTitle': 'Move knowledge base',
   'library.list.transferTo': 'Move to…',
   'library.new': 'New Knowledge Base',
-  'library.backToResources': 'Back to Docs',
+  'library.backToResources': 'Back to Library',
   'library.publish': 'Publish to workspace',
   'library.publishConfirm.title': 'Publish knowledge base to workspace?',
   'library.title': 'Knowledge Base',
@@ -328,7 +334,15 @@ export default {
     'Saving will be refused once the page goes over the limit.',
   'pageEditor.charLimit.nearTitle':
     'This page has {{actual}} of {{limit}} characters allowed per page on your plan.',
+  'pageEditor.charLimit.overDescription':
+    'Changes cannot be saved while the page is over the limit. Shorten the page or upgrade your plan.',
   'pageEditor.chooseIcon': 'Choose Icon',
+  'pageEditor.collab.deleted.description':
+    'It was deleted or moved out of this workspace. Return to the page list to keep working.',
+  'pageEditor.collab.deleted.title': 'This page is no longer available here',
+  'pageEditor.collab.nearFull.description':
+    "It's close to its size limit. Remove content you no longer need, or move some of it to a new page.",
+  'pageEditor.collab.nearFull.title': 'This page is almost full',
   'pageEditor.collab.notSynced':
     'Your latest page edits are still syncing, so the Agent may not see them yet.',
   'pageEditor.collab.offlineRestore.content':
@@ -348,6 +362,9 @@ export default {
   'pageEditor.collab.status.connecting': 'Connecting…',
   'pageEditor.collab.status.error': "Couldn't sync this page.",
   'pageEditor.collab.status.offline': 'Offline. Edits sync when you reconnect.',
+  'pageEditor.collab.tooLarge.description':
+    'It reached its size limit. Contact support to trim it or restore an earlier version.',
+  'pageEditor.collab.tooLarge.title': 'This page is too large to edit',
   'pageEditor.comments.anchor.add': 'Comment',
   'pageEditor.comments.anchor.addToLine': 'Comment on this line',
   'pageEditor.comments.anchor.label': 'Quoted text:',
@@ -413,13 +430,20 @@ export default {
   'pageEditor.editMode.lockedBySelf': 'You’re editing this document in another tab',
   'pageEditor.editMode.lockedBySelfDescription':
     'Saves will resume after the other session closes or its lock expires (~30s).',
+  'pageEditor.editMode.lockedBySelfInRoomDescription':
+    'Your other tab is using Live Page Collaboration, a Labs feature. Turn it on here to edit in both tabs.',
+  'pageEditor.editMode.lockedBySelfReloadDescription':
+    'Turn on Live Page Collaboration, a Labs feature, to edit this document in several tabs at once. Reload your other tab after turning it on.',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.lockedInRoomDescription':
+    'They’re editing with Live Page Collaboration, a Labs feature. Turn it on to edit together in real time.',
   'pageEditor.editMode.lockLostDescription':
     'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
   'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',
   'pageEditor.editMode.lockUnstable': 'Reconnecting edit lock…',
+  'pageEditor.editMode.turnOnPageCollab': 'Turn on',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',
@@ -458,10 +482,6 @@ export default {
   'pageEditor.history.versionCount_other': '{{count}} versions',
 
   'pageEditor.linkCopied': 'Link copied',
-  'pageEditor.lock.editingByOther':
-    '{{name}} is editing this page. Your changes can’t be saved right now.',
-  'pageEditor.lock.editingBySomeone':
-    'Someone else is editing this page. Your changes can’t be saved right now.',
   'pageEditor.menu.copyLink': 'Copy Link',
   'pageEditor.menu.export': 'Export',
   'pageEditor.menu.export.html': 'HTML',
@@ -546,6 +566,8 @@ export default {
   'resourceList.viewTransferred': 'View',
   'portal.openInPageEditor': 'Edit in Page',
   'preview.tooLarge': 'This file is too large to preview. Download it to view its contents.',
+  'preview.audioLoadFailed':
+    'This audio could not be played in the browser. Download it to listen.',
   'preview.downloadFile': 'Download File',
   'preview.raw': 'Raw',
   'preview.render': 'Preview',
@@ -584,13 +606,16 @@ export default {
   'work.loadErrorTitle': 'Couldn’t load works',
   'work.loadMoreError': 'Failed to load more works.',
   'work.retry': 'Retry',
+  'work.type.artboard': 'Artboard',
   'work.type.canvas': 'Canvas',
   'work.type.document': 'Document',
   'work.type.file': 'File',
+  'work.type.collection': 'Gallery',
   'work.type.githubIssue': 'GitHub Issue',
   'work.type.githubPullRequest': 'GitHub PR',
   'work.type.linearDocument': 'Linear Document',
   'work.type.linearIssue': 'Linear Issue',
+  'work.type.link': 'Link',
   'work.type.task': 'Task',
   'work.updatedAt': 'Updated {{date}}',
   'work.topicGroup.other': 'Other',

@@ -1,13 +1,25 @@
 'use client';
 
-import { DEFAULT_AVATAR, EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { Block, Flexbox, Icon, Input, Skeleton, toast, Tooltip } from '@lobehub/ui';
+import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
+import {
+  Block,
+  Flexbox,
+  Icon,
+  Input,
+  parseAgentAvatar,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
+import { createAgentCharacterTab } from '@/components/AgentAvatar/pickerTab';
+import { isDefaultAgentAvatar } from '@/components/AgentAvatar/resolve';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
@@ -176,17 +188,23 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
             : undefined
         }
         customRender={
-          agentMeta.avatar && agentMeta.avatar !== DEFAULT_AVATAR
-            ? undefined
-            : () => {
-                return (
+          isDefaultAgentAvatar(agentMeta.avatar)
+            ? () => (
+                <Block clickable height={72} width={72}>
+                  <SupervisorAvatar size={72} />
+                </Block>
+              )
+            : // A picked character is no emoji or image; the picker would print its text.
+              parseAgentAvatar(agentMeta.avatar)
+              ? () => (
                   <Block clickable height={72} width={72}>
-                    <SupervisorAvatar size={72} />
+                    <AgentAvatar agentId={agentId} avatar={agentMeta.avatar} size={72} />
                   </Block>
-                );
-              }
+                )
+              : undefined
         }
         customTabs={[
+          createAgentCharacterTab(agentId),
           {
             label: (
               <Tooltip title={t('settingAgent.backgroundColor.title', { ns: 'setting' })}>

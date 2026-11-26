@@ -17,6 +17,10 @@ describe('resolveNavPanelKey', () => {
     ['/settings/profile', null, 'settings'],
     ['/lobe-team/settings/general', 'lobe-team', 'workspace-settings'],
     ['/lobe-team/community', 'lobe-team', 'discover'],
+    // The Marketplace (formerly Community) and its migrated skill/connector pages.
+    ['/marketplace', null, 'discover'],
+    ['/marketplace/skill/installed', null, 'discover'],
+    ['/lobe-team/marketplace/connector', 'lobe-team', 'discover'],
     ['/lobe-team/resource', 'lobe-team', 'resource'],
     // The library gallery keeps the Docs sidebar; one library has its own.
     ['/lobe-team/resource/library', 'lobe-team', 'resource'],

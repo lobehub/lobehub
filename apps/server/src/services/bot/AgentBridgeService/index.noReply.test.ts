@@ -143,6 +143,7 @@ const subscribed = async (
   new AgentBridgeService(FAKE_DB, USER_ID).handleSubscribedMessage(thread, userMessage, {
     agentId: 'agent-1',
     botContext,
+    botSettings: { processingMessage: true },
     client,
     replyLocale: 'en-US',
     ...extra,
@@ -153,6 +154,7 @@ const fresh = async (thread: any, client: any, extra: Record<string, unknown> = 
   new AgentBridgeService(FAKE_DB, USER_ID).handleMention(thread, message(), {
     agentId: 'agent-1',
     botContext,
+    botSettings: { processingMessage: true },
     client,
     replyLocale: 'en-US',
     ...extra,
@@ -430,7 +432,7 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       });
       const { progress, thread } = createThread();
       const { client } = createClient();
-      const botSettings = { botWake: { enabled: true } };
+      const botSettings = { botWake: { enabled: true }, processingMessage: true };
 
       await subscribed(thread, client, { botSettings, standDown: true });
 
