@@ -403,6 +403,25 @@ export const execAgentTurn = async (
     ),
   );
 
+  const onOperationCreated = async (id: string) => {
+    // Approval continuations execute tools owned by an earlier assistant. Persist
+    // those exact sources before dispatch; provider IDs and client operation IDs
+    // alone cannot authorize an elicitation checkpoint.
+    const sources = approvedToolEntries
+      .filter(({ plugin }) => plugin.type === 'mcp')
+      .map(({ plugin, toolMessageId }) => ({
+        assistantMessageId: approvalOwnerAssistantId ?? resumeParentMessage?.parentId,
+        toolCallId: plugin.toolCallId,
+        toolMessageId,
+      }));
+    if (
+      sources.length &&
+      !(await deps.agentOperationModel.mergeMetadata(id, { mcpInvocationSources: sources }))
+    )
+      throw new Error('Could not persist MCP continuation identity');
+    await params.onOperationCreated?.(id);
+  };
+
   // Deterministic continuation identity for a generic (v2) approval claim.
   // Also consumed by the turn setup below: a crash-safe re-entry must find
   // the SAME assistant placeholder instead of minting a second turn.
@@ -642,7 +661,7 @@ export const execAgentTurn = async (
           markTopicRunning: params.markTopicRunning,
           onOperationCreated: async (operationId) => {
             await bindRunFee(runFee, deps.userId, operationId);
-            await params.onOperationCreated?.(operationId);
+            await onOperationCreated(operationId);
           },
           reservedOperationId: params.reservedOperationId,
           parentOperationId,
@@ -868,7 +887,7 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoSkillIds,
         autoStart,
-        onOperationCreated: params.onOperationCreated,
+        onOperationCreated,
         markTopicRunning: params.markTopicRunning,
         // From here the run's completion releases the slot and settles the
         // fee; a run that never started (failed, or created without

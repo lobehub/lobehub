@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import {
   buildMcpToolMetadata,
   getMcpAppEntrypoints,
@@ -14,8 +16,11 @@ import {
   type McpSessionOptions,
   type McpTool,
   type McpToolOutput,
+  serializeMcpClientParams,
   withStdioOutput,
 } from '@lobechat/device-mcp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
+import { safeParseJSON } from '@lobechat/utils';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
@@ -25,10 +30,19 @@ import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
 import { getDesktopEnv } from '@/env';
 import FileService from '@/services/fileSrv';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
+import { McpCompletionDelivery } from './mcpCompletionDelivery';
+import {
+  createNativeMcpElicitationHost,
+  relayNativeMcpResult,
+  runNativeMcpElicitation,
+} from './McpCtr/elicitation';
 import { checkDeployOption } from './mcpInstallCheck';
+import { McpInvocationRegistry } from './mcpInvocation';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:McpCtr');
 
@@ -109,6 +123,7 @@ interface GetStreamableMcpServerManifestInput extends McpSessionOptions {
 
 export interface StdioCallToolInput extends McpCallOptions {
   args: any;
+  elicitation?: McpElicitationCall;
   env: any;
   http?: undefined;
   params: GetStdioMcpServerManifestInput;
@@ -118,6 +133,7 @@ export interface StdioCallToolInput extends McpCallOptions {
 /** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
 export interface HttpCallToolInput extends McpCallOptions {
   args: any;
+  elicitation?: McpElicitationCall;
   http: {
     auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
     headers?: Record<string, string>;
@@ -207,6 +223,9 @@ const serializePayload = serializeMcpIpcPayload;
 export default class McpCtr extends ControllerModule {
   static override readonly groupName = 'mcp';
 
+  private readonly mcpInvocations = new McpInvocationRegistry();
+  private readonly mcpProducerId = randomUUID();
+  private readonly mcpCompletions = new McpCompletionDelivery();
   private runtimeInstance?: DeviceMcpRuntime;
 
   private get runtime(): DeviceMcpRuntime {
@@ -412,11 +431,16 @@ export default class McpCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getToolTimeoutMs() {
+    return getDesktopEnv().MCP_TOOL_TIMEOUT;
+  }
+
+  @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
     if ('http' in input && input.http) {
       return serializePayload(
-        await this.runHttpMcpTool(input.http, input.toolName, input.args, {
+        await this.runHttpMcpTool(input.http, input.toolName, input.args, input.elicitation, {
           fromApp: input.fromApp,
           fromEntrypoint: input.fromEntrypoint,
           mcpApps: input.mcpApps,
@@ -471,7 +495,7 @@ export default class McpCtr extends ControllerModule {
    * caller can shape its own error response.
    */
   async runStdioMcpTool(input: StdioCallToolInput): Promise<McpToolOutput> {
-    return this.runtime.runTool(
+    return this.runMcpTool(
       {
         args: input.params.args || [],
         command: input.params.command,
@@ -481,6 +505,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
+      input.elicitation,
       { fromApp: input.fromApp, fromEntrypoint: input.fromEntrypoint, mcpApps: input.mcpApps },
     );
   }
@@ -499,14 +524,59 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
+    elicitation?: McpElicitationCall,
     options: McpCallOptions = {},
   ): Promise<McpToolOutput> {
-    return this.runtime.runTool(
+    return this.runMcpTool(
       { auth: input.auth, headers: input.headers, name: input.name, type: 'http', url: input.url },
       toolName,
       rawArgs,
+      elicitation,
       options,
     );
+  }
+
+  private async runMcpTool(
+    params: MCPClientParams,
+    toolName: string,
+    rawArgs: unknown,
+    elicitation: McpElicitationCall | undefined,
+    options: McpCallOptions,
+  ): Promise<McpToolOutput> {
+    if (!elicitation) return this.runtime.runTool(params, toolName, rawArgs, options);
+    const config = this.app.getController(RemoteServerConfigCtr);
+    return runNativeMcpElicitation({
+      config,
+      elicitation,
+      fingerprint: createHash('sha256')
+        .update(
+          JSON.stringify([
+            serializeMcpClientParams(params),
+            toolName,
+            typeof rawArgs === 'string' ? safeParseJSON(rawArgs) : rawArgs,
+          ]),
+        )
+        .digest('hex'),
+      producerId: this.mcpProducerId,
+      invocations: this.mcpInvocations,
+      completions: this.mcpCompletions,
+      execute: (owner) => {
+        const timeoutMs = Math.max(1, elicitation.deadline - Date.now());
+        return this.runtime.runTool(params, toolName, rawArgs, {
+          ...options,
+          timeoutMs,
+          interaction: {
+            continuation: elicitation.continuation,
+            host: createNativeMcpElicitationHost(config, elicitation, owner)!,
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        });
+      },
+      relay: (result, owner) =>
+        relayNativeMcpResult(config, elicitation, result, owner, () =>
+          this.app.getService(GatewayConnectionService).resolveCurrentDeviceId(),
+        ),
+    });
   }
 
   @IpcMethod()

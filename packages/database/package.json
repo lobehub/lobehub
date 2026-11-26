@@ -20,6 +20,7 @@
     "@lobechat/business-model-bank": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/conversation-flow": "workspace:*",
+    "@lobechat/mcp-elicitation": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "p-map": "^7.0.6",

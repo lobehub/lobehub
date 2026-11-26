@@ -583,7 +583,13 @@ describe('syncConnectorToolsById', () => {
       });
 
       expect(mcpService.listRawTools).toHaveBeenLastCalledWith(
-        expect.objectContaining({ auth: { accessToken: 'token-b', type: 'oauth2' } }),
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            accessToken: 'token-b',
+            clientId: 'client-1',
+            type: 'oauth2',
+          }),
+        }),
         expect.anything(),
       );
       expect(connectorToolModel.upsertMany).toHaveBeenCalledWith('c1', [

@@ -8,6 +8,12 @@ import {
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
 import {
+  McpCallNotStartedError,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpInputRequiredError,
+} from '@lobechat/mcp-elicitation';
+import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
   type CustomPluginMetadata,
@@ -160,7 +166,11 @@ export class MCPService {
     params: MCPClientParams,
     operationName: string,
     operation: (client: MCPClient) => Promise<T>,
-    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
+    {
+      mcpApps = false,
+      mcpEvents = false,
+      scope = 'metadata',
+    }: MCPClientOptions & { scope?: string } = {},
   ): Promise<T> {
     const connection = this.getConnectionLogMetadata(params);
 
@@ -176,11 +186,18 @@ export class MCPService {
           // failure (bad URL/token, stdio spawn error) is NOT a stale-session
           // error, so it must bail immediately instead of retrying — otherwise
           // we'd repeat auth attempts / respawn stdio commands needlessly.
-          const client = await this.getClient(params, skipCache, { mcpApps, mcpEvents });
+          const client = await this.getClient(params, skipCache, { mcpApps, mcpEvents, scope });
           return await operation(client);
         } catch (error) {
+          if (error instanceof McpInputRequiredError) {
+            bail(error);
+            return undefined as T;
+          }
           // Only retry for NoValidSessionId errors
-          if ((error as Error).message !== 'NoValidSessionId') {
+          if (
+            !(error instanceof McpCallNotStartedError && error.retryable) &&
+            (error as Error).message !== 'NoValidSessionId'
+          ) {
             console.error('MCP operation failed:', {
               ...operationLog,
               error: getMCPErrorLogMetadata(error),
@@ -334,6 +351,14 @@ export class MCPService {
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
   async callTool(options: {
     argsStr: any;
+    elicitation?: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+      interactive?: boolean;
+      timeoutMs?: number;
+      scope?: string;
+    };
     clientParams: MCPClientParams;
     /**
      * The call comes from an MCP App view (`tools/call`), not the model. Only
@@ -414,7 +439,9 @@ export class MCPService {
 
       try {
         // Delegate the call to the MCPClient instance
-        const result = await client.callTool(toolName, args); // Pass args directly
+        const result = options.elicitation
+          ? await client.callTool(toolName, args, options.elicitation)
+          : await client.callTool(toolName, args);
 
         // Use the common processing method
         // A view gets the tool's own MCP result: its media stays base64 `data`,
@@ -465,14 +492,21 @@ export class MCPService {
       }
     };
 
-    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApps });
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, {
+      mcpApps,
+      scope: `${options.elicitation?.scope ?? 'tool'}:${options.elicitation?.host ? 'elicitation' : 'plain'}`,
+    });
   }
 
   // Private method to get or initialize a client based on parameters
   private async getClient(
     params: MCPClientParams,
     skipCache = false,
-    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
+    {
+      mcpApps = false,
+      mcpEvents = false,
+      scope = 'metadata',
+    }: MCPClientOptions & { scope?: string } = {},
   ): Promise<MCPClient> {
     // Every server caller (including connector sync and agent tool execution)
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
@@ -486,7 +520,7 @@ export class MCPService {
 
     // A session announces its capabilities once, at initialize, so sessions
     // with and without MCP Apps are cached apart.
-    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}${mcpEvents ? '#mcp-events' : ''}`;
+    const key = `${scope}:${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}${mcpEvents ? '#mcp-events' : ''}`;
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
@@ -495,7 +529,11 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApps, mcpEvents });
+      const client = new MCPClient(params, {
+        mcpApps,
+        mcpEvents,
+        ...(scope.endsWith(':elicitation') && { elicitationEnabled: true }),
+      });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);

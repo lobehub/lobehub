@@ -5,6 +5,7 @@ import {
   canApproveInterventionBatch,
   getInterventionBatch,
   getPendingInterventions,
+  mergePendingInterventions,
 } from './pendingInterventions';
 
 const toolMessage = (
@@ -303,4 +304,16 @@ describe('canApproveInterventionBatch', () => {
       expect(getPendingInterventions([noDeadline])).toHaveLength(1);
     });
   });
+});
+
+it('keeps another assistant intervention when a provider reuses the MCP call id', () => {
+  const selected = getPendingInterventions([
+    toolMessage('old-row', 'call_1', 'assistant-one'),
+    toolMessage('mcp-row', 'call_1', 'assistant-two'),
+  ]);
+  const mcp = [{ ...selected[1], batchId: 'mcp-batch' }];
+  expect(mergePendingInterventions(selected, mcp).map((item) => item.toolMessageId)).toEqual([
+    'old-row',
+    'mcp-row',
+  ]);
 });

@@ -82,7 +82,15 @@ export const buildConnectorMcpParams = (
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
-    auth,
+    auth:
+      auth?.type === 'oauth2' && connector.oidcConfig
+        ? {
+            ...auth,
+            clientId: connector.oidcConfig.clientId,
+            clientSecret: connector.oidcConfig.clientSecret ?? auth.clientSecret,
+            serverMetadata: { ...auth.serverMetadata, issuer: connector.oidcConfig.issuer },
+          }
+        : auth,
     ...(boundDevice && { boundDevice }),
     // Only set when chosen, as `buildConnectorManifests` does
     ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),

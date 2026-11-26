@@ -3,6 +3,7 @@ import { agentDocumentIndex } from './agentDocumentIndex';
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
+import { agentToolResults } from './agentToolResults';
 import { botDeferred } from './botDeferred';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
@@ -29,6 +30,7 @@ export const redisService = {
   agentDocumentIndex,
   agentIdentity,
   agentRunSlots,
+  agentToolResults,
   agentSignal,
   botDeferred,
   botReply,
