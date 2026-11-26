@@ -8,7 +8,6 @@ import { log } from '../utils/logger';
 export function registerLegacyPluginCommand(program: Command) {
   const plugin = program
     .command('legacy-plugin')
-    .alias('plugin')
     .description(
       'List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add',
     );
