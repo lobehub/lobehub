@@ -54,12 +54,25 @@ describe('lh legacy-plugin - E2E', () => {
   // ── update ────────────────────────────────────────
 
   describe('update', () => {
-    it('should error when no changes specified', () => {
-      expect(() => run('legacy-plugin update nonexistent-id')).toThrow();
+    const runError = (args: string) => {
+      try {
+        run(args);
+      } catch (error) {
+        return String((error as { stderr?: string }).stderr || error);
+      }
+      throw new Error(`Expected \`${args}\` to fail`);
+    };
+
+    it('should reject edits with migration guidance', () => {
+      const output = runError('legacy-plugin update some-id --settings "not-json"');
+
+      expect(output).toContain('was removed');
+      expect(output).toContain('lh connector add');
+      expect(output).toContain('lh legacy-plugin uninstall some-id');
     });
 
-    it('should reject invalid settings JSON', () => {
-      expect(() => run('legacy-plugin update some-id --settings "not-json"')).toThrow();
+    it('should reject the command even without edit flags', () => {
+      expect(runError('legacy-plugin update nonexistent-id')).toContain('was removed');
     });
   });
 });

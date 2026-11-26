@@ -10,7 +10,7 @@ export function registerLegacyPluginCommand(program: Command) {
     .command('legacy-plugin')
     .alias('plugin')
     .description(
-      'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+      'List, search, or uninstall legacy 1.0 plugins (user_installed_plugins). Add MCP servers with lh connector add',
     );
 
   // ── list ──────────────────────────────────────────────
@@ -123,37 +123,14 @@ export function registerLegacyPluginCommand(program: Command) {
   // ── update ────────────────────────────────────────────
 
   plugin
-    .command('update <id>')
-    .description('Update plugin settings or manifest')
-    .option('--manifest <json>', 'New manifest JSON')
-    .option('--settings <json>', 'New settings JSON')
-    .action(async (id: string, options: { manifest?: string; settings?: string }) => {
-      const input: Record<string, any> = { id };
-
-      if (options.manifest) {
-        try {
-          input.manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
-        }
-      }
-      if (options.settings) {
-        try {
-          input.settings = JSON.parse(options.settings);
-        } catch {
-          log.error('Invalid settings JSON.');
-          process.exit(1);
-        }
-      }
-
-      if (!options.manifest && !options.settings) {
-        log.error('No changes specified. Use --manifest or --settings.');
-        process.exit(1);
-      }
-
-      const client = await getTrpcClient();
-      await client.plugin.updatePlugin.mutate(input as any);
-      console.log(`${pc.green('✓')} Updated plugin ${pc.bold(id)}`);
+    .command('update <id>', { hidden: true })
+    .description('Removed — legacy plugins cannot be edited in place')
+    .option('--manifest <json>', 'Accepted for compatibility; ignored')
+    .option('--settings <json>', 'Accepted for compatibility; ignored')
+    .action((id: string) => {
+      log.error(
+        `\`lh legacy-plugin update\` was removed. Legacy plugins are read-only and cannot be edited in place. To migrate, recreate the MCP server with \`lh connector add\`, then uninstall the legacy plugin with \`lh legacy-plugin uninstall ${id}\`.`,
+      );
+      process.exit(1);
     });
 }

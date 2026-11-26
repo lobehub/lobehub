@@ -113,7 +113,7 @@ lh skill read-resource <id> <path>
 
 ## Legacy Plugin Management (`lh legacy-plugin`)
 
-List, update and uninstall legacy 1.0 plugins stored in `user_installed_plugins`. New plugins cannot be created here: add an MCP server with `lh connector add --url <url>`, and re-sync an existing connection with `lh connector refresh <idOrIdentifier>`.
+List, search and uninstall legacy 1.0 plugins stored in `user_installed_plugins`. Legacy plugins are read-only: they cannot be created or edited here. Add an MCP server with `lh connector add --url <url>`, and re-sync an existing connection with `lh connector refresh <idOrIdentifier>`.
 
 **Source**: `apps/cli/src/commands/plugin.ts`
 
@@ -131,10 +131,6 @@ lh legacy-plugin list [--json [fields]]
 lh legacy-plugin uninstall <id> [--yes]
 ```
 
-### `lh legacy-plugin update <id>`
+### Removed: `lh legacy-plugin update <id>`
 
-Requires `--manifest` or `--settings` (at least one); errors if neither is specified.
-
-```bash
-lh legacy-plugin update <id> [--manifest <json>] [--settings <json>]
-```
+Legacy plugins cannot be edited in place. The hidden command remains only as a compatibility error: it accepts the old flags, exits 1 without contacting the server, and tells the user to recreate the MCP server with `lh connector add` before uninstalling the legacy plugin.
