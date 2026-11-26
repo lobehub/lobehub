@@ -8123,6 +8123,34 @@ components:
                 - heartbeat
                 - schedule
             - type: "null"
+        channelDelivery:
+          type: object
+          properties:
+            channelId:
+              type: string
+            lastError:
+              anyOf:
+                - type: object
+                  properties:
+                    at:
+                      type: string
+                    code:
+                      type: string
+                      const: channel_unavailable
+                    message:
+                      type: string
+                  required:
+                    - at
+                    - code
+                  additionalProperties: false
+                - type: "null"
+            threadId:
+              type:
+                - string
+                - "null"
+          required:
+            - channelId
+          additionalProperties: false
         checkpoint:
           type: object
           properties:

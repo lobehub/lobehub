@@ -708,8 +708,8 @@ importers:
         specifier: workspace:*
         version: link:../business/const
       '@lobehub/a2ui':
-        specifier: ^1.1.0
-        version: 1.1.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@lobehub/ui@6.0.4)(lucide-react@1.57.0(@types/react@19.3.0)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^1.2.0
+        version: 1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@lobehub/market-sdk':
         specifier: 0.46.0
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
@@ -2192,11 +2192,6 @@ packages:
     peerDependencies:
       react: 19.2.7
 
-  '@icons-pack/react-simple-icons@13.16.0':
-    resolution: {integrity: sha512-LOs+OW7CawzA+P6btA2XUQI4vWfAZ17t1b8GoPJjRXCHZN0cVuWJSvMdWjQZzgdgDl/PYJ0NTeGxUwnAmoLpuw==}
-    peerDependencies:
-      react: 19.2.7
-
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -2242,13 +2237,11 @@ packages:
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
 
-  '@lobehub/a2ui@1.1.0':
-    resolution: {integrity: sha512-4G7t7bLv8wIQi3C8F72u+OM//AiBPEMZzTl/mc+yLQQxGtCK1oglPHOo/epbivx3wiARuUX36z8RX5ZZc7xinw==}
+  '@lobehub/a2ui@1.2.0':
+    resolution: {integrity: sha512-eG73RFOw1hi2TpVs/KloRWtjjkWwJWx/ku581HvPl3c2Z8I5vnOJag/kZpCDnxMs7fpU5IZc/UqShuNX1pcyoQ==}
     peerDependencies:
       '@lobehub/charts': ^6.0.0
-      '@lobehub/icons': ^6.0.0
       '@lobehub/ui': ^6.21.0
-      lucide-react: ^1.0.0
       react: 19.2.7
       react-dom: 19.2.7
 
@@ -9725,10 +9718,6 @@ snapshots:
     dependencies:
       react: 19.2.7
 
-  '@icons-pack/react-simple-icons@13.16.0(react@19.2.7)':
-    dependencies:
-      react: 19.2.7
-
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -9781,15 +9770,12 @@ snapshots:
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
 
-  '@lobehub/a2ui@1.1.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@lobehub/ui@6.0.4)(lucide-react@1.57.0(@types/react@19.3.0)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@lobehub/a2ui@1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@a2ui/react': 0.16.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@3.25.76)
       '@a2ui/web_core': 0.16.1
-      '@icons-pack/react-simple-icons': 13.16.0(react@19.2.7)
       '@lobehub/charts': 6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@lobehub/icons': 6.0.0(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@lobehub/ui': 6.0.4(@lobehub/fluent-emoji@5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@shikijs/themes@4.5.0)(@types/mdast@4.0.4)(@types/react@19.3.0)(date-fns@4.4.0)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@9.4.0))(motion@14.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@9.4.0)
-      lucide-react: 1.57.0(@types/react@19.3.0)(react@19.2.7)
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       zod: 3.25.76
