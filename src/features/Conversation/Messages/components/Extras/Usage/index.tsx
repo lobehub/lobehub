@@ -67,7 +67,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
   const modelCard = useAiInfraStore((s) => {
     const exact = aiModelSelectors.getModelCard(displayModel, provider)(s);
     if (exact || !serverDefaultConfiguredModel) return exact;
-    // Server-default messages keep provider as the CLI type (`claude-code` /
+    // Older server-default messages kept provider as the CLI type (`claude-code` /
     // `codex`), so the catalog card lives under the relay provider id.
     return (
       s.enabledAiModels?.find((item) => item.id === displayModel) ||
