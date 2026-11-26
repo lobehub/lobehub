@@ -1,4 +1,12 @@
 export default {
+  'api-route.apiKey.desc': 'API key provided by API Route',
+  'api-route.apiKey.placeholder': 'API Route API Key',
+  'api-route.apiKey.required': 'API key is required',
+  'api-route.apiKey.title': 'API Key',
+  'api-route.models.fetch': 'Fetch model list',
+  'api-route.models.selected': 'Selected models',
+  'api-route.models.title': 'Available Models',
+  'api-route.title': 'API Route',
   'azure.azureApiVersion.desc':
     'Azure API version, follow the format YYYY-MM-DD, check the [latest version](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)',
   'azure.azureApiVersion.fetch': 'Fetch List',
