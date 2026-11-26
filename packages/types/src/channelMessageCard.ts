@@ -1,4 +1,5 @@
-import { type A2uiSurfaceRecord, surfacesToText, toSurfaceRecords } from '@lobehub/a2ui';
+import { surfacesToText, toSurfaceRecords } from '@lobehub/a2ui/records';
+import type { A2uiSurfaceRecord } from '@lobehub/a2ui/types';
 
 import type { ChannelMemberGrantStatus, ChannelMessageMetadata } from './channel';
 
