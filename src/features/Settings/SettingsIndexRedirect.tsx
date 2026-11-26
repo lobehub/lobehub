@@ -3,6 +3,8 @@
 import { memo } from 'react';
 import { Navigate } from 'react-router';
 
+import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
+
 import { useSettingsIndexUrl } from './hooks/useSettingsIndexUrl';
 
 /**
@@ -14,7 +16,11 @@ import { useSettingsIndexUrl } from './hooks/useSettingsIndexUrl';
 const SettingsIndexRedirect = memo(() => {
   const destination = useSettingsIndexUrl();
 
-  return destination ? <Navigate replace to={destination} /> : null;
+  // Until the server config lands, keep the same skeleton the route's chunk
+  // fallback showed, so the pane never goes blank between the two.
+  if (!destination) return <SettingsPageSkeleton />;
+
+  return <Navigate replace to={destination} />;
 });
 
 SettingsIndexRedirect.displayName = 'SettingsIndexRedirect';
