@@ -69,6 +69,7 @@ import Search1APIProvider from './search1api';
 import SenseNovaProvider from './sensenova';
 import SiliconCloudProvider from './siliconcloud';
 import SparkProvider from './spark';
+import SteadyRouterProvider from './steadyrouter';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
@@ -124,6 +125,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   CohereProvider.chatModels,
   V0Provider.chatModels,
   ZeroOneProvider.chatModels,
+  SteadyRouterProvider.chatModels,
   StepfunProvider.chatModels,
   NovitaProvider.chatModels,
   NvidiaProvider.chatModels,
@@ -213,6 +215,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ZeroOneProvider,
   SparkProvider,
   SenseNovaProvider,
+  SteadyRouterProvider,
   StepfunProvider,
   BaichuanProvider,
   VolcengineProvider,
@@ -379,6 +382,7 @@ export { default as Search1APIProviderCard } from './search1api';
 export { default as SenseNovaProviderCard } from './sensenova';
 export { default as SiliconCloudProviderCard } from './siliconcloud';
 export { default as SparkProviderCard } from './spark';
+export { default as SteadyRouterProviderCard } from './steadyrouter';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
