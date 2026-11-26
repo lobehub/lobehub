@@ -14,6 +14,16 @@ const SKILLS_IDENTIFIER = 'lobe-skills';
 const ACTIVATOR_IDENTIFIER = 'lobe-activator';
 
 /**
+ * Literal copies of `LobeAgentIdentifier` and its todo-mutating API names
+ * (@lobechat/builtin-tool-lobe-agent), frozen for the same reason as above.
+ */
+const LOBE_AGENT_IDENTIFIER = 'lobe-agent';
+const TODO_MUTATION_APIS = new Set(['clearTodos', 'createTodos', 'updateTodos']);
+
+export const isTodoMutationCall = (identifier?: string, apiName?: string) =>
+  identifier === LOBE_AGENT_IDENTIFIER && !!apiName && TODO_MUTATION_APIS.has(apiName);
+
+/**
  * Options for message visitor traversal
  */
 export interface MessageVisitorOptions {
@@ -204,6 +214,40 @@ export const extractTodosFromMessages = (
   }
 
   return undefined;
+};
+
+/**
+ * Count the todo-mutating calls at the end of the conversation with no other
+ * tool call in between, stopping at the latest user message. Text-only
+ * assistant output does not reset the count: a model stuck re-managing its list
+ * keeps announcing that it will stop while it keeps calling (production: ~490
+ * todo calls in one 33-minute run).
+ */
+export const countTrailingTodoCalls = (
+  messages: UIChatMessage[],
+  /**
+   * Calls of the batch being executed. Its assistant is already persisted with
+   * these calls (and, on an approval resume, their placeholder rows), so they
+   * would otherwise count as history.
+   */
+  pendingToolCallIds: ReadonlySet<string>,
+): number => {
+  let count = 0;
+
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+    const message = messages[messageIndex];
+    if (message.role === 'user') return count;
+
+    const invocations = collectToolInvocations(message);
+    for (let invocationIndex = invocations.length - 1; invocationIndex >= 0; invocationIndex--) {
+      const { apiName, identifier, toolCallId } = invocations[invocationIndex];
+      if (toolCallId && pendingToolCallIds.has(toolCallId)) continue;
+      if (!isTodoMutationCall(identifier, apiName)) return count;
+      count++;
+    }
+  }
+
+  return count;
 };
 
 /**
