@@ -125,9 +125,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 6px;
+    gap: ${densityVars.gap};
 
-    padding-block: 4px 12px;
+    padding-block: 0 12px;
     padding-inline: 8px;
   `,
   column: css`
@@ -166,8 +166,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    padding-block: 10px 8px;
-    padding-inline: 10px 6px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: 12px 8px;
   `,
   headerActions: css`
     display: flex;
