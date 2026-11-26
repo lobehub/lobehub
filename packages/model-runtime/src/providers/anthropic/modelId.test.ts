@@ -414,17 +414,20 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
 });
 
 describe('supportsClaudeInlineToolChanges', () => {
-  it('accepts verified Novita routing tiers of supported models', () => {
+  it('resolves relay namespaces and backend tags to the served model', () => {
+    expect(supportsClaudeInlineToolChanges('claude-opus-4-8')).toBe(true);
+    expect(supportsClaudeInlineToolChanges('claude-opus-4-8-20260101')).toBe(true);
     expect(supportsClaudeInlineToolChanges('pa/claude-opus-4-8')).toBe(true);
     expect(supportsClaudeInlineToolChanges('pa/claude-fable-5')).toBe(true);
     expect(supportsClaudeInlineToolChanges('anthropic/claude-opus-4-8-aws')).toBe(true);
-    expect(supportsClaudeInlineToolChanges('anthropic/claude-opus-5-5')).toBe(true);
+    expect(supportsClaudeInlineToolChanges('anthropic/claude-opus-5.5')).toBe(true);
   });
 
-  it('keeps unsupported models and unverified tiers on the normal path', () => {
+  it('keeps unsupported models and Bedrock ids on the normal path', () => {
+    expect(supportsClaudeInlineToolChanges('claude-sonnet-5')).toBe(false);
     expect(supportsClaudeInlineToolChanges('pa/claude-sonnet-4-6')).toBe(false);
     expect(supportsClaudeInlineToolChanges('anthropic/claude-sonnet-4-6-aws')).toBe(false);
-    expect(supportsClaudeInlineToolChanges('pa/claude-opus-4-8-hs')).toBe(false);
     expect(supportsClaudeInlineToolChanges('anthropic.claude-opus-4-8')).toBe(false);
+    expect(supportsClaudeInlineToolChanges('gpt-6.1')).toBe(false);
   });
 });

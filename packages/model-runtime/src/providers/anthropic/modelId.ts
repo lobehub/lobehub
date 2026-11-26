@@ -105,24 +105,22 @@ const inlineToolModels = new Set([
 ]);
 
 /**
- * Novita serves the same Claude models behind routing tiers: a `pa/` prefix and an
- * `-aws` suffix. Both accept inline tool additions (verified against Novita with the
- * inline-tools beta), so they map back to the plain model id before the allowlist check.
- * Other tiers (`-hs`, `-ps`) are unverified and stay on the normal path.
+ * Matches on the parsed family and version rather than the raw id, so a relay's own
+ * naming still resolves to the model it serves: a namespace the parser does not know
+ * (`<relay>/claude-opus-4-8`) or a trailing backend tag (`anthropic/claude-opus-4-8-aws`).
+ * The route still opts in explicitly through the inline-tools beta header, which is the
+ * operator's statement that this relay accepts the blocks. Bedrock ids stay excluded.
  */
-const stripVerifiedInlineToolTier = (model: string) =>
-  model
-    .trim()
-    .replace(/^pa\//i, '')
-    .replace(/^(anthropic\/claude-.+)-aws$/i, '$1');
-
 export const supportsClaudeInlineToolChanges = (model: string): boolean => {
-  const parsed = parseClaudeModelId(stripVerifiedInlineToolTier(model));
-  return (
-    !!parsed &&
-    parsed.source !== 'bedrock' &&
-    inlineToolModels.has(parsed.normalizedModelId.replace(/-\d{8}$/, '').replaceAll('.', '-'))
-  );
+  const parsed =
+    parseClaudeModelId(model) ?? parseClaudeModelId(model.trim().split('/').at(-1) ?? '');
+  if (!parsed || parsed.source === 'bedrock') return false;
+
+  const version =
+    parsed.minorVersion === undefined
+      ? `${parsed.majorVersion}`
+      : `${parsed.majorVersion}-${parsed.minorVersion}`;
+  return inlineToolModels.has(`claude-${parsed.family}-${version}`);
 };
 
 export const isContextCachingModel = (model: string): boolean => {
