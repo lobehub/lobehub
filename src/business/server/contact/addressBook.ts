@@ -25,10 +25,6 @@ export interface AddressBook {
   findAgentAccess: (agentId: string) => Promise<AddressBookAgentAccess | undefined>;
   findUser: (userId: string) => Promise<ContactUserProfile | undefined>;
   listAddressBookPeople: () => Promise<ContactUserProfile[]>;
-  listPeople: (options: {
-    limit: number;
-    query?: string;
-  }) => Promise<{ hasMore: boolean; people: ContactUserProfile[] }>;
   resolveCard: (input: ContactCardInput) => Promise<ContactCard>;
 }
 
@@ -38,7 +34,6 @@ const emptyAddressBook: AddressBook = {
   findAgentAccess: async () => undefined,
   findUser: async () => undefined,
   listAddressBookPeople: async () => [],
-  listPeople: async () => ({ hasMore: false, people: [] }),
   resolveCard: async () => {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Contact cards are not available' });
   },

@@ -240,19 +240,16 @@ export const channelMessageReplyError = (
 };
 
 /**
- * The Agent that wrote a message on its requester's behalf (`lobe-channel.sendMessage` /
- * `messagePerson`). The person stays the sender and execution identity; this only says who
- * relayed it.
+ * The Agent that posted a request in its own Channel on its requester's behalf (a Thread it
+ * opened, a steer, a scheduled report). The person stays the sender and execution identity; this
+ * only says which Agent posted it.
  */
 export interface ChannelMessageVia {
   agentId: string;
   name: string;
 }
 
-/**
- * Where a relayed request came from (`metadata.via.origin`), kept server-side so the target's
- * reply can be delivered back there as a receipt.
- */
+/** Where an exchange between Agents began, so what the asking Agent concludes is posted there. */
 export interface ChannelRelayOrigin {
   channelId: string;
   threadId: string | null;
@@ -273,15 +270,6 @@ export interface ChannelMessageReceipt {
   /** The published reply in that Channel. */
   messageId: string;
 }
-
-export const channelRelayOrigin = (
-  metadata: ChannelMessageMetadata | null | undefined,
-): ChannelRelayOrigin | undefined => {
-  const origin = (metadata?.via as { origin?: Partial<ChannelRelayOrigin> } | undefined)?.origin;
-  return typeof origin?.channelId === 'string'
-    ? { channelId: origin.channelId, threadId: origin.threadId ?? null }
-    : undefined;
-};
 
 /**
  * `metadata.exchange` of a request one Agent wrote to another in their conversation: where the
@@ -547,14 +535,11 @@ export interface ChannelDirectoryPage {
   hasMore: boolean;
 }
 
-/** A request posted into another Channel for the run's requester, @mentioning its Agents. */
+/** A request one Agent writes to another in the conversation between the two Agents. */
 export interface ChannelSendMessageParams {
-  /**
-   * Agents to address. One Agent is asked in the conversation between the two Agents; several are
-   * addressed in `channelId`, a group Channel they are all active members of.
-   */
+  /** The one Agent to ask; ask several with one call each. */
   agentIds: string[];
-  /** Required for several Agents; for one, only a hint of where the person reaches it. */
+  /** Only a hint of where the person reaches the Agent, whose environment it keeps. */
   channelId?: string;
   content: string;
 }
@@ -565,39 +550,6 @@ export interface ChannelSentMessage {
   channelTitle: string;
   messageId: string;
   /** Link to the Channel the message was posted in, for the reply that mentions it. */
-  url: string;
-}
-
-/** People the run's requester can message one-on-one in the run's scope. */
-export interface ChannelListPeopleParams {
-  limit?: number;
-  /** Case-insensitive part of the person's display name or @handle. */
-  query?: string;
-}
-
-export interface ChannelPerson {
-  name: string;
-  userId: string;
-  username: string | null;
-}
-
-export interface ChannelPeoplePage {
-  /** More people matched than were returned; narrow with `query`. */
-  hasMore: boolean;
-  people: ChannelPerson[];
-}
-
-/** A message for one person, posted in the requester's conversation with them. */
-export interface ChannelMessagePersonParams {
-  content: string;
-  userId: string;
-}
-
-export interface ChannelSentPersonMessage {
-  channelId: string;
-  messageId: string;
-  person: ChannelPerson;
-  /** Link to the requester's conversation with the person. */
   url: string;
 }
 

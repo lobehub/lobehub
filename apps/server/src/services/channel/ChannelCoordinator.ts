@@ -45,7 +45,6 @@ import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { type PickedOfflineDevice, wakePickedDevices } from './pickedDeviceWake';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
-import { deliverRelayReceipt } from './relayReceipt';
 import { reportChannelReplyFailure } from './replyError';
 import { openChannelReply } from './replyOpening';
 import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
@@ -697,10 +696,6 @@ export class ChannelCoordinator {
         await wakeChannel(channelId);
       await reportAgentExchange(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
         console.error('[channel:agent-exchange]', error),
-      );
-      // A reply to a relayed request also goes back to the Agent that relayed it.
-      await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
-        console.error('[channel:relay-receipt]', error),
       );
       this.summarizeTopicTitle(channelId, jobId, {
         lastAssistantContent: reply,

@@ -1,10 +1,6 @@
 export * from './agents';
 export * from './chains';
-export {
-  BOT_CHANNEL_MESSAGING_INSTRUCTIONS,
-  buildChannelPrompt,
-  CHANNEL_INSTRUCTIONS,
-} from './chains/channel';
+export { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from './chains/channel';
 export * from './chains/goalExplore';
 export * from './chains/goalSupervisor';
 export * from './contexts';

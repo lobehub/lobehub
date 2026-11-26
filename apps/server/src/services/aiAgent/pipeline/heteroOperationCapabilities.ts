@@ -18,14 +18,9 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * a user-sent run creates binds to that user's topic, where its tray shows it.
  *
  * `channel:read` and `channel:message` let a Channel dispatch read its own conversation
- * (`lh channel history|message`), message Agents in the requester's other Channels
- * (`lh channel list|send`) and people the requester can talk to one-on-one
- * (`lh channel people|dm`), as the requester, never as the device owner. A bot run whose
- * sender is the bot's owner (`botContext.isOwner`, e.g. the owner messaging their Agent on
- * Telegram) gets `channel:message` alone: it may list the owner's Channels and post a request
- * there as the owner. A turn the user sent in an ordinary chat gets the same, so asking an Agent
- * to "send tj a message" works there too. Neither has a Channel conversation to read; a bot
- * message from anyone else, a Task run and a server-started run get neither.
+ * (`lh channel history|message`) and ask Agents in the requester's other Channels
+ * (`lh channel list|send`), as the requester, never as the device owner. Only a Channel run gets
+ * them: asking another Agent needs a Channel to bring what it concludes back to.
  *
  * `acceptance:evidence` lets a Task run file evidence into its own verification
  * round (`lh acceptance run result submit|ingest --operation`). That round is
@@ -50,8 +45,6 @@ export const heteroOperationCapabilities = (
   prompt: unknown,
   options: {
     channel?: boolean;
-    /** The run answers a bot message its owner sent (`botContext.isOwner`). */
-    ownerBotTurn?: boolean;
     /**
      * A share visitor drives the run. It gets only the run's own callbacks:
      * a goal or acceptance round it created would belong to the creator.
@@ -69,11 +62,7 @@ export const heteroOperationCapabilities = (
   return [
     'caller:act',
     'hetero:ingest',
-    ...(options.channel
-      ? (['channel:read', 'channel:message'] as const)
-      : options.ownerBotTurn || directUserTurn
-        ? (['channel:message'] as const)
-        : []),
+    ...(options.channel ? (['channel:read', 'channel:message'] as const) : []),
     'hetero:finish',
     'hetero:intervention:read',
     ...(isGoalPrompt(prompt) || directUserTurn ? (['goal:manage'] as const) : []),

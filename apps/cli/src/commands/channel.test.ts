@@ -14,34 +14,21 @@ const historyMessage = {
   truncated: false,
 };
 
-const {
-  listChannels,
-  listPeople,
-  listThreads,
-  messagePerson,
-  readMessages,
-  readMessage,
-  react,
-  sendMessage,
-  output,
-} = vi.hoisted(() => ({
-  listChannels: vi.fn(),
-  listThreads: vi.fn(),
-  listPeople: vi.fn(),
-  messagePerson: vi.fn(),
-  readMessages: vi.fn(),
-  readMessage: vi.fn(),
-  react: vi.fn(),
-  sendMessage: vi.fn(),
-  output: vi.fn(),
-}));
+const { listChannels, listThreads, readMessages, readMessage, react, sendMessage, output } =
+  vi.hoisted(() => ({
+    listChannels: vi.fn(),
+    listThreads: vi.fn(),
+    readMessages: vi.fn(),
+    readMessage: vi.fn(),
+    react: vi.fn(),
+    sendMessage: vi.fn(),
+    output: vi.fn(),
+  }));
 vi.mock('../api/client', () => ({
   getTrpcClient: async () => ({
     channel: {
       listChannels: { query: listChannels },
-      listPeople: { query: listPeople },
       listThreads: { query: listThreads },
-      messagePerson: { mutate: messagePerson },
       readMessages: { query: readMessages },
       readMessage: { query: readMessage },
       react: { mutate: react },
@@ -153,7 +140,7 @@ describe('Channel CLI', () => {
     expect(listChannels).toHaveBeenCalledWith({ agentId: 'agent-1', limit: 3, query: 'general' });
     expect(output).toHaveBeenCalledWith(page);
   });
-  it('sends to every --agent with a retry key', async () => {
+  it('asks one --agent with a retry key', async () => {
     sendMessage.mockResolvedValue({ messageId: 'message-sent' });
     await run([
       'channel',
@@ -161,38 +148,18 @@ describe('Channel CLI', () => {
       'channel-1',
       '--agent',
       'agent-1',
-      '--agent',
-      'agent-2',
       '-c',
       'Please take a look',
       '--request-key',
       'retry-1',
     ]);
     expect(sendMessage).toHaveBeenCalledWith({
-      agentIds: ['agent-1', 'agent-2'],
+      agentIds: ['agent-1'],
       channelId: 'channel-1',
       content: 'Please take a look',
       requestKey: 'retry-1',
     });
     await run(['channel', 'send', 'channel-1', '--agent', 'agent-1', '-c', 'Hi']);
     expect(sendMessage.mock.calls[1][0].requestKey).toMatch(/^[\da-f-]{36}$/);
-  });
-  it('lists the people the requester can message', async () => {
-    const page = { hasMore: false, people: [] };
-    listPeople.mockResolvedValue(page);
-    await run(['channel', 'people', '--query', 'alice', '--limit', '3', '--json']);
-    expect(listPeople).toHaveBeenCalledWith({ limit: 3, query: 'alice' });
-    expect(output).toHaveBeenCalledWith(page);
-  });
-  it('messages one person with a retry key', async () => {
-    messagePerson.mockResolvedValue({ messageId: 'message-sent' });
-    await run(['channel', 'dm', 'user-alice', '-c', 'T-1 is done', '--request-key', 'retry-1']);
-    expect(messagePerson).toHaveBeenCalledWith({
-      content: 'T-1 is done',
-      requestKey: 'retry-1',
-      userId: 'user-alice',
-    });
-    await run(['channel', 'dm', 'user-alice', '-c', 'Hi']);
-    expect(messagePerson.mock.calls[1][0].requestKey).toMatch(/^[\da-f-]{36}$/);
   });
 });
