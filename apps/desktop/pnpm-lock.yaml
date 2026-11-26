@@ -708,8 +708,8 @@ importers:
         specifier: workspace:*
         version: link:../business/const
       '@lobehub/a2ui':
-        specifier: ^1.2.0
-        version: 1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^1.2.1
+        version: 1.2.1(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@lobehub/market-sdk':
         specifier: 0.46.0
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
@@ -2237,8 +2237,8 @@ packages:
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
 
-  '@lobehub/a2ui@1.2.0':
-    resolution: {integrity: sha512-eG73RFOw1hi2TpVs/KloRWtjjkWwJWx/ku581HvPl3c2Z8I5vnOJag/kZpCDnxMs7fpU5IZc/UqShuNX1pcyoQ==}
+  '@lobehub/a2ui@1.2.1':
+    resolution: {integrity: sha512-rTylRdplGrsLsTR3anV5zpd5HXmV6p4iqt3rUlt1mqeRadvWlQ1b4E43Pe02FRpsemEwJsYpq6FuVancUcX8cQ==}
     peerDependencies:
       '@lobehub/charts': ^6.0.0
       '@lobehub/ui': ^6.21.0
@@ -7332,6 +7332,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: 19.2.7
       react-dom: 19.2.7
@@ -9770,7 +9771,7 @@ snapshots:
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
 
-  '@lobehub/a2ui@1.2.0(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@lobehub/a2ui@1.2.1(@lobehub/charts@6.0.1(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@a2ui/react': 0.16.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@3.25.76)
       '@a2ui/web_core': 0.16.1
