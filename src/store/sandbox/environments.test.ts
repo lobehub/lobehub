@@ -188,6 +188,9 @@ describe('sandbox environments replica', () => {
       wrapper,
     });
     await waitFor(() => expect(sandboxSelectors.environments('private')(state())).toHaveLength(1));
+    // `useSync` subscribes to `error` only once it is read, as a component reading
+    // it in render would; read it before the refresh fails.
+    expect(result.current.error).toBeUndefined();
 
     await act(async () => {
       await result.current.revalidate().catch(() => {});
