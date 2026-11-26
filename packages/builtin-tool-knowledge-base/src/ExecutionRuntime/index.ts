@@ -28,6 +28,8 @@ import type {
   RemoveFilesArgs,
   SearchKnowledgeBaseArgs,
   SearchKnowledgeBaseState,
+  UpdateDocumentArgs,
+  UpdateDocumentState,
   ViewKnowledgeBaseArgs,
   ViewKnowledgeBaseState,
 } from '../types';
@@ -77,6 +79,28 @@ interface DocumentResult {
   id: string;
 }
 
+interface DocumentDetailResult {
+  fileType: string;
+  id: string;
+  knowledgeBaseId?: string | null;
+  parentId?: string | null;
+  /** `file` = parsed upload, `web` = crawled page; both are derived text, not editable notes. */
+  sourceType?: string | null;
+  title?: string | null;
+}
+
+/** The only document type this tool edits: notes written as text, not parsed uploads. */
+const EDITABLE_DOCUMENT_FILE_TYPE = 'custom/document';
+
+/**
+ * Parsed uploads are stored as `custom/document` too, so the file type alone
+ * cannot tell them from notes; their source type can.
+ */
+const DERIVED_DOCUMENT_SOURCE_TYPES = new Set(['file', 'web']);
+
+/** Upper bound on the ancestor walk; deeper (or already looping) trees are refused. */
+const MAX_PARENT_DEPTH = 64;
+
 interface RagService {
   getFileContents: (fileIds: string[], signal?: AbortSignal) => Promise<FileContentResult[]>;
   semanticSearchForChat: (
@@ -117,6 +141,15 @@ interface DocumentService {
     knowledgeBaseId?: string;
     parentId?: string;
     title: string;
+  }) => Promise<DocumentResult>;
+  /** Resolves only documents the caller can access; `undefined` otherwise. */
+  getDocumentById: (id: string) => Promise<DocumentDetailResult | undefined>;
+  /** Fields left `undefined` must stay unchanged. */
+  updateDocument: (params: {
+    content?: string;
+    id: string;
+    parentId?: string;
+    title?: string;
   }) => Promise<DocumentResult>;
 }
 
@@ -502,6 +535,136 @@ export class KnowledgeBaseExecutionRuntime {
     } catch (e) {
       return {
         content: `Error creating document: ${(e as Error).message}`,
+        error: e,
+        success: false,
+      };
+    }
+  }
+
+  async updateDocument(args: UpdateDocumentArgs): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.documentService) {
+        return { content: 'Document service is not available.', success: false };
+      }
+      // The knowledge base check below is part of the access guard; never skip it.
+      if (!this.knowledgeBaseService) {
+        return { content: 'Knowledge base service is not available.', success: false };
+      }
+
+      const documentId = args.documentId?.trim();
+      if (!documentId) {
+        return { content: 'Error: documentId is required.', success: false };
+      }
+
+      // Models often fill optional fields with "" — that means "leave unchanged",
+      // never "erase the body" or "rename to nothing".
+      const content = args.content || undefined;
+      const title = args.title?.trim() ? args.title.trim() : undefined;
+      const parentId = args.parentId?.trim() || undefined;
+
+      if (content === undefined && title === undefined && parentId === undefined) {
+        return {
+          content: 'Error: Nothing to update. Provide at least one of title, content or parentId.',
+          success: false,
+        };
+      }
+
+      const document = await this.documentService.getDocumentById(documentId);
+      if (!document) {
+        return {
+          content: `Document "${documentId}" not found, or you do not have access to it.`,
+          success: false,
+        };
+      }
+
+      if (!document.knowledgeBaseId) {
+        return {
+          content: `Document "${documentId}" is not in a knowledge base, so it cannot be edited with this tool.`,
+          success: false,
+        };
+      }
+
+      if (
+        document.fileType !== EDITABLE_DOCUMENT_FILE_TYPE ||
+        DERIVED_DOCUMENT_SOURCE_TYPES.has(document.sourceType ?? '')
+      ) {
+        return {
+          content: `Document "${documentId}" is an uploaded file or imported web page, not a note, so it cannot be edited. Only documents created as notes (createDocument) can be edited; create a new document instead if needed.`,
+          success: false,
+        };
+      }
+
+      const knowledgeBase = await this.knowledgeBaseService.getKnowledgeBaseById(
+        document.knowledgeBaseId,
+      );
+      if (!knowledgeBase) {
+        return {
+          content: `Document "${documentId}" belongs to a knowledge base you do not have access to.`,
+          success: false,
+        };
+      }
+
+      if (parentId) {
+        if (parentId === documentId) {
+          return { content: 'Error: A document cannot be moved under itself.', success: false };
+        }
+        const parent = await this.documentService.getDocumentById(parentId);
+        if (!parent || parent.knowledgeBaseId !== document.knowledgeBaseId) {
+          return {
+            content: `Parent "${parentId}" not found in knowledge base \`${document.knowledgeBaseId}\`. The new parent must be a folder or document in the same knowledge base.`,
+            success: false,
+          };
+        }
+
+        // Neither the shared write flow nor the model checks ancestry, so a move
+        // under one of the document's own descendants would persist a loop: both
+        // drop out of the tree and subtree walks never terminate.
+        let ancestorId = parent.parentId ?? undefined;
+        let depth = 0;
+        while (ancestorId) {
+          if (ancestorId === documentId) {
+            return {
+              content: `Error: "${parentId}" is inside document "${documentId}", so the document cannot be moved under it.`,
+              success: false,
+            };
+          }
+          if (++depth > MAX_PARENT_DEPTH) {
+            return {
+              content: `Error: Could not verify where "${parentId}" sits in the knowledge base (nesting is too deep), so the document was not moved.`,
+              success: false,
+            };
+          }
+          const ancestor = await this.documentService.getDocumentById(ancestorId);
+          ancestorId = ancestor?.parentId ?? undefined;
+        }
+      }
+
+      const result = await this.documentService.updateDocument({
+        content,
+        id: documentId,
+        parentId,
+        title,
+      });
+
+      if (!result?.id) {
+        return { content: 'Error: Failed to update document.', success: false };
+      }
+
+      const changes: string[] = [];
+      if (content !== undefined) changes.push(`content replaced (${content.length} characters)`);
+      if (title !== undefined) changes.push(`renamed to "${title}"`);
+      if (parentId !== undefined) changes.push(`moved under \`${parentId}\``);
+
+      const state: UpdateDocumentState = { id: result.id };
+
+      return {
+        content: `Document "${title ?? document.title ?? documentId}" (\`${result.id}\`) updated: ${changes.join('; ')}.`,
+        state,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `Error updating document: ${(e as Error).message}`,
         error: e,
         success: false,
       };

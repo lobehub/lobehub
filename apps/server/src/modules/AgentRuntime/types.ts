@@ -53,7 +53,6 @@ export interface IAgentStateManager {
       /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       /**
@@ -119,6 +118,13 @@ export interface IAgentStateManager {
    * Load Agent state
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /**
+   * Read only the persisted state's `status`. Use it instead of
+   * `loadAgentState` when the status is all the caller needs: the Redis
+   * implementation reads one hash field rather than the whole state blob.
+   */
+  loadAgentStatus: (operationId: string) => Promise<AgentState['status'] | null>;
 
   /** Read the inline step loop's parked envelope, if any. */
   loadInlineResume: (operationId: string) => Promise<null | string>;

@@ -18,6 +18,7 @@ import {
   mergeCredsEnvListing,
   resolveInjectedEnvVarsByKey,
 } from '@/server/services/sandbox/credsEnv';
+import { resolveCredKey } from '@/server/utils/credKey';
 
 const log = debug('lambda-router:market:creds');
 
@@ -85,7 +86,8 @@ export const credsRouter = router({
         description: z.string().optional(),
         fileHashId: z.string().length(64),
         fileName: z.string().min(1),
-        key: z.string().min(1).max(100),
+        /** Generated from the name when omitted; only agents and skills pass a fixed key. */
+        key: z.string().max(100).optional(),
         name: z.string().min(1).max(255),
       }),
     )
@@ -93,7 +95,10 @@ export const credsRouter = router({
       log('createFile input: %O', { ...input, fileHashId: '[HIDDEN]' });
 
       try {
-        const result = await ctx.marketService.market.creds.createFile(input);
+        const result = await ctx.marketService.market.creds.createFile({
+          ...input,
+          key: resolveCredKey(input),
+        });
         log('createFile success: id=%d', result.id);
         return result;
       } catch (error) {
@@ -111,7 +116,8 @@ export const credsRouter = router({
     .input(
       z.object({
         description: z.string().optional(),
-        key: z.string().min(1).max(100),
+        /** Generated from the name when omitted; only agents and skills pass a fixed key. */
+        key: z.string().max(100).optional(),
         name: z.string().min(1).max(255),
         type: z.enum(['kv-env', 'kv-header']),
         values: z.record(z.string(), z.string()),
@@ -121,7 +127,10 @@ export const credsRouter = router({
       log('createKV input: %O', { ...input, values: '[HIDDEN]' });
 
       try {
-        const result = await ctx.marketService.market.creds.createKV(input);
+        const result = await ctx.marketService.market.creds.createKV({
+          ...input,
+          key: resolveCredKey(input),
+        });
         log('createKV success: id=%d', result.id);
         return result;
       } catch (error) {
@@ -139,7 +148,8 @@ export const credsRouter = router({
     .input(
       z.object({
         description: z.string().optional(),
-        key: z.string().min(1).max(100),
+        /** Generated from the name when omitted; only agents and skills pass a fixed key. */
+        key: z.string().max(100).optional(),
         name: z.string().min(1).max(255),
         oauthConnectionId: z.number(),
       }),
@@ -148,7 +158,10 @@ export const credsRouter = router({
       log('createOAuth input: %O', input);
 
       try {
-        const result = await ctx.marketService.market.creds.createOAuth(input);
+        const result = await ctx.marketService.market.creds.createOAuth({
+          ...input,
+          key: resolveCredKey(input),
+        });
         log('createOAuth success: id=%d', result.id);
         return result;
       } catch (error) {

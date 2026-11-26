@@ -99,6 +99,7 @@ export const uploadShareVisitorFile = async ({
       type: 'updateFile',
       value: {
         ...(dimensions && { dimensions }),
+        fileType,
         fileUrl: data.url,
         id: data.id,
         status: 'success',

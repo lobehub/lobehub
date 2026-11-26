@@ -16,14 +16,11 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.betterCodingExperience.desc':
-    'A set of experiments that improve how agents write, run and review code with you.',
-  'features.betterCodingExperience.title': 'Better Coding Experience',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
   'features.codexAppServer.desc':
-    'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
+    'Run Codex through App Server on desktop or a connected device for interactive questions and native turn control. Applies to subsequent runs.',
   'features.codexAppServer.title': 'Codex App Server Runtime',
   'features.desktopSplitView.desc':
     'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
@@ -37,9 +34,6 @@ export default {
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
-  'features.goals.desc':
-    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
-  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',

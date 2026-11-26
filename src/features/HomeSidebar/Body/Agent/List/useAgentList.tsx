@@ -10,6 +10,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useSidebarGroupVisibility } from '../useSidebarGroupVisibility';
 import { useSidebarItemVisibility } from '../useSidebarItemVisibility';
+import { liftInboxRow, withoutInboxInGroups } from './inboxRow';
 
 /**
  * Filter predicate over the caller's effective sidebar membership: legacy
@@ -63,18 +64,35 @@ export const useAgentList = (limitDefault = true) => {
   const keepGroups = useKeepSidebarGroupsListed();
 
   return useMemo(() => {
+    // Filter BEFORE the page-size cut so an unpin doesn't shrink the page.
     const filteredUngrouped = keep(ungroupedAgents);
+    // Cut BEFORE lifting Lobe AI out, so the page (Lobe AI included) matches the
+    // "More" row's count of the whole ungrouped list.
+    const pageUngrouped = limitDefault
+      ? filteredUngrouped.slice(0, agentPageSize)
+      : filteredUngrouped;
+
+    // Lobe AI (the inbox) leads the sidebar wherever its row sits, so it is
+    // taken out of the sections and returned on its own.
+    const custom = withoutInboxInGroups(
+      keepGroups(agentGroups).map((group) => ({ ...group, items: keep(group.items) })),
+    );
+    const privateGroups = withoutInboxInGroups(
+      keepGroups(privateAgentGroups).map((group) => ({ ...group, items: keep(group.items) })),
+    );
+    const { inbox, lists } = liftInboxRow({
+      defaultList: pageUngrouped,
+      pinnedList: keep(pinnedAgents),
+      privateUngroupedList: keep(privateUngroupedAgents),
+    });
 
     return {
-      customList: keepGroups(agentGroups).map((group) => ({ ...group, items: keep(group.items) })),
-      // Filter BEFORE the page-size cut so an unpin doesn't shrink the page.
-      defaultList: limitDefault ? filteredUngrouped.slice(0, agentPageSize) : filteredUngrouped,
-      pinnedList: keep(pinnedAgents),
-      privateGroupList: keepGroups(privateAgentGroups).map((group) => ({
-        ...group,
-        items: keep(group.items),
-      })),
-      privateUngroupedList: keep(privateUngroupedAgents),
+      customList: custom.groups,
+      defaultList: lists.defaultList,
+      inboxItem: inbox ?? custom.inbox ?? privateGroups.inbox,
+      pinnedList: lists.pinnedList,
+      privateGroupList: privateGroups.groups,
+      privateUngroupedList: lists.privateUngroupedList,
     };
   }, [
     agentGroups,

@@ -138,7 +138,7 @@ const createHarness = () => {
         return match?.id;
       },
     ),
-    listMessagePluginsByTopic: vi.fn(async () =>
+    listToolCallIndexByTopic: vi.fn(async () =>
       [...messages.values()]
         .filter((m) => m.role === 'tool' && m.tool_call_id)
         .map((m) => ({ id: m.id, toolCallId: m.tool_call_id! })),

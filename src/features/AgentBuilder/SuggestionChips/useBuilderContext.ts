@@ -3,7 +3,7 @@ import {
   agentDisplayName,
   type AgentGroupDetail,
   type AgentPluginEntry,
-  getActivePluginIds,
+  getOptedInPluginIds,
 } from '@lobechat/types';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,9 +31,8 @@ const summarize = (value: string | null | undefined, fallback: string): string =
 const buildAgentSummary = (agent?: AgentLike): string => {
   if (!agent) return 'A new agent with default settings and no role configured yet.';
   const role = agent.systemRole?.trim();
-  // Pinned identifiers only — a disabled plugin isn't a "tool enabled" for
-  // the builder-suggestion summary's purposes.
-  const plugins = getActivePluginIds(agent.plugins);
+  // Opted-in identifiers (`auto` + legacy `pinned`) — excludes explicitly disabled plugins.
+  const plugins = getOptedInPluginIds(agent.plugins);
   const openingQuestions = agent.openingQuestions ?? [];
   return [
     `Name: ${summarize(agentDisplayName(agent), '(untitled)')}`,

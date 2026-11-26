@@ -1,6 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "File aggiunto con successo",
-  "addToKnowledgeBase.alreadyExists": "Questo file è già presente nella libreria",
+  "addToKnowledgeBase.alreadyExists": "Questo file è già nella libreria",
   "addToKnowledgeBase.confirm": "Aggiungi",
   "addToKnowledgeBase.error": "Impossibile aggiungere il file alla Libreria",
   "addToKnowledgeBase.id.placeholder": "Seleziona una libreria a cui aggiungere",
@@ -17,8 +17,8 @@
   "createNew.formTitle": "Informazioni di base",
   "createNew.name.placeholder": "Nome della libreria",
   "createNew.name.required": "Inserisci un nome per la libreria",
-  "createNew.title": "Crea nuova libreria",
-  "moveToKnowledgeBase.error": "Impossibile spostare il file nella libreria",
+  "createNew.title": "Crea nuova Libreria",
+  "moveToKnowledgeBase.error": "Impossibile spostare il file nella Libreria",
   "moveToKnowledgeBase.success": "File spostato con successo",
   "tab.evals": "Valutazioni",
   "tab.files": "File",

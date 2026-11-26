@@ -2,10 +2,32 @@ import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { useCallback } from 'react';
 import { useSWRConfig } from 'swr';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useClientDataSWR } from '@/libs/swr';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 const USAGE_KEY = 'sandbox-drive-usage';
+
+/**
+ * How many refresh calls one measurement keeps going for while a large drive
+ * is still being walked. Each call walks for up to about half a minute on the
+ * server, so this follows a walk for several minutes; past it, the measurement
+ * cron finishes the walk and the next visit shows the result.
+ */
+export const MAX_MEASURE_CALLS = 12;
+
+/**
+ * Pause between those calls. A call normally spends its time walking on the
+ * server; when another caller holds the walk it answers at once, and without
+ * a pause the loop would spend all its calls in a second.
+ */
+export const MEASURE_CALL_GAP_MS = 3000;
+
+export const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Nobody is looking: the measurement cron finishes the walk without this tab. */
+export const pageHidden = () =>
+  typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 /**
  * A refresh of a drive too large to measure in one go: the
@@ -104,6 +126,49 @@ export const useRefreshDrive = () => {
 
   return useCallback(
     () => mutate((key) => Array.isArray(key) && (key[0] === FILES_KEY || key[0] === USAGE_KEY)),
+    [mutate],
+  );
+};
+
+/**
+ * Measure a drive again after something was deleted from it, in the
+ * background.
+ *
+ * A delete only marks the stored figure stale; the usage read keeps returning
+ * the figure measured before it until something measures again. Reloading the
+ * usage alone would show the space as still taken, so walk the drive — over
+ * several calls when it is large — and reload the usage after each one. The
+ * delete has already happened: a measurement that fails leaves the old figure,
+ * and the user can still refresh it by hand.
+ */
+export const useRemeasureDrive = () => {
+  const { mutate } = useSWRConfig();
+
+  return useCallback(
+    /**
+     * `startedIn`: the workspace active when the delete began — capture it
+     * before awaiting the delete, so a switch while it runs is noticed.
+     */
+    async (drive: SandboxDrive, startedIn: string | null = getActiveWorkspaceId()) => {
+      // Requests go to whichever workspace is active: a walk for a delete made
+      // in one must not run, or carry on, in the next.
+      const workspaceId = startedIn;
+      try {
+        for (let call = 0; call < MAX_MEASURE_CALLS; call++) {
+          if (call > 0) {
+            await wait(MEASURE_CALL_GAP_MS);
+            if (pageHidden()) return;
+          }
+          if (getActiveWorkspaceId() !== workspaceId) return;
+          const result = await sandboxStorageService.refreshStorageUsage({ drive });
+          if (getActiveWorkspaceId() !== workspaceId) return;
+          await mutate((key) => Array.isArray(key) && key[0] === USAGE_KEY);
+          if (!measurementOf(result)) return;
+        }
+      } catch {
+        // Best-effort: see above.
+      }
+    },
     [mutate],
   );
 };

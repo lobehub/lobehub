@@ -1,7 +1,11 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { getDisabledPluginIds } from '@lobechat/types';
+import {
+  connectorIdentifierCandidates,
+  getDisabledPluginIds,
+  needsConnectorReauthorization,
+} from '@lobechat/types';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -30,7 +34,11 @@ import {
 } from '@/server/services/toolExecution/mcpAuthError';
 
 import { ConnectorLinkSelectionError, resolveLinkedCall } from './links';
-import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
+import {
+  buildLastSyncedAtMap,
+  connectorSyncContextForRow,
+  scheduleStaleConnectorToolsRefresh,
+} from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -107,21 +115,47 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
 /**
  * The connector an identifier names. With an agent, resolve the way that agent's
  * runs do (agent-owned > mounted > free base row); without one, keep the base
- * lookup the classic chat path has always used.
+ * lookup the classic chat path has always used (the workspace's shared rows).
  *
- * Connector rows are scoped by workspace only, so in a workspace another
- * member's private agent would resolve to its connectors and their
+ * Agent-owned and mounted rows are scoped by workspace only, so in a workspace
+ * another member's private agent would resolve to its connectors and their
  * credentials. Only an agent the caller can see may be resolved; any other id
- * reads as not found.
+ * reads as not found. A private agent's own private connectors also need the
+ * call's `topicId` to be that agent's own topic (see `ConnectorRunTarget`).
+ *
+ * The one resolution every connector call runs on, including a desktop that
+ * runs a stdio connector itself (`connector.getForRun`): which row serves a
+ * conversation is decided here, never by the client.
  */
-const findConnector = async (
-  params: { agentId?: string; identifier: string },
-  ctx: ConnectorExecContext,
+export const resolveConnectorForRun = async (
+  params: {
+    agentId?: string;
+    /**
+     * The tool prefix the call names (`connectorToolIdentifier`): a private or
+     * personal row is a tool set of its own beside the shared row of its
+     * connector, and only the row the prefix belongs to answers.
+     */
+    identifier: string;
+    topicId?: string;
+  },
+  ctx: Pick<ConnectorExecContext, 'agentModel' | 'connectorModel'>,
 ) => {
-  if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
+  // Without an agent only shared rows resolve, each under its identifier
+  if (!params.agentId)
+    return (await ctx.connectorModel.queryByIdentifiers([params.identifier])).map((row) => ({
+      ...row,
+      toolIdentifier: row.identifier,
+    }));
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
-  return ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId);
+  const rows = await ctx.connectorModel.resolveToolSets(
+    { agentId: params.agentId, topicId: params.topicId },
+    connectorIdentifierCandidates(params.identifier),
+  );
+  const matches = rows.filter((row) => row.toolIdentifier === params.identifier);
+  // Prefixes are collision-free within a run (`connectorToolIdentifier`); an
+  // ambiguous one runs nothing rather than a guess at whose account
+  return matches.length === 1 ? matches : [];
 };
 
 /**
@@ -192,18 +226,23 @@ export const callConnectorToolById = async (
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
-    /** The conversation the call runs in, reported as the call's session. */
+    /**
+     * The conversation the call runs in, reported as the call's session. It also
+     * decides whether a private agent's private connectors resolve; see
+     * {@link resolveConnectorForRun}.
+     */
     topicId?: string;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
-  const [connector] = await findConnector(params, ctx);
+  const [connector] = await resolveConnectorForRun(params, ctx);
+  // The agent's configuration names the connector, not the row's tool prefix
   if (
     params.fromEntrypoint &&
     params.agentId &&
     getDisabledPluginIds(
       (await ctx.agentModel.getAgentConfigById(params.agentId))?.plugins ?? undefined,
-    ).includes(params.identifier)
+    ).includes(connector?.identifier ?? params.identifier)
   )
     throw new ConnectorToolCallError('FORBIDDEN', 'This app is disabled for the agent');
   if (!connector) {
@@ -258,19 +297,24 @@ export const callConnectorToolById = async (
   // throttled, and deferred — reuses the `tools` rows already loaded above.
   // Wrapped defensively: this is a pure optimization and must never break the
   // tool call, even if the scheduler itself throws.
+  // A personal row a private agent's workspace run resolved refreshes through
+  // its own scope (`connectorSyncContextForRow`).
   try {
-    scheduleStaleConnectorToolsRefresh(
-      [
-        {
-          id: connector.id,
-          mcpConnectionType: connector.mcpConnectionType,
-          mcpServerUrl: connector.mcpServerUrl,
-          metadata: connector.metadata,
-        },
-      ],
-      buildLastSyncedAtMap(tools),
-      ctx,
-    );
+    const refreshContext = connectorSyncContextForRow(ctx, connector, ctx.serverDB);
+    if (refreshContext) {
+      scheduleStaleConnectorToolsRefresh(
+        [
+          {
+            id: connector.id,
+            mcpConnectionType: connector.mcpConnectionType,
+            mcpServerUrl: connector.mcpServerUrl,
+            metadata: connector.metadata,
+          },
+        ],
+        buildLastSyncedAtMap(tools),
+        { ...refreshContext, userId: ctx.userId },
+      );
+    }
   } catch {
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
@@ -388,6 +432,17 @@ const resolveCallAccount = async (
     const fresh = resolved.linkId
       ? resolved.connector
       : await ensureFreshConnectorToken(connector, ctx.connectorModel);
+    if (needsConnectorReauthorization(fresh.credentials)) {
+      return {
+        failure: failedToolResult(
+          buildMcpAuthorizationErrorContent(connector.identifier, {
+            isShareVisitor: false,
+            linkName: resolved.linkName,
+          }),
+          'AUTHORIZATION_ERROR',
+        ),
+      };
+    }
     return { argsStr: resolved.argsStr, fresh, linkName: resolved.linkName };
   } catch (error) {
     if (error instanceof ConnectorLinkSelectionError)
@@ -524,14 +579,21 @@ const runConnectorToolOnBoundDevice = async (
  */
 export const readConnectorUiResourceById = async (
   /** `server`: the server the result came from; the view is read from no other. */
-  params: { agentId?: string; identifier: string; server: string; uri: string; linkId?: string },
+  params: {
+    agentId?: string;
+    identifier: string;
+    linkId?: string;
+    server: string;
+    topicId?: string;
+    uri: string;
+  },
   ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppsEnabled(ctx.userId))) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
   }
 
-  const [connector] = await findConnector(params, ctx);
+  const [connector] = await resolveConnectorForRun(params, ctx);
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }

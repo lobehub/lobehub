@@ -93,6 +93,10 @@ export const MemoryManifest: BuiltinToolManifest = {
     {
       description:
         'Retrieve memories using one or more search queries plus optional filters for categories, tags, labels, relationships, and time range. Context memories (ongoing projects, situations, environments) may be left out of default searches depending on the memory effort setting; to be sure to get them, include "context" in layers or set topK.contexts.',
+      // One reply once ran 500 searches, each with a rephrased query, and
+      // never answered. 20 leaves room for a multi-part question searched one
+      // intent at a time; past it the model is told to answer with what it has.
+      maxCallsPerOperation: 20,
       name: MemoryApiName.searchUserMemory,
       parameters: {
         additionalProperties: false,

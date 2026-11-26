@@ -16,6 +16,7 @@ import {
 } from '../../../schemas/userMemories';
 import { workspaces } from '../../../schemas/workspace';
 import type { LobeChatDatabase } from '../../../type';
+import { describeFtsSearchFileContentBehavior } from '../__tests__/fileContentBehavior';
 import {
   describeFtsSearchProductBehavior,
   otherUserId,
@@ -49,6 +50,7 @@ const createRepo = (
 describe('FtsSearchRepo (pg_like)', () => {
   describeFtsSearchProductBehavior({ createRepo, db: serverDB });
   describeFtsSearchTimeRangeBehavior({ createRepo, db: serverDB, supportsCandidates: true });
+  describeFtsSearchFileContentBehavior({ createRepo, db: serverDB });
 
   describe('LIKE wildcard escaping', () => {
     beforeEach(async () => {

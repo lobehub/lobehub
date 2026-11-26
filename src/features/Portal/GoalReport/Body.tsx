@@ -8,6 +8,7 @@ import { chapterMap } from '@/features/AgentGoals/ProcessControl/Graph/chapterMa
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { useReportChapter, useReportGraph } from './useReportGraph';
 
@@ -24,7 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
    */
   detour: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px dashed ${cssVar.colorWarningBorder};
     border-radius: ${cssVar.borderRadius};
   `,

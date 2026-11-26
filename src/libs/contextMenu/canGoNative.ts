@@ -8,7 +8,13 @@ const isNativeSafe = (item: NativeContextMenuItem): boolean => {
   if (item === null) return true;
   if (item.type === 'switch') return false;
 
-  if ('extra' in item && item.extra) return false;
+  // A plain-text `extra` (a row's current value, e.g. "Visibility · Private")
+  // maps to the native sublabel, which only has room for it when there is no
+  // `desc`. Rich extras (icons, hotkeys) have no native counterpart.
+  if ('extra' in item && item.extra) {
+    if (typeof item.extra !== 'string') return false;
+    if ('desc' in item && item.desc) return false;
+  }
   if ('loading' in item && item.loading) return false;
   if ('closeOnClick' in item && item.closeOnClick === false) return false;
 

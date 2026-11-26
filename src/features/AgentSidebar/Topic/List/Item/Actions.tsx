@@ -13,10 +13,10 @@ interface ActionsProps extends TopicItemDropdownMenuProps {
 }
 
 const Actions = memo<ActionsProps>(
-  ({ completionLabel, fav, id, showInlineArchive, status, title }) => {
+  ({ completionLabel, fav, id, onRename, showInlineArchive, status, title }) => {
     const { t } = useTranslation('topic');
     const { canInlineArchive, dropdownMenu, isCompleted, toggleCompleted } =
-      useTopicItemDropdownMenu({ completionLabel, fav, id, status, title });
+      useTopicItemDropdownMenu({ completionLabel, fav, id, onRename, status, title });
     const dropdownPortalProps = useOverlayDropdownPortalProps();
 
     return (

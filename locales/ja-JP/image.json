@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "シード",
   "config.seed.random": "ランダムシード",
+  "config.size.autoByOpenAI": "自動（OpenAI により決定）",
   "config.size.label": "サイズ",
   "config.steps.label": "ステップ数",
   "config.title": "設定",

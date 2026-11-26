@@ -1,4 +1,9 @@
-import type { ConnectorAuthKind, ConnectorLinkProfile, ConnectorLinkStatus } from '@lobechat/types';
+import type {
+  ConnectorAuthKind,
+  ConnectorLinkProfile,
+  ConnectorLinkStatus,
+  ConnectorVisibility,
+} from '@lobechat/types';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 
@@ -38,9 +43,19 @@ export interface ConnectorWithTools {
   name: string;
   sourceType: string;
   status: string;
+  /**
+   * The row's tool prefix, when the server resolved it for a run
+   * (`connector.listForRun`); otherwise derived with `connectorToolIdentifier`.
+   */
+  toolIdentifier?: string;
   tools: ConnectorTool[];
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
+  /**
+   * Workspace only: `private` is the creator's own connector, offered only to
+   * their private agents. Absent on rows from older servers (shared).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 export interface ConnectorLinkSummary {

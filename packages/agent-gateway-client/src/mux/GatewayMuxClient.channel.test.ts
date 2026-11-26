@@ -33,7 +33,9 @@ describe('Gateway public Channel notifications', () => {
       getToken: async () => 'token',
     });
     const changed = vi.fn();
+    const userChanged = vi.fn();
     const off = mux.on('channel_changed', changed);
+    const offUser = mux.on('user_changed', userChanged);
     try {
       const connected = mux.connect();
       await vi.waitFor(() => expect(sockets[0]).toBeDefined());
@@ -45,9 +47,16 @@ describe('Gateway public Channel notifications', () => {
       socket.receive(event);
       expect(changed).toHaveBeenCalledExactlyOnceWith(event);
       expect(socket.sent.some((message) => JSON.parse(message).type === 'subscribe')).toBe(false);
-      off();
-      socket.receive(event);
+      const userEvent = { type: 'user_changed', topic: 'contacts' };
+      socket.receive(userEvent);
+      expect(userChanged).toHaveBeenCalledExactlyOnceWith(userEvent);
       expect(changed).toHaveBeenCalledTimes(1);
+      off();
+      offUser();
+      socket.receive(event);
+      socket.receive(userEvent);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(userChanged).toHaveBeenCalledTimes(1);
     } finally {
       mux.disconnect();
     }

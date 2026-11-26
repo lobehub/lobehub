@@ -7,32 +7,22 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
-import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+import { densityTokens } from '@/styles/density.stylex';
 
+// A quiet key–value list: labels in a fixed column, no boxes or row rules.
 const styles = stylex.create({
   label: {
     color: cssVar.colorTextTertiary,
     flexShrink: 0,
-    fontSize: 13,
-    width: 96,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    width: 160,
   },
   list: {
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    paddingBlock: 4,
-    paddingInline: 12,
+    display: 'flex',
+    flexDirection: 'column',
   },
   row: {
-    borderBlockEndColor: {
-      ':last-child': 'transparent',
-      'default': cssVar.colorBorderSecondary,
-    },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
     minHeight: 40,
   },
 });
@@ -76,18 +66,12 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
 
   const kind = getConnectorKind(connector);
   const isBuiltin = kind === 'builtin';
-  // Uninstalling a built-in only records it in a user preference; the connector
-  // row stays, so read the same installation state the list shows.
-  const isBuiltinInstalled = useToolStore(
-    builtinToolSelectors.isBuiltinToolInstalled(connector.identifier),
-  );
-  const status = isBuiltin
-    ? isBuiltinInstalled
-      ? { color: 'success' as const, label: t('connector.enabled') }
-      : { label: t('tools.builtins.uninstalled', { ns: 'setting' }) }
-    : // Disconnect only clears `isEnabled` and leaves the stored status (connected
-      // or error) behind, so a disabled connector reads not connected first.
-      !connector.isEnabled
+  // Bundled tools have no library authorization or installation status.
+  if (isBuiltin) return null;
+
+  const status = // Disconnect only clears `isEnabled` and leaves the stored status (connected
+    // or error) behind, so a disabled connector reads not connected first.
+    !connector.isEnabled
       ? { label: t('connector.notConnected') }
       : connector.status === ConnectorStatus.connected
         ? { color: 'success' as const, label: t('connector.connected') }

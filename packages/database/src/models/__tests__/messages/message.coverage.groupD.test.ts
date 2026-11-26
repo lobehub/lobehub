@@ -236,18 +236,7 @@ describe('updateToolMessage guards', () => {
   });
 });
 
-describe('toVisitorMessage model-info passthrough', () => {
-  it('keeps pinnedMessages untouched when the share exposes model info', () => {
-    const pinnedMessages = [{ content: 'p', id: 'pin-1', model: 'gpt-4o', role: 'assistant' }];
-
-    const visitor = toVisitorMessage(
-      { content: 'c', id: 'm', pinnedMessages, role: 'assistant' } as unknown as UIChatMessage,
-      { showModelInfo: true },
-    );
-
-    expect(visitor.pinnedMessages).toBe(pinnedMessages);
-  });
-
+describe('toVisitorMessage council projection', () => {
   it('projects a null council to an empty member list', () => {
     const visitor = toVisitorMessage({
       content: 'c',

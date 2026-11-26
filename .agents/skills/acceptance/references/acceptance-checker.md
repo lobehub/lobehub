@@ -71,7 +71,9 @@ and compare them with the draft cases and supplied diff. State coverage limits
 when sources are incomplete. Look for missing boundaries, ambiguous
 criteria, and probes that cannot distinguish success from failure. Check how
 fixtures/fault injections will be proven effective, and that each case
-changing existing UI requires a before/after comparison pair. Also identify
+changing existing UI requires a before/after comparison pair. Flag a visual
+case whose fixture data is missing or smaller than real use (one group, one
+item, short titles, an empty settings page) unless that state is the criterion. Also identify
 duplicate or out-of-scope cases; review must not only expand scope.
 Check that groups reflect independently reviewable user tasks and that each check
 can be accepted or rejected on its own. For flow plans, inspect flow titles as
@@ -161,7 +163,8 @@ by the old inspection.
 
 Follow-up rounds have no independent checker gate. The primary repairs code and
 coordinates the existing runner's affected cases, assigning each new artifact
-to one capable inspector. Preserve its attributable inspection record and disclose
+to one capable inspector. Before a visual case is recaptured, its fixture data
+is written into that round's review notes ([report.md](report.md#workflow)). Preserve its attributable inspection record and disclose
 changes in the narrative tail. Preserve
 unaffected results with their original provenance. If scope,
 surface, or business goal materially changes, it obtains any user-owned decision

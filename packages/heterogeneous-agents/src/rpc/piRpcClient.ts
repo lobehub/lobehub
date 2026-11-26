@@ -220,7 +220,7 @@ export class PiRpcClient {
           plan.args,
           {
             cwd: this.options.cwd,
-            env: this.options.env,
+            env: plan.env ?? this.options.env,
             killSignal: 'SIGKILL',
             signal: this.probeAbort.signal,
             timeout: 5000,

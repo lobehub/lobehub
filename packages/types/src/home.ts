@@ -156,5 +156,12 @@ export interface SidebarAgentListResponse {
    * user. Empty array in personal mode.
    */
   privateUngrouped: SidebarAgentItem[];
+  /**
+   * Workspace-only: the Agents / chat groups owners and admins recommend to
+   * every member, in their order. New members start with them in their
+   * sidebar (unpinned); the Agents page lists them on top. Absent in personal
+   * mode.
+   */
+  recommendedIds?: string[];
   ungrouped: SidebarAgentItem[];
 }

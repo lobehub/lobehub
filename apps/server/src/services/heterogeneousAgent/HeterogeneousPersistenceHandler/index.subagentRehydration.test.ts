@@ -133,7 +133,7 @@ const createHarness = (params: {
         return match?.id;
       },
     ),
-    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => {
+    listToolCallIndexByTopic: vi.fn(async (_topicId: string) => {
       // Mirror the real query: every persisted tool row's (toolCallId → id).
       return [...messages.values()]
         .filter((m) => m.role === 'tool' && m.tool_call_id)

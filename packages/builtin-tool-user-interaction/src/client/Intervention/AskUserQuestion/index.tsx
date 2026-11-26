@@ -100,15 +100,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   }
 
   const labels = {
+    addNote: t('askUserQuestion.note.add'),
     customPlaceholder: t('askUserQuestion.customOption.placeholder'),
-    escapeBack: t('askUserQuestion.escape.back'),
-    escapeEnter: t('askUserQuestion.escape.enter'),
-    escapePlaceholder: t('askUserQuestion.escape.placeholder'),
-    multiSelectTag: t('askUserQuestion.multiSelectTag'),
+    next: (title: string) => t('askUserQuestion.next', { title }),
+    noteLabel: t('askUserQuestion.note.label'),
+    progress: (answered: number, total: number) =>
+      t('askUserQuestion.progress', { answered, total }),
     recommendedTag: t('askUserQuestion.recommendedTag'),
     skip: t('askUserQuestion.skip'),
     submit: t('askUserQuestion.submit'),
-    supplementEnter: t('askUserQuestion.supplement.enter'),
+    removeNote: t('askUserQuestion.note.remove'),
+    sendNoteOnly: t('askUserQuestion.note.sendOnly'),
     supplementPlaceholder: t('askUserQuestion.supplement.placeholder'),
     timeExpired: '',
     timeExpiredNoAnswer: '',

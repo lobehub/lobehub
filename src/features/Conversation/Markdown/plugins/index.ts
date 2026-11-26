@@ -18,6 +18,7 @@ import Thinking from './Thinking';
 import Tool from './Tool';
 import { type MarkdownElement } from './type';
 import UserFeedback from './UserFeedback';
+import WebhookEvent from './WebhookEvent';
 
 export type { MarkdownElement } from './type';
 
@@ -34,6 +35,7 @@ export const markdownElements: MarkdownElement[] = [
   Task,
   ScmEvent,
   McpEvent,
+  WebhookEvent,
   GoalTurn,
   UserFeedback,
   ImageSearchRef,

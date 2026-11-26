@@ -1,4 +1,3 @@
-import { toast } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,10 +16,16 @@ export const useLogoUpload = () => {
   const { t } = useTranslation('auth');
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [uploading, setUploading] = useState(false);
+  /**
+   * Why the last upload was refused or failed. The form that owns the logo control stays open,
+   * so it renders this next to the control instead of a corner toast; it clears on the next try.
+   */
+  const [error, setError] = useState('');
 
   const upload = async (file: File): Promise<string | undefined> => {
+    setError('');
     if (file.size > MAX_LOGO_SIZE) {
-      toast.error(t('oauthApp.form.logo.tooLarge'));
+      setError(t('oauthApp.form.logo.tooLarge'));
       return;
     }
 
@@ -28,19 +33,19 @@ export const useLogoUpload = () => {
     try {
       const result = await uploadWithProgress({ file });
       if (!result?.url) {
-        toast.error(t('oauthApp.form.logo.uploadFailed'));
+        setError(t('oauthApp.form.logo.uploadFailed'));
         return;
       }
 
       // Local storage returns a path; the provider needs an absolute URL.
       return result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url;
-    } catch (error) {
-      console.error('[OAuthApps] Logo upload failed:', error);
-      toast.error(t('oauthApp.form.logo.uploadFailed'));
+    } catch (err) {
+      console.error('[OAuthApps] Logo upload failed:', err);
+      setError(t('oauthApp.form.logo.uploadFailed'));
     } finally {
       setUploading(false);
     }
   };
 
-  return { upload, uploading };
+  return { error, upload, uploading };
 };

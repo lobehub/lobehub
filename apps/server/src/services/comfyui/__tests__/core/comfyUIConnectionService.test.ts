@@ -1,14 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as SSRFSafeFetchModule from '@lobechat/ssrf-safe-fetch';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ComfyUIConnectionService } from '@/server/services/comfyui/core/comfyUIConnectionService';
 import { ServicesError } from '@/server/services/comfyui/errors';
 
-// Mock global fetch
-global.fetch = vi.fn();
+vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => {
+  const mod = await importOriginal<typeof SSRFSafeFetchModule>();
+  return { ...mod, ssrfSafeFetch: vi.fn() };
+});
+
+const realSsrfSafeFetch = async () =>
+  (await vi.importActual<typeof SSRFSafeFetchModule>('@lobechat/ssrf-safe-fetch')).ssrfSafeFetch;
 
 describe('ComfyUIConnectionService', () => {
   let service: ComfyUIConnectionService;
-  const mockFetch = vi.mocked(fetch);
+  const mockFetch = vi.mocked(ssrfSafeFetch);
 
   beforeEach(() => {
     service = new ComfyUIConnectionService();
@@ -282,6 +289,30 @@ describe('ComfyUIConnectionService', () => {
         method: 'GET',
         mode: 'cors',
       });
+    });
+  });
+
+  describe('SSRF boundary', () => {
+    beforeEach(async () => {
+      vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', undefined);
+      vi.stubEnv('SSRF_ALLOW_PRIVATE_IP_ADDRESS', undefined);
+      mockFetch.mockImplementation(await realSsrfSafeFetch());
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      'http://169.254.169.254:8188',
+      'http://127.0.0.1:8188',
+      'http://10.0.0.1:8188',
+      'http://192.168.1.1:8188',
+      'http://[::1]:8188',
+    ])('rejects validation against %s', async (blockedBaseURL) => {
+      await expect(service.validateConnection(blockedBaseURL)).rejects.toThrow(/SSRF blocked/);
+      expect(service.isValidated()).toBe(false);
     });
   });
 });

@@ -113,7 +113,7 @@ describe('MessengerLinqBinder.handleUnlinkedMessage', () => {
     expect(mocks.upsertForPlatform).not.toHaveBeenCalled();
     expect(mocks.sendText).toHaveBeenCalledWith(
       'chat_1',
-      expect.stringContaining('https://app.test/settings/messenger/linq'),
+      expect.stringContaining('https://app.test/marketplace/app/linq'),
     );
   });
 

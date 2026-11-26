@@ -23,6 +23,7 @@ export const BACKGROUND_OPERATION_TRIGGERS: ReadonlySet<string> = new Set<string
   RequestTrigger.Task,
   RequestTrigger.TaskCallback,
   RequestTrigger.Verify,
+  RequestTrigger.Webhook,
 ]);
 
 export const isForegroundOperationTrigger = (trigger: string | null | undefined): boolean =>

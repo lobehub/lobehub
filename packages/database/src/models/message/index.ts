@@ -38,6 +38,7 @@ export class MessageModel {
   findLatestUserTurnHop: MessageLookupQueries['findLatestUserTurnHop'];
   findVerifyMessageByOperationId: MessageLookupQueries['findVerifyMessageByOperationId'];
   findLatestAssistantByOperationId: MessageLookupQueries['findLatestAssistantByOperationId'];
+  listToolStatesByOperationId: MessageLookupQueries['listToolStatesByOperationId'];
   listLatestTurnAssistantContents: MessageLookupQueries['listLatestTurnAssistantContents'];
   getThreadParentMessages: MessageLookupQueries['getThreadParentMessages'];
   findMessageQueriesById: MessageLookupQueries['findMessageQueriesById'];
@@ -47,13 +48,13 @@ export class MessageModel {
   searchByKeyword: MessageKeywordSearchQueries['searchByKeyword'];
 
   queryByIds: MessageByIdsQueries['queryByIds'];
+  queryCompressedGroupMembers: MessageByIdsQueries['queryCompressedGroupMembers'];
 
   queryWithWhere: MessagePageQueries['queryWithWhere'];
 
   queryLastUserMessageByTopics: MessageConversationQueries['queryLastUserMessageByTopics'];
   query: MessageConversationQueries['query'];
   queryForVisitor: MessageConversationQueries['queryForVisitor'];
-  countByTopic: MessageConversationQueries['countByTopic'];
   queryTopicTranscript: MessageConversationQueries['queryTopicTranscript'];
   queryTopicMessageTree: MessageConversationQueries['queryTopicMessageTree'];
   queryTopicMessagesByCursor: MessageConversationQueries['queryTopicMessagesByCursor'];
@@ -85,10 +86,12 @@ export class MessageModel {
   restoreHumanApproval: MessageApprovalRepo['restore'];
   findMessagePlugin: MessagePluginStore['findMessagePlugin'];
   listMessagePluginsByTopic: MessagePluginStore['listMessagePluginsByTopic'];
+  listToolCallIndexByTopic: MessagePluginStore['listToolCallIndexByTopic'];
   findLatestPluginStateInTopic: MessagePluginStore['findLatestPluginStateInTopic'];
   listToolCallsInTopics: MessagePluginStore['listToolCallsInTopics'];
   listMessagePluginsForOperation: MessagePluginStore['listMessagePluginsForOperation'];
   listMessagePluginsByIds: MessagePluginStore['listMessagePluginsByIds'];
+  getInterventionSnapshot: MessagePluginStore['getInterventionSnapshot'];
   findToolMessageIdByToolCallId: MessagePluginStore['findToolMessageIdByToolCallId'];
 
   updateToolMessage: MessageToolMutations['updateToolMessage'];
@@ -160,6 +163,7 @@ export class MessageModel {
     this.findLatestUserTurnHop = lookups.findLatestUserTurnHop;
     this.findVerifyMessageByOperationId = lookups.findVerifyMessageByOperationId;
     this.findLatestAssistantByOperationId = lookups.findLatestAssistantByOperationId;
+    this.listToolStatesByOperationId = lookups.listToolStatesByOperationId;
     this.listLatestTurnAssistantContents = lookups.listLatestTurnAssistantContents;
     this.getThreadParentMessages = lookups.getThreadParentMessages;
     this.findMessageQueriesById = lookups.findMessageQueriesById;
@@ -168,11 +172,11 @@ export class MessageModel {
     this.searchInTopic = lookups.searchInTopic;
     this.searchByKeyword = keywordSearch.searchByKeyword;
     this.queryByIds = byIds.queryByIds;
+    this.queryCompressedGroupMembers = byIds.queryCompressedGroupMembers;
     this.queryWithWhere = page.queryWithWhere;
     this.queryLastUserMessageByTopics = conversation.queryLastUserMessageByTopics;
     this.query = conversation.query;
     this.queryForVisitor = conversation.queryForVisitor;
-    this.countByTopic = conversation.countByTopic;
     this.queryTopicTranscript = conversation.queryTopicTranscript;
     this.queryTopicMessageTree = conversation.queryTopicMessageTree;
     this.queryTopicMessagesByCursor = conversation.queryTopicMessagesByCursor;
@@ -204,10 +208,12 @@ export class MessageModel {
     this.restoreHumanApproval = approvals.restore;
     this.findMessagePlugin = plugins.findMessagePlugin;
     this.listMessagePluginsByTopic = plugins.listMessagePluginsByTopic;
+    this.listToolCallIndexByTopic = plugins.listToolCallIndexByTopic;
     this.findLatestPluginStateInTopic = plugins.findLatestPluginStateInTopic;
     this.listToolCallsInTopics = plugins.listToolCallsInTopics;
     this.listMessagePluginsForOperation = plugins.listMessagePluginsForOperation;
     this.listMessagePluginsByIds = plugins.listMessagePluginsByIds;
+    this.getInterventionSnapshot = plugins.getInterventionSnapshot;
     this.findToolMessageIdByToolCallId = plugins.findToolMessageIdByToolCallId;
     this.updateToolMessage = tools.updateToolMessage;
     this.updateToolArguments = tools.updateToolArguments;

@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import {
   agentLabelAssignments,
@@ -41,13 +42,13 @@ describe('the main agent a project creates', () => {
   const repo = new ProjectRepository(serverDB, userId);
 
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values([{ id: userId }, { id: memberId }]);
   });
 
   afterEach(async () => {
+    await deleteTestUsers(serverDB);
     await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await serverDB.delete(users);
   });
 
   it('is an ordinary agent named after the project, wearing its avatar and the Project label', async () => {

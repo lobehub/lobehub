@@ -20,7 +20,7 @@ import {
 // The SCM event card's anatomy and tokens (status line with a pill, hairline
 // rows, folded log, quiet instruction footer), so the two kinds of wake-up
 // message read as one family.
-const styles = stylex.create({
+export const eventCardStyles = stylex.create({
   body: { paddingBlock: '2px', paddingInline: 0 },
   data: {
     overflow: 'auto',
@@ -125,7 +125,7 @@ const styles = stylex.create({
   },
 });
 
-const Pill = ({
+export const EventPill = ({
   children,
   tone,
 }: {
@@ -134,12 +134,12 @@ const Pill = ({
 }) => (
   <span
     {...stylex.props(
-      styles.pill,
+      eventCardStyles.pill,
       tone === 'danger'
-        ? styles.pillDanger
+        ? eventCardStyles.pillDanger
         : tone === 'warning'
-          ? styles.pillWarning
-          : styles.pillEvent,
+          ? eventCardStyles.pillWarning
+          : eventCardStyles.pillEvent,
     )}
   >
     {children}
@@ -151,29 +151,34 @@ const Pill = ({
  * the full data folded out underneath on request. The data is untrusted text
  * from the connector, so it renders as text in a `<pre>`, never as markup.
  */
-const EventRow = memo<{ event: McpEventItem; leading?: ReactNode }>(({ event, leading }) => {
+export const EventRow = memo<{
+  event: McpEventItem;
+  /** How the data reads collapsed and expanded; defaults to the data as JSON. */
+  format?: (data: string) => { preview: string; pretty: string };
+  leading?: ReactNode;
+}>(({ event, format = formatEventData, leading }) => {
   const { t } = useTranslation('integration');
   const [open, setOpen] = useState(false);
-  const data = useMemo(() => formatEventData(event.data), [event.data]);
+  const data = useMemo(() => format(event.data), [event.data, format]);
   const time = formatEventTime(event.timestamp);
 
   return (
-    <Flexbox gap={4} {...stylex.props(styles.row)}>
+    <Flexbox gap={4} {...stylex.props(eventCardStyles.row)}>
       <Flexbox horizontal align={'center'} gap={8}>
         {leading}
         {time && (
-          <span title={event.timestamp} {...stylex.props(styles.time)}>
+          <span title={event.timestamp} {...stylex.props(eventCardStyles.time)}>
             {time}
           </span>
         )}
-        <span title={data.preview} {...stylex.props(styles.preview)}>
+        <span title={data.preview} {...stylex.props(eventCardStyles.preview)}>
           {data.preview}
         </span>
         {event.data && (
           <button
             aria-expanded={open}
             type={'button'}
-            {...stylex.props(styles.toggle)}
+            {...stylex.props(eventCardStyles.toggle)}
             onClick={() => setOpen((value) => !value)}
           >
             {open ? t('mcpEvent.hideData') : t('mcpEvent.showData')}
@@ -185,7 +190,7 @@ const EventRow = memo<{ event: McpEventItem; leading?: ReactNode }>(({ event, le
           </button>
         )}
       </Flexbox>
-      {open && <pre {...stylex.props(styles.data)}>{data.pretty}</pre>}
+      {open && <pre {...stylex.props(eventCardStyles.data)}>{data.pretty}</pre>}
     </Flexbox>
   );
 });
@@ -213,7 +218,7 @@ const Render = memo<MarkdownElementProps<McpEventAttributes>>(({ children, node 
     [event, text, truncated],
   );
 
-  const eventPill = card.eventName ? <Pill tone={'event'}>{card.eventName}</Pill> : null;
+  const eventPill = card.eventName ? <EventPill tone={'event'}>{card.eventName}</EventPill> : null;
   const countText = card.count
     ? [
         t('mcpEvent.eventCount', { count: card.count.total }),
@@ -224,26 +229,28 @@ const Render = memo<MarkdownElementProps<McpEventAttributes>>(({ children, node 
     : undefined;
 
   return (
-    <div {...stylex.props(styles.root)}>
-      <div {...stylex.props(styles.body)}>
+    <div {...stylex.props(eventCardStyles.root)}>
+      <div {...stylex.props(eventCardStyles.body)}>
         {card.notice && (
-          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.row)}>
-            <Pill tone={'danger'}>
+          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(eventCardStyles.row)}>
+            <EventPill tone={'danger'}>
               {t(`mcpEvent.notice.${card.notice.kind}` as any, {
                 defaultValue: t('mcpEvent.notice.subscription_terminated'),
               })}
-            </Pill>
+            </EventPill>
             {card.notice.namesEvent && eventPill}
             <Text type={'secondary'}>
-              {t(`mcpEvent.noticeReason.${card.notice.reason}` as any, {
-                defaultValue: t('mcpEvent.noticeReason.unknown'),
-              })}
+              {card.notice.reason === 'access_revoked'
+                ? t('mcpEvent.noticeReason.reconnectToResubscribe')
+                : t(`mcpEvent.noticeReason.${card.notice.reason}` as any, {
+                    defaultValue: t('mcpEvent.noticeReason.unknown'),
+                  })}
             </Text>
           </Flexbox>
         )}
         {card.single && <EventRow event={card.single} leading={eventPill} />}
         {countText && (
-          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.row)}>
+          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(eventCardStyles.row)}>
             {eventPill}
             <Text type={'secondary'}>{countText}</Text>
           </Flexbox>
@@ -252,19 +259,21 @@ const Render = memo<MarkdownElementProps<McpEventAttributes>>(({ children, node 
           <EventRow event={event} key={event.id} />
         ))}
         {card.onlyEventName && (
-          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.row)}>
+          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(eventCardStyles.row)}>
             {eventPill}
           </Flexbox>
         )}
         {card.truncated && (
-          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.row)}>
-            <Pill tone={'warning'}>{t('mcpEvent.truncated')}</Pill>
+          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(eventCardStyles.row)}>
+            <EventPill tone={'warning'}>{t('mcpEvent.truncated')}</EventPill>
             <Text type={'secondary'}>{t('mcpEvent.truncatedDesc')}</Text>
           </Flexbox>
         )}
       </div>
 
-      {card.instruction && <div {...stylex.props(styles.instruction)}>{card.instruction}</div>}
+      {card.instruction && (
+        <div {...stylex.props(eventCardStyles.instruction)}>{card.instruction}</div>
+      )}
     </div>
   );
 });

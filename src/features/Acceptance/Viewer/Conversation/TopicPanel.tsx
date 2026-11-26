@@ -1,10 +1,11 @@
 'use client';
 
-import { ActionIcon, Avatar, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { TopicChatDrawerBody } from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 
 import type { OriginTopicPanelProps } from './originConversation';

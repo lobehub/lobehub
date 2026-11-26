@@ -8,6 +8,7 @@ import { withStaleReposCleared } from '@/database/models/task/utils';
 import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
+import { takeTaskArtboardsOffline } from '@/server/services/artboard/taskCleanup';
 import { EditLockService } from '@/server/services/editLock';
 
 import { AiAgentService } from '../aiAgent';
@@ -647,6 +648,16 @@ export class TaskBatchService {
       return deleted;
     });
     result.updated.push(...deletedIdle);
+    if (deletedIdle.length > 0) {
+      try {
+        await takeTaskArtboardsOffline(
+          { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+          deletedIdle,
+        );
+      } catch (error) {
+        console.error('[task:batchDelete] Artboard share teardown failed', error);
+      }
+    }
     if (removedTopicIds.length > 0) {
       try {
         await removeByTopics(this.db, { userId: this.userId, workspaceId: this.workspaceId }, [

@@ -256,3 +256,52 @@ describe('assembleManifestPool', () => {
     warn.mockRestore();
   });
 });
+
+describe('connector rows sharing an identifier', () => {
+  const tools = [{ permission: 'auto', toolName: 'create_issue' }];
+  const shared = buildConnectorManifest({
+    id: 'c-shared',
+    identifier: 'github',
+    isEnabled: true,
+    name: 'GitHub',
+    toolIdentifier: 'github',
+    tools,
+  })!;
+  const mine = buildConnectorManifest({
+    id: 'c-mine',
+    identifier: 'github',
+    isEnabled: true,
+    name: 'GitHub',
+    toolIdentifier: 'github-3f9a1c2e',
+    tools,
+  })!;
+
+  it("keys each row's manifest by its tool prefix and names the row and its connector", () => {
+    expect(mine.identifier).toBe('github-3f9a1c2e');
+    expect(mine.connector).toEqual({ id: 'c-mine', identifier: 'github' });
+    expect(mine.meta.description).toBe('GitHub connector (your own connection) with 1 tools');
+    expect(shared.meta.description).toBe('GitHub connector with 1 tools');
+  });
+
+  it('replaces the plugin and follows the exclusion of the connector they serve', () => {
+    const pool = assembleManifestPool({
+      connectors: [shared, mine],
+      installedPlugins: [manifest('github')],
+    });
+    expect(pool.manifests.map((m) => m.identifier)).toEqual(['github', 'github-3f9a1c2e']);
+    expect([...pool.connectorIdentifiers]).toEqual(['github']);
+
+    // A private-only connector still replaces the same-named plugin
+    expect(
+      assembleManifestPool({
+        connectors: [mine],
+        installedPlugins: [manifest('github')],
+      }).manifests.map((m) => m.identifier),
+    ).toEqual(['github-3f9a1c2e']);
+
+    expect(
+      assembleManifestPool({ connectors: [shared, mine] }, { excludedIdentifiers: ['github'] })
+        .manifests,
+    ).toEqual([]);
+  });
+});

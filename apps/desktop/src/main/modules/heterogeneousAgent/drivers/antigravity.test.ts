@@ -1,32 +1,13 @@
-import { buildAgentInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it } from 'vitest';
 
 import { getHeterogeneousAgentDriver } from '../index';
 import { antigravityDriver } from './antigravity';
 
 describe('antigravityDriver', () => {
-  it('registers the native driver and resumes using text on stdin', async () => {
+  it('is registered and routes prompts through the native ACP session', async () => {
     expect(getHeterogeneousAgentDriver('antigravity')).toBe(antigravityDriver);
-    const plan = await antigravityDriver.buildSpawnPlan({
-      args: ['--effort', 'high'],
-      helpers: { buildAgentInput },
-      promptInput: 'hello\nworld',
-      resumeSessionId: 'conv-1',
-    });
-    expect(plan.args).toEqual([
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
-      '--dangerously-skip-permissions',
-      '--conversation',
-      'conv-1',
-      '--effort',
-      'high',
-    ]);
-    expect(JSON.parse(plan.stdinPayload!)).toEqual({
-      event: 'user',
-      message: { content: 'hello\nworld' },
-    });
+    await expect(antigravityDriver.buildSpawnPlan({} as never)).rejects.toThrow(
+      'native ACP session',
+    );
   });
 });

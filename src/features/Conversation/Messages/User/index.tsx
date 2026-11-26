@@ -1,6 +1,8 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Tag } from '@lobehub/ui';
+import { Icon, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import isEqual from 'fast-deep-equal';
+import { CornerDownRight } from 'lucide-react';
 import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +11,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { getMcpEventSource } from '@/features/Conversation/Markdown/plugins/McpEvent/parseMcpEvent';
 import { getScmEventSource } from '@/features/Conversation/Markdown/plugins/ScmEvent/parseScmEvent';
+import { getWebhookEventSource } from '@/features/Conversation/Markdown/plugins/WebhookEvent/parseWebhookEvent';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
@@ -28,6 +31,7 @@ import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import { McpEventAvatar, McpEventSenderTitle } from './components/McpEventSender';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
+import { WebhookEventAvatar, WebhookEventSenderTitle } from './components/WebhookEventSender';
 import { UserMessageExtra } from './Extra';
 import { McpAppSourceFooter } from './McpAppSourceFooter';
 import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
@@ -58,6 +62,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // Same for an MCP event subscription: the connector the event came from is
   // the sender.
   const mcpSource = useMemo(() => getMcpEventSource(content), [content]);
+  // And for a generic webhook call: the webhook is the sender.
+  const webhookSource = useMemo(() => getWebhookEventSource(content), [content]);
   // A background sub-agent reporting back speaks in a user turn of its own.
   const subAgentCallback = metadata?.subAgentCallback;
   const subAgentSender = useSubAgentSenderIdentity(subAgentCallback);
@@ -164,13 +170,32 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           ? () => <ScmEventAvatar />
           : mcpSource
             ? () => <McpEventAvatar source={mcpSource} />
-            : undefined
+            : webhookSource
+              ? () => <WebhookEventAvatar />
+              : undefined
       }
       headerAddon={
         scmSource ? (
           <ScmEventSenderTitle source={scmSource} />
         ) : mcpSource ? (
           <McpEventSenderTitle source={mcpSource} />
+        ) : webhookSource ? (
+          <WebhookEventSenderTitle source={webhookSource} />
+        ) : undefined
+      }
+      messageLeading={
+        // A steered instruction joined a run already in progress; the arrow marks
+        // it as a follow-up to that run, the way a reply indents under its thread.
+        metadata?.steer ? (
+          <Tooltip title={t('steer.tag')}>
+            <Icon
+              aria-label={t('steer.tag')}
+              color={cssVar.colorTextTertiary}
+              icon={CornerDownRight}
+              role={'img'}
+              size={16}
+            />
+          </Tooltip>
         ) : undefined
       }
       titleAddon={
@@ -194,16 +219,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
     >
-      {metadata?.steer ? (
-        // The steer tag labels the instruction itself, so it sits inside the
-        // bubble rather than in the sender header.
-        <Flexbox align={'flex-start'} gap={4}>
-          <Tag>{t('steer.tag')}</Tag>
-          <UserMessageContent {...item} />
-        </Flexbox>
-      ) : (
-        <UserMessageContent {...item} />
-      )}
+      <UserMessageContent {...item} />
     </ChatItem>
   );
 }, isEqual);

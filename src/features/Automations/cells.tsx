@@ -14,6 +14,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import ConnectorBrandIcon from '@/features/Connectors/ConnectorBrandIcon';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
+import ChannelTarget, { channelTargetOf } from './ChannelTarget';
 import { summarizeArguments } from './formatArguments';
 
 dayjs.extend(relativeTime);
@@ -59,6 +60,8 @@ export const EmptyValue = () => <span {...stylex.props(styles.muted)}>--</span>;
 export const SubscriptionCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { connector, source } = item;
+  // Automations are MCP Events subscriptions; custom webhooks are listed on their own pages.
+  if (source.kind !== 'mcp_events') return null;
   const name = item.name?.trim() || source.eventName;
   const args = summarizeArguments(source.arguments);
 
@@ -130,7 +133,10 @@ export const TargetCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
         />
         <Text ellipsis>{agentName}</Text>
       </Flexbox>
-      {topic && topicTitle ? (
+      {channelTargetOf(item) ? (
+        // Results posted to a Channel are read there, not in its hidden Topic.
+        <ChannelTarget item={item} />
+      ) : topic && topicTitle ? (
         <WorkspaceLink
           title={topicTitle}
           to={AGENT_CHAT_TOPIC_URL(agent.id, topic.id)}
@@ -152,6 +158,8 @@ TargetCell.displayName = 'AutomationTargetCell';
 export const TopicCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { agent, topic } = item;
+  // Results posted to a Channel are read there, not in the Topic the run works in.
+  if (channelTargetOf(item)) return <ChannelTarget item={item} />;
   if (!agent || !topic) return <EmptyValue />;
 
   const topicTitle = topic.title?.trim() || t('automations.untitledTopic');

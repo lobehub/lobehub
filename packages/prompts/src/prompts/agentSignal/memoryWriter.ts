@@ -36,6 +36,7 @@ Do not use memory tools for requests to create, update, refine, merge, consolida
 If the feedback asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, skip memory and leave it to the skill/document management path.
 Apply the same boundary to Chinese feedback such as "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单".
 Do not summarize skill-management requests as preferences.
+Do not use memory tools for feedback that configures the agent itself: its role or persona, responsibilities, name, or working directory/workspace. Examples: "You are my copywriting assistant", "你是我的文案助理", "以后你负责帮我整理文案", "你的工作空间是我 win 电脑上的文档目录". These belong to the agent's own configuration, not to user memory shared with all of the user's agents. Only a separate fact about the user in the same feedback may still become memory.
 
 If the feedback should not become durable memory, do not call any tools and end briefly.
 Do not invent your own JSON schema. Use the built-in tool exactly as exposed.`;

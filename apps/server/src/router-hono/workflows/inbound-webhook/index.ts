@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { sweepInboundWebhooks } from '@/server/services/inboundWebhook/sweep';
 import { wakeInboundWebhook } from '@/server/services/inboundWebhook/waker';
+import { InboundWebhookWorkflow } from '@/server/workflows/inboundWebhook';
 
 import { qstashAuth } from '../middlewares/qstashAuth';
 
@@ -21,6 +22,8 @@ inboundWebhookWorkflowApp.post('/wake', qstashAuth(), async (c) => {
   const payload = z.object({ id: z.uuid() }).safeParse(body);
   if (!payload.success) return c.json({ error: 'Invalid payload' }, 400);
   const result = await wakeInboundWebhook(await getServerDB(), payload.data.id);
+  // The wake started its share of runs; the deliveries still waiting get a wake of their own.
+  if (result.outcome === 'more') await InboundWebhookWorkflow.triggerWake(payload.data, 1);
   // QStash backs off and retries busy topics. Persistent signals also have the sweep as a backstop.
   return c.json(result, result.outcome === 'deferred' ? 503 : 200);
 });

@@ -7,6 +7,12 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedControlTooltip';
+import {
+  isCurrentMachineDevice,
+  splitPickerDevices,
+  useCurrentMachine,
+} from '@/features/DeviceManager/devicePicker';
+import { OfflineDevicesToggle } from '@/features/DeviceManager/OfflineDevicesToggle';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
@@ -73,8 +79,10 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
     onFollowChange,
     value,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
+    const [showOffline, setShowOffline] = useState(false);
+    const currentMachine = useCurrentMachine();
 
     const {
       canSelect,
@@ -134,6 +142,14 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
       [canSelect, isLocked, onChange],
     );
 
+    // This machine first, then reachable devices; offline ones fold away unless pinned.
+    const { available, offline } = splitPickerDevices(devices ?? [], currentMachine);
+    const visibleDevices = [
+      ...available,
+      ...offline.filter((device) => device.deviceId === pinnedDeviceId),
+    ];
+    const foldedDevices = offline.filter((device) => device.deviceId !== pinnedDeviceId);
+
     const renderDeviceRow = (device: DeviceListItem) => {
       const isActive = device.deviceId === pinnedDeviceId;
       return (
@@ -147,6 +163,9 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
           <Flexbox flex={1} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={6}>
               <div className={styles.rowTitle}>{deviceLabel(device, unknownLabel)}</div>
+              {isCurrentMachineDevice(device, currentMachine) && (
+                <span className={styles.badge}>{t('picker.thisDevice', { ns: 'device' })}</span>
+              )}
               {device.deviceId === inheritedDeviceId && (
                 <span className={styles.badge}>{t('taskExecution.agentDefault')}</span>
               )}
@@ -228,7 +247,17 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
               </div>
             )}
             {!isPending && !devicesFailed && devices && devices.length > 0 && (
-              <div className={styles.scroll}>{devices.map(renderDeviceRow)}</div>
+              <div className={styles.scroll}>
+                {visibleDevices.map(renderDeviceRow)}
+                {foldedDevices.length > 0 && (
+                  <OfflineDevicesToggle
+                    count={foldedDevices.length}
+                    expanded={showOffline}
+                    onToggle={() => setShowOffline((v) => !v)}
+                  />
+                )}
+                {showOffline && foldedDevices.map(renderDeviceRow)}
+              </div>
             )}
             {!isPending && !devicesFailed && devices?.length === 0 && (
               <div className={styles.emptyHint}>{t('heteroAgent.executionTarget.noDevices')}</div>

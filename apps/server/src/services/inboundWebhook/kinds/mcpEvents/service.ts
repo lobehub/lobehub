@@ -6,8 +6,8 @@ import type {
   McpEventSubscriptionSummary,
   SubscribeEventArgs,
   SubscribeEventState,
-  UnsubscribeEventState,
 } from '@lobechat/builtin-tool-mcp-events';
+import { isInboundWebhookOfKind } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import { isPlainRecord } from '@lobechat/utils/object';
 import Ajv from 'ajv';
@@ -16,7 +16,7 @@ import pMap from 'p-map';
 import { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorModel } from '@/database/models/connector';
-import type { InboundWebhookView } from '@/database/models/inboundWebhook';
+import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { InboundWebhookLimitError, InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { TopicModel } from '@/database/models/topic';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
@@ -30,6 +30,7 @@ import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { isPublicHttpsUrl } from '@/server/utils/publicHttpsUrl';
 
+import { channelOriginOfRun } from '../../channelDelivery';
 import { removeInboundWebhook } from '../../lifecycle';
 import { mapMcpEventsError, McpEventsServiceError } from './errors';
 import { applySubscriptionResult, callbackUrl, subscribeRemote } from './subscription';
@@ -43,25 +44,40 @@ export class McpEventsService {
     private workspaceId?: string,
   ) {}
 
-  private async context(agentId: string, topicId?: string) {
+  /**
+   * `channelOrigin` is asked for by subscribing only: a subscription made in a Channel run must
+   * know which Channel or Thread its results go to. Discovering events and listing subscriptions
+   * work in a Channel topic like in any other.
+   */
+  private async context(
+    agentId: string,
+    topicId?: string,
+    channelOrigin?: { operationId?: string },
+  ) {
     if (!(await isWebhookEnabled(this.userId)))
       throw new McpEventsServiceError('feature_disabled', 'MCP Events is disabled.');
     if (!(await new AgentModel(this.db, this.userId, this.workspaceId).existsById(agentId)))
       throw new McpEventsServiceError('forbidden', 'This agent is not available.');
+    let channel: { channelId: string; threadId: string | null } | undefined;
     if (topicId) {
       const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(topicId);
       if (!topic || topic.agentId !== agentId)
         throw new McpEventsServiceError('forbidden', 'This topic is not available to this agent.');
-      // A Channel run works in a hidden topic of its own: events would wake the agent there, where
-      // the Channel never sees the result.
-      if (topic.trigger === CHANNEL_TOPIC_TRIGGER)
-        throw new McpEventsServiceError(
-          'channel_unsupported',
-          'Event subscriptions are not available in Channels. Subscribe from a direct conversation with this agent.',
-        );
+      // A Channel run works in a hidden Topic of its own; events run there too, and their result
+      // is posted back to the Channel or Thread the run answers.
+      if (channelOrigin && topic.trigger === CHANNEL_TOPIC_TRIGGER) {
+        const { operationId } = channelOrigin;
+        channel = operationId ? await channelOriginOfRun(this.db, operationId) : undefined;
+        if (!channel)
+          throw new McpEventsServiceError(
+            'channel_unsupported',
+            'Subscribe from a message in the Channel, so events know where to post.',
+          );
+      }
     }
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
     return {
+      channel,
       connectorModel: new ConnectorModel(this.db, this.userId, this.workspaceId, gateKeeper),
       model: new InboundWebhookModel(this.db, this.userId, this.workspaceId, gateKeeper),
     };
@@ -92,19 +108,26 @@ export class McpEventsService {
   }
 
   private async summary(
-    row: InboundWebhookView,
+    row: InboundWebhookViewOf<'mcp_events'>,
     connectorModel: ConnectorModel,
   ): Promise<McpEventSubscriptionSummary> {
     const connector = row.connectorId ? await connectorModel.findPublicById(row.connectorId) : null;
     return {
       arguments: row.config.arguments,
       connector: { identifier: connector?.identifier ?? '', name: connector?.name ?? '' },
+      ...(row.config.delivery && {
+        deliversTo: row.config.delivery.threadId ? ('thread' as const) : ('channel' as const),
+      }),
       eventName: row.config.eventName,
       expiresAt: row.state.refreshBefore ?? null,
       id: row.id,
       instructions: row.instructions,
       lastError: row.lastError,
-      status: row.status === 'pending' || row.status === 'deleting' ? 'error' : row.status,
+      name: row.name,
+      status:
+        row.status === 'pending' || row.status === 'deleting' || row.status === 'paused'
+          ? 'error'
+          : row.status,
     };
   }
 
@@ -148,7 +171,7 @@ export class McpEventsService {
   }
 
   async subscribeEvent(
-    input: SubscribeEventArgs & { agentId: string; topicId: string },
+    input: SubscribeEventArgs & { agentId: string; operationId?: string; topicId: string },
   ): Promise<SubscribeEventState> {
     try {
       return await this.createSubscription(input);
@@ -158,9 +181,16 @@ export class McpEventsService {
   }
 
   private async createSubscription(
-    input: SubscribeEventArgs & { agentId: string; topicId: string },
+    input: SubscribeEventArgs & { agentId: string; operationId?: string; topicId: string },
   ): Promise<SubscribeEventState> {
-    const { connectorModel, model } = await this.context(input.agentId, input.topicId);
+    const { channel, connectorModel, model } = await this.context(input.agentId, input.topicId, {
+      operationId: input.operationId,
+    });
+    // In a Thread, results go to that Thread unless the agent was asked for the main timeline.
+    const delivery = channel && {
+      channelId: channel.channelId,
+      ...(channel.threadId && input.deliverTo !== 'channel' && { threadId: channel.threadId }),
+    };
     if (!isPublicHttpsUrl(appEnv.APP_URL))
       throw new McpEventsServiceError(
         'public_url_required',
@@ -197,7 +227,14 @@ export class McpEventsService {
     }
     // Another account of the same connector is another subscription on the server.
     const identity = JSON.stringify(
-      [connector.id, input.topicId, input.name, args, ...(linkId ? [linkId] : [])],
+      [
+        connector.id,
+        input.topicId,
+        input.name,
+        args,
+        ...(linkId ? [linkId] : []),
+        ...(delivery ? [delivery] : []),
+      ],
       (_key, value: unknown) =>
         isPlainRecord(value)
           ? Object.fromEntries(
@@ -208,9 +245,11 @@ export class McpEventsService {
           : value,
     );
     const dedupeKey = createHash('sha256').update(identity).digest('hex');
-    const existing = (await model.query({ includeHidden: true, topicId: input.topicId })).find(
-      (row) => row.userId === this.userId && row.dedupeKey === dedupeKey,
-    );
+    const existing = (
+      await model.query({ includeHidden: true, kind: 'mcp_events', topicId: input.topicId })
+    )
+      .filter((row) => isInboundWebhookOfKind(row, 'mcp_events'))
+      .find((row) => row.userId === this.userId && row.dedupeKey === dedupeKey);
     if (existing) {
       if (existing.status === 'pending' || existing.status === 'deleting')
         throw new McpEventsServiceError(
@@ -220,21 +259,27 @@ export class McpEventsService {
       return { subscription: await this.summary(existing, connectorModel) };
     }
     const secret = `whsec_${randomBytes(32).toString('base64')}`;
-    let row: InboundWebhookView;
+    let row: InboundWebhookViewOf<'mcp_events'>;
     try {
-      row = await model.createWithLimits({
+      row = (await model.createWithLimits({
         agentId: input.agentId,
-        config: { arguments: args, eventName: input.name, ...(linkId && { linkId }) },
+        config: {
+          arguments: args,
+          ...(delivery && { delivery }),
+          eventName: input.name,
+          ...(linkId && { linkId }),
+        },
         connectorId: connector.id,
         dedupeKey,
         instructions: input.instructions,
         kind: 'mcp_events',
-        name: input.name,
+        // How lists show it: the user's name for it, else the event it follows.
+        name: input.title?.trim().slice(0, 100) || input.name,
         secret,
         status: 'pending',
         topicId: input.topicId,
         verification: { scheme: 'standard_webhooks' },
-      });
+      })) as InboundWebhookViewOf<'mcp_events'>;
     } catch (error) {
       if (error instanceof InboundWebhookLimitError)
         throw new McpEventsServiceError('limit_reached', error.message);
@@ -259,7 +304,7 @@ export class McpEventsService {
           workspaceId: this.workspaceId,
         });
       const updated = await model.findById(row.id);
-      if (!updated)
+      if (!updated || !isInboundWebhookOfKind(updated, 'mcp_events'))
         throw new McpEventsServiceError(
           'not_found',
           'This subscription was removed while it was being created.',
@@ -277,39 +322,13 @@ export class McpEventsService {
     topicId: string;
   }): Promise<ListSubscriptionsState> {
     const { connectorModel, model } = await this.context(input.agentId, input.topicId);
-    const rows = await model.query(input);
+    const rows = (await model.query({ ...input, kind: 'mcp_events' })).filter((row) =>
+      isInboundWebhookOfKind(row, 'mcp_events'),
+    );
     return {
       subscriptions: await pMap(rows, (row) => this.summary(row, connectorModel), {
         concurrency: 5,
       }),
     };
-  }
-
-  async unsubscribeEvent(input: {
-    agentId: string;
-    topicId: string;
-    subscriptionId: string;
-  }): Promise<UnsubscribeEventState> {
-    const { model } = await this.context(input.agentId, input.topicId);
-    const row = await model.findById(input.subscriptionId);
-    // A topic-bound runtime must not manage another topic's triggers or another member's credentials.
-    if (
-      !row ||
-      row.topicId !== input.topicId ||
-      row.agentId !== input.agentId ||
-      row.userId !== this.userId
-    )
-      throw new McpEventsServiceError('not_found', 'Subscription not found in this topic.');
-    await removeInboundWebhook(this.db, row);
-    if (this.workspaceId)
-      await new WorkspaceAuditLogModel(this.db).create({
-        action: 'webhook.deleted',
-        metadata: { direction: 'inbound', kind: row.kind },
-        resourceId: row.id,
-        resourceType: 'webhook',
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-    return { removed: true, subscriptionId: row.id };
   }
 }

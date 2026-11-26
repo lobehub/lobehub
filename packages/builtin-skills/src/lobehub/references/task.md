@@ -1,0 +1,94 @@
+# lh task - Complete Command Reference
+
+## Core Commands
+
+- `lh task list [--status <status>] [--root] [--parent <id>] [--agent <id>] [--label <name>] [--unlabeled] [-L <limit>] [--tree] [--board]` - List tasks
+  - `--status`: backlog, running, scheduled, paused, completed, failed, canceled
+  - `--root`: Only root tasks (no parent)
+  - `--label`: Tasks carrying any of these labels (repeatable / comma-separated; a label group name matches any label in it)
+  - `--tree`: Display as tree structure
+- `lh task view <id>` - View task details (instruction, documents, activities)
+- `lh task create -i <instruction> [-n <name>] [--agent <id>] [--user <idOrEmail>] [--parent <id>] [--priority <0-4>] [--label <name>] [--visibility <private|public>] [--origin-agent <id> --origin-topic <id>]` - Create task
+  - Priority: 0=none, 1=urgent, 2=high, 3=normal, 4=low
+  - `--visibility`: `private` (only you) or `public` (whole workspace). Default: inherited from `--parent`, private for a private `--agent`, otherwise public. A public task cannot be assigned to a private agent.
+  - `--origin-agent` / `--origin-topic` (optional): the conversation to report back to when the task finishes (a result card is posted there and that agent continues). Pass both together; to be notified in your current conversation, use `$LOBEHUB_AGENT_ID` and `$LOBEHUB_TOPIC_ID`. The topic must be your own conversation.
+- `lh task edit <id> [-n <name>] [-i <instruction>] [--status <status>] [--priority <0-4>] [--agent <id>] [--user <idOrEmail>] [--label <name>] [--remove-label <name>] [--visibility <private|public>]` - Update task
+  - `--visibility`: only the task creator can make a task private. To give a public task to a private agent, pass `--visibility private` with `--agent` (or make it private first).
+- `lh task delete <id> [--yes]` - Delete task
+- `lh task clear [--yes]` - Delete all tasks
+- `lh task tree <id>` - Show subtask tree with dependencies
+
+## Lifecycle Commands
+
+- `lh task start <id> [--no-run] [-p <prompt>] [-f] [-v]` - Start task (backlog → running)
+  - `--no-run`: Only update status, skip agent execution
+  - `-f, --follow`: Follow agent output in real-time
+  - `-v, --verbose`: Show detailed tool call info
+- `lh task run <id> [-p <prompt>] [-c <topicId>] [-f] [--topics <n>] [--delay <s>]` - Run/re-run agent execution
+  - `-c, --continue`: Continue on existing topic
+  - `--topics <n>`: Run N topics in sequence
+- `lh task pause <id>` - Pause running task
+- `lh task resume <id>` - Resume paused task
+- `lh task complete <id>` - Mark as completed
+- `lh task cancel <id>` - Cancel task
+- `lh task comment <id> -m <message>` - Add comment. To notify a member who needs to act, mention them with `<mention name="Name" id="user_xxx" />`, taking the id from `lh workspace members` (never guess it); a plain "@Name" is only text. Each mention sends a notification, so do not @ people in routine progress notes.
+- `lh task sort <parentId> <id1> <id2> ...` - Reorder subtasks
+- `lh task heartbeat <id>` - Send manual heartbeat
+- `lh task watchdog` - Detect and fail stuck tasks
+
+## Checkpoint Commands
+
+- `lh task checkpoint view <id>` - View checkpoint config
+- `lh task checkpoint set <id> [--on-agent-request <bool>] [--topic-before <bool>] [--topic-after <bool>] [--before <ids>] [--after <ids>]` - Configure checkpoints
+  - `--on-agent-request`: Allow agent to request review
+  - `--topic-before/after`: Pause before/after each topic
+  - `--before/after <ids>`: Pause before/after specific subtasks; accepts stable ids or display identifiers
+
+## Review Commands (LLM-as-Judge)
+
+- `lh task review view <id>` - View review config
+- `lh task review set <id> [--model <model>] [--provider <provider>] [--max-iterations <n>] [--no-auto-retry] [--recursive]` - Configure review
+- `lh task review criteria list <id>` - List review rubrics
+- `lh task review criteria add <id> -n <name> [--type <type>] [-t <threshold>] [-d <description>] [--value <value>] [--pattern <pattern>] [-w <weight>] [--recursive]` - Add rubric
+  - Types: llm-rubric, contains, equals, starts-with, ends-with, regex
+  - Threshold: 0-100
+- `lh task review criteria rm <id> -n <name> [--recursive]` - Remove rubric
+- `lh task review run <id> --content <text>` - Manually run review
+
+## Dependency Commands
+
+- `lh task dep add <taskId> <dependsOnId> [--type <blocks|relates>]` - Add dependency
+- `lh task dep rm <taskId> <dependsOnId>` - Remove dependency
+- `lh task dep list <taskId>` - List dependencies
+
+## Label Commands
+
+Labels are shared by the workspace. `--label` only takes existing names (`Bug`, or `Type/Bug` for a label in a group); an unknown name fails with suggestions instead of creating a label. A task carries at most one label per label group — adding another one from the same group replaces it.
+
+- `lh task label list` - List labels and label groups with task counts
+- `lh task label create <name> [--color <hex>] [--group] [--parent <group>]` - Create a label (or a group with `--group`)
+- `lh task label edit <label> [-n <name>] [--color <hex>] [--parent <group|none>]` - Rename, recolor or move a label
+- `lh task label delete <label> [--yes]` - Delete a label (a group deletes its labels too)
+
+## Topic Commands
+
+- `lh task topic list <id>` - List topics for task
+- `lh task topic view <id> <topicId>` - View topic messages (topicId can be seq number like "1")
+- `lh task topic cancel <topicId>` - Cancel running topic and pause task
+- `lh task topic delete <topicId> [--yes]` - Delete topic and messages
+
+## Document Commands
+
+- `lh task doc create <id> -t <title> [-b <content>] [--parent <docId>] [--folder]` - Create and pin document
+- `lh task doc pin <id> <documentId>` - Pin existing document
+- `lh task doc unpin <id> <documentId>` - Unpin document
+- `lh task doc mv <id> <documentId> <folder>` - Move document into folder (auto-creates folder)
+
+## Tips
+
+- `--user` accepts an email or username in workspace scope; in personal scope it needs a `user_…` id.
+- All commands support `--json [fields]` for structured output
+- Task identifiers use formats like T-1 or ABC-2. They are display labels and compatible input aliases; prefer stable task ids from previous results for subsequent calls. Use identifier short links such as `/task/T-1` in user-facing output.
+- Use `lh task tree` to visualize full task hierarchy before planning work
+- Use `lh task comment` to log progress — comments appear in task activities
+- Documents pinned to the task are accessible to the agent during execution

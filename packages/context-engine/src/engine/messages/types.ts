@@ -13,6 +13,7 @@ import type {
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { RevokedDocumentReads } from '../../processors/RevokedDocumentResultFilter';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type {
   AgentContextDocument,
@@ -29,6 +30,7 @@ import type { OnboardingContext } from '../../providers/OnboardingContextInjecto
 import type { Plan } from '../../providers/PlanInjector';
 import type { ProjectInstructionFile } from '../../providers/ProjectInstructionsInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { SkillChangesByMessage } from '../../providers/SkillIndexSnapshot';
 import type { TodoList } from '../../providers/TodoInjector';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
@@ -65,6 +67,8 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
+  /** Prepare optional prompt edits for a transport that can declare tools mid-conversation. */
+  anchorActivatedTools?: boolean;
   /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
   disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */
@@ -308,10 +312,22 @@ export interface MessagesEngineParams {
    * snapshot (see `resolveAgentDocumentIndex`).
    */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /**
+   * Documents deleted or disabled since earlier turns read them, per reading
+   * agent. Historical `readKnowledge` / `readDocument` results referencing
+   * them are withheld from the model.
+   */
+  revokedDocumentReads?: RevokedDocumentReads[];
 
   // ========== Skills ==========
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
+  /**
+   * Skill-index change notes keyed by the user message each belongs to.
+   * The host passes them when `skillsConfig.enabledSkills` renders
+   * `<available_skills>` from a snapshot (see `resolveSkillIndex`).
+   */
+  skillChanges?: SkillChangesByMessage;
   /** Skills explicitly selected by the user for the current request */
   selectedSkills?: RuntimeSelectedSkill[];
   /** Tools explicitly selected by the user for the current request */

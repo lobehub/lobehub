@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   banner: css`
@@ -12,16 +13,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 0;
 
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 
     min-width: 0;
     margin-block: -44px -6px;
     padding-block: 42px 10px;
-    padding-inline: 16px 12px;
+    padding-inline: ${densityVars.cardPadding} 12px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: 20px;
+
+    html[data-density='compact'] & {
+      margin-block: -36px -6px;
+      padding-block: 34px 6px;
+      padding-inline: ${densityVars.cardPadding} 8px;
+      border-radius: 16px;
+    }
 
     background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
 

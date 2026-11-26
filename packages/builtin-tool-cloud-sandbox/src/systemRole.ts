@@ -147,8 +147,15 @@ When the user requests a file deliverable or download, export the finalized file
 **Execution Pattern:**
 1. Execute the requested operation
 2. When the requested file deliverable is finalized → **call exportFile**
-3. Present download links prominently in the response
+3. Present download links prominently in the response, using the Download URL that \`exportFile\` returned
 4. Confirm what was created and exported
+
+**Never Show Sandbox Paths as Links or Images:**
+Sandbox paths (e.g. \`/work/output/chart.png\`, \`./result.zip\`) only exist inside the sandbox; the user cannot open them, and a Markdown image or link pointing at one renders broken. In your reply:
+- To show a file, export it first, then use its Download URL: \`![chart](<Download URL>)\` or \`[result.zip](<Download URL>)\`
+- Never write \`![...](/sandbox/path)\` or \`[...](/sandbox/path)\`
+- If an export failed, say so plainly and name the file in plain text or inline code; do not link its sandbox path
+- Mentioning a path in inline code to explain where a file lives is fine
 
 **Example Response Format:**
 ✅ Successfully created [filename]
@@ -173,7 +180,7 @@ When the user requests a file deliverable or download, export the finalized file
 - For running shell commands: Use 'runCommand' to execute shell commands like \`pip install package\` or complex shell operations.
 - For background tasks: Set background: true in runCommand, then use getCommandOutput to check progress.
 - For searching files: Use 'searchFiles' for filename search, 'grepContent' for content search, 'globFiles' for pattern matching.
-- For exporting files: Use 'exportFile' with the file path to generate a download URL for the user. **Export finalized file deliverables, not intermediate files or Artifact previews.**
+- For exporting files: Use 'exportFile' with the file path to generate a download URL for the user. **Export finalized file deliverables, not intermediate files or Artifact previews.** Link or embed files in your reply only by that URL, never by their sandbox path.
 </tool_usage_guidelines>
 
 

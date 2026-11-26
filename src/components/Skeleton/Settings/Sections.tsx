@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
@@ -785,23 +786,35 @@ const PageTabs = ({ count }: { count: number }) => (
   </Flexbox>
 );
 
-/** Large page title + divider, matching a settings page that renders its own heading. */
-const PageTitle = () => (
-  <Flexbox gap={24} style={{ paddingTop: 12 }}>
-    <Flexbox height={38} justify={'center'}>
-      <SkeletonBar height={28} width={96} />
+/**
+ * Large page title + divider, matching `SettingHeader`: a 24px title (38px line,
+ * compact 20px / 31px) 24px (compact 16px) above the divider.
+ */
+const PageTitle = () => {
+  const { compact, tokens } = useDensity();
+
+  return (
+    <Flexbox gap={compact ? 16 : 24} style={{ paddingTop: 12 }}>
+      <Flexbox height={compact ? 31 : 38} justify={'center'}>
+        <SkeletonBar height={tokens.iconBox} width={96} />
+      </Flexbox>
+      <div {...stylex.props(styles.divider)} />
     </Flexbox>
-    <div {...stylex.props(styles.divider)} />
-  </Flexbox>
-);
+  );
+};
 
 /**
  * The sections of a settings page without any surrounding chrome. Use it
  * directly where a layout already draws the header and padded container.
  */
 export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => {
+  const { compact } = useDensity();
   const sections = (
-    <Flexbox aria-busy data-testid={'settings-sections-skeleton'} gap={shape.gap ?? 36}>
+    <Flexbox
+      aria-busy
+      data-testid={'settings-sections-skeleton'}
+      gap={shape.gap ?? (compact ? 24 : 36)}
+    >
       {shape.title && <PageTitle />}
       {shape.sections.map((section, index) => (
         <Section key={index} section={section} />

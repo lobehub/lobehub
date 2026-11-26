@@ -1,63 +1,36 @@
+import dns from 'node:dns';
+import net from 'node:net';
+
 import fetch from 'node-fetch';
-import type { RequestFilteringAgentOptions } from 'request-filtering-agent';
 import { RequestFilteringHttpAgent, RequestFilteringHttpsAgent } from 'request-filtering-agent';
 
-/**
- * Options for per-call SSRF configuration overrides
- */
-export interface SSRFOptions {
-  /** List of IP addresses to allow */
-  allowIPAddressList?: string[];
-  /** Whether to allow private/local IP addresses */
-  allowPrivateIPAddress?: boolean;
-  /**
-   * Maximum response body size in bytes. When set, the body stream ends as soon as
-   * the cap is reached and the upstream connection is closed. Readers get only the
-   * bytes received up to that point (soft truncation — still considered a
-   * successful response).
-   *
-   * Use this for any fetch that downloads untrusted content (e.g. web crawlers)
-   * so a large or malicious response cannot be buffered without bound by
-   * callers that read the whole body.
-   */
-  maxContentLength?: number;
-}
+import {
+  assertAddressAllowed,
+  blockedError,
+  resolveAgentOptions,
+  SSRF_BLOCKED_PREFIX,
+  SSRF_DOCS_URL,
+  SSRFBlockedError,
+  type SSRFOptions,
+} from './policy';
+
+export type { CreateSsrfSafeFetchOptions } from './guardedFetch';
+export { createSsrfSafeDispatcher, createSsrfSafeFetch, validateSsrfAddress } from './guardedFetch';
+export type { SSRFOptions } from './policy';
+export {
+  findSSRFBlockedError,
+  isSSRFBlockedError,
+  matchIPAddressList,
+  resolveAgentOptions,
+  SSRF_BLOCKED_PREFIX,
+  SSRF_DOCS_URL,
+  SSRFBlockedError,
+} from './policy';
 
 /** Statuses whose Response must have a null body (Fetch standard "null body status"). */
 const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
 type NodeBody = NodeJS.ReadableStream & { destroy?: (error?: Error) => void };
-
-const SSRF_BLOCKED_PREFIX = 'SSRF blocked';
-
-/**
- * Thrown when the request (or one of its redirect hops) resolves to a private, loopback,
- * link-local or otherwise reserved address that the SSRF policy does not allow. The message
- * keeps its `SSRF blocked:` prefix so callers matching on it keep working.
- */
-export class SSRFBlockedError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'SSRFBlockedError';
-  }
-}
-
-/**
- * Whether `error`, or any error in its `cause` chain, is an SSRF block. Callers that wrap
- * fetch errors (an SDK transport, a retry helper) keep the original as `cause`, so the
- * chain is walked instead of checking only the outermost error.
- */
-export const isSSRFBlockedError = (error: unknown): boolean => {
-  const seen = new Set<unknown>();
-  let current: unknown = error;
-  while (current instanceof Error && !seen.has(current)) {
-    if (current instanceof SSRFBlockedError || current.message.startsWith(SSRF_BLOCKED_PREFIX))
-      return true;
-    seen.add(current);
-    current = current.cause;
-  }
-  return false;
-};
 
 /** A URL inside an error message (node-fetch puts the full request URL in its errors). */
 const URL_IN_TEXT = /\b[a-z][\d+.a-z-]*:\/\/[^\s"'<>]+/gi;
@@ -93,11 +66,9 @@ const toFetchError = (error: unknown): Error => {
 
   if (isSSRFBlock) {
     console.error('SSRF protection blocked request:', toErrorLog(error));
-    return new SSRFBlockedError(
-      `${SSRF_BLOCKED_PREFIX}: ${errorMessage}. ` +
-        'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
-      { cause: error },
-    );
+    return new SSRFBlockedError(`${SSRF_BLOCKED_PREFIX}: ${errorMessage}. See: ${SSRF_DOCS_URL}`, {
+      cause: error,
+    });
   }
 
   console.error('Fetch error:', toErrorLog(error));
@@ -186,23 +157,9 @@ export const ssrfSafeFetch = async (
   ssrfOptions?: SSRFOptions,
 ): Promise<Response> => {
   try {
-    // Configure SSRF protection options with proper precedence using nullish coalescing
-    const envAllowPrivate = process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1';
-    const allowPrivate = ssrfOptions?.allowPrivateIPAddress ?? envAllowPrivate;
-
-    const agentOptions: RequestFilteringAgentOptions = {
-      allowIPAddressList:
-        ssrfOptions?.allowIPAddressList ??
-        process.env.SSRF_ALLOW_IP_ADDRESS_LIST?.split(',').filter(Boolean) ??
-        [],
-      allowMetaIPAddress: allowPrivate,
-      allowPrivateIPAddress: allowPrivate,
-      denyIPAddressList: [],
-    };
-
     // Create agents for both protocols
-    const httpAgent = new RequestFilteringHttpAgent(agentOptions);
-    const httpsAgent = new RequestFilteringHttpsAgent(agentOptions);
+    const httpAgent = new RequestFilteringHttpAgent(resolveAgentOptions(ssrfOptions));
+    const httpsAgent = new RequestFilteringHttpsAgent(resolveAgentOptions(ssrfOptions));
 
     // Use node-fetch with SSRF protection agent
     // Pass a function to dynamically select agent based on URL protocol
@@ -233,3 +190,64 @@ export const ssrfSafeFetch = async (
     throw toFetchError(error);
   }
 };
+
+/**
+ * Assert that `url` does not point at a private, loopback, link-local or
+ * otherwise reserved address: every address its hostname resolves to is checked
+ * against the same policy `ssrfSafeFetch` enforces, including the
+ * `SSRF_ALLOW_PRIVATE_IP_ADDRESS` / `SSRF_ALLOW_IP_ADDRESS_LIST` overrides.
+ *
+ * Use this for transports `ssrfSafeFetch` cannot cover — WebSocket clients or
+ * third-party SDKs that manage their own connections — as a pre-flight check on
+ * the base URL. Note the resolution happens once, ahead of the connection;
+ * where the transport accepts a custom agent, prefer {@link ssrfSafeAgent}
+ * which filters at connect time instead.
+ *
+ * @param url - The URL whose host is resolved and checked
+ * @param ssrfOptions - Optional per-call SSRF configuration overrides
+ * @throws {SSRFBlockedError} when any resolved address is refused by the policy
+ */
+export const assertSsrfSafeUrl = async (url: string, ssrfOptions?: SSRFOptions): Promise<void> => {
+  const options = resolveAgentOptions(ssrfOptions);
+
+  let hostname: string;
+  try {
+    // `new URL` keeps the brackets on IPv6 literals (`[::1]`); strip them for the
+    // IP checks and the DNS lookup below.
+    hostname = new URL(url).hostname.replaceAll(/^\[|\]$/g, '');
+  } catch (error) {
+    throw blockedError(`Invalid URL: ${url}`, error);
+  }
+
+  if (!hostname) {
+    throw blockedError(`Invalid URL: ${url}`);
+  }
+
+  // Literal IP hostnames skip DNS and are checked directly.
+  if (net.isIP(hostname) !== 0) {
+    assertAddressAllowed(hostname, hostname, undefined, options);
+    return;
+  }
+
+  const addresses = await dns.promises.lookup(hostname, { all: true });
+  for (const { address, family } of addresses) {
+    assertAddressAllowed(address, hostname, family, options);
+  }
+};
+
+/**
+ * Create a request-filtering agent for `url`, so transports that accept a
+ * Node.js `http.Agent` / `https.Agent` (for example `ws`, which uses the agent
+ * for its handshake connection) get the same connect-time SSRF policy as
+ * `ssrfSafeFetch` — including DNS filtering on every connect, with no
+ * resolution-vs-connect race.
+ *
+ * `https`/`wss` URLs get a TLS-capable agent; anything else gets the plain one.
+ *
+ * @param url - The URL the agent will connect to
+ * @param ssrfOptions - Optional per-call SSRF configuration overrides
+ */
+export const ssrfSafeAgent = (url: string, ssrfOptions?: SSRFOptions) =>
+  url.startsWith('https') || url.startsWith('wss')
+    ? new RequestFilteringHttpsAgent(resolveAgentOptions(ssrfOptions))
+    : new RequestFilteringHttpAgent(resolveAgentOptions(ssrfOptions));

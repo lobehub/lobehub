@@ -9,9 +9,10 @@ import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModel
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSingleton } from '@/hooks/useSingleton';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
-import { useBuildListItems } from '../../hooks/useBuildListItems';
+import { resolveListGuardOptions, useBuildListItems } from '../../hooks/useBuildListItems';
 import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
@@ -51,6 +52,8 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
   const {
+    featuredModels,
+    isModelHidden,
     isModelRestricted,
     onBeforeModelSelect,
     onRestrictedModelClick,
@@ -65,13 +68,24 @@ export const List: FC<ListProps> = ({
   );
 
   const chatEnabledList = useEnabledChatModels();
-  const enabledList = enabledListProp ?? chatEnabledList;
+  const enabledList = useMemo(
+    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isModelHidden),
+    [chatEnabledList, enabledListProp, isModelHidden],
+  );
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, sortModelLast);
+  // Generation lists (image, video, music) are the only ones rendered with their own row
+  // component.
+  const listItems = useBuildListItems(
+    enabledList,
+    groupMode,
+    searchKeyword,
+    sortModelLast,
+    resolveListGuardOptions(!!ModelItemComponent, { featuredModels }),
+  );
 
   const resolvePricing = useBusinessModelPricing();
   const resolveRating = useBusinessModelRating();
@@ -149,7 +163,7 @@ export const List: FC<ListProps> = ({
                 : `${item.type}-${index}`,
           );
           const isActive =
-            (item.type === 'provider-model-item' &&
+            ((item.type === 'provider-model-item' || item.type === 'featured-model-item') &&
               menuKey(item.provider.id, item.model.id) === activeKey) ||
             (item.type === 'model-item-single' &&
               menuKey(item.data.providers[0].id, item.data.model.id) === activeKey) ||

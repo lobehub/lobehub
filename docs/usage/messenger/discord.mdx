@@ -14,7 +14,7 @@ tags:
 
 # Use LobeHub on Discord
 
-Discord works in two phases: a **server admin adds** the official LobeHub bot to a Discord server once, and then **each member links** their personal Discord account to LobeHub. Both phases happen from **Settings → Messenger → Discord**.
+Discord works in two phases: a **server admin adds** the official LobeHub bot to a Discord server once, and then **each member links** their personal Discord account to LobeHub. Both phases happen from **Marketplace → Apps → Discord**.
 
 > The Discord install audit is per-server, but your **personal link is global** to your Discord account — you only link once, and the same link works in every server that has the bot.
 
@@ -27,9 +27,9 @@ Discord works in two phases: a **server admin adds** the official LobeHub bot to
 ## Phase A — Add the LobeHub bot to a server (server admin)
 
 <Steps>
-  ### Open Settings → Messenger → Discord
+  ### Open Marketplace → Apps → Discord
 
-  In LobeHub, open **Settings → Messenger** and click the **Discord** card. Click **Connect** in the top-right.
+  In LobeHub, open **Marketplace → Apps** and click the **Discord** card. Click **Connect** in the top-right.
 
   {/* TODO: screenshot — Discord detail page with empty Connections list and the Connect button */}
 
@@ -79,7 +79,7 @@ Discord works in two phases: a **server admin adds** the official LobeHub bot to
 Two equivalent ways:
 
 - **On Discord** — DM the bot `/agents` and pick a different agent.
-- **In LobeHub** — open **Settings → Messenger → Discord** and use the agent picker on your link row.
+- **In LobeHub** — open **Marketplace → Apps → Discord** and use the agent picker on your link row.
 
 The change takes effect on the next message you send.
 
@@ -98,9 +98,9 @@ You can re-add the bot to a server (or re-link personally) at any time by repeat
 
 - **"Server already connected"** — Another LobeHub user already added the bot to this server. DM the LobeHub bot on Discord to link your personal account; you do not need to add the bot again.
 - **Discord install failed (`<reason>`)** — Common reasons: authorisation cancelled, install session expired (re-open the modal and try again), Discord returned incomplete data (retry; if persistent, contact support).
-- **Bot is in the server but doesn't reply** — Check that you have a personal link under **Settings → Messenger → Discord**. The bot only answers users with a confirmed personal link.
+- **Bot is in the server but doesn't reply** — Check that you have a personal link under **Marketplace → Apps → Discord**. The bot only answers users with a confirmed personal link.
 - **Bot replies in some channels but not in a private one** — Discord only delivers a private channel's messages to members listed in its permissions. Open the channel's **Settings → Permissions**, click **Add members or roles**, and add the LobeHub bot with **View Channel**, **Send Messages**, **Read Message History** and **Send Messages in Threads** allowed.
 - **Removed the audit row but the bot is still in my server** — That's expected. Disconnecting in LobeHub only removes the audit entry; a Discord server admin must kick the bot from Discord itself.
 - **"This link is already used"** — One-time confirmation links expire after one use. DM the bot again to get a new link.
 - **"This account is already linked"** — Your Discord account is bound to a different LobeHub account. Sign in to that LobeHub account to manage the link, or unlink there before retrying.
-- **"Another Discord account is already linked"** — Your LobeHub account already has a Discord link. Disconnect it in **Settings → Messenger → Discord** before linking a new Discord account.
+- **"Another Discord account is already linked"** — Your LobeHub account already has a Discord link. Disconnect it in **Marketplace → Apps → Discord** before linking a new Discord account.

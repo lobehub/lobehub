@@ -6,7 +6,14 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { ToolExecutionService } from './index';
 
-const mocks = vi.hoisted(() => ({ find: vi.fn(), links: vi.fn(), call: vi.fn(), tools: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  call: vi.fn(),
+  find: vi.fn(),
+  links: vi.fn(),
+  resolveTarget: vi.fn(),
+  toolModelOptions: vi.fn(),
+  tools: vi.fn(),
+}));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {
@@ -14,16 +21,23 @@ vi.mock('@/database/models/connector', () => ({
       // Any row by id: the marker alone must never pick the connector
       findById: mocks.find,
       // The connector the call's identifier resolves to for the run
-      resolveByIdentifiers: async () => {
+      resolveByIdentifiers: async (_identifiers: string[], target: unknown) => {
+        mocks.resolveTarget(target);
         const row = await mocks.find();
         return row ? [row] : [];
+      },
+      resolveToolSets: async (target: unknown) => {
+        mocks.resolveTarget(target);
+        const row = await mocks.find();
+        return row ? [{ ...row, toolIdentifier: row.toolIdentifier ?? row.identifier }] : [];
       },
       getLinkModel: () => ({ listByConnectorIds: mocks.links }),
     };
   }),
 }));
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn(function () {
+  ConnectorToolModel: vi.fn(function (_db, _userId, _workspaceId, options) {
+    mocks.toolModelOptions(options);
     return { queryByConnector: mocks.tools };
   }),
 }));
@@ -96,6 +110,22 @@ beforeEach(() => {
   });
 });
 describe('live connector account resolution at dispatch', () => {
+  it("resolves the connector in the run's conversation, reading a personal row's tools", async () => {
+    // Regression: discovery advertised a private agent's own private connector
+    // (resolved with the topic), but dispatch re-resolved without it, found no
+    // row or a shared sibling, and failed every call with a connector mismatch.
+    const result = await service.executeTool(
+      payload,
+      context('https://mcp.example', { agentId: 'agt-private', topicId: 'tpc-own' }),
+    );
+
+    expect(result.success).toBe(true);
+    // Every resolution (the permission gate's and the dispatch's) names the topic
+    expect(mocks.resolveTarget.mock.calls.length).toBeGreaterThan(0);
+    for (const [target] of mocks.resolveTarget.mock.calls)
+      expect(target).toEqual({ agentId: 'agt-private', topicId: 'tpc-own' });
+    expect(mocks.toolModelOptions).toHaveBeenCalledWith({ agentRun: true });
+  });
   it('resolves the selected token and strips the selector before HTTP execution', async () => {
     const result = await service.executeTool(payload, context('https://mcp.example'));
     expect(result.success).toBe(true);
@@ -164,6 +194,26 @@ describe('live connector account resolution at dispatch', () => {
     expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     expect(mocks.call).not.toHaveBeenCalled();
   });
+  it('lets a shared visitor reach a device-only MCP under the share device grant', async () => {
+    mocks.find.mockResolvedValue({
+      id: 'c',
+      identifier: 'multi',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'http://localhost:1234/mcp',
+      credentials: null,
+      oidcConfig: { clientId: 'client', scheme: 'dcr' },
+    });
+    const result = await service.executeTool(
+      payload,
+      context('http://localhost:1234/mcp', {
+        activeDeviceId: 'device',
+        agentShareVisitor: { canUseDevice: true },
+      }),
+    );
+    expect(result).not.toMatchObject({ error: { code: 'SHARE_GATE_BLOCKED' } });
+    expect(deviceGateway.executeMcpCall).toHaveBeenCalled();
+  });
   it('retains the selected account on serialized device failures', async () => {
     mocks.find.mockResolvedValue({
       id: 'c',
@@ -225,5 +275,58 @@ describe('live connector account resolution at dispatch', () => {
       expect(mocks.links).not.toHaveBeenCalled();
       expect(mocks.call).not.toHaveBeenCalled();
     });
+  });
+});
+
+// A single-account connector's manifest carries its endpoint and credentials
+// from discovery: a row that has left the conversation's scope since must not
+// keep running from that copy.
+describe('connector row revalidation at dispatch', () => {
+  const single = (url: string) =>
+    ({
+      userId: 'me',
+      serverDB: {},
+      toolManifestMap: {
+        multi: {
+          connector: { id: 'c', identifier: 'multi' },
+          mcpParams: { auth: { accessToken: 'discovery-token' }, type: 'http', url },
+        },
+      },
+    }) as any;
+
+  it('refuses a call whose row the run no longer resolves', async () => {
+    // Regression: made private mid-conversation, the shared row stopped
+    // resolving, yet the discovery-time params kept running its account.
+    mocks.find.mockResolvedValue(undefined);
+
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('refuses a call whose prefix now names another row', async () => {
+    mocks.find.mockResolvedValue({ id: 'other', identifier: 'multi', isEnabled: true });
+
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('runs a call whose row still resolves', async () => {
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.call).toHaveBeenCalledTimes(1);
   });
 });

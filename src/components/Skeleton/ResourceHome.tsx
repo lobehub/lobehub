@@ -4,6 +4,8 @@ import { cssVar as cssVarValue, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { useDensityTokens } from '@/styles/density';
+
 import SkeletonBar from './Bar';
 
 /**
@@ -72,27 +74,31 @@ const ListSkeleton = () => (
   </Flexbox>
 );
 
-const ResourceHomeSkeleton = () => (
-  <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={stylex.props(styles.header).className}
-      flex={'none'}
-      height={44}
-      justify={'space-between'}
-      paddingInline={16}
-    >
-      <SkeletonBar height={20} width={96} />
-      <SkeletonBar height={28} width={88} />
-    </Flexbox>
-    <div className={stylex.props(styles.scroll).className}>
-      <Flexbox className={stylex.props(styles.content).className} gap={28}>
-        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.quickActions} />
-        <ListSkeleton />
+const ResourceHomeSkeleton = () => {
+  const { headerHeight } = useDensityTokens();
+
+  return (
+    <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        flex={'none'}
+        height={headerHeight}
+        justify={'space-between'}
+        paddingInline={16}
+      >
+        <SkeletonBar height={20} width={96} />
+        <SkeletonBar height={28} width={88} />
       </Flexbox>
-    </div>
-  </Flexbox>
-);
+      <div className={stylex.props(styles.scroll).className}>
+        <Flexbox className={stylex.props(styles.content).className} gap={28}>
+          <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.quickActions} />
+          <ListSkeleton />
+        </Flexbox>
+      </div>
+    </Flexbox>
+  );
+};
 
 export default ResourceHomeSkeleton;

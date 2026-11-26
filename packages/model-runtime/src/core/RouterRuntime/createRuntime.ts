@@ -219,9 +219,29 @@ export const createRouterRuntime = ({
       };
 
       try {
+        const onAttemptDiscarded = options?.callback?.onAttemptDiscarded;
+        const shouldRetryChatAttempt = params.shouldRetryChatAttempt;
         return await createChatStreamFallbackResponse({
+          onDiscarded: onAttemptDiscarded
+            ? (result) => {
+                if (result.outcome !== 'empty' && result.outcome !== 'interrupted') return;
+                return onAttemptDiscarded({
+                  attemptId: result.attemptId,
+                  channelId: result.channelId,
+                  durationMs: result.durationMs,
+                  finishReason: result.finishReason,
+                  outcome: result.outcome,
+                  requestId: result.requestId,
+                  routerId: result.routerId,
+                  usage: result.usage,
+                });
+              }
+            : undefined,
           onSettled: routeTasks?.settle,
           shouldFallback: createChatAttemptFallbackCheck(params.shouldFallbackChatAttempt),
+          shouldRetry: shouldRetryChatAttempt
+            ? async (result, context) => Boolean(await shouldRetryChatAttempt(result, context))
+            : undefined,
           startAttempt,
           totalAttempts: routerOptions.length,
         });

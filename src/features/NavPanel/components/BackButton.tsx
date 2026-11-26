@@ -3,15 +3,22 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { appNavigate } from '@/features/Electron/navigation/appNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useHeaderActionSize } from '@/styles/density';
 
 export const BACK_BUTTON_ID = 'lobe-back-button';
 
-const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick, ...rest }) => {
+interface BackButtonProps extends ActionIconProps {
+  /** Go to the literal `to` without applying the active workspace prefix. */
+  escape?: boolean;
+  to?: string;
+}
+
+const BackButton = memo<BackButtonProps>(({ to = '/', escape, onClick, ...rest }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const activeSlug = useActiveWorkspaceSlug();
-  const resolvedTo = buildWorkspaceAwarePath(to, activeSlug);
+  const resolvedTo = buildWorkspaceAwarePath(to, activeSlug, { escape });
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event as never);
@@ -27,12 +34,7 @@ const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick,
 
   return (
     <a href={resolvedTo} onClick={handleClick}>
-      <ActionIcon
-        icon={ChevronLeftIcon}
-        id={BACK_BUTTON_ID}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-        {...rest}
-      />
+      <ActionIcon icon={ChevronLeftIcon} id={BACK_BUTTON_ID} size={headerActionSize} {...rest} />
     </a>
   );
 });

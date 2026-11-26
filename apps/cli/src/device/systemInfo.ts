@@ -8,8 +8,9 @@ import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolv
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import { CodexAppServerClient } from '@lobechat/heterogeneous-agents/spawn';
 import { getShellInfo } from '@lobechat/local-file-shell';
+import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 
-import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { resolveCliDirName } from '../constants/identity';
 import { cliVersion } from '../pkg';
 import type { BrowserDevice } from '../tools/browser';
 import type { ComputerUseDevice } from '../tools/computerUse';
@@ -71,9 +72,14 @@ async function supportsNativeCodex(): Promise<boolean> {
   }
 }
 
-/** Native agent runtimes the resolved binaries support; one handshake per call. */
+/**
+ * Native agent runtimes the resolved binaries support; one handshake per call.
+ * `codex-collaboration-mode-v1` says this `lh` also takes the Codex Plan switch.
+ */
 export async function probeNativeRuntimes(): Promise<string[]> {
-  return (await supportsNativeCodex()) ? ['codex-app-server-v1'] : [];
+  return (await supportsNativeCodex())
+    ? ['codex-app-server-v1', CODEX_COLLABORATION_MODE_RUNTIME]
+    : [];
 }
 
 /**
@@ -117,7 +123,7 @@ export async function collectSystemInfo(
     // Tunneled MCP calls (stdio / local-network servers) run on this machine.
     supportedToolCallTypes: ['tool', 'mcp'],
     ...(supportedTools.length > 0 && { supportedTools }),
-    userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
+    userDataPath: path.join(home, resolveCliDirName()),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),
   };

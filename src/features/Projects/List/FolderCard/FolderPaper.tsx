@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import type { ProjectListItem } from '@/store/project';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import type { FolderSheet } from './folderSheet';
@@ -54,7 +55,7 @@ const styles = stylex.create({
     marginBlockStart: 12,
   },
   root: {
-    paddingBlock: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     paddingInline: 18,
   },
   row: {

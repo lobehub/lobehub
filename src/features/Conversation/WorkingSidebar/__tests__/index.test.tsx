@@ -1,12 +1,11 @@
 import type { DeviceGitPullRequestDetail } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ComponentType } from 'react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { electronSystemService } from '@/services/electron/system';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import PullRequestSections from '../PullRequest/Sections';
 import {
   agentStore,
   browserPanes,
@@ -27,81 +26,11 @@ import {
 } from './harness';
 
 // Loaded after the mock harness so module mocks are registered first.
-let AgentWorkingSidebar: ComponentType<{ availableWidth?: number }>;
-
-beforeAll(async () => {
-  AgentWorkingSidebar = (await import('../index')).default;
-});
+const { default: AgentWorkingSidebar } = await import('../index');
+const { default: PullRequestHeader } = await import('../PullRequest/Header');
+const { default: PullRequestSections } = await import('../PullRequest/Sections');
 
 describe('AgentWorkingSidebar — controlled panel width', () => {
-  it('opens a scoped saved PR before branch lookup and discards it after authoritative empty lookup', () => {
-    linkedPR.branch = undefined;
-    reviewState.workingDirectory = '/repo';
-    chatStore.activeTopicId = 'topic-pr';
-    chatStore.topicDetailMap = {
-      'topic-pr': {
-        id: 'topic-pr',
-        metadata: {
-          workingDirectoryConfig: {
-            path: '/repo',
-            git: {
-              branch: 'feature',
-              github: {
-                pullRequest: {
-                  number: 42,
-                  title: 'Saved PR',
-                  state: 'open',
-                  url: 'https://github.com/test/repo/pull/42',
-                },
-              },
-            },
-          },
-        },
-      },
-    };
-    globalStore.status.workingSidebarTab = 'pr';
-    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
-    const { rerender } = render(<AgentWorkingSidebar />);
-    expect(screen.getByRole('textbox', { name: 'PR draft' })).toBeInTheDocument();
-    linkedPR.status = 'ok';
-    rerender(<AgentWorkingSidebar availableWidth={1200} />);
-    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    { path: '/other', boundDeviceId: undefined },
-    { path: '/repo', boundDeviceId: 'other-device' },
-  ])('does not bootstrap a snapshot from another scope: %o', ({ path, boundDeviceId }) => {
-    linkedPR.branch = undefined;
-    reviewState.workingDirectory = '/repo';
-    chatStore.activeTopicId = 'topic-pr';
-    chatStore.topicDetailMap = {
-      'topic-pr': {
-        id: 'topic-pr',
-        metadata: {
-          boundDeviceId,
-          workingDirectoryConfig: {
-            path,
-            git: {
-              github: {
-                pullRequest: {
-                  number: 42,
-                  state: 'open',
-                  title: 'Other PR',
-                  url: 'https://github.com/test/repo/pull/42',
-                },
-              },
-            },
-          },
-        },
-      },
-    };
-    globalStore.status.workingSidebarTab = 'pr';
-    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
-    render(<AgentWorkingSidebar />);
-    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
-  });
-
   it('resets PR state when the PR number or directory changes', () => {
     reviewState.repoType = 'github';
     reviewState.workingDirectory = '/repo';
@@ -123,7 +52,6 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     reviewState.repoType = 'github';
     reviewState.workingDirectory = '/repo';
     linkedPR.number = 42;
-    linkedPR.status = 'ok';
 
     render(<AgentWorkingSidebar />);
 
@@ -362,45 +290,68 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
   });
 });
 
-describe('Pull request Markdown', () => {
-  it('renders standard Markdown without creating raw HTML elements', () => {
-    const rawHtml = '<aside data-raw-html="true">raw HTML</aside>';
-    const detail: DeviceGitPullRequestDetail = {
-      additions: 1,
-      author: 'lobehub',
-      autoMerge: null,
-      baseBehindBy: 0,
-      baseRefName: 'canary',
-      body: `**description-safe**\n\n${rawHtml}`,
-      changedFiles: 1,
-      checks: [],
-      comments: [
-        {
-          author: 'contributor',
-          body: `**comment-safe**\n\n${rawHtml}`,
-          createdAt: '2026-09-24T00:00:00Z',
-          id: 'comment-1',
-        },
-      ],
-      commits: [],
-      deletions: 0,
-      headRefName: 'fix/markdown',
-      headRefOid: 'a'.repeat(40),
-      isCrossRepository: false,
-      isDraft: false,
-      mergeable: 'MERGEABLE',
-      mergeStateStatus: 'CLEAN',
-      number: 1,
-      repo: { name: 'lobehub', owner: 'lobehub' },
-      reviewDecision: null,
-      reviews: [],
-      state: 'open',
-      title: 'Markdown rendering',
-      url: 'https://github.com/lobehub/lobehub/pull/1',
-      viewerCanBypass: false,
-      viewerCanWrite: true,
-    };
+describe('Pull request panel', () => {
+  const rawHtml = '<aside data-raw-html="true">raw HTML</aside>';
+  const detail: DeviceGitPullRequestDetail = {
+    additions: 1,
+    author: 'lobehub',
+    autoMerge: null,
+    baseBehindBy: 0,
+    baseRefName: 'canary',
+    body: `**description-safe**\n\n${rawHtml}`,
+    changedFiles: 1,
+    checks: [],
+    comments: [
+      {
+        author: 'contributor',
+        body: `**comment-safe**\n\n${rawHtml}`,
+        createdAt: '2026-09-24T00:00:00Z',
+        id: 'comment-1',
+      },
+    ],
+    commits: [],
+    deletions: 0,
+    headRefName: 'fix/markdown',
+    headRefOid: 'a'.repeat(40),
+    isCrossRepository: false,
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
+    number: 1,
+    repo: { name: 'lobehub', owner: 'lobehub' },
+    reviewDecision: null,
+    reviews: [],
+    state: 'open',
+    title: 'Markdown rendering',
+    url: 'https://github.com/lobehub/lobehub/pull/1',
+    viewerCanBypass: false,
+    viewerCanWrite: true,
+  };
 
+  it.each(['web', 'desktop'])('opens the PR externally on %s', (surface) => {
+    platform.isDesktop = surface === 'desktop';
+    const openBrowserTab = vi.spyOn(window, 'open').mockReturnValue(null);
+    const openSystemBrowser = vi
+      .spyOn(electronSystemService, 'openExternalLink')
+      .mockResolvedValue();
+
+    render(<PullRequestHeader detail={detail} workingDirectory="/repo" onAction={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.pr.menu.openOnGithub' }));
+
+    if (surface === 'desktop') {
+      expect(openSystemBrowser).toHaveBeenCalledExactlyOnceWith(detail.url);
+      expect(openBrowserTab).not.toHaveBeenCalled();
+    } else {
+      expect(openBrowserTab).toHaveBeenCalledExactlyOnceWith(
+        detail.url,
+        '_blank',
+        'noopener,noreferrer',
+      );
+      expect(openSystemBrowser).not.toHaveBeenCalled();
+    }
+  });
+
+  it('renders standard Markdown without creating raw HTML elements', () => {
     const { container } = render(
       <PullRequestSections
         detail={detail}
@@ -827,6 +778,20 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('does not offer Files for the implicit desktop directory when no folder is selected', () => {
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.workingDirectory = '/Users/me/Desktop';
+    reviewState.isHomeFallback = true;
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(document.querySelector('button[data-tab-key="files"]')).toBeNull();
+    expect(document.querySelector('button[data-tab-key="skills"]')).not.toBeNull();
+  });
+
   it('opens Claude Code memory by default once a project folder is selected', () => {
     agentStore.activeAgentId = 'agent';
     agentStore.heterogeneousType = 'claude-code';
@@ -1140,5 +1105,23 @@ describe('AgentWorkingSidebar — tab strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
 
     expect(screen.queryByRole('button', { name: 'topicComment.title' })).not.toBeInTheDocument();
+  });
+
+  it('renders Tools tab for standard agents and hides it in chat or heterogeneous mode', async () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = { 'draft:agent:none': ['tools', 'params'] };
+    globalStore.status.workingSidebarTab = 'tools';
+
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1000} />);
+    await waitFor(() => expect(screen.getByTestId('tools-section')).toBeInTheDocument());
+
+    agentStore.isChatMode = true;
+    rerender(<AgentWorkingSidebar availableWidth={1001} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
+
+    agentStore.isChatMode = false;
+    agentStore.isHeterogeneous = true;
+    rerender(<AgentWorkingSidebar availableWidth={1002} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
   });
 });

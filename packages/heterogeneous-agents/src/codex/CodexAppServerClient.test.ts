@@ -182,6 +182,42 @@ describe('CodexAppServerClient', () => {
     }
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'reports each detached app-server group until its leader exits',
+    async () => {
+      const first = createProcess();
+      const replacement = createProcess();
+      replacement.child.pid = 987_655;
+      spawnMock.mockReturnValueOnce(first.child).mockReturnValueOnce(replacement.child);
+      vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const onProcessGroupChange = vi.fn();
+      const client = new CodexAppServerClient({
+        clientVersion: 'test',
+        commandPath: 'codex',
+        cwd: '/workspace',
+        env: process.env,
+        onProcessGroupChange,
+      });
+
+      try {
+        await client.connect();
+        expect(spawnMock.mock.calls[0][2]).toMatchObject({ detached: true });
+        expect(onProcessGroupChange.mock.calls).toEqual([[987_654, true]]);
+
+        // A restart replaces the group; the caller must learn about both.
+        first.child.emit('exit', 1, null);
+        await client.connect();
+        expect(onProcessGroupChange.mock.calls).toEqual([
+          [987_654, true],
+          [987_654, false],
+          [987_655, true],
+        ]);
+      } finally {
+        client.close();
+      }
+    },
+  );
+
   it('reuses a process across runs whose environments differ only in provenance', () => {
     const baseEnv = { ...process.env, CODEX_HOME: '/codex', LOBEHUB_JWT: 'token-a' };
     const options = { clientVersion: '1.0.0', commandPath: 'codex', cwd: '/workspace' };

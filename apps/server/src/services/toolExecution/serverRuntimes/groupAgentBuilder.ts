@@ -402,9 +402,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
             {
               avatar: params.avatar,
               description: params.description,
-              // Domain tool plugins support structured entries, while the DB
-              // model's JSONB column still carries its legacy string[] type.
-              plugins: params.tools as unknown as string[] | undefined,
+              plugins: params.tools,
               systemRole: params.systemRole,
               title: params.title,
               virtual: true,
@@ -449,7 +447,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
             params.agents.map((agent) => ({
               avatar: agent.avatar,
               description: agent.description,
-              plugins: agent.tools as unknown as string[] | undefined,
+              plugins: agent.tools,
               systemRole: agent.systemRole,
               title: agent.title,
               virtual: true,

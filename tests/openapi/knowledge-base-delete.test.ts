@@ -53,8 +53,8 @@ describe('KnowledgeBaseService.deleteKnowledgeBase', () => {
     });
 
     await expect(service.deleteKnowledgeBase('kb-1')).resolves.toEqual({
-      message: 'Knowledge base deleted successfully',
-      success: true,
+      deleted: true,
+      id: 'kb-1',
     });
 
     expect(deleteWithFilesSpy).toHaveBeenCalledWith('kb-1');

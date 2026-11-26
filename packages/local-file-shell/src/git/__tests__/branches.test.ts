@@ -11,12 +11,11 @@ import {
   deleteGitBranch,
   listGitBranches,
   listGitRemoteBranches,
-  pullGitBranch,
-  pushGitBranch,
   renameGitBranch,
   revertGitFile,
 } from '../branches';
 import { getGitAheadBehind, getGitBranch } from '../info';
+import { pullGitBranch, pushGitBranch } from '../sync';
 import { getGitBranchDiff, getGitWorkingTreeFiles, getGitWorkingTreePatches } from '../workingTree';
 import { listGitWorktrees, parseGitWorktreeList, removeGitWorktree } from '../worktrees';
 

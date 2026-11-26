@@ -12,6 +12,7 @@ export const getListItemKey = (item: ListItem): string => {
     case 'model-item-multiple': {
       return item.data.displayName;
     }
+    case 'featured-model-item':
     case 'provider-model-item': {
       return menuKey(item.provider.id, item.model.id);
     }

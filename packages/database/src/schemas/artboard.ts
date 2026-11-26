@@ -30,13 +30,11 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
-import { files } from './file';
 import { projects } from './project';
 import { tasks } from './task';
 import { topics } from './topic';
 import { users } from './user';
 import { acceptances } from './verify';
-import { workVersions } from './work';
 import { workspaces } from './workspace';
 
 const ownerColumns = {
@@ -204,22 +202,14 @@ export const artboardBoards = pgTable(
     description: text('description'),
     expected: text('expected'),
     rect: jsonb('rect').$type<ArtboardRect>().notNull(),
-    sourceWorkVersionId: uuid('source_work_version_id').references(() => workVersions.id, {
-      onDelete: 'set null',
-    }),
     sourcePath: text('source_path'),
-    sourceFileId: text('source_file_id').references(() => files.id, { onDelete: 'set null' }),
     metadata: jsonb('metadata').$type<ArtboardBoardMetadata>(),
     ...timestamps,
   },
   (t) => [
     check(
-      'artboard_boards_single_source_check',
-      sql`num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}) <= 1`,
-    ),
-    check(
       'artboard_boards_decision_no_source_check',
-      sql`${t.type} <> 'decision' OR num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}, ${t.sourcePath}) = 0`,
+      sql`${t.type} <> 'decision' OR ${t.sourcePath} IS NULL`,
     ),
     index('artboard_boards_artboard_id_idx').on(t.artboardId),
     index('artboard_boards_page_id_idx').on(t.pageId),
@@ -235,9 +225,6 @@ export const artboardBoards = pgTable(
     uniqueIndex('artboard_boards_acceptance_flow_node_id_unique')
       .on(t.acceptanceFlowNodeId)
       .where(sql`${t.acceptanceFlowNodeId} IS NOT NULL`),
-    index('artboard_boards_source_work_version_id_idx')
-      .on(t.sourceWorkVersionId)
-      .where(sql`${t.sourceWorkVersionId} IS NOT NULL`),
     index('artboard_boards_user_id_idx').on(t.userId),
     index('artboard_boards_workspace_id_idx')
       .on(t.workspaceId)

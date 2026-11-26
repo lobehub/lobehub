@@ -75,6 +75,18 @@ describe('run fee claim', () => {
     expect(claim.holderId).toBeUndefined();
   });
 
+  it('passes the model the run starts on to the hold', async () => {
+    const claim: RunFeeClaim = {};
+    await claimRunFee(claim, { hold: true, model: 'm1', provider: 'p1', userId: 'u1' });
+
+    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({
+      holderId: claim.holderId,
+      model: 'm1',
+      provider: 'p1',
+      userId: 'u1',
+    });
+  });
+
   it('moves the fee to the operation and releases it when the run never started', async () => {
     const claim: RunFeeClaim = {};
     await claimRunFee(claim, { hold: true, userId: 'u1' });

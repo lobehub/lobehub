@@ -10,6 +10,7 @@ import Favorites from './index';
 const state = vi.hoisted(() => ({
   error: undefined as Error | undefined,
   list: undefined as unknown[] | undefined,
+  menuKey: undefined as string | undefined,
   revalidate: vi.fn(),
 }));
 
@@ -29,6 +30,12 @@ vi.mock('@/components/AsyncError', () => ({
       retry
     </button>
   ),
+}));
+vi.mock('../useSidebarSectionMenuItems', () => ({
+  useSidebarSectionMenuItems: (key: string) => {
+    state.menuKey = key;
+    return [{ key: 'customizeSidebar', label: 'navPanel.customizeSidebar' }];
+  },
 }));
 vi.mock('./SortableFavoriteList', () => ({ default: () => <div data-testid="favorite-list" /> }));
 
@@ -63,5 +70,13 @@ describe('Favorites sidebar section', () => {
     renderSection();
 
     expect(screen.queryByText('favorite.section')).toBeNull();
+  });
+
+  it('gives the header the section layout menu, like the other sections', () => {
+    state.list = [{ id: 'fav-1' }];
+    const { container } = renderSection();
+
+    expect(state.menuKey).toBe('favorites');
+    expect(container.querySelector('.accordion-action')).toBeTruthy();
   });
 });

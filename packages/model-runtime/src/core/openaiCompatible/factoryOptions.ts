@@ -22,6 +22,7 @@ import type {
 } from '../../types/video';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import type { AssertContextWithinWindowOptions } from '../../utils/resolveSafeMaxTokens';
+import type { ResponsesToolAnchoringMode } from '../protocols/openaiResponses/toolAnchoring';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import type { DecideConfig } from './decide';
 
@@ -205,6 +206,17 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       headers?: Record<string, string>;
       payload: ResponseCreateParamsWithPromptCacheKey;
     };
+    /**
+     * How this provider declares tools that became available mid-conversation
+     * (`OpenAIChatMessage.toolsAdded`), for the model the request targets. Leave it
+     * unset, or return `undefined`, to keep every tool in the top-level list.
+     */
+    toolAnchoring?: (context: {
+      /** Endpoint the request is sent to. */
+      baseURL?: string;
+      /** Upstream model id, after `modelIdMapping`. */
+      model: string;
+    }) => ResponsesToolAnchoringMode | undefined;
   };
   videoGenerationCapabilities?:
     VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);

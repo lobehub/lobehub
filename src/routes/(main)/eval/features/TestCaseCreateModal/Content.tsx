@@ -13,9 +13,11 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -43,7 +45,11 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
+  /** Save failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | undefined>();
+
   const handleFinish = async (values: any) => {
+    setError(undefined);
     onLoadingChange?.(true);
     try {
       const tags = values.tags
@@ -76,16 +82,15 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
       }, 0);
       close();
       onSuccess?.(datasetId);
-    } catch {
-      setTimeout(() => {
-        toast.error(t('testCase.create.error'));
-      }, 0);
+    } catch (cause) {
+      console.error('Failed to create eval test case:', cause);
+      setError(toInlineError(t('testCase.create.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
   };
 
-  const form = useForm({ onSubmit: handleFinish });
+  const form = useForm({ onSubmit: handleFinish, onValuesChange: () => setError(undefined) });
   const evalModeValue = useWatch(form, 'evalMode');
 
   return (
@@ -175,6 +180,7 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
           },
         ]}
       />
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

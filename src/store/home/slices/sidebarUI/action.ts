@@ -1,8 +1,9 @@
+import type { WorkspaceUserPreference } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { cacheScope } from '@/libs/replica';
-import { agentService } from '@/services/agent';
+import { agentService, type RemoveAgentOptions } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
@@ -11,13 +12,17 @@ import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
+import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 import { type SessionGroupItemBase } from '@/types/session';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('sidebarUI');
 
-/** Upper bound for one member's personal pin list (mirrors the server cap). */
-export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+/**
+ * Upper bound for one member's pin list (mirrors the server cap). It may hold
+ * every team pin, so this matches the team order cap (`MAX_PINNED_ORDER_ITEMS`).
+ */
+export const MAX_SIDEBAR_PINNED_ITEMS = 2000;
 
 export interface PersonalPinTarget {
   id: string;
@@ -27,6 +32,26 @@ export interface PersonalPinTarget {
   visibility?: 'private' | 'public' | null;
 }
 
+const isSameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
+
+/**
+ * The caller's user store once the server has set their sidebar up. Pin
+ * writes replace the whole list, so one built from a cached preference the
+ * server has not answered yet could drop what the server is about to add —
+ * or, built from the sidebar's guess of the outcome
+ * (`workspaceUserSettingsSelectors.sidebarSetupPreview`), persist the wrong
+ * one. Such a write waits for that answer instead; the server sets the
+ * sidebar up in it.
+ */
+const getSettledUserStore = async () => {
+  const userStore = getUserStoreState();
+  if (workspaceUserSettingsSelectors.sidebarSetupPreview(userStore) === null) return userStore;
+
+  await userStore.refreshWorkspaceUserPreference();
+  return getUserStoreState();
+};
+
 type Setter = StoreSetter<HomeStore>;
 export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
   new SidebarUIActionImpl(set, get, _api);
@@ -35,6 +60,9 @@ export class SidebarUIActionImpl {
   readonly #get: () => HomeStore;
   readonly #set: Setter;
   #myPinnedQueue: Promise<unknown> = Promise.resolve();
+
+  /** The workspace's legacy team pins (public rows with the shared column), in team order. */
+  #teamPinnedIds = (): string[] => this.#get().pinnedAgents.map((item) => item.id);
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -102,15 +130,21 @@ export class SidebarUIActionImpl {
   /**
    * Pin / unpin an Agent or chat group for the current member only, in the
    * merged workspace Agents section. The member's pin order lives in their
-   * `sidebarPinnedItemIds` preference (newest first); the shared column on a
-   * public row is the team pin and is left alone. A private row additionally
-   * keeps its own column in sync — only its creator can see it, earlier
-   * clients read it as the pin, and a rollback keeps showing it. Unpinning
-   * clears both places.
+   * `sidebarPinnedItemIds` preference (a new pin goes first); the shared
+   * column on a public row is a legacy team pin and is left alone.
+   *
+   * - Unpinning keeps the row in the sidebar: a public row with no explicit
+   *   choice yet (for example a team pin made by a teammate) is added to
+   *   the member's list (`sidebarAgentVisibilityOverrides`), so it moves down
+   *   instead of vanishing. Removing it stays a separate action.
+   * - A private row additionally keeps its own column in sync — only its
+   *   creator can see it, earlier clients read it as the pin, and a rollback
+   *   keeps showing it. Unpinning clears both places.
    */
   pinItemForMe = async (item: PersonalPinTarget, pinned: boolean): Promise<void> => {
-    const userStore = getUserStoreState();
-    const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+    const userStore = await getSettledUserStore();
+    const preference = userStore.workspaceUserPreference;
+    const current = preference.sidebarPinnedItemIds ?? [];
     const isPrivate = item.visibility === 'private';
     const writeColumn = (value: boolean) =>
       item.type === 'group' ? this.pinAgentGroup(item.id, value) : this.pinAgent(item.id, value);
@@ -118,17 +152,22 @@ export class SidebarUIActionImpl {
     const nextIds = pinned
       ? [item.id, ...current.filter((id) => id !== item.id)].slice(0, MAX_SIDEBAR_PINNED_ITEMS)
       : current.filter((id) => id !== item.id);
-    const listChanged =
-      nextIds.length !== current.length || nextIds.some((id, i) => id !== current[i]);
 
-    if (listChanged) {
-      await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
-    }
+    const patch: Partial<WorkspaceUserPreference> = {};
+    if (!isSameIds(nextIds, current)) patch.sidebarPinnedItemIds = nextIds;
+    if (
+      !pinned &&
+      !isPrivate &&
+      preference.sidebarAgentVisibilityOverrides?.[item.id] === undefined
+    )
+      patch.sidebarAgentVisibilityOverrides = { [item.id]: true };
+
+    if (Object.keys(patch).length > 0) await userStore.updateWorkspaceUserPreference(patch);
     if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
   };
 
   /**
-   * Reorder the member's own pins in the merged workspace Agents section.
+   * Reorder the member's pinned list in the merged workspace Agents section.
    * `ids` is the new order of the rows the sidebar shows; ids in the stored
    * list that are not shown right now (hidden or dangling) keep their place
    * after them, so a reorder never unpins anything.
@@ -144,15 +183,19 @@ export class SidebarUIActionImpl {
       .catch(() => undefined)
       .then(async () => {
         if (cacheScope.get() !== scope) return;
-        const userStore = getUserStoreState();
+        const userStore = await getSettledUserStore();
+        if (cacheScope.get() !== scope) return;
         const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
-        const shown = new Set(ids);
-        const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
+        // A team pin is pinned only through the member's own list; one the
+        // sidebar merely previewed as pinned is not pinned by a drag.
+        const teamPinned = new Set(this.#teamPinnedIds());
+        const kept = ids.filter((id) => !teamPinned.has(id) || current.includes(id));
+        const shown = new Set(kept);
+        const nextIds = [...kept, ...current.filter((id) => !shown.has(id))].slice(
           0,
           MAX_SIDEBAR_PINNED_ITEMS,
         );
-        if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i]))
-          return;
+        if (isSameIds(nextIds, current)) return;
 
         await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
       });
@@ -160,8 +203,8 @@ export class SidebarUIActionImpl {
     await operation;
   };
 
-  removeAgent = async (agentId: string): Promise<void> => {
-    await agentService.removeAgent(agentId);
+  removeAgent = async (agentId: string, options?: RemoveAgentOptions): Promise<void> => {
+    await agentService.removeAgent(agentId, options);
     await this.#get().refreshAgentList();
     // deleting an agent cascade-deletes its topics + messages on the server; drop
     // their message cache too so it doesn't orphan in IndexedDB (never expires)

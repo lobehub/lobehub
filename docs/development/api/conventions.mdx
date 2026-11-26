@@ -1,0 +1,177 @@
+---
+title: LobeHub API Errors, Pagination, Rate Limits, and Retries
+description: >-
+  Error format and error code catalog, pagination, rate limits, idempotency
+  keys, and retry advice for the LobeHub public REST API.
+tags:
+  - LobeHub
+  - REST API
+  - Errors
+  - Pagination
+  - Rate Limit
+  - Idempotency
+---
+
+# LobeHub API Errors, Pagination, Rate Limits, and Retries
+
+This page describes the conventions shared by every `/api/v1` endpoint. Each section starts with today's behavior on `canary`, then the behavior added by [#23231](https://github.com/lobehub/lobehub/pull/23231), which is **coming soon**.
+
+## Response Envelope
+
+Successful JSON responses are wrapped:
+
+```json
+{ "success": true, "data": {}, "message": "optional", "timestamp": "2026-11-18T08:00:00.000Z" }
+```
+
+Every `DELETE` returns `{ "deleted": true, "id": "…" }`, or `{ "deleted": true, "count": 3 }` for bulk deletes. `GET /health` and streaming responses are not wrapped. `POST /responses` returns the OpenResponses object without the envelope.
+
+## Errors
+
+### Available: Current Error Body
+
+```json
+{ "success": false, "error": "Agent not found", "timestamp": "2026-11-18T08:00:00.000Z" }
+```
+
+Use the HTTP status to branch:
+
+| Status | Meaning                                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `400`  | Validation failed or the request cannot be processed. For validation errors, `error` contains the serialized field errors |
+| `401`  | Missing, invalid, or expired credential                                                                                   |
+| `403`  | Authenticated but not allowed: missing scope, Workspace role, or Workspace mismatch                                       |
+| `404`  | The resource does not exist or is not visible to the caller                                                               |
+| `405`  | Method not supported                                                                                                      |
+| `408`  | Timeout                                                                                                                   |
+| `409`  | Conflicts with the current state of the resource                                                                          |
+| `412`  | A precondition is not met, for example the task is archived                                                               |
+| `413`  | Request body too large                                                                                                    |
+| `422`  | Valid request that cannot be applied                                                                                      |
+| `429`  | Too many requests                                                                                                         |
+| `500`  | Unexpected server error                                                                                                   |
+
+### Coming Soon: Unified Error Body and Codes
+
+[#23231](https://github.com/lobehub/lobehub/pull/23231) adds a stable `code`, a human-readable `message`, field `details`, and a `requestId` to every error. The old `error` field stays, with the same text as `message`, so current clients keep working.
+
+```json
+{
+  "success": false,
+  "code": "validation_error",
+  "message": "Too big: expected number to be <=100",
+  "details": [{ "path": "query.limit", "message": "Too big: expected number to be <=100" }],
+  "error": "Too big: expected number to be <=100",
+  "requestId": "req_6f1c2b…",
+  "timestamp": "2026-11-18T08:00:00.000Z"
+}
+```
+
+`details[].path` starts with the part of the request that failed: `json`, `query`, `param`, or `header`.
+
+#### Error Codes
+
+Codes are only ever added, never renamed or removed. Treat an unknown code by its HTTP status.
+
+| Code                   | Status    | Meaning                                                                                                          | Retry                           |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `validation_error`     | 400       | A field failed validation; see `details`                                                                         | No, fix the request             |
+| `bad_request`          | 400       | Understood but cannot be processed as sent                                                                       | No                              |
+| `unauthorized`         | 401       | Missing, invalid, or expired credential                                                                          | After refreshing the token      |
+| `payment_required`     | 402       | Needs credits or a plan the caller does not have                                                                 | No                              |
+| `forbidden`            | 403       | Authenticated but not allowed                                                                                    | No                              |
+| `insufficient_scope`   | 403       | The API key lacks a required scope                                                                               | No, issue a key with the scope  |
+| `workspace_mismatch`   | 403       | `X-Workspace-Id` does not match the key, or the caller is not a member                                           | No                              |
+| `not_found`            | 404       | Does not exist or is not visible                                                                                 | No                              |
+| `conflict`             | 409       | Conflicts with the current resource state                                                                        | After re-reading the resource   |
+| `idempotency_conflict` | 409 / 422 | 409: a request with this `Idempotency-Key` is still running. 422: the key was first used for a different request | 409: yes, with backoff. 422: no |
+| `precondition_failed`  | 412       | A precondition is not met                                                                                        | No                              |
+| `payload_too_large`    | 413       | Body exceeds the accepted size                                                                                   | No                              |
+| `unprocessable_entity` | 422       | Valid but cannot be applied                                                                                      | No                              |
+| `rate_limited`         | 429       | Too many requests for this key                                                                                   | Yes, after `Retry-After`        |
+| `internal_error`       | 500       | Unexpected error                                                                                                 | Yes, with backoff               |
+| `upstream_error`       | 502       | A model provider or other upstream failed                                                                        | Yes, with backoff               |
+| `service_unavailable`  | 503       | A dependency is temporarily unavailable                                                                          | Yes, with backoff               |
+
+`POST /responses` keeps the OpenResponses error shape, `{ "error": { "type", "message", "code", "param" } }`, with `code` taken from the same catalog. The `/openai` and `/anthropic` compatible routes keep their vendors' error bodies.
+
+#### Request IDs
+
+Every response carries `X-Request-Id`. Send your own (up to 128 characters of letters, digits, `_`, `.`, `:`, `-`) to correlate logs; otherwise the server generates `req_…`. Include it when you report a problem.
+
+## Pagination
+
+### Available: Page Numbers
+
+List endpoints accept `page` (from 1) and `pageSize` (1–100, default 20). Most also accept `keyword` (up to 100 characters). Responses name the array after the resource and include the total:
+
+```json
+{ "success": true, "data": { "agents": [], "total": 42 } }
+```
+
+Three lists are exceptions and return a bare array of every item today: `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers`.
+
+### Coming Soon: Cursors
+
+With [#23231](https://github.com/lobehub/lobehub/pull/23231), lists accept `limit` (1–100, default 20) and `cursor`, and return `hasMore` and `nextCursor`:
+
+```bash
+curl "https://app.lobehub.com/api/v1/agent-groups?limit=50" -H "Authorization: Bearer $KEY"
+# next page:
+curl "https://app.lobehub.com/api/v1/agent-groups?limit=50&cursor=bzo1MA" -H "Authorization: Bearer $KEY"
+```
+
+```json
+{ "success": true, "data": { "items": [], "total": 120, "hasMore": true, "nextCursor": "bzo1MA" } }
+```
+
+- Treat `nextCursor` as opaque and pass it back unchanged. It is `null` on the last page. An invalid cursor returns `400` `validation_error` on `query.cursor`.
+- `total` is returned only where it is cheap to compute.
+- New endpoints use `items`. Existing lists keep their array key (`agents`, `topics`, …) and gain `hasMore` and `nextCursor`.
+- **Shape change:** `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers` switch from a bare array to `{ items, total, hasMore, nextCursor }`. Send `format=array` (deprecated) to keep the old bare array with every item while you migrate.
+- `page`, `pageSize`, and `offset` keep working but are deprecated. If several are sent, `cursor` wins over `offset`, which wins over `page`.
+
+## Rate Limits
+
+Today the public API does not send rate limit headers.
+
+**Coming soon** ([#23231](https://github.com/lobehub/lobehub/pull/23231)): each API key gets a fixed window of 600 requests per 60 seconds by default (self-hosted instances set it with `OPENAPI_RATE_LIMIT_PER_MINUTE`). Every API key response then carries:
+
+| Header                  | Meaning                                 |
+| ----------------------- | --------------------------------------- |
+| `X-RateLimit-Limit`     | Requests allowed in the window          |
+| `X-RateLimit-Remaining` | Requests left in the current window     |
+| `X-RateLimit-Reset`     | When the window resets, in Unix seconds |
+
+A request over the limit returns `429` `rate_limited` with `Retry-After` in seconds. The limit and its headers apply to API key requests only; OIDC sessions are not counted. On a self-hosted instance without Redis, requests are not limited and the headers are not sent.
+
+## Idempotency
+
+**Coming soon** ([#23231](https://github.com/lobehub/lobehub/pull/23231)): send `Idempotency-Key` on a `POST` to make it safe to retry.
+
+```bash
+curl https://app.lobehub.com/api/v1/agents \
+  -H "Authorization: Bearer $KEY" \
+  -H "Idempotency-Key: 0b8f6a52-6c1e-4b8a-9d55-3f0d7f2a91c4" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Researcher"}'
+```
+
+- The key is 1–255 characters; a UUID per logical operation works well.
+- The first response is stored for 24 hours. Repeating the same method, path, query, and body with the same key returns the stored response with `Idempotent-Replayed: true`, without running the operation again.
+- Keys are scoped to the caller and the Workspace, so two keys or two Workspaces never collide.
+- Repeating while the first request is still running returns `409` `idempotency_conflict`. Reusing the key with a different body returns `422` `idempotency_conflict`.
+- Error responses of `5xx` and `429`, streaming responses, and empty responses are not stored, so a retry runs the operation again.
+
+## Retry Advice
+
+| Situation                                                  | Retry?                                  | How                                                                        |
+| ---------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------- |
+| Network error or timeout on `GET`, `HEAD`, `PUT`, `DELETE` | Yes                                     | Exponential backoff                                                        |
+| Network error on `POST`                                    | Only with `Idempotency-Key`             | Same key, same body                                                        |
+| `408`, `500`, `502`, `503`, `504`                          | Yes, for safe methods or a keyed `POST` | Exponential backoff with jitter                                            |
+| `429`                                                      | Yes                                     | Wait for `Retry-After`; if it is very long, report back instead of waiting |
+| `409` `idempotency_conflict`                               | Yes                                     | Backoff; the first request is still running                                |
+| Other `4xx`                                                | No                                      | Fix the request, credential, or scope                                      |
+
+A good default backoff is 0.5 s, doubling each attempt up to 8 s, with ±25% random jitter and at most 2 retries. This is the policy of the TypeScript and Python SDKs once [#23246](https://github.com/lobehub/lobehub/pull/23246) and [#23337](https://github.com/lobehub/lobehub/pull/23337) ship. The SDK returns the error without waiting when `Retry-After` is longer than 60 seconds. Never retry `PATCH` or an unkeyed `POST` automatically: it can apply the change twice.

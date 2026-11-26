@@ -27,7 +27,6 @@ import type {
   QueryTopicByCursorParams,
   TopicMessagesByCursorResult,
   TopicTranscriptResult,
-  VisitorRedactionOptions,
 } from './types';
 import { toVisitorMessage } from './visitor';
 
@@ -102,13 +101,16 @@ export class MessageConversationQueries extends MessageScope {
       agentId,
       before,
       current = 0,
+      includeArtboardWorks,
       includeFileWorks,
       pageSize = 1000,
       sessionId,
+      skipCompressedMembers,
       skipWorks,
       topicId,
       groupId,
       threadId,
+      viewModelPluginState,
     }: QueryMessageParams = {},
     options: {
       /**
@@ -203,12 +205,16 @@ export class MessageConversationQueries extends MessageScope {
         allowShareVisitor: effectiveIncludeVisitor,
         before,
         current,
+        groupMemberScope: threadCondition,
+        includeArtboardWorks,
         includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipCompressedMembers,
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: and(threadScopeCondition, threadCondition),
       });
@@ -233,12 +239,17 @@ export class MessageConversationQueries extends MessageScope {
         allowShareVisitor: effectiveIncludeVisitor,
         before,
         current,
+        // Main-conversation page: leave out the groups of the topic's threads.
+        groupMemberScope: this.matchThread(threadId),
+        includeArtboardWorks,
         includeFileWorks,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipCompressedMembers,
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: whereCondition,
       });
@@ -267,12 +278,17 @@ export class MessageConversationQueries extends MessageScope {
       allowShareVisitor: effectiveIncludeVisitor,
       before,
       current,
+      // Main-conversation page: leave out the groups of the topic's threads.
+      groupMemberScope: this.matchThread(threadId),
+      includeArtboardWorks,
       includeFileWorks,
       pageSize,
       postProcessUrl: options.postProcessUrl,
+      skipCompressedMembers,
       skipWorks,
       timing,
       topicId: topicId ?? undefined,
+      viewModelPluginState,
       where: whereCondition,
       workAccessScope: options.workAccessScope,
     });
@@ -288,9 +304,8 @@ export class MessageConversationQueries extends MessageScope {
    *
    * Share messages persist under the CREATOR's account (see `shareChat.ts`),
    * so `query()`'s joined `sender` and the billing/model-snapshot fields
-   * describe the creator, not the visitor reading them. `redaction` carries the
-   * share's own `showModelInfo` / `showErrorDetails` switches; omitting it
-   * strips everything (fail closed).
+   * describe the creator, not the visitor reading them. Errors are projected to
+   * a classified type; model, provider and spend never reach a visitor.
    */
   queryForVisitor = async (
     params: QueryMessageParams = {},
@@ -299,7 +314,6 @@ export class MessageConversationQueries extends MessageScope {
         path: string | null,
         file: { fileType: string; id?: string | null },
       ) => Promise<string>;
-      redaction?: VisitorRedactionOptions;
       timing?: ModelTimingContext;
       /**
        * The visitor's share scope for Work summaries. Omitting it skips Work
@@ -315,31 +329,7 @@ export class MessageConversationQueries extends MessageScope {
       { ...params, skipWorks: params.skipWorks || !options.workAccessScope },
       { ...options, allowShareVisitor: true },
     );
-    return messageItems.map((message) => toVisitorMessage(message, options.redaction));
-  };
-
-  /**
-   * Exact per-topic turn count for one role, used by `maxTurnsPerTopic`.
-   *
-   * MUST NOT reuse {@link MessageModel.count}: its `analyticsConditions()` ANDs
-   * in `notShareVisitorMessage()`, which excludes every message whose topic has
-   * a non-null `senderId` — i.e. every agent-share visitor topic. That
-   * predicate is correct for personal analytics (visitor usage is reported
-   * separately), but it would make `count()` return 0 forever for a share
-   * topic, silently disabling the turn cap.
-   *
-   * Safe without a visitor/ownership check here: the caller (shareChat router /
-   * `reserveShareVisitorTurn`) already resolved and authorized the topic, and
-   * `this.ownership()` matches because share messages carry the creator's
-   * `userId` (the model is constructed with `share.ownerId`).
-   */
-  countByTopic = async ({ role, topicId }: { role: string; topicId: string }): Promise<number> => {
-    const result = await this.db
-      .select({ count: count(messages.id) })
-      .from(messages)
-      .where(and(this.ownership(), eq(messages.topicId, topicId), eq(messages.role, role)));
-
-    return result[0].count;
+    return messageItems.map((message) => toVisitorMessage(message));
   };
 
   /**
@@ -457,6 +447,7 @@ export class MessageConversationQueries extends MessageScope {
       cursor,
       direction = 'backward',
       groupId,
+      includeArtboardWorks,
       includeFileWorks,
       roundLimit = DEFAULT_ROUND_LIMIT,
       skipWorks,
@@ -498,6 +489,9 @@ export class MessageConversationQueries extends MessageScope {
     const messages = await this.page.queryWithWhere({
       allowShareVisitor: true,
       current: 0,
+      // The windowed `where` would drop groups whose members predate the page.
+      groupMemberScope: this.matchThread(undefined),
+      includeArtboardWorks,
       includeFileWorks,
       pageSize: CURSOR_PAGE_CEILING,
       postProcessUrl: options.postProcessUrl,

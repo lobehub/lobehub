@@ -45,7 +45,10 @@ const AllTopicsDrawer = memo<AllTopicsDrawerProps>(({ open, onClose }) => {
       }
       onClose={onClose}
     >
-      <Content open={open} searchKeyword={searchKeyword} />
+      {/* Keeps arrow-key navigation inside the drawer; `display: contents` leaves the layout untouched. */}
+      <div data-topic-list-root="" style={{ display: 'contents' }}>
+        <Content open={open} searchKeyword={searchKeyword} />
+      </div>
     </SideBarDrawer>
   );
 });

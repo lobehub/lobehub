@@ -52,3 +52,39 @@ export const buildProjectedMessagePatch = (
   revision: number,
 ): MessagePatchData =>
   buildMessagePatch(projectToolViewModels(before), projectToolViewModels(after), revision);
+
+/**
+ * Swap each upserted `compressedGroup` envelope for its copy in `withMembers`,
+ * projected like the rest of the patch.
+ *
+ * A protocol-2 run reads the topic without compression-group members (see
+ * `queryStepEntryMessages`), so both sides of the diff carry member-less envelopes
+ * and an untouched group never ships. A group the step created or changed
+ * does ship, and the client replaces its copy with whatever the patch holds:
+ * sent as read, the group would lose the original messages the client shows
+ * when it is expanded. Undefined when `withMembers` lacks one of them.
+ */
+export const fillCompressedGroupUpserts = (
+  patch: MessagePatchData,
+  withMembers: UIChatMessage[],
+): MessagePatchData | undefined => {
+  const byId = new Map(withMembers.map((message) => [message.id, message]));
+  const upserts: MessagePatchData['upserts'] = [];
+
+  for (const upsert of patch.upserts) {
+    if (upsert.message.role !== 'compressedGroup') {
+      upserts.push(upsert);
+      continue;
+    }
+
+    const filled = byId.get(upsert.message.id);
+    if (!filled) return undefined;
+    upserts.push({ ...upsert, message: projectToolViewModels([filled])[0] });
+  }
+
+  return { ...patch, upserts };
+};
+
+/** Whether {@link fillCompressedGroupUpserts} has anything to fill. */
+export const hasCompressedGroupUpsert = (patch: MessagePatchData): boolean =>
+  patch.upserts.some((upsert) => upsert.message.role === 'compressedGroup');

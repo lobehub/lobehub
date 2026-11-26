@@ -13,6 +13,8 @@ export const TRACING_SCENARIOS = {
   BotRetro: 'bot_retro',
   BotWakeClassifier: 'bot_wake_classifier',
   BuilderSuggestion: 'builder_suggestion',
+  ChannelReplyError: 'channel_reply_error',
+  ChannelReplyOpener: 'channel_reply_opener',
   ChannelRouting: 'channel_routing',
   DocumentToSkillMeta: 'document_to_skill_meta',
   ExpertiseConsolidation: 'expertise_consolidation',

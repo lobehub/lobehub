@@ -1,4 +1,4 @@
-import { channelMessageEditedAt } from '@lobechat/types';
+import { channelMessageDeletedAt, channelMessageEditedAt } from '@lobechat/types';
 import { and, count, eq } from 'drizzle-orm';
 
 import { channelMessageFiles, channelMessages } from '../../schemas';
@@ -24,6 +24,9 @@ export const editMessage = async (
     .from(channelMessages)
     .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, messageId)));
   if (!message) throw new ChannelError('NOT_FOUND', 'Message not found');
+  // A tombstone carries no content by design; editing one would put it back.
+  if (channelMessageDeletedAt(message.metadata))
+    throw new ChannelError('CONFLICT', 'A deleted message cannot be edited');
   // Agent replies have no userId, so this also keeps them read-only.
   if (message.routingStatus === 'reply' || message.userId !== userId)
     throw new ChannelError('FORBIDDEN', 'Only the author can edit a message');

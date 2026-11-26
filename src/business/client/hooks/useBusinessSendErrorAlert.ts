@@ -1,10 +1,16 @@
+import type { IconProps } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 export interface BusinessSendErrorAlert {
   /** Button shown beside the notice, such as an upgrade entry. */
   action?: ReactNode;
-  /** Replaces the line under the title, so it names only the actions offered. */
-  description?: string;
+  /**
+   * Replaces the line under the title, so it names only the actions offered.
+   * `null` drops the line, for a title that already says what to do.
+   */
+  description?: string | null;
+  /** Replaces the notice icon, e.g. an hourglass for a limit that resets. */
+  icon?: IconProps['icon'];
   /** Replaces the default notice text. */
   title?: string;
 }

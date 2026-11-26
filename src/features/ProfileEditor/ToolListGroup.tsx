@@ -39,6 +39,12 @@ interface ToolListGroupProps extends ToolGroupMeta {
   /** The control that adds one more; it closes the list as a row of its own. */
   addControl: ReactNode;
   emptyText: string;
+  /**
+   * Fold a long list after a few rows. Turn off where the list is the page itself, so nothing
+   * the person came to find sits behind a click.
+   * @default true
+   */
+  fold?: boolean;
   /** One element per tool or skill, each with its own key. */
   rows: ReactElement[];
   /** How many exist to choose from; shows as "N of M turned on" instead of a bare count. */
@@ -67,11 +73,11 @@ Row.displayName = 'ToolListRow';
  * scannable, and one row opens the rest.
  */
 const ToolListGroup = memo<ToolListGroupProps>(
-  ({ activeCount, addControl, desc, emptyText, extra, plain, rows, title, total }) => {
+  ({ activeCount, addControl, desc, emptyText, extra, fold = true, plain, rows, title, total }) => {
     const { t } = useTranslation('setting');
     const form = useForm();
     const [expanded, setExpanded] = useState(false);
-    const foldable = rows.length > TOOL_ROWS_VISIBLE;
+    const foldable = fold && rows.length > TOOL_ROWS_VISIBLE;
     const visible = foldable && !expanded ? rows.slice(0, TOOL_ROWS_VISIBLE) : rows;
 
     const content = (

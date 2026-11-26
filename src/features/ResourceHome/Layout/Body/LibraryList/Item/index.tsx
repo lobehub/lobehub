@@ -15,6 +15,7 @@ import { useDropdownMenu } from './useDropdownMenu';
 
 interface KnowledgeBaseItemProps {
   active?: boolean;
+  avatar?: string | null;
   className?: string;
   description?: string | null;
   id: string;
@@ -28,6 +29,7 @@ interface KnowledgeBaseItemProps {
 
 const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
   ({
+    avatar,
     id,
     name,
     description,
@@ -98,6 +100,7 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
     }, [isLoading, visibility, isMemberRestricted]);
 
     const dropdownMenu = useDropdownMenu({
+      avatar,
       description,
       id,
       name,

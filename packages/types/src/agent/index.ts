@@ -2,6 +2,7 @@ export * from './agencyConfig';
 export * from './agentConfig';
 export * from './agentIntervention';
 export * from './chatConfig';
+export type * from './deleteImpact';
 export * from './displayName';
 export * from './document';
 export * from './executionTargetRules';

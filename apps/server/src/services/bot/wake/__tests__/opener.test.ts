@@ -33,7 +33,7 @@ describe('createReplyOpener', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v3',
+      promptVersion: 'v5',
       scenario: 'bot_reply_opener',
       schemaName: 'bot_reply_opener',
     });
@@ -90,6 +90,9 @@ describe('normalizeReplyOpening', () => {
       placement: 'channel',
     });
     expect(normalizeReplyOpening({ ...answer, ack: '  ', acknowledge: true }, true)).toEqual({
+      placement: 'channel',
+    });
+    expect(normalizeReplyOpening({ ...answer, ack: ':', acknowledge: true }, true)).toEqual({
       placement: 'channel',
     });
   });

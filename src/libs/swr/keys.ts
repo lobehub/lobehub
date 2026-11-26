@@ -39,6 +39,7 @@ interface LocalFilePreviewKeyParams {
   resourceScope?: 'workspace';
   /** Topic scope when the previewed file lives in the topic's cloud sandbox. */
   sandboxTopicId?: string;
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -327,16 +328,6 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
-  gitLinkedPR: def(
-    'device:gitLinkedPR',
-    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
-      'device:gitLinkedPR',
-      deviceId,
-      path,
-      branch,
-      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
-    ],
-  ),
   gitPullRequestDetail: def(
     'device:gitPullRequestDetail',
     (deviceId: string, path: string, number: number) => [
@@ -436,12 +427,14 @@ export const mcpAppKeys = {
         onThisDevice = false,
         server,
         toolArguments,
+        topicId,
       }: {
         agentId?: string;
         linkId?: string;
         onThisDevice?: boolean;
         server?: string;
         toolArguments?: string;
+        topicId?: string;
       },
     ) => [
       'mcpApp:resource',
@@ -452,6 +445,7 @@ export const mcpAppKeys = {
       server ?? null,
       toolArguments ?? null,
       linkId ?? null,
+      topicId ?? null,
     ],
   ),
 };
@@ -551,6 +545,7 @@ export const localFileKeys = {
       filePath,
       resourceScope,
       sandboxTopicId,
+      topicId,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
@@ -560,6 +555,7 @@ export const localFileKeys = {
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
       resourceScope ?? 'single-file',
+      ...(deviceId && topicId ? [topicId] : []),
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [

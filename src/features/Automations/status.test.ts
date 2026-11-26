@@ -58,6 +58,9 @@ describe('resolveAutomationStatus', () => {
       resolveAutomationStatus({ lastError: 'insufficient_budget', status: 'error' }).remedy,
     ).toBe('none');
     expect(resolveAutomationStatus({ lastError: 'wake_cap', status: 'error' }).remedy).toBe('none');
+    expect(
+      resolveAutomationStatus({ lastError: 'channel_unavailable', status: 'active' }),
+    ).toMatchObject({ reasonKey: 'automations.error.channel_unavailable', remedy: 'none' });
   });
 
   it('reads an error row without a recorded cause as unknown', () => {
@@ -73,13 +76,22 @@ describe('resolveAutomationStatus', () => {
     ).toMatchObject({
       kind: 'terminated',
       labelKey: 'automations.status.terminated',
-      reasonKey: 'automations.error.access_revoked',
+      reasonKey: 'automations.error.reconnectToResubscribe',
       remedy: 'resubscribe',
       tone: 'default',
     });
     expect(resolveAutomationStatus({ lastError: null, status: 'terminated' }).reasonKey).toBe(
       'automations.error.terminated',
     );
+  });
+
+  it('shows a paused webhook as paused, not failing, even with a stale error', () => {
+    expect(resolveAutomationStatus({ lastError: 'wake_cap', status: 'paused' })).toEqual({
+      kind: 'paused',
+      labelKey: 'automations.status.paused',
+      remedy: 'none',
+      tone: 'default',
+    });
   });
 });
 
@@ -88,8 +100,7 @@ describe('automationErrorKey', () => {
     const keys = INBOUND_WEBHOOK_ERRORS.map((error) => automationErrorKey(error));
 
     expect(new Set(keys).size).toBe(INBOUND_WEBHOOK_ERRORS.length);
-    for (const error of INBOUND_WEBHOOK_ERRORS)
-      expect(automationErrorKey(error)).toBe(`automations.error.${error}`);
+    for (const key of keys) expect(key).toMatch(/^automations\.error\./);
   });
 
   it('falls back to unknown for a value the client does not know yet', () => {

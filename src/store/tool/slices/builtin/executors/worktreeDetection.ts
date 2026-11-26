@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceGitUpstreamRef } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import { gitService } from '@/services/git';
@@ -9,14 +9,14 @@ import { getChatStoreState } from '@/store/chat/store';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
 
+import { applyOwnBranchToConfig, parseCreatedBranch } from './ownBranch';
+import { linkPushedPullRequests } from './pushedPullRequests';
 import {
   applyBranchToConfig,
   applyDetachedToConfig,
-  applyPullRequestToConfig,
   applyPushToConfig,
   applyWorktreeAddToConfig,
   applyWorktreeExitToConfig,
-  type PullRequestCreateInfo,
   type WorktreeAddInfo,
 } from './worktreeConfigEffects';
 
@@ -26,7 +26,7 @@ import {
  *
  * Runs from the `claude-code` / `codex` executor's `onAfterCall` hook
  * (renderer-side, fired on `tool_end`). The CLI session cwd stays anchored to
- * the source repo; selected worktree / branch / linked PR are topic metadata.
+ * the source repo; selected worktree / branch are topic metadata.
  *
  * Command parsing is a trigger + hint, not the source of truth: a Codex-style
  * login-shell wrapper (`/bin/zsh -lc "…"`) is peeled off first, `$VAR`
@@ -39,6 +39,11 @@ import {
 /** Flags on `git worktree add` that consume the following token as their value. */
 const VALUE_FLAGS = new Set(['-b', '-B', '--reason']);
 const BRANCH_VALUE_FLAGS = new Set(['-b', '-B']);
+/**
+ * Branch flags that can only CREATE: `-C` / `-B` / `--force-create` also reset an
+ * existing branch, so a successful run with them proves nothing about who made it.
+ */
+const CREATE_ONLY_BRANCH_FLAGS = new Set(['-b', '-c', '--create', '--orphan']);
 const BRANCH_SWITCH_VALUE_FLAGS = new Set([
   '-b',
   '-B',
@@ -51,32 +56,6 @@ const BRANCH_SWITCH_VALUE_FLAGS = new Set([
 const DETACH_FLAGS = new Set(['-d', '--detach']);
 const GIT_BRANCH_SWITCH_SUBCOMMANDS = new Set(['checkout', 'switch']);
 const GIT_SWITCH_VALUE_FLAGS = new Set(['--conflict', '--pathspec-from-file']);
-const GH_VALUE_FLAGS = new Set([
-  '-B',
-  '-H',
-  '-R',
-  '-t',
-  '--base',
-  '--body',
-  '--body-file',
-  '--head',
-  '--label',
-  '--milestone',
-  '--project',
-  '--recover',
-  '--repo',
-  '--reviewer',
-  '--template',
-  '--title',
-]);
-const GH_GLOBAL_VALUE_FLAGS = new Set([
-  '-R',
-  '--config-dir',
-  '--git-protocol',
-  '--hostname',
-  '--repo',
-]);
-const GITHUB_PR_URL_PATTERN = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)/i;
 const BRANCH_OUTPUT_PATTERNS = [
   /Switched to (?:a new )?branch ['"]([^'"\n]+)['"]/i,
   /Already on ['"]([^'"\n]+)['"]/i,
@@ -102,13 +81,16 @@ const CC_SESSION_ENTER_MARKER = 'The session is now working in the worktree';
 
 interface WorktreeAddParseResult {
   branch?: string;
+  /** `-b` named {@link branch}: git refuses it when the branch exists, so it is new. */
+  createdBranch?: boolean;
   /** Resolved absolute path, present only when the command yielded a trustworthy literal. */
   path?: string;
   /** Positional commit-ish (often the checked-out branch) — hint for the device lookup. */
   ref?: string;
 }
 
-type BranchSwitchInfo = { branch: string } | { detached: true };
+/** `created`: a creation flag named the branch (`-c` / `-b` / `--orphan` …). */
+type BranchSwitchInfo = { branch: string; created?: true } | { detached: true };
 
 const stripQuotes = (token: string): string => {
   if (token.length >= 2) {
@@ -165,11 +147,6 @@ const getExecutableName = (token: string): string | undefined =>
 const isGitExecutable = (token: string): boolean => {
   const executable = getExecutableName(token);
   return executable === 'git' || executable === 'git.exe';
-};
-
-const isGhExecutable = (token: string): boolean => {
-  const executable = getExecutableName(token);
-  return executable === 'gh' || executable === 'gh.exe';
 };
 
 const normalizeBranch = (branch?: string): string | undefined => {
@@ -237,13 +214,6 @@ const parseBranchFromGitOutput = (content?: string): string | undefined => {
   }
 };
 
-const parsePrUrlFromOutput = (content?: string): { number: number; url: string } | undefined => {
-  const match = content?.match(GITHUB_PR_URL_PATTERN);
-  if (!match) return undefined;
-
-  return { number: Number(match[1]), url: match[0] };
-};
-
 const getOptionValue = (
   tokens: string[],
   index: number,
@@ -295,6 +265,7 @@ const parseGitBranchSwitchTokens = (
   if (!git || !GIT_BRANCH_SWITCH_SUBCOMMANDS.has(git.subcommand)) return undefined;
 
   let branch: string | undefined;
+  let created = false;
   for (let i = 0; i < git.args.length; i += 1) {
     const token = git.args[i];
     if (DETACH_FLAGS.has(stripQuotes(token))) return { detached: true };
@@ -302,6 +273,7 @@ const parseGitBranchSwitchTokens = (
     const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS], env);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
+      created = CREATE_ONLY_BRANCH_FLAGS.has(stripQuotes(token).split('=')[0]);
       break;
     }
     if (branchFlag.skipNext) {
@@ -323,7 +295,7 @@ const parseGitBranchSwitchTokens = (
     break;
   }
 
-  return branch ? { branch } : undefined;
+  return branch ? { branch, ...(created ? { created: true as const } : {}) } : undefined;
 };
 
 const isGitBranchSwitchCommand = (tokens: string[]): boolean | undefined => {
@@ -342,76 +314,6 @@ const parseGitBranchSwitch = (
 
   return findInCommand(command, parseGitBranchSwitchTokens);
 };
-
-const parseGhPrCreateTokens = (
-  tokens: string[],
-  resultContent?: string,
-  env?: ShellEnv,
-): PullRequestCreateInfo | undefined => {
-  const prUrl = parsePrUrlFromOutput(resultContent);
-  if (!prUrl) return undefined;
-
-  let i = consumeCommandPreamble(tokens);
-  if (!isGhExecutable(tokens[i] ?? '')) return undefined;
-  i += 1;
-
-  while (i < tokens.length && tokens[i].startsWith('-')) {
-    if (GH_GLOBAL_VALUE_FLAGS.has(stripQuotes(tokens[i]))) i += 2;
-    else i += 1;
-  }
-
-  if (stripQuotes(tokens[i] ?? '') !== 'pr') return undefined;
-  i += 1;
-  if (stripQuotes(tokens[i] ?? '') !== 'create') return undefined;
-  i += 1;
-
-  let branch: string | undefined;
-  let isDraft = false;
-  let title: string | undefined;
-  for (; i < tokens.length; i += 1) {
-    const token = stripQuotes(tokens[i]);
-    if (token === '--draft') {
-      isDraft = true;
-      continue;
-    }
-
-    const titleValue = getOptionValue(tokens, i, ['-t', '--title'], env);
-    if (titleValue.value) {
-      title = titleValue.value;
-      if (titleValue.skipNext) i += 1;
-      continue;
-    }
-
-    const headValue = getOptionValue(tokens, i, ['-H', '--head'], env);
-    if (headValue.value) {
-      branch = normalizeBranch(headValue.value) ?? branch;
-      if (headValue.skipNext) i += 1;
-      continue;
-    }
-
-    if (GH_VALUE_FLAGS.has(token)) {
-      i += 1;
-      continue;
-    }
-  }
-
-  return {
-    branch,
-    pullRequest: {
-      ...(isDraft ? { isDraft: true } : {}),
-      number: prUrl.number,
-      state: 'OPEN',
-      title: title || `PR #${prUrl.number}`,
-      url: prUrl.url,
-    },
-  };
-};
-
-const parseGhPrCreate = (
-  command: string | string[],
-  resultContent?: string,
-): PullRequestCreateInfo | undefined =>
-  findInCommand(command, (tokens, env) => parseGhPrCreateTokens(tokens, resultContent, env));
 
 /**
  * One ref a `git push` moved, as the push itself reported it.
@@ -476,7 +378,11 @@ const parsePushRefMappings = (content?: string): PushRefMapping[] => {
     if (local === '(none)' || local.startsWith('refs/tags/') || remote.startsWith('refs/tags/'))
       continue;
 
-    mappings.push({ local, remote: remote.replace(/^refs\/heads\//, '') });
+    const mapping = { local, remote: remote.replace(/^refs\/heads\//, '') };
+    // git writes the table to stderr; a result that carries both streams (or
+    // echoes them) states the same mapping twice — one ref, not an ambiguity.
+    if (!mappings.some((m) => m.local === mapping.local && m.remote === mapping.remote))
+      mappings.push(mapping);
   }
   return mappings;
 };
@@ -532,6 +438,10 @@ const parseGitPush = (
 
   return { branch: remoteBranch, remote: push.remote ?? 'origin' };
 };
+
+/** The command runs a fallback when an earlier step fails (`a || b`). */
+const hasFailureRecovery = (command: string | string[]): boolean =>
+  (Array.isArray(command) ? command.join(' ') : command).includes('||');
 
 /** Collapse `.`/`..` segments in a POSIX path without touching the filesystem. */
 const normalizePosix = (p: string): string => {
@@ -671,12 +581,14 @@ const parseGitWorktreeAddTokens = (
 
   // Positionals after `add`: first is the worktree path, second the commit-ish.
   let branch: string | undefined;
+  let createdBranch = false;
   let path: string | undefined;
   let ref: string | undefined;
   for (; i < tokens.length; i += 1) {
     const token = tokens[i];
     if (BRANCH_VALUE_FLAGS.has(token)) {
       branch = resolveToken(tokens[i + 1] ?? '', env) || branch;
+      createdBranch = CREATE_ONLY_BRANCH_FLAGS.has(token);
       i += 1; // skip this flag's value
       continue;
     }
@@ -699,6 +611,7 @@ const parseGitWorktreeAddTokens = (
 
   return {
     ...(branch ? { branch } : {}),
+    ...(branch && createdBranch ? { createdBranch: true } : {}),
     ...(ref ? { ref } : {}),
     ...(isLiteralPath(path) ? { path: resolveWorktreePath(path, baseCwd) } : {}),
   };
@@ -913,15 +826,18 @@ export const recordWorktreeAdd = async (params: {
  * - `git worktree add` selects the created worktree and explicit branch.
  * - `git worktree remove` of that worktree returns the topic to its source repo.
  * - `git switch` / confirmed `git checkout` updates the branch snapshot.
- * - `git push` records the remote ref the branch publishes to.
- * - `gh pr create` binds the created PR URL to the topic.
+ * - `git push` records the remote ref the branch publishes to, and links the
+ *   pull request the pushed branch already has (as a server Work row).
+ * - A branch the command created is recorded as the conversation's own.
  */
 export const recordGitCommandEffects = async (params: {
   command: string | string[];
   resultContent?: string;
+  /** The shell call's id; lets the server re-read a push to link its PR. */
+  toolCallId?: string;
   topicId: string;
 }): Promise<void> => {
-  const { command, resultContent, topicId } = params;
+  const { command, resultContent, toolCallId, topicId } = params;
   const state = getChatStoreState();
 
   const topic = topicSelectors.getTopicById(topicId)(state);
@@ -948,7 +864,7 @@ export const recordGitCommandEffects = async (params: {
   if (activeWorktree && removesWorktree(command, activeWorktree, source)) {
     const worktrees = await listDeviceWorktrees(source, topic?.metadata?.boundDeviceId);
     if (isWorktreeGone(worktrees, activeWorktree, nextConfig?.git?.branch))
-      nextConfig = applyWorktreeExitToConfig(nextConfig, source);
+      nextConfig = applyWorktreeExitToConfig(nextConfig, source, { removed: true });
   }
 
   const branchSwitch = parseGitBranchSwitch(command, resultContent);
@@ -966,10 +882,23 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyPushToConfig(nextConfig, source, pushUpstream);
   }
 
-  const prCreate = parseGhPrCreate(command, resultContent);
-  if (prCreate) {
-    nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
-  }
+  // A branch the agent created is the conversation's own: its PR may be looked up.
+  // The creation shows in git's output, or — with `-q`, which prints nothing —
+  // in the creation flag that named it. A chain that recovers from a failure
+  // (`git switch -c x || git switch x`) succeeds whether or not the creation
+  // did, so only git's own output can say so there.
+  const commandSaysCreated = !hasFailureRecovery(command);
+  const created =
+    parseCreatedBranch(resultContent) ??
+    (commandSaysCreated && branchSwitch && 'created' in branchSwitch
+      ? branchSwitch.branch
+      : undefined) ??
+    (() => {
+      if (!commandSaysCreated) return undefined;
+      const worktreeAdd = parseWorktreeAddInfo(command, source);
+      return worktreeAdd?.createdBranch ? worktreeAdd.branch : undefined;
+    })();
+  nextConfig = applyOwnBranchToConfig(nextConfig, created);
 
   if (!isEqual(currentConfig, nextConfig)) {
     await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
@@ -977,7 +906,7 @@ export const recordGitCommandEffects = async (params: {
 
   // A checkout performed inside the heterogeneous CLI bypasses ChatInput's
   // BranchSwitcher, which normally refreshes this cache itself. Revalidate the
-  // shared branch key so the control bar (and its branch-keyed PR lookup) follows
+  // shared branch key so the control bar follows
   // the repository's actual HEAD immediately after the tool call completes. A push
   // is refreshed too: it establishes the branch's remote ref, which this key carries.
   if (branchSwitch || pushUpstream) {
@@ -987,6 +916,18 @@ export const recordGitCommandEffects = async (params: {
       currentDeviceId && boundDeviceId === currentDeviceId ? 'local' : boundDeviceId;
     const revalidateDeviceId = cacheDeviceId === 'local' ? undefined : cacheDeviceId;
     await getGitStatusStoreState().revalidateGitStatus(revalidateDeviceId, source, ['branch']);
+
+    const branch = nextConfig?.git?.branch;
+    if (pushUpstream && toolCallId && branch) {
+      // Not awaited: the device lookup and the server's re-read may retry.
+      void linkPushedPullRequests({
+        branch,
+        deviceId: revalidateDeviceId,
+        path: getWorkingDirEffectivePath(nextConfig) ?? source,
+        toolCallId,
+        topicId,
+      });
+    }
   }
 };
 
@@ -1038,7 +979,8 @@ export const recordWorktreeEnter = async (params: {
   const worktreeInfo = parseWorktreeEnterInfo(content);
   if (!worktreeInfo || !source || worktreeInfo.path === source) return;
 
-  const nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  let nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  nextConfig = applyOwnBranchToConfig(nextConfig, parseCreatedBranch(content))!;
 
   if (isEqual(currentConfig, nextConfig)) return;
   await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });

@@ -107,6 +107,25 @@ describe('addGitWorktree', () => {
     expect(git(repo, 'branch', '--list', 'feat/x')).toBe('');
   });
 
+  it('reuses only the checkout created by the same persisted worktree request', async () => {
+    const worktreePath = deriveWorktreePath(repo, 'feat/x');
+    const request = {
+      branch: 'feat/x',
+      ownerToken: 'same-request-owner-token',
+      path: repo,
+      worktreePath,
+    };
+    const result = await addGitWorktree(request);
+    expect(result.success).toBe(true);
+    await expect(addGitWorktree(request)).resolves.toEqual(result);
+    await expect(
+      addGitWorktree({ ...request, ownerToken: 'some-other-owner-token' }),
+    ).resolves.toMatchObject({ success: false });
+    await expect(addGitWorktree({ ...request, branch: 'feat/y' })).resolves.toMatchObject({
+      success: false,
+    });
+  });
+
   it('reports an unwritable worktree root', async () => {
     // A file where the `.lobehub` folder should be makes the mkdir fail even
     // when the tests run as root (where permission bits are ignored).

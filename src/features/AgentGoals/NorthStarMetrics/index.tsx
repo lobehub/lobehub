@@ -21,6 +21,7 @@ import AsyncError from '@/components/AsyncError';
 import { useChatStore } from '@/store/chat';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { densityVars } from '@/styles/densityVars';
 
 import { handleCardKeyDown } from './cardKeyboard';
 import { openDeclareMetricModal } from './DeclareMetricModal';
@@ -44,8 +45,8 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 236px;
     max-width: 340px;
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

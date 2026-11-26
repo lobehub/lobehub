@@ -10,7 +10,6 @@ import {
   Select,
   Text,
   TextArea,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
@@ -18,7 +17,10 @@ import { CheckIcon } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
+import { densityVars } from '@/styles/densityVars';
 
 import { DATASET_PRESETS, getPresetsByCategory } from '../../config/datasetPresets';
 
@@ -51,7 +53,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: relative;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -134,7 +136,11 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   const [identifierTouched, setIdentifierTouched] = useState(false);
 
+  /** Submit failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
+
   const handleFinish = async (values: any) => {
+    setError(null);
     onLoadingChange?.(true);
     try {
       const result = await agentEvalService.createDataset({
@@ -158,14 +164,15 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
         name: result.name,
         preset: selectedPreset,
       });
-    } catch (error: any) {
-      toast.error(error?.message || t('dataset.create.error'));
+    } catch (cause) {
+      console.error('Failed to create eval dataset:', cause);
+      setError(toInlineError(t('dataset.create.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
   };
 
-  const form = useForm({ onSubmit: handleFinish });
+  const form = useForm({ onSubmit: handleFinish, onValuesChange: () => setError(null) });
   const nameValue = useWatch(form, 'name');
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -304,6 +311,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
           </Flexbox>
         )}
       </Flexbox>
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

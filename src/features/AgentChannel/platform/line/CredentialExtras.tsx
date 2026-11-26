@@ -7,6 +7,7 @@ import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useAgentStore } from '@/store/agent';
 
 import type { PlatformCredentialExtrasProps } from '../types';
@@ -18,6 +19,7 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
   const form = useFormInstance();
   const channelAccessToken = useWatch(form, 'credentials.channelAccessToken') as string | undefined;
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<{ detail: string; summary: string } | null>(null);
 
   const lineFetchBotInfo = useAgentStore((s) => s.lineFetchBotInfo);
 
@@ -32,6 +34,7 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
       return;
     }
     setLoading(true);
+    setFetchError(null);
     try {
       const info = await lineFetchBotInfo(token);
       form.setValue('applicationId', info.userId);
@@ -45,26 +48,34 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
       );
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      toast.error(`${t('channel.line.fetchBotInfoFailed')}: ${text}`);
+      console.error('[LINE] Failed to fetch bot info:', error);
+      setFetchError({ detail: text, summary: t('channel.line.fetchBotInfoFailedRetry') });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Button
-      icon={<Download size={14} />}
-      loading={loading}
-      size="small"
-      style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
-      type="default"
-      disabled={
-        disabled || !channelAccessToken?.trim() || isMaskedBotCredential(channelAccessToken)
-      }
-      onClick={handleFetch}
-    >
-      {t('channel.line.fetchBotInfo')}
-    </Button>
+    <>
+      <Button
+        icon={<Download size={14} />}
+        loading={loading}
+        size="small"
+        style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
+        type="default"
+        disabled={
+          disabled || !channelAccessToken?.trim() || isMaskedBotCredential(channelAccessToken)
+        }
+        onClick={handleFetch}
+      >
+        {t('channel.line.fetchBotInfo')}
+      </Button>
+      {fetchError && (
+        <div style={{ marginBlockEnd: 12 }}>
+          <InlineErrorText detail={fetchError.detail}>{fetchError.summary}</InlineErrorText>
+        </div>
+      )}
+    </>
   );
 });
 

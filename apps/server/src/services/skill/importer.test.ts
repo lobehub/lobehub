@@ -17,9 +17,9 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/[^\w-]/g, '-')
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '');
-
 const mockGitHubInstance = {
-  downloadRepoZip: vi.fn(),
+  downloadCommitZip: vi.fn(),
+  resolveCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
   generateIdentifier: vi
     .fn()
     .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
@@ -36,6 +36,8 @@ vi.mock('@/server/modules/GitHub', () => ({
   GitHub: vi.fn(function () {
     return mockGitHubInstance;
   }),
+  GitHubError: class GitHubError extends Error {},
+  GitHubRateLimitError: class GitHubRateLimitError extends Error {},
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -369,7 +371,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-demo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# GitHub Skill content',
         manifest: { name: 'GitHub Skill', description: 'A GitHub skill' },
@@ -384,7 +386,7 @@ describe('SkillImporter', () => {
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
       expect(result.skill.name).toBe('GitHub Skill');
-      expect(result.skill.identifier).toBe('lobehub-skill-demo');
+      expect(result.skill.identifier).toMatch(/^lobehub-skill-demo-[a-f0-9]{20}$/);
       expect(result.skill.source).toBe('market');
 
       // Verify manifest contains repository info
@@ -404,7 +406,7 @@ describe('SkillImporter', () => {
         path: 'skills/skill-creator',
         repo: 'openclaw',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Creator content',
         manifest: { name: 'skill-creator', description: 'Create skills' },
@@ -418,11 +420,11 @@ describe('SkillImporter', () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
-      expect(result.skill.identifier).toBe('openclaw-openclaw-skill-creator');
+      expect(result.skill.identifier).toMatch(/^openclaw-openclaw-skill-creator-[a-f0-9]{20}$/);
 
-      // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        fallbackName: 'skill-creator',
         repackSkillZip: true,
       });
     });
@@ -433,7 +435,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -473,7 +475,7 @@ describe('SkillImporter', () => {
         .select()
         .from(agentSkills)
         .where(
-          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, 'lobehub-skill-update')),
+          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, first.skill.identifier)),
         );
       expect(dbSkills).toHaveLength(1);
     });
@@ -502,19 +504,13 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'non-existent',
       });
-      mockGitHubInstance.downloadRepoZip.mockImplementation(() => {
-        throw new GitHubNotFoundError('Repository not found');
-      });
+      mockGitHubInstance.resolveCommit.mockRejectedValueOnce(
+        new GitHubNotFoundError('GitHub repository or ref not found'),
+      );
 
       await expect(
         importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' }),
-      ).rejects.toThrow(SkillImportError);
-
-      try {
-        await importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' });
-      } catch (e) {
-        expect((e as SkillImportError).code).toBe('NOT_FOUND');
-      }
+      ).rejects.toMatchObject({ code: 'NOT_FOUND', name: 'SkillImportError' });
     });
 
     it('should use custom branch when provided', async () => {
@@ -523,7 +519,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-branch',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Branch Skill',
         manifest: { name: 'Branch Skill', description: 'From develop branch' },
@@ -550,7 +546,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-global-only',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Global Only Skill', description: 'Test global files' },
@@ -595,7 +591,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-path-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Content',
         manifest: { name: 'Path Test Skill', description: 'Test path' },
@@ -607,11 +603,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-path-test',
       });
 
-      // Verify uploadBuffer was called with correct path
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         `skills/zip/${zipHash}.zip`,
         expect.any(Buffer),
         'application/zip',
+        undefined,
       );
     });
 
@@ -621,7 +617,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'repack-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('large-repo-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('large-repo-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -655,7 +651,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'large-repo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(largeRepoZip);
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(largeRepoZip);
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -668,11 +664,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/large-repo',
       });
 
-      // Verify uploadBuffer was called with skillZipBuffer, not the large repo ZIP
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         expect.stringContaining('skills/zip/'),
         smallSkillZip, // Should be the small repacked ZIP
         'application/zip',
+        undefined,
       );
     });
 
@@ -684,7 +680,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-dedup',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Dedup Skill', description: 'Test deduplication' },
@@ -727,7 +723,7 @@ describe('SkillImporter', () => {
       const dbSkills = await db
         .select()
         .from(agentSkills)
-        .where(eq(agentSkills.identifier, 'lobehub-skill-dedup'));
+        .where(eq(agentSkills.identifier, first.skill.identifier));
       expect(dbSkills).toHaveLength(1);
     });
 
@@ -743,7 +739,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update-content',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -1275,7 +1271,7 @@ description: A nested skill
 
       // Second user should not be able to create skill with same identifier
       // because findByIdentifier filters by userId
-      const otherResult = await otherImporter.createUserSkill({
+      await otherImporter.createUserSkill({
         content: '# User 2 Skill',
         description: 'User 2 skill',
         identifier: 'isolation-test-skill', // Same identifier, different user

@@ -1,19 +1,13 @@
 import { MCP_EVENT_TAG } from '@lobechat/const';
 import type { SignalItem } from '@lobechat/types';
 
-import type { InboundWebhookView } from '@/database/models/inboundWebhook';
+import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 
-const escapeText = (text: string) =>
-  text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll(/\r?\n/g, '&#10;');
-const attribute = (text: string) => escapeText(text).replaceAll('"', '&quot;');
+import { escapeXmlAttribute as attribute, escapeXmlText as escapeText } from '../xml';
 
 export function buildMcpEventPrompt(params: {
   connector: { identifier: string; name: string };
-  row: InboundWebhookView;
+  row: InboundWebhookViewOf<'mcp_events'>;
   signals: SignalItem[];
 }): string {
   const { row, connector, signals } = params;

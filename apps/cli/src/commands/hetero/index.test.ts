@@ -39,6 +39,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof HeteroSpawn>()),
   spawnAgent: mockSpawnAgent,
   spawnDshAcpSession: mockSpawnDshAcpSession,
+  resolveDshSpawnCommand: async (command?: string) => ({ command: command ?? 'dsh' }),
   createCodexAgentHandle: mockCreateCodexAgentHandle,
 }));
 
@@ -547,48 +548,6 @@ describe('hetero exec command', () => {
         prompt: 'do thing',
       }),
     );
-  });
-
-  it('runs DeepSeek Harness through its dsh CLI acp-profile session', async () => {
-    const dispose = vi.fn().mockResolvedValue(undefined);
-    const prompt = vi.fn(async function* () {
-      yield {
-        data: { model: 'deepseek-chat', provider: 'deepseek-harness' },
-        operationId: 'op-dsh',
-        type: 'stream_start',
-      };
-      yield {
-        data: { finishReason: 'stop' },
-        operationId: 'op-dsh',
-        type: 'agent_runtime_end',
-      };
-    });
-    mockSpawnDshAcpSession.mockReturnValue({ dispose, prompt, sessionId: 'dsh-session-1' });
-
-    await runCmd([
-      'hetero',
-      'exec',
-      '--type',
-      'deepseek-harness',
-      '--prompt',
-      'say hi',
-      '--cwd',
-      '/tmp/work',
-      '--model',
-      'deepseek-chat',
-    ]);
-
-    expect(mockSpawnDshAcpSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: '/tmp/work',
-        model: 'deepseek-chat',
-        resumeSessionId: undefined,
-      }),
-    );
-    expect(prompt).toHaveBeenCalledWith('say hi');
-    expect(dispose).toHaveBeenCalledTimes(1);
-    expect(mockSpawnAgent).not.toHaveBeenCalled();
-    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('resumes the harness session named by --resume and reports it on finish', async () => {

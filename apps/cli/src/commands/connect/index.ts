@@ -42,6 +42,7 @@ import {
 } from '../../daemon/manager';
 import { listTasks } from '../../daemon/taskRegistry';
 import { ActivityReporter } from '../../device/activityHook';
+import { createAgentCredentialDeps } from '../../device/agentCredentials';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
@@ -154,6 +155,7 @@ export function registerConnectCommand(program: Command) {
       }
 
       const isServiceChild = options.serviceChild || process.env.LOBEHUB_CONNECT_SERVICE === '1';
+      if (isServiceChild) process.env.LOBEHUB_CONNECT_SERVICE = '1';
       const isDaemonChild =
         options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 
@@ -596,6 +598,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   });
 
   const deviceControlDeps: DeviceControlDeps = {
+    // Provider credentials the server installs for this device's agent runs;
+    // `spawnHeteroAgentRun` applies them.
+    ...createAgentCredentialDeps(),
     checkCliUpdate: maintenance.check,
     ...createTerminalDeps(terminals),
     getCliUpdateState: maintenance.getState,
@@ -688,6 +693,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managedAuthRetried = false;
     updateStatus('connected');
     void metricsSampler?.flush();
+    // Back online: the server runs the worktree cleanups that waited for this
+    // device (topics archived or trashed while it was offline) over the gateway.
+    const connectedDeviceId = client.currentDeviceId;
+    if (connectedDeviceId)
+      void createLambdaClient(auth, managed ? managedWorkspaceId : workspaceId)
+        .device.drainWorktreeCleanups.mutate({ deviceId: connectedDeviceId })
+        .catch((err) => info(`Worktree cleanup drain failed: ${(err as Error).message}`));
     // A (re)connection reprobes so an upgraded or downgraded Codex is reported, and
     // warms the cache before the gateway's first system_info_request.
     nativeRuntimes.invalidate();
@@ -748,6 +760,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     });
 
     bindGatewayClientHandlers(wsClient, handlerContext, wsId);
+    // The share has its own device id: drain what waited for it, in its workspace.
+    wsClient.on('connected', () => {
+      const shareDeviceId = wsClient.currentDeviceId;
+      if (shareDeviceId)
+        void createLambdaClient(auth, wsId)
+          .device.drainWorktreeCleanups.mutate({ deviceId: shareDeviceId })
+          .catch((err) =>
+            info(`Worktree cleanup drain failed (${wsId}): ${(err as Error).message}`),
+          );
+    });
 
     const entry: WorkspaceShareConnection = { cancelRefresh: null, client: wsClient };
 

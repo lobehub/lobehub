@@ -2,23 +2,20 @@ import {
   DEFAULT_SANDBOX_DRIVE,
   DEFAULT_SANDBOX_MODE,
   isSafeSandboxCwd,
-  isSafeSandboxEnvironmentId,
   SANDBOX_DRIVE_ROOT,
-  SANDBOX_LOCAL_WORK_ROOT,
   type SandboxDrive,
   sandboxDriveOfKey,
   type SandboxMode,
   type SandboxStorageClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { EnvironmentConfiguration } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
-import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import { resolveScmCloneCredentials } from '@/server/services/scm/cloneCredential';
 
 import { sandboxStorageBinding } from './binding';
 import { driveFolderExists, ensureDriveFolder } from './driveFolder';
@@ -56,6 +53,10 @@ export interface SandboxSessionConfig {
    * instance, so two instances of one environment restore separately and
    * capture separately.
    *
+   * Never set by {@link resolveSandboxSessionConfig} any more: a legacy
+   * instance runs as a plain folder, without its snapshot (T-14825). Kept on
+   * the contract the execution plane and its callers still read.
+   *
    * Carries the same invariant as {@link SandboxSessionConfig.mode}: a session
    * is bound to one of these on its first call, so every call for a topic has
    * to agree or the snapshot at the end is refused.
@@ -68,20 +69,20 @@ export interface SandboxSessionConfig {
    * person did not pick:
    *
    * - `directoryMissing` — the folder is no longer on the drive;
-   * - `instanceUnavailable` — the environment directory was deleted, is not
-   *   this member's to use, or the folder sits inside one;
-   * - `instanceRebuildRequired` — a private environment's directory left on
-   *   the workspace's public drive from before members had drives of their
-   *   own; it stays hidden there, and the environment has to be initialized
-   *   again on the owner's personal drive;
+   * - `instanceUnavailable` — a legacy environment directory was deleted, is
+   *   not this member's to use, or would not survive the fence;
+   * - `instanceRebuildRequired` — a private legacy environment directory left
+   *   on the workspace's public drive from before members had drives of their
+   *   own; it stays hidden there, so it is not run in;
    * - `rootNotAllowed` — the public drive's root, which every member's
    *   folders live under, is not a folder anyone may work in.
    */
   fallback?: SandboxPlacementFallback;
   /**
-   * The environment to initialize the working directory from, when the topic
-   * picked one: applied once to a folder on the drive, and once per sandbox in
-   * a temporary one. Never set on a legacy instance run — its build did this.
+   * The environment to initialize the working directory from — a project
+   * conversation's, its project's: applied once to a folder on the drive, and
+   * once per sandbox in a temporary one. Never set outside a project, nor on a
+   * legacy instance's folder.
    */
   initialization?: SandboxInitialization;
   mode: SandboxMode;
@@ -96,6 +97,9 @@ export interface SandboxSessionConfig {
    * execution plane records for a session matches the digest of the build it
    * restored. Editing the environment therefore takes effect on rebuild, which
    * is the same rule the checkout and the installed packages already follow.
+   *
+   * Never set by {@link resolveSandboxSessionConfig} any more (T-14825), like
+   * {@link environment}.
    */
   specification?: SandboxSessionSpecification;
   /**
@@ -104,57 +108,11 @@ export interface SandboxSessionConfig {
    * lives there and installs only work there; {@link cwd} stays the
    * instance's directory on the volume, which is what the call belongs to —
    * what a shared workspace narrows its view to, and what the file browser
-   * reads.
+   * reads. Never set by {@link resolveSandboxSessionConfig} any more, like
+   * {@link environment}.
    */
   workingDir?: string;
 }
-
-/**
- * The run-time half of a stored definition, named field by field.
- *
- * Everything this omits is either not the execution plane's business during a
- * session or has no business leaving the server at all; see
- * {@link SandboxSessionSpecification}. Absent when the pick is empty, so a
- * definition that says nothing sends nothing rather than an empty object the
- * runtime would still adopt.
- *
- * `kind` is the clearest case of the first: it only picks which form the
- * product shows, and an execution plane that saw it would digest it into every
- * session of every environment that gained one.
- */
-const toSessionSpecification = (
-  configuration: EnvironmentConfiguration | null | undefined,
-): SandboxSessionSpecification | undefined => {
-  if (!configuration) return undefined;
-
-  const specification: SandboxSessionSpecification = {
-    ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),
-    ...(configuration.env &&
-      Object.keys(configuration.env).length > 0 && { env: configuration.env }),
-    ...(configuration.excludePaths?.length && { excludePaths: configuration.excludePaths }),
-    ...(configuration.internetAccess !== undefined && {
-      internetAccess: configuration.internetAccess,
-    }),
-    ...(configuration.maintenanceCommand && {
-      maintenanceCommand: configuration.maintenanceCommand,
-    }),
-    ...(configuration.sources?.length && { sources: configuration.sources }),
-  };
-
-  return Object.keys(specification).length > 0 ? specification : undefined;
-};
-
-/**
- * Whether an instance's checkout is on the sandbox's local disk: it has been
- * built, from a definition that clones something. An instance with nothing to
- * clone has no checkout to run in, and one not built yet has nothing there.
- */
-const hasLocalCheckout = (instance: {
-  configurationSnapshot?: { sources?: { kind?: string }[] } | null;
-  status?: string | null;
-}): boolean =>
-  instance.status === 'ready' &&
-  !!instance.configurationSnapshot?.sources?.some((source) => source.kind === 'git');
 
 interface SandboxSessionConfigInput {
   /** See `resolveSandboxStorageClaim` — a visitor run never gets an entitlement. */
@@ -173,12 +131,13 @@ interface SandboxSessionConfigInput {
 /**
  * Everything the sandbox layer needs to know about persistence for one run,
  * resolved once: the entitlement that goes on the trust token, and the topic's
- * own placement that goes on each request. One of three:
+ * own placement that goes on each request. One of two:
  *
- * - **instance** (`persistent`) — the topic is bound to an environment
- *   directory: its folder plus the packages its build installed;
  * - **drive** — the topic picked a folder on the drive (or its root, in a
- *   personal account): the folder persists, nothing else does;
+ *   personal account): the folder persists, nothing else does. A topic still
+ *   bound to a legacy environment directory runs in that directory the same
+ *   way — the cloud sandbox is not set up from an environment any more, so
+ *   neither the packages its build installed nor its definition come along;
  * - **temporary** (`ephemeral`) — nothing picked, or a pick that can no
  *   longer be honoured, which then says why in `fallback`.
  *
@@ -304,36 +263,35 @@ const resolvePlacement = async ({
         }
       }
 
-      // The directory and the snapshot are one choice, so a bad half discards
-      // the whole instance rather than half of it. Running the instance's
-      // packages at the drive root would put one instance's files under
-      // another's captured state, which is the exact mixing separate instances
-      // exist to prevent — and it would do it silently.
+      // The directory is a folder on the drive like any other, and the run
+      // works in it without the environment: no snapshot is restored and no
+      // definition applied. A directory that would not survive the fence is
+      // not run in at all.
       const { id, workingDirectory } = instance;
-      if (!isSafeSandboxCwd(workingDirectory) || !isSafeSandboxEnvironmentId(id)) {
+      if (!isSafeSandboxCwd(workingDirectory)) {
         log('Ignoring unusable instance %s on topic %s: %o', id, topicId, workingDirectory);
         return fallBack('instanceUnavailable');
       }
 
+      // Renamed or deleted through the drive browser since: the row outlives
+      // the folder, and a run pointed at a missing cwd would fail rather than
+      // fall back the way any other folder does.
+      if (
+        (await driveFolderExists({ claim, path: workingDirectory, userId, workspaceId })) === false
+      ) {
+        log('Legacy instance %s folder %o on topic %s is gone', id, workingDirectory, topicId);
+        return fallBack('directoryMissing');
+      }
+
       log(
-        'Persistent for topic %s: instance=%s cwd=%o drive=%s',
+        'Drive for topic %s in legacy instance %s, without its environment: cwd=%o drive=%s',
         topicId,
         id,
         workingDirectory,
         drive,
       );
 
-      const specification = toSessionSpecification(instance.configurationSnapshot);
-
-      return {
-        claim,
-        cwd: workingDirectory,
-        drive,
-        environment: id,
-        mode: 'persistent',
-        ...(specification && { specification }),
-        ...(hasLocalCheckout(instance) && { workingDir: SANDBOX_LOCAL_WORK_ROOT }),
-      };
+      return { claim, cwd: workingDirectory, drive, mode: 'drive' };
     }
 
     // The topic is only consulted when an entitlement exists. Without one the
@@ -368,9 +326,10 @@ const resolvePlacement = async ({
     // an empty folder under a name someone chose to remove. A repository's
     // checkout is the exception: the environment fills the folder, so a
     // project conversation's checkout is made on its first run, and made
-    // again — a fresh clone — after someone removes it.
+    // again — a fresh clone — after someone removes it. Only a project
+    // conversation is set up from an environment (see `resolveInitialization`).
     if ((await driveFolderExists({ claim, path: folder, userId, workspaceId })) === false) {
-      const checkout = !!topic?.metadata?.sandboxEnvironmentId;
+      const checkout = !!topic?.projectId && !!topic.metadata?.sandboxEnvironmentId;
       if (
         !checkout ||
         !(await ensureDriveFolder({ claim, path: folder, topicId, userId, workspaceId }))
@@ -393,22 +352,44 @@ const resolvePlacement = async ({
  * The topic's environment as an initialization, or `undefined` when it picked
  * none, picked one the caller cannot read (deleted, or another member's
  * private one), or one that asks for nothing.
+ *
+ * Only a project conversation is set up from an environment: its project's,
+ * configured on the project. The cloud sandbox is not otherwise a place for
+ * coding, so an environment any other conversation still carries from before
+ * is ignored — the run goes ahead as if it had none.
  */
 const resolveInitialization = async ({
+  placement,
   serverDB,
   topicId,
   userId,
   workspaceId,
 }: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
-  SandboxInitialization | undefined
-> => {
+  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'> & {
+    /** Where the run works, as {@link resolvePlacement} decided. */
+    placement: Pick<SandboxSessionConfig, 'drive' | 'mode'>;
+  }): Promise<SandboxInitialization | undefined> => {
   try {
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
     );
     const environmentId = topic?.metadata?.sandboxEnvironmentId;
     if (!environmentId) return undefined;
+    // A legacy environment directory runs as a plain folder, without any
+    // environment — not even its project's: setting one up there would clone
+    // or bootstrap into a folder that already holds that conversation's work.
+    if (topic.metadata?.sandboxInstanceId) {
+      log('Not initializing legacy instance folder on topic %s', topicId);
+      return undefined;
+    }
+    if (!topic.projectId) {
+      log(
+        'Ignoring sandboxEnvironmentId outside a project on topic %s: %s',
+        topicId,
+        environmentId,
+      );
+      return undefined;
+    }
 
     const environment = await new EnvironmentModel(
       serverDB,
@@ -440,20 +421,41 @@ const resolveInitialization = async ({
       }
     }
 
+    // Every member can browse the workspace's public drive, so a private
+    // environment's checkout and setup output must not land in a folder there:
+    // it is applied on a personal drive or in a temporary sandbox only.
+    if (
+      workspaceId &&
+      placement.mode === 'drive' &&
+      placement.drive === 'public' &&
+      environment.visibility !== 'public'
+    ) {
+      log(
+        'Not applying private environment %s in a public-drive folder on topic %s',
+        environmentId,
+        topicId,
+      );
+      return undefined;
+    }
+
     const initialization = toSandboxInitialization(environment);
     if (!initialization || initialization.sources.length === 0) return initialization;
 
     // The same credential a build used to get, so a private repository the
     // picker offered still clones. Never throws: without one, a public
     // repository clones and a private one fails in the report, by name.
-    const cloneCredential = await resolveScmCloneCredential({
+    const cloneCredentials = await resolveScmCloneCredentials({
       configuration: environment.configuration ?? undefined,
       db: serverDB,
       userId,
       workspaceId,
     });
 
-    return cloneCredential ? { ...initialization, cloneCredential } : initialization;
+    if (cloneCredentials.length === 0) return initialization;
+    // One repository keeps the single host-wide credential it always had.
+    return cloneCredentials.length === 1
+      ? { ...initialization, cloneCredential: cloneCredentials[0] }
+      : { ...initialization, cloneCredentials };
   } catch (error) {
     log('Failed to read the environment for topic %s: %O', topicId, error);
     return undefined;
@@ -462,10 +464,9 @@ const resolveInitialization = async ({
 
 /**
  * Everything the sandbox layer needs to know about one run: where it works
- * ({@link resolvePlacement}) and, when the topic picked an environment, what
- * that working directory is initialized from. The environment is independent
- * of the placement — a temporary sandbox is initialized as readily as a folder
- * — except on a legacy instance run, which already has what its build made.
+ * ({@link resolvePlacement}) and, for a project conversation, what that working
+ * directory is initialized from. The environment is independent of the
+ * placement — a temporary sandbox is initialized as readily as a folder.
  *
  * Never throws; a failed lookup degrades to the ephemeral sandbox every session
  * uses today, without an environment.
@@ -475,9 +476,14 @@ export const resolveSandboxSessionConfig = async (
 ): Promise<SandboxSessionConfig> => {
   const config = await resolvePlacement(input);
   const { serverDB, topicId } = input;
-  if (!serverDB || !topicId || config.mode === 'persistent') return config;
+  if (!serverDB || !topicId) return config;
 
-  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
+  const initialization = await resolveInitialization({
+    ...input,
+    placement: config,
+    serverDB,
+    topicId,
+  });
 
   return initialization ? { ...config, initialization } : config;
 };

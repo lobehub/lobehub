@@ -6,6 +6,7 @@ import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 
 import { useTranslation } from 'react-i18next';
 
 import type { VoiceMessageUploadState } from '@/store/chat/slices/voiceMessage/initialState';
+import { densityVars } from '@/styles/densityVars';
 
 import { useAudioElementSource } from './useAudioElementSource';
 import { useWaveform } from './useWaveform';
@@ -54,13 +55,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     width: 360px;
     max-width: 100%;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
 

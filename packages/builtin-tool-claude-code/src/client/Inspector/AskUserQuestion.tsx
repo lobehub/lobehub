@@ -1,6 +1,12 @@
 'use client';
 
-import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
+import type { ClaudeCodePermissionInterventionArgs } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import {
+  type AskUserQuestionResultState,
+  normalizeAskUserQuestions,
+  resolveAskUserAnswers,
+  summarizeAskUserAnswers,
+} from '@lobechat/shared-tool-ui/ask-user';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from '@lobehub/ui';
@@ -54,48 +60,64 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuestionArgs>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
-    const { t } = useTranslation('plugin');
-    const label = t(ClaudeCodeApiName.AskUserQuestion as any);
-    const argsQuestions = normalizeAskUserQuestions(args);
-    const questions = argsQuestions.length ? argsQuestions : normalizeAskUserQuestions(partialArgs);
+export const AskUserQuestionInspector = memo<
+  BuiltinInspectorProps<AskUserQuestionArgs, AskUserQuestionResultState>
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState, result }) => {
+  const { t } = useTranslation(['plugin', 'tool']);
+  // A Claude Code permission request rides the same card: say what it asks.
+  const permission = (args as Partial<ClaudeCodePermissionInterventionArgs> | undefined)
+    ?.claudeCodePermission;
+  const label = permission
+    ? t(
+        permission.kind === 'exitPlan'
+          ? 'tool:claudeCode.permission.inspector.plan'
+          : 'tool:claudeCode.permission.inspector.permission',
+      )
+    : t(ClaudeCodeApiName.AskUserQuestion as any);
+  const argsQuestions = normalizeAskUserQuestions(args);
+  const questions = argsQuestions.length ? argsQuestions : normalizeAskUserQuestions(partialArgs);
 
-    // One chip per question, so a collapsed card still says *what* was asked. The
-    // old `header +N` named only the first and turned the rest into a count.
-    const headers = questions
-      .map((q) => q.header || q.question)
-      .filter((header): header is string => !!header);
-    const shown = headers.slice(0, MAX_CHIPS);
-    const rest = headers.length - shown.length;
+  // One chip per question, so a collapsed card still says *what* was asked. The
+  // old `header +N` named only the first and turned the rest into a count.
+  const answerSummary = permission
+    ? undefined
+    : summarizeAskUserAnswers(questions, resolveAskUserAnswers(pluginState, result?.content));
+  const headers = permission
+    ? permission.kind === 'tool'
+      ? [permission.displayName ?? permission.toolName]
+      : []
+    : answerSummary
+      ? [answerSummary]
+      : questions.map((q) => q.header || q.question).filter((header): header is string => !!header);
+  const shown = headers.slice(0, MAX_CHIPS);
+  const rest = headers.length - shown.length;
 
-    if (isArgumentsStreaming && shown.length === 0) {
-      return <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{label}</div>;
-    }
+  if (isArgumentsStreaming && shown.length === 0) {
+    return <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{label}</div>;
+  }
 
-    return (
-      <div className={inspectorTextStyles.root}>
-        <span
-          className={cx(
-            styles.label,
-            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-          )}
-        >
-          {label}
-        </span>
-        {shown.length > 0 && (
-          <div className={styles.chips}>
-            {shown.map((header, idx) => (
-              <span className={styles.chip} key={`${header}-${idx}`}>
-                {header}
-              </span>
-            ))}
-            {rest > 0 && <span className={styles.more}>{`+${rest}`}</span>}
-          </div>
+  return (
+    <div className={inspectorTextStyles.root}>
+      <span
+        className={cx(
+          styles.label,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
-      </div>
-    );
-  },
-);
+      >
+        {label}
+      </span>
+      {shown.length > 0 && (
+        <div className={styles.chips}>
+          {shown.map((header, idx) => (
+            <span className={styles.chip} key={`${header}-${idx}`}>
+              {header}
+            </span>
+          ))}
+          {rest > 0 && <span className={styles.more}>{`+${rest}`}</span>}
+        </div>
+      )}
+    </div>
+  );
+});
 
 AskUserQuestionInspector.displayName = 'ClaudeCodeAskUserQuestionInspector';

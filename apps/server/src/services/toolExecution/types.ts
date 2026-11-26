@@ -344,9 +344,20 @@ export interface ToolExecutionContext {
    * execution device. Used by the Skills runtime to load them on demand via the
    * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
+  projectSkills?: {
+    description?: string;
+    location: string;
+    name: string;
+    source?: 'device' | 'project';
+  }[];
   /** Root AI runtime operation ID used to aggregate artifacts produced by one run. */
   rootOperationId?: string;
+  /**
+   * Identifiers of the skills in this operation's pool. A library skill is
+   * opt-in per agent, and the pool is where a turn's selection or a share's
+   * grant opted one in without it being turned on in the agent's own config.
+   */
+  runSkillIds?: string[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
@@ -364,6 +375,12 @@ export interface ToolExecutionContext {
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */
   threadId?: string | null;
+  /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between, counted by the runtime executors. The lobe-agent todo APIs pause
+   * once it reaches their limit.
+   */
+  todoCallStreak?: number;
   /** Stable LLM tool call ID for structured tool outcome identity. */
   toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;

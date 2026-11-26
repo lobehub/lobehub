@@ -43,7 +43,11 @@ vi.mock('@/server/services/inboundWebhook/featureGate', () => ({ isWebhookEnable
 vi.mock('@/libs/trpc/lambda', async () => {
   const { initTRPC } = await import('@trpc/server');
   const trpc = initTRPC.context<RouterTestContext>().create();
-  return { router: trpc.router, authedProcedure: trpc.procedure };
+  return {
+    authedProcedure: trpc.procedure,
+    mergeRouters: trpc.mergeRouters,
+    router: trpc.router,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async ({ next }: { next: () => Promise<unknown> }) => next(),
@@ -66,13 +70,23 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => gateKeeper },
 }));
 vi.mock('@/server/services/inboundWebhook/sweep', () => ({ scheduleInboundWebhookSweep: vi.fn() }));
+/** An `mcp_events` handler whose network operations are the test doubles above. */
+const fakeKind = () => ({
+  canCheck: true,
+  expiresAt: (row: InboundWebhookView) =>
+    row.kind === 'mcp_events' ? (row.state.refreshBefore ?? null) : null,
+  isEnabled: enabled,
+  maintain,
+  source: (row: InboundWebhookView) =>
+    row.kind === 'mcp_events'
+      ? { arguments: row.config.arguments, eventName: row.config.eventName, kind: row.kind }
+      : { ...row.config, kind: row.kind },
+  teardown,
+});
 vi.mock('@/server/services/inboundWebhook/kinds', () => ({
-  getInboundWebhookKind: vi.fn(() => ({
-    maintain,
-    teardown,
-    buildPrompt: () => '',
-    handleDelivery: async () => ({}),
-  })),
+  createKindGate: () => async () => true,
+  getInboundWebhookKind: vi.fn(() => fakeKind()),
+  INBOUND_WEBHOOK_SIGNAL_SOURCES: ['mcp-events', 'webhook'],
 }));
 vi.mock('@/server/services/inboundWebhook/kinds/mcpEvents/subscription', () => ({
   maintenanceBackoff: (n: number) => 60_000 * 2 ** n,
@@ -170,12 +184,7 @@ beforeEach(async () => {
     await model.update(row.id, { status: 'active', lastError: null });
   });
   teardown.mockReset().mockResolvedValue(undefined);
-  vi.mocked(getInboundWebhookKind).mockReturnValue({
-    maintain,
-    teardown,
-    buildPrompt: () => '',
-    handleDelivery: async () => ({}),
-  });
+  vi.mocked(getInboundWebhookKind).mockReturnValue(fakeKind() as never);
   await db.delete(users);
   await db.insert(users).values([{ id: creator }, { id: colleague }]);
   await db.insert(workspaces).values([
@@ -339,6 +348,18 @@ describe('inboundWebhook tRPC resource contract', () => {
     expect(maintain).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a Channel that no longer takes its results when checked', async () => {
+    const row = await seed();
+    const model = new InboundWebhookModel(db, creator, undefined, gateKeeper);
+    await model.update(row.id, {
+      config: { arguments: {}, delivery: { channelId: 'chn_gone' }, eventName: 'issue.created' },
+    });
+    expect(await caller().check({ id: row.id })).toMatchObject({
+      lastError: 'channel_unavailable',
+      status: 'active',
+    });
+  });
+
   it('returns discovered delivery errors as rows instead of throwing', async () => {
     const row = await seed();
     maintain.mockImplementation(async ({ model, row: current }) => {
@@ -388,6 +409,30 @@ describe('inboundWebhook tRPC resource contract', () => {
     expect(maintain).not.toHaveBeenCalled();
     expect(teardown).not.toHaveBeenCalled();
     expect(checkClaims.size).toBe(0);
+  });
+
+  it('renames a subscription for its creator, back to the event name when cleared', async () => {
+    const row = await seed();
+    const renamed = await caller().update({ id: row.id, name: 'Web bugs' });
+    expect(renamed).toMatchObject({ name: 'Web bugs', source: { kind: 'mcp_events' } });
+    expect((await caller().list())[0].name).toBe('Web bugs');
+    expect(await caller().update({ id: row.id, name: null })).toMatchObject({
+      name: row.config.eventName,
+    });
+    // What it follows is set up in its conversation, not here.
+    await expect(caller().update({ id: row.id, instructions: 'x' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(caller().update({ id: row.id, paused: true })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it("does not let an admin rename a colleague's subscription", async () => {
+    const row = await seed({ workspaceId });
+    await expect(
+      scoped('admin', colleague).update({ id: row.id, name: 'Mine now' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('rejects viewers at the write-role boundary', async () => {

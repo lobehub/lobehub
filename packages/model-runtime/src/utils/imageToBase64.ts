@@ -2,6 +2,7 @@ import { Buffer } from 'buffer.js';
 
 import { resolveMimeTypeFromBytes } from './imageMimeType';
 import { readBlobWithLimit } from './readBlobWithLimit';
+import { ssrfFetch } from './ssrfFetch';
 
 export { readBlobWithLimit } from './readBlobWithLimit';
 
@@ -61,19 +62,14 @@ export const imageUrlToBase64 = async (
   try {
     const isServer = typeof window === 'undefined';
 
-    // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const init = options.signal ? { signal: options.signal } : undefined;
     // Also cap the stream inside ssrfSafeFetch. It truncates silently, so allow one extra
     // byte for readBlobWithLimit to detect the overflow and reject.
-    const res = isServer
-      ? await import('@lobechat/ssrf-safe-fetch').then((m) =>
-          m.ssrfSafeFetch(
-            imageUrl,
-            init,
-            options.maxBytes ? { maxContentLength: options.maxBytes + 1 } : undefined,
-          ),
-        )
-      : await fetch(imageUrl, init);
+    const res = await ssrfFetch(
+      imageUrl,
+      init,
+      options.maxBytes ? { maxContentLength: options.maxBytes + 1 } : undefined,
+    );
 
     const blob = options.maxBytes
       ? await readBlobWithLimit(res, options.maxBytes)
