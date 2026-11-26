@@ -275,6 +275,23 @@ describe('AgentBridgeService local mode', () => {
     });
   });
 
+  it('treats a whitespace-only completion as empty instead of sending a blank reply', async () => {
+    runHooks({ onComplete: { lastAssistantContent: ' \n\t ', reason: 'done' } });
+    const { edit, thread } = createThread();
+
+    await mention(thread);
+
+    expect(edit).not.toHaveBeenCalledWith({ markdown: expect.stringMatching(/^\s*$/) });
+    expect(thread.post).not.toHaveBeenCalledWith({ markdown: expect.stringMatching(/^\s*$/) });
+    expect(thread.post).toHaveBeenLastCalledWith({
+      markdown: renderThrownAgentError(
+        new Error('Agent completed but no response content found'),
+        'op-1',
+        'en-US',
+      ),
+    });
+  });
+
   it('streams step progress when displayToolCalls is on and skips identical edits', async () => {
     const step = {
       content: 'thinking...',
