@@ -11,6 +11,7 @@ import { copyOperationIdAction } from './actions/copyOperationId';
 import { delAction } from './actions/del';
 import { delAndRegenerateAction } from './actions/delAndRegenerate';
 import { editAction } from './actions/edit';
+import { editInNewTopicAction } from './actions/editInNewTopic';
 import { forkAction } from './actions/fork';
 import { regenerateAction } from './actions/regenerate';
 import { restoreToInputAction } from './actions/restoreToInput';
@@ -49,6 +50,7 @@ export const useBuildActions = (
     del: delAction.useBuild(ctx),
     delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
     edit: editAction.useBuild(ctx),
+    editInNewTopic: editInNewTopicAction.useBuild(ctx),
     fork: forkAction.useBuild(ctx),
     regenerate: regenerateAction.useBuild(ctx),
     restoreToInput: restoreToInputAction.useBuild(ctx),
@@ -65,6 +67,7 @@ export const useBuildActions = (
       'del',
       'delAndRegenerate',
       'edit',
+      'editInNewTopic',
       'fork',
       'regenerate',
       'translate',

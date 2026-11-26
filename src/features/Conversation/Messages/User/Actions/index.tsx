@@ -22,6 +22,7 @@ const DEFAULT_BAR: MessageActionSlot[] = ['regenerate', 'edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
+  'editInNewTopic',
   'comments',
   'branching',
   'divider',

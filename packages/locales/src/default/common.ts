@@ -293,6 +293,7 @@ export default {
   'goToTarget': 'Go to target',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
+  'editInNewTopic': 'Edit in new topic',
   'errors.invalidFileFormat': 'Invalid file format',
   'errors.unimplementedType': 'Unimplemented type. Please check the reducer.',
   'export': 'Export Configuration',
