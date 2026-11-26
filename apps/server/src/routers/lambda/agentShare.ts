@@ -284,6 +284,14 @@ export const agentShareRouter = router({
       return { revoked: await ctx.agentShareModel.revokeGrant(input.agentId, input.userId) };
     }),
 
+  /** Give one person back the card grant the owner withdrew from them. */
+  restoreCardGrant: agentShareProcedure
+    .input(agentIdInput.extend({ userId: z.string().trim().min(1) }).strict())
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return { restored: await ctx.agentShareModel.restoreGrant(input.agentId, input.userId) };
+    }),
+
   /**
    * Minimal Workspace-wide audit inventory. `agent:update:all` is held by
    * administrators, while the model projection intentionally omits private

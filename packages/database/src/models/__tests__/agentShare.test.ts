@@ -824,6 +824,44 @@ describe('AgentShareModel', () => {
     });
   });
 
+  describe('card grants', () => {
+    const grantTo = async (shareId: string) =>
+      AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
+        shareId,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: otherUserId,
+      });
+
+    it('lets the owner switch a withdrawn grant back on', async () => {
+      const share = await agentShareModel.create(agentId, 'card');
+      await grantTo(share!.id);
+
+      expect(await agentShareModel.revokeGrant(agentId, otherUserId)).toBe(true);
+      expect(await agentShareModel.listGrants(agentId)).toEqual([]);
+
+      expect(await agentShareModel.restoreGrant(agentId, otherUserId)).toBe(true);
+      expect((await agentShareModel.listGrants(agentId)).map((item) => item.user.id)).toEqual([
+        otherUserId,
+      ]);
+    });
+
+    it('restores nobody who never held a grant, and leaves a live grant as it is', async () => {
+      const share = await agentShareModel.create(agentId, 'card');
+
+      expect(await agentShareModel.restoreGrant(agentId, otherUserId)).toBe(false);
+      expect(await agentShareModel.listGrants(agentId)).toEqual([]);
+
+      await grantTo(share!.id);
+      expect(await agentShareModel.restoreGrant(agentId, otherUserId)).toBe(false);
+      expect(await agentShareModel.listGrants(agentId)).toHaveLength(1);
+    });
+
+    it('restores nothing on an Agent without a share', async () => {
+      expect(await agentShareModel.restoreGrant(agentId, otherUserId)).toBe(false);
+    });
+  });
+
   describe('isRunStillAuthorized', () => {
     it('authorizes a live link share on a personal agent', async () => {
       const created = await agentShareModel.create(agentId, 'link');

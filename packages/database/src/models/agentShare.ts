@@ -793,6 +793,35 @@ export class AgentShareModel {
     }));
 
   /**
+   * Give a person back the card grant the owner withdrew, from the owner's own list of who can
+   * use the Agent. The owner's decision is newer than the withdrawal, like approving a request,
+   * so it restores the grant whatever card it came from. Only a person who held a grant can be
+   * restored; a new person still comes in by card or request. Returns whether a grant was
+   * restored.
+   */
+  restoreGrant = async (agentId: string, userId: string): Promise<boolean> =>
+    !!(await this.withScopedAgentLock(agentId, async (tx) => {
+      const [share] = await tx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .limit(1);
+      if (!share) return false;
+      const restored = await tx
+        .update(agentShareGrants)
+        .set({ revokedAt: null })
+        .where(
+          and(
+            eq(agentShareGrants.shareId, share.id),
+            eq(agentShareGrants.userId, userId),
+            isNotNull(agentShareGrants.revokedAt),
+          ),
+        )
+        .returning({ id: agentShareGrants.id });
+      return restored.length > 0;
+    }));
+
+  /**
    * Resolve public share metadata and derive ownership and billing scope from
    * the Agent. Sharing prevents transfers, so no separate tenancy snapshot is needed.
    */
