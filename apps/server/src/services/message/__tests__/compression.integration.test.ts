@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
-import { MessageModel } from '@/database/models/message';
+import type { MessageModel } from '@/database/models/message';
 import { messageGroups, messages, threads, topics, users } from '@/database/schemas';
+import { redisService } from '@/server/services/redis';
 
 import { MessageService } from '../index';
 
@@ -43,6 +44,7 @@ beforeEach(async () => {
   ]);
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await db.delete(users).where(eq(users.id, userId));
 });
 it('does not hide another thread message under the requested thread summary', async () => {
@@ -55,12 +57,14 @@ it('does not hide another thread message under the requested thread summary', as
   expect(row?.messageGroupId).toBeNull();
 });
 it('refuses revoked input before returning text to the compression model', async () => {
-  await new MessageModel(db, userId).commitContextReplay('scope-a', {
-    invocationId: 'scope-a',
-    sessionKey: 'openai:model:agent',
-    version: 1,
-    changes: [],
-    sourceIds: ['document:revoked'],
+  vi.spyOn(redisService.contextReplay, 'getMany').mockResolvedValue({
+    'scope-a': {
+      invocationId: 'scope-a',
+      sessionKey: 'openai:model:agent',
+      version: 1,
+      changes: [],
+      sourceIds: ['document:revoked'],
+    },
   });
   await expect(
     service.createCompressionGroup('compression-topic', ['scope-u', 'scope-a']),
@@ -72,12 +76,14 @@ it('refuses revoked input before returning text to the compression model', async
 
 it('rechecks source permissions before committing the generated summary', async () => {
   const result = await service.createCompressionGroup('compression-topic', ['scope-u', 'scope-a']);
-  await new MessageModel(db, userId).commitContextReplay('scope-a', {
-    invocationId: 'scope-a',
-    sessionKey: 'openai:model:agent',
-    version: 1,
-    changes: [],
-    sourceIds: ['document:revoked'],
+  vi.spyOn(redisService.contextReplay, 'getMany').mockResolvedValue({
+    'scope-a': {
+      invocationId: 'scope-a',
+      sessionKey: 'openai:model:agent',
+      version: 1,
+      changes: [],
+      sourceIds: ['document:revoked'],
+    },
   });
   await expect(
     service.finalizeCompression(result.messageGroupId, 'derived summary', {

@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import { TopicTrigger } from '@/const/topic';
 import { router } from '@/libs/trpc/lambda';
-import { scrubDeletedContextSources } from '@/server/services/contextReplay/scrub';
 
 import { agentDocumentProcedure, agentDocumentProcedureWrite } from './procedures';
 
@@ -144,11 +143,7 @@ export const documentsRouter = router({
       const doc = await ctx.agentDocumentService.getDocument(input.agentId, input.filename);
       if (!doc) return;
 
-      const result = await ctx.agentDocumentService.deleteDocument(doc.id);
-      await scrubDeletedContextSources(ctx, {
-        ids: [`document:${doc.id}`, `document-read:${doc.id}`],
-      });
-      return result;
+      return ctx.agentDocumentService.deleteDocument(doc.id);
     }),
   /**
    * Delete all documents for an agent

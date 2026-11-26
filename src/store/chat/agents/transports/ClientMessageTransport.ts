@@ -10,7 +10,6 @@ import type {
 import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import type {
   ChatMessagePluginError,
-  ContextReplaySnapshot,
   CreateMessageParams,
   UIChatMessage,
   UpdateMessageParams,
@@ -28,12 +27,6 @@ import type { ChatStore } from '@/store/chat/store';
 
 /** Client message adapter backed by the optimistic chat store. */
 export class ClientMessageTransport implements MessageTransport {
-  async commitContextReplay(
-    id: string,
-    snapshot: ContextReplaySnapshot,
-  ): Promise<ContextReplaySnapshot> {
-    return messageService.commitContextReplay(id, snapshot);
-  }
   /** Stored tool payloads refilled for this run — see `withStoredToolPayloads`. */
   private readonly storedToolPayloads = new Map<string, StoredToolPayload>();
 

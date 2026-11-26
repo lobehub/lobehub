@@ -5,7 +5,6 @@ import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 
 import { messagePlugins, messages, topics } from '../../schemas';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
-import { copyContextReplaySnapshots } from '../../utils/copyContextReplaySnapshots';
 import { markCopiedMessageMetadata } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
 import { buildWorkspacePayload } from '../../utils/workspace';
@@ -208,12 +207,6 @@ export const duplicateTopic = async (
       }
     }
 
-    await copyContextReplaySnapshots({
-      executor: tx,
-      messageIdPairs: [...idMap],
-      targetUserId: scope.userId,
-      targetWorkspaceId: scope.workspaceId,
-    });
     return {
       messages: duplicatedMessages,
       topic: duplicatedTopic,

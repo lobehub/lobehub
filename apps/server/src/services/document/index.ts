@@ -29,7 +29,6 @@ import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
 import { diffAddedMentionUserIds } from '@/server/utils/documentMentions';
 import { type LobeDocument } from '@/types/document';
 
-import { scrubDeletedContextSources } from '../contextReplay/scrub';
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
 import { parseFileInWorker } from '../fileParse';
@@ -603,7 +602,6 @@ export class DocumentService {
     // parentId FK is `set null`, so they get promoted to root instead of being
     // destroyed by a non-owner's folder delete.
     if (options?.restrictToCreator && document.userId !== this.userId) return;
-    const removedSources = [`document:${id}`, `document-read:${id}`];
 
     // If it's a folder, recursively delete all children first
     if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
@@ -630,23 +628,17 @@ export class DocumentService {
       for (const file of childFiles) {
         if (options?.restrictToCreator && file.userId !== this.userId) continue;
         await this.deleteFileRecordAndStorage(file.id);
-        removedSources.push(`file:${file.id}`);
       }
     }
 
     // Delete the associated file record if it exists
     if (document.fileId) {
       await this.deleteFileRecordAndStorage(document.fileId);
-      removedSources.push(`file:${document.fileId}`);
     }
 
     // Finally delete the document itself
     const deleted = await this.documentModel.delete(id);
     if (document.workspaceId) dropPageRooms([id]);
-    await scrubDeletedContextSources(
-      { serverDB: this.db, userId: this.userId, workspaceId: this.workspaceId },
-      { ids: removedSources },
-    );
     return deleted;
   }
 

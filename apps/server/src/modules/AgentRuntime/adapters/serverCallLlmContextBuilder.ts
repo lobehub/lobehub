@@ -215,7 +215,6 @@ export const buildServerCallLlmContext = async ({
           shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
           topicId,
         },
-        ctx.messageModel,
         [...contextReplayMessageIds(messagesForContext), contextReplay.invocationId],
       )
     : {};

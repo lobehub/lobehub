@@ -52,6 +52,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
       llm: ctx.userId ? new ServerLLMTransport(ctx, blob) : undefined,
       messages: new ServerMessageTransport(ctx.messageModel, {
         postProcessUrl: buildPostProcessUrl(ctx),
+        userId: ctx.userId,
       }),
       operationStore: new ServerOperationStore(
         ctx.serverDB,

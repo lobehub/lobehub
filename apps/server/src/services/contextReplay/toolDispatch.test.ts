@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm';
 import { afterEach, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
-import { MessageModel } from '@/database/models/message';
 import { agents, messages, topics, users } from '@/database/schemas';
 
 import { assertCurrentToolDispatch } from './toolDispatch';
@@ -61,20 +60,12 @@ it('compares explicit live pins with the invocation binding despite a stale runn
     topicId: 'policy-topic',
     agentId: 'policy-agent',
   });
-  await new MessageModel(db, userId).commitContextReplay('device-assistant', {
-    invocationId: 'device-assistant',
-    version: 1,
-    changes: [],
-    sourceIds: [],
-    sessionKey: 'device',
-    executionBinding: { topicDeviceId: 'A', agentDeviceId: null },
-  });
   const call = {
     db,
     userId,
     agentId: 'policy-agent',
     topicId: 'policy-topic',
-    assistantMessageId: 'device-assistant',
+    expectedBinding: { topicDeviceId: 'A', agentDeviceId: null },
     identifier: 'lobe-local-system',
     apiName: 'runCommand',
     expectedDeviceId: 'A',

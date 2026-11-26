@@ -15,7 +15,6 @@ import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
-import { scrubDeletedContextSources } from '@/server/services/contextReplay/scrub';
 import { FileService } from '@/server/services/file';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -393,12 +392,6 @@ export const knowledgeBaseRouter = router({
           ),
         );
       }
-      await scrubDeletedContextSources(ctx, {
-        ids: [
-          ...knowledgeBases.map((knowledgeBase) => `knowledgeBase:${knowledgeBase.id}`),
-          ...results.flatMap((result) => result.deletedFiles.map((f) => `file:${f.id}`)),
-        ],
-      });
       const urls = results
         .flatMap((result) => result.deletedFiles)
         .map((file) => file.url)
@@ -459,9 +452,6 @@ export const knowledgeBaseRouter = router({
         input.id,
         serverDBEnv.REMOVE_GLOBAL_FILE,
       );
-      await scrubDeletedContextSources(ctx, {
-        ids: [`knowledgeBase:${input.id}`, ...result.deletedFiles.map((f) => `file:${f.id}`)],
-      });
 
       if (result.deletedFiles.length > 0) {
         const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);

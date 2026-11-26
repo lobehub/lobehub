@@ -47,6 +47,19 @@ it('withholds a revoked snapshot, derived reply, reasoning, tool args and opaque
   expect(next.messages.some((message) => message.content === 'continue')).toBe(true);
 });
 
+it('keeps the history around a summary whose snapshot has expired', async () => {
+  const history = [
+    u('u1', 'first question'),
+    { id: 'summary', role: 'compressedGroup', content: 'EARLIER SUMMARY' },
+    { id: 'a1', role: 'assistant', content: 'earlier answer' },
+    u('u2', 'continue'),
+  ] as UIChatMessage[];
+  const next = await new MessagesEngine(params(history)).process();
+  const text = JSON.stringify(next.messages);
+  expect(text).toContain('earlier answer');
+  expect(text).toContain('first question');
+});
+
 it('refuses to retry a committed invocation after its sources were revoked', async () => {
   const first = await new MessagesEngine(
     params([u('u1')], {

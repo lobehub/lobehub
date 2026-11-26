@@ -12,7 +12,6 @@ import pMap from 'p-map';
 import { AgentDocumentModel, canReadDocument } from '@/database/models/agentDocuments';
 import { FileModel } from '@/database/models/file';
 import { GoalModel } from '@/database/models/goal';
-import type { MessageModel } from '@/database/models/message';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
@@ -29,6 +28,7 @@ import {
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
+import { redisService } from '@/server/services/redis';
 import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 
 interface ReplayAccessContext {
@@ -215,26 +215,10 @@ export const redactRevokedSnapshots = (
   );
 };
 
-export const loadContextReplays = async (
-  ctx: ReplayAccessContext,
-  model: Pick<MessageModel, 'getContextReplays' | 'getContextReplayDependencies'>,
-  ids: string[],
-) => {
-  const [dependencies, own] = await Promise.all([
-    model.getContextReplayDependencies(ids),
-    model.getContextReplays(ids),
-  ]);
-  const snapshots = { ...dependencies, ...own };
+export const loadContextReplays = async (ctx: ReplayAccessContext, ids: string[]) => {
+  const snapshots = await redisService.contextReplay.getMany(ctx.userId, ids);
+  if (!Object.keys(snapshots).length) return snapshots;
   await assertCanViewMessageTargets(ctx, Object.keys(snapshots));
-  for (const snapshot of Object.values(snapshots)) {
-    if (
-      snapshot.createdBy !== ctx.userId &&
-      snapshot.sourceIds.some(
-        (source) => source.startsWith('memory:') || source.startsWith('memory-persona:'),
-      )
-    )
-      snapshot.invalidated = true;
-  }
   const revoked = await revokedContextSources(
     ctx,
     Object.values(snapshots).flatMap((snapshot) => snapshot.sourceIds),

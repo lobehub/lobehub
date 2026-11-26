@@ -3603,19 +3603,6 @@ table messages_files {
   }
 }
 
-table message_context_snapshots {
-  message_id text [pk, not null]
-  user_id text [not null]
-  workspace_id text
-  snapshot jsonb [not null]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'message_context_snapshots_user_id_idx']
-    workspace_id [name: 'message_context_snapshots_workspace_id_idx']
-  }
-}
-
 table messenger_account_links {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]

@@ -583,10 +583,10 @@ export class MessageService {
       agentId: options.agentId ?? undefined,
       topicId: options.topicId ?? undefined,
     };
-    const snapshots = await loadContextReplays(access, this.messageModel, [
-      ...history.map((message) => message.id),
-      ...sourceGroupIds,
-    ]);
+    const snapshots = await loadContextReplays(
+      access,
+      history.map((message) => message.id),
+    );
     const revokedFiles = await revokedContextSources(
       access,
       contextReplayFileIds(history).map((id) => `file:${id}`),

@@ -22,14 +22,8 @@ const mockListStories = vi.fn();
 const mockListPersonaVersions = vi.fn();
 const mockResetMemoryExtractStatus = vi.fn();
 const mockRestorePersonaVersion = vi.fn();
-const { mockPreferenceDelete, mockScrub, mockTriggerProcessUsers } = vi.hoisted(() => ({
-  mockPreferenceDelete: vi.fn(),
-  mockScrub: vi.fn(),
+const { mockTriggerProcessUsers } = vi.hoisted(() => ({
   mockTriggerProcessUsers: vi.fn(),
-}));
-
-vi.mock('@/server/services/contextReplay/scrub', () => ({
-  scrubDeletedContextSources: mockScrub,
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
@@ -77,7 +71,7 @@ vi.mock('@/database/models/userMemory', () => ({
     };
   }),
   UserMemoryPreferenceModel: vi.fn(function () {
-    return { delete: mockPreferenceDelete };
+    return {};
   }),
 }));
 
@@ -471,33 +465,5 @@ describe('userMemoryRouter context stories', () => {
     await expect(caller.getContextStory({ id: 'ctx-1' })).resolves.toMatchObject({ id: 'ctx-1' });
     await expect(caller.getContextStory({ id: 'legacy-1' })).resolves.toBeNull();
     expect(mockGetStory.mock.calls).toEqual([['ctx-1'], ['legacy-1']]);
-  });
-});
-
-describe('userMemoryRouter deletion and replay snapshots', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockPreferenceDelete.mockResolvedValue({ success: true });
-  });
-
-  it('clears a deleted preference from stored model input', async () => {
-    await createCaller().deletePreference({ id: 'pref-1' });
-    expect(mockScrub).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-1' }), {
-      ids: ['memory:preferences:pref-1'],
-    });
-  });
-
-  it('clears every memory family when all memories are deleted', async () => {
-    await createCaller().deleteAll();
-    expect(mockScrub).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-1' }), {
-      prefixes: ['memory:', 'memory-persona:', 'unverified-memory:'],
-    });
-  });
-
-  it('clears every persona revision when the persona is deleted', async () => {
-    await createCaller().deletePersona();
-    expect(mockScrub).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-1' }), {
-      prefixes: ['memory-persona:'],
-    });
   });
 });

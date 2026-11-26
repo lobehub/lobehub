@@ -113,14 +113,8 @@ export const prepareContextReplay = async (
       'Context source access changed; start a new invocation instead of retrying revoked input',
     );
   }
-  const unknownSummary = visibleMessages.some(
-    (message) => message.role === 'compressedGroup' && !message.metadata?.contextReplay,
-  );
   const reset =
-    unknownSummary ||
-    replay.resetHistory ||
-    revoked.size > 0 ||
-    historical.some((snapshot) => snapshot.invalidated);
+    replay.resetHistory || revoked.size > 0 || historical.some((snapshot) => snapshot.invalidated);
   const latestUser = visibleMessages.findLast((message) => message.role === 'user');
   const messages = reset
     ? latestUser

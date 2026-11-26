@@ -15,7 +15,6 @@ vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
 vi.mock('../history');
 vi.mock('../../pageCollab/notify', () => ({ dropPageRooms: vi.fn() }));
-vi.mock('../../contextReplay/scrub', () => ({ scrubDeletedContextSources: vi.fn() }));
 
 describe('DocumentService.deleteDocument — collaboration rooms', () => {
   const documentModel = { delete: vi.fn(), findById: vi.fn() };

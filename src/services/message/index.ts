@@ -4,7 +4,6 @@ import {
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatTranslate,
-  type ContextReplaySnapshot,
   type CreateMessageParams,
   type CreateMessageResult,
   type HeterogeneousToolStateSnapshot,
@@ -117,8 +116,6 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
 const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
-  getExecutionBinding = (input: { agentId: string; topicId?: string }) =>
-    lambdaClient.message.getExecutionBinding.query(input);
   assertToolDispatch = (input: {
     agentId: string;
     topicId?: string;
@@ -127,36 +124,6 @@ export class MessageService {
     expectedDeviceId?: string;
     assistantMessageId?: string;
   }) => lambdaClient.message.assertToolDispatch.query(input);
-  revokedContextSources = async (sourceIds: string[], agentId?: string): Promise<string[]> => {
-    const denied: string[] = [];
-    for (let start = 0; start < sourceIds.length; start += 1000)
-      denied.push(
-        ...(await lambdaClient.message.revokedContextSources.query({
-          sourceIds: sourceIds.slice(start, start + 1000),
-          agentId,
-        })),
-      );
-    return denied;
-  };
-  getContextReplays = async (
-    ids: string[],
-    agentId?: string,
-  ): Promise<Record<string, ContextReplaySnapshot>> => {
-    const result: Record<string, ContextReplaySnapshot> = {};
-    for (let start = 0; start < ids.length; start += 1000) {
-      Object.assign(
-        result,
-        await lambdaClient.message.getContextReplays.query({
-          ids: ids.slice(start, start + 1000),
-          agentId,
-        }),
-      );
-    }
-    return result;
-  };
-
-  commitContextReplay = (id: string, snapshot: ContextReplaySnapshot) =>
-    lambdaClient.message.commitContextReplay.mutate({ id, snapshot });
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
     const input = {
       operations: operations.map((operation) => {

@@ -57,6 +57,17 @@ const mockBuiltinModels = vi.hoisted(() => [
   },
 ]);
 
+// Snapshots outlive a test in the process-memory fallback; each test starts with none.
+vi.mock('@/server/services/redis/contextReplay', () => ({
+  contextReplay: {
+    commit: vi.fn(async (userId: string, snapshot: object) => ({ ...snapshot, createdBy: userId })),
+    getMany: vi.fn(async () => ({})),
+  },
+}));
+vi.mock('@/server/services/contextReplay', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  revokedContextSources: vi.fn(async () => []),
+}));
 // Authorization and device-binding rules have their own service integration tests.
 vi.mock('@/server/services/contextReplay/toolDispatch', () => ({
   assertCurrentToolDispatch: vi.fn().mockResolvedValue(undefined),
@@ -65,7 +76,6 @@ vi.mock('@/server/services/contextReplay/toolDispatch', () => ({
     .mockResolvedValue({ agentDeviceId: null, topicDeviceId: null }),
 }));
 
-// Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', async () => {
   const { createModelRuntimeMock } = await import('./mocks/modelRuntimeMock');
 
@@ -1915,10 +1925,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should NOT create a new assistant message
         expect(mockMessageModel.create).not.toHaveBeenCalled();
 
-        // Should publish stream_start event with existing assistant message ID
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
@@ -1972,7 +1980,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should create a new assistant message
         expect(mockMessageModel.create).toHaveBeenCalledWith(
           expect.objectContaining({
             agentId: 'agent-123',
@@ -1984,7 +1991,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           }),
         );
 
-        // Should publish stream_start event with newly created message ID
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
@@ -2016,7 +2022,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.call_llm!(instruction, state);
 
-        // Should NOT create a new message
         expect(mockMessageModel.create).not.toHaveBeenCalled();
 
         // Stream event should reference the existing message
@@ -4058,13 +4063,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.call_tools_batch!(instruction, state);
 
-      // Should execute both tools
       expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
 
-      // Should create two tool messages
       expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
 
-      // Verify first tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
@@ -4074,7 +4076,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         }),
       );
 
-      // Verify second tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
@@ -4408,13 +4409,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.call_tools_batch!(instruction, state);
 
-      // Should publish tool_start for each tool
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
         'op-123',
         expect.objectContaining({ type: 'tool_start' }),
       );
 
-      // Should publish tool_end for each tool
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
         'op-123',
         expect.objectContaining({ type: 'tool_end' }),

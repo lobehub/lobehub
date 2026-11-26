@@ -5,12 +5,9 @@ import type {
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
 import {
-  contextReplayMessageIds,
-  replayToolActivationContext,
   ToolResolver,
   type ToolsEngine,
   tryCountRequestPayloadTokens,
-  withContextReplays,
 } from '@lobechat/context-engine';
 import type { MessageMetadata } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
@@ -19,7 +16,6 @@ import { dedupeBy } from '@lobechat/utils';
 import { chatService } from '@/services/chat';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { FetchOptions } from '@/services/chat/types';
-import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
 import type { ChatStreamPayload } from '@/types/openai/chat';
 
@@ -80,28 +76,6 @@ export class ClientContextBuilder implements ContextBuilder {
     const messages = input.payload.messages.filter(
       (message) => !assistantMessageId || message.id !== assistantMessageId,
     );
-    const documentAgentId =
-      input.state.origin?.editingAgentId ??
-      (resolvedAgentConfig.enabledToolIds?.includes('lobe-agent-builder')
-        ? this.context.get().activeAgentId
-        : effectiveAgentId) ??
-      undefined;
-    const snapshots = input.contextReplay
-      ? await messageService.getContextReplays(
-          [...contextReplayMessageIds(messages), input.contextReplay.invocationId],
-          documentAgentId,
-        )
-      : {};
-    const executionBinding =
-      input.contextReplay &&
-      (snapshots[input.contextReplay.invocationId]?.executionBinding ??
-        input.contextReplay.committedSnapshot?.executionBinding ??
-        input.state.binding?.executionBinding ??
-        (await messageService.getExecutionBinding({
-          agentId: effectiveAgentId!,
-          topicId: topicId ?? undefined,
-        })));
-    if (executionBinding) input.state.binding = { ...input.state.binding, executionBinding };
     const prepared = await chatService.buildAssistantMessageContext(
       {
         agentId: effectiveAgentId || undefined,
@@ -111,30 +85,7 @@ export class ClientContextBuilder implements ContextBuilder {
         discoveryManifests:
           input.state.operationToolSet?.manifestMap ?? input.state.toolManifestMap,
         groupId,
-        messages: input.contextReplay ? withContextReplays(messages, snapshots) : messages,
-        ...(input.contextReplay && {
-          contextReplay: {
-            ...input.contextReplay,
-            actorId: effectiveAgentId ?? undefined,
-            executionBinding: executionBinding || undefined,
-
-            sourceIdsByProvider: {
-              ProjectContextInjector: input.state.origin?.projectId
-                ? [`project:${input.state.origin.projectId}`]
-                : [],
-              TaskManagerContextInjector:
-                operation.context.viewedTask?.type === 'detail'
-                  ? [`task:${operation.context.viewedTask.taskId}`]
-                  : [],
-            },
-            validateSources: (ids) => messageService.revokedContextSources(ids, documentAgentId),
-            runtimeContext: {
-              environment: input.state.plan?.execution?.kind,
-              deviceId: input.state.binding?.device?.id,
-            },
-            committedSnapshot: snapshots[input.contextReplay.invocationId],
-          },
-        }),
+        messages,
         model: input.model,
         provider: input.provider,
         resolvedAgentConfig: promptAgentConfig,
@@ -154,25 +105,12 @@ export class ClientContextBuilder implements ContextBuilder {
     const { messages: preparedMessages = [], ...params } = prepared.params;
 
     return {
-      ...(prepared.contextReplaySnapshot && {
-        beforeDispatch: async () => {
-          const revoked = await messageService.revokedContextSources(
-            prepared.contextReplaySnapshot!.sourceIds,
-            documentAgentId,
-          );
-          if (revoked.length) throw new Error('Context source access revoked before dispatch');
-        },
-      }),
       // The client transport sends these messages and `params.tools` as-is.
       contextAccounting: tryCountRequestPayloadTokens({
         messages: preparedMessages,
         tools: params.tools,
       }),
       messages: preparedMessages,
-      contextReplaySnapshot: prepared.contextReplaySnapshot,
-      getToolActivationContext: input.contextReplay
-        ? async () => replayToolActivationContext(preparedMessages)
-        : undefined,
       modelParameters: {
         options: prepared.options,
         params: {

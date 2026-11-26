@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { serverDBEnv } from '@/config/db';
 import { router } from '@/libs/trpc/lambda';
-import { scrubDeletedContextSources } from '@/server/services/contextReplay/scrub';
 
 import { assertFileNotInRestrictedKnowledgeBase } from '../_helpers/knowledgeBaseAccess';
 import { fileProcedure } from './procedures';
@@ -44,7 +43,6 @@ export const removeRouter = router({
       const file = await ctx.fileModel.delete(input.id, {
         removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
       });
-      await scrubDeletedContextSources(ctx, { ids: [`file:${input.id}`] });
 
       if (!file) return;
 
@@ -100,7 +98,6 @@ export const removeRouter = router({
         ids,
         serverDBEnv.REMOVE_GLOBAL_FILE,
       );
-      await scrubDeletedContextSources(ctx, { ids: ids.map((id) => `file:${id}`) });
 
       if (!needToRemoveFileList || needToRemoveFileList.length === 0) return;
 

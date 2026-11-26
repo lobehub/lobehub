@@ -2,7 +2,6 @@ import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   AgentSenderMetadataSchema,
-  ContextReplaySnapshotSchema,
   CreateNewMessageParamsSchema,
   omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
@@ -24,11 +23,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { loadContextReplays, revokedContextSources } from '@/server/services/contextReplay';
-import {
-  assertCurrentToolDispatch,
-  getCurrentExecutionBinding,
-} from '@/server/services/contextReplay/toolDispatch';
+import { assertCurrentToolDispatch } from '@/server/services/contextReplay/toolDispatch';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
@@ -138,16 +133,6 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
 ]);
 
 export const messageRouter = router({
-  getExecutionBinding: messageProcedure
-    .use(withScopedPermission('message:read'))
-    .input(z.object({ agentId: z.string(), topicId: z.string().optional() }))
-    .query(({ ctx, input }) =>
-      getCurrentExecutionBinding({
-        ...input,
-        ...guardCtx(ctx),
-        workspaceId: ctx.workspaceId ?? undefined,
-      }),
-    ),
   assertToolDispatch: messageProcedure
     .use(withScopedPermission('message:read'))
     .input(
@@ -167,35 +152,6 @@ export const messageRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
       return true;
-    }),
-  revokedContextSources: messageProcedure
-    .use(withScopedPermission('message:read'))
-    .input(z.object({ sourceIds: z.array(z.string()).max(1000), agentId: z.string().optional() }))
-    .query(({ ctx, input }) =>
-      revokedContextSources(
-        { ...guardCtx(ctx), workspaceId: ctx.workspaceId ?? undefined, agentId: input.agentId },
-        input.sourceIds,
-      ),
-    ),
-  getContextReplays: messageProcedure
-    .use(withScopedPermission('message:read'))
-    .input(z.object({ ids: z.array(z.string()).max(1000), agentId: z.string().optional() }))
-    .query(async ({ ctx, input }) => {
-      await assertCreatorMessageTargets(guardCtx(ctx), input.ids);
-      await assertCanViewMessageTargets(guardCtx(ctx), input.ids);
-      return loadContextReplays(
-        { ...guardCtx(ctx), workspaceId: ctx.workspaceId ?? undefined, agentId: input.agentId },
-        ctx.messageModel,
-        input.ids,
-      );
-    }),
-  commitContextReplay: messageProcedure
-    .use(withScopedPermission('message:update'))
-    .input(z.object({ id: z.string(), snapshot: ContextReplaySnapshotSchema }))
-    .mutation(async ({ ctx, input }) => {
-      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
-      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
-      return ctx.messageModel.commitContextReplay(input.id, input.snapshot);
     }),
   addFilesToMessage: messageProcedure
     .use(withScopedPermission('message:update'))

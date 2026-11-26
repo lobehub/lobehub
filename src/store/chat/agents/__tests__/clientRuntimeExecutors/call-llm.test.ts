@@ -127,12 +127,6 @@ describe('createClientRuntimeExecutors call_llm', () => {
       const id = 'assistant-created';
       return { id, messages: [{ ...params, id } as UIChatMessage] };
     });
-    vi.spyOn(messageService, 'getContextReplays').mockResolvedValue({});
-    vi.spyOn(messageService, 'getExecutionBinding').mockResolvedValue({
-      agentDeviceId: null,
-      topicDeviceId: null,
-    });
-    vi.spyOn(messageService, 'revokedContextSources').mockResolvedValue([]);
   });
 
   afterEach(() => {

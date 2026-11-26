@@ -1617,13 +1617,6 @@
       "when": 1795541757594,
       "tag": "0230_custom_emoji_and_reactions",
       "breakpoints": true
-    },
-    {
-      "idx": 231,
-      "version": "7",
-      "when": 1795713326141,
-      "tag": "0231_add_message_context_snapshots",
-      "breakpoints": true
     }
   ],
   "version": "6"

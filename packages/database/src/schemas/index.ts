@@ -52,7 +52,6 @@ export * from './linear';
 export * from './llmGenerationTracing';
 export * from './meeting';
 export * from './message';
-export * from './messageContext';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';
 export * from './metric';

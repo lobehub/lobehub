@@ -191,7 +191,7 @@ export class ServerToolTransport implements ToolTransport {
           identifier: chatToolPayload.identifier,
           apiName: chatToolPayload.apiName,
           expectedDeviceId: resolveRunActiveDeviceId(context.state),
-          assistantMessageId: context.parentMessageId,
+          expectedBinding: context.state.binding?.executionBinding,
           includeShareVisitor: !!this.ctx.agentShareVisitor,
         });
       let toolCallMocked = false;
