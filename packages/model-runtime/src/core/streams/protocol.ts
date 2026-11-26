@@ -25,6 +25,8 @@ export type ChatPayloadForTransformStream = {
  * context in the stream to save temporarily data
  */
 export interface StreamContext {
+  /** Anthropic content-block index → app tool-call index of each `tool_use` block. */
+  anthropicToolBlocks?: Map<number, number>;
   chunkIndex?: number;
   id: string;
   /** Options used to price `usage.cost`, forwarded so hooks can reprice the same usage. */
