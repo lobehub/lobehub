@@ -560,7 +560,7 @@
   "lobeBench.dashboard.filter.all": "All",
   "lobeBench.dashboard.filter.allFail": "Everyone failed",
   "lobeBench.dashboard.filter.category": "Category: {{category}}",
-  "lobeBench.dashboard.filter.clear": "Clear",
+  "lobeBench.dashboard.filter.clear": "Clear filters",
   "lobeBench.dashboard.filter.diff": "Cases with disagreement",
   "lobeBench.dashboard.filter.errors": "With errors",
   "lobeBench.dashboard.filter.level": "Level: {{level}}",

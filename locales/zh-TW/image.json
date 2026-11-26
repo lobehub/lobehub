@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "種子",
   "config.seed.random": "隨機種子",
+  "config.size.autoByOpenAI": "自動（由 OpenAI 決定）",
   "config.size.label": "尺寸",
   "config.steps.label": "步數",
   "config.title": "設定",

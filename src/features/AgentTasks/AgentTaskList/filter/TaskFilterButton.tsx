@@ -23,13 +23,19 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { useHeaderActionSize } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { groupFilterOptions } from './groupFilterOptions';
 import {
   isTaskFilterValueSelected,
   setTaskFilterContent,
   setTaskFilterDateWindow,
   toggleTaskFilterValue,
 } from './taskFilterState';
-import type { TaskFilterDateFieldDef, TaskFilterFieldDef } from './useTaskFilterFields';
+import type {
+  TaskFilterDateFieldDef,
+  TaskFilterFieldDef,
+  TaskFilterOption,
+  TaskFilterSetFieldDef,
+} from './useTaskFilterFields';
 
 const styles = stylex.create({
   search: {
@@ -100,20 +106,31 @@ const TaskFilterButton = memo<TaskFilterButtonProps>(({ fields, filter, setFilte
         type: 'checkbox' as const,
       }));
 
+    const optionItem = (field: TaskFilterSetFieldDef, option: TaskFilterOption): DropdownItem => ({
+      checked: isTaskFilterValueSelected(filter, field.key, option.value),
+      closeOnClick: false,
+      icon: option.icon,
+      key: `${field.key}:${option.value}`,
+      label: option.label,
+      onCheckedChange: () =>
+        setFilter((prev) => toggleTaskFilterValue(prev, field.key, option.value)),
+      type: 'checkbox' as const,
+    });
+
+    const setOptionItems = (field: TaskFilterSetFieldDef): DropdownItem[] =>
+      groupFilterOptions(field.options).map((entry) =>
+        entry.kind === 'option'
+          ? optionItem(field, entry.option)
+          : {
+              children: entry.options.map((option) => optionItem(field, option)),
+              key: `${field.key}:group:${entry.label}`,
+              label: entry.label,
+              type: 'group' as const,
+            },
+      );
+
     const fieldItem = (field: TaskFilterFieldDef): DropdownItem => ({
-      children:
-        field.kind === 'date'
-          ? dateWindowItems(field)
-          : field.options.map((option) => ({
-              checked: isTaskFilterValueSelected(filter, field.key, option.value),
-              closeOnClick: false,
-              icon: option.icon,
-              key: `${field.key}:${option.value}`,
-              label: option.label,
-              onCheckedChange: () =>
-                setFilter((prev) => toggleTaskFilterValue(prev, field.key, option.value)),
-              type: 'checkbox' as const,
-            })),
+      children: field.kind === 'date' ? dateWindowItems(field) : setOptionItems(field),
       icon: <Icon color={cssVarJs.colorTextSecondary} icon={field.icon} size={16} />,
       key: field.key,
       label: field.label,

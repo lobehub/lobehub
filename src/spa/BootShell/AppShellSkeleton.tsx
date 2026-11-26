@@ -1,7 +1,11 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- StyleX cannot target the shell from a body :has() condition without a universal selector
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -28,6 +32,23 @@ import { useLoadingHint } from './useLoadingHint';
 const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
+
+/**
+ * Hides the shell while a dialog is open, so an auth dialog that opens during
+ * loading is visible. The dialog and the shell are siblings under body, so the
+ * condition sits on body. Keep the shell class itself as the subject: StyleX can
+ * only write this as `.x:is(body:has(...) *)`, and Chrome shares one
+ * invalidation set across all :has() rules, so that universal `*` made every
+ * DOM insertion (each message row a list mounts) restyle the whole page
+ * (T-14366).
+ */
+const fallback = createStaticStyles(({ css }) => ({
+  root: css`
+    body:has([role='dialog'][data-open]) & {
+      visibility: hidden;
+    }
+  `,
+}));
 
 const fadeIn = stylex.keyframes({
   from: { opacity: 0 },
@@ -75,10 +96,6 @@ const styles = stylex.create({
     width: '100%',
   },
   root: {
-    // The dialog and boot shell are siblings, not a marker/descendant pair.
-    // A self condition preserves the existing body :has() rule without moving
-    // the shell or introducing a component-scoped stylesheet.
-    visibility: { 'default': null, ':is(body:has([role="dialog"][data-open]) *)': 'hidden' },
     pointerEvents: 'none',
     position: 'fixed',
     zIndex: 99_999,
@@ -126,7 +143,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   );
 
   return (
-    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
+    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS, fallback.root)}>
       {isDesktop && (
         <div {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })} />
       )}

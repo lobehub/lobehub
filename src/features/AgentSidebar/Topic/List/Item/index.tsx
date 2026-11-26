@@ -20,7 +20,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
-import type { CSSProperties, DragEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -58,8 +58,10 @@ import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
+import InlineTitleEditor from './InlineTitleEditor';
 import { getTopicMetaCard } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
+import { useRenameTopic } from './useRenameTopic';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
@@ -313,6 +315,20 @@ const TopicItemRow = memo<TopicItemRowProps>(
       void navRef.current.navigateToTopic(id);
     }, [id, navRef]);
 
+    // Double clicking the row, or the menu's Rename, turns the title into an
+    // input in place. The first click of a double click has already switched
+    // to the topic.
+    const [editing, setEditing] = useState(false);
+    const { autoRename, canRename, saveTitle } = useRenameTopic(id, title, activeAgentId);
+    const startEditing = useCallback(() => setEditing(true), []);
+    const stopEditing = useCallback(() => setEditing(false), []);
+    const handleDoubleClick = useCallback((event: MouseEvent) => {
+      // The trailing actions (complete, archive, more) stop click propagation
+      // but not double clicks; a fast double click on them must not rename.
+      if ((event.target as HTMLElement).closest('[data-nav-item-actions]')) return;
+      setEditing(true);
+    }, []);
+
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
     const isScheduled = status === 'scheduled';
@@ -544,7 +560,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       );
 
     const navItem = (
-      <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
+      <TopicItemContextMenu fav={fav} id={id} status={status} title={title} onRename={startEditing}>
         <NavItem
           draggable
           titleMarquee
@@ -562,6 +578,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
               showInlineArchive={!shouldShowRunningIcon}
               status={status}
               title={title}
+              onRename={startEditing}
             />
           )}
           extra={
@@ -588,6 +605,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
+          onDoubleClick={canRename ? handleDoubleClick : undefined}
           onDragStart={handleDragStart}
         />
       </TopicItemContextMenu>
@@ -600,7 +618,15 @@ const TopicItemRow = memo<TopicItemRowProps>(
         style={{ position: 'relative' }}
         {...hoverPrefetchHandlers}
       >
-        {metaCard ? (
+        {editing ? (
+          <InlineTitleEditor
+            icon={leadingIconNode}
+            title={title}
+            onAutoRename={autoRename}
+            onClose={stopEditing}
+            onSave={saveTitle}
+          />
+        ) : metaCard ? (
           <Popover
             arrow={false}
             content={<MetaHoverCard metadata={metadata} title={title} />}
