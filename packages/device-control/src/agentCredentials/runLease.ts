@@ -36,8 +36,13 @@ const REPLACING_PREFIX = 'replacing-';
 const REASON_MAX_LENGTH = 500;
 
 const HEARTBEAT_MS = 1000;
-/** A lease not renewed for this long belongs to a wrapper that died without cleanup. */
+/**
+ * A lease not renewed for this long may belong to a wrapper that died and a
+ * pid reused since, so it is asked to stop but never killed.
+ */
 const STALE_MS = 10_000;
+/** A lease not renewed for this long is abandoned: no paused wrapper sleeps through it. */
+const ABANDONED_MS = 60 * 60 * 1000;
 /** Time a run gets to stop on its own and report why, before it is killed. */
 const GRACE_MS = 6000;
 /** Time a killed run gets to disappear before the replacement gives up. */
@@ -60,6 +65,8 @@ export interface AgentCredentialRunLease {
 }
 
 export interface TrackAgentCredentialRunOptions {
+  /** How long `admitted` waits out a replacement; tests shorten it. */
+  admissionTimeoutMs?: number;
   /** The run's env; only a run spawned on an installed credential carries the lease dir. */
   env: Record<string, string | undefined>;
   heartbeatMs?: number;
@@ -73,23 +80,47 @@ const NO_LEASE: AgentCredentialRunLease = { admitted: Promise.resolve(), release
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Only a missing file means "none"; any other failure must not admit a run blindly. */
+const unlessMissing =
+  <T>(fallback: T) =>
+  (error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return fallback;
+    throw error;
+  };
+
 const replacementInProgress = async (runDir: string) => {
-  const names = await readdir(runDir).catch(() => [] as string[]);
+  const names = await readdir(runDir).catch(unlessMissing([] as string[]));
   for (const name of names) {
     if (!name.startsWith(REPLACING_PREFIX)) continue;
     const mtime = await stat(path.join(runDir, name)).then(
       (s) => s.mtimeMs,
-      () => undefined,
+      unlessMissing(undefined),
     );
     if (mtime !== undefined && Date.now() - mtime <= REPLACING_STALE_MS) return true;
   }
   return false;
 };
 
-/** Wait (bounded by the stale age) until no installer is replacing the credential. */
-const waitForAdmission = async (runDir: string, pollMs: number) => {
-  const deadline = Date.now() + REPLACING_STALE_MS;
-  while (Date.now() < deadline && (await replacementInProgress(runDir))) await sleep(pollMs);
+/**
+ * Wait (bounded by the stale age) until no installer is replacing the
+ * credential. A marker directory that cannot be inspected counts as a
+ * replacement in progress, and rejects once the wait runs out.
+ */
+const waitForAdmission = async (runDir: string, pollMs: number, timeoutMs: number) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    let error: unknown;
+    const busy = await replacementInProgress(runDir).catch((caught) => {
+      error = caught;
+      return true;
+    });
+    if (!busy) return;
+    if (Date.now() >= deadline) {
+      if (error) throw error;
+      return;
+    }
+    await sleep(pollMs);
+  }
 };
 
 /**
@@ -98,6 +129,7 @@ const waitForAdmission = async (runDir: string, pollMs: number) => {
  * installer could replace the credential without seeing this run.
  */
 export const trackAgentCredentialRun = ({
+  admissionTimeoutMs = REPLACING_STALE_MS,
   env,
   heartbeatMs = HEARTBEAT_MS,
   onStop,
@@ -115,10 +147,15 @@ export const trackAgentCredentialRun = ({
     writeFileSync(lease, JSON.stringify({ pid, startedAt: new Date().toISOString() }), {
       mode: FILE_MODE,
     });
-  } catch {
-    // Without a lease a replacement cannot stop this run, but failing the run
-    // for that would be worse than the race the lease guards against.
-    return NO_LEASE;
+  } catch (error) {
+    // Without a lease a replacement could not stop this run, which could then
+    // write its login back over the next one: refuse the run instead.
+    const message = error instanceof Error ? error.message : String(error);
+    const admitted = Promise.reject(
+      new Error(`Could not register this run on the installed credential: ${message}`),
+    );
+    admitted.catch(() => {});
+    return { admitted, release: () => {} };
   }
 
   let stopped = false;
@@ -142,7 +179,8 @@ export const trackAgentCredentialRun = ({
   }, heartbeatMs);
   timer.unref?.();
 
-  const admitted = waitForAdmission(runDir, POLL_MS);
+  const admitted = waitForAdmission(runDir, POLL_MS, admissionTimeoutMs);
+  admitted.catch(() => {});
 
   const release = () => {
     if (released) return;
@@ -204,11 +242,18 @@ const killRunTree = async (pid: number) => {
 
 interface LiveLease {
   file: string;
+  /** Renewed recently, so its pid is the wrapper's and may be killed. */
+  killable: boolean;
   pid: number;
 }
 
 /** Leases of runs that are still alive; stale ones are deleted on the way. */
-const listLiveLeases = async (runDir: string, now: number, staleMs: number) => {
+const listLiveLeases = async (
+  runDir: string,
+  now: number,
+  staleMs: number,
+  abandonedMs: number,
+) => {
   // Only a missing directory means no runs: any other failure must stop the
   // replacement, or a run it cannot see would write the old login back.
   const names = await readdir(runDir).catch((error: NodeJS.ErrnoException) => {
@@ -231,14 +276,15 @@ const listLiveLeases = async (runDir: string, now: number, staleMs: number) => {
       },
     );
     if (mtime === undefined) continue;
-    // A lease that stopped renewing is never signalled: its pid may now
-    // belong to an unrelated process.
-    if (now - mtime > staleMs || !isPidAlive(pid)) {
+    // A lease that stopped renewing may be a wrapper that was paused (the
+    // device slept) or a dead one whose pid was reused: it is still asked to
+    // stop, but never killed, and the replacement fails if it does not go.
+    if (now - mtime > abandonedMs || !isPidAlive(pid)) {
       await rm(file, { force: true });
       await rm(stopFile(runDir, pid), { force: true });
       continue;
     }
-    live.push({ file, pid });
+    live.push({ file, killable: now - mtime <= staleMs, pid });
   }
   return live;
 };
@@ -265,6 +311,7 @@ const waitForLeases = async (leases: LiveLease[], timeoutMs: number, pollMs: num
 };
 
 export interface StopAgentCredentialRunsOptions {
+  abandonedMs?: number;
   forceMs?: number;
   graceMs?: number;
   /** Kill a run's process tree; tests replace it so they never kill themselves. */
@@ -287,6 +334,7 @@ export const stopAgentCredentialRuns = async (
   options: StopAgentCredentialRunsOptions = {},
 ): Promise<number> => {
   const {
+    abandonedMs = ABANDONED_MS,
     forceMs = FORCE_MS,
     graceMs = GRACE_MS,
     killRun = killRunTree,
@@ -294,7 +342,7 @@ export const stopAgentCredentialRuns = async (
     pollMs = POLL_MS,
     staleMs = STALE_MS,
   } = options;
-  const leases = await listLiveLeases(runDir, now(), staleMs);
+  const leases = await listLiveLeases(runDir, now(), staleMs, abandonedMs);
   if (leases.length === 0) return 0;
 
   await Promise.all(
@@ -303,9 +351,13 @@ export const stopAgentCredentialRuns = async (
     ),
   );
   let pending = await waitForLeases(leases, graceMs, pollMs);
-  if (pending.length > 0) {
-    await Promise.all(pending.map((lease) => killRun(lease.pid)));
-    pending = await waitForLeases(pending, forceMs, pollMs);
+  const killable = pending.filter((lease) => lease.killable);
+  if (killable.length > 0) {
+    await Promise.all(killable.map((lease) => killRun(lease.pid)));
+    pending = [
+      ...pending.filter((lease) => !lease.killable),
+      ...(await waitForLeases(killable, forceMs, pollMs)),
+    ];
   }
   if (pending.length > 0) {
     // The caller keeps the old credential, so a run that stops later must not
