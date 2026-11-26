@@ -1,0 +1,48 @@
+---
+title: 在 LobeHub 中使用 Standard Compute
+description: 了解如何在 LobeHub 中配置和使用 Standard Compute LLM 网关
+tags:
+  - LobeHub
+  - Standard Compute
+  - API 密钥
+  - Web 界面
+---
+
+# 在 LobeHub 中使用 Standard Compute
+
+[Standard Compute](https://standardcompute.com) 是一个成本优化的 LLM 网关：通过一个兼容 OpenAI 的 API，将每一步路由到能够胜任且成本最低的模型，并可选启用欧洲 / 美国区域规则。
+
+本文将指导你如何在 LobeHub 中使用 Standard Compute。
+
+<Steps>
+  ### 第一步：获取 Standard Compute API 密钥
+
+  - 登录 [Standard Compute 控制台](https://standardcompute.com/dashboard/api-keys)
+  - 复制你的 API 密钥并妥善保管
+
+  ### 第二步：在 LobeHub 中配置 Standard Compute
+
+  - 打开 **应用设置 → AI 服务商**
+  - 选择 **Standard Compute**，然后打开服务商
+  - 填入你复制的 API 密钥
+  - 获取模型列表，选择模型后即可开始对话
+
+  <Callout type={'warning'}>
+    使用费用由 Standard Compute 收取，详情请参阅
+    [Standard Compute 价格页面](https://standardcompute.com/pricing)。
+  </Callout>
+</Steps>
+
+## 模型选择
+
+`StandardCompute` 模型会将每个请求路由到能够胜任且成本最低的模型。你也可以从获取的模型列表中选择具体模型。模型目录来自 `GET https://api.stdcmpt.com/v1/models`，会随时间变化，详见[模型文档](https://docs.standardcompute.com/models)。
+
+## API 配置
+
+Standard Compute 使用兼容 OpenAI 的 API，默认接口地址为：
+
+```
+https://api.stdcmpt.com/v1
+```
+
+如需将请求发送到美国节点，请将 API 代理地址设置为 `https://us.stdcmpt.com/v1`。详见[区域与隐私](https://docs.standardcompute.com/regions-and-privacy)。

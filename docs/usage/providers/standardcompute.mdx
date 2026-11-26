@@ -1,0 +1,48 @@
+---
+title: Using Standard Compute in LobeHub
+description: Learn how to configure and use the Standard Compute LLM gateway in LobeHub
+tags:
+  - LobeHub
+  - Standard Compute
+  - API Key
+  - Web Interface
+---
+
+# Using Standard Compute in LobeHub
+
+[Standard Compute](https://standardcompute.com) is a cost-optimized LLM gateway: one OpenAI-compatible API that routes each step to the cheapest capable model, with opt-in Europe/US rules.
+
+This guide walks you through using Standard Compute in LobeHub.
+
+<Steps>
+  ### Step 1: Get a Standard Compute API key
+
+  - Sign in to the [Standard Compute dashboard](https://standardcompute.com/dashboard/api-keys)
+  - Copy your API key and keep it secret
+
+  ### Step 2: Configure Standard Compute in LobeHub
+
+  - Open **App Settings → AI Providers**
+  - Select **Standard Compute**, then turn on the provider
+  - Enter the API key you copied
+  - Fetch the model list, choose a model and start chatting
+
+  <Callout type={'warning'}>
+    Usage is billed by Standard Compute. See the
+    [Standard Compute pricing page](https://standardcompute.com/pricing) for details.
+  </Callout>
+</Steps>
+
+## Model Selection
+
+The `StandardCompute` model routes each request to the cheapest capable model. You can also pick a specific model from the fetched list. The catalog is served from `GET https://api.stdcmpt.com/v1/models` and changes over time; see the [models documentation](https://docs.standardcompute.com/models).
+
+## API Configuration
+
+Standard Compute uses an OpenAI-compatible API. The default base URL is:
+
+```
+https://api.stdcmpt.com/v1
+```
+
+To send requests to the US endpoint, set the API proxy address to `https://us.stdcmpt.com/v1`. See [regions and privacy](https://docs.standardcompute.com/regions-and-privacy).
