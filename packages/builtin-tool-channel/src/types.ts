@@ -4,9 +4,7 @@ export const ChannelApiName = {
   askUser: 'askUser',
   createThread: 'createThread',
   listChannels: 'listChannels',
-  listPeople: 'listPeople',
   listThreads: 'listThreads',
-  messagePerson: 'messagePerson',
   readMessage: 'readMessage',
   readMessages: 'readMessages',
   removeReaction: 'removeReaction',
@@ -16,4 +14,5 @@ export const ChannelApiName = {
   stopThread: 'stopThread',
   unwatchThreads: 'unwatchThreads',
   watchThreads: 'watchThreads',
+  postMessage: 'postMessage',
 } as const;

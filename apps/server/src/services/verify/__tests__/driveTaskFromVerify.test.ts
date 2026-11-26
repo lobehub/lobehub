@@ -116,6 +116,11 @@ vi.mock('@/server/services/taskResultBridge', () => ({
   }),
 }));
 
+const { postToChannel } = vi.hoisted(() => ({ postToChannel: vi.fn() }));
+vi.mock('@/server/services/task/channelDelivery', () => ({
+  postTaskRunToChannel: postToChannel,
+}));
+
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
@@ -518,7 +523,9 @@ describe('driveTaskFromVerify', () => {
       serviceUpdateStatus,
       statusRecompute,
       deliverMock,
+      postToChannel,
     ].forEach((m) => m.mockReset());
+    postToChannel.mockResolvedValue('posted');
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
@@ -549,6 +556,28 @@ describe('driveTaskFromVerify', () => {
       topicId: 'topic-done',
     });
     expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
+  });
+
+  it('passed → posts the accepted run to the task Channel; a failed post does not block', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
+    postToChannel.mockRejectedValueOnce(new Error('boom'));
+
+    await driveTaskFromVerify(db, 'u1', 'op-1', 'ws-1');
+
+    expect(postToChannel).toHaveBeenCalledWith(db, {
+      operationId: 'op-1',
+      scope: { userId: 'u1', workspaceId: 'ws-1' },
+      task: expect.objectContaining({ id: 'task-1' }),
+    });
+    expect(deliverMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('failed → posts nothing to the task Channel', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(postToChannel).not.toHaveBeenCalled();
   });
 
   it('passed → keeps a recurring task scheduled', async () => {

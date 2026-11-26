@@ -38,12 +38,16 @@ const findRow = (items: FavoriteItem[], id: string): FavoriteItem | undefined =>
 const isTarget = (item: FavoriteItem, type: FavoriteType, targetId: string) =>
   item.type === type && item.targetId === targetId;
 
-/** Insert or refresh `item` in place, the way the server upserts by target. */
-const upsert = (items: FavoriteItem[], item: FavoriteItem): FavoriteItem[] => {
+/**
+ * Insert `item` at the top or refresh it in place, the way the server upserts
+ * by target. `keepId` keeps the id already in the list (an optimistic row
+ * must not replace a confirmed one).
+ */
+const upsert = (items: FavoriteItem[], item: FavoriteItem, keepId = true): FavoriteItem[] => {
   const index = items.findIndex((row) => isTarget(row, item.type, item.targetId));
-  if (index === -1) return [...items, item];
+  if (index === -1) return [item, ...items];
   const next = [...items];
-  next[index] = { ...item, id: items[index].id };
+  next[index] = keepId ? { ...item, id: items[index].id } : item;
   return next;
 };
 
@@ -133,13 +137,8 @@ export class FavoriteActionImpl {
       {
         confirm:
           (saved) =>
-          (items = []) => {
-            const index = items.findIndex((row) => isTarget(row, saved.type, saved.targetId));
-            if (index === -1) return [...items, saved];
-            const next = [...items];
-            next[index] = saved;
-            return next;
-          },
+          (items = []) =>
+            upsert(items, saved, false),
       },
     );
     // Settles once the confirmed row (with its real id) is in the list.
@@ -168,8 +167,9 @@ export class FavoriteActionImpl {
       FAVORITE_LIST_KEY,
       (items = []) => {
         const listed = ids.flatMap((id) => findRow(items, id) ?? []);
+        // Rows the drag did not list were added since; new favorites stay on top.
         const rest = items.filter((item) => !listed.includes(item));
-        return [...listed, ...rest];
+        return [...rest, ...listed];
       },
       () => {
         const operation = this.#reorderQueue

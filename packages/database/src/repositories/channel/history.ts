@@ -19,20 +19,13 @@ import type {
   ChannelThreadRunActivity,
   ChannelThreadSummary,
 } from '@lobechat/types';
-import {
-  agentDisplayName,
-  channelAgentExchange,
-  channelMessageVia,
-  connectorRequestText,
-  RequestTrigger,
-} from '@lobechat/types';
+import { channelAgentExchange, channelMessageVia, connectorRequestText } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { isEqual } from 'es-toolkit';
 
 import {
   agentOperations,
-  agents,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -42,7 +35,6 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { isUuid } from '../../utils/uuid';
 import { normalizeWorkspaceId } from '../../utils/workspace';
@@ -59,13 +51,6 @@ const EXCERPT_LENGTH = 2000;
 const SUMMARY_LENGTH = 300;
 /** Latest steps of a running reply shown in a Thread summary. */
 const ACTIVITY_STEPS = 3;
-
-/** Runs the requester started themselves, which may message for them without a Channel job. */
-const DIRECT_RUN_TRIGGERS = new Set<RequestTrigger>([
-  RequestTrigger.Bot,
-  RequestTrigger.Chat,
-  RequestTrigger.Scheduled,
-]);
 
 const clip = (text: string | null | undefined, length = SUMMARY_LENGTH) => {
   const value = (text ?? '').trim();
@@ -242,8 +227,8 @@ export class ChannelHistoryRepository {
 
   /**
    * The live run's Channel and request, under the same checks as a history read: what a run may
-   * act from (e.g. relay a request into another Channel). `requestVia` is set when the request
-   * it answers was itself relayed by an Agent, and `requestByAgent` when another Agent wrote it
+   * act from (e.g. ask another Agent). `requestVia` is set when an Agent posted the request it
+   * answers (a Thread it opened, a scheduled report), and `requestByAgent` when another Agent wrote it
    * in their conversation: either way the run answers instead of passing it on. `exchange` is set
    * when, in that conversation, it answers the other Agent's answer to what it asked.
    */
@@ -318,71 +303,6 @@ export class ChannelHistoryRepository {
       }
       await tx.update(channelJobs).set({ ask: input }).where(eq(channelJobs.id, job.id));
     });
-
-  /**
-   * Who a run relays as, and from where. A Channel run relays from its Channel and request
-   * (`currentRun`, all its checks). A run with no Channel job may only be the requester's own
-   * live direct run, and only when the caller says so (`allowDirectRun`): the requester asked
-   * their Agent, in a chat (sent or scheduled) or as the bot's owner on an IM platform, to message
-   * someone or post into one of their Channels. Only a caller holding that run's `channel:message`
-   * token, minted only for those runs, may set it; the trigger is checked again here so no
-   * server-started run without a Channel can relay.
-   */
-  relaySource = async (
-    operationId: string,
-    { allowDirectRun = false }: { allowDirectRun?: boolean } = {},
-  ): Promise<{
-    /** The Channel run, with what {@link currentRun} reads; absent for a direct run. */
-    channelRun?: Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
-    origin?: { channelId: string; threadId: string | null };
-    requestVia?: ChannelMessageVia;
-    self: { agentId: string; name: string };
-  }> => {
-    const [job] = await this.db
-      .select({ id: channelJobs.id })
-      .from(channelJobs)
-      .where(eq(channelJobs.operationId, operationId))
-      .limit(1);
-    if (job || !allowDirectRun) {
-      const run = await this.currentRun(operationId);
-      return {
-        channelRun: run,
-        origin: { channelId: run.channelId, threadId: run.manifest.threadId },
-        requestVia: run.requestVia,
-        self: { agentId: run.manifest.self.agentId, name: run.manifest.self.name },
-      };
-    }
-
-    const [operation] = await this.db
-      .select({
-        agentId: agentOperations.agentId,
-        agentName: agents.name,
-        agentTitle: agentTitleSql(),
-        status: agentOperations.status,
-        trigger: agentOperations.trigger,
-        userId: agentOperations.userId,
-        workspaceId: agentOperations.workspaceId,
-      })
-      .from(agentOperations)
-      .leftJoin(agents, eq(agents.id, agentOperations.agentId))
-      .where(eq(agentOperations.id, operationId))
-      .limit(1);
-    if (
-      !operation?.agentId ||
-      operation.userId !== this.userId ||
-      operation.workspaceId !== this.workspaceId ||
-      !DIRECT_RUN_TRIGGERS.has(operation.trigger as RequestTrigger)
-    )
-      throw new ChannelError('NOT_FOUND', 'Channel operation not found');
-    if (operation.status !== 'running')
-      throw new ChannelError('CONFLICT', 'Channel operation is no longer active');
-    return {
-      self: {
-        agentId: operation.agentId,
-        name: agentDisplayName({ name: operation.agentName, title: operation.agentTitle }, 'Agent'),
-      },
-    };
-  };
 
   /**
    * Threads of the run's Channel, newest first, with the calling Agent's latest reply in each.

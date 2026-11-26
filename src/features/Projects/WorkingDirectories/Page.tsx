@@ -17,7 +17,7 @@ import { MembersSettings } from '../Review/MembersSettings';
 import { useCanManageProject } from '../useCanManageProject';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
-import { ProjectWorkingDirectories } from './index';
+import { ProjectEnvironment, ProjectRunners } from './index';
 
 interface SectionItem {
   key: string;
@@ -60,10 +60,13 @@ export function ProjectDirectoriesPage() {
     },
     {
       key: 'environments',
-      label: t('settings.environments'),
-      render: () => (
-        <ProjectWorkingDirectories canManage={canManage} projectId={detail.project.id} />
-      ),
+      label: t('settings.runners'),
+      render: () => <ProjectRunners canManage={canManage} projectId={detail.project.id} />,
+    },
+    {
+      key: 'environment',
+      label: t('settings.environment'),
+      render: () => <ProjectEnvironment canManage={canManage} projectId={detail.project.id} />,
     },
     // Everyone sees Advanced for Sites; it hides its management settings from viewers.
     {

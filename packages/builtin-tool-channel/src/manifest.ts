@@ -11,8 +11,7 @@ export const ChannelManifest: BuiltinToolManifest = {
   meta: {
     avatar: '#',
     title: 'Channel',
-    description:
-      'Read the current shared conversation, message Agents in your other Channels, and message people for your requester.',
+    description: 'Read the current shared conversation, and ask Agents in your other Channels.',
   },
   api: [
     {
@@ -225,7 +224,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.sendMessage,
       description:
-        "Ask or tell another Agent something. Address one Agent by agentIds: it is asked in the conversation between you two, never in the person's conversation or a group; its answer wakes you there, and what you then write is posted back where you asked. To address several Agents together, also give channelId, a group they are all in: the message appears as your requester's, marked as relayed by you, they answer in that group, and the reply is brought back to you here as a new request. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",
+        "Ask or tell another Agent something, in the conversation between you two, never in the person's conversation or a group: its answer wakes you there, and what you then write is posted back where you asked. Address one Agent per call; to ask several, call once for each. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -235,57 +234,18 @@ export const ChannelManifest: BuiltinToolManifest = {
             type: 'array',
             items: { type: 'string' },
             minItems: 1,
-            maxItems: 5,
-            description: 'Agents to address. One Agent is asked directly; several need channelId.',
+            maxItems: 1,
+            description: 'The one Agent to ask.',
           },
           channelId: {
             type: 'string',
             description:
-              'A group Channel from listChannels that every addressed Agent is in. Only for several Agents.',
+              'Optional: a Channel from listChannels where the person reaches that Agent, whose setup it keeps.',
           },
           content: {
             type: 'string',
             description:
               'The message, self-contained: the addressed Agent does not see this conversation.',
-          },
-        },
-      },
-    },
-    {
-      name: ChannelApiName.listPeople,
-      description:
-        'List the people your requester can message one-on-one (userId, name, username): their contacts, or in a workspace its members and the external contacts paired with them. Use it to find who messagePerson can reach. Filter with query (part of the name or @handle). Default 10, maximum 20.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          query: {
-            type: 'string',
-            description: "Case-insensitive part of the person's name or @handle.",
-          },
-          limit: {
-            type: 'integer',
-            minimum: 1,
-            maximum: 20,
-            description: 'Number of people; default 10.',
-          },
-        },
-      },
-    },
-    {
-      name: ChannelApiName.messagePerson,
-      description:
-        "Message one person for your requester, e.g. when asked to let someone know once you are done. It is posted in your requester's one-on-one conversation with that person, as your requester's message marked as sent by you, and the person is notified. No Agent answers there and nothing comes back to you. Get userId from listPeople; if several people match the name, ask your requester instead of guessing. Not for your requester: your final answer reaches them.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['userId', 'content'],
-        properties: {
-          userId: { type: 'string', description: 'The person, from listPeople.' },
-          content: {
-            type: 'string',
-            description:
-              'The message, self-contained and written for that person: they do not see this conversation.',
           },
         },
       },
@@ -418,6 +378,36 @@ export const ChannelManifest: BuiltinToolManifest = {
         required: ['watchId'],
         properties: {
           watchId: { type: 'string', description: 'The watchId watchThreads returned.' },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.postMessage,
+      description:
+        'Post a message as yourself somewhere other than where you are answering: the main timeline or a Thread of the current Channel, or another Channel you are an active member of (from listChannels). It carries the cards you drew earlier in this run (lobe-a2ui renderUI) unless includeCards is false, so to put a card somewhere else, draw it first, then post it here; with cards, content may be empty. Use it when asked to publish a result elsewhere, e.g. a Thread run asked to post its summary on the main timeline, or a report that belongs in another Channel. It wakes no one and answers no request; your final answer still goes where you are answering, so do not post there with this. Each call posts once.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            type: 'string',
+            description:
+              'Another Channel from listChannels that you are a member of. Omit for the current Channel.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              "A Thread of that Channel, from listThreads. Omit for the Channel's main timeline.",
+          },
+          content: {
+            type: 'string',
+            description:
+              'The message, written for the people there; self-contained, as they do not see this conversation. May be empty when it carries cards.',
+          },
+          includeCards: {
+            type: 'boolean',
+            description: 'Carry the cards you drew in this run. Default true.',
+          },
         },
       },
     },

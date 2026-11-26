@@ -29,7 +29,7 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     : `/project/${projectId}/dashboard`;
 
 export type ProjectSettingsSection =
-  'advanced' | 'environments' | 'general' | 'knowledge' | 'members';
+  'advanced' | 'environment' | 'environments' | 'general' | 'knowledge' | 'members';
 
 /**
  * Settings tabs that were folded into another tab. An old link keeps opening

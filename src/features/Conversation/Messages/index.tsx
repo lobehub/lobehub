@@ -57,6 +57,8 @@ export interface MessageItemProps {
   continuations?: SteerContinuation[];
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
+  /** Keep the row out of multi-select (compressed history rows). */
+  disableSelection?: boolean;
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
   footerRender?: ReactNode;
@@ -76,6 +78,7 @@ const MessageItem = memo<MessageItemProps>(
     endRender,
     footerRender,
     disableEditing,
+    disableSelection,
     inPortalThread = false,
     index,
     isLatestItem,
@@ -300,7 +303,7 @@ const MessageItem = memo<MessageItemProps>(
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <MessageSelectionWrapper id={id} role={role}>
+          <MessageSelectionWrapper id={id} readOnlyHistory={disableSelection} role={role}>
             {selectableContent}
           </MessageSelectionWrapper>
           {!shouldInjectFooter && footerRender}
