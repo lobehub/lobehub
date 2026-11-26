@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { seedClaudeProfile, seedCodexProfile } from './profile';
+import { AGENT_CREDENTIAL_RUN_DIR_ENV } from './runLease';
 import {
+  agentCredentialRunDirFor,
   type AgentCredentialStoreOptions,
   isAgentCredentialExpired,
   readInstalledAgentCredential,
@@ -106,7 +108,12 @@ export const resolveAgentCredentialSpawnEnv = async (
     };
   }
   return {
-    env: { CODEX_HOME: credential.codexHome },
+    env: {
+      // The run wrapper leases the login here, so replacing it can stop runs
+      // that would otherwise write the old login back (see `runLease.ts`).
+      [AGENT_CREDENTIAL_RUN_DIR_ENV]: agentCredentialRunDirFor(options.rootDir, 'codex'),
+      CODEX_HOME: credential.codexHome,
+    },
     kind: 'spawn',
     unsetEnv: [...CODEX_CREDENTIAL_OVERRIDDEN_ENV],
   };
