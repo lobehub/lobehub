@@ -32,6 +32,18 @@ describe('browserless', () => {
     );
   });
 
+  it('should treat the provider API 404 as a provider failure, not a dead link', async () => {
+    process.env.BROWSERLESS_TOKEN = 'test-token';
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response('Not Found', { status: 404, statusText: 'Not Found' }));
+
+    const { ProviderFetchError } = await import('../../utils/errorType');
+    await expect(browserless('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      ProviderFetchError,
+    );
+  });
+
   it('should return undefined when content is empty', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
     global.fetch = vi.fn().mockResolvedValue({

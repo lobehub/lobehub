@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError } from '../../utils/errorType';
+import { NetworkConnectionError, ProviderFetchError } from '../../utils/errorType';
 import { withTimeout } from '../../utils/withTimeout';
 import { deepseek } from '../deepseek';
 
@@ -87,7 +87,7 @@ describe('deepseek crawler', () => {
     await expect(deepseek('https://example.com', { filterOptions: {} })).resolves.toBeUndefined();
   });
 
-  it('should throw PageNotFoundError when DeepSeek cannot fetch usable content', async () => {
+  it('should report a DeepSeek 404 as a provider failure, not a dead link', async () => {
     fetchMock.mockResolvedValue(
       createMockResponse(
         { error: { message: 'failed to fetch URL', type: 'not_found_error' } },
@@ -95,9 +95,13 @@ describe('deepseek crawler', () => {
       ),
     );
 
-    await expect(deepseek('https://example.com', { filterOptions: {} })).rejects.toThrow(
-      PageNotFoundError,
-    );
+    await expect(deepseek('https://example.com', { filterOptions: {} })).rejects.toMatchObject({
+      constructor: ProviderFetchError,
+      message: expect.stringContaining('DeepSeek could not fetch this page'),
+      name: 'ProviderFetchError',
+      provider: 'DeepSeek',
+      status: 404,
+    });
   });
 
   it('should include the DeepSeek error body for other HTTP errors', async () => {

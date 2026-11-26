@@ -50,6 +50,23 @@ export class HTTPStatusError extends Error {
   }
 }
 
+/**
+ * A crawl provider's own API answered 404. That status describes the provider's fetch
+ * (blocked by the site, unsupported content, no extractable body, unknown route, ...),
+ * not the target page, so unlike `PageNotFoundError` it must not stop the fallback chain
+ * or be reported as a dead link. Re-sending the same request is still pointless, which
+ * the inherited 4xx status expresses to `isRetryableCrawlError`.
+ */
+export class ProviderFetchError extends HTTPStatusError {
+  provider: string;
+
+  constructor(message: string, status: number, provider: string) {
+    super(message, status);
+    this.name = 'ProviderFetchError';
+    this.provider = provider;
+  }
+}
+
 export class NetworkConnectionError extends Error {
   constructor() {
     super('Network connection error');

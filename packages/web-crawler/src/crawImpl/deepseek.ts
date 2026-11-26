@@ -1,5 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -55,11 +55,6 @@ export const deepseek: CrawlImpl = async (url) => {
   }
 
   if (!res.ok) {
-    // DeepSeek answers 404 when no usable content could be fetched from the page
-    if (res.status === 404) {
-      throw new PageNotFoundError(res.statusText);
-    }
-
     throw await createHTTPStatusError(res, 'DeepSeek');
   }
 

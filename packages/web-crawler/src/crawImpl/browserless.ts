@@ -2,7 +2,7 @@ import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
@@ -64,10 +64,6 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
   }
 
   if (!res.ok) {
-    if (res.status === 404) {
-      throw new PageNotFoundError(res.statusText);
-    }
-
     throw await createHTTPStatusError(res, 'Browserless');
   }
 
