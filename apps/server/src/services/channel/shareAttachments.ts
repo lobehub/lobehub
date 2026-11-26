@@ -121,8 +121,23 @@ export const importShareAttachments = async (
   const fileModel = new FileModel(db, target.ownerId, workspaceId);
   const uploadModel = new FileUploadModel(db, target.ownerId, workspaceId);
   /** Best-effort cleanup of objects no row references; a few deletes at a time. */
-  const deleteObjects = (pathnames: string[]) =>
-    pMap(pathnames, (pathname) => s3.deleteFile(pathname).catch(() => {}), { concurrency: 5 });
+  const deleteObjects = async (pathnames: string[]) => {
+    let failed = 0;
+    await pMap(
+      pathnames,
+      (pathname) =>
+        s3.deleteFile(pathname).catch(() => {
+          failed += 1;
+        }),
+      { concurrency: 5 },
+    );
+    // Such an object holds bucket storage no row or upload sweep accounts for.
+    if (failed)
+      console.error('[channel:share-attachments] cleanup left unreferenced objects', {
+        failed,
+        shareId: target.shareId,
+      });
+  };
   const provenance = { shareId: target.shareId, visitorUserId: target.visitorUserId };
 
   /** Each source's copies live under their own folder, so a redispatch finds the one it made. */
@@ -148,8 +163,20 @@ export const importShareAttachments = async (
     if (existing) reused.set(source.id, existing);
   }
 
+  // Refuse a turn that cannot fit before transferring anything. Advisory: concurrent uploads may
+  // still fill the share meanwhile, so the transaction below counts again before settling.
+  const pending = sources.filter((source) => !reused.has(source.id));
+  if (pending.length) {
+    const used =
+      (await fileModel.countAgentShareUsage(target.shareId)) +
+      (await uploadModel.countLiveUsageUnderPrefix(prefix));
+    if (used + pending.reduce((total, source) => total + source.size, 0) > maxFileStorage)
+      throw new ShareAttachmentRefusal(ChatErrorType.ShareFileStorageExceeded);
+  }
+
   // A key of its own per attempt, so a refused or concurrent attempt deletes only its own objects.
-  const uploaded: Array<{ bytes: Buffer; pathname: string; source: SourceFile }> = [];
+  // Only each copy's size is kept: a turn's bytes are never held in memory together.
+  const uploaded: Array<{ pathname: string; size: number; source: SourceFile }> = [];
   /** Every key this attempt tried to write: a rejected upload may still have stored its object. */
   const attempted: string[] = [];
   let created: Map<string, string>;
@@ -161,7 +188,7 @@ export const importShareAttachments = async (
       const bytes = Buffer.from(await s3.getFileByteArray(source.url));
       attempted.push(pathname);
       await s3.uploadBuffer(pathname, bytes, source.fileType);
-      uploaded.push({ bytes, pathname, source });
+      uploaded.push({ pathname, size: bytes.length, source });
     }
 
     // One transaction for the whole turn: a file beyond the share's storage leaves none of the
@@ -186,7 +213,7 @@ export const importShareAttachments = async (
       await AgentShareModel.lockUploadAdmission(tx, target.shareId);
 
       const ids = new Map<string, string>();
-      for (const { bytes, pathname, source } of uploaded) {
+      for (const { pathname, size, source } of uploaded) {
         const concurrent = await copyOf(tx, source);
         if (concurrent) {
           ids.set(source.id, concurrent);
@@ -197,11 +224,11 @@ export const importShareAttachments = async (
         // Counted per file inside the transaction, so each sees the copies written before it.
         const settled = await fileModel.countAgentShareUsage(target.shareId, trx);
         const reserved = await uploadModel.countLiveUsageUnderPrefix(prefix, trx);
-        if (settled + reserved + bytes.length > maxFileStorage)
+        if (settled + reserved + size > maxFileStorage)
           throw new ShareAttachmentRefusal(ChatErrorType.ShareFileStorageExceeded);
         try {
           await businessFileUploadCheck({
-            actualSize: bytes.length,
+            actualSize: size,
             inputSize: source.size,
             transaction: trx,
             url: pathname,
@@ -225,7 +252,7 @@ export const importShareAttachments = async (
               path: pathname,
             },
             name: sanitizeShareUploadName(source.name),
-            size: bytes.length,
+            size,
             url: pathname,
           },
           false,

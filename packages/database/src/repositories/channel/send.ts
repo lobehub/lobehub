@@ -7,6 +7,7 @@ import { channelMembers, channelMessages, channelThreads, files } from '../../sc
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
 import type { ChannelContacts } from './contacts';
 import {
@@ -206,9 +207,12 @@ export const sendMessage = async (
   // (`ChannelCoordinator.shareGate`), which also copies the files into the share for the run.
   if (fileIds.length) {
     // A workspace's public files are its members'. An external contact talking in it attaches
-    // only files they uploaded themselves, never one of the workspace's by its id.
-    const external =
-      !!channel.workspaceId && !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!));
+    // only files they uploaded themselves, never one of the workspace's by its id. So does a
+    // visitor of a shared Agent: the share copies only the visitor's own files for its run.
+    const ownOnly =
+      (!!channel.workspaceId &&
+        !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!))) ||
+      (!!channel.agentId && !!(await sharedAgentOwner(tx, channel, member.userId!)));
     // Lock in a stable order so concurrent sends and file cleanup cannot deadlock.
     const accessible = await tx
       .select({ id: files.id })
@@ -216,7 +220,7 @@ export const sendMessage = async (
       .where(
         and(
           inArray(files.id, fileIds),
-          external
+          ownOnly
             ? eq(files.userId, member.userId!)
             : buildWorkspaceWhere(
                 { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },

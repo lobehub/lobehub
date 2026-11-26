@@ -186,6 +186,7 @@ export default {
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
   'attachments.limit': 'Attach up to {{count}} files.',
+  'attachments.tooLarge': 'Each file must be {{size}} or smaller.',
   'attachments.failedShort': 'Upload failed',
   'attachments.remove': 'Remove {{name}}',
   'attachments.retry': 'Retry',

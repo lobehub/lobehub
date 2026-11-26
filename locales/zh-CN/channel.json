@@ -32,6 +32,7 @@
   "attachments.limit": "最多添加 {{count}} 个附件。",
   "attachments.remove": "移除 {{name}}",
   "attachments.retry": "重试",
+  "attachments.tooLarge": "单个文件不能超过 {{size}}。",
   "attachments.upload": "添加附件",
   "attachments.uploading": "上传中",
   "autoTitle.empty": "我的频道",

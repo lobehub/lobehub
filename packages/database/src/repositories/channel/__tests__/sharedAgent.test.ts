@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
+import { ChatErrorType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -617,6 +618,31 @@ describe('a shared Agent in the visitor’s workspace', () => {
     });
 
     expect(await jobsOf(db, message.id)).toHaveLength(1);
+  });
+
+  // The share copies only the visitor's own files for the run; a colleague's would never arrive.
+  it('refuses a workspace file the visitor did not upload', async () => {
+    const channel = await open();
+    const [file] = await db
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'team.txt',
+        size: 1,
+        url: 'files/ws-team.txt',
+        userId: ownerId,
+        workspaceId: fixture.workspaceId,
+      })
+      .returning();
+
+    await expect(
+      inWorkspace.send(channel.id, {
+        content: 'See file',
+        fileIds: [file.id],
+        requestKey: 'ws-team-file',
+        routing: 'fallback',
+      }),
+    ).rejects.toThrow(ChatErrorType.ChannelAttachmentUnavailable);
   });
 
   it('still cannot join a workspace group', async () => {

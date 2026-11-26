@@ -32,6 +32,7 @@
   "attachments.limit": "Attach up to {{count}} files.",
   "attachments.remove": "Remove {{name}}",
   "attachments.retry": "Retry",
+  "attachments.tooLarge": "Each file must be {{size}} or smaller.",
   "attachments.upload": "Attach files",
   "attachments.uploading": "Uploading",
   "autoTitle.empty": "My Channel",

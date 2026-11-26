@@ -155,8 +155,19 @@ describe('importShareAttachments', () => {
     expect(s3.uploadBuffer).toHaveBeenCalledOnce();
   });
 
-  it('refuses a copy beyond the share’s storage and removes its object', async () => {
+  it('refuses a turn that cannot fit before transferring anything', async () => {
     await expect(importShareAttachments(db, target(3), [source])).rejects.toEqual(
+      new ShareAttachmentRefusal(ChatErrorType.ShareFileStorageExceeded),
+    );
+
+    expect(await shareCopies()).toHaveLength(0);
+    expect(s3.getFileByteArray).not.toHaveBeenCalled();
+    expect(s3.uploadBuffer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a copy whose actual bytes exceed the share’s storage and removes its object', async () => {
+    // The recorded size passes the early check; the copied bytes do not.
+    await expect(importShareAttachments(db, target(3), [{ ...source, size: 1 }])).rejects.toEqual(
       new ShareAttachmentRefusal(ChatErrorType.ShareFileStorageExceeded),
     );
 
@@ -165,10 +176,12 @@ describe('importShareAttachments', () => {
   });
 
   it('leaves none of a turn’s copies behind when a later file does not fit', async () => {
+    // Recorded as 1 byte, so the turn passes the early check and fails while settling.
     const second = {
       ...source,
       id: 'file_share_attach_src2',
       name: 'notes.pptx',
+      size: 1,
       url: 'files/v/n',
     };
     await db.insert(files).values({ ...second, userId: visitorId });
@@ -212,6 +225,22 @@ describe('importShareAttachments', () => {
 
     expect(s3.deleteFile).toHaveBeenCalledWith(s3.uploadBuffer.mock.calls[0][0]);
     expect(await shareCopies()).toHaveLength(0);
+  });
+
+  it('reports cleanup that leaves an object behind', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    s3.uploadBuffer.mockRejectedValue(new Error('upload timed out'));
+    s3.deleteFile.mockRejectedValue(new Error('delete failed'));
+
+    await expect(importShareAttachments(db, target(), [source])).rejects.toThrow(
+      'upload timed out',
+    );
+
+    expect(error).toHaveBeenCalledWith(
+      '[channel:share-attachments] cleanup left unreferenced objects',
+      { failed: 1, shareId },
+    );
+    error.mockRestore();
   });
 
   it('writes nothing once the share is paused', async () => {
