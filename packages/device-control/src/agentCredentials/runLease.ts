@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
@@ -16,7 +17,10 @@ import path from 'node:path';
  *
  * The run wrapper (`lh hetero exec`) holds the lease: `<pid>.json`, its mtime
  * renewed as a heartbeat. An installer asks it to stop by writing
- * `<pid>.stop` (the reason), then waits for the lease to go.
+ * `<pid>.stop` (the reason), then waits for the lease to go. While an
+ * installer replaces the credential it also holds `replacing-<id>`: a run
+ * that leases meanwhile waits for it to go before starting its agent, so no
+ * run can start on a login the installer is about to undo.
  */
 
 /** Spawn env naming the lease directory of the credential a run uses. */
@@ -28,6 +32,7 @@ const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 const LEASE_SUFFIX = '.json';
 const STOP_SUFFIX = '.stop';
+const REPLACING_PREFIX = 'replacing-';
 const REASON_MAX_LENGTH = 500;
 
 const HEARTBEAT_MS = 1000;
@@ -38,11 +43,18 @@ const GRACE_MS = 6000;
 /** Time a killed run gets to disappear before the replacement gives up. */
 const FORCE_MS = 2000;
 const POLL_MS = 100;
+/** A replacement marker older than this belongs to an installer that died. */
+const REPLACING_STALE_MS = 30_000;
 
 const leaseFile = (runDir: string, pid: number) => path.join(runDir, `${pid}${LEASE_SUFFIX}`);
 const stopFile = (runDir: string, pid: number) => path.join(runDir, `${pid}${STOP_SUFFIX}`);
 
 export interface AgentCredentialRunLease {
+  /**
+   * Resolves once no replacement of the credential is in progress. Await it
+   * after leasing and before the agent reads the credential.
+   */
+  admitted: Promise<void>;
   /** Drop the lease once the agent has exited; idempotent. */
   release: () => void;
 }
@@ -57,7 +69,28 @@ export interface TrackAgentCredentialRunOptions {
   pid?: number;
 }
 
-const NO_LEASE: AgentCredentialRunLease = { release: () => {} };
+const NO_LEASE: AgentCredentialRunLease = { admitted: Promise.resolve(), release: () => {} };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const replacementInProgress = async (runDir: string) => {
+  const names = await readdir(runDir).catch(() => [] as string[]);
+  for (const name of names) {
+    if (!name.startsWith(REPLACING_PREFIX)) continue;
+    const mtime = await stat(path.join(runDir, name)).then(
+      (s) => s.mtimeMs,
+      () => undefined,
+    );
+    if (mtime !== undefined && Date.now() - mtime <= REPLACING_STALE_MS) return true;
+  }
+  return false;
+};
+
+/** Wait (bounded by the stale age) until no installer is replacing the credential. */
+const waitForAdmission = async (runDir: string, pollMs: number) => {
+  const deadline = Date.now() + REPLACING_STALE_MS;
+  while (Date.now() < deadline && (await replacementInProgress(runDir))) await sleep(pollMs);
+};
 
 /**
  * Hold a lease for this run until `release` (or process exit). Synchronous on
@@ -109,6 +142,8 @@ export const trackAgentCredentialRun = ({
   }, heartbeatMs);
   timer.unref?.();
 
+  const admitted = waitForAdmission(runDir, POLL_MS);
+
   const release = () => {
     if (released) return;
     released = true;
@@ -119,7 +154,18 @@ export const trackAgentCredentialRun = ({
   };
   // Many exit paths call `process.exit` directly; the lease must not outlive them.
   process.once('exit', release);
-  return { release };
+  return { admitted, release };
+};
+
+/**
+ * Mark a replacement of the credential in progress until the returned `end`:
+ * runs leasing meanwhile hold back their agent (see `admitted`).
+ */
+export const beginAgentCredentialReplacement = async (runDir: string) => {
+  const marker = path.join(runDir, `${REPLACING_PREFIX}${randomUUID()}`);
+  await mkdir(runDir, { mode: DIR_MODE, recursive: true });
+  await writeFile(marker, '', { mode: FILE_MODE });
+  return { end: () => rm(marker, { force: true }).catch(() => {}) };
 };
 
 const isPidAlive = (pid: number) => {
@@ -175,9 +221,14 @@ const listLiveLeases = async (runDir: string, now: number, staleMs: number) => {
     const pid = Number(name.slice(0, -LEASE_SUFFIX.length));
     const file = path.join(runDir, name);
     if (!Number.isInteger(pid) || pid <= 0) continue;
+    // Only a lease that disappeared is skipped; one that cannot be read may
+    // belong to a live run, so it fails the replacement.
     const mtime = await stat(file).then(
       (s) => s.mtimeMs,
-      () => undefined,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined;
+        throw error;
+      },
     );
     if (mtime === undefined) continue;
     // A lease that stopped renewing is never signalled: its pid may now
@@ -195,7 +246,10 @@ const listLiveLeases = async (runDir: string, now: number, staleMs: number) => {
 const leaseGone = (lease: LiveLease) =>
   readFile(lease.file).then(
     () => !isPidAlive(lease.pid),
-    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return true;
+      throw error;
+    },
   );
 
 const waitForLeases = async (leases: LiveLease[], timeoutMs: number, pollMs: number) => {
@@ -205,7 +259,7 @@ const waitForLeases = async (leases: LiveLease[], timeoutMs: number, pollMs: num
     const gone = await Promise.all(pending.map(leaseGone));
     pending = pending.filter((_, index) => !gone[index]);
     if (pending.length === 0 || Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    await sleep(pollMs);
   }
   return pending;
 };

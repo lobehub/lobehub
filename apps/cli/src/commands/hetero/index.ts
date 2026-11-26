@@ -1059,6 +1059,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       abortForCredentialStop?.();
     },
   });
+  await credentialRun.admitted;
   const first = await runOneAgent(
     { ...spawnOptions, prompt: resolved.prompt, resumeSessionId: options.resume },
     interceptResume,
