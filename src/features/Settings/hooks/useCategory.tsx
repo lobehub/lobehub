@@ -206,11 +206,6 @@ export const useCategory = () => {
           key: SettingsTabs.Usage,
           label: tSubscription('tab.usage'),
         },
-        codingPlansTab && {
-          icon: CodeXmlIcon,
-          key: SettingsTabs.CodingPlans,
-          label: codingPlansTab.label,
-        },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
       ].filter(Boolean) as CategoryItem[];
 
@@ -255,6 +250,43 @@ export const useCategory = () => {
       title: t('group.aiConfig'),
     });
 
+    // Resource group — where agents run, right after the Agent group that uses it.
+    const resourceItems: CategoryItem[] = [
+      {
+        icon: MonitorSmartphoneIcon,
+        key: SettingsTabs.Devices,
+        label: t('tab.devices'),
+      },
+      // The coding-agent subscriptions this member's devices signed in to:
+      // the capacity their agents are balanced onto.
+      {
+        icon: GaugeIcon,
+        key: SettingsTabs.SubscriptionAccounts,
+        label: t('tab.subscriptionAccounts'),
+      },
+      // An optional business tab: listed only where its slot supplies a label.
+      codingPlansTab && {
+        icon: CodeXmlIcon,
+        key: SettingsTabs.CodingPlans,
+        label: codingPlansTab.label,
+      },
+      // Environments & Vault, always there: what a run starts from and
+      // the secrets it reads, in one place. An environment is a definition,
+      // written down before anything runs it, so it needs no drive.
+      {
+        icon: ContainerIcon,
+        key: SettingsTabs.Environments,
+        label: t('tab.environmentsAndCreds'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: resourceItems,
+      key: SettingsGroupKey.Resource,
+      scope: 'space',
+      title: t('group.resource'),
+    });
+
     // Connection group — the outside services the space's agents can reach.
     const connectionItems: CategoryItem[] = [
       // What connectors fire on their own: the event subscriptions agents made
@@ -280,37 +312,6 @@ export const useCategory = () => {
         scope: 'space',
         title: t('group.connection'),
       });
-
-    // Resource group — where agents run.
-    const resourceItems: CategoryItem[] = [
-      {
-        icon: MonitorSmartphoneIcon,
-        key: SettingsTabs.Devices,
-        label: t('tab.devices'),
-      },
-      // The coding-agent subscriptions this member's devices signed in to:
-      // the capacity their agents are balanced onto.
-      {
-        icon: GaugeIcon,
-        key: SettingsTabs.SubscriptionAccounts,
-        label: t('tab.subscriptionAccounts'),
-      },
-      // Environments & Vault, always there: what a run starts from and
-      // the secrets it reads, in one place. An environment is a definition,
-      // written down before anything runs it, so it needs no drive.
-      {
-        icon: ContainerIcon,
-        key: SettingsTabs.Environments,
-        label: t('tab.environmentsAndCreds'),
-      },
-    ].filter(Boolean) as CategoryItem[];
-
-    groups.push({
-      items: resourceItems,
-      key: SettingsGroupKey.Resource,
-      scope: 'space',
-      title: t('group.resource'),
-    });
 
     // Data & developer group — what the space stores and spent, and the keys
     // that act on it. API Key has a single home whichever flag turned it on.
