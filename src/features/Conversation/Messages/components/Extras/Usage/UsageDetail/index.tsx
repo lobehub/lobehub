@@ -247,7 +247,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
     >
       <Center
         horizontal
-        gap={2}
+        gap={hideCost ? 4 : 2}
         style={{ cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
         onClick={(e) => {
           // Prevent Popover from closing and toggle the format
@@ -256,7 +256,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
           updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
         }}
       >
-        <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />
+        {/* A coin beside a bare number reads as money, so hidden-cost usage spells out its unit */}
+        {!hideCost && <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />}
         <AnimatedNumber
           duration={1500}
           // Force remount when switching between token/credit to prevent unwanted animation
@@ -272,6 +273,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
             return new Intl.NumberFormat('en-US').format(roundedValue);
           }}
         />
+        {hideCost && <span>{t('messages.tokenDetails.unit')}</span>}
       </Center>
     </Popover>
   );
