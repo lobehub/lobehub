@@ -150,6 +150,38 @@ describe('createBackOriginRecorder', () => {
     expect(getBackOrigin('tab-2', '/agent/agt_1')).toBe('/projects');
   });
 
+  it('restores an agent origin when browser Back revisits its history entry', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/agent/agt_1', 1, 'agent');
+    record('main', '/settings', 2, 'settings');
+    record('main', '/agent/agt_1', 1, 'agent');
+
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
+  });
+
+  it('restores the origin when browser Forward skips over it', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/settings', 1, 'settings');
+    record('main', '/group/grp_1', 2, 'group');
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/group/grp_1', 2, 'group');
+
+    expect(getBackOrigin('main', '/group/grp_1')).toBe('/settings');
+  });
+
+  it('records a fresh origin for a new visit that reuses a history index', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/agent/agt_1', 1, 'first-agent');
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/settings', 0, 'settings');
+    record('main', '/agent/agt_1', 1, 'second-agent');
+
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/settings');
+  });
+
   it('keeps the hash of the origin page', () => {
     const record = createBackOriginRecorder();
     record('main', '/page/docs_1#notes');
@@ -160,19 +192,40 @@ describe('createBackOriginRecorder', () => {
 
 describe('history walk-back', () => {
   it('steps back over the entries opened inside the agent', () => {
-    recordBackLocation('main', '/tasks', 3);
-    recordBackLocation('main', '/agent/agt_1', 4);
-    recordBackLocation('main', '/agent/agt_1/tpc_1', 5);
-    const origin = { historyIndex: 3, location: '/tasks' };
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 3, 'tasks');
+    record('main', '/agent/agt_1', 4, 'agent');
+    record('main', '/agent/agt_1/tpc_1', 5, 'topic');
+    const origin = { historyIndex: 3, location: '/tasks', locationKey: 'tasks' };
     expect(historyDeltaTo(origin, 5)).toBe(-2);
   });
 
+  it('falls back to the saved URL when its browser entry was replaced', () => {
+    const record = createBackOriginRecorder();
+    const origin = { historyIndex: 1, location: '/agent/agt_1/tpc_1', locationKey: 'topic-1' };
+    const group = '/group/grp_1';
+
+    record('main', '/tasks', 0, 'tasks');
+    record('main', origin.location, 1, 'topic-1');
+    record('main', group, 2, 'group');
+    expect(historyDeltaTo(origin, 2)).toBe(-1);
+
+    record('main', origin.location, 1, 'topic-1');
+    record('main', '/agent/agt_1/tpc_2', 1, 'topic-2');
+    record('main', group, 2, 'group');
+
+    expect(getBackOrigin('main', group)).toBe(origin.location);
+    expect(historyDeltaTo(origin, 2)).toBeUndefined();
+  });
+
   it('falls back to pushing when the origin is not an earlier history entry', () => {
-    // replaced into the agent, unknown indexes (desktop tabs), or a later entry
-    expect(historyDeltaTo({ historyIndex: 4, location: '/tasks' }, 4)).toBeUndefined();
-    expect(historyDeltaTo({ location: '/tasks' }, 4)).toBeUndefined();
-    expect(historyDeltaTo({ historyIndex: 2, location: '/tasks' }, undefined)).toBeUndefined();
-    expect(historyDeltaTo({ historyIndex: 6, location: '/tasks' }, 4)).toBeUndefined();
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 4, 'tasks');
+    const origin = { historyIndex: 4, location: '/tasks', locationKey: 'tasks' };
+    expect(historyDeltaTo(origin, 4)).toBeUndefined();
+    expect(historyDeltaTo(origin, 3)).toBeUndefined();
+    expect(historyDeltaTo(origin, undefined)).toBeUndefined();
+    expect(historyDeltaTo({ location: '/tasks' }, 5)).toBeUndefined();
   });
 
   it('records a revisit of the same location at a new history index', () => {
