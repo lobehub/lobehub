@@ -48,6 +48,37 @@ interface OperationUsageRollup {
   unitemizedLlmCost: UnitemizedLlmCost[];
 }
 
+/** Largest value the int4 `topics.total*_tokens` columns can hold. */
+const INT4_MAX = 2_147_483_647;
+
+/**
+ * Builds the token scalar columns of the rollup. A long-lived topic can sum
+ * past int4 (one real topic of ~38k messages reached 2.1B tokens); writing it
+ * throws, and because callers recompute inside the message write transaction,
+ * the error rolled back the assistant reply itself. A column whose total no
+ * longer fits keeps its previous value instead, while `usage` / `cost` jsonb
+ * still carry the true totals.
+ * TODO: drop once the columns are bigint (LobeHub task T-14967).
+ */
+const buildTokenColumns = (
+  topicId: string,
+  totals: { totalInputTokens: number; totalOutputTokens: number; totalTokens: number } | null,
+) => {
+  if (!totals) return { totalInputTokens: null, totalOutputTokens: null, totalTokens: null };
+
+  const columns: Partial<Record<keyof typeof totals, number>> = {};
+  const overflowed: string[] = [];
+  for (const key of ['totalInputTokens', 'totalOutputTokens', 'totalTokens'] as const) {
+    if (totals[key] > INT4_MAX) overflowed.push(key);
+    else columns[key] = totals[key];
+  }
+  if (overflowed.length > 0)
+    console.warn(
+      `[recomputeTopicUsage] topic ${topicId} token totals exceed int4, keeping previous ${overflowed.join(', ')}`,
+    );
+  return columns;
+};
+
 /**
  * ModelUsage numeric fields summed per (provider, model) to build the
  * `cost.llm.byModel[].usage` breakdown. Mirrors ModelUsageSchema in
@@ -427,9 +458,10 @@ export const recomputeTopicUsage = async (
       accessedAt: topics.accessedAt,
       cost,
       totalCost: hasAnyCost ? totalCost + toolCostTotal : null,
-      totalInputTokens: hasLlmGroups ? totalInputTokens : null,
-      totalOutputTokens: hasLlmGroups ? totalOutputTokens : null,
-      totalTokens: hasLlmGroups ? totalTokens : null,
+      ...buildTokenColumns(
+        topicId,
+        hasLlmGroups ? { totalInputTokens, totalOutputTokens, totalTokens } : null,
+      ),
       updatedAt: topics.updatedAt,
       usage,
     })
