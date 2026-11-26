@@ -230,12 +230,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            // An optional business tab: listed only where its slot supplies a label.
-            codingPlansTab && {
-              icon: CodeXmlIcon,
-              key: WorkspaceSettingsTabs.CodingPlans,
-              label: codingPlansTab.label,
-            },
             // Credits / Billing are readable by Admin-or-higher; the pages
             // themselves keep the money-moving controls (top-up, payment
             // methods, plan changes) behind the narrower subscription gate.
@@ -289,6 +283,42 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           scope: 'space',
           title: t('workspaceSetting.group.agent'),
         },
+        // What the workspace's agents run on and spend: machines, coding-agent
+        // subscriptions, code environments and the drive. Each item keeps its
+        // own gate; the group only puts the shared capacity in one place.
+        {
+          items: [
+            {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            // The coding-agent accounts are shared capacity every agent routes
+            // onto, so taking one in or out of rotation is an admin decision.
+            canManageWorkspace && {
+              icon: GaugeIcon,
+              key: WorkspaceSettingsTabs.SubscriptionAccounts,
+              label: t('tab.subscriptionAccounts'),
+            },
+            // An optional business tab: listed only where its slot supplies a label.
+            codingPlansTab && {
+              icon: CodeXmlIcon,
+              key: WorkspaceSettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
+            },
+            // Environments & Vault, always there: what a run starts from and
+            // the secrets it reads, in one place. An environment is a definition,
+            // written down before anything runs it, so it needs no drive.
+            {
+              icon: ContainerIcon,
+              key: WorkspaceSettingsTabs.Environments,
+              label: t('tab.environmentsAndCreds'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Resource,
+          scope: 'space',
+          title: t('group.resource'),
+        },
         enableWebhook && {
           items: [
             // Every member sees the workspace's event subscriptions, so it is
@@ -308,36 +338,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Connection,
           scope: 'space',
           title: t('group.connection'),
-        },
-        // What the workspace's agents run on and spend: machines, coding-agent
-        // subscriptions, code environments and the drive. Each item keeps its
-        // own gate; the group only puts the shared capacity in one place.
-        {
-          items: [
-            {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
-            },
-            // The coding-agent accounts are shared capacity every agent routes
-            // onto, so taking one in or out of rotation is an admin decision.
-            canManageWorkspace && {
-              icon: GaugeIcon,
-              key: WorkspaceSettingsTabs.SubscriptionAccounts,
-              label: t('tab.subscriptionAccounts'),
-            },
-            // Environments & Vault, always there: what a run starts from and
-            // the secrets it reads, in one place. An environment is a definition,
-            // written down before anything runs it, so it needs no drive.
-            {
-              icon: ContainerIcon,
-              key: WorkspaceSettingsTabs.Environments,
-              label: t('tab.environmentsAndCreds'),
-            },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Resource,
-          scope: 'space',
-          title: t('group.resource'),
         },
         // The Admin group is available to Admin and Owner.
         canManageWorkspace && {

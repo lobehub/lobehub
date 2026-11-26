@@ -131,21 +131,21 @@ describe('settings useCategory', () => {
     expect(keys).not.toContain('drive');
   });
 
-  it('lists the business tab after Usage, labelled by its slot, only where the slot supplies it', () => {
-    const subscriptionItems = () =>
+  it('lists the business tab under Runtime, labelled by its slot, only where the slot supplies it', () => {
+    const resourceItems = () =>
       renderHook(() => useCategory(), { wrapper: createWrapper(true, true) }).result.current.find(
-        (group) => group.key === SettingsGroupKey.Subscription,
+        (group) => group.key === SettingsGroupKey.Resource,
       )?.items;
 
-    expect(subscriptionItems()?.map((item) => item.key)).not.toContain(SettingsTabs.CodingPlans);
+    expect(resourceItems()?.map((item) => item.key)).not.toContain(SettingsTabs.CodingPlans);
 
     mocks.codingPlans = true;
-    const items = subscriptionItems();
+    const items = resourceItems();
     expect(items?.map((item) => item.key)).toEqual([
-      SettingsTabs.Plans,
-      SettingsTabs.Usage,
+      SettingsTabs.Devices,
+      SettingsTabs.SubscriptionAccounts,
       SettingsTabs.CodingPlans,
-      SettingsTabs.Billing,
+      SettingsTabs.Environments,
     ]);
     expect(items?.find((item) => item.key === SettingsTabs.CodingPlans)?.label).toBe(
       'Business tab',
@@ -259,6 +259,28 @@ describe('settings useCategory automations', () => {
       .find((group) => group.key === SettingsGroupKey.Connection)
       ?.items.map((item) => item.key);
   };
+
+  it('puts Runtime right under Agent, before Connection', () => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider
+        createStore={() =>
+          initServerConfigStore({
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableWebhook: true },
+            serverConfig: { aiProvider: {}, telemetry: {} },
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+    const keys = renderHook(() => useCategory(), { wrapper: Wrapper }).result.current.map(
+      (group) => group.key,
+    );
+    expect(keys.indexOf(SettingsGroupKey.Resource)).toBe(keys.indexOf(SettingsGroupKey.Agent) + 1);
+    expect(keys.indexOf(SettingsGroupKey.Connection)).toBe(
+      keys.indexOf(SettingsGroupKey.Resource) + 1,
+    );
+  });
 
   // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
   it('hides Automations while MCP Events is off', () => {

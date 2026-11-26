@@ -144,8 +144,12 @@ describe('workspace settings useCategory', () => {
       wrapper: wrapperWithMcpEvents,
     });
     const orderedKeys = withConnection.current.map((group) => group.key);
+    // Runtime sits right under the Agent group that uses it, before Connection.
     expect(orderedKeys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
-      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Connection) + 1,
+      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Agent) + 1,
+    );
+    expect(orderedKeys.indexOf(WorkspaceSettingsGroupKey.Connection)).toBe(
+      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Resource) + 1,
     );
     expect(resourceGroup?.items.map((item) => item.key)).toEqual([
       WorkspaceSettingsTabs.Devices,
@@ -279,17 +283,29 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 
-  it('lists Coding Plans only where the business slot supplies it, after Usage, for every role', () => {
+  it('lists Coding Plans under Runtime only where the business slot supplies it, for every role', () => {
     expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.CodingPlans);
 
     mocks.codingPlans = true;
+    const resourceKeys = () =>
+      renderHook(() => useWorkspaceSettingCategory(), { wrapper })
+        .result.current.find((group) => group.key === WorkspaceSettingsGroupKey.Resource)
+        ?.items.map((item) => item.key);
+    expect(resourceKeys()).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.SubscriptionAccounts,
+      WorkspaceSettingsTabs.CodingPlans,
+      WorkspaceSettingsTabs.Environments,
+    ]);
+
+    // A member without admin rights still sees it; Subscription Accounts is admin-only.
     mocks.canViewBilling = false;
     mocks.canManageWorkspace = false;
-    const itemKeys = getItemKeys();
-
-    expect(itemKeys.indexOf(WorkspaceSettingsTabs.CodingPlans)).toBe(
-      itemKeys.indexOf(WorkspaceSettingsTabs.Usage) + 1,
-    );
+    expect(resourceKeys()).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.CodingPlans,
+      WorkspaceSettingsTabs.Environments,
+    ]);
   });
 });
 
