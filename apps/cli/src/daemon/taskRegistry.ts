@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { log } from '../utils/logger';
 
 export interface TaskEntry {
   agentId?: string;
@@ -29,7 +30,15 @@ function getRegistryPath(): string {
   return path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'task-registry.json');
 }
 
+/**
+ * Registry state this process could not persist. While set it is the source of
+ * truth for this process, so spawn, exit and cancel handlers still agree on who
+ * owns a run; the next successful write clears it.
+ */
+let unsavedRegistry: Record<string, TaskEntry> | undefined;
+
 function readRegistry(): Record<string, TaskEntry> {
+  if (unsavedRegistry) return { ...unsavedRegistry };
   try {
     return JSON.parse(fs.readFileSync(getRegistryPath(), 'utf8')) as Record<string, TaskEntry>;
   } catch {
@@ -37,10 +46,27 @@ function readRegistry(): Record<string, TaskEntry> {
   }
 }
 
+/**
+ * Persists the registry without ever throwing.
+ *
+ * Callers run inside child-process `spawn` / `exit` handlers of the connect
+ * daemon, where an uncaught error (for example ENOSPC on a full disk) kills
+ * the daemon and every run it supervises. A failed write keeps the state in
+ * memory instead; only a daemon restart loses it, and cancellation then falls
+ * back to the process table.
+ */
 function writeRegistry(entries: Record<string, TaskEntry>): void {
-  const dir = path.dirname(getRegistryPath());
-  fs.mkdirSync(dir, { mode: 0o700, recursive: true });
-  fs.writeFileSync(getRegistryPath(), JSON.stringify(entries, null, 2), { mode: 0o600 });
+  try {
+    const dir = path.dirname(getRegistryPath());
+    fs.mkdirSync(dir, { mode: 0o700, recursive: true });
+    fs.writeFileSync(getRegistryPath(), JSON.stringify(entries, null, 2), { mode: 0o600 });
+    unsavedRegistry = undefined;
+  } catch (error) {
+    unsavedRegistry = entries;
+    log.warn(
+      `Failed to write task registry: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 export function saveTask(entry: TaskEntry): void {

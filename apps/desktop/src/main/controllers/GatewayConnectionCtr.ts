@@ -15,6 +15,7 @@ import type {
   GatewayConnectResult,
   GatewayEndpointInfo,
 } from '@lobechat/electron-client-ipc';
+import { findHeteroExecProcesses } from '@lobechat/heterogeneous-agents/heteroExecProcess';
 import type { HeterogeneousAgentCancellationSignal } from '@lobechat/heterogeneous-agents/protocol';
 import { stripInheritedRunIdentity } from '@lobechat/heterogeneous-agents/protocol';
 import type { RemotePlatformCommandRuntime } from '@lobechat/heterogeneous-agents/scanHost';
@@ -32,7 +33,6 @@ import GatewayConnectionService, {
   type WorkspaceDeviceRegistration,
 } from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
-import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
