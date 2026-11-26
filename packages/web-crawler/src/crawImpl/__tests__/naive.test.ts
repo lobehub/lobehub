@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  BlockedPageError,
   NetworkConnectionError,
   PageNotFoundError,
   TimeoutError,
@@ -212,7 +213,14 @@ describe('naive crawler', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should leave a Cloudflare challenge page for the Crawler to reject', async () => {
+  it.each([
+    ['a full-length challenge page', 'Test content'.padEnd(101, ' ')],
+    [
+      'a challenge page shorter than the minimum length',
+      'Enable JavaScript and cookies to continue',
+    ],
+    ['a challenge page with an empty body', ''],
+  ])('should throw BlockedPageError for %s', async (_, content) => {
     const mockResponse = {
       status: 200,
       ok: true,
@@ -225,17 +233,13 @@ describe('naive crawler', () => {
 
     const { htmlToMarkdown } = await import('../../utils/htmlToMarkdown');
     vi.mocked(htmlToMarkdown).mockReturnValue({
-      content: 'Test content'.padEnd(101, ' '),
+      content,
       title: 'Just a moment...', // Cloudflare blocking page
-      description: 'Test description',
-      siteName: 'Test Site',
-      length: 101,
     });
 
-    const result = await naive('https://example.com', { filterOptions: {} });
-
-    // Challenge pages are rejected once, in Crawler.crawl, for every impl
-    expect(result).toMatchObject({ title: 'Just a moment...' });
+    await expect(naive('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should throw error for non-ok status codes', async () => {

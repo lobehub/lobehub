@@ -22,6 +22,11 @@ describe('isChallengePage', () => {
     expect(isChallengePage({ content, title: 'Access to this page has been denied.' })).toBe(true);
   });
 
+  it('should detect a wall whose body is empty', () => {
+    expect(isChallengePage({ content: '', title: 'Just a moment...' })).toBe(true);
+    expect(isChallengePage({ title: 'Access Denied' })).toBe(true);
+  });
+
   it('should detect a wall by its body when the provider gives no usable title', () => {
     expect(
       isChallengePage({
@@ -43,8 +48,8 @@ describe('isChallengePage', () => {
         title: 'LobeHub',
       }),
     ).toBe(false);
-    expect(isChallengePage({ content: '', title: 'Just a moment...' })).toBe(false);
-    expect(isChallengePage({ title: 'Just a moment...' })).toBe(false);
+    expect(isChallengePage({ content: '', title: 'LobeHub' })).toBe(false);
+    expect(isChallengePage({})).toBe(false);
   });
 
   it('should keep a long page that only mentions a challenge', () => {

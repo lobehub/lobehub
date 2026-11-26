@@ -2,6 +2,7 @@ import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { assertNotChallengePage } from '../utils/challengePage';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
@@ -73,6 +74,8 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
 
   const html = await res.text();
   const result = htmlToMarkdown(html, { filterOptions, url });
+
+  assertNotChallengePage(result);
 
   if (!!result.content && result.content.length > 100 && result.title) {
     return {

@@ -1,7 +1,7 @@
 import { getJinaReaderBaseUrl } from '@lobechat/utils';
 
 import type { CrawlImpl } from '../type';
-import { CHALLENGE_PAGE_MAX_LENGTH } from '../utils/challengePage';
+import { assertNotChallengePage, CHALLENGE_PAGE_MAX_LENGTH } from '../utils/challengePage';
 import { BlockedPageError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { withTimeout } from '../utils/withTimeout';
@@ -66,6 +66,8 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   ) {
     throw new BlockedPageError(result.warning);
   }
+
+  assertNotChallengePage({ content: result?.content, title: result?.title });
 
   if (!result?.content || result.content.length < 100) {
     return;

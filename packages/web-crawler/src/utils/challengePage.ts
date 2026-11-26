@@ -1,3 +1,5 @@
+import { BlockedPageError } from './errorType';
+
 /**
  * Challenge and block pages are a few lines of text. A longer body is a real page
  * that merely mentions one (an article about Cloudflare, a support thread), so the
@@ -63,11 +65,21 @@ export const isChallengePage = ({
   content?: string;
   title?: string;
 }): boolean => {
-  if (!content || content.length > CHALLENGE_PAGE_MAX_LENGTH) return false;
+  if (content && content.length > CHALLENGE_PAGE_MAX_LENGTH) return false;
 
   if (title && CHALLENGE_TITLES.has(normalizeTitle(title))) return true;
+  if (!content) return false;
 
   const body = content.toLowerCase();
 
   return CHALLENGE_PHRASES.some((phrase) => body.includes(phrase));
+};
+
+/**
+ * Throw when the page is an anti-bot wall. Every impl calls this before it drops a
+ * body under the minimum length: a wall is often that short, and a dropped page
+ * never reaches the check in `Crawler.crawl`.
+ */
+export const assertNotChallengePage = (page: { content?: string; title?: string }) => {
+  if (isChallengePage(page)) throw new BlockedPageError();
 };

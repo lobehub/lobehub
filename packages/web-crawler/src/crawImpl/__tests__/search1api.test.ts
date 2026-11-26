@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
 import {
+  BlockedPageError,
   HTTPStatusError,
   isRetryableCrawlError,
   NetworkConnectionError,
@@ -111,6 +112,26 @@ describe('search1api crawler', () => {
 
     await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
       'Search1API request failed with status 500: Internal Server Error',
+    );
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    mockFetch.mockResolvedValue(
+      createMockResponse(
+        {
+          crawlParameters: { url: 'https://example.com' },
+          results: {
+            title: 'Just a moment...',
+            link: 'https://example.com',
+            content: 'Enable JavaScript and cookies to continue',
+          },
+        },
+        { ok: true },
+      ),
+    );
+
+    await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
     );
   });
 

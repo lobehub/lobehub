@@ -221,6 +221,22 @@ describe('jina crawler', () => {
     );
   });
 
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    mockFetch.mockResolvedValue(
+      createMockResponse(
+        {
+          code: 200,
+          data: { content: 'Enable JavaScript and cookies to continue', title: 'Just a moment...' },
+        },
+        { ok: true },
+      ),
+    );
+
+    await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
+  });
+
   describe('CAPTCHA warning', () => {
     const warning =
       'This page maybe requiring CAPTCHA, please make sure you are authorized to access this page.';

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { BlockedPageError } from '../../utils/errorType';
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { browserless } from '../browserless';
 
@@ -45,31 +46,32 @@ describe('browserless', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should leave a Cloudflare challenge page for the Crawler to reject', async () => {
+  it.each([
+    [
+      'a full-length challenge page',
+      '<p>This website uses a security service to protect against malicious bots. This page is displayed while the website verifies you are not a bot.</p>',
+    ],
+    [
+      'a challenge page shorter than the minimum length',
+      '<p>Enable JavaScript and cookies to continue</p>',
+    ],
+    ['a challenge page with an empty body', ''],
+  ])('should throw BlockedPageError for %s', async (_, body) => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    const challengeBody =
-      'This website uses a security service to protect against malicious bots. This page is displayed while the website verifies you are not a bot.';
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
-      text: vi.fn().mockResolvedValue(`
-        <html>
-          <head>
-            <title>Just a moment...</title>
-          </head>
-          <body>
-            <p>${challengeBody}</p>
-          </body>
-        </html>
-      `),
+      text: vi
+        .fn()
+        .mockResolvedValue(
+          `<html><head><title>Just a moment...</title></head><body>${body}</body></html>`,
+        ),
     } as any);
 
-    const result = await browserless('https://example.com', { filterOptions: {} });
-
-    // Challenge pages are rejected once, in Crawler.crawl, for every impl
-    expect(result).toMatchObject({ title: 'Just a moment...' });
-    expect(result?.content).toContain(challengeBody);
+    await expect(browserless('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should return crawl result on successful fetch', async () => {
