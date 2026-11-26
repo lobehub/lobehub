@@ -343,7 +343,7 @@
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobechat/widget-spec": "workspace:*",
-    "@lobehub/a2ui": "^1.1.0",
+    "@lobehub/a2ui": "^1.1.1",
     "@lobehub/analytics": "^1.6.4",
     "@lobehub/charts": "^6.0.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",

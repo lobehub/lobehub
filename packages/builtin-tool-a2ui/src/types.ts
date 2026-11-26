@@ -1,9 +1,5 @@
-import {
-  A2UI_TOOL_IDENTIFIER,
-  A2UI_TOOL_NAME,
-  type A2uiToolParams,
-  type A2uiToolState,
-} from '@lobehub/a2ui';
+import { A2UI_TOOL_IDENTIFIER } from '@lobehub/a2ui/records';
+import { A2UI_TOOL_NAME, type A2uiToolParams, type A2uiToolState } from '@lobehub/a2ui/tool';
 
 export const A2uiIdentifier = A2UI_TOOL_IDENTIFIER;
 
