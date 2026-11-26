@@ -3,7 +3,11 @@
  * (`packages/types/src/connector.ts`) match `user_connectors`. Code outside the
  * schema imports those declared types; a mismatch fails `type-check`.
  */
-import type { ConnectorOIDCConfig, ResolvedConnectorRef } from '@lobechat/types';
+import type {
+  ConnectorOIDCConfig,
+  ResolvedConnectorRef,
+  UserConnectorInsert,
+} from '@lobechat/types';
 
 import type { userConnectors } from './connector';
 
@@ -16,4 +20,5 @@ type UserConnectorRow = typeof userConnectors.$inferSelect;
 export type ConnectorRowTypesMatchSchema = [
   Assert<Equal<ResolvedConnectorRef, Pick<UserConnectorRow, 'id' | 'userId' | 'workspaceId'>>>,
   Assert<Equal<ConnectorOIDCConfig | null, UserConnectorRow['oidcConfig']>>,
+  Assert<Equal<UserConnectorInsert, typeof userConnectors.$inferInsert>>,
 ];

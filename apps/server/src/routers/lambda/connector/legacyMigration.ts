@@ -1,7 +1,6 @@
 import { MARKETPLACE_INSTALL_COMPLETED_KEY, MARKETPLACE_TOOL_POLICIES_KEY } from '@lobechat/const';
-import type { LobeTool } from '@lobechat/types';
+import type { LobeTool, UserConnectorMigrationPayload } from '@lobechat/types';
 
-import type { NewUserConnector } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -15,7 +14,7 @@ type LegacyPluginRow = Pick<
 >;
 
 type MigrationResult =
-  | { payload: Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>; ok: true }
+  | { payload: UserConnectorMigrationPayload; ok: true }
   | { ok: false; reason: 'no-endpoint' | 'no-mcp' };
 
 const trimRecord = (input?: Record<string, string>) => {
