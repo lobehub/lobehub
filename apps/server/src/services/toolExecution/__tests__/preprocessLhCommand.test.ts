@@ -1,5 +1,13 @@
-import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -28,14 +36,35 @@ vi.mock('@/utils/env', () => ({
 
 const CREDS = "LOBEHUB_JWT='mock-jwt-token' LOBEHUB_SERVER='https://app.lobehub.com'";
 /**
+ * Resolves an installable `@lobehub/cli` without running it, falling back to
+ * the release below `latest` while npm cannot serve the newest one yet.
+ */
+const RESOLVE_CLI = [
+  'lh_log=$(mktemp) || exit 1',
+  'lh_resolve() {',
+  `  lh_bin=$(npx --yes --package="$1" --call 'command -v lh' 2>>"$lh_log" </dev/null) &&`,
+  '    case $lh_bin in /*/node_modules/.bin/lh) [ -x "$lh_bin" ] ;; *) false ;; esac',
+  '}',
+  'if ! lh_resolve @lobehub/cli; then',
+  '  if lh_latest=$(npm view @lobehub/cli version --fetch-retries=0 --fetch-timeout=10000 2>>"$lh_log" </dev/null) &&',
+  '    lh_resolve "@lobehub/cli@<$lh_latest"; then',
+  '    echo "lh: @lobehub/cli@$lh_latest cannot be downloaded from npm yet; using the release before it" >&2',
+  '  else',
+  '    cat "$lh_log" >&2; rm -f "$lh_log"; exit 1',
+  '  fi',
+  'fi',
+  'rm -f "$lh_log"',
+];
+/**
  * The shim: an `lh` executable written to a fresh `PATH` directory, with
- * credentials scoped to the `npx` process it execs rather than exported.
+ * credentials scoped to the CLI process it execs rather than exported.
  */
 const wrap = (command: string, extraEnv = '') =>
   [
     `__lobehub_lh_bin=$(mktemp -d) && trap '[ -s "$__lobehub_lh_bin"/.jobs ] || rm -rf "$__lobehub_lh_bin"' EXIT && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && cat > "$__lobehub_lh_bin"/lh <<'__LOBEHUB_LH_SHIM__' && chmod 700 "$__lobehub_lh_bin"/lh && export PATH="$__lobehub_lh_bin":"$PATH" || { echo 'lh: could not set up LobeHub CLI credentials' >&2; exit 1; }`,
     '#!/bin/sh',
-    `${CREDS}${extraEnv} exec npx -y @lobehub/cli "$@"`,
+    ...RESOLVE_CLI,
+    `${CREDS}${extraEnv} exec "$lh_bin" "$@"`,
     '__LOBEHUB_LH_SHIM__',
     '(',
     `trap 'jobs -l > "$__lobehub_lh_bin"/.jobs; sed -n "s/^[[][0-9]*[]][ +-]*//; s/^ *\\([0-9][0-9]*\\).*/\\1/p" "$__lobehub_lh_bin"/.jobs > "$__lobehub_lh_bin"/.pids; mv "$__lobehub_lh_bin"/.pids "$__lobehub_lh_bin"/.jobs; if [ -s "$__lobehub_lh_bin"/.jobs ]; then (n=0; while read -r p; do while [ "$n" -lt 300 ] && kill -0 "$p" 2>/dev/null; do case "$(cat /proc/"$p"/stat 2>/dev/null)" in *") Z "*) break ;; esac; sleep 1; n=$((n + 1)); done; done < "$__lobehub_lh_bin"/.jobs; rm -rf "$__lobehub_lh_bin") >/dev/null 2>&1 </dev/null & fi' EXIT`,
@@ -115,10 +144,10 @@ describe('preprocessLhCommand', () => {
 
     const lines = result.command.split('\n');
     // The only occurrence of the token is inside the wrapper body, prefixed to
-    // `npx` — so it scopes to that one process and nothing else inherits it.
+    // the CLI — so it scopes to that one process and nothing else inherits it.
     const tokenLines = lines.filter((line) => line.includes('mock-jwt-token'));
     expect(tokenLines).toHaveLength(1);
-    expect(tokenLines[0]).toMatch(/^LOBEHUB_JWT='mock-jwt-token'.* exec npx -y @lobehub\/cli/);
+    expect(tokenLines[0]).toMatch(/^LOBEHUB_JWT='mock-jwt-token'.* exec "\$lh_bin" "\$@"$/);
   });
 
   it('should shell-escape values containing quotes', async () => {
@@ -180,35 +209,147 @@ describe('preprocessLhCommand', () => {
 /**
  * Runs the prepared command in a real POSIX shell, the way the sandbox does.
  * The fake bin dir mirrors the sandbox: a global `lh` with no credentials
- * (what the model hit before) and an `npx` that reports the credentials the
- * CLI process actually received.
+ * (what the model hit before), and an `npx` / `npm` pair standing in for the
+ * registry, with the CLI releases `npx` would have installed. The CLI reports
+ * the credentials its process actually received.
+ *
+ * `LH_TEST_UNPUBLISHED=<version>` models the minutes after a CLI publish, when
+ * npm lists `<version>` as `latest` but its tarball still answers 404.
  */
 describe('preprocessLhCommand in a real shell', () => {
   let fakeBin: string;
 
   beforeAll(() => {
     fakeBin = mkdtempSync(path.join(tmpdir(), 'lh-shim-test-'));
-    const writeBin = (name: string, body: string) => {
-      const file = path.join(fakeBin, name);
+    const writeBin = (file: string, body: string) => {
+      mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, `#!/bin/sh\n${body}\n`);
       chmodSync(file, 0o755);
     };
-    writeBin('lh', `echo "No authentication found. Run 'lh login' first."`);
-    writeBin('npx', 'echo "cli jwt=${LOBEHUB_JWT:-none}"');
+    const cli = (release: string) => path.join(fakeBin, release, 'node_modules/.bin/lh');
+    writeBin(path.join(fakeBin, 'lh'), `echo "No authentication found. Run 'lh login' first."`);
+    writeBin(
+      cli('latest'),
+      [
+        'case $1 in',
+        `  fail) echo ran >> '${fakeBin}/runs'; exit 3 ;;`,
+        '  cat) cat ;;',
+        '  *) echo "cli jwt=${LOBEHUB_JWT:-none}" ;;',
+        'esac',
+      ].join('\n'),
+    );
+    writeBin(cli('previous'), 'echo "previous cli jwt=${LOBEHUB_JWT:-none}"');
+    // `npx -y <spec> <args>` runs the CLI (the old wrapper);
+    // `npx --yes --package=<spec> --call 'command -v lh'` prints its path.
+    writeBin(
+      path.join(fakeBin, 'npx'),
+      [
+        `echo "\${LOBEHUB_JWT:-no token}" >> '${fakeBin}/npx.log'`,
+        'if [ "$1" = -y ]; then spec=$2; shift 2; else spec=${2#--package=}; fi',
+        'case $spec in',
+        '  @lobehub/cli)',
+        '    if [ -n "$LH_TEST_UNPUBLISHED" ]; then',
+        '      echo "npm error 404 Not Found - GET https://registry.npmjs.org/@lobehub/cli/-/cli-$LH_TEST_UNPUBLISHED.tgz - Not found" >&2',
+        '      exit 1',
+        '    fi',
+        `    bin='${cli('latest')}' ;;`,
+        `  "@lobehub/cli@<$LH_TEST_UNPUBLISHED") bin='${cli('previous')}' ;;`,
+        '  *) echo "npm error notarget No matching version found for $spec" >&2; exit 1 ;;',
+        'esac',
+        // Any input npm read here would be lost to the CLI.
+        'if [ "$1" = --yes ]; then cat >/dev/null; echo "$bin"; else exec "$bin" "$@"; fi',
+      ].join('\n'),
+    );
+    writeBin(
+      path.join(fakeBin, 'npm'),
+      [
+        'if [ "$*" = "view @lobehub/cli version --fetch-retries=0 --fetch-timeout=10000" ] &&',
+        '  [ -z "$LH_TEST_REGISTRY_DOWN" ]; then',
+        '  echo "$LH_TEST_UNPUBLISHED"',
+        'else',
+        '  echo "npm error code ECONNRESET" >&2; exit 1',
+        'fi',
+      ].join('\n'),
+    );
   });
 
   afterAll(() => {
     rmSync(fakeBin, { force: true, recursive: true });
   });
 
+  const shellEnv = (env: Record<string, string> = {}) => ({
+    ...process.env,
+    // An inherited token would mask a shim that failed to reach the CLI.
+    LOBEHUB_JWT: undefined,
+    PATH: `${fakeBin}:${process.env.PATH}`,
+    ...env,
+  });
+
   const run = async (command: string, shell = '/bin/sh') => {
     const { command: prepared } = await preprocessLhCommand(command, 'user-1');
-    return execFileSync(shell, ['-c', prepared], {
-      encoding: 'utf8',
-      // An inherited token would mask a shim that failed to reach the CLI.
-      env: { ...process.env, LOBEHUB_JWT: undefined, PATH: `${fakeBin}:${process.env.PATH}` },
-    });
+    return execFileSync(shell, ['-c', prepared], { encoding: 'utf8', env: shellEnv() });
   };
+
+  /** Like {@link run}, but keeps stderr and the exit status. */
+  const runWith = async (command: string, env: Record<string, string> = {}, input?: string) => {
+    const { command: prepared } = await preprocessLhCommand(command, 'user-1');
+    const { status, stderr, stdout } = spawnSync('/bin/sh', ['-c', prepared], {
+      encoding: 'utf8',
+      env: shellEnv(env),
+      input,
+    });
+    return { status, stderr, stdout };
+  };
+
+  // Regression: the wrapper ran a bare `npx -y @lobehub/cli`, which resolves
+  // `latest` on every call. For minutes after each CLI release npm lists the
+  // new version before it can serve its tarball, so every sandbox `lh` failed
+  // with `npm error 404 … cli-0.0.98.tgz`, even with 0.0.97 already cached.
+  it('runs the release before latest while npm cannot serve the newest one yet', async () => {
+    const result = await runWith('lh whoami', { LH_TEST_UNPUBLISHED: '0.0.98' });
+
+    expect(result.stdout).toBe('previous cli jwt=mock-jwt-token\n');
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe(
+      'lh: @lobehub/cli@0.0.98 cannot be downloaded from npm yet; using the release before it\n',
+    );
+  });
+
+  it("reports npm's own error when no release can be installed", async () => {
+    const result = await runWith('lh whoami', {
+      LH_TEST_REGISTRY_DOWN: '1',
+      LH_TEST_UNPUBLISHED: '0.0.98',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('npm error 404 Not Found - GET');
+    expect(result.stderr).toContain('npm error code ECONNRESET');
+  });
+
+  // Resolving and running are separate steps so a failed install can retry;
+  // a failure of the command itself must never run it a second time.
+  it('runs a failing command once and keeps its exit status', async () => {
+    rmSync(path.join(fakeBin, 'runs'), { force: true });
+
+    const result = await runWith('lh fail');
+
+    expect(result.status).toBe(3);
+    expect(readFileSync(path.join(fakeBin, 'runs'), 'utf8')).toBe('ran\n');
+    expect(result.stderr).toBe('');
+  });
+
+  it('passes piped input through to the CLI', async () => {
+    expect((await runWith('lh cat', {}, 'doc body')).stdout).toBe('doc body');
+  });
+
+  it('keeps the token away from npm', async () => {
+    rmSync(path.join(fakeBin, 'npx.log'), { force: true });
+
+    await runWith('lh whoami', { LH_TEST_UNPUBLISHED: '0.0.98' });
+
+    expect(readFileSync(path.join(fakeBin, 'npx.log'), 'utf8')).toBe('no token\nno token\n');
+  });
 
   it('authenticates an lh the shell resolves itself', async () => {
     expect(await run('lh whoami')).toBe('cli jwt=mock-jwt-token\n');
