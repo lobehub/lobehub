@@ -16,7 +16,7 @@ import {
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
-import { channelReplyShare } from './agent';
+import { accessShare, resolveChannelAgentAccess } from './agentAccess';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
 import { isMergedBehind } from './merge';
@@ -242,7 +242,17 @@ export const findOpeningCandidate = async (
       .where(eq(channels.id, channelId)),
   ]);
   if (!request || !channel) return;
-  const share = await channelReplyShare(db, channel, row.agentId, requester.userId);
+  const access = await resolveChannelAgentAccess(
+    db,
+    channel,
+    { agentId: row.agentId, id: job.memberId },
+    { memberId: job.requesterMemberId, userId: requester.userId },
+    job.threadId,
+  );
+  // A requester who may not use the Agent gets no acknowledgement: the reply waits for its
+  // owner's answer, or fails, where it was asked.
+  if (access.kind === 'request' || access.kind === 'unavailable') return;
+  const share = accessShare(access);
   // Answered in the run of the same person's earlier request, which opens for both. A shared
   // Agent answers each of a visitor's requests in its own run.
   if (!share && (await isMergedBehind(db, job, request))) return;

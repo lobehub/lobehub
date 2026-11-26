@@ -4,6 +4,7 @@ import { useForm, useWatch } from '@lobehub/ui/form';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 
 import MCPManifestForm from './MCPManifestForm';
@@ -65,6 +66,7 @@ const DevModal = memo<DevModalProps>(
     const { t } = useTranslation('plugin');
 
     const [submitting, setSubmitting] = useState(false);
+    const [saveError, setSaveError] = useState<{ detail?: string; summary: string } | null>(null);
 
     const form = useForm<LobeToolCustomPlugin>({
       initialValues: INITIAL_VALUES,
@@ -72,6 +74,7 @@ const DevModal = memo<DevModalProps>(
         await doSave(values);
       },
       onValuesChange: (_, values) => {
+        setSaveError(null);
         onValueChange?.(values);
       },
     });
@@ -102,6 +105,7 @@ const DevModal = memo<DevModalProps>(
         return;
       }
       setSubmitting(true);
+      setSaveError(null);
       try {
         await onSave(pruneHiddenFields(values), ctx);
         toast.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
@@ -116,7 +120,7 @@ const DevModal = memo<DevModalProps>(
                 'You are not allowed to modify this connector — only the creator or a workspace owner can',
               )
             : t(titleKey as never);
-        toast.error(description ? { description, title } : title);
+        setSaveError({ detail: description, summary: title });
       } finally {
         ctx?.oauthPopup?.close();
         setSubmitting(false);
@@ -129,9 +133,10 @@ const DevModal = memo<DevModalProps>(
     // the footer save button and the in-form "Authorize" button.
     const runOAuthFlow = async () => {
       if (submitting) return;
+      setSaveError(null);
       const popup = openConnectorOAuthPopup();
       if (popup === null) {
-        toast.error(t('dev.oauthError.blocked'));
+        setSaveError({ summary: t('dev.oauthError.blocked') });
         return;
       }
       const { valid } = await form.validate();
@@ -155,40 +160,45 @@ const DevModal = memo<DevModalProps>(
     }, [open]);
 
     const footer = (
-      <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
-        {isEditMode ? (
-          <Button
-            danger
-            onClick={() =>
-              confirmModal({
-                cancelText: t('cancel', { ns: 'common' }),
-                okButtonProps: { danger: true },
-                okText: t('ok', { ns: 'common' }),
-                onOk: () => {
-                  onDelete?.();
-                  toast.success(t('dev.deleteSuccess'));
-                },
-                content: t('dev.confirmDeleteDevPlugin'),
-                title: t('delete', { ns: 'common' }),
-              })
-            }
-          >
-            {t('delete', { ns: 'common' })}
-          </Button>
-        ) : (
-          <div />
+      <Flexbox flex={1} gap={8}>
+        {saveError && (
+          <InlineErrorText detail={saveError.detail}>{saveError.summary}</InlineErrorText>
         )}
-        <Flexbox horizontal gap={12}>
-          <Button
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            {t('cancel', { ns: 'common' })}
-          </Button>
-          <Button loading={submitting} type={'primary'} onClick={handlePrimaryClick}>
-            {t(isEditMode ? 'dev.update' : 'dev.addConnector')}
-          </Button>
+        <Flexbox horizontal gap={12} justify={'space-between'}>
+          {isEditMode ? (
+            <Button
+              danger
+              onClick={() =>
+                confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  okButtonProps: { danger: true },
+                  okText: t('ok', { ns: 'common' }),
+                  onOk: () => {
+                    onDelete?.();
+                    toast.success(t('dev.deleteSuccess'));
+                  },
+                  content: t('dev.confirmDeleteDevPlugin'),
+                  title: t('delete', { ns: 'common' }),
+                })
+              }
+            >
+              {t('delete', { ns: 'common' })}
+            </Button>
+          ) : (
+            <div />
+          )}
+          <Flexbox horizontal gap={12}>
+            <Button
+              onClick={() => {
+                onOpenChange(false);
+              }}
+            >
+              {t('cancel', { ns: 'common' })}
+            </Button>
+            <Button loading={submitting} type={'primary'} onClick={handlePrimaryClick}>
+              {t(isEditMode ? 'dev.update' : 'dev.addConnector')}
+            </Button>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
     );

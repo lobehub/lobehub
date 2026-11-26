@@ -37,7 +37,7 @@ import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/sto
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import type { CommandMenuResultClick } from './analytics';
-import { CommandItem } from './components';
+import { CommandItem, HighlightedText } from './components';
 import { styles } from './styles';
 import { goalResultStatusKey } from './utils/goalResults';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
@@ -293,8 +293,8 @@ const SearchResults = memo<SearchResultsProps>(
 
     const getDescription = (result: FtsSearchResult) => {
       if (!result.description) return null;
-      // Sanitize markdown content for message search results
-      if (result.type === 'message') {
+      // Message, page and file snippets carry raw markdown
+      if (result.type === 'message' || result.type === 'page' || result.type === 'file') {
         return markdownToTxt(result.description);
       }
       return result.description;
@@ -359,6 +359,10 @@ const SearchResults = memo<SearchResultsProps>(
           return `${description} · ${formattedDate}`;
         }
         return formattedDate;
+      }
+
+      if (description && (result.type === 'page' || result.type === 'file')) {
+        return <HighlightedText query={searchQuery} text={description} />;
       }
 
       return description;

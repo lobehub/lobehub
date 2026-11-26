@@ -59,7 +59,6 @@ describe('usePermissionMode', () => {
     useUserStore.setState({
       preference: {
         heteroPermissionModeDirs: [{ key: 'dev-1::/repo', mode: 'plan' }],
-        lab: { enableBetterCodingExperience: true },
       } as any,
       setHeteroPermissionModeDir: setDir,
       useFetchWorkspaceUserPreference: () => {},

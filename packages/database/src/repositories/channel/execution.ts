@@ -1,10 +1,16 @@
 import type {
   AgentOperationStatus,
+  ChannelAsk,
   ChannelContextMessage,
   ChannelJobStatus,
+  ChannelMessageSurface,
   ChannelReplyError,
 } from '@lobechat/types';
-import { channelMessageReplyError } from '@lobechat/types';
+import {
+  channelAskFallbackText,
+  channelMessageReplyError,
+  channelSurfacesText,
+} from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -20,10 +26,11 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
-import { claimJob } from './claim';
+import { claimJob, notAwaitingAccess } from './claim';
 import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import { channelMemberNicknameSql } from './nickname';
 import type { ChannelOpeningDecision } from './opening';
 import {
   applyOpening,
@@ -175,13 +182,15 @@ export class ChannelExecutionRepository {
 
   /**
    * Retire only an untouched reservation, racing recordStart on the operation row itself.
-   * `failure` records why dispatch refused it, for a reason the requester can act on.
+   * `failure` records why dispatch refused it, for a reason the requester can act on. Returns
+   * the status the operation ended in (`interrupted` when the reply was cancelled meanwhile),
+   * or `false` when there was no untouched reservation to retire.
    */
   retireReservation = async (
     channelId: string,
     jobId: string,
     failure?: { message: string; type?: string },
-  ) =>
+  ): Promise<'error' | 'interrupted' | false> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (!job.operationId || !job.writerHeld) return false;
@@ -203,7 +212,7 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'reservation_retired', job.id, { status });
-      return true;
+      return status;
     });
 
   /** Writes back a routing decision for `attempt`; null when the result is stale. */
@@ -224,7 +233,7 @@ export class ChannelExecutionRepository {
    * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
-    const [inFlight, heads] = await Promise.all([
+    const [inFlight, heads, awaitingAccess] = await Promise.all([
       this.db
         .select()
         .from(channelJobs)
@@ -243,7 +252,13 @@ export class ChannelExecutionRepository {
         .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-        .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            notAwaitingAccess(),
+          ),
+        )
         // Same order as the head check in claimJob.
         .orderBy(
           channelJobs.memberId,
@@ -251,11 +266,25 @@ export class ChannelExecutionRepository {
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
+      // Out of the queue order while their requester waits for the Agent owner's answer, so each
+      // is tried on its own: the answer moves it on.
+      this.db
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.status, 'queued'),
+            eq(channelJobs.blockedCode, 'access_request_pending'),
+          ),
+        )
+        .orderBy(asc(channelJobs.createdAt))
+        .limit(limit),
     ]);
     return {
-      heads: heads
-        .map(({ job }) => job)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      heads: [...heads.map(({ job }) => job), ...awaitingAccess].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
       inFlight,
     };
   };
@@ -517,7 +546,12 @@ export class ChannelExecutionRepository {
    * Publishes the saved draft as the member's reply and completes the job. Idempotent: a
    * second call returns the same message id.
    */
-  publish = async (channelId: string, jobId: string): Promise<string> =>
+  publish = async (
+    channelId: string,
+    jobId: string,
+    /** Cards the run drew; they go out with its reply and keep their text in its content. */
+    surfaces: ChannelMessageSurface[] = [],
+  ): Promise<string> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId);
       if (job.publishedMessageId) return job.publishedMessageId;
@@ -538,13 +572,44 @@ export class ChannelExecutionRepository {
         .for('share');
       if (!sender) throw new ChannelError('CONFLICT', 'The replying Agent was deleted');
 
+      // Questions the run asked go out with its reply, as a card only its requester answers.
+      const body = job.draft.trim();
+      const ask: ChannelAsk | undefined = job.ask
+        ? {
+            ...job.ask,
+            bodyLength: body.length,
+            requesterMemberId: job.requesterMemberId,
+            status: 'pending',
+          }
+        : undefined;
+      const carded = !!ask || surfaces.length > 0;
+      const published = {
+        // Cards keep a text form after the reply's own words, read by everything that can't
+        // draw them (previews, notifications, an Agent reading history); views show only the body.
+        content: carded
+          ? [
+              body,
+              surfaces.length > 0 ? channelSurfacesText(surfaces) : '',
+              ask ? channelAskFallbackText(ask) : '',
+            ]
+              .filter(Boolean)
+              .join('\n\n')
+          : job.draft,
+        ...(ask && { kind: 'ask' as const }),
+        ...(carded && {
+          metadata: {
+            ...(ask && { ask }),
+            ...(surfaces.length > 0 && { surfaces, surfacesBodyLength: body.length }),
+          },
+        }),
+      };
       // A card from an earlier failure of this job is replaced by the reply, in the same slot.
       const reply =
-        (await replaceReplyError(tx, job, job.draft)) ??
+        (await replaceReplyError(tx, job, published)) ??
         (await appendMessage(tx, {
+          ...published,
           agentId: sender.id,
           channelId,
-          content: job.draft,
           replyToId: job.messageId,
           requestKey: replyRequestKey(job.id),
           routingStatus: 'reply',
@@ -664,7 +729,7 @@ export class ChannelExecutionRepository {
         .select({
           actorType: channelMembers.actorType,
           id: channelMembers.id,
-          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), nullif(${users.fullName}, ''), ${users.username}, '')`,
+          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), ${channelMemberNicknameSql(channelMembers.channelId, channelMembers.userId)}, nullif(${users.fullName}, ''), ${users.username}, '')`,
         })
         .from(channelMembers)
         .leftJoin(users, eq(users.id, channelMembers.userId))

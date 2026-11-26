@@ -1,13 +1,21 @@
-import useSWR from 'swr';
+import type { EnvironmentConfiguration } from '@lobechat/types';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { environmentService } from '@/services/environment';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 import { pickableEnvironments } from './sandboxEnvironmentOptions';
-import type { SandboxRepositoryOption } from './SandboxRepositoryMenu';
+
+/** An environment a project conversation can start from. */
+export interface SandboxRepositoryOption {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+  description?: string | null;
+  id: string;
+  name: string;
+  /** `public` once published to the workspace; anything else is its owner's alone. */
+  visibility?: string | null;
+}
 
 /**
  * Whether the conversation's agent is workspace-public. Such an agent runs on
@@ -49,35 +57,5 @@ export const useProjectSandboxEnvironments = (
     failed: !!sync.error,
     loaded: sync.hasData,
     refresh: sync.revalidate,
-  };
-};
-
-/**
- * The environments a conversation may start from. A project conversation runs
- * in its project's environment — the workspace's shared list leaves it out —
- * so it is offered that one alone. Any other conversation is offered the
- * workspace's shared environments. Only the list in use is fetched.
- */
-export const useSandboxEnvironmentList = ({
-  projectId,
-  sharedAgent,
-  workspaceId,
-}: {
-  projectId?: string;
-  sharedAgent: boolean;
-  workspaceId?: string | null;
-}): SandboxEnvironmentList => {
-  const shared = useSWR(projectId ? null : ['sandbox-environment-chip', workspaceId ?? ''], () =>
-    environmentService.listEnvironments(),
-  );
-  const project = useProjectSandboxEnvironments(projectId, sharedAgent);
-
-  if (projectId) return project;
-
-  return {
-    environments: pickableEnvironments(shared.data?.environments ?? [], sharedAgent),
-    failed: !!shared.error,
-    loaded: !!shared.data,
-    refresh: () => shared.mutate(),
   };
 };

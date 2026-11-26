@@ -1,8 +1,4 @@
-import type {
-  DeviceGitLinkedPullRequest,
-  DeviceGitUpstreamRef,
-  WorkingDirConfig,
-} from '@lobechat/types';
+import type { DeviceGitUpstreamRef, WorkingDirConfig } from '@lobechat/types';
 import { dropStaleAutoCreated } from '@lobechat/types';
 
 /**
@@ -14,11 +10,6 @@ import { dropStaleAutoCreated } from '@lobechat/types';
 export interface WorktreeAddInfo {
   branch?: string;
   path: string;
-}
-
-export interface PullRequestCreateInfo {
-  branch?: string;
-  pullRequest: DeviceGitLinkedPullRequest;
 }
 
 export const applyBranchToConfig = (
@@ -69,31 +60,6 @@ export const applyDetachedToConfig = (
   };
 };
 
-export const applyPullRequestToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  info: PullRequestCreateInfo,
-): WorkingDirConfig => {
-  const branch = info.branch ?? currentConfig?.git?.branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    ...(branch ? { branch } : {}),
-    github: {
-      pullRequest: info.pullRequest,
-      pullRequestStatus: 'ok',
-    },
-  };
-
-  delete git.detached;
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    repoType: 'github',
-  };
-};
-
 /**
  * Record where the branch now publishes to. This is what makes the PR lookup work at
  * all for a worktree: its local branch name (`worktree-feat+x`) never exists on the
@@ -110,9 +76,8 @@ export const applyPushToConfig = (
     upstream,
   };
 
-  // Re-pointing the branch at a DIFFERENT remote ref orphans the PR bound to the old
-  // one. Only a change invalidates it — a first push must not drop a PR that a
-  // preceding `gh pr create` in the same run just recorded.
+  // Re-pointing the branch at a DIFFERENT remote ref orphans a PR an older client
+  // recorded for the old one. Only a change invalidates it.
   if (previous && previous !== upstream.branch) delete git.github;
 
   return {

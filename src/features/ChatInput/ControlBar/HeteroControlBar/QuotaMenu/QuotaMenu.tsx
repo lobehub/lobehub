@@ -205,6 +205,8 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   renderFooter?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
   /** Agent-specific content rendered above the quota windows (e.g. account switcher). */
   renderHeader?: (quota: S, helpers: QuotaMenuHelpers<S>) => ReactNode;
+  /** Disable the generic fallback when the reader supplies account-scoped failure data. */
+  retainLastSnapshotOnError?: boolean;
   sourceKey?: string;
   title: string;
   tooltip: string;
@@ -243,6 +245,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   hasExtraData,
   renderFooter,
   renderHeader,
+  retainLastSnapshotOnError = true,
   alwaysRenderHeader,
   sourceKey = 'default',
   title,
@@ -337,7 +340,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         }
 
         // A failed refresh keeps the last good snapshot on screen (and in storage).
-        if (hasQuotaDataForSnapshot(readQuota(requestSourceKey))) {
+        if (retainLastSnapshotOnError && hasQuotaDataForSnapshot(readQuota(requestSourceKey))) {
           if (options.manual) setRefreshError(nextQuota);
           return;
         }
@@ -348,7 +351,13 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       setRefreshError(null);
       setQuotaSnapshot(nextQuota, requestSourceKey, requestContext);
     },
-    [hasQuotaDataForSnapshot, isCurrentRequest, readQuota, setQuotaSnapshot],
+    [
+      hasQuotaDataForSnapshot,
+      isCurrentRequest,
+      readQuota,
+      retainLastSnapshotOnError,
+      setQuotaSnapshot,
+    ],
   );
 
   const loadQuota = useCallback(

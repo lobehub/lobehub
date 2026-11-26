@@ -154,6 +154,8 @@ export default {
     'After deletion completes, the same email cannot be used to sign up again for {{days}} days.',
   'accountDeletion.requestButton': 'Request Account Deletion',
   'accountDeletion.requestFailed': 'Failed to request account deletion',
+  'accountDeletion.requestFailedRetry':
+    "Couldn't submit your deletion request. Check your connection and try again.",
   'accountDeletion.requestSuccess': 'Deletion request submitted',
   'accountDeletion.sectionTitle': 'Account Deletion',
   'accountDeletion.title': 'Delete Account',
@@ -526,6 +528,7 @@ export default {
   'permission.page.accessLevelLabel': 'Access level',
   'permission.page.accessLevelPrivateHint':
     'Members get this level once the agent is published to the workspace. It can be changed after publishing.',
+  'permission.page.agentEntry': 'Permissions',
   'permission.page.configGroup': 'Editable settings',
   'permission.page.devicePolicyDesc':
     'Whether members can switch the execution environment for their own runs.',
@@ -541,6 +544,8 @@ export default {
   'permission.page.documentPrivateNotice':
     'This page is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.entry': 'Permissions',
+  'permission.page.groupTransferDesc':
+    'Hand this group to another workspace member. It moves to them once they accept.',
   'permission.page.kbAccessibleWhenShared': 'Can access when shared',
   'permission.page.kbNoAccessWhenShared': 'No access when shared',
   'permission.page.libraryAccessLevelPrivateHint':
@@ -583,11 +588,13 @@ export default {
   'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
   'permission.page.modelPolicyDesc':
     'Whether members can switch the model for their own conversations.',
+  'permission.page.ownershipGroup': 'Ownership',
   'permission.page.personalDesc':
     'This agent only belongs to you, so there is nothing to share yet. Publish it to a workspace to set member permissions.',
   'permission.page.personalTitle': 'Permissions apply to workspace agents',
   'permission.page.privateNotice':
     'This agent is still private. Everything here takes effect once you publish it to the workspace.',
+  'permission.page.sharingGroup': 'Visibility & ownership',
   'permission.page.title': 'Permissions',
   'permission.page.topicSharePolicyDesc':
     "Whether members can publish share links for this agent's topics.",
@@ -595,8 +602,16 @@ export default {
     "Members can publish share links for any of this agent's topics",
   'permission.page.topicSharePolicyRestrictedDesc':
     'Only you and workspace owners can publish share links',
+  'permission.page.transferDesc':
+    'Hand this agent to another workspace member. It moves to them once they accept.',
+  'permission.page.transferLabel': 'Transfer ownership',
   'permission.page.usableWhenShared': 'Can use when shared',
   'permission.page.viewableWhenShared': 'Can view when shared',
+  'permission.page.visibilityBuiltinDesc':
+    'Built-in agents are always visible to the whole workspace',
+  'permission.page.visibilityCreatorOnlyDesc':
+    'Only the creator can make a shared agent private again',
+  'permission.page.visibilityDesc': 'Who in the workspace can see and use this agent',
   'permission.saveNoEditPermission':
     'You have view-only access to this page, so your changes were not saved',
   'permission.updateError': 'Failed to update permission',
@@ -619,6 +634,8 @@ export default {
   'agentDocuments.overwriteConfirm.warning':
     'Existing documents with the same filename will be replaced.',
   'agentDocuments.title': 'Agent Documents',
+  'agentSkillModal.github.connectFailedRetry':
+    "Couldn't connect GitHub. Check your network and try again.",
   'analytics.telemetry.desc': 'Help us improve {{appName}} with anonymous usage data',
   'analytics.telemetry.title': 'Send Anonymous Usage Data',
   'analytics.title': 'Analytics',
@@ -761,15 +778,21 @@ export default {
     'This credential will be permanently deleted. This action cannot be undone.',
   'creds.actions.deleteConfirm.ok': 'Delete',
   'creds.actions.deleteConfirm.title': 'Delete Credential?',
+  'creds.actions.done': 'Done',
   'creds.actions.edit': 'Edit',
+  'creds.actions.remove': 'Remove',
   'creds.actions.view': 'View',
-  'creds.create': 'New Credential',
+  'creds.create': 'Add',
   'creds.createModal.titles.file': 'New credential file',
   'creds.createModal.titles.kv-env': 'New environment variable',
   'creds.createModal.titles.kv-header': 'New HTTP header',
   'creds.createModal.titles.oauth': 'New OAuth credential',
+  'creds.detail.account': 'Account',
+  'creds.detail.author': 'Owner',
+  'creds.detail.visibility': 'Visible to',
   'creds.empty': 'No credentials configured yet',
   'creds.errors.createFailed': 'Failed to create the credential. Please try again.',
+  'creds.errors.deleteFailed': 'Failed to delete the credential. Please try again.',
   'creds.errors.multiOrgShareDisabled':
     'Sharing one credential into several workspaces is not available yet. Remove its other share first.',
   'creds.errors.privateCredExists':
@@ -779,15 +802,12 @@ export default {
   'creds.errors.publicCredExists':
     'This workspace already shares a credential with this key. Remove it before publishing this one.',
   'creds.file.authRequired': 'Please sign in to the Market first',
-  'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
   'creds.form.addEnvVar': 'Add variable',
   'creds.form.addHeader': 'Add header',
   'creds.form.envVars': 'Environment variables',
   'creds.form.headers': 'Headers',
-  'creds.form.keyDesc':
-    'Agents find this credential by its identifier. Letters, numbers, hyphens and underscores only.',
   'creds.form.removePair': 'Remove',
   'creds.form.valuesDesc.kv-env':
     'Set as environment variables when an agent uses this credential.',
@@ -830,9 +850,6 @@ export default {
   'creds.form.descriptionPlaceholder': 'Optional description for this credential',
   'creds.form.file': 'Credential File',
   'creds.form.fileRequired': 'Please upload a file',
-  'creds.form.key': 'Identifier',
-  'creds.form.keyPattern': 'Identifier can only contain letters, numbers, underscores, and hyphens',
-  'creds.form.keyRequired': 'Identifier is required',
   'creds.form.name': 'Display Name',
   'creds.form.nameRequired': 'Display name is required',
   'creds.form.save': 'Save',
@@ -845,7 +862,6 @@ export default {
   'creds.form.valuePlaceholder': 'Enter value',
   'creds.oauth.noConnections': 'No OAuth connections available. Please connect an account first.',
   'creds.table.actions': 'Actions',
-  'creds.table.key': 'Identifier',
   'creds.table.lastUsed': 'Last Used',
   'creds.table.name': 'Name',
   'creds.table.neverUsed': 'Never',
@@ -857,8 +873,11 @@ export default {
   'creds.types.kv-header': 'Header',
   'creds.types.oauth': 'OAuth',
   'creds.view.error': 'Failed to load credential',
+  'creds.view.hide': 'Hide',
   'creds.view.noValues': 'No Values',
   'creds.view.oauthNote': 'OAuth credentials are managed by the connected service.',
+  'creds.view.show': 'Show',
+  'creds.view.showValues': 'Show values',
   'creds.view.title': 'View Credential: {{name}}',
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
@@ -1120,6 +1139,7 @@ export default {
   'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.connection': 'Connections',
+  'group.data': 'Data & Developer',
   'group.profile': 'Account',
   'group.resource': 'Runtime',
   'group.subscription': 'Plans & Billing',
@@ -1157,7 +1177,6 @@ export default {
   'hotkey.sendMessage.desc': 'The other key combination inserts a line break',
   'hotkey.sendMessage.title': 'Send Message',
   'hotkey.title': 'Hotkeys',
-  'hotkey.updateError': 'Failed to update hotkey: Network or system error',
   'hotkey.updateSuccess': 'Hotkey updated successfully',
   'llm.aesGcm':
     'Your keys and proxy address will be encrypted using the <1>AES-GCM</1> encryption algorithm',
@@ -1276,6 +1295,7 @@ export default {
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.subscription_one_time_expired': 'One-time plan ended',
+  'notification.item.subscription_one_time_expiring': 'One-time plan ending soon',
   'notification.item.subscription_payment_failed': 'Subscription renewal payment failed',
   'notification.item.subscription_plan_changed': 'Subscription plan changed',
   'notification.item.subscription_renewed': 'Subscription renewed',
@@ -1471,11 +1491,10 @@ export default {
   'settingAgent.tools.type.plugin': 'Plugin or skill',
   'settingAgent.tools.type.skill': 'Skill',
   'settingAgent.driver.groupCli': 'Heterogeneous agent · local CLI',
-  'settingAgent.driver.groupHarness': 'Built by LobeHub',
+  'settingAgent.driver.groupHarness': 'Built-in',
   'settingAgent.driver.groupRemote': 'Heterogeneous agent · remote platform',
   'settingAgent.driver.harness': 'LobeHub',
-  'settingAgent.driver.brings.harness':
-    "LobeHub's own harness: you choose the model, tools and instruction.",
+  'settingAgent.driver.brings.harness': 'You choose the model, tools, and instruction.',
   'settingAgent.driver.brings.hetero':
     'Brings its own model, tools and instruction; you set where it runs.',
   'settingAgent.driver.switchBackHarness': 'The core instruction and tools take effect again.',
@@ -1499,18 +1518,18 @@ export default {
   'settingAgent.instruction.description':
     'Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.',
   'settingAgent.knowledgePage.title': 'Knowledge Base',
-  'settingAgent.knowledgePage.desc': 'The libraries and files it can search when it answers.',
-  'settingAgent.knowledgePage.libraries.title': 'Libraries',
+  'settingAgent.knowledgePage.desc': 'The knowledge bases and files it can search when it answers.',
+  'settingAgent.knowledgePage.libraries.title': 'Knowledge Bases',
   'settingAgent.knowledgePage.libraries.desc':
-    'Collections you manage in Resources. Switch one off to keep it without searching it.',
-  'settingAgent.knowledgePage.libraries.empty': 'No library attached yet',
+    'Knowledge bases you manage in Library. Switch one off to keep it without searching it.',
+  'settingAgent.knowledgePage.libraries.empty': 'No knowledge base attached yet',
   'settingAgent.knowledgePage.files.count_one': '{{count}} file',
   'settingAgent.knowledgePage.files.count_other': '{{count}} files',
   'settingAgent.knowledgePage.files.countMore': '{{count}}+ files',
   'settingAgent.knowledgePage.files.title': 'Files',
-  'settingAgent.knowledgePage.files.desc': 'Single files it can read without a library.',
+  'settingAgent.knowledgePage.files.desc': 'Single files it can read without a knowledge base.',
   'settingAgent.knowledgePage.files.empty': 'No file attached yet',
-  'settingAgent.knowledgePage.addLibrary': 'Add library',
+  'settingAgent.knowledgePage.addLibrary': 'Add knowledge base',
   'settingAgent.knowledgePage.addFile': 'Add file',
   'settingAgent.knowledgePage.remove': 'Remove from this agent',
   'settingAgent.model.desc': 'The model it answers with.',
@@ -1696,6 +1715,9 @@ export default {
   'settingChatAppearance.showImageReadPreview.desc':
     'When off, tool calls that read an image fold in with the other calls and stay collapsed until clicked.',
   'settingChatAppearance.showImageReadPreview.title': 'Show Image Reads on Their Own',
+  'settingChatAppearance.showMessageUsage.desc':
+    'Show the model that wrote each reply and the tokens it used, below the reply.',
+  'settingChatAppearance.showMessageUsage.title': 'Show model and token usage',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',
@@ -1704,9 +1726,6 @@ export default {
   'settingChatAppearance.transitionMode.options.none.value': 'None',
   'settingChatAppearance.transitionMode.options.smooth': 'Smooth',
   'settingChatAppearance.transitionMode.title': 'Transition Animation',
-  'settingCommon.devMode.desc':
-    'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
-  'settingCommon.devMode.title': 'Advanced tools',
   'settingCommon.lang.autoMode': 'Follow System',
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
@@ -1870,6 +1889,9 @@ export default {
   'settingGraphRuntime.validation.required':
     'A graph snapshot is required before enabling graph runtime.',
   'settingGraphRuntime.validation.unknown': 'Unknown graph validation error',
+  'settingsSwitch.account': 'Account Settings',
+  'settingsSwitch.personalSpace': 'Personal Space Settings',
+  'settingsSwitch.workspace': '{{name}} Settings',
   'settingsSearch.empty': 'No settings found for "{{keyword}}"',
   'settingsSearch.placeholder': 'Search settings...',
   'settingsSearch.tabKeywords.about': 'about, version, changelog, feedback, help',
@@ -2294,7 +2316,6 @@ When I am ___, I need ___
   'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
-  'tab.advanced.appUpdates.title': 'App updates',
   'tab.advanced.gatewayMode.desc':
     'Run supported agent tasks through the cloud Gateway by default. Individual agents can override this from the chat menu.',
   'tab.advanced.gatewayMode.title': 'Gateway Mode',
@@ -4801,7 +4822,6 @@ When I am ___, I need ___
   'tab.environmentsAndCreds': 'Environments & Vault',
   'environmentsAndCreds.tabs.environments': 'Environments',
   'environmentsAndCreds.tabs.vault': 'Vault',
-  'creds.writeOnly.tag': 'Write-only',
   'creds.writeOnly.tooltip':
     'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',
   'creds.writeOnly.editHint':
@@ -4814,7 +4834,6 @@ When I am ___, I need ___
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
   'environments.removeFailed': 'Could not delete this environment',
-  'environments.saveFailed': 'Could not save this change',
   'environments.instances.removeFailed': 'Could not delete this copy',
   'environments.instances.removing': 'Deleting — removing its folder and everything in it',
   'environments.instances.removeConfirmTitle': 'Delete copy {{name}}?',
@@ -4876,7 +4895,7 @@ When I am ___, I need ___
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
-  'environments.form.sources': 'Source code',
+  'environments.form.sources': 'Repositories',
   'environments.form.sourcesHint':
     'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
@@ -5451,6 +5470,9 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'creds.file.uploadFailedRetry': 'File upload failed. Check the file and try again.',
+  'devices.share.failedRetry':
+    "Couldn't share this device to {{name}}. Make sure the device is online, then try again.",
   'environments.form.addRepository': 'Add repository',
   'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
   'environments.form.noVariables': 'No variables',
@@ -5468,9 +5490,142 @@ When I am ___, I need ___
   'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
   'environments.form.repositorySetupHint':
     "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.setupAndVariables': 'Setup and environment variables',
+  'environments.form.setupConfigured': 'Setup configured',
+  'environments.form.setupNotConfigured': 'No setup',
+  'environments.form.variablesCount_one': '{{count}} variable',
+  'environments.form.variablesCount_other': '{{count}} variables',
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
+  'environments.saveFailedRetry': 'Could not save this change. Check your network and try again.',
+  'hotkey.updateErrorRetry': "Couldn't save this hotkey. Try recording it again.",
+  'settingAgent.avatar.uploadFailed':
+    "Couldn't upload the image. Check your network and choose it again.",
+  'storageOverage.capUpdateFailedRetry':
+    "Couldn't save the monthly cap. Check the amount and try again.",
+  'storageOverage.disableFailedRetry': "Couldn't disable storage pay-as-you-go. Try again.",
+  'storageOverage.enableFailedRetry': "Couldn't enable storage pay-as-you-go. Try again.",
+  'taskLabels.form.saveFailedRetry': "Couldn't save the label. Check your network and try again.",
+  'workspace.billing.paymentMethods.portalFailedRetry':
+    "Couldn't open the billing portal. Check your network and try again.",
+  'workspace.billingPage.billing.changeFailedRetry':
+    "Couldn't update the subscription. Check your connection and try again.",
+  'workspace.billingPage.credits.autoTopUp.saveFailed':
+    "Couldn't save auto top-up settings. Check your connection and try again.",
+  'workspace.billingPage.credits.autoTopUp.toggleFailed': "Couldn't change auto top-up. Try again.",
+  'workspace.billingPage.credits.topUp.purchaseFailed':
+    "Couldn't complete the top-up. Check your connection and try again.",
+  'workspace.upgradeModal.payFailedRetry':
+    "Couldn't start checkout. Check your connection and try again.",
+  'workspace.wizard.step2.createFailedRetry':
+    "Couldn't create the workspace. Check your connection and try again.",
+  'workspace.wizard.step2.payFailedRetry':
+    "Couldn't start checkout. Check your connection and try again.",
   'workspaceSetting.devices.enrollPrivateDesc':
     'Run this on the machine you want to connect. It starts private to you; publish it to the workspace from its card menu.',
+  'market.apps.viewAll': 'View all',
+  'market.back': 'Back',
+  'market.detail.category': 'Category',
+  'market.detail.developer': 'Developer',
+  'market.detail.info': 'Information',
+  'market.detail.website': 'Website',
+  'market.skills.addToAgent': 'Add to assistant',
+  'market.skills.agents.empty': 'No assistant has this skill yet',
+  'market.skills.agents.emptyHint': 'Use "Add to assistant" above to turn it on for one.',
+  'market.skills.agents.enabledOn': 'On for {{on}}/{{total}} assistants',
+  'market.skills.agents.failed': "Couldn't update the assistant. Try again.",
+  'market.skills.agents.noneToAdd': 'No assistant to add it to',
+  'market.skills.agents.notAdded': 'Not added to an assistant',
+  'market.skills.agents.remove': 'Remove',
+  'market.skills.agents.removeAll': 'Remove all',
+  'market.skills.agents.title': 'Assistants · {{count}}',
+  'market.skills.copyPrompt': 'Copy this message',
+  'market.skills.customGroup': 'Custom',
+  'market.skills.desc':
+    'Reusable ways of working for your assistants. Install one, then turn it on in an assistant.',
+  'market.skills.empty': 'No matching skills',
+  'market.skills.github.add': 'Add selected ({{count}})',
+  'market.skills.github.addressHint': 'Find the skills in this repository',
+  'market.skills.github.desc':
+    'Paste a repository or folder link. Every SKILL.md in it is found — at the root, in skills/, .claude/skills/, plugin folders or deeper.',
+  'market.skills.github.entry': 'Add from GitHub',
+  'market.skills.github.failed.find': "Couldn't read this repository.",
+  'market.skills.github.failed.import': "Couldn't add the skills.",
+  'market.skills.github.failed.refresh': "The skills were added, but the list didn't refresh.",
+  'market.skills.github.find': 'Find skills',
+  'market.skills.github.found': '{{count}} skills in {{repo}}',
+  'market.skills.github.group': 'GitHub',
+  'market.skills.github.installedGroup': 'From GitHub',
+  'market.skills.github.invalid': "That isn't a GitHub repository link.",
+  'market.skills.github.localChanges.cancel': 'Cancel',
+  'market.skills.github.localChanges.content':
+    'This skill was edited here after it was installed. Updating replaces it with the version on GitHub.',
+  'market.skills.github.localChanges.ok': 'Update and replace',
+  'market.skills.github.localChanges.title': 'Replace your changes?',
+  'market.skills.github.none': 'No SKILL.md found in {{repo}}',
+  'market.skills.github.openOnGithub': 'Open on GitHub',
+  'market.skills.github.outcome.conflict': 'Name taken',
+  'market.skills.github.outcome.created': 'Added',
+  'market.skills.github.outcome.failed': 'Failed',
+  'market.skills.github.outcome.forbidden': 'No permission',
+  'market.skills.github.outcome.unchanged': 'Already installed',
+  'market.skills.github.outcome.updated': 'Updated',
+  'market.skills.github.placeholder': 'owner/repo, or a github.com link to a repository or folder',
+  'market.skills.github.recovery.accessTitle': "GitHub won't share this repository",
+  'market.skills.github.recovery.addToken': 'Add a token to the Vault',
+  'market.skills.github.recovery.connect': 'Connect GitHub',
+  'market.skills.github.recovery.connectTitle': 'Connect GitHub to read this repository',
+  'market.skills.github.recovery.desc':
+    'It may be private, or the link may be wrong. Connect GitHub, or save a personal access token (GITHUB_TOKEN) in the Vault; the repository is scanned again right after.',
+  'market.skills.github.recovery.tokenDescription':
+    'Read private GitHub repositories when adding skills from GitHub.',
+  'market.skills.github.retry': 'Try again',
+  'market.skills.github.searchEmpty': 'No matching repositories on GitHub',
+  'market.skills.github.searchFailed': "Couldn't search GitHub.",
+  'market.skills.github.searchLimited':
+    'GitHub search is busy. Try again in a minute, or paste a repository link.',
+  'market.skills.github.selectAll': 'Select all',
+  'market.skills.github.status.conflict': 'Name taken',
+  'market.skills.github.status.forbidden': 'No permission',
+  'market.skills.github.status.invalid': 'Invalid SKILL.md',
+  'market.skills.github.status.new': 'New',
+  'market.skills.github.status.unchanged': 'Installed',
+  'market.skills.github.status.update': 'Update available',
+  'market.skills.github.title': 'Add skills from GitHub',
+  'market.skills.github.update': 'Update ({{count}})',
+  'market.skills.github.updateFailed': "Couldn't update. Try again later.",
+  'market.skills.github.updateOne': 'Update',
+  'market.skills.install': 'Install',
+  'market.skills.installFailed': "Couldn't install. Try again later.",
+  'market.skills.installed': 'Installed',
+  'market.skills.installedGroup': 'Installed',
+  'market.skills.mockPrompt': 'Help me use this skill.',
+  'market.skills.more': 'Load more',
+  'market.skills.results': 'Results',
+  'market.skills.reviews.anonymous': 'Anonymous',
+  'market.skills.reviews.outOf': 'out of 5',
+  'market.skills.reviews.title': 'Ratings & Reviews',
+  'market.skills.reviews.total': '{{count}} reviews',
+  'market.skills.search': 'Search skills, or paste a GitHub link',
+  'market.skills.sendFailed': "Couldn't send it. Try again.",
+  'market.skills.sendPick': 'Send to an assistant',
+  'market.skills.sendTo': 'Send to {{name}}',
+  'market.skills.stats.installs': 'Installs',
+  'market.skills.stats.latest': 'Latest',
+  'market.skills.stats.ratings': '{{count}} ratings',
+  'market.skills.stats.reviews': 'Reviews',
+  'market.skills.stats.stars': 'GitHub stars',
+  'market.skills.title': 'Skills',
+  'market.skills.uninstall': 'Uninstall',
+  'market.skills.uninstallFailed': "Couldn't uninstall. Try again later.",
+  'market.skills.version': 'Version',
+  'workspaceSetting.labels.archive.failedRetry':
+    "Couldn't archive the label. Check your network and try again.",
+  'workspaceSetting.labels.delete.failedRetry':
+    "Couldn't delete the label. Check your network and try again.",
+  'workspaceSetting.labels.form.saveFailedRetry':
+    "Couldn't save the label. Check your network and try again.",
+  'workspace.auditLog.actions.budget.model_policy_removed': 'Model tier rule removed',
+  'workspace.auditLog.actions.budget.model_policy_updated': 'Model tier rule updated',
 };

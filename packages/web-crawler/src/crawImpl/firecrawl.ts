@@ -1,4 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { assertNotChallengePage } from '../utils/challengePage';
 import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
@@ -97,6 +98,8 @@ export const firecrawl: CrawlImpl = async (url) => {
   if (data.data.metadata.error) {
     console.error('[Firecrawl] Metadata error:', data.data.metadata.error);
   }
+
+  assertNotChallengePage({ content: data.data.markdown, title: data.data.metadata.title });
 
   // Check if content is empty or too short
   if (!data.data.markdown || data.data.markdown.length < 100) {

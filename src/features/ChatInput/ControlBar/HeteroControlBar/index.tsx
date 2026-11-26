@@ -24,10 +24,9 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import PermissionModeSelector from './PermissionMode';
+import PlanModeSwitch from './PlanMode';
 import {
   AntigravityQuotaMenu,
   ClaudeCodeQuotaMenu,
@@ -172,11 +171,15 @@ const HeteroControlBar = memo(() => {
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
 
   const heteroProvider = agencyConfig?.heterogeneousProvider;
-  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  // Claude Code under the lab picks how it asks before acting, per topic.
+  // Claude Code picks how it asks before acting, per topic.
   const permissionModeChip =
-    betterCoding && heteroProvider?.type === 'claude-code' && agentId ? (
+    heteroProvider?.type === 'claude-code' && agentId ? (
       <PermissionModeSelector agentId={agentId} topicId={topicId} />
+    ) : null;
+  // Codex gets a Plan switch beside its unchanged full access.
+  const planModeSwitch =
+    heteroProvider?.type === 'codex' && agentId ? (
+      <PlanModeSwitch agentId={agentId} topicId={topicId} />
     ) : null;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
@@ -230,6 +233,7 @@ const HeteroControlBar = memo(() => {
         <DeviceSwitcher agentId={agentId} />
         <Flexbox horizontal align={'center'} gap={4}>
           {permissionModeChip}
+          {planModeSwitch}
           {shouldShowApiCredits && <ChatInputCredits />}
         </Flexbox>
       </Flexbox>
@@ -259,6 +263,7 @@ const HeteroControlBar = memo(() => {
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
         {(permissionModeChip ||
+          planModeSwitch ||
           shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
           (shouldShowCodexQuota && quotaDeviceId) ||
@@ -271,6 +276,7 @@ const HeteroControlBar = memo(() => {
             gap={4}
           >
             {permissionModeChip}
+            {planModeSwitch}
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowAntigravityQuota && quotaDeviceId && (
               <AntigravityQuotaMenu
@@ -388,6 +394,7 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
+        {planModeSwitch}
         {permissionModeChip ?? (
           <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
         )}

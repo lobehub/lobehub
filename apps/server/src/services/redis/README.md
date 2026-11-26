@@ -31,6 +31,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
 - `agentDocumentIndex`: the agent-document index snapshot and change notes one conversation
   (topic/thread/agent) renders from, for a day. `undefined` without Redis; the runtime then
   takes a fresh snapshot every run.
+- `skillIndex`: the skill-index snapshot and change notes one conversation
+  (topic/thread/agent) renders `<available_skills>` from, for a day. `undefined` without Redis;
+  the runtime then takes a fresh snapshot every run.
 - `pageCollab`: a digest of the body each page's last room projection wrote, for a day, so the
   next projection can tell that something wrote the body outside the room. `null` without Redis.
 - `agentSignal`: spend bounds for background self-iteration — classifier calls per user per UTC

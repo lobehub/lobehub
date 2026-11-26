@@ -1,4 +1,6 @@
 export default {
+  'picker.offlineGroup': 'Offline ({{count}})',
+  'picker.thisDevice': 'This device',
   'workingDirectory.newFolderCreated': 'Created folder: {{path}}',
   'workingDirectory.newFolderInvalidWindowsName':
     'Use a Windows folder name without reserved names (such as CON), special characters (< > : " / \\ | ? *), control characters, or a trailing space or period.',
@@ -79,8 +81,6 @@ export default {
   'workingDirectory.filesEmpty': 'No uncommitted changes',
   'workingDirectory.filesLoading': 'Loading changes…',
   'workingDirectory.filesModified': 'Modified',
-  'workingDirectory.ghMissing':
-    'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',
   'workingDirectory.newWorktreeLocation': 'Will be created at {{path}}',
   'workingDirectory.noMatch': 'No matching directories',
@@ -89,7 +89,6 @@ export default {
   'workingDirectory.pathNotDirectory': 'This path is not a directory',
   'workingDirectory.pathNotExist': "This path doesn't exist on the device",
   'workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
-  'workingDirectory.prTooltipWithExtra': '{{title}} (+{{count}} more open PR on this branch)',
   'workingDirectory.topicPullRequestsTooltip':
     '{{title}} (+{{count}} more linked to this topic — click to see all)',
   'workingDirectory.pullAction': 'Click to pull {{count}} commit(s) from {{upstream}}',
@@ -185,10 +184,12 @@ export default {
   'workingDirectory.drive.drives.personal': 'Personal drive',
   'workingDirectory.drive.rebuildInPersonal':
     'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
-  // Better Coding Experience: branch picked for a new topic, switched or forked on send.
+  // Branch picked for a new topic, switched or forked on send.
   'workingDirectory.branchCheckedOutHere': 'Checked out here',
   'workingDirectory.deviceOutdated':
     'The LobeHub app or lh CLI on this device is too old for this. Update it and try again.',
+  'workingDirectory.drive.pickFailedRetry':
+    "Couldn't switch to this folder. Check your network and try again.",
   'workingDirectory.occupiedBranchConfirm': 'Create branch and send',
   'workingDirectory.occupiedBranchDesc':
     '{{branch}} is checked out in worktree {{name}}, so it cannot be checked out here. A new branch will be created from it instead.',

@@ -50,6 +50,7 @@ interface RpcRateWindow {
 }
 
 interface RpcRateLimitSnapshot {
+  credits?: { balance?: string | null; unlimited?: boolean } | null;
   limitId?: string | null;
   limitName?: string | null;
   primary?: RpcRateWindow;
@@ -149,6 +150,12 @@ const normalizeCreditText = (value: string | null | undefined) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed || null;
+};
+
+const mapRpcCredits = (raw: RpcRateLimitSnapshot['credits']): CodexQuotaSnapshot['credits'] => {
+  const balance = normalizeCreditText(raw?.balance);
+  const unlimited = raw?.unlimited === true;
+  return balance === null && !unlimited ? undefined : { balance, unlimited };
 };
 
 const mapRpcResetCredit = (credit: RpcRateLimitResetCredit): CodexRateLimitResetCredit => ({
@@ -573,6 +580,9 @@ const fetchViaRpc = async (
     const rateLimits = mapRpcRateLimits(wrapper);
     const defaultRateLimit =
       rateLimits.find(({ limitId }) => limitId.toLowerCase() === 'codex') ?? rateLimits[0];
+    const credits =
+      mapRpcCredits(wrapper.rateLimitsByLimitId?.codex?.credits) ??
+      mapRpcCredits(wrapper.rateLimits?.credits);
     const rateLimitResetCredits = mapRpcResetCredits(wrapper?.rateLimitResetCredits);
     let backendCredits: CodexRateLimitResetCredits | null = null;
 
@@ -592,6 +602,7 @@ const fetchViaRpc = async (
 
     const updatedAt = Date.now();
     return {
+      credits,
       error: null,
       readings: codexQuotaReadings(rateLimits, updatedAt),
       provider: 'codex',

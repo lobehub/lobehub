@@ -75,17 +75,14 @@ describe('useNavLayout', () => {
     return result.current.topNavItems.find((item) => item.key === 'goals');
   };
 
-  it('merges Goals into Tasks in personal mode and keeps both workspace destinations', async () => {
+  it.each([null, 'acme'])('merges Goals into Tasks (workspace: %s)', async (slug) => {
+    mocks.activeWorkspaceSlug = slug as typeof mocks.activeWorkspaceSlug;
     expect(await goalsItem()).toBeUndefined();
-    mocks.activeWorkspaceSlug = 'acme';
-    const item = await goalsItem();
-    expect(item?.hidden).not.toBe(true);
-    expect(item?.url).toBe('/goals');
 
     const { useNavLayout } = await import('./useNavLayout');
     const { result } = renderHook(() => useNavLayout());
-    const keys = result.current.topNavItems.map((navItem) => navItem.key);
-    expect(keys.indexOf('goals')).toBe(keys.indexOf('tasks') + 1);
+    const tasks = result.current.topNavItems.find((item) => item.key === 'tasks');
+    expect(tasks?.additionalActiveTabs).toEqual(['goals', 'goal', 'task']);
   });
 
   it('keeps Memory visible in personal mode', async () => {

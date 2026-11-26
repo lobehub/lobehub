@@ -16,6 +16,7 @@ const facts = (
   deviceId: 'device-1',
   job: {
     acceptedAt: new Date(),
+    blockedCode: null,
     id: 'job',
     messageId: 'msg',
     operationId: 'op',
@@ -37,6 +38,49 @@ const facts = (
   request: 'Why did the deploy fail?',
   requesterUserId: 'user',
   ...overrides,
+});
+
+describe('reply error cards for a requester who may not use the Agent', () => {
+  // A visitor DMing a link-shared Claude Code Agent without its device grant got "the reply could
+  // not start" and a Retry that could never succeed.
+  it('asks the owner for access when a shared local CLI Agent refuses the visitor', () => {
+    const refused = facts(
+      {
+        error: {
+          message: 'This shared Agent cannot run for visitors in its current setup',
+          type: 'ShareHeterogeneousAgentUnsupported',
+        },
+      },
+      { share: { showErrorDetails: false } },
+      { acceptedAt: null },
+    );
+    expect(classifyReplyFailure(refused)).toBe('access_required');
+    expect(ruleBasedReplyError(refused, 'zh-CN', NOW)).toMatchObject({
+      actions: ['request_access'],
+      kind: 'access_required',
+      summary: 'Coder 需要主人授权后才能使用。申请后，主人同意即可继续。',
+    });
+    expect(ruleBasedReplyError(refused, 'en-US', NOW).summary).toBe(
+      "Coder needs its owner's permission before you can use it. Ask for access; it continues once they allow it.",
+    );
+  });
+
+  it('says the owner declined, with asking again as the only step', () => {
+    const declined = facts(
+      null,
+      {},
+      { acceptedAt: null, blockedCode: 'access_denied', operationId: null, topicId: null },
+    );
+    expect(classifyReplyFailure(declined)).toBe('access_denied');
+    expect(ruleBasedReplyError(declined, 'zh-CN', NOW)).toMatchObject({
+      actions: ['request_access'],
+      deviceId: null,
+      errorMessage: null,
+      errorType: null,
+      kind: 'access_denied',
+      summary: 'Coder 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。',
+    });
+  });
 });
 
 describe('rule-based reply error cards', () => {
@@ -145,6 +189,45 @@ describe('rule-based reply error cards', () => {
     );
     expect(card.errorMessage ?? '').not.toContain('sk-123');
     expect(card.actions).not.toContain('switch_device');
+  });
+
+  it("explains a shared Agent's monthly usage limit without offering a doomed retry", () => {
+    const card = ruleBasedReplyError(
+      facts(
+        {
+          error: {
+            message: 'This shared Agent reached its monthly usage limit',
+            type: 'ShareSpendLimitExceeded',
+          },
+        },
+        { share: { showErrorDetails: false } },
+        { acceptedAt: null },
+      ),
+      'zh-CN',
+      NOW,
+    );
+    expect(card.kind).toBe('share_spend_limit');
+    expect(card.actions).toEqual([]);
+    expect(card.summary).toBe(
+      'Coder 已用完这个分享的用量额度，这次没有回复。需要创建者提高额度才能继续。',
+    );
+    expect(card.errorType).toBe('ShareSpendLimitExceeded');
+  });
+
+  it("explains a shared Agent's message limit without offering a doomed resume", () => {
+    const card = ruleBasedReplyError(
+      facts(
+        { error: { message: 'limit', type: 'ShareMessageLimitExceeded' } },
+        { share: { showErrorDetails: false } },
+      ),
+      'en-US',
+      NOW,
+    );
+    expect(card.kind).toBe('share_message_limit');
+    expect(card.actions).toEqual([]);
+    expect(card.summary).toBe(
+      'Messages to Coder reached the limit its creator set, so it did not reply. Its creator needs to raise the limit.',
+    );
   });
 
   it("never persists a shared Agent's owner detail, even with the share's details enabled", () => {

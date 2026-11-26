@@ -12,11 +12,13 @@ export const MAX_MERGED_REQUESTS = 10;
 
 /**
  * Whether a queued job owes an answer that may be merged with the requester's next ones: a
- * person's own message, not a `followup` wake (it may stay silent, and a deferred one waits for
- * another reply), an Agent's message, a relay for someone elsewhere or an answer brought back.
+ * person's own message the Agent must answer — addressed, or woken as a `mention` (a follow-up
+ * window, its name in the text) — not a `followup` wake (it may stay silent), a deferred one
+ * (it waits for another reply), an Agent's message, a relay for someone elsewhere or an answer
+ * brought back.
  */
 const isMergeable = (job: Pick<ChannelJobItem, 'wake'>, request: ChannelMessageItem) =>
-  !job.wake &&
+  (!job.wake || (job.wake.kind !== 'followup' && !job.wake.afterMemberId)) &&
   !isAgentAuthored(request) &&
   !channelMessageVia(request.metadata) &&
   !channelMessageReceipt(request.metadata) &&

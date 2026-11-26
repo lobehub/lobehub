@@ -118,6 +118,46 @@ describe('Windows install locations off PATH', () => {
     await expect(detectDshCommand()).resolves.toMatchObject({ available: true, path: shim });
   });
 
+  it('finds an agent a package manager put off PATH, and runs it with that folder on PATH', async () => {
+    // `scoop install opencode`: the shim folder reaches PATH only in new shells.
+    vi.stubEnv('SCOOP', 'C:\\Users\\me\\scoop');
+    const shim = 'C:\\Users\\me\\scoop\\shims\\opencode.exe';
+    existingPaths(shim);
+    answerExecFile((file, args) =>
+      file === shim && args.at(-1) === '--version' ? 'opencode v2.2.6\n' : undefined,
+    );
+
+    const { detectHeterogeneousCliCommand } = await importModule();
+
+    await expect(detectHeterogeneousCliCommand('opencode', 'opencode')).resolves.toMatchObject({
+      available: true,
+      path: shim,
+      resolvedPathEnv: 'C:\\Users\\me\\scoop\\shims;C:\\Windows',
+      version: '2.2.6',
+    });
+    // Found on Windows: WSL is never woken.
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("finds Cursor by its `cursor-agent` alias when that's the name on PATH", async () => {
+    const alias = 'C:\\tools\\cursor-agent.exe';
+    existingPaths(alias);
+    answerExecFile((file, args) => {
+      if (file === 'where' && args[0] === 'cursor-agent') return `${alias}\r\n`;
+      if (file === alias && args.at(-1) === '--help') {
+        return 'Usage: cursor-agent [options] [command] [prompt...]\n\nStart the Cursor Agent';
+      }
+      return undefined;
+    });
+
+    const { detectHeterogeneousCliCommand } = await importModule();
+
+    await expect(detectHeterogeneousCliCommand('cursor', 'agent')).resolves.toMatchObject({
+      available: true,
+      path: alias,
+    });
+  });
+
   it('does not wake WSL when Windows already has the agent', async () => {
     const codex = 'C:\\tools\\codex.exe';
     existingPaths(codex);

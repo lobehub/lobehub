@@ -56,6 +56,8 @@ const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 const settleLiveMock = vi.fn().mockResolvedValue(true);
 const claimForAbandonmentMock = vi.fn().mockResolvedValue(true);
+/** Lifecycle options of an abandonment that retired the row itself and wrote the error bubble. */
+const claimedHooks = { skipErrorMessageWrite: true, terminalClaimed: true };
 const markAbandonmentFinalizedMock = vi.fn().mockResolvedValue(undefined);
 const markAbandonmentHandoffPendingMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
@@ -323,7 +325,7 @@ describe('AbandonOperationService', () => {
           userId: 'user_x',
         }),
         'error',
-        { skipErrorMessageWrite: true },
+        claimedHooks,
       );
     });
 
@@ -333,7 +335,7 @@ describe('AbandonOperationService', () => {
       expect(completeOperationMock).toHaveBeenCalledWith(
         expect.objectContaining({ serializedHooks: [taskHook] }),
         'error',
-        { skipErrorMessageWrite: true },
+        claimedHooks,
       );
     });
 
@@ -373,7 +375,7 @@ describe('AbandonOperationService', () => {
         expect(completeOperationMock).toHaveBeenCalledWith(
           expect.objectContaining({ operationId: 'op_x', serializedHooks: undefined }),
           'error',
-          { skipErrorMessageWrite: true },
+          claimedHooks,
         );
       },
     );
@@ -449,7 +451,7 @@ describe('AbandonOperationService', () => {
       });
       expect(completeOperationMock).toHaveBeenCalledWith(expect.anything(), 'error', {
         settledAsAbandoned: true,
-        skipErrorMessageWrite: true,
+        ...claimedHooks,
       });
     });
 
@@ -617,7 +619,7 @@ describe('AbandonOperationService', () => {
         'op_x',
         expect.anything(),
         'error',
-        expect.objectContaining({ settledAsAbandoned: false }),
+        expect.objectContaining({ settledAsAbandoned: false, terminalClaimed: true }),
       );
       // Only once everything landed does the claim stop being resumable.
       expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_x');
@@ -801,9 +803,7 @@ describe('AbandonOperationService', () => {
         'op_x',
         expect.objectContaining({ status: 'error' }),
       );
-      expect(completeOperationMock).toHaveBeenCalledWith(expect.anything(), 'error', {
-        skipErrorMessageWrite: true,
-      });
+      expect(completeOperationMock).toHaveBeenCalledWith(expect.anything(), 'error', claimedHooks);
     });
 
     it('leaves the turn alone when the run settles before the claim lands', async () => {
@@ -966,7 +966,7 @@ describe('AbandonOperationService', () => {
       'error',
       // No operation row was readable here, so nothing was claimed and the
       // lifecycle decides for itself.
-      { settledAsAbandoned: false, skipErrorMessageWrite: true },
+      { settledAsAbandoned: false, skipErrorMessageWrite: true, terminalClaimed: false },
     );
 
     // Coordinator state cleaned

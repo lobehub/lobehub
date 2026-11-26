@@ -4,8 +4,9 @@ import { DSH_MIN_VERSION, resolveDshSpawnCommand } from './dshAcpSession';
 
 const { detectValidatedCommand } = vi.hoisted(() => ({ detectValidatedCommand: vi.fn() }));
 
-// The WSL fallback only runs on Windows; here it hands the native result back.
+// The install-folder sweep and the WSL fallback hand the native result back.
 vi.mock('./resolveCliCommand', () => ({
+  detectInUserBinDirs: async (status: unknown) => status,
   detectInWslWhenMissing: async (status: unknown) => status,
   detectValidatedCommandCandidates: detectValidatedCommand,
 }));

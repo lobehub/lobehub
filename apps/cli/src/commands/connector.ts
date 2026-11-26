@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import type { Command } from 'commander';
 import pc from 'picocolors';
@@ -497,6 +499,61 @@ export function registerConnectorCommand(program: Command) {
         `${pc.green('✓')} ${isNew ? 'Added' : 'Updated'} connector ${pc.bold(input.identifier)} ${pc.dim(`(${id})`)} with ${toolCount} tool(s)${local ? pc.dim(' (synced from this machine)') : ''}`,
       );
     });
+
+  // ── request ───────────────────────────────────────────
+
+  connector
+    .command('request <identifier>')
+    .description(
+      'Inside a Channel run: post a card in the current conversation that the person connects with one click',
+    )
+    .option('--url <url>', 'https MCP endpoint, for a server outside the connector catalog')
+    .option('--name <name>', 'Display name, with --url')
+    .option('--auth <none|oauth>', 'How the --url server authorizes (default oauth)')
+    .option('--reason <text>', 'One short sentence on what you will do with it, shown on the card')
+    .option('--request-key <key>', 'Reuse to retry without posting twice')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        identifier: string,
+        options: {
+          auth?: string;
+          json?: string | boolean;
+          name?: string;
+          reason?: string;
+          requestKey?: string;
+          url?: string;
+        },
+      ) => {
+        if (options.auth !== undefined && options.auth !== 'none' && options.auth !== 'oauth')
+          fail(new Error('--auth must be none or oauth'));
+        if ((options.name || options.auth) && !options.url)
+          fail(new Error('--name and --auth only apply with --url'));
+        const client = await getTrpcClient();
+        let result: { messageId: string; name: string; source: string };
+        try {
+          result = await client.channel.requestConnector.mutate({
+            auth: options.auth as 'none' | 'oauth' | undefined,
+            identifier,
+            name: options.name,
+            reason: options.reason,
+            requestKey: options.requestKey ?? randomUUID(),
+            url: options.url,
+          });
+        } catch (error) {
+          fail(error);
+        }
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(result, fields);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Posted a card asking to connect ${pc.bold(result.name)}. It is usable from your next turn once connected.`,
+        );
+      },
+    );
 
   // ── refresh ───────────────────────────────────────────
 

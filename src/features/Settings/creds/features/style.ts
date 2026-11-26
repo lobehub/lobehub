@@ -4,6 +4,16 @@ import * as stylex from '@stylexjs/stylex';
 import { densityTokens } from '@/styles/density.stylex';
 
 export const styles = stylex.create({
+  // The row opens the item: a hover wash that reaches 8px past the content,
+  // inside the list card's own padding.
+  clickable: {
+    cursor: 'pointer',
+    marginInline: '-8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
   container: {
     paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,

@@ -12945,6 +12945,18 @@ export type PostApiV1ResponsesErrors = {
         requestId: string;
     };
     /**
+     * Resource not found
+     */
+    404: {
+        error: {
+            code: 'bad_request' | 'conflict' | 'forbidden' | 'idempotency_conflict' | 'insufficient_scope' | 'internal_error' | 'not_found' | 'payload_too_large' | 'payment_required' | 'precondition_failed' | 'rate_limited' | 'service_unavailable' | 'unauthorized' | 'unprocessable_entity' | 'upstream_error' | 'validation_error' | 'workspace_mismatch';
+            message: string;
+            param: string | null;
+            type: 'invalid_request_error' | 'not_found' | 'rate_limit_error' | 'server_error';
+        };
+        requestId: string;
+    };
+    /**
      * Rate limit exceeded
      */
     429: {

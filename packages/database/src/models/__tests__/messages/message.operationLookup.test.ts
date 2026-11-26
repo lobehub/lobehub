@@ -276,3 +276,61 @@ describe('MessageModel.listLatestTurnAssistantContents', () => {
     ).resolves.toEqual([]);
   });
 });
+
+describe('MessageModel.listToolStatesByOperationId', () => {
+  // As the agent runtime writes them: the assistant step carries the operation stamp, the tool
+  // result under it carries only timing metadata (toolResultMetadata).
+  const drawCard = async (operationId: string, surfaceId: string) => {
+    const step = await messageModel.create({
+      content: '',
+      metadata: { operationId },
+      role: 'assistant',
+      topicId,
+    });
+    await messageModel.create({
+      content: 'Card drawn',
+      metadata: { toolExecutionTimeMs: 3, toolResultStop: false, toolResultSuccess: true },
+      parentId: step.id,
+      plugin: { apiName: 'renderUI', arguments: '{}', identifier: 'lobe-a2ui', type: 'builtin' },
+      pluginState: { surface: { surfaceId } },
+      role: 'tool',
+      tool_call_id: `call-${surfaceId}`,
+      topicId,
+    });
+  };
+  const query = { apiName: 'renderUI', identifier: 'lobe-a2ui', topicId };
+
+  it("finds a run's tool states through the assistant step that called the tool", async () => {
+    await drawCard('op-card', 'plan');
+    await drawCard('op-card', 'budget');
+    await drawCard('op-other', 'elsewhere');
+
+    const states = await messageModel.listToolStatesByOperationId({
+      ...query,
+      operationId: 'op-card',
+    });
+
+    expect(states).toEqual([
+      { surface: { surfaceId: 'plan' } },
+      { surface: { surfaceId: 'budget' } },
+    ]);
+  });
+
+  it('ignores another tool and another topic', async () => {
+    await drawCard('op-card', 'plan');
+    expect(
+      await messageModel.listToolStatesByOperationId({
+        ...query,
+        identifier: 'lobe-calculator',
+        operationId: 'op-card',
+      }),
+    ).toEqual([]);
+    expect(
+      await messageModel.listToolStatesByOperationId({
+        ...query,
+        operationId: 'op-card',
+        topicId: otherTopicId,
+      }),
+    ).toEqual([]);
+  });
+});

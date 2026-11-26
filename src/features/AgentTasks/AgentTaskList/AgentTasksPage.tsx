@@ -588,28 +588,16 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "Content contains" for the same condition.
   const showFind = !isMobile && (headerVisibility.showViewOptions || hasFilter);
 
-  const showGoalsAndTasksTabs = !!agentId || (!projectId && !activeWorkspaceId);
+  // Only a project's task list stays on its own: it has no goals tab to switch to.
+  const showGoalsAndTasksTabs = !!agentId || !projectId;
   const headerLeft = showGoalsAndTasksTabs ? (
-    <AgentGoalsAndTasksTabs
-      agentId={agentId}
-      view={isScheduledCollection ? 'scheduled' : 'tasks'}
-      onTaskCollectionChange={handleCollectionChange}
-    />
-  ) : (
     <Flexbox horizontal align={'center'} gap={8}>
-      {headerVisibility.showBreadcrumb && <Breadcrumb />}
-      <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
-        <TabsList>
-          <TabsIndicator />
-          {/* The landing tab leads; beside "My tasks" the ordinary list needs a
-              scope in its name, or it reads as the page title. */}
-          {showMineCollection && <TabsTab value={'mine'}>{t('taskList.mine.title')}</TabsTab>}
-          <TabsTab value={'tasks'}>
-            {showMineCollection ? t('taskList.all') : t('taskList.title')}
-          </TabsTab>
-          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
-        </TabsList>
-      </TabsRoot>
+      <AgentGoalsAndTasksTabs
+        agentId={agentId}
+        showMine={showMineCollection}
+        view={collection}
+        onTaskCollectionChange={handleCollectionChange}
+      />
       {isMineCollection && (
         <TabsRoot size={'small'} value={myTaskScope} onValueChange={handleMyTaskScopeChange}>
           <TabsList>
@@ -619,6 +607,17 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           </TabsList>
         </TabsRoot>
       )}
+    </Flexbox>
+  ) : (
+    <Flexbox horizontal align={'center'} gap={8}>
+      {headerVisibility.showBreadcrumb && <Breadcrumb />}
+      <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
+        <TabsList>
+          <TabsIndicator />
+          <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
+          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
+        </TabsList>
+      </TabsRoot>
     </Flexbox>
   );
 

@@ -11,6 +11,7 @@ import {
   AbandonOperationService,
   type AgentExecutionResult,
   type AgentStepContinuation,
+  scheduleOpportunisticInterventionExpirySweep,
   scheduleOpportunisticStaleSweep,
   scheduleOpportunisticVerifySweep,
 } from '@/server/services/agentRuntime';
@@ -239,6 +240,8 @@ export async function runStep(c: Context): Promise<Response> {
     // Same for verification rounds stranded in `verifying`: their sweep route
     // expects a QStash Schedule no deployment registers.
     scheduleOpportunisticVerifySweep();
+    // And for runs parked on a question nobody answers, which nothing else ends.
+    scheduleOpportunisticInterventionExpirySweep();
     scheduleInboundWebhookSweep();
 
     // Get userId from operation metadata stored in Redis

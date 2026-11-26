@@ -90,3 +90,28 @@ describe('useAttachments across composers of one conversation', () => {
     expect(signal.aborted).toBe(true);
   });
 });
+
+describe('useAttachments limits', () => {
+  it('refuses files beyond the conversation’s count or size before uploading', async () => {
+    const { toast } = await import('@lobehub/ui');
+    upload.mockReset();
+    const limits = { maxFileSize: 2, maxFiles: 1 };
+    const { result } = renderHook(() => useAttachments('channel:ch-limits:main', null, limits));
+
+    await act(() =>
+      result.current.upload([
+        new File(['a'], 'a.txt', { type: 'text/plain' }),
+        new File(['b'], 'b.txt', { type: 'text/plain' }),
+      ]),
+    );
+    expect(toast.error).toHaveBeenLastCalledWith('attachments.limit');
+
+    await act(() =>
+      result.current.upload([new File(['too big'], 'big.txt', { type: 'text/plain' })]),
+    );
+    expect(toast.error).toHaveBeenLastCalledWith('attachments.tooLarge');
+
+    expect(upload).not.toHaveBeenCalled();
+    expect(result.current.items).toHaveLength(0);
+  });
+});

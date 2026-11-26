@@ -887,13 +887,23 @@ export class ModelRuntime {
     >,
     hooks?: ModelRuntimeHooks,
   ) {
+    return new ModelRuntime(ModelRuntime.createProviderRuntime(provider, params), hooks);
+  }
+
+  /**
+   * Construct the bare provider implementation without wrapping it in a
+   * ModelRuntime, so callers can decorate it (e.g. the server's SSRF guard)
+   * before attaching hooks.
+   */
+  static createProviderRuntime(
+    provider: string,
+    params: Parameters<typeof ModelRuntime.initializeWithProvider>[1],
+  ): LobeRuntimeAI {
     // runtime map does not include every provider id (e.g. vertex), so index loosely
     const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
       providerRuntimeMap;
     const providerAI = runtimeMap[provider] ?? LobeOpenAI;
 
-    const runtimeModel: LobeRuntimeAI = new providerAI(params);
-
-    return new ModelRuntime(runtimeModel, hooks);
+    return new providerAI(params);
   }
 }

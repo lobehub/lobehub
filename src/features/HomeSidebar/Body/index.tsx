@@ -98,15 +98,10 @@ const Body = memo(() => {
   const hideSection = useCallback(
     (key: string) => {
       updateSystemStatus({
-        hiddenSidebarSections: setSidebarSectionHidden(
-          hiddenSections,
-          key,
-          true,
-          !!activeWorkspaceId,
-        ),
+        hiddenSidebarSections: setSidebarSectionHidden(hiddenSections, key, true),
       });
     },
-    [activeWorkspaceId, hiddenSections, updateSystemStatus],
+    [hiddenSections, updateSystemStatus],
   );
 
   const getContextMenuItems = useCallback(
@@ -144,13 +139,15 @@ const Body = memo(() => {
   // Items that must always be visible regardless of hiddenSections
   const isVisible = useCallback(
     (k: string) => {
-      return k === GroupKey.Agent || k === SIDEBAR_SPACER_ID || !hiddenSections.includes(k);
+      return k === GroupKey.Agent || !hiddenSections.includes(k);
     },
     [hiddenSections],
   );
 
   const visibleKeys = useMemo(
-    () => sidebarItems.filter((k) => !HEADER_KEYS.has(k) && isVisible(k)),
+    // The saved order may still hold the retired bottom spacer; the list is continuous now.
+    () =>
+      sidebarItems.filter((k) => !HEADER_KEYS.has(k) && k !== SIDEBAR_SPACER_ID && isVisible(k)),
     [sidebarItems, isVisible],
   );
 
@@ -201,7 +198,7 @@ const Body = memo(() => {
   );
 
   // Consecutive sections share one spacing group, including Channels' independent
-  // accordion. Nav links and the spacer keep their positions and compact spacing.
+  // accordion. Nav links keep their positions and compact spacing.
   const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: { element: ReactElement; key: string }[] = [];
@@ -239,17 +236,7 @@ const Body = memo(() => {
     };
 
     for (const key of visibleKeys) {
-      if (key === SIDEBAR_SPACER_ID) {
-        flushSections();
-        elements.push(
-          <div
-            aria-hidden
-            data-sidebar-bottom-spacer
-            key={`spacer-${elements.length}`}
-            style={{ flex: '1 1 0', minHeight: 0 }}
-          />,
-        );
-      } else if (key === GroupKey.Channels) {
+      if (key === GroupKey.Channels) {
         // Channels keep their own accordion (and its unsaved expanded state)
         // but take their place in the section order like the others.
         flushAccordion();
@@ -271,7 +258,7 @@ const Body = memo(() => {
   }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange, sectionGap]);
 
   return (
-    <Flexbox flex={1} gap={1} paddingInline={panelPaddingInline} style={{ minHeight: '100%' }}>
+    <Flexbox gap={1} paddingInline={panelPaddingInline}>
       {content}
     </Flexbox>
   );

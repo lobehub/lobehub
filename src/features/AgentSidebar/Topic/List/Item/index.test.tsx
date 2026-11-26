@@ -28,15 +28,7 @@ const electronTabMocks = vi.hoisted(() => ({
   addTab: vi.fn(),
 }));
 const topicMetaCardMock = vi.hoisted(() => ({
-  value: undefined as
-    | {
-        pullRequest?: {
-          ciStatus?: 'failure' | 'pending' | 'success' | 'unknown';
-          mergedAt?: string;
-          state: string;
-        };
-      }
-    | undefined,
+  value: undefined as { branch?: string } | undefined,
 }));
 
 // Assertions key on the raw lucide displayName, which the real Icon does not
@@ -147,9 +139,6 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableBetterCodingExperience: () => false,
-  },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
@@ -197,18 +186,9 @@ vi.mock('./MetaHoverCard', () => ({
 }));
 vi.mock('./metaCardData', async (importOriginal) => {
   const actual = await importOriginal<typeof MetaCardData>();
-  const CiIcon = () => null;
-  CiIcon.displayName = 'CiIcon';
-  const PullRequestIcon = () => null;
-  PullRequestIcon.displayName = 'PullRequestIcon';
 
   return {
     ...actual,
-    PR_STATE_VISUAL: {
-      ...actual.PR_STATE_VISUAL,
-      open: { color: '#0a0', icon: PullRequestIcon, labelKey: 'metaCard.pr.open' },
-    },
-    getCiVisual: () => ({ color: '#fa0', icon: CiIcon, labelKey: 'metaCard.ci.pending' }),
     // Defaults to undefined so TopicItem skips the hover Popover wrapper in tests.
     getTopicMetaCard: () => topicMetaCardMock.value,
   };
@@ -560,17 +540,6 @@ describe('TopicItem active state', () => {
     });
   });
 
-  // The unread dot and the linked-PR marker compete for the same icon slot, and
-  // unread is one of the three `pending` attention states, so it has to win.
-  it('keeps the unread dot visible when the topic has a linked pull request', () => {
-    topicUnreadCompletedMock.value = true;
-    topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-
-    render(<TopicItem id="tpc_test" title="Topic" />);
-
-    expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
-  });
-
   /** @example A project row is not in the chat store, so only its own status says unread. */
   it('shows the unread dot for a project row whose own status is unread', () => {
     scopedTopicMock.value = { agentId: 'other-agent', agentName: 'Other Agent' };
@@ -584,26 +553,11 @@ describe('TopicItem active state', () => {
     expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
   });
 
-  it('shows the pull request marker once the topic is no longer unread', () => {
-    topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-
-    render(<TopicItem id="tpc_test" title="Topic" />);
-
-    expect(screen.queryByTestId('topic-unread-dot')).not.toBeInTheDocument();
-    expect(screen.getByTestId('topic-item-icon')).toBeInTheDocument();
-  });
-
   describe('goal marker', () => {
-    it('marks a topic that has a goal, ahead of its pull request', () => {
-      topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-
+    it('marks a topic that has a goal', () => {
       render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
 
       expect(screen.getByLabelText('metaCard.goal')).toBeInTheDocument();
-      expect(screen.getByTestId('topic-item-icon')).not.toHaveAttribute(
-        'data-icon',
-        'PullRequestIcon',
-      );
     });
 
     it('keeps the execution status ahead of the goal marker', () => {
@@ -611,46 +565,6 @@ describe('TopicItem active state', () => {
 
       expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
     });
-  });
-
-  it('adds the CI status to the pull request marker', () => {
-    topicMetaCardMock.value = { pullRequest: { ciStatus: 'pending', state: 'open' } };
-
-    render(<TopicItem id="tpc_test" title="Topic" />);
-
-    expect(screen.getAllByTestId('topic-item-icon').map((icon) => icon.dataset.icon)).toEqual([
-      'PullRequestIcon',
-      'CiIcon',
-    ]);
-  });
-
-  it.each([{ state: 'merged' }, { mergedAt: '2026-11-05T03:58:11Z', state: 'closed' }])(
-    'uses the merged PR icon as the avatar badge for %o regardless of CI',
-    (pullRequest) => {
-      for (const ciStatus of ['pending', 'failure', 'success'] as const) {
-        topicMetaCardMock.value = { pullRequest: { ...pullRequest, ciStatus } };
-
-        const { unmount } = render(<TopicItem id="tpc_test" title="Topic" userId="user-2" />);
-
-        expect(
-          within(screen.getByTestId('creator-avatar'))
-            .getAllByTestId('topic-item-icon')
-            .map((icon) => icon.dataset.icon),
-        ).toEqual(['GitMerge']);
-        unmount();
-      }
-    },
-  );
-
-  it.each([
-    ['scheduled', 'Clock'],
-    ['completed', 'CircleCheck'],
-  ] as const)('keeps the %s status above linked pull request metadata', (status, icon) => {
-    topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-
-    render(<TopicItem id="tpc_test" status={status} title="Topic" />);
-
-    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', icon);
   });
 });
 

@@ -71,7 +71,9 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
       </Form.Field>
 
       <CredFormFooter>
-        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={!canManageCredentials}
           htmlType="submit"

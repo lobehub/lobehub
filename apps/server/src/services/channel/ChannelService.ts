@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelVisibility } from '@lobechat/types';
+import type { ChannelMetadata, ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -25,9 +25,17 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
+import { answerAsk } from '@/database/repositories/channel/ask';
+import {
+  projectDefaultChannelMetadata,
+  withDisplayTitle,
+} from '@/database/repositories/channel/displayTitle';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
+import { createNamedThread } from '@/database/repositories/channel/namedThread';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
+import { frequentReactions, setReaction } from '@/database/repositories/channel/reactions';
 import {
   findShareVisitorTopic,
   listShareVisitorConversations,
@@ -43,6 +51,7 @@ import { ChannelCoordinator } from './ChannelCoordinator';
 import { channelContacts } from './contacts';
 import { announceDeviceGrants, refreshDeviceGrantCard } from './deviceGrantCard';
 import { notifyChannelDirectMessages } from './directMessage';
+import { answerIntervention } from './interventionAsk';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
@@ -238,17 +247,19 @@ export class ChannelService {
       userIds,
     });
     await announceDeviceGrants(this.db, access.channel.id);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
    * The Channel a new workspace or project starts with. Callers pass a project they just created
-   * in this scope, so its readability is not checked again.
+   * in this scope, so its readability is not checked again. A project's is marked so clients show
+   * it under the project's name (`displayTitle`); a workspace's carries no mark.
    */
   createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
     const agentId = await this.defaultChannelAgent(input.agentId);
     return this.createAndNotify({
       agents: [{ agentId }],
+      ...(input.projectId && { metadata: projectDefaultChannelMetadata() }),
       projectId: input.projectId,
       title: input.title,
     });
@@ -286,7 +297,7 @@ export class ChannelService {
     // Invitees see the new group without waiting for their next poll.
     await this.changed(access.channel.id);
     await announceDeviceGrants(this.db, access.channel.id);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -467,10 +478,11 @@ export class ChannelService {
     return grant;
   };
 
+  /** Edits `title` only: a project's default Channel keeps its mark and its project's name. */
   rename = async (channelId: string, title: string) => {
     const channel = await this.repository.rename(channelId, title);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   editMessage = async (channelId: string, messageId: string, content: string) => {
@@ -478,6 +490,18 @@ export class ChannelService {
     await this.changed(channelId);
     return message;
   };
+
+  /** Reactions only repaint the message: no unread, notification or routing. */
+  toggleReaction = async (channelId: string, messageId: string, emoji: string) => {
+    const result = await this.repository.write(channelId, (tx, { member }) =>
+      setReaction(tx, channelId, member.id, messageId, emoji),
+    );
+    await this.changed(channelId);
+    return result;
+  };
+
+  /** The caller's most used reactions lately, for their quick reactions. */
+  frequentReactions = () => frequentReactions(this.db, this.userId);
 
   /** Replies the message asked for stop with it; the coordinator stops those still writing. */
   deleteMessage = async (channelId: string, messageId: string) => {
@@ -495,7 +519,7 @@ export class ChannelService {
   updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
     const channel = await this.repository.updateVisibility(channelId, visibility);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   /** The coordinator physically stops a removed Agent's runs. */
@@ -503,6 +527,12 @@ export class ChannelService {
     const writers = await this.repository.removeMember(channelId, memberId);
     await new ChannelCoordinator(this.db).stopWriters(writers);
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  /** The owner makes a person an admin or a plain member; members see the new mark at once. */
+  setMemberRole = async (channelId: string, memberId: string, role: 'admin' | 'member') => {
+    await this.repository.setMemberRole(channelId, memberId, role);
+    await this.changed(channelId);
   };
 
   leave = async (channelId: string) => {
@@ -518,7 +548,7 @@ export class ChannelService {
   join = async (channelId: string) => {
     const access = await this.repository.join(channelId);
     await this.changed(channelId);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -535,6 +565,18 @@ export class ChannelService {
     );
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
+
+  /** Adds `displayTitle` to a Channel handed back to a client; see `withDisplayTitle`. */
+  private withDisplayTitle = async <
+    T extends {
+      channel: { metadata: ChannelMetadata | null; projectId: string | null; title: string };
+    },
+  >(
+    access: T,
+  ) => ({
+    ...access,
+    channel: await withDisplayTitle(this.db, access.channel),
+  });
 
   /** A personal list write that joins an open Channel first; members hear only about a join. */
   private writeMayJoin = async <T>(
@@ -605,10 +647,12 @@ export class ChannelService {
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
     const view = await this.readView(channelId, options);
     const files = new FileService(this.db, this.userId, this.workspaceId);
+    const channel = await withDisplayTitle(this.db, view.channel);
     // The public message's attachment relation grants this read after membership authorization.
     // Do not return private storage keys or route through an unrelated ordinary-chat ACL.
     return {
       ...view,
+      channel,
       attachments: await pMap(
         view.attachments,
         async (file) => ({ ...file, url: await files.getFullFileUrl(file.url, 300) }),
@@ -654,6 +698,17 @@ export class ChannelService {
     ]);
   };
 
+  /** A Thread a person opens by name; posting its root wakes no Agent. */
+  createThread = async (channelId: string, input: { requestKey: string; title: string }) => {
+    const thread = await this.repository.write(
+      channelId,
+      (tx, access) => createNamedThread(tx, access, input, channelContacts),
+      { joinOpen: true },
+    );
+    await this.changed(channelId);
+    return thread;
+  };
+
   unarchiveThread = async (channelId: string, threadId: string) => {
     await this.repository.unarchiveThread(channelId, threadId);
     await this.changed(channelId);
@@ -681,6 +736,21 @@ export class ChannelService {
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
+  };
+
+  /**
+   * Answers an Agent's question as the person it asked; the answer wakes that Agent, or resumes
+   * the run blocked on it.
+   */
+  answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
+    const { ask, reply } = await this.repository.write(channelId, (tx, access) =>
+      answerAsk(tx, access, input, channelContacts),
+    );
+    if (ask.intervention) {
+      await this.changed(channelId);
+      await answerIntervention(this.db, ask);
+    } else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return reply;
   };
 
   retryRouting = async (channelId: string, messageId: string) => {

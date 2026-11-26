@@ -5,7 +5,7 @@
  * (title — description · via LobeHub · link), so a post reads the same and
  * points at the same `/share/t/<id>` link whichever platform it lands on.
  *
- * - X (Twitter) and Weibo have web share intents: we open them in a new window.
+ * - X (Twitter) and Weibo have web share intents: we open them in a new tab.
  * - Instagram has no web intent and no prefill: we hand the text to the system
  *   share sheet when there is one (mobile), otherwise copy it to the clipboard.
  * - WeChat Moments can only be reached from the WeChat app: we render the link
@@ -19,7 +19,12 @@ export const SOCIAL_PLATFORMS: SocialPlatform[] = ['x', 'weibo', 'instagram', 'w
 /** Identifies LobeHub as the source on every channel. */
 export const SHARE_SIGNATURE = 'via LobeHub';
 
-export const TWITTER_INTENT_URL = 'https://twitter.com/intent/tweet';
+/**
+ * X's own compose intent. The legacy `twitter.com/intent/tweet` adds a
+ * cross-domain redirect, and on phones its universal link can open the X app
+ * on the home timeline instead of a prefilled composer.
+ */
+export const TWITTER_INTENT_URL = 'https://x.com/intent/post';
 export const WEIBO_SHARE_URL = 'https://service.weibo.com/share/share.php';
 export const INSTAGRAM_URL = 'https://www.instagram.com/';
 
@@ -92,7 +97,7 @@ const truncateToWeight = (text: string, maxWeight: number) => {
  */
 export const buildTwitterText = (input: SocialShareInput) => {
   const { text } = composeShareCopy(input);
-  // Link plus the space X puts in front of it.
+  // Link plus the line break in front of it.
   const budget = TWITTER_MAX_WEIGHT - TWITTER_URL_WEIGHT - 1;
   if (twitterTextWeight(text) <= budget) return text;
 
@@ -111,8 +116,15 @@ const toQuery = (params: Record<string, string>) =>
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
 
+/**
+ * The link travels inside `text`, after a line break, rather than in the
+ * separate `url` parameter: the composer shows `text` as-is, so the post reads
+ * "title — description via LobeHub" with the link under it without depending
+ * on how X merges `url`. X still weighs the link at 23, which
+ * {@link buildTwitterText} reserves.
+ */
 export const buildTwitterShareUrl = (input: SocialShareInput) =>
-  `${TWITTER_INTENT_URL}?${toQuery({ text: buildTwitterText(input), url: input.url })}`;
+  `${TWITTER_INTENT_URL}?${toQuery({ text: `${buildTwitterText(input)}\n${input.url}` })}`;
 
 export const buildWeiboShareUrl = (input: SocialShareInput) => {
   const { text } = composeShareCopy(input);
@@ -161,9 +173,14 @@ export const buildSocialShareActions = (input: SocialShareInput): SocialShareAct
   };
 };
 
-const SHARE_WINDOW_FEATURES = 'noopener,noreferrer,width=600,height=640';
+/**
+ * No `width` / `height`: a sized popup squeezes X and Weibo into their narrow
+ * layouts, while a plain tab behaves like following a link on every platform
+ * (mobile browsers ignore the size anyway).
+ */
+const SHARE_WINDOW_FEATURES = 'noopener,noreferrer';
 
-/** Opens a share intent in a new window without handing it `window.opener`. */
+/** Opens a share intent in a new tab without handing it `window.opener`. */
 export const openShareWindow = (href: string, win: Pick<Window, 'open'> = window) =>
   win.open(href, '_blank', SHARE_WINDOW_FEATURES);
 

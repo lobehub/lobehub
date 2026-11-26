@@ -5,6 +5,11 @@ import type { DocumentPage, FileLoaderInterface } from '../../types';
 
 const log = debug('file-loaders:doc');
 
+export const extractDocText = async (source: string | Buffer): Promise<string> => {
+  const extracted = await new WordExtractor().extract(source);
+  return typeof extracted?.getBody === 'function' ? extracted.getBody() : (extracted?.text ?? '');
+};
+
 /**
  * Loads legacy Word documents (.doc) using word-extractor.
  * Extracts plain text content and basic metadata from DOC files.
@@ -13,14 +18,7 @@ export class DocLoader implements FileLoaderInterface {
   async loadPages(filePath: string): Promise<DocumentPage[]> {
     log('Loading DOC file:', filePath);
     try {
-      const extractor = new WordExtractor();
-      const extracted: any = await extractor.extract(filePath);
-
-      // Prefer getBody() if available; fallback to common fields
-      const pageContent: string =
-        extracted && typeof extracted.getBody === 'function'
-          ? extracted.getBody()
-          : ((extracted?.text as string) ?? '');
+      const pageContent = await extractDocText(filePath);
 
       const lines = pageContent.split('\n');
       const lineCount = lines.length;

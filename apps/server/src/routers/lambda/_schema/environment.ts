@@ -44,9 +44,22 @@ const environmentSourceSchema = z.object({
           return false;
         }
 
-        return parsed.protocol === 'https:' && ALLOWED_SOURCE_HOSTS.has(parsed.hostname);
+        // Credentials, a query or a fragment would be stored and shown back
+        // as is (the CLI and the agent tool both print the URL), so a token
+        // pasted into a clone URL is refused rather than persisted.
+        return (
+          parsed.protocol === 'https:' &&
+          ALLOWED_SOURCE_HOSTS.has(parsed.hostname) &&
+          !parsed.username &&
+          !parsed.password &&
+          !parsed.search &&
+          !parsed.hash
+        );
       },
-      { message: 'Only https:// github.com git URLs are supported' },
+      {
+        message:
+          'Only https:// github.com git URLs without credentials, a query or a fragment are supported',
+      },
     ),
 });
 
@@ -77,6 +90,8 @@ export const configurationSchema = z.object({
   // it would leave those environments impossible to change.
   kind: z.enum(['code', 'files']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
+  // Free-text notes on what a run needs; the product's own, never sent on.
+  notes: z.string().max(4000).optional(),
   // Any number of repositories, or none. The working directory a conversation
   // gets is still one folder: the first repository is checked out at its top
   // and each one after it into a folder of its own (`path`, which the form

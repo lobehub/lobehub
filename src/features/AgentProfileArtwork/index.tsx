@@ -25,6 +25,7 @@ import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { createAgentCharacterTab } from '@/components/AgentAvatar/pickerTab';
 import EmojiPicker from '@/components/EmojiPicker';
 import {
   openAgentArtworkStudio,
@@ -478,18 +479,15 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           ) : null}
         </div>
         <div className={`${styles.avatar} agent-avatar-entry`}>
-          {/* Uploading an image lives in the studio, so the picker keeps only
-              emoji plus the studio launcher tab; the launcher tab is ordered
-              first and auto-selected on open, preserving the old generate-tab
-              position. */}
-          {/* Keyed by the url for the same reason as the studio preview: the
-              underlying Avatar latches its image-error state, so without a
-              remount a newly generated avatar stays invisible whenever the
-              previous one failed to load. */}
+          {/* Uploading an image lives in the studio, so the picker keeps the
+              character tab (first, and where it opens), emoji and the studio
+              launcher tab. */}
+          {/* Not keyed by the avatar: a remount would close the popup on every
+              character pick. The trigger's AgentAvatar resets a broken image
+              itself when the url changes. */}
           <EmojiPicker
             allowModelAvatar
             allowDelete={canEdit && !!avatar}
-            key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
             popupClassName="agent-avatar-artwork-picker"
@@ -509,6 +507,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               />
             )}
             customTabs={[
+              createAgentCharacterTab(agentId),
               {
                 label: (
                   <Tooltip title={t('settingAgent.artwork.avatar.image')}>
@@ -540,14 +539,6 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             ]}
             onChange={(value) => onAvatarChange(value)}
             onDelete={() => onAvatarChange(null)}
-            onOpenChange={(open) => {
-              if (!open) return;
-
-              requestAnimationFrame(() => {
-                const tabs = document.querySelectorAll('.agent-avatar-artwork-picker [role="tab"]');
-                (tabs.item(tabs.length - 1) as HTMLElement | null)?.click();
-              });
-            }}
           />
           {generating === 'avatar' ? (
             <Center className={styles.avatarGenerating}>

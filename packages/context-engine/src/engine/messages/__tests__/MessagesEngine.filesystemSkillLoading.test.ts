@@ -5,7 +5,10 @@ import type { UIChatMessage } from '@/types/index';
 import { MessagesEngine } from '../MessagesEngine';
 import type { MessagesEngineParams } from '../types';
 
-const createParams = (tools: string[]): MessagesEngineParams => ({
+const createParams = (
+  tools: string[],
+  manifests: NonNullable<MessagesEngineParams['toolsConfig']>['manifests'] = [],
+): MessagesEngineParams => ({
   messages: [
     {
       content: 'Deploy the project',
@@ -29,11 +32,14 @@ const createParams = (tools: string[]): MessagesEngineParams => ({
     ],
   },
   systemRole: 'You are a helpful assistant.',
-  toolsConfig: { manifests: [], tools },
+  toolsConfig: { manifests, tools },
 });
 
-const systemPromptFor = async (tools: string[]) => {
-  const result = await new MessagesEngine(createParams(tools)).process();
+const systemPromptFor = async (
+  tools: string[],
+  manifests?: NonNullable<MessagesEngineParams['toolsConfig']>['manifests'],
+) => {
+  const result = await new MessagesEngine(createParams(tools, manifests)).process();
   return result.messages[0].content as string;
 };
 
@@ -53,5 +59,24 @@ describe('MessagesEngine filesystem skill loading instruction', () => {
 
     expect(system).toContain('calling the readFile tool on its `location` path');
     expect(system).not.toContain('do not bypass activation with readFile');
+  });
+
+  it('keeps the readFile route when Skills was sent with its sandbox shell only', async () => {
+    // A run that deferred the skill APIs still has Skills enabled; requiring
+    // `activateSkill` there would point at a function the model was not sent.
+    const system = await systemPromptFor(
+      ['lobe-skills', 'lobe-local-system'],
+      [
+        {
+          api: [{ description: 'Run a command', name: 'runCommand', parameters: {} }],
+          identifier: 'lobe-skills',
+          meta: { title: 'Skills' },
+          type: 'builtin',
+        },
+      ],
+    );
+
+    expect(system).toContain('calling the readFile tool on its `location` path');
+    expect(system).not.toContain('load it with activateSkill by name');
   });
 });

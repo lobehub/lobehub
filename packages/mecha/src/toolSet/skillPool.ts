@@ -47,7 +47,8 @@ export interface AssembleSkillPoolOptions {
    * "only user-selected tools and skills are available to AI" — so the
    * selectable sources collapse to `enabledPluginIds`. Withholding the
    * discovery tools is not enough on its own: `activateSkill` ships with the
-   * always-on `lobe-skills` tool and resolves against this pool.
+   * always-on `lobe-skills` tool, which offers it whenever this pool is not
+   * empty, and resolves against this pool.
    */
   skillActivateMode?: 'auto' | 'manual';
   /**

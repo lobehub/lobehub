@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Saldo de bonificación añadido",
   "storage_overage_cap_reached": "Se ha alcanzado el límite mensual de pago por uso de almacenamiento de ${{monthlyCap}}. Los cargos estimados de este ciclo son ${{estimatedCycleCharge}}. Las nuevas cargas más allá de tu almacenamiento incluido serán bloqueadas hasta el próximo ciclo de facturación o hasta que aumentes el límite.",
   "storage_overage_cap_reached_title": "Límite de pago por uso de almacenamiento alcanzado",
-  "subscription_one_time_expired": "Tu plan único {{plan}} ha finalizado y tu cuenta ahora está en el plan gratuito. Renueva {{plan}} para recuperar tus beneficios.",
   "subscription_one_time_expired_action": "Renovar {{plan}}",
   "subscription_one_time_expired_title": "Tu plan {{plan}} ha finalizado",
   "subscription_payment_failed": "El pago de renovación de tu suscripción ha fallado. Por favor, actualiza tu método de pago para mantener activa tu suscripción.",

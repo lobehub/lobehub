@@ -1,5 +1,7 @@
 'use client';
 
+import { getRunCommandStdout } from '@lobechat/shared-tool-ui/run-command';
+
 export interface GithubRunCommandArgs {
   command?: string;
   description?: string;
@@ -60,5 +62,9 @@ export const tryParseJson = (value?: string): unknown | undefined => {
   }
 };
 
+/**
+ * The card renders `stderr` in its own section, so the output section reads
+ * `stdout` first; the legacy combined `output` would repeat that stderr.
+ */
 export const getGithubOutput = (state?: GithubRunCommandState, fallbackContent?: string): string =>
-  state?.output || state?.stdout || fallbackContent || '';
+  getRunCommandStdout(state, fallbackContent);

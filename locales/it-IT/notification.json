@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Saldo bonus aggiunto",
   "storage_overage_cap_reached": "Il limite mensile di pagamento a consumo per l'archiviazione di ${{monthlyCap}} è stato raggiunto. I costi stimati per questo ciclo sono ${{estimatedCycleCharge}}. I nuovi caricamenti oltre lo spazio di archiviazione incluso saranno bloccati fino al prossimo ciclo di fatturazione o fino a quando non aumenterai il limite.",
   "storage_overage_cap_reached_title": "Limite di pagamento a consumo per l'archiviazione raggiunto",
-  "subscription_one_time_expired": "Il tuo piano {{plan}} una tantum è terminato e il tuo account è ora sul piano gratuito. Rinnova {{plan}} per riottenere i tuoi benefici.",
   "subscription_one_time_expired_action": "Rinnova {{plan}}",
   "subscription_one_time_expired_title": "Il tuo piano {{plan}} è terminato",
   "subscription_payment_failed": "Il pagamento per il rinnovo dell'abbonamento non è andato a buon fine. Aggiorna il metodo di pagamento per mantenere attivo il tuo abbonamento.",

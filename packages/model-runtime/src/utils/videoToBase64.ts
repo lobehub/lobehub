@@ -1,3 +1,5 @@
+import { ssrfFetch } from './ssrfFetch';
+
 /**
  * Convert video URL to base64 data URL with SSRF protection
  * Uses SSRF-safe fetch to prevent SSRF attacks
@@ -8,14 +10,10 @@ export const videoUrlToBase64 = async (
   try {
     const isServer = typeof window === 'undefined';
 
-    // Use SSRF-safe fetch to prevent SSRF attacks
-    const response = isServer
-      ? await import('@lobechat/ssrf-safe-fetch').then((m) =>
-          m.ssrfSafeFetch(videoUrl, {
-            signal: AbortSignal.timeout(30_000), // 30 seconds
-          }),
-        )
-      : await fetch(videoUrl);
+    const response = await ssrfFetch(
+      videoUrl,
+      isServer ? { signal: AbortSignal.timeout(30_000) } : undefined, // 30 seconds
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);

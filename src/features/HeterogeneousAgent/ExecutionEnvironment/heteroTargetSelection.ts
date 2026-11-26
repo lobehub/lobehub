@@ -34,13 +34,19 @@ export const getPrivateDeviceBlock = ({
   return selectionPolicy === 'fixed' ? 'fixed' : 'publicAgent';
 };
 
-/** The picker value for a resolved target; undefined leaves the placeholder. */
+/**
+ * The picker value for a resolved target; undefined leaves the placeholder. A LobeHub agent
+ * lists "No device" and "Auto" as choices of their own; for a heterogeneous agent they are not
+ * choices, and `none` is the pending state that asks for a device.
+ */
 export const getTargetSelectValue = (
   target: DeviceExecutionTarget,
   deviceId: string | undefined,
+  { builtin = false }: { builtin?: boolean } = {},
 ): string | undefined => {
   if (target === 'device') return deviceId ? executionTargetValue('device', deviceId) : undefined;
   if (target === 'local' || target === 'sandbox') return executionTargetValue(target);
+  if (builtin) return executionTargetValue(target);
 };
 
 export type TargetHint = 'default' | 'fixed' | 'overridden';

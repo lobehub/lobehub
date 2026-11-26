@@ -96,6 +96,26 @@ describe('buildNewTopicMetadata — Claude Code permission mode', () => {
   });
 });
 
+describe('buildNewTopicMetadata — Codex Plan switch', () => {
+  it('is born with the switch the composer showed, off included', () => {
+    for (const heteroPlanMode of [true, false]) {
+      expect(
+        buildNewTopicMetadata({
+          appContext: { initialTopicMetadata: { heteroPlanMode } } as any,
+        }),
+      ).toMatchObject({ heteroPlanMode });
+    }
+  });
+
+  it('records nothing when the composer showed no switch', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { workingDirectory: '/code/d' } } as any,
+      }),
+    ).not.toHaveProperty('heteroPlanMode');
+  });
+});
+
 describe('sub-topic link (metadata.openedBy)', () => {
   it('records the opener read through the caller scope', async () => {
     const findById = vi.fn().mockResolvedValue({ agentId: 'agt_parent', id: 'tpc_parent' });

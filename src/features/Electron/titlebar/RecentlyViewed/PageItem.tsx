@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, cx, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, cx, Flexbox } from '@lobehub/ui';
 import { Pin, PinOff } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import { isSameTabTarget } from '../TabBar/scope';
+import TabMetaIcon from '../TabBar/TabMetaIcon';
 import { useStyles } from './styles';
 
 interface PageItemProps {
@@ -54,7 +55,7 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
       gap={8}
       onClick={handleClick}
     >
-      {meta.icon && <Icon className={styles.icon} icon={meta.icon} size="small" />}
+      <TabMetaIcon iconClassName={styles.icon} meta={meta} />
       <span className={styles.itemTitle}>{meta.title}</span>
       <ActionIcon
         className={cx('actionIcon', styles.actionIcon)}

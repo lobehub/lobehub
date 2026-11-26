@@ -1,3 +1,4 @@
+import { A2uiManifest } from '@lobechat/builtin-tool-a2ui';
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
@@ -34,6 +35,7 @@ import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ProjectManifest } from '@lobechat/builtin-tool-project';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
@@ -50,11 +52,13 @@ export const builtinToolIdentifiers: string[] = [
   WebhookManifest.identifier,
   WorkManifest.identifier,
   ChannelManifest.identifier,
+  A2uiManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
   ArtboardManifest.identifier,
+  ProjectManifest.identifier,
   AttachmentsManifest.identifier,
   AuvManifest.identifier,
   CalculatorManifest.identifier,

@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Không thể kết nối với thiết bị chạy cho tác nhân này. Hãy kết nối một thiết bị hoặc cấu hình cổng thiết bị trên máy chủ, sau đó thử lại.",
   "response.DeviceResponseTimeout": "Thiết bị không phản hồi kịp thời. Có thể thiết bị đang ngoại tuyến hoặc ở chế độ ngủ, hoặc có thể nó vẫn đang bắt đầu chạy. Kiểm tra xem thiết bị đã được kết nối và liệu lần chạy này đã bắt đầu hay chưa, sau đó thử lại.",
   "response.ExceededContextWindowCloud": "Cuộc trò chuyện quá dài để xử lý. Vui lòng chỉnh sửa tin nhắn cuối của bạn để giảm đầu vào hoặc xóa một số tin nhắn và thử lại.",
-  "response.FreePlanLimit": "Bạn hiện đang sử dụng gói miễn phí và không thể sử dụng tính năng này. Vui lòng nâng cấp lên gói trả phí để tiếp tục.",
   "response.GoogleAIBlockReason.BLOCKLIST": "Nội dung bao gồm các thuật ngữ bị chặn. Vui lòng diễn đạt lại và thử lại.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "Hình ảnh được tạo đã bị chặn vì lý do an toàn. Vui lòng thử điều chỉnh yêu cầu của bạn.",
   "response.GoogleAIBlockReason.LANGUAGE": "Ngôn ngữ yêu cầu không được hỗ trợ. Vui lòng thử lại bằng một ngôn ngữ được hỗ trợ.",

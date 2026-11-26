@@ -19,8 +19,8 @@ export const isRunningAsRoot = (): boolean => process.getuid?.() === 0;
  * Claude Code permission flags for one spawn, shared by every CLI host
  * (desktop IPC, `lh hetero exec`).
  *
- * - No `mode` (Better Coding Experience lab off): every action is allowed, as
- *   before — `bypassPermissions`, or `acceptEdits` with the common tools
+ * - No `mode` (a host that predates permission modes): every action is
+ *   allowed — `bypassPermissions`, or `acceptEdits` with the common tools
  *   pre-approved as root. Nothing asks the host.
  * - With a `mode`: Claude Code asks the host over stdio
  *   (`--permission-prompt-tool stdio`) whenever the mode wants a decision.

@@ -149,10 +149,24 @@ export class ClientContextBuilder implements ContextBuilder {
 
     if (!additional.tools?.length) return this.context.agentConfig;
 
+    // A tool the run deferred starts with a narrowed manifest; once activated,
+    // the engine's full one takes its place instead of losing to it below.
+    const deferredManifestMap = input.state.operationToolSet?.deferredManifestMap ?? {};
+    const promotedManifests = new Map(
+      additional.enabledManifests
+        .filter((manifest) => deferredManifestMap[manifest.identifier])
+        .map((manifest) => [manifest.identifier, manifest]),
+    );
+
     return {
       ...this.context.agentConfig,
       enabledManifests: dedupeBy(
-        [...(this.context.agentConfig.enabledManifests ?? []), ...additional.enabledManifests],
+        [
+          ...(this.context.agentConfig.enabledManifests ?? []).map(
+            (manifest) => promotedManifests.get(manifest.identifier) ?? manifest,
+          ),
+          ...additional.enabledManifests,
+        ],
         (manifest) => manifest.identifier,
       ),
       enabledToolIds: [

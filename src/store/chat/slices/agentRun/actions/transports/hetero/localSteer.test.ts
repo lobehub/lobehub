@@ -11,7 +11,7 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: { steerSession: vi.fn() },
 }));
 vi.mock('@/services/message', () => ({ messageService: { createMessage: vi.fn() } }));
-const mode = vi.hoisted(() => ({ value: 'steer' as 'legacy' | 'queue' | 'steer' }));
+const mode = vi.hoisted(() => ({ value: 'steer' as 'queue' | 'steer' }));
 vi.mock('../../lifecycle/followUpMode', () => ({ getFollowUpMode: () => mode.value }));
 
 const queued = (
@@ -369,10 +369,5 @@ describe('startLocalSteer', () => {
     const cc = start('claude-code');
     expect(cc).toBeDefined();
     cc?.settle();
-  });
-
-  it('does nothing with the lab off', () => {
-    mode.value = 'legacy';
-    expect(start('codex')).toBeUndefined();
   });
 });

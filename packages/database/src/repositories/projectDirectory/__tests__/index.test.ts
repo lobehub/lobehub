@@ -629,6 +629,126 @@ describe('ProjectDirectoryRepository.moveTopic', () => {
   });
 });
 
+describe('ProjectDirectoryRepository pending topic move', () => {
+  const second = { ...base, deviceId: 'second-device', path: '/work/second' };
+  const topicIn = async (directoryId: string | null, metadata: Record<string, unknown> = {}) => {
+    await db.insert(topics).values({
+      id: 'switching',
+      agentId: 'repo-agent',
+      metadata: {
+        boundDeviceId: base.deviceId,
+        heteroSessionId: 'old-session',
+        workingDirectory: base.path,
+        ...metadata,
+      },
+      projectId: base.projectId,
+      projectWorkingDirectoryId: directoryId,
+      status: 'running',
+      userId,
+    });
+  };
+  const read = async () => (await db.select().from(topics).where(eq(topics.id, 'switching')))[0];
+  beforeEach(async () => {
+    await db
+      .insert(devices)
+      .values({ deviceId: second.deviceId, identitySource: 'fallback', platform: 'linux', userId });
+  });
+
+  it('records the move while the turn that asked for it is still running', async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await topicIn(first.id);
+
+    await repo.requestTopicMove('switching', target.id);
+
+    const topic = await read();
+    expect(topic.projectWorkingDirectoryId).toBe(first.id);
+    expect(topic.metadata?.pendingProjectWorkingDirectoryId).toBe(target.id);
+  });
+
+  it('cancels a pending move when the current folder is chosen again', async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await topicIn(first.id, { pendingProjectWorkingDirectoryId: target.id });
+
+    await repo.requestTopicMove('switching', first.id);
+
+    expect((await read()).metadata?.pendingProjectWorkingDirectoryId).toBeUndefined();
+  });
+
+  it("refuses another project's folder", async () => {
+    const first = await repo.bind(base);
+    await db.insert(agents).values({ id: 'other-coordinator', userId });
+    await db.insert(projects).values({
+      coordinatorAgentId: 'other-coordinator',
+      id: 'other-project',
+      identifier: 'OTH',
+      name: 'Other project',
+      userId,
+    });
+    const foreign = await repo.bind({ ...second, projectId: 'other-project' });
+    await topicIn(first.id);
+
+    await expect(repo.requestTopicMove('switching', foreign.id)).rejects.toThrow();
+    expect((await read()).metadata?.pendingProjectWorkingDirectoryId).toBeUndefined();
+  });
+
+  it('moves at the start of the next turn, under that turn’s own reservation', async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await topicIn(first.id, {
+      pendingProjectWorkingDirectoryId: target.id,
+      taskCallbackReservation: { messageId: 'next-turn', reservedAt: new Date().toISOString() },
+    });
+    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 'switching'));
+
+    const moved = await repo.applyPendingTopicMove('switching');
+
+    expect(moved?.projectWorkingDirectoryId).toBe(target.id);
+    expect(moved?.metadata).toMatchObject({
+      boundDeviceId: second.deviceId,
+      workingDirectory: second.path,
+    });
+    expect(moved?.metadata?.pendingProjectWorkingDirectoryId).toBeUndefined();
+    expect(moved?.metadata?.heteroSessionId).toBeUndefined();
+  });
+
+  it('moves a conversation from the cloud sandbox to a device folder', async () => {
+    const target = await repo.bind(second);
+    await topicIn(null, { pendingProjectWorkingDirectoryId: target.id });
+    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 'switching'));
+
+    expect((await repo.applyPendingTopicMove('switching'))?.projectWorkingDirectoryId).toBe(
+      target.id,
+    );
+  });
+
+  it('keeps the move pending while a run is still live on the topic', async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await topicIn(first.id, { pendingProjectWorkingDirectoryId: target.id });
+
+    await repo.applyPendingTopicMove('switching');
+
+    const topic = await read();
+    expect(topic.projectWorkingDirectoryId).toBe(first.id);
+    expect(topic.metadata?.pendingProjectWorkingDirectoryId).toBe(target.id);
+  });
+
+  it('drops a pending move whose folder was removed', async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await topicIn(first.id, { pendingProjectWorkingDirectoryId: target.id });
+    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 'switching'));
+    await repo.remove(base.projectId, target.id);
+
+    const topic = await repo.applyPendingTopicMove('switching');
+
+    expect(topic?.projectWorkingDirectoryId).toBe(first.id);
+    expect(topic?.metadata?.pendingProjectWorkingDirectoryId).toBeUndefined();
+  });
+});
+
 describe('ProjectDirectoryRepository.remove', () => {
   const seedTopic = async (directoryId: string, patch: Partial<typeof topics.$inferInsert> = {}) =>
     db.insert(topics).values({
@@ -823,6 +943,96 @@ describe('ProjectDirectoryRepository.relocate', () => {
         path: '/work/fixed',
         projectId: base.projectId,
       }),
+    ).rejects.toThrow('Project not found or access denied');
+  });
+});
+
+// The project's execution environments — its device folders and the cloud
+// sandbox — in the order a new conversation tries them.
+describe('ProjectDirectoryRepository execution order', () => {
+  const order = async () => {
+    const { sandbox } = await repo.executionOrder(base.projectId);
+    const folders = await directoryModel.list(base.projectId);
+    return [
+      ...folders.map((folder) => ({ id: folder.path, sortOrder: folder.sortOrder })),
+      {
+        id: 'sandbox',
+        sortOrder: sandbox,
+      },
+    ]
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder || Number(a.id === 'sandbox') - Number(b.id === 'sandbox'),
+      )
+      .map((item) => item.id);
+  };
+
+  it('tries folders before the sandbox until anything is reordered', async () => {
+    await repo.bind(base);
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('stores a reordered priority for folders and the sandbox', async () => {
+    const first = await repo.bind(base);
+    const second = await repo.bind({ ...base, path: '/work/second' });
+
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', second.id, first.id]);
+
+    expect(await order()).toEqual(['sandbox', '/work/second', '/work/repo']);
+  });
+
+  it('places a new folder before the sandbox when the sandbox is last', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, [first.id, 'sandbox']);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('places a new folder last when the sandbox was moved ahead of folders', async () => {
+    const first = await repo.bind(base);
+    await repo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]);
+
+    await repo.bind({ ...base, path: '/work/second' });
+
+    expect(await order()).toEqual(['sandbox', '/work/repo', '/work/second']);
+  });
+
+  it("refuses an order naming a folder that is not this project's", async () => {
+    await repo.bind(base);
+
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, [
+        'sandbox',
+        '00000000-0000-0000-0000-000000000000',
+      ]),
+    ).rejects.toThrow('Unknown project directory');
+  });
+
+  it('refuses an order that leaves a runner out or names one twice', async () => {
+    const first = await repo.bind(base);
+    const second = await repo.bind({ ...base, path: '/work/second' });
+
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, ['sandbox', second.id]),
+    ).rejects.toThrow('exactly once');
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, [second.id, first.id]),
+    ).rejects.toThrow('exactly once');
+    await expect(
+      repo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id, first.id, second.id]),
+    ).rejects.toThrow('exactly once');
+    expect(await order()).toEqual(['/work/repo', '/work/second', 'sandbox']);
+  });
+
+  it('lets only someone who may change the project reorder it', async () => {
+    const first = await repo.bind(base);
+
+    await expect(
+      otherRepo.reorderExecutionEnvironments(base.projectId, ['sandbox', first.id]),
     ).rejects.toThrow('Project not found or access denied');
   });
 });

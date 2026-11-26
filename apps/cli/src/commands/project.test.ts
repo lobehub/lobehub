@@ -21,6 +21,10 @@ const { mockClient, mockResolveWorkspaceId } = vi.hoisted(() => ({
       update: { mutate: vi.fn() },
       updateStatus: { mutate: vi.fn() },
     },
+    projectWorkingDirectory: {
+      getEnvironment: { query: vi.fn() },
+      updateEnvironment: { mutate: vi.fn() },
+    },
     task: { create: { mutate: vi.fn() } },
     workspace: { getById: { query: vi.fn() } },
   },
@@ -159,6 +163,39 @@ describe('project command', () => {
     expect(mockClient.project.acceptCompletion.mutate).toHaveBeenCalledWith({
       comment: 'Approved',
       id: 'prj_1',
+    });
+  });
+});
+
+describe('project env edit', () => {
+  // Regression: `--add-repo <url[@ref]...>` was not variadic under commander, so
+  // the value arrived as a string and every character became a repository.
+  it('adds each --add-repo value as one repository, with its ref', async () => {
+    mockClient.projectWorkingDirectory.getEnvironment.query.mockResolvedValue({
+      data: { configuration: { sources: [] } },
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'project',
+      'env',
+      'edit',
+      'prj_1',
+      '--add-repo',
+      'https://github.com/acme/app@feature/foo',
+      'https://github.com/acme/lib',
+    ]);
+
+    expect(mockClient.projectWorkingDirectory.updateEnvironment.mutate).toHaveBeenCalledWith({
+      configuration: {
+        sources: [
+          { kind: 'git', ref: 'feature/foo', url: 'https://github.com/acme/app' },
+          { kind: 'git', url: 'https://github.com/acme/lib' },
+        ],
+      },
+      projectId: 'prj_1',
     });
   });
 });

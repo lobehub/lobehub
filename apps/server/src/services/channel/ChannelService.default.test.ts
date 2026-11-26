@@ -48,11 +48,25 @@ describe('the default Channel of a new workspace or project', () => {
     expect(getBuiltinAgent).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({
       agents: [{ agentId: 'agt_main' }],
+      metadata: { projectDefault: true },
       projectId: 'pro_1',
       title: 'General',
     });
     // The creator's other devices list the new Channel without waiting for a poll.
     expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
+  });
+
+  it("marks no workspace's default Channel as a project's", async () => {
+    getAgent.mockResolvedValue({ model: 'gpt-5' });
+    await new ChannelService({} as never, 'owner', 'workspace').createDefault({
+      agentId: 'agt_main',
+      title: 'General',
+    });
+    expect(create).toHaveBeenCalledWith({
+      agents: [{ agentId: 'agt_main' }],
+      projectId: undefined,
+      title: 'General',
+    });
   });
 
   it.each([
@@ -68,6 +82,7 @@ describe('the default Channel of a new workspace or project', () => {
     expect(getBuiltinAgent).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.inbox);
     expect(create).toHaveBeenCalledWith({
       agents: [{ agentId: 'agt_lobeai' }],
+      metadata: { projectDefault: true },
       projectId: 'pro_1',
       title: 'General',
     });

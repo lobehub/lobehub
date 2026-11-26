@@ -20,6 +20,7 @@ import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
 import { agentShareAdmits } from '../../utils/agentShareAdmits';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import type { ChannelAgentAccess } from './agentAccess';
 import { ChannelError } from './error';
 import { syncMemberGrant } from './grants';
 
@@ -168,28 +169,6 @@ export const findSharedChannelAgent = async (
 const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
   channel.agentId === agentId;
 
-/**
- * The share a member's reply runs under, resolved as {@link resolveExecutionConfig} does: only in a
- * direct conversation, and only for an Agent the requester cannot use as their own.
- */
-export const channelReplyShare = async (
-  db: LobeChatDatabase | Transaction,
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
-  agentId: string,
-  userId: string,
-) => {
-  if (!acceptsSharedAgent(channel, agentId)) return;
-  const [usable] = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(agentUsableByWhere(agentId, { userId, workspaceId: channel.workspaceId ?? undefined }));
-  if (usable) return;
-  const share = await findSharedChannelAgent(db, userId, agentId);
-  return (
-    share && { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId }
-  );
-};
-
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (
   tx: Transaction,
@@ -336,15 +315,23 @@ const agentSettingsColumns = {
   virtual: agents.virtual,
 };
 
-/** Read current settings with the requester's Agent permissions, then freeze the effective config. */
+/**
+ * Read current settings with the requester's Agent permissions, then freeze the effective config.
+ * `access` is how the requester may use it (`resolveChannelAgentAccess`): only `own` and `share`
+ * run.
+ */
 export const resolveExecutionConfig = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
   userId: string,
   serverDefault: PartialDeep<LobeAgentConfig>,
+  access: ChannelAgentAccess,
 ): Promise<ChannelExecutionConfig | null> => {
   if (!member.agentId) return null;
+  if (access.kind === 'share')
+    return sharedExecutionConfig(tx, member.agentId, access.share, serverDefault);
+  if (access.kind !== 'own') return null;
   const [agent] = await tx
     .select(agentSettingsColumns)
     .from(agents)
@@ -352,27 +339,32 @@ export const resolveExecutionConfig = async (
       agentUsableByWhere(member.agentId, { userId, workspaceId: channel.workspaceId ?? undefined }),
     )
     .for('share');
-  if (agent) {
-    const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
-    const runtime = agentRuntime(config);
-    if (!isChannelRuntime(runtime)) return null;
-    return {
-      ...config,
-      ...memberEnvironment(member.config),
-      provider: config.provider || DEFAULT_PROVIDER,
-      runtime,
-    };
-  }
+  if (!agent) return null;
+  const config = await mergeDefaults(tx, agent, userId, channel.workspaceId, serverDefault);
+  const runtime = agentRuntime(config);
+  if (!isChannelRuntime(runtime)) return null;
+  return {
+    ...config,
+    ...memberEnvironment(member.config),
+    provider: config.provider || DEFAULT_PROVIDER,
+    runtime,
+  };
+};
 
-  // Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
-  // exactly what a visitor of its share page gets — and only in the cloud.
-  if (!acceptsSharedAgent(channel, member.agentId)) return null;
-  const share = await findSharedChannelAgent(tx, userId, member.agentId);
-  if (!share) return null;
+/**
+ * Someone else's Agent: it runs as its owner, in its own scope, with the owner's defaults —
+ * exactly what a visitor of its share page gets — and only where its share runs.
+ */
+const sharedExecutionConfig = async (
+  tx: Transaction,
+  agentId: string,
+  share: ChannelSharedAgentAccess,
+  serverDefault: PartialDeep<LobeAgentConfig>,
+): Promise<ChannelExecutionConfig | null> => {
   const [owned] = await tx
     .select(agentSettingsColumns)
     .from(agents)
-    .where(eq(agents.id, member.agentId))
+    .where(eq(agents.id, agentId))
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
@@ -393,7 +385,7 @@ export const resolveExecutionConfig = async (
 };
 
 // Match ordinary Agent execution, including Agents created before agencyConfig existed.
-const agentRuntime = (config: LobeAgentConfig) =>
+export const agentRuntime = (config: Pick<LobeAgentConfig, 'agencyConfig' | 'model'>) =>
   config.agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(config.model) ? config.model : 'native');
 

@@ -17,6 +17,13 @@ export const HETERO_AGENT_SILENCE_TIMEOUT = 'HeteroAgentSilenceTimeout';
 
 /** Why a reply failed, in the terms the card explains and acts on. */
 export type ChannelReplyFailureKind =
+  /** The Agent's owner declined the requester's request to use it. */
+  | 'access_denied'
+  /**
+   * The requester may not use the Agent as it runs: a local CLI Agent (Claude Code, Codex, …)
+   * whose share does not grant them its owner's device. Only its owner can grant that.
+   */
+  | 'access_required'
   /** The run could not be submitted at all. */
   | 'dispatch'
   /** The device the Agent runs on was offline or could not be reached. */
@@ -27,6 +34,13 @@ export type ChannelReplyFailureKind =
   | 'quota_credit'
   /** The CLI's plan window is spent; it reopens by itself. */
   | 'quota_usage'
+  /** A shared Agent's visitor sent all the messages its creator allows. */
+  | 'share_message_limit'
+  /**
+   * A shared Agent spent the usage its share allows. The copy promises no reset: a zero limit
+   * stops visitor runs for good, and a cap set elsewhere raises the same error.
+   */
+  | 'share_spend_limit'
   /** The CLI on the device produced no output for too long and was stopped there. */
   | 'silence'
   /** The platform found the run without progress for too long and abandoned it. */
@@ -41,6 +55,13 @@ const DEVICE_ERROR_TYPES = new Set<string>([
 export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelReplyFailureKind => {
   const type = facts.operation?.error?.type;
   const message = facts.operation?.error?.message;
+  // Checked first: no run, retry or other device helps until the Agent's owner allows it.
+  if (facts.job.blockedCode === 'access_denied') return 'access_denied';
+  if (type === ChatErrorType.ShareHeterogeneousAgentUnsupported) return 'access_required';
+  // Checked before `dispatch`: a share limit refuses the run before it takes its input, and
+  // "could not start" would hide that only the creator's limit can change the outcome.
+  if (type === ChatErrorType.ShareSpendLimitExceeded) return 'share_spend_limit';
+  if (type === ChatErrorType.ShareMessageLimitExceeded) return 'share_message_limit';
   if (type && DEVICE_ERROR_TYPES.has(type)) return 'device';
   if (type === HETERO_AGENT_SILENCE_TIMEOUT) return 'silence';
   const quota = classifyCliQuotaMessage(message);
@@ -79,6 +100,16 @@ export const replyFailureActions = (
       case 'dispatch': {
         return ['retry'];
       }
+      // Only the Agent's owner can lift it: ask them. Their answer runs the reply again.
+      case 'access_denied':
+      case 'access_required': {
+        return ['request_access'];
+      }
+      // Resuming or retrying runs into the same limit; only its creator can lift it.
+      case 'share_message_limit':
+      case 'share_spend_limit': {
+        return [];
+      }
       default: {
         return resume ? ['resume', 'retry'] : ['retry'];
       }
@@ -91,6 +122,8 @@ export const replyFailureActions = (
 type Copy = Record<ChannelReplyFailureKind, (name: string, started: boolean) => string>;
 
 const ZH: Copy = {
+  access_denied: (name) => `${name} 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。`,
+  access_required: (name) => `${name} 需要主人授权后才能使用。申请后，主人同意即可继续。`,
   device: (name, started) =>
     started
       ? `${name} 所在的设备断开了，回复没能完成。`
@@ -100,11 +133,19 @@ const ZH: Copy = {
   no_reply: (name) => `${name} 运行结束了，但没有写出回复。`,
   quota_credit: (name) => `${name} 使用的账号额度已用完，需要充值或换一台设备。`,
   quota_usage: (name) => `${name} 使用的账号已达到用量上限，额度重置后可以继续。`,
+  share_message_limit: (name) =>
+    `发给 ${name} 的消息已达到创建者设置的上限，这次没有回复。需要创建者提高上限才能继续。`,
+  share_spend_limit: (name) =>
+    `${name} 已用完这个分享的用量额度，这次没有回复。需要创建者提高额度才能继续。`,
   silence: (name) => `${name} 在设备上长时间没有任何输出，这次回复被中止了。`,
   watchdog: (name) => `${name} 长时间没有进展，这次回复被系统中止了。`,
 };
 
 const EN: Copy = {
+  access_denied: (name) =>
+    `${name}'s owner declined your request to use it, so it did not reply. You can ask again.`,
+  access_required: (name) =>
+    `${name} needs its owner's permission before you can use it. Ask for access; it continues once they allow it.`,
   device: (name, started) =>
     started
       ? `${name}'s device disconnected, so the reply could not finish.`
@@ -114,6 +155,10 @@ const EN: Copy = {
   no_reply: (name) => `${name} finished running without writing a reply.`,
   quota_credit: (name) => `${name}'s account is out of credits; top it up or use another device.`,
   quota_usage: (name) => `${name}'s account hit its usage limit; you can continue once it resets.`,
+  share_message_limit: (name) =>
+    `Messages to ${name} reached the limit its creator set, so it did not reply. Its creator needs to raise the limit.`,
+  share_spend_limit: (name) =>
+    `${name} used up the usage this share allows, so it did not reply. Its creator needs to raise the limit.`,
   silence: (name) => `${name} went silent on its device for too long, so this reply was stopped.`,
   watchdog: (name) => `${name} stopped making progress, so the system ended this reply.`,
 };

@@ -2,7 +2,7 @@ import { confirmModal, toast } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getAgentPublishErrorKey } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/agentMenuVisibility';
+import { getAgentPublishErrorKey } from '@/features/AgentVisibility/publishError';
 import { useRevealSidebarSection } from '@/features/HomeSidebar/hooks/useRevealSidebarSection';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { agentService } from '@/services/agent';

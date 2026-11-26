@@ -24,13 +24,19 @@ export const MARKETPLACE_CATEGORY_VALUES = Object.values(MarketplaceCategory);
  * A single agent template shown in the marketplace picker.
  */
 export interface AgentTemplate {
+  /** Who published it in the marketplace (LobeHub for the curated set). */
+  author?: string;
   /** Optional emoji or image URL — falls back to a category default in the UI. */
   avatar?: string;
   category: MarketplaceCategory;
   /** Optional one-line capability summary. Upstream marketplace API may omit this. */
   description?: string;
+  /** Times it was added; orders the Marketplace's featured picks. */
+  forkCount?: number;
   /** Marketplace identifier (e.g. 'agent-template-copywriter'). */
   id: string;
+  /** Skills and tools it ships with. */
+  pluginCount?: number;
   /** Human-readable title (English Title Case). */
   title: string;
 }

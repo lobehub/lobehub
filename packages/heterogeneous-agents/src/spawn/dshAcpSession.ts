@@ -1,6 +1,3 @@
-import { homedir, platform } from 'node:os';
-import path from 'node:path';
-
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeterogeneousAgentModel } from '@lobechat/types';
 import { parseModelTuple } from '@lobechat/types';
@@ -15,7 +12,11 @@ import {
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
 import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
-import { detectInWslWhenMissing, detectValidatedCommandCandidates } from './resolveCliCommand';
+import {
+  detectInUserBinDirs,
+  detectInWslWhenMissing,
+  detectValidatedCommandCandidates,
+} from './resolveCliCommand';
 
 /**
  * DeepSeek Harness over the Agent Client Protocol.
@@ -54,36 +55,25 @@ const isSupportedDshVersion = (version: string | undefined): boolean => {
  * Find a `dsh` that can run LobeHub turns. An older CLI still answers
  * `--version` but has no `acp` profile, so it is reported unavailable here
  * rather than failing every turn after the agent was created.
+ *
+ * `dsh` is installed with `npm i -g`, which puts it in whichever global folder
+ * the user's Node setup has: `%APPDATA%\npm`, an nvm-windows or fnm Node's own
+ * folder, a pnpm / bun / Volta global, often off the PATH this app started
+ * with. Those folders are swept before WSL is asked.
  */
-/**
- * `dsh` is installed with `npm i -g`. On Windows that drops `dsh.cmd` in npm's
- * global prefix (`%APPDATA%\npm`), a directory npm's installer only adds to the
- * registry User PATH, so an app started before it never sees it.
- */
-const getDshWellKnownPaths = (): string[] =>
-  platform() === 'win32'
-    ? [
-        path.win32.join(
-          process.env.APPDATA || path.win32.join(homedir(), 'AppData', 'Roaming'),
-          'npm',
-          'dsh.cmd',
-        ),
-      ]
-    : [];
-
 export const detectDshCommand = async (
   command: string = DSH_COMMAND,
   env?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
   const isDefaultCommand = command.trim() === DSH_COMMAND;
   const validation = { validatePattern: DSH_VERSION_PATTERN };
-  const nativeStatus = await detectValidatedCommandCandidates(
-    isDefaultCommand ? [command, ...getDshWellKnownPaths()] : [command],
-    validation,
-    env,
-  );
+  const nativeStatus = await detectValidatedCommandCandidates([command], validation, env);
   const status = isDefaultCommand
-    ? await detectInWslWhenMissing(nativeStatus, [DSH_COMMAND], validation)
+    ? await detectInWslWhenMissing(
+        await detectInUserBinDirs(nativeStatus, [DSH_COMMAND], validation, env),
+        [DSH_COMMAND],
+        validation,
+      )
     : nativeStatus;
   if (!status.available || isSupportedDshVersion(status.version)) return status;
   return {

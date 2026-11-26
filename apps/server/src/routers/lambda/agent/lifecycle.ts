@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { type AgentDeleteImpact, CreateAgentSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
@@ -320,6 +321,18 @@ export const lifecycleRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Builtin agents (Lobe AI) are the scope's defaults. A trashed row would
+      // keep holding its unique slug, so the default could never be recreated.
+      // Clients hide Delete on them; this is the backstop for older clients,
+      // the CLI and agent tools.
+      const builtinMeta = await ctx.agentModel.getAgentVisibilityMeta(input.agentId);
+      if (
+        builtinMeta?.slug &&
+        Object.values(BUILTIN_AGENT_SLUGS).includes(builtinMeta.slug as any)
+      ) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Builtin agents cannot be deleted' });
+      }
+
       if (ctx.workspaceId) {
         const { adminOverride, meta } = await resolveAgentDeleteAuthority(
           { ...ctx, workspaceId: ctx.workspaceId },

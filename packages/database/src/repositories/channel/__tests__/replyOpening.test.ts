@@ -82,6 +82,30 @@ describe('Channel reply opening', () => {
     expect((await jobById(db, job.id)).threadId).toBeNull();
   });
 
+  it('marks the acknowledgement in the list preview, so it raises no notification, and not the answer', async () => {
+    const { channel, job } = await mentionAgent();
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const preview = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+    expect(await preview()).toMatchObject({ opening: false });
+
+    await execution.open(channel.id, job.id, {
+      ack: 'On it, comparing the two configs first.',
+      threadTitle: 'Deploy failure',
+    });
+    expect(await preview()).toMatchObject({
+      content: 'On it, comparing the two configs first.',
+      opening: true,
+      thread: { title: 'Deploy failure' },
+    });
+
+    await execution.claim(channel.id, job.id, lease);
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'The token expired.');
+    await execution.publish(channel.id, job.id);
+    expect(await preview()).toMatchObject({ content: 'The token expired.', opening: false });
+  });
+
   it('names the acknowledgement on the job, so a failed run shows under it', async () => {
     const { channel, job } = await mentionAgent();
     await execution.open(channel.id, job.id, { ack: 'Got it, checking CI.' });

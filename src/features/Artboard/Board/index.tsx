@@ -75,7 +75,7 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
   return (
     <div {...stylex.props(styles.stage)}>
       {mode === 'verify' && verifyView === 'list' ? <CheckTable narrow={narrow} /> : <Canvas />}
-      {outlineOpen && !narrow && mode === 'discuss' && <Outline />}
+      {outlineOpen && mode === 'discuss' && <Outline />}
       {mode === 'discuss' && <SubmitBar narrow={narrow} />}
     </div>
   );

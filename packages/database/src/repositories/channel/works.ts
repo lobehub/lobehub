@@ -1,27 +1,42 @@
 import type {
+  CanvasWorkSummaryItem,
   ChannelSharedAgentAccess,
   ExternalWorkSummaryItem,
   WorkSummaryItem,
+  WorkType,
 } from '@lobechat/types';
 import { agentShareWorkAccessScope } from '@lobechat/types';
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import { sanitizeVisitorWorks } from '../../models/message/visitor';
 import { WorkModel } from '../../models/work';
-import { channelJobs, channelMembers, channels } from '../../schemas';
+import { channelJobs, channelMembers, channels, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
 
 const isLinkedExternalWork = (item: WorkSummaryItem): item is ExternalWorkSummaryItem =>
   item.type === 'external' && !!item.url;
 
+const isCanvasWork = (item: WorkSummaryItem): item is CanvasWorkSummaryItem =>
+  item.type === 'canvas' && !!item.resourceId;
+
 /**
- * The Works a Channel reply card can open for a shared Agent's visitor: a link, a file by its
+ * The Works a reply card can open for a shared Agent's visitor: a link, a file by its
  * public `/f/:id` URL, and a collection from the images its summary carries. Documents, canvases
  * and tasks only open through the owner's Work, so they stay out instead of drawing dead cards.
  */
 const isVisitorOpenableWork = (item: WorkSummaryItem) =>
   isLinkedExternalWork(item) || item.type === 'file' || item.type === 'collection';
+
+/**
+ * The Work types each card actually draws, handed to the summary read so a type that the card
+ * then drops cannot spend one of its `limit` slots. Opting into canvases also enables `file` and
+ * `collection` (see `OPT_IN_WORK_TYPES`), and a run that saved 20 newer files after its link would
+ * otherwise fill the bucket before the cards are filtered, losing the link and the canvas.
+ */
+const MEMBER_CARD_WORK_TYPES: WorkType[] = ['external', 'canvas'];
+const VISITOR_CARD_WORK_TYPES: WorkType[] = ['external', 'file', 'collection'];
+const EXTERNAL_ONLY_CARD_WORK_TYPES: WorkType[] = ['external'];
 
 /**
  * A summary as other members see it: what the card draws, without the ids that tie it to the
@@ -41,6 +56,8 @@ const publicSummary = (item: ExternalWorkSummaryItem): ExternalWorkSummaryItem =
 });
 
 export interface ReplyWorksViewer {
+  /** The client opens a canvas beside the Channel; older clients would draw a dead card. */
+  includeCanvasWorks?: boolean;
   /** The client renders the opt-in Work types (`file`, `collection`, ...); see `OPT_IN_WORK_TYPES`. */
   includeFileWorks?: boolean;
   userId?: string;
@@ -52,9 +69,10 @@ export interface ReplyWorksViewer {
  * under the identity and scope the run registered them with, keyed by the job's operation.
  *
  * Every member sees the external Works (GitHub, Linear, ...): a reply already shows what it did,
- * and these resources live outside LobeHub behind their own URL. Internal Works (documents,
- * canvases, files, collections, tasks) stay off the card, as do the ids that link a card to the
- * requester's Work, topic and run.
+ * and these resources live outside LobeHub behind their own URL. A canvas is shown to whoever
+ * can read it through their own canvas API: the requester, and in a workspace the members when
+ * the canvas is not private. Other internal Works (documents, files, collections, tasks) stay
+ * off the card, as do the ids that link an external card to the requester's Work, topic and run.
  *
  * A shared Agent's run executes as the Agent's owner and stamps its Works with the visitor's share
  * scope, so they are read as the owner under that scope. The visitor who asked also sees the files
@@ -99,10 +117,33 @@ export const replyWorksByMessage = async (
     );
   if (!jobs.length) return result;
 
+  // A workspace member reads the workspace's public canvases; an external contact does not.
+  const workspaceId = jobs[0].workspaceId;
+  const viewerInWorkspace =
+    !!viewer.includeCanvasWorks &&
+    !!viewer.userId &&
+    !!workspaceId &&
+    (
+      await tx
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, viewer.userId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        )
+        .limit(1)
+    ).length > 0;
+  const canOpenCanvas = (item: CanvasWorkSummaryItem, requesterUserId: string) =>
+    !!viewer.includeCanvasWorks &&
+    (viewer.userId === requesterUserId || (viewerInWorkspace && item.visibility !== 'private'));
+
   // One read per identity and scope the runs registered their Works under.
   const readers = new Map<
     string,
-    { jobs: typeof jobs; model: WorkModel; visitorSeesOwn: boolean }
+    { jobs: typeof jobs; model: WorkModel; share: boolean; visitorSeesOwn: boolean }
   >();
   for (const job of jobs) {
     const requesterUserId = job.requesterUserId!;
@@ -127,11 +168,13 @@ export const replyWorksByMessage = async (
                 visitorUserId: requesterUserId,
               }),
             ),
+            share: true,
             visitorSeesOwn: viewer.userId === requesterUserId,
           }
         : {
             jobs: [],
             model: new WorkModel(tx, requesterUserId, job.workspaceId ?? undefined),
+            share: false,
             visitorSeesOwn: false,
           });
     reader.jobs.push(job);
@@ -140,16 +183,30 @@ export const replyWorksByMessage = async (
 
   await pMap(
     [...readers.values()],
-    async ({ jobs: readerJobs, model, visitorSeesOwn }) => {
+    async ({ jobs: readerJobs, model, share, visitorSeesOwn }) => {
       const summaries = await model.listSummariesByRootOperations({
-        includeFileWorks: visitorSeesOwn && viewer.includeFileWorks,
+        // Canvases are an opt-in type; a share run's canvas stays fenced to its visitor topic.
+        includeFileWorks: share
+          ? visitorSeesOwn && viewer.includeFileWorks
+          : viewer.includeCanvasWorks,
         rootOperationIds: readerJobs.map((job) => job.operationId!),
+        // Read only what this card can draw, so the types it drops never take a slot.
+        types: share
+          ? visitorSeesOwn
+            ? VISITOR_CARD_WORK_TYPES
+            : EXTERNAL_ONLY_CARD_WORK_TYPES
+          : MEMBER_CARD_WORK_TYPES,
       });
       for (const job of readerJobs) {
         const runWorks = summaries[job.operationId!] ?? [];
-        const cards = visitorSeesOwn
+        const cards: WorkSummaryItem[] = visitorSeesOwn
           ? (sanitizeVisitorWorks(runWorks.filter(isVisitorOpenableWork)) ?? [])
-          : runWorks.filter(isLinkedExternalWork).map(publicSummary);
+          : runWorks.flatMap<WorkSummaryItem>((item): WorkSummaryItem[] => {
+              if (isLinkedExternalWork(item)) return [publicSummary(item)];
+              if (!share && isCanvasWork(item) && canOpenCanvas(item, job.requesterUserId!))
+                return [item];
+              return [];
+            });
         if (cards.length) result.set(job.messageId!, cards);
       }
     },

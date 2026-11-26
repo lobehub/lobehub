@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelMembers, userSettings } from '../../../schemas';
+import { agents, channelAgentGrants, channelMembers, userSettings } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import {
   createChannelFixture,
@@ -194,34 +194,42 @@ describe('Channel Agent configuration', () => {
     expect(next.topic.id).not.toBe(first.topic.id);
   });
 
-  it.each(['private', 'trashed', 'other scope'])(
-    'blocks a queued request after its Agent becomes %s',
-    async (reason) => {
-      const team = await fixture.createTeamChannel();
-      const member = await fixture.addAgent(team.channel.id, 'Agent');
-      const message = await team.asMember.send(team.channel.id, {
-        content: 'Request',
-        mentions: [member.id],
-        requestKey: 'request',
-        routing: 'fallback',
-      });
-      const [job] = await jobsOf(db, message.id);
-      await db
-        .update(agents)
-        .set(
-          reason === 'private'
-            ? { visibility: 'private' }
-            : reason === 'trashed'
-              ? { isDeleted: true, deletedAt: new Date() }
-              : { workspaceId: null },
-        )
-        .where(eq(agents.id, member.agentId!));
-      expect(await execution.claim(team.channel.id, job.id, lease)).toBeNull();
-      expect(await jobById(db, job.id)).toMatchObject({
-        blockedCode: 'unavailable',
-        operationId: null,
-        topicId: null,
-      });
-    },
-  );
+  // Private, or moved to its owner's personal scope: its owner can still let the requester use it,
+  // so the reply waits for their answer. A trashed Agent nobody can grant.
+  it.each([
+    ['private', 'access_request_pending'],
+    ['trashed', 'unavailable'],
+    ['other scope', 'access_request_pending'],
+  ])('blocks a queued request after its Agent becomes %s', async (reason, blockedCode) => {
+    const team = await fixture.createTeamChannel();
+    const member = await fixture.addAgent(team.channel.id, 'Agent');
+    const message = await team.asMember.send(team.channel.id, {
+      content: 'Request',
+      mentions: [member.id],
+      requestKey: 'request',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    await db
+      .update(agents)
+      .set(
+        reason === 'private'
+          ? { visibility: 'private' }
+          : reason === 'trashed'
+            ? { isDeleted: true, deletedAt: new Date() }
+            : { workspaceId: null },
+      )
+      .where(eq(agents.id, member.agentId!));
+    expect(await execution.claim(team.channel.id, job.id, lease)).toBeNull();
+    expect(await jobById(db, job.id)).toMatchObject({
+      blockedCode,
+      operationId: null,
+      topicId: null,
+    });
+    const requests = await db
+      .select()
+      .from(channelAgentGrants)
+      .where(eq(channelAgentGrants.memberId, member.id));
+    expect(requests).toHaveLength(blockedCode === 'unavailable' ? 0 : 1);
+  });
 });

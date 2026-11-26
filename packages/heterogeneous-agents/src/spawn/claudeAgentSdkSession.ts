@@ -176,6 +176,7 @@ export interface HeterogeneousAgentRuntimeStatus {
   state: HeterogeneousAgentRuntimeState;
   transport:
     | 'acp-stdio'
+    | 'antigravity-acp'
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
@@ -209,9 +210,9 @@ export interface ClaudeAgentSdkSessionOptions {
   onStderr: (data: string) => Promise<void> | void;
   operationId: string;
   /**
-   * Better Coding Experience permission mode. With `askUserBridge`, Claude
-   * Code asks through `canUseTool` and each request raises a card; absent,
-   * every action is allowed as before the lab.
+   * Claude Code permission mode. With `askUserBridge`, Claude Code asks
+   * through `canUseTool` and each request raises a card; absent, every action
+   * is allowed.
    */
   permissionMode?: HeteroPermissionMode;
   /**

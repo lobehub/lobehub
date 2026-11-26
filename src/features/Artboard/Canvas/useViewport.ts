@@ -15,7 +15,6 @@ export interface ViewState {
 const MIN_K = 0.08;
 const MAX_K = 2;
 const FLY_MS = 480;
-const OUTLINE_INSET = 200;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -76,11 +75,18 @@ export const useViewport = (
       if (!el) return;
       target.current = { pad, rect: b };
       const { mode, outlineOpen } = useArtboardStore.getState();
-      const inset = outlineOpen && mode === 'discuss' ? OUTLINE_INSET : 0;
+      const outline =
+        outlineOpen && mode === 'discuss'
+          ? el.parentElement?.querySelector<HTMLElement>('[data-artboard-outline]')
+          : null;
+      const inset = outline ? outline.offsetLeft + outline.offsetWidth + 8 : 0;
       const vw = el.clientWidth - inset;
       const vh = el.clientHeight;
+      // Keep three quarters of even a narrow visible area available for the board.
+      const padX = Math.min(pad, vw / 8);
+      const padY = Math.min(pad, vh / 8);
       const k = clamp(
-        Math.min((vw - pad * 2) / (b.maxX - b.minX), (vh - pad * 2) / (b.maxY - b.minY)),
+        Math.min((vw - padX * 2) / (b.maxX - b.minX), (vh - padY * 2) / (b.maxY - b.minY)),
         MIN_K,
         1,
       );

@@ -7,8 +7,30 @@ import type {
   SearchSkillParams,
 } from '../types';
 
+const DEFAULT_SEARCH_PAGE_SIZE = 10;
+const MAX_SKILL_OVERVIEW_LENGTH = 300;
+
+const pickNonEmptyString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const truncateText = (text: string, maxLength: number): string => {
+  const normalized = text.replaceAll(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const formatSkillOverview = (skill: MarketSkillItem): string | undefined => {
+  const raw = pickNonEmptyString(skill.summary) ?? pickNonEmptyString(skill.description);
+  return raw ? truncateText(raw, MAX_SKILL_OVERVIEW_LENGTH) : undefined;
+};
+
+export type SkillStoreSearchServiceParams = Omit<SearchSkillParams, 'query'>;
+
 export interface SkillImportServiceResult {
-  skill: { id: string; name: string };
+  skill: { description?: string | null; id: string; name: string };
   status: 'created' | 'updated' | 'unchanged';
 }
 
@@ -19,7 +41,7 @@ export interface SkillStoreRuntimeService {
   importFromZipUrl: (url: string) => Promise<SkillImportServiceResult>;
   onSkillImported?: () => Promise<void>;
   searchSkill?: (
-    params: SearchSkillParams,
+    params: SkillStoreSearchServiceParams,
   ) => Promise<{ items: MarketSkillItem[]; page: number; pageSize: number; total: number }>;
 }
 
@@ -74,9 +96,13 @@ export class SkillStoreExecutionRuntime {
       // routes import through the server runtime, so this never double-fires.
       await this.service.onSkillImported?.();
 
+      const description = result.skill.description?.trim() || undefined;
       return {
-        content: `Skill "${result.skill.name}" ${result.status} successfully.`,
+        content: description
+          ? `Skill "${result.skill.name}" ${result.status} successfully.\nDescription: ${description}`
+          : `Skill "${result.skill.name}" ${result.status} successfully.`,
         state: {
+          ...(description && { description }),
           name: result.skill.name,
           skillId: result.skill.id,
           status: result.status,
@@ -92,7 +118,7 @@ export class SkillStoreExecutionRuntime {
     }
   }
 
-  async searchSkill(args: SearchSkillParams): Promise<BuiltinServerRuntimeOutput> {
+  async searchSkill(args: SearchSkillParams = {}): Promise<BuiltinServerRuntimeOutput> {
     if (!this.service.searchSkill) {
       return {
         content: 'Market skill search is not available in this environment.',
@@ -100,29 +126,53 @@ export class SkillStoreExecutionRuntime {
       };
     }
 
+    const resolvedQuery = pickNonEmptyString(args.query) ?? pickNonEmptyString(args.q);
+    const pageSize =
+      typeof args.pageSize === 'number' && Number.isFinite(args.pageSize) && args.pageSize > 0
+        ? args.pageSize
+        : DEFAULT_SEARCH_PAGE_SIZE;
+
+    const serviceParams: SkillStoreSearchServiceParams = {
+      ...(args.locale ? { locale: args.locale } : {}),
+      ...(args.order ? { order: args.order } : {}),
+      ...(args.page !== undefined ? { page: args.page } : {}),
+      pageSize,
+      ...(resolvedQuery ? { q: resolvedQuery } : {}),
+      ...(args.sort ? { sort: args.sort } : {}),
+    };
+
     try {
-      const result = await this.service.searchSkill(args);
+      const result = await this.service.searchSkill(serviceParams);
 
       if (result.items.length === 0) {
         return {
-          content: args.q
-            ? `No skills found matching "${args.q}"`
+          content: resolvedQuery
+            ? `No skills found matching "${resolvedQuery}"`
             : 'No skills found in the market',
           state: result,
           success: true,
         };
       }
 
-      // Format results as a readable list
+      // Format results concisely: prefer summary over description to avoid duplicating both
       const skillsList = result.items
-        .map(
-          (skill, index) =>
-            `${index + 1}. **${skill.name}** (${skill.identifier})\n   ${skill.description}${skill.summary ? `\n   Summary: ${skill.summary}` : ''}${skill.repository ? `\n   Repository: ${skill.repository}` : ''}${skill.installCount ? `\n   Installs: ${skill.installCount}` : ''}`,
-        )
+        .map((skill, index) => {
+          const overview = formatSkillOverview(skill);
+          const lines = [`${index + 1}. **${skill.name}** (${skill.identifier})`];
+          if (overview) lines.push(`   ${overview}`);
+          if (skill.repository) lines.push(`   Repository: ${skill.repository}`);
+          if (skill.installCount) lines.push(`   Installs: ${skill.installCount}`);
+          return lines.join('\n');
+        })
         .join('\n\n');
 
+      const totalPages = result.pageSize > 0 ? Math.ceil(result.total / result.pageSize) : 1;
+      const header = resolvedQuery
+        ? `Found ${result.total} skills for "${resolvedQuery}" (page ${result.page}/${totalPages}):`
+        : `Found ${result.total} skills (browse mode, no query, page ${result.page}/${totalPages}):`;
+
       return {
-        content: `Found ${result.total} skills (page ${result.page}/${Math.ceil(result.total / result.pageSize)}):\n\n${skillsList}`,
+        content: `${header}\n\n${skillsList}`,
         state: result,
         success: true,
       };
@@ -150,9 +200,13 @@ export class SkillStoreExecutionRuntime {
       // See importSkill: refresh for the direct/local client invoke path.
       await this.service.onSkillImported?.();
 
+      const description = result.skill.description?.trim() || undefined;
       return {
-        content: `Skill "${result.skill.name}" ${result.status} successfully from market.`,
+        content: description
+          ? `Skill "${result.skill.name}" ${result.status} successfully from market.\nDescription: ${description}`
+          : `Skill "${result.skill.name}" ${result.status} successfully from market.`,
         state: {
+          ...(description && { description }),
           name: result.skill.name,
           skillId: result.skill.id,
           status: result.status,
