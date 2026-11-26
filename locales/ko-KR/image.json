@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "시드",
   "config.seed.random": "무작위 시드",
+  "config.size.autoByOpenAI": "자동 (OpenAI가 결정)",
   "config.size.label": "크기",
   "config.steps.label": "단계 수",
   "config.title": "구성",

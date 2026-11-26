@@ -1,6 +1,15 @@
+import {
+  CODE_EDITOR_FOCUSED_SCRIPT,
+  CODE_EDITOR_PAGE_HELPERS,
+  codeEditorTypingError,
+  fillCodeEditor,
+  formatCodeEditors,
+  readCodeEditorsScript,
+} from '@lobechat/device-control/browser-code-editor';
 import type { BrowserKeyCombo } from '@lobechat/device-control/browser-input';
 import {
   browserEditCommandOf,
+  browserKeyTypesText,
   parseBrowserKey,
   parseBrowserViewport,
 } from '@lobechat/device-control/browser-input';
@@ -86,9 +95,7 @@ export const keyInputEvents = ({ key, modifiers }: BrowserKeyCombo) => {
   const electronModifiers = modifiers.map((modifier) => ELECTRON_MODIFIERS[modifier]);
   const events: KeyboardInputEvent[] = [{ keyCode, modifiers: electronModifiers, type: 'keyDown' }];
 
-  const typesText = [...key].length === 1 || key === 'Enter' || key === 'Space';
-  const chorded = modifiers.some((modifier) => modifier !== 'Shift');
-  if (typesText && !chorded) {
+  if (browserKeyTypesText({ combo: '', key, modifiers })) {
     events.push({
       keyCode: key === 'Space' ? ' ' : key,
       modifiers: electronModifiers,
@@ -224,14 +231,33 @@ export const SNAPSHOT_SCRIPT = `(() => {
   const nameOf = (el) =>
     (el.getAttribute('aria-label') || el.innerText || (isSensitive(el) ? '' : el.value) || el.placeholder || el.title || el.getAttribute('alt') || '')
       .trim().replaceAll(/\\s+/g, ' ').slice(0, 80);
-  const candidates = document.querySelectorAll('a,button,input,select,textarea,summary,h1,h2,h3,[role],[onclick],[contenteditable=true]');
   const seen = new Set();
+  // Monaco's real input is a 1×1 px mirror the size check drops, which left
+  // the editor with no ref at all. List the editor itself, with its text.
+  ${CODE_EDITOR_PAGE_HELPERS}
+  for (const root of document.querySelectorAll('.monaco-editor')) {
+    const input = root.querySelector(CODE_INPUT);
+    if (counter >= MAX || !input || codeRootOf(input) !== root || !isVisible(root)) continue;
+    seen.add(input);
+    const bound = codeApiOf(root);
+    const code = bound ? toLf(bound.model.getValue()) : renderedCode(root);
+    counter += 1;
+    const ref = 'e' + counter;
+    refs[ref] = input;
+    let line = '- textbox "' + (input.getAttribute('aria-label') || 'Code editor') + '" [ref=' + ref + '] [code-editor=monaco] [lines=' + code.split('\\n').length + ']';
+    if (bound && codeReadOnly(bound)) line += ' [readonly]';
+    line += ' [value="' + code.trim().replaceAll(/\\s+/g, ' ').slice(0, 80) + '"]';
+    lines.push(line);
+  }
+  const candidates = document.querySelectorAll('a,button,input,select,textarea,summary,h1,h2,h3,[role],[onclick],[contenteditable=true]');
   for (const el of candidates) {
     if (counter >= MAX) break;
     if (seen.has(el) || !isVisible(el)) continue;
     seen.add(el);
     const role = roleOf(el);
     if (!role || role === 'presentation' || role === 'none') continue;
+    // The rendered lines of an editor listed above, line numbers included.
+    if (role === 'code' && codeRootOf(el)) continue;
     const name = nameOf(el);
     if (!name && !['checkbox', 'combobox', 'radio', 'textbox'].includes(role)) continue;
     counter += 1;
@@ -430,6 +456,23 @@ export default class BrowserControlCtr extends ControllerModule {
   async fill(params: BrowserControlFillParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
+      const target = `(window.__lobeBrowserRefs || {})[${JSON.stringify(params.ref)}]`;
+      const edit = await fillCodeEditor(
+        {
+          collapseSelection: () => this.sendKey(guest, parseBrowserKey('ArrowLeft')),
+          evaluate: (script) => evaluate(guest, script),
+          selectAll: () => this.sendKey(guest, parseBrowserKey('ControlOrMeta+a')),
+        },
+        target,
+        { oldText: params.oldText, submit: params.submit, text: params.text },
+      );
+      if (edit.handled) {
+        return edit.error ? { error: edit.error, success: false } : { success: true };
+      }
+      if (params.oldText !== undefined) {
+        return { error: 'oldText only works on a code editor ref', success: false };
+      }
+
       const raw = await evaluate(guest, fillScript(params.ref, params.text));
       const result = JSON.parse(raw);
       if (result.error) return { error: result.error, success: false };
@@ -453,6 +496,9 @@ export default class BrowserControlCtr extends ControllerModule {
     }
 
     return this.withGuest(params.sessionId, async (guest) => {
+      if (browserKeyTypesText(combo) && (await evaluate(guest, CODE_EDITOR_FOCUSED_SCRIPT))) {
+        return { error: codeEditorTypingError(combo.combo), success: false };
+      }
       this.markControlling(params.sessionId, guest);
       await this.sendKey(guest, combo);
       return { success: true };
@@ -569,8 +615,9 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async readPage(params: BrowserControlParams): Promise<BrowserControlReadPageResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      const raw = await evaluate(guest, READ_PAGE_SCRIPT);
-      return { success: true, ...JSON.parse(raw) };
+      const page = JSON.parse(await evaluate(guest, READ_PAGE_SCRIPT));
+      const code = formatCodeEditors(await evaluate(guest, readCodeEditorsScript()));
+      return { success: true, ...page, content: `${page.content ?? ''}${code}` };
     });
   }
 

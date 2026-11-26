@@ -161,6 +161,9 @@ export const discoverTools = async (
   const toolSourceMap: Record<string, ToolSource> = {};
   const toolExecutorMap: Record<string, ToolExecutor> = {};
   let onlineDevices: DeviceAttachment[] = [];
+  // Managed cloud devices without a live connection: always online for the
+  // model (listed in the device tool's prompt), not for routing.
+  let sleepingCloudDevices: DeviceAttachment[] = [];
   let activeDeviceId: string | undefined;
   let activeDeviceScope: 'personal' | 'workspace' | undefined;
   let executionPlan: ExecutionPlan | undefined;
@@ -495,7 +498,7 @@ export const discoverTools = async (
     const gatewayConfigured = deviceGateway.isConfigured;
     const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
     const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
-    onlineDevices = await toolReads.devicePool;
+    ({ online: onlineDevices, sleepingCloud: sleepingCloudDevices } = await toolReads.devicePool);
     const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
@@ -882,7 +885,7 @@ export const discoverTools = async (
   if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
     toolManifestMap[RemoteDeviceManifest.identifier] = {
       ...toolManifestMap[RemoteDeviceManifest.identifier],
-      systemRole: generateSystemPrompt(onlineDevices),
+      systemRole: generateSystemPrompt([...onlineDevices, ...sleepingCloudDevices]),
     };
   }
 

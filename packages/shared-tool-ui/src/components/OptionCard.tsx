@@ -16,6 +16,25 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
+  checkbox: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    width: '16px',
+    height: '16px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '4px',
+  },
+  checkboxChecked: {
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    borderColor: cssVar.colorText,
+  },
   optionCheck: { flexShrink: 0, color: cssVar.colorPrimary },
   optionDescription: { fontSize: '12px', lineHeight: 1.45, color: cssVar.colorTextSecondary },
   optionIndex: {
@@ -59,6 +78,7 @@ export interface OptionCardProps {
   highlighted?: boolean;
   index: number;
   label: string;
+  multiSelect?: boolean;
   onToggle: () => void;
   /** Badge text rendered after the label for a model-recommended option. */
   recommendedText?: string;
@@ -76,7 +96,17 @@ export interface OptionCardProps {
  * everywhere.
  */
 export const OptionCard = memo<OptionCardProps>(
-  ({ index, label, description, highlighted, recommendedText, selected, disabled, onToggle }) => (
+  ({
+    index,
+    label,
+    description,
+    highlighted,
+    multiSelect,
+    recommendedText,
+    selected,
+    disabled,
+    onToggle,
+  }) => (
     <Flexbox
       horizontal
       align="center"
@@ -104,8 +134,14 @@ export const OptionCard = memo<OptionCardProps>(
         </Flexbox>
         {description && <span {...stylex.props(styles.optionDescription)}>{description}</span>}
       </Flexbox>
-      {selected && (
-        <Icon className={stylex.props(styles.optionCheck).className} icon={Check} size={16} />
+      {multiSelect ? (
+        <span {...stylex.props(styles.checkbox, selected && styles.checkboxChecked)}>
+          {selected && <Icon icon={Check} size={{ size: 12, strokeWidth: 3 }} />}
+        </span>
+      ) : (
+        selected && (
+          <Icon className={stylex.props(styles.optionCheck).className} icon={Check} size={16} />
+        )
       )}
     </Flexbox>
   ),

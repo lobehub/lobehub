@@ -55,6 +55,7 @@ import type {
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
+import { checkChannelDelivery } from './channelDelivery';
 import { applyTaskLabelDelta, resolveLabelIdsOrThrow } from './labelIds';
 import { settleAll } from './settleAll';
 
@@ -623,6 +624,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         };
       }
 
+      const delivery = await checkChannelDelivery(identifier, params.channelDelivery, ctx);
+      if (delivery?.refused) return delivery.refused;
+
       // Top-level schedule columns — direct service.update bypasses the
       // store.updateTask optimistic path, which would otherwise need to map
       // flat columns onto the detail's nested `schedule.*` shape.
@@ -689,11 +693,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         );
       }
 
-      // The server checks a Channel delivery (which needs its channelId here) before storing it.
-      if (params.channelDelivery !== undefined) {
-        ops.push(taskService.updateConfig(identifier, { delivery: params.channelDelivery }));
-        changes.push(params.channelDelivery ? 'Channel delivery set' : 'Channel delivery cleared');
-      }
+      delivery?.queue(ops, changes);
 
       if (ops.length === 0) {
         return {

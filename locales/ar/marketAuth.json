@@ -27,6 +27,7 @@
   "claimResources.claim": "المطالبة بالمحدد",
   "claimResources.description": "وجدنا موارد مرتبطة بحسابك يمكنك المطالبة بها:",
   "claimResources.error": "فشل في المطالبة بالموارد. يرجى المحاولة مرة أخرى.",
+  "claimResources.failedRetry": "تعذّر المطالبة بهذه الموارد. تحقق من اتصال شبكتك وحاول مرة أخرى.",
   "claimResources.mcpSection": "خوادم MCP",
   "claimResources.selectedCount": "{{count}} عنصر(عناصر) محدد",
   "claimResources.skillSection": "المهارات",

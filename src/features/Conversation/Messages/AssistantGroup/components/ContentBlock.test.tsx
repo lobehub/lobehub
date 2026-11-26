@@ -403,4 +403,24 @@ describe('AssistantGroup ContentBlock', () => {
     expect(screen.getByText('message content')).toBeInTheDocument();
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
+
+  it('keeps reasoning streamed before an error that cut the turn short', () => {
+    render(
+      <ContentBlock
+        assistantId="assistant-1"
+        content=""
+        id="block-1"
+        reasoning={{ content: 'Long reasoning before the step deadline' }}
+        error={
+          {
+            body: { provider: 'anthropic' },
+            message: 'LLM call stopped before the step invocation deadline',
+            type: 'LlmStepTimeout',
+          } as any
+        }
+      />,
+    );
+
+    expect(screen.getByText('reasoning')).toBeInTheDocument();
+  });
 });

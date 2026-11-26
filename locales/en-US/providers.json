@@ -43,7 +43,7 @@
   "magpie.description": "magpie is an LLM gateway: every model and subscription you have there is served on one endpoint.",
   "meta.description": "Meta builds AI models and products that help people connect, create, and get things done, including the Llama and Muse model families.",
   "minimax.description": "Founded in 2021, MiniMax builds general-purpose AI with multimodal foundation models, including trillion-parameter MoE text models, speech models, and vision models, along with apps like Hailuo AI.",
-  "minimaxcodingplan.description": "MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.",
+  "minimaxcodingplan.description": "MiniMax Token Plan provides access to MiniMax models including M3.1 Flash for coding tasks via a fixed-fee subscription.",
   "mistral.description": "Mistral offers advanced general, specialized, and research models for complex reasoning, multilingual tasks, and code generation, with function-calling for custom integrations.",
   "modelscope.description": "ModelScope is Alibaba Cloud’s model-as-a-service platform, offering a wide range of AI models and inference services.",
   "moonshot.description": "Moonshot, from Moonshot AI (Beijing Moonshot Technology), offers multiple NLP models for use cases like content creation, research, recommendations, and medical analysis, with strong long-context and complex generation support.",

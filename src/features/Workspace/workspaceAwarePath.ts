@@ -103,7 +103,7 @@ const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;
  * {@link WORKSPACE_SETTINGS_TABS} (llm, referral, system-tools, …).
  * `/settings` index (or with query/hash) gets prefixed too — workspace
  * `/${slug}/settings` redirects to `/${slug}/settings/general`, personal
- * `/settings` redirects to `/settings/profile`.
+ * `/settings` redirects to the personal space's first settings tab.
  */
 const isPersonalSettingsPath = (to: string): boolean => {
   const match = SETTINGS_PREFIX_REGEX.exec(to);
