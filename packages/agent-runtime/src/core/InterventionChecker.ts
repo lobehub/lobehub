@@ -1,4 +1,4 @@
-import  {
+import {
   type ArgumentMatcher,
   type HumanInterventionPolicy,
   type HumanInterventionRule,
@@ -7,6 +7,7 @@ import  {
 } from '@lobechat/types';
 
 import { DEFAULT_SECURITY_BLACKLIST } from '../audit/defaultSecurityBlacklist';
+import { matchSemanticShellPredicate } from './semanticShellPredicates';
 
 /**
  * Result of security blacklist check
@@ -158,6 +159,16 @@ export class InterventionChecker {
    * @returns true if matches
    */
   private static matchesArgument(matcher: ArgumentMatcher, value: any): boolean {
+    // Semantic shell matcher: evaluate parsed-command predicates
+    if (
+      typeof matcher === 'object' &&
+      'type' in matcher &&
+      matcher.type === 'semanticShell' &&
+      'predicate' in matcher
+    ) {
+      return matchSemanticShellPredicate(matcher.predicate, String(value));
+    }
+
     const strValue = String(value);
 
     // Simple string matcher
