@@ -193,9 +193,17 @@ describe('AgentShareModel grant lifecycle', () => {
       });
       await model.revokeGrant(agentId, visitorId);
 
+      // `issuedAt` must be strictly after `revokedAt`, otherwise the restore is
+      // rejected as an older card — do not depend on the two timestamps landing
+      // in different milliseconds.
+      const [beforeRestore] = await serverDB
+        .select()
+        .from(agentShareGrants)
+        .where(eq(agentShareGrants.shareId, share!.id));
+
       await expect(
         AgentShareModel.grant(serverDB, {
-          issuedAt: new Date(),
+          issuedAt: new Date(beforeRestore.revokedAt!.getTime() + 1000),
           shareId: share!.id,
           source: { channelId: 'channel', messageId: 'newer-message', type: 'card' },
           userId: visitorId,
@@ -289,6 +297,109 @@ describe('AgentShareModel grant lifecycle', () => {
         .from(agentShares)
         .where(eq(agentShares.agentId, agentId));
       expect(row.id).toBe(share!.id);
+    });
+  });
+
+  describe('request grants', () => {
+    const requestSource = (grantId: string) => ({
+      channelId: 'channel',
+      grantId,
+      type: 'request' as const,
+    });
+
+    it('admits the approved person through a request grant', async () => {
+      const model = new AgentShareModel(serverDB, ownerId);
+      const share = await model.create(agentId, 'card');
+
+      await AgentShareModel.grantByRequest(serverDB, {
+        channelId: 'channel',
+        grantId: 'grant-approved',
+        shareId: share!.id,
+        userId: visitorId,
+      });
+
+      const [row] = await serverDB
+        .select()
+        .from(agentShareGrants)
+        .where(eq(agentShareGrants.shareId, share!.id));
+      expect(row).toMatchObject({
+        revokedAt: null,
+        source: { channelId: 'channel', grantId: 'grant-approved', type: 'request' },
+        userId: visitorId,
+      });
+      await expect(
+        AgentShareModel.admitsVisitor(
+          serverDB,
+          { shareId: share!.id, visibility: 'card' },
+          visitorId,
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('restores a revoked card grant and takes over its source', async () => {
+      const model = new AgentShareModel(serverDB, ownerId);
+      const share = await model.create(agentId, 'card');
+
+      await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(Date.now() - 60_000),
+        shareId: share!.id,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: visitorId,
+      });
+      await expect(model.revokeGrant(agentId, visitorId)).resolves.toBe(true);
+
+      await AgentShareModel.grantByRequest(serverDB, {
+        channelId: 'channel',
+        grantId: 'grant-after-revoke',
+        shareId: share!.id,
+        userId: visitorId,
+      });
+
+      const [row] = await serverDB
+        .select()
+        .from(agentShareGrants)
+        .where(eq(agentShareGrants.shareId, share!.id));
+      expect(row).toMatchObject({ revokedAt: null, source: requestSource('grant-after-revoke') });
+      await expect(
+        AgentShareModel.admitsVisitor(
+          serverDB,
+          { shareId: share!.id, visibility: 'card' },
+          visitorId,
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('reports only the live request grants among the asked people', async () => {
+      const model = new AgentShareModel(serverDB, ownerId);
+      const share = await model.create(agentId, 'card');
+
+      await expect(AgentShareModel.requestGrantedUserIds(serverDB, share!.id, [])).resolves.toEqual(
+        [],
+      );
+
+      // A card grant is not a request grant.
+      await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
+        shareId: share!.id,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: secondVisitorId,
+      });
+      await AgentShareModel.grantByRequest(serverDB, {
+        channelId: 'channel',
+        grantId: 'grant-live',
+        shareId: share!.id,
+        userId: visitorId,
+      });
+
+      await expect(
+        AgentShareModel.requestGrantedUserIds(serverDB, share!.id, [visitorId, secondVisitorId]),
+      ).resolves.toEqual([visitorId]);
+
+      // A withdrawn request grant stops counting.
+      await expect(model.revokeGrant(agentId, visitorId)).resolves.toBe(true);
+      await expect(
+        AgentShareModel.requestGrantedUserIds(serverDB, share!.id, [visitorId]),
+      ).resolves.toEqual([]);
     });
   });
 });
