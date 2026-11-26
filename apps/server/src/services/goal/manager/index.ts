@@ -36,7 +36,7 @@ import {
   closeTurnOnStart,
   moveConversationTo,
 } from './conversation';
-import { decideFailedTurn } from './failedTurn';
+import { decideFailedTurn, MAX_NO_PLAN_MANAGER_TURNS, noPlanPauseReason } from './failedTurn';
 import { budgetBlocked, managerUsage, reviewFeedback, verifiedTasks } from './planningInputs';
 import type { GoalPlan } from './planSchema';
 import { submitPlan } from './submit';
@@ -403,24 +403,18 @@ export class GoalManagerService {
         };
         const cleared = {
           failedTurns: undefined,
+          noPlanTurns: undefined,
           offlineDevice: undefined,
           offlineTurns: undefined,
           retryAfter: undefined,
         };
-        // A committed plan is progress whatever the run's ending; only an errored
-        // turn that committed nothing gates the next dispatch.
-        if (current.submitted || operation?.status !== 'error') {
+        // The person who resumes the Goal gets a fresh retry schedule. Pause in
+        // this same transaction: committing the consumed receipt first would
+        // let a concurrent tick claim and dispatch a replacement turn before
+        // the pause took the row lock.
+        const pauseSettled = async (reason: string) => {
           await saveManagerState(db, goal.id, { ...settled, ...cleared });
-          return;
-        }
-        const decision = decideFailedTurn(operation.error, current);
-        if (decision.action === 'pause') {
-          // The person who resumes the Goal gets a fresh retry schedule. Pause in
-          // this same transaction: committing the consumed receipt first would
-          // let a concurrent tick claim and dispatch a replacement turn before
-          // the pause took the row lock.
-          await saveManagerState(db, goal.id, { ...settled, ...cleared });
-          const message = `${decision.reason}. Resume with: lh goal resume ${goal.id}`;
+          const message = `${reason}. Resume with: lh goal resume ${goal.id}`;
           if (activeStatuses.has(fresh!.status)) {
             await new GoalRepository(db, this.userId, this.workspaceId).updateStatus(
               goal.id,
@@ -428,11 +422,37 @@ export class GoalManagerService {
             );
             await this.graph(db).recordGoalStatus(goal.id, fresh!.status, 'paused', message);
           }
-          return { ...decision, reason: message };
+          return message;
+        };
+        // A committed plan is progress whatever the run's ending; only an errored
+        // turn that committed nothing gates the next dispatch.
+        if (current.submitted || operation?.status !== 'error') {
+          // Only a run that really finished counts, and any other ending breaks
+          // the sequence. A dispatch that never started ran nothing, so it leaves
+          // the count alone.
+          const noPlanTurns =
+            !current.submitted && operation?.status === 'done'
+              ? (current.noPlanTurns ?? 0) + 1
+              : !current.submitted && neverStarted
+                ? current.noPlanTurns
+                : undefined;
+          // An invited turn keeps its problem: `startTurn` declines the next
+          // invitation, so the caller's gate carries the actual question.
+          if (!current.problem && (noPlanTurns ?? 0) >= MAX_NO_PLAN_MANAGER_TURNS)
+            return {
+              action: 'pause' as const,
+              reason: await pauseSettled(noPlanPauseReason(noPlanTurns!)),
+            };
+          await saveManagerState(db, goal.id, { ...settled, ...cleared, noPlanTurns });
+          return;
         }
+        const decision = decideFailedTurn(operation.error, current);
+        if (decision.action === 'pause')
+          return { ...decision, reason: await pauseSettled(decision.reason) };
         await saveManagerState(db, goal.id, {
           ...settled,
           failedTurns: decision.failedTurns || undefined,
+          noPlanTurns: undefined,
           offlineDevice:
             decision.failure.kind === 'device_unavailable'
               ? readDeviceDispatchRoute(operation.error)
@@ -547,6 +567,17 @@ export class GoalManagerService {
       if (problem) return null;
       return this.pause(goal.id, 'Goal or main Agent turn budget exhausted');
     }
+    // Invited again after a streak of turns that planned nothing: decline, so the
+    // caller opens its gate on the real problem. Whoever answers it starts over.
+    if (problem && state && (state.noPlanTurns ?? 0) >= MAX_NO_PLAN_MANAGER_TURNS) {
+      await this.db.transaction(async (db) => {
+        const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
+        const current = fresh?.config?.managerState;
+        if (current?.token !== state.token || !current.consumed) return;
+        await saveManagerState(db, goal.id, { ...current, noPlanTurns: undefined });
+      });
+      return null;
+    }
     // The previous turn failed without a plan. Its settlement already queued the
     // wakeup for this time, so a tick arriving earlier (the sweep, a Task event)
     // only reports the wait instead of queueing another one. An invited turn
@@ -635,6 +666,7 @@ export class GoalManagerService {
         ...(previousTopicIds.length > 0 && { previousTopicIds }),
         // Failure streaks span turns; settling a turn that did not error resets them.
         ...(freshState?.failedTurns && { failedTurns: freshState.failedTurns }),
+        ...(freshState?.noPlanTurns && { noPlanTurns: freshState.noPlanTurns }),
         ...(freshState?.offlineTurns && { offlineTurns: freshState.offlineTurns }),
         reviewSnapshot: reviews.hash,
         topicId,

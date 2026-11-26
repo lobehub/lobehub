@@ -320,6 +320,12 @@ export interface GoalManagerState {
    */
   failedTurns?: number;
   /**
+   * Consecutive turns whose run finished normally without committing a plan, as
+   * when the Agent cannot reach `lh` and says so instead of erroring. Reset by a
+   * committed plan and whenever the streak hands the Goal to a person.
+   */
+  noPlanTurns?: number;
+  /**
    * The device the last turn could not reach, when it failed as unavailable.
    * Seeing it online again ends the `retryAfter` wait early.
    */

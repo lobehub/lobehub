@@ -26,6 +26,7 @@ import {
 } from '@lobechat/local-file-shell/shell';
 import { managedProcessEnvironment, spawnManagedFor } from '@lobechat/utils/managedProcess';
 
+import { commandInvokesEmbeddedCli } from '@/modules/cliEmbedding';
 import { createLogger } from '@/utils/logger';
 
 import CliCtr from './CliCtr';
@@ -284,7 +285,17 @@ export default class ShellCommandCtr extends ControllerModule {
       }
     }
 
-    if (!params.sandbox) return runCommand(params, { logger, processManager, spawnProcess });
+    if (!params.sandbox) {
+      // An `lh` further into the command (`cd x && lh goal show`) needs the same
+      // CLI environment, or it fails with "no LobeHub sign-in" in a conversation
+      // the user is signed in to. A sandboxed run deliberately stays out of this:
+      // its command is model-authored and must stay inside the fence.
+      const cliCtr = commandInvokesEmbeddedCli(params.command)
+        ? this.app.getController(CliCtr)
+        : undefined;
+      if (cliCtr) params = { ...params, env: await cliCtr.buildCliEnv(params.env) };
+      return runCommand(params, { logger, processManager, spawnProcess });
+    }
 
     // Sandboxed run. The policy is scoped to the run's working directory, so
     // without one there is nothing to scope to — refuse rather than fall back
