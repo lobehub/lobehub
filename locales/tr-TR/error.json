@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Bu ajan için bir çalışma cihazına ulaşılamadı. Bir cihaz bağlayın veya sunucuda cihaz geçidini yapılandırın, ardından tekrar deneyin.",
   "response.DeviceResponseTimeout": "Cihaz zamanında yanıt vermedi. Çevrimdışı veya uyku modunda olabilir ya da bu çalışmayı başlatıyor olabilir. Cihazın bağlı olduğunu ve bu çalışmanın zaten devam edip etmediğini kontrol edin, ardından tekrar deneyin.",
   "response.ExceededContextWindowCloud": "Sohbet, işlenemeyecek kadar uzun. Lütfen son mesajınızı düzenleyerek girdiyi azaltın veya bazı mesajları silip tekrar deneyin.",
-  "response.FreePlanLimit": "Şu anda ücretsiz kullanıcı olarak bu özelliği kullanamazsınız. Lütfen ücretli bir plana geçiş yapın.",
   "response.GoogleAIBlockReason.BLOCKLIST": "İçerik engellenmiş terimler içeriyor. Lütfen yeniden ifade edin ve tekrar deneyin.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "Oluşturulan görüntü güvenlik nedenleriyle engellendi. Lütfen isteğinizi değiştirerek tekrar deneyin.",
   "response.GoogleAIBlockReason.LANGUAGE": "Talep edilen dil desteklenmiyor. Lütfen desteklenen bir dilde tekrar deneyin.",

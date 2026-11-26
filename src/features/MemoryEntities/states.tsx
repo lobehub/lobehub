@@ -6,6 +6,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import KindIcon from './components/KindIcon';
 import { useEntityFormat } from './format';
@@ -32,7 +34,12 @@ const styles = stylex.create({
     textAlign: 'center',
   },
   title: { fontSize: '20px', fontWeight: 600, margin: 0 },
-  desc: { color: cssVar.colorTextSecondary, fontSize: '14px', lineHeight: '22px', margin: 0 },
+  desc: {
+    color: cssVar.colorTextSecondary,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: '22px',
+    margin: 0,
+  },
   analysis: { maxWidth: '320px', width: '100%' },
   kinds: {
     display: 'grid',
@@ -49,9 +56,9 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: '1px',
     display: 'flex',
-    gap: '12px',
-    paddingBlock: '12px',
-    paddingInline: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   kindText: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   kindLabel: { fontSize: '13px', fontWeight: 500 },
@@ -63,12 +70,18 @@ const styles = stylex.create({
     borderInlineEndWidth: '1px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     paddingBlock: '20px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     width: '320px',
   },
-  loadingRow: { alignItems: 'flex-start', display: 'flex', gap: '12px' },
+  // Compact entity rows are 4px shorter (6px block padding), so the skeleton pitch follows.
+  loadingListCompact: { gap: '12px' },
+  loadingRow: {
+    alignItems: 'flex-start',
+    display: 'flex',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   loadingPage: {
     display: 'flex',
     flex: '1',
@@ -131,27 +144,31 @@ export const ErrorState = memo<{ onRetry: () => void }>(({ onRetry }) => {
 ErrorState.displayName = 'ErrorState';
 
 /** Same frame as the loaded page, so nothing jumps when data arrives. */
-export const LoadingState = memo(() => (
-  <div aria-busy {...stylex.props(styles.loading)}>
-    <div {...stylex.props(styles.loadingList)}>
-      <Skeleton height={22} width={64} />
-      <Skeleton height={32} radius={8} width={'100%'} />
-      {Array.from({ length: 7 }, (_, i) => (
-        <div key={i} {...stylex.props(styles.loadingRow)}>
-          <SkeletonAvatar shape={'square'} size={24} />
-          <SkeletonText fontSize={12} rows={2} width={['60%', '90%']} />
-        </div>
-      ))}
-    </div>
-    <div {...stylex.props(styles.loadingPage)}>
-      <div {...stylex.props(styles.loadingRow)}>
-        <SkeletonAvatar shape={'square'} size={40} />
-        <SkeletonText fontSize={20} rows={2} width={['40%', '25%']} />
+export const LoadingState = memo(() => {
+  const compact = useInterfaceDensity() === 'compact';
+
+  return (
+    <div aria-busy {...stylex.props(styles.loading)}>
+      <div {...stylex.props(styles.loadingList, compact && styles.loadingListCompact)}>
+        <Skeleton height={22} width={64} />
+        <Skeleton height={32} radius={8} width={'100%'} />
+        {Array.from({ length: 7 }, (_, i) => (
+          <div key={i} {...stylex.props(styles.loadingRow)}>
+            <SkeletonAvatar shape={'square'} size={24} />
+            <SkeletonText fontSize={12} rows={2} width={['60%', '90%']} />
+          </div>
+        ))}
       </div>
-      <SkeletonText fontSize={17} rows={3} width={['15%', '100%', '70%']} />
-      <SkeletonText rows={6} width={['15%', '90%', '60%', '95%', '80%', '50%']} />
+      <div {...stylex.props(styles.loadingPage)}>
+        <div {...stylex.props(styles.loadingRow)}>
+          <SkeletonAvatar shape={'square'} size={40} />
+          <SkeletonText fontSize={20} rows={2} width={['40%', '25%']} />
+        </div>
+        <SkeletonText fontSize={17} rows={3} width={['15%', '100%', '70%']} />
+        <SkeletonText rows={6} width={['15%', '90%', '60%', '95%', '80%', '50%']} />
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 LoadingState.displayName = 'LoadingState';

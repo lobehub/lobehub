@@ -2,7 +2,7 @@ import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CircleAlertIcon, RotateCwIcon, XIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
@@ -14,14 +14,10 @@ import { type UploadFileItem } from '@/types/files/upload';
 import { openFilePreviewModal } from './FilePreviewModal.loader';
 import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
+import { useRepastePulse } from './useRepastePulse';
 import { getUploadChipState } from './utils';
 
 const IMAGE_CARD_SIZE = 112;
-
-const enter = stylex.keyframes({
-  from: { opacity: 0, transform: 'scale(0.92)' },
-  to: { opacity: 1, transform: 'scale(1)' },
-});
 
 const styles = stylex.create({
   card: {
@@ -35,12 +31,6 @@ const styles = stylex.create({
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
-    animationName: {
-      'default': enter,
-      '@media (prefers-reduced-motion: reduce)': 'none',
-    },
-    animationDuration: '160ms',
-    animationTimingFunction: 'ease-out',
   },
   cardError: { borderColor: cssVar.colorErrorBorder },
   image: {
@@ -56,20 +46,6 @@ const styles = stylex.create({
     padding: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
-  },
-  badge: {
-    pointerEvents: 'none',
-    position: 'absolute',
-    insetBlockStart: '4px',
-    insetInlineStart: '4px',
-    paddingInline: '4px',
-    borderRadius: cssVar.borderRadiusSM,
-    fontSize: '11px',
-    fontVariantNumeric: 'tabular-nums',
-    fontWeight: 500,
-    lineHeight: '16px',
-    color: cssVar.colorText,
-    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 85%, transparent)`,
   },
   close: {
     cursor: 'pointer',
@@ -107,19 +83,17 @@ const styles = stylex.create({
   overlayActions: { pointerEvents: 'auto' },
 });
 
-interface ImageCardProps extends UploadFileItem {
-  /** Position among the draft's images; matches the inline `[Image #N]` references. */
-  number?: number;
-}
-
-const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
+const ImageCard = memo<UploadFileItem>((item) => {
   const { errorCode, file, id, previewUrl } = item;
   const { t } = useTranslation(['chat', 'common']);
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
   const { busy, canRetry, indicator } = getUploadChipState(item);
+  const failed = indicator === 'error';
   const src = previewUrl || item.fileUrl || item.base64Url;
+  const cardRef = useRef<HTMLDivElement>(null);
+  useRepastePulse(cardRef, item.repastedAt);
 
   const handlePreview = useEventCallback(() => {
     void openFilePreviewModal(item);
@@ -132,7 +106,7 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
   });
 
   return (
-    <div aria-busy={busy} {...stylex.props(styles.card, canRetry && styles.cardError)}>
+    <div aria-busy={busy} ref={cardRef} {...stylex.props(styles.card, failed && styles.cardError)}>
       {src && <img alt={file.name} draggable={false} src={src} {...stylex.props(styles.image)} />}
       <Tooltip title={<UploadTooltipContent {...item} />}>
         <button
@@ -143,15 +117,16 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
           {...stylex.props(styles.previewButton)}
         />
       </Tooltip>
-      {(busy || canRetry) && (
+      {(busy || failed) && (
         <div {...stylex.props(styles.overlay)}>
           {indicator === 'busy' ? (
             <UploadIndicator label={t('upload.preview.status.uploading')} size={24} />
           ) : (
             <>
               <Icon
-                aria-label={t('upload.preview.status.error')}
+                aria-label={item.error || t('upload.preview.status.error')}
                 icon={CircleAlertIcon}
+                role={'img'}
                 size={20}
                 style={{ color: cssVar.colorError }}
               />
@@ -159,19 +134,20 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
                 {errorCode ? (
                   <FileUploadErrorActions compact code={errorCode} />
                 ) : (
-                  <ActionIcon
-                    icon={RotateCwIcon}
-                    size={'small'}
-                    title={t('retry', { ns: 'common' })}
-                    onClick={handleRetry}
-                  />
+                  canRetry && (
+                    <ActionIcon
+                      icon={RotateCwIcon}
+                      size={'small'}
+                      title={t('retry', { ns: 'common' })}
+                      onClick={handleRetry}
+                    />
+                  )
                 )}
               </div>
             </>
           )}
         </div>
       )}
-      {number !== undefined && <span {...stylex.props(styles.badge)}>#{number}</span>}
       <button
         aria-label={t('upload.image.remove', { name: file.name })}
         type={'button'}

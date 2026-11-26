@@ -361,3 +361,18 @@ export const resolveMergeDock = ({ detail, local, ui }: MergeDockInput): MergeDo
     status,
   };
 };
+
+/** `origin/feat/x` → `feat/x`. */
+const remoteBranch = (ref?: string) => ref?.replace(/^[^/]+\//, '');
+
+/**
+ * Whether the working checkout's unpushed commits go to this PR's head — by
+ * its tracking ref or by the ref the push action targets. A topic can link
+ * several PRs, so the pane may show one the checkout is not on.
+ */
+export const checkoutPublishesTo = (
+  aheadBehind: { pushTarget?: string; upstream?: string },
+  headRefName: string,
+) =>
+  remoteBranch(aheadBehind.upstream) === headRefName ||
+  remoteBranch(aheadBehind.pushTarget) === headRefName;

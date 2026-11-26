@@ -1,0 +1,118 @@
+---
+title: LobeHub Public API Overview and Quick Start
+description: >-
+  Call the LobeHub public REST API and SDKs: what is available today, what is
+  coming soon, and a first request with an API key.
+tags:
+  - LobeHub
+  - REST API
+  - SDK
+  - OpenAPI
+  - Developer Guide
+---
+
+# LobeHub Public API Overview and Quick Start
+
+The public API lets your own application, script, or agent read and act on a LobeHub account or Workspace: Agents, Topics, messages, files, Libraries, tasks, goals, and model calls. It is a REST API under `/api/v1`, described by an OpenAPI 3.1 specification, with an official TypeScript SDK generated from that specification.
+
+This guide only describes behavior that exists in LobeHub source code. Each capability carries one of two labels:
+
+- **Available**: merged into the `canary` branch, which runs LobeHub Cloud.
+- **Coming soon**: implemented in an open pull request that has not been merged. Names, fields, and limits can still change before release. Do not build production integrations on them yet.
+
+## Guide Contents
+
+| Page                                                                              | What it covers                                                                              |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Authentication and Scopes](/docs/development/api/authentication)                 | API keys, OIDC with PKCE, OAuth apps, `X-Workspace-Id`, and the scope table                 |
+| [Errors, Pagination, Rate Limits, and Retries](/docs/development/api/conventions) | Error format and code catalog, pagination, rate limits, `Idempotency-Key`, and retry advice |
+| [Streaming, Runs, and Human Approval](/docs/development/api/streaming)            | `POST /responses` stream events, Agent run events, approvals, and client tool results       |
+| [Webhooks](/docs/development/api/webhooks)                                        | Event catalog, delivery format, and signature verification                                  |
+| [MCP Server](/docs/development/api/mcp-server)                                    | Connecting Claude Code, Cursor, or Codex to LobeHub over MCP                                |
+| [SDKs and File Uploads](/docs/development/api/sdks)                               | TypeScript and Python SDK examples, and uploading files                                     |
+| [Versioning, Deprecation, and Changelog](/docs/development/api/versioning)        | Compatibility rules and the API changelog                                                   |
+
+## Availability at a Glance
+
+| Capability                                                                   | Status      | Source                                                  |
+| ---------------------------------------------------------------------------- | ----------- | ------------------------------------------------------- |
+| REST API under `/api/v1` with typed success responses                        | Available   | [#23217](https://github.com/lobehub/lobehub/pull/23217) |
+| API key and OIDC bearer authentication, `X-Workspace-Id`                     | Available   | `packages/openapi/src/middleware`                       |
+| TypeScript SDK `@lobehub/sdk` (`createLobeHub`, OAuth PKCE helpers)          | Available   | `packages/sdk`                                          |
+| `POST /responses` streaming, task runs, multipart file upload                | Available   | `packages/openapi/src/routes`                           |
+| Unified error codes, cursor pagination, rate limits, idempotency             | Coming soon | [#23231](https://github.com/lobehub/lobehub/pull/23231) |
+| SDK retries, typed errors, `paginate`, `responses.stream`, `workspaceId`     | Coming soon | [#23246](https://github.com/lobehub/lobehub/pull/23246) |
+| Agent runs API with event stream and human approval                          | Coming soon | [#23253](https://github.com/lobehub/lobehub/pull/23253) |
+| Developer webhooks with HMAC signatures                                      | Coming soon | [#23272](https://github.com/lobehub/lobehub/pull/23272) |
+| MCP server at `/api/v1/mcp`                                                  | Coming soon | [#23318](https://github.com/lobehub/lobehub/pull/23318) |
+| OAuth open platform (dynamic registration, `client_credentials`, API scopes) | Coming soon | [#23322](https://github.com/lobehub/lobehub/pull/23322) |
+| Python SDK `lobehub`                                                         | Coming soon | [#23337](https://github.com/lobehub/lobehub/pull/23337) |
+
+The full list of merged and pending changes is in the [API Changelog](/docs/development/api/versioning#api-changelog).
+
+## Quick Start
+
+### 1. Create an API Key
+
+1. Open the Workspace where your data lives and go to **Settings → API Keys** (`/<workspace>/settings/apikey`).
+2. Create a key. Choose **Full access** or pick only the [scopes](/docs/development/api/authentication#scopes) your integration needs.
+3. Copy the key. It starts with `sk-lh-` and is followed by 58 lowercase letters and digits. Keys created earlier have 16 and keep working.
+
+You can change a key's scopes later on its detail page. Only the key's creator can do this.
+
+### 2. Send a First Request
+
+```bash
+curl https://app.lobehub.com/api/v1/users/me \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY"
+```
+
+A successful response is wrapped in an envelope:
+
+```json
+{
+  "success": true,
+  "data": { "id": "user_…", "email": "…" },
+  "timestamp": "2026-11-18T08:00:00.000Z"
+}
+```
+
+For a self-hosted instance, replace `https://app.lobehub.com` with your deployment's origin. The base path is always `/api/v1`.
+
+### 3. Choose the Workspace
+
+A key created inside a Workspace is bound to it: requests run in that Workspace without extra headers. An OIDC access token can address a Workspace by sending its id:
+
+```bash
+curl https://app.lobehub.com/api/v1/agents \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "X-Workspace-Id: $WORKSPACE_ID"
+```
+
+See [Workspace selection](/docs/development/api/authentication#workspace-selection) for the full rules.
+
+### 4. Explore the Specification
+
+- Interactive reference: `https://app.lobehub.com/api/v1/docs`
+- Machine-readable spec: `https://app.lobehub.com/api/v1/openapi.json`
+- Source spec in the repository: [`packages/openapi/openapi.yml`](https://github.com/lobehub/lobehub/blob/canary/packages/openapi/openapi.yml)
+
+Internal application routes (`/trpc/*`, `/webapi/*`) are not part of the public API and can change without notice.
+
+### 5. Use the TypeScript SDK
+
+```bash
+npm install @lobehub/sdk
+```
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({ apiKey: process.env.LOBEHUB_API_KEY! });
+
+const { data, error } = await lobehub.agents.list();
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.data.agents.map((agent) => agent.id));
+```
+
+More examples are in [SDKs and File Uploads](/docs/development/api/sdks).

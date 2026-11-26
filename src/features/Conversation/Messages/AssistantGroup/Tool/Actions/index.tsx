@@ -4,7 +4,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { useDensity } from '@/styles/density';
 
+import { STEP_ACTION_ICON_SIZE } from '../../../../components/stepTriggerStyles';
 import { useConversationStore } from '../../../../store';
 import Settings from './Settings';
 
@@ -33,6 +35,8 @@ const Actions = memo<ActionsProps>(
   }) => {
     const { t } = useTranslation('plugin');
     const { allowed: canEdit } = usePermission('edit_own_content');
+    const { density } = useDensity();
+    const iconSize = STEP_ACTION_ICON_SIZE[density];
     const [deleteAssistantMessage, removeToolFromMessage] = useConversationStore((s) => [
       s.deleteAssistantMessage,
       s.removeToolFromMessage,
@@ -43,7 +47,7 @@ const Actions = memo<ActionsProps>(
         {canToggleCustomToolRender && (
           <ActionIcon
             icon={showCustomToolRender ? LogsIcon : LayoutPanelTop}
-            size={'small'}
+            size={iconSize}
             title={showCustomToolRender ? t('inspector.args') : t('inspector.pluginRender')}
             onClick={() => {
               setShowCustomToolRender?.(!showCustomToolRender);
@@ -53,17 +57,17 @@ const Actions = memo<ActionsProps>(
         <ActionIcon
           active={showDebug}
           icon={showDebug ? LucideBugOff : LucideBug}
-          size={'small'}
+          size={iconSize}
           title={t(showDebug ? 'debug.off' : 'debug.on')}
           onClick={() => setShowDebug?.(!showDebug)}
         />
         {canEdit && (
           <>
-            <Settings id={identifier} />
+            <Settings id={identifier} size={iconSize} />
             <ActionIcon
               danger
               icon={Trash2}
-              size={'small'}
+              size={iconSize}
               title={t('inspector.delete')}
               onClick={() => {
                 if (toolRemoval) {

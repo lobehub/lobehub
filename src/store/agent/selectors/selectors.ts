@@ -3,6 +3,7 @@ import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_INBOX_AVATAR,
+  DEFAULT_INBOX_TITLE,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
   isDesktop,
@@ -12,7 +13,6 @@ import {
   type AgentMode,
   type AgentProfile,
   getActivePluginIds,
-  getDisabledPluginIds,
   getWorkingDirEffectivePath,
   type KnowledgeItem,
   KnowledgeType,
@@ -66,6 +66,10 @@ const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.creat
 
 const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
 
+/** An agent's visibility by id — for a conversation whose agent is not the active one. */
+const getAgentVisibilityById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentMap[agentId]?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -103,6 +107,20 @@ const getAgentMetaById =
       title: data.title || undefined,
     };
   };
+
+/**
+ * The inbox agent's label: the name the user gave it, else its title, else `DEFAULT_INBOX_TITLE`.
+ * Use it wherever the inbox is named, rather than the brand constant.
+ */
+const inboxAgentDisplayName = (s: AgentStoreState) =>
+  agentDisplayName(
+    getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s),
+    DEFAULT_INBOX_TITLE,
+  );
+
+/** The inbox agent's avatar, else `DEFAULT_INBOX_AVATAR`. */
+const inboxAgentAvatar = (s: AgentStoreState) =>
+  getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s).avatar || DEFAULT_INBOX_AVATAR;
 
 /**
  * Full-body artwork of the agent's character, or `undefined` when it has none.
@@ -173,19 +191,6 @@ const currentAgentPlugins = (s: AgentStoreState) => {
   const config = currentAgentConfig(s);
 
   return getActivePluginIds(config?.plugins);
-};
-
-/**
- * Disabled plugin identifiers for the current agent. Consumers that build a
- * tool/skill candidate pool (not just the "always whitelisted" rule map)
- * need this to actually drop a disabled entry from the pool — being absent
- * from `currentAgentPlugins` alone doesn't stop it from being present (and
- * explicit-activation-eligible) in an unfiltered manifest source.
- */
-const currentAgentDisabledPlugins = (s: AgentStoreState) => {
-  const config = currentAgentConfig(s);
-
-  return getDisabledPluginIds(config?.plugins);
 };
 
 /**
@@ -382,6 +387,8 @@ const isAgentSlugConfirmed = (slug?: string | null) => (s: AgentStoreState) =>
 const heteroServerDefaultCapability = (s: AgentStoreState) => s.heteroServerDefaultCapability;
 
 export const agentSelectors = {
+  inboxAgentAvatar,
+  inboxAgentDisplayName,
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
   currentAgentAuthorId,
@@ -396,7 +403,6 @@ export const agentSelectors = {
   currentAgentRuntimeEnvConfig,
   currentAgentMeta,
   currentAgentMode,
-  currentAgentDisabledPlugins,
   currentAgentModel,
   currentAgentModelProvider,
   currentAgentPlugins,
@@ -407,6 +413,7 @@ export const agentSelectors = {
   currentAgentDisplayName,
   currentAgentTitle,
   currentAgentVisibility,
+  getAgentVisibilityById,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,

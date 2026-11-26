@@ -12,6 +12,8 @@ import { pickAppResource } from './utils';
 
 export interface AppPresentationOptions {
   agentId?: string;
+  /** The tool call's arguments: they name the account it ran as. */
+  arguments?: string;
   icon?: string;
   identifier: string;
   location: 'inline' | 'fullscreen';
@@ -31,6 +33,7 @@ let lastHostInstance = 0;
 /** Ownership and protocol callbacks shared by the inline and sidebar hosts. */
 export const useMcpAppPresentation = ({
   agentId,
+  arguments: toolArguments,
   icon,
   identifier,
   location,
@@ -68,6 +71,7 @@ export const useMcpAppPresentation = ({
     agentId,
     onThisDevice,
     server,
+    toolArguments,
   });
   useEffect(() => {
     if (!deciding || isLoading) return;

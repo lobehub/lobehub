@@ -6,6 +6,8 @@ import { ListTodo, Lock, UsersRound } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import type { DecisionSegment } from '../Checks/checkDecision';
 import { DecisionActions } from './DecisionActions';
 import { decisionBarStyles as styles } from './decisionBarStyles';
@@ -17,6 +19,11 @@ import { DecisionTally } from './DecisionTally';
 interface DecisionBarProps {
   /** Checks the user has signed off, of `totalCount` reviewable ones. */
   acceptedCount: number;
+  /** Docks the bar across the whole scroll frame — its rule then mirrors the
+      header band's under the tabs — while the content keeps to a column this
+      wide (the body column's max width, its padding included). The caller
+      renders the bar after the column instead of inside it. */
+  dockedMaxWidth?: number;
   /** Rendered inside the conversation portal — the composer beside the bar
       receives the repair draft, so the copy handoff stays standalone-only. */
   embedded?: boolean;
@@ -70,6 +77,7 @@ interface DecisionBarProps {
 const DecisionBar = memo<DecisionBarProps>(
   ({
     acceptedCount,
+    dockedMaxWidth,
     embedded,
     feedbackCount,
     ignoredCount,
@@ -93,6 +101,7 @@ const DecisionBar = memo<DecisionBarProps>(
     totalCount,
   }) => {
     const { t } = useTranslation('verify');
+    const docked = dockedMaxWidth !== undefined;
 
     const allConfirmed = totalCount > 0 && acceptedCount + ignoredCount >= totalCount;
     const hasFeedback = feedbackCount > 0;
@@ -118,9 +127,10 @@ const DecisionBar = memo<DecisionBarProps>(
     }
 
     return (
-      <div {...stylex.props(styles.bar)}>
+      <div {...stylex.props(styles.bar, docked && styles.barDocked)}>
         {segments && segments.length > 0 && (
           <DecisionStrip
+            pendingXstyle={styles.stripPending}
             segmentXstyle={styles.stripSegment}
             segments={segments}
             xstyle={styles.strip}
@@ -130,85 +140,93 @@ const DecisionBar = memo<DecisionBarProps>(
             })}
           />
         )}
-        <Flexbox horizontal align={'flex-start'} gap={10} {...stylex.props(styles.summary)}>
-          <span {...stylex.props(styles.mark)}>
-            <DecisionStatusMark
-              allConfirmed={allConfirmed}
-              decidedCount={decidedCount}
-              justCompleted={justCompleted}
-              repairing={repairing}
-              settledNeedsFix={settledNeedsFix}
-              state={state}
-              totalCount={totalCount}
-            />
-          </span>
-          <Flexbox gap={0} style={{ flex: '0 1 auto', minWidth: 0 }}>
-            <Text ellipsis {...stylex.props(styles.statusText)}>
-              {statusText}
-            </Text>
-            {state === 'settled' && totalCount > 0 && (
-              <DecisionTally
-                acceptedCount={acceptedCount}
-                ignoredCount={ignoredCount}
-                needsFixCount={needsFixCount}
-                pendingCount={Math.max(totalCount - decidedCount, 0)}
+        <div
+          {...sx(
+            styles.content,
+            docked && styles.contentDocked,
+            docked ? { maxWidth: dockedMaxWidth } : undefined,
+          )}
+        >
+          <Flexbox horizontal align={'flex-start'} gap={10} {...stylex.props(styles.summary)}>
+            <span {...stylex.props(styles.mark)}>
+              <DecisionStatusMark
+                allConfirmed={allConfirmed}
+                decidedCount={decidedCount}
+                justCompleted={justCompleted}
+                repairing={repairing}
+                settledNeedsFix={settledNeedsFix}
+                state={state}
+                totalCount={totalCount}
               />
-            )}
-            {subText && (
-              <Text ellipsis fontSize={12} type={'secondary'}>
-                {subText}
+            </span>
+            <Flexbox gap={0} style={{ flex: '0 1 auto', minWidth: 0 }}>
+              <Text ellipsis {...stylex.props(styles.statusText)}>
+                {statusText}
               </Text>
-            )}
-            {(readOnlyReason || rejectOnlyReason) && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                data-testid={'acceptance-decision-reason'}
-                gap={4}
-              >
-                <Icon
-                  icon={readOnlyReason ? Lock : UsersRound}
-                  size={12}
-                  style={{ flex: 'none' }}
+              {state === 'settled' && totalCount > 0 && (
+                <DecisionTally
+                  acceptedCount={acceptedCount}
+                  ignoredCount={ignoredCount}
+                  needsFixCount={needsFixCount}
+                  pendingCount={Math.max(totalCount - decidedCount, 0)}
                 />
-                <Text fontSize={12} type={'secondary'}>
-                  {readOnlyReason ?? rejectOnlyReason}
+              )}
+              {subText && (
+                <Text ellipsis fontSize={12} type={'secondary'}>
+                  {subText}
                 </Text>
-              </Flexbox>
-            )}
-          </Flexbox>
+              )}
+              {(readOnlyReason || rejectOnlyReason) && (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  data-testid={'acceptance-decision-reason'}
+                  gap={4}
+                >
+                  <Icon
+                    icon={readOnlyReason ? Lock : UsersRound}
+                    size={12}
+                    style={{ flex: 'none' }}
+                  />
+                  <Text fontSize={12} type={'secondary'}>
+                    {readOnlyReason ?? rejectOnlyReason}
+                  </Text>
+                </Flexbox>
+              )}
+            </Flexbox>
 
-          {/* The clearing list — every note this round queues for the next one.
+            {/* The clearing list — every note this round queues for the next one.
             Sits with the status reading on the left: it explains that reading,
             while the right side stays pure actions. */}
-          {feedbackCount > 0 && (
-            <Button
-              icon={<Icon icon={ListTodo} />}
-              size={'small'}
-              style={{ flex: 'none' }}
-              type={'text'}
-              onClick={onOpenFeedback}
-            >
-              {t('acceptance.bar.feedback', { count: feedbackCount })}
-            </Button>
-          )}
-        </Flexbox>
-        <DecisionActions
-          allConfirmed={allConfirmed}
-          embedded={embedded}
-          hasFeedback={hasFeedback}
-          pending={pending}
-          readOnlyReason={readOnlyReason}
-          rejectOnlyReason={rejectOnlyReason}
-          rerunAvailable={rerunAvailable}
-          rerunPending={rerunPending}
-          state={state}
-          onAccept={onAccept}
-          onAddComment={onAddComment}
-          onCopyReview={onCopyReview}
-          onRejectComment={onRejectComment}
-          onRerun={onRerun}
-        />
+            {feedbackCount > 0 && (
+              <Button
+                icon={<Icon icon={ListTodo} />}
+                size={'small'}
+                style={{ flex: 'none' }}
+                type={'text'}
+                onClick={onOpenFeedback}
+              >
+                {t('acceptance.bar.feedback', { count: feedbackCount })}
+              </Button>
+            )}
+          </Flexbox>
+          <DecisionActions
+            allConfirmed={allConfirmed}
+            embedded={embedded}
+            hasFeedback={hasFeedback}
+            pending={pending}
+            readOnlyReason={readOnlyReason}
+            rejectOnlyReason={rejectOnlyReason}
+            rerunAvailable={rerunAvailable}
+            rerunPending={rerunPending}
+            state={state}
+            onAccept={onAccept}
+            onAddComment={onAddComment}
+            onCopyReview={onCopyReview}
+            onRejectComment={onRejectComment}
+            onRerun={onRerun}
+          />
+        </div>
       </div>
     );
   },

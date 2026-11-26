@@ -237,7 +237,6 @@
   "rules.distill.truncated": "El material es largo; solo se leyó el principio.",
   "rules.distill.untitled": "Sin título",
   "rules.distill.upload": "Subir un archivo",
-  "rules.distill.uploadFailed": "No se pudo subir el archivo.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint o texto plano",
   "rules.enforcement.block": "Bloquear",
   "rules.enforcement.blockDesc": "Retendrá la entrega hasta que la permitas. Aún no en efecto: por ahora solo recuerda",

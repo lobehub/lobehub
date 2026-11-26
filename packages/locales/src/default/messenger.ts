@@ -54,7 +54,7 @@ export default {
   'messenger.slack.connections.disconnectSuccess': 'Workspace disconnected.',
   'messenger.slack.connections.disconnectTitle': 'Disconnect workspace',
   'messenger.slack.installBlocked.dismiss': 'Got it',
-  'messenger.slack.installBlocked.suggestion':
+  'messenger.slack.installBlocked.nextSteps':
     "DM @LobeHub on Slack to link your personal account — you don't need to install again. Or ask the original installer to disconnect this workspace first if you want to take over ownership.",
   'messenger.slack.installBlocked.title': 'Workspace already connected',
   'messenger.slack.installBlocked.withName':
@@ -88,8 +88,8 @@ export default {
   'messenger.discord.connections.disconnectSuccess': 'Server removed.',
   'messenger.discord.connections.disconnectTitle': 'Remove server',
   'messenger.discord.installBlocked.dismiss': 'Got it',
-  'messenger.discord.installBlocked.suggestion':
-    "DM the LobeHub bot on Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Settings → Messenger before re-adding it.",
+  'messenger.discord.installBlocked.nextSteps':
+    "DM the LobeHub bot on Discord to link your personal account — you don't need to add the bot again. Or ask the original installer to remove this server in LobeHub Marketplace → Apps before re-adding it.",
   'messenger.discord.installBlocked.title': 'Server already connected',
   'messenger.discord.installBlocked.withName':
     '"{{workspace}}" is already connected to LobeHub by another user.',
@@ -246,17 +246,17 @@ export default {
   'verify.confirm.conflict.title': 'This account is already linked',
   'verify.confirm.cta': 'Confirm linking',
   'verify.confirm.defaultAgent': 'Default agent',
-  'verify.confirm.defaultAgentHint':
-    'Your messages will be routed here first. You can switch any time via /agents in the bot or from Settings → Messenger.',
+  'verify.confirm.defaultAgentMarketplaceHint':
+    'Your messages will be routed here first. You can switch any time via /agents in the bot or from Marketplace → Apps.',
   'verify.confirm.defaultAgentPlaceholder': 'Select an agent',
   'verify.confirm.fields.lobeHubAccount': 'LobeHub account',
   'verify.confirm.fields.platformAccount': '{{platform}} account',
   'verify.confirm.fields.workspace': 'Workspace',
   'verify.confirm.noAgents':
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
-  'verify.confirm.relink.description':
-    'This LobeHub account is already linked to {{platform}} account {{account}}. To link a different {{platform}} account, disconnect the current one first in Settings → Messenger.',
-  'verify.confirm.relink.manage': 'Open Messenger settings',
+  'verify.confirm.relink.disconnectInMarketplace':
+    'This LobeHub account is already linked to {{platform}} account {{account}}. To link a different {{platform}} account, disconnect the current one first in Marketplace → Apps.',
+  'verify.confirm.relink.openApp': 'Open app',
   'verify.confirm.relink.title': 'Another {{platform}} account is already linked',
   'verify.confirm.title': 'Confirm linking',
   'verify.confirm.workspace': 'Workspace: {{workspace}}',
@@ -270,7 +270,7 @@ export default {
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
   'verify.error.title': 'Unable to confirm link',
   'verify.error.unlinkBeforeRelink':
-    'This LobeHub account is already linked to another account on this platform. Disconnect it in Settings → Messenger before linking a new one.',
+    'This LobeHub account is already linked to another account on this platform. Disconnect it in Marketplace → Apps before linking a new one.',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.backToLobeHub': 'Back to LobeHub',

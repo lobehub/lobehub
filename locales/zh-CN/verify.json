@@ -151,6 +151,7 @@
   "acceptance.comments.copyLink": "复制链接",
   "acceptance.comments.copyLinkHint": "{{time}} · 点一下复制这条评论的链接",
   "acceptance.comments.createFailed": "评论发送失败，请重试。",
+  "acceptance.comments.createFailedRetry": "无法发布评论，请检查网络后重试。",
   "acceptance.comments.delete": "删除",
   "acceptance.comments.deleteConfirm": "删除这条评论？",
   "acceptance.comments.deleteFailed": "评论删除失败，请重试。",

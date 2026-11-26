@@ -55,6 +55,18 @@ describe('isListedInWorkspaceSidebar', () => {
     );
   });
 
+  it('lists the shared Lobe AI for every member until they hide it', () => {
+    const inbox = item('inbox-agent', 'public', '2026-01-01', { slug: 'inbox' });
+
+    expect(isListedInWorkspaceSidebar(inbox, membership)).toBe(true);
+    expect(
+      isListedInWorkspaceSidebar(inbox, {
+        ...membership,
+        visibilityOverrides: { 'inbox-agent': false },
+      }),
+    ).toBe(false);
+  });
+
   it('leaves a teammate’s shared row on the Agents page until the member adds it', () => {
     expect(isListedInWorkspaceSidebar(item('t', 'public', '2026-01-01'), membership)).toBe(false);
   });
@@ -74,7 +86,7 @@ describe('isListedInWorkspaceSidebar', () => {
 });
 
 describe('resolveWorkspaceAgentSections', () => {
-  it('puts team pins, my pins, private folders and the rest in that order of sections', () => {
+  it('lists pinned rows, private folders and the rest in that order of sections', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
       groups: [folder('pub-folder', 'public', [item('in-pub-folder', 'public', '2026-01-01')])],
@@ -91,24 +103,22 @@ describe('resolveWorkspaceAgentSections', () => {
       ],
     });
 
-    expect(ids(sections.teamPinned)).toEqual(['team']);
-    // Preference order first, then private rows pinned through their column.
-    expect(ids(sections.myPinned)).toEqual(['pub-mine', 'legacy-private-pin']);
+    // One pinned list: preference order, then private column pins. A default
+    // pin the member's list does not hold is not pinned for them.
+    expect(ids(sections.pinned)).toEqual(['pub-mine', 'legacy-private-pin']);
     // Only private folders stay in the sidebar.
     expect(ids(sections.folders)).toEqual(['priv-folder']);
     // Public and private rows interleave, newest first.
     expect(ids(sections.rest)).toEqual(['priv-rest', 'pub-rest']);
   });
 
-  it('keeps every pre-existing pin: public column → team, private column → mine', () => {
+  it('keeps a private row pinned through its own column by earlier clients', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
-      pinned: [item('old-public-pin', 'public', '2026-01-01', { pinned: true })],
       privatePinned: [item('old-private-pin', 'private', '2026-01-01', { pinned: true })],
     });
 
-    expect(ids(sections.teamPinned)).toEqual(['old-public-pin']);
-    expect(ids(sections.myPinned)).toEqual(['old-private-pin']);
+    expect(ids(sections.pinned)).toEqual(['old-private-pin']);
   });
 
   it('moves public folders off the sidebar but keeps the member’s own and added rows', () => {
@@ -141,20 +151,9 @@ describe('resolveWorkspaceAgentSections', () => {
       ungrouped: [item('c', 'public', '2026-01-01'), item('d', 'public', '2026-01-01', mine)],
     });
 
-    expect(ids(sections.myPinned)).toEqual(['a', 'c']);
+    expect(ids(sections.pinned)).toEqual(['a', 'c']);
     expect(ids(sections.folders[0].items)).toEqual(['b']);
     expect(ids(sections.rest)).toEqual(['d']);
-  });
-
-  it('never repeats a team pin under my pins', () => {
-    const sections = resolveWorkspaceAgentSections({
-      ...base,
-      myPinnedIds: ['team'],
-      pinned: [item('team', 'public', '2026-01-01', { pinned: true })],
-    });
-
-    expect(ids(sections.teamPinned)).toEqual(['team']);
-    expect(sections.myPinned).toEqual([]);
   });
 
   it('skips dangling personal pins of rows that no longer exist', () => {
@@ -164,7 +163,7 @@ describe('resolveWorkspaceAgentSections', () => {
       ungrouped: [item('kept', 'public', '2026-01-01')],
     });
 
-    expect(ids(sections.myPinned)).toEqual(['kept']);
+    expect(ids(sections.pinned)).toEqual(['kept']);
   });
 
   it('dedupes a private pin recorded both in the preference and on the column', () => {
@@ -175,6 +174,96 @@ describe('resolveWorkspaceAgentSections', () => {
       privatePinned: [pinnedPrivate],
     });
 
-    expect(ids(sections.myPinned)).toEqual(['p']);
+    expect(ids(sections.pinned)).toEqual(['p']);
+  });
+
+  describe('team pins and recommended Agents', () => {
+    const team = [
+      item('t1', 'public', '2026-01-01', { pinned: true }),
+      item('t2', 'public', '2026-01-02', { pinned: true }),
+    ];
+    const ungrouped = [
+      item('m1', 'public', '2026-01-03', mine),
+      item('r1', 'public', '2026-01-04'),
+    ];
+
+    it('pins team pins only through the member’s own list, in the member’s order', () => {
+      const sections = resolveWorkspaceAgentSections({
+        ...base,
+        myPinnedIds: ['t2', 'm1', 't1'],
+        pinned: team,
+        ungrouped,
+      });
+
+      expect(ids(sections.pinned)).toEqual(['t2', 'm1', 't1']);
+      expect(ids(sections.rest)).toEqual([]);
+    });
+
+    it('shows the team pins after the member’s own while the server is about to copy them in', () => {
+      const sections = resolveWorkspaceAgentSections({
+        ...base,
+        myPinnedIds: ['m1', 't2'],
+        pinned: team,
+        setupPreview: 'teamPins',
+        ungrouped,
+      });
+
+      // Where the server appends them, so nothing moves when it lands.
+      expect(ids(sections.pinned)).toEqual(['m1', 't2', 't1']);
+    });
+
+    it('lists a new member’s recommended Agents, unpinned, before the server set them up', () => {
+      const sections = resolveWorkspaceAgentSections({
+        ...base,
+        pinned: team,
+        recommendedIds: ['r1', 't1'],
+        setupPreview: 'recommended',
+        ungrouped,
+      });
+
+      expect(sections.pinned).toEqual([]);
+      expect(ids(sections.rest)).toEqual(['r1', 'm1', 't1']);
+    });
+
+    it('ignores the recommended list once the member’s sidebar is set up', () => {
+      const sections = resolveWorkspaceAgentSections({
+        ...base,
+        pinned: team,
+        recommendedIds: ['r1', 't1'],
+        ungrouped,
+        // Set up earlier with r1 only; t1 was recommended later.
+        visibilityOverrides: { r1: true },
+      });
+
+      expect(ids(sections.rest)).toEqual(['r1', 'm1']);
+    });
+
+    it('lists a team pin the member unpinned in the rest while they keep it', () => {
+      const sections = resolveWorkspaceAgentSections({
+        ...base,
+        myPinnedIds: ['m1', 't2'],
+        pinned: team,
+        ungrouped,
+        // Unpinning records the row as added to the member's sidebar.
+        visibilityOverrides: { t1: true },
+      });
+
+      expect(ids(sections.pinned)).toEqual(['m1', 't2']);
+      expect(ids(sections.rest)).toEqual(['t1']);
+    });
+  });
+});
+
+describe('resolveWorkspaceAgentSections with Lobe AI', () => {
+  it('leads the rest with Lobe AI even when other rows are newer', () => {
+    const sections = resolveWorkspaceAgentSections({
+      ...base,
+      ungrouped: [
+        item('newer', 'public', '2026-03-01', mine),
+        item('inbox-agent', 'public', '2020-01-01', { slug: 'inbox' }),
+      ],
+    });
+
+    expect(ids(sections.rest)).toEqual(['inbox-agent', 'newer']);
   });
 });

@@ -32,7 +32,6 @@
   "features.messageTextSelectionActions.title": "Acties voor Tekstselectie in Berichten",
   "features.oauthApps.desc": "Toon OAuth-appbeheer in persoonlijke en werkruimte-instellingen. Deze functie is standaard verborgen.",
   "features.oauthApps.title": "OAuth-apps",
-  "features.projects.desc": "Organiseer langlopende doelen in speciale werkruimtes met eigen agenten, kennisbanken en taken.",
   "features.projects.title": "Projectwerkruimtes",
   "features.selfLearning.desc": "Toon wat elke agent heeft geleerd uit echte praktijk — zijn regelbasis, welke regels daadwerkelijk worden gebruikt en welke lagen nog leeg zijn.",
   "features.selfLearning.note": "Dit voert modelaanroepen op de achtergrond uit en gebruikt extra quota. Elke nachtelijke beoordeling behandelt maximaal 50 gesprekken.",

@@ -136,3 +136,19 @@ export const isQuotaStale = (
   const receivedAtMs = toMs(receivedAt);
   return receivedAtMs === null || now - receivedAtMs > maxAgeMs;
 };
+
+/**
+ * Whether the selected model is the one a model-scoped limit applies to. The CLI names
+ * models by alias or id (`fable`, `claude-fable-5-2`) while the limit names the model by
+ * display name (`Fable`, possibly `Claude Fable 5`), so both are compared by family.
+ *
+ * The CLI default (`default`) is not a selection of that model, so it does not match even
+ * when the account's default happens to be it; the panel still lists the limit.
+ */
+export const isScopedQuotaModel = (selectedModel: string | undefined, scopeModelName: string) => {
+  const family = scopeModelName
+    .toLowerCase()
+    .split(/[\s-]+/)
+    .find((word) => word && word !== 'claude');
+  return !!selectedModel && !!family && selectedModel.toLowerCase().includes(family);
+};

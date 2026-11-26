@@ -5,10 +5,13 @@ import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import DocumentsRoutes from './documents.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
+import GenerationsRoutes from './generations.route';
 import GoalsRoutes from './goals.route';
 import ImRoutes from './im.route';
+import ImagesRoutes from './images.route';
 import KnowledgeBasesRoutes from './knowledge-bases.route';
 import McpServersRoutes from './mcp-servers.route';
 import MemoriesRoutes from './memories.route';
@@ -16,6 +19,7 @@ import MessageTranslationsRoutes from './message-translations.route';
 import MessagesRoutes from './messages.route';
 import ModelsRoutes from './models.route';
 import NotificationsRoutes from './notifications.route';
+import ObjectsRoutes from './objects.route';
 import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
 import { PluginsRoutes } from './plugins.route';
@@ -25,9 +29,11 @@ import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
+import TextRoutes from './text.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
+import VideosRoutes from './videos.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
@@ -37,6 +43,7 @@ export default {
   'audio': AudioRoutes,
   'chat': ChatRoutes,
   'chat-groups': ChatGroupsRoutes,
+  'documents': DocumentsRoutes,
   'eval': EvalRoutes,
   'plugins': PluginsRoutes,
   'files': FileRoutes,
@@ -60,4 +67,9 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'generations': GenerationsRoutes,
+  'images': ImagesRoutes,
+  'videos': VideosRoutes,
+  'text': TextRoutes,
+  'objects': ObjectsRoutes,
 };

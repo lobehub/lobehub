@@ -1,5 +1,5 @@
 import type { SidebarAgentItem } from '@lobechat/types';
-import { type AgentAvatarColor, cssVar, getAgentAvatarTraits } from '@lobehub/ui';
+import { cssVar, getAgentAvatarTraits, parseAgentAvatar } from '@lobehub/ui';
 
 import { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 import { remoteAvatarSrc } from '@/components/Avatar/fallback';
@@ -8,24 +8,35 @@ import { remoteAvatarSrc } from '@/components/Avatar/fallback';
  * The generated character's palette as theme colors. `ink` / `gray` share the
  * gray scale: the cover is mixed toward the container color, which keeps both
  * readable in either theme.
+ *
+ * Keyed by string rather than `AgentAvatarColor`: `@lobehub/ui` grows that
+ * palette in minor releases, and an exhaustive record breaks the type check of
+ * every build that resolves a newer one. A color it adds before it is listed
+ * here falls back to gray.
  */
-const SEED_COLORS: Record<AgentAvatarColor, string> = {
+const SEED_COLORS: Record<string, string> = {
+  cyan: cssVar.cyan,
   geekblue: cssVar.geekblue,
   gray: cssVar.gray,
+  green: cssVar.green,
   ink: cssVar.gray,
   magenta: cssVar.magenta,
   orange: cssVar.orange,
   purple: cssVar.purple,
+  red: cssVar.red,
   volcano: cssVar.volcano,
 };
 
 /**
- * Cover color derived from the agent id: the same color its generated
- * character wears, so an agent without an avatar of its own gets a band that
- * matches its face, and any other agent still gets a stable one.
+ * Cover color of the agent's character: the color its owner picked, else the
+ * one derived from the agent id. An agent without an image of its own gets a
+ * band that matches its face, and any other agent still gets a stable one.
  */
-export const seedCoverColor = (item: SidebarAgentItem): string =>
-  SEED_COLORS[getAgentAvatarTraits(item.id).color];
+export const seedCoverColor = (item: SidebarAgentItem): string => {
+  const picked = typeof item.avatar === 'string' ? parseAgentAvatar(item.avatar) : undefined;
+
+  return SEED_COLORS[picked?.color ?? getAgentAvatarTraits(item.id).color] ?? cssVar.gray;
+};
 
 export const AGENT_COVER_PATTERNS = [
   'dots',

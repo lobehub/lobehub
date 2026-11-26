@@ -6,10 +6,13 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { shinyTextStyles } from '@/styles';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { formatElapsedTime } from './utils';
 
-const styles = stylex.create({ container: { paddingBlock: '12px' } });
+const styles = stylex.create({
+  container: { paddingBlock: densityTokens['--lobe-density-content-gap'] },
+});
 
 const InitializingState = memo(() => {
   const { t } = useTranslation('chat');

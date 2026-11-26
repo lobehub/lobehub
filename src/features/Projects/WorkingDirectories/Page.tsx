@@ -11,14 +11,13 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
+import { resolveProjectSettingsSection } from '../Layout/navigation';
 import { ProjectMemberSettings } from '../Members';
 import { MembersSettings } from '../Review/MembersSettings';
-import { SitesSettings } from '../Review/SitesSettings';
 import { useCanManageProject } from '../useCanManageProject';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
-import { ProjectWorkingDirectories } from './index';
-import { WorkingDirectorySettings } from './WorkingDirectorySettings';
+import { ProjectEnvironment, ProjectRunners } from './index';
 
 interface SectionItem {
   key: string;
@@ -61,36 +60,23 @@ export function ProjectDirectoriesPage() {
     },
     {
       key: 'environments',
-      label: t('settings.environments'),
-      render: () => (
-        <ProjectWorkingDirectories
-          projectId={detail.project.id}
-          shared={Boolean(detail.project.workspaceId) && detail.project.visibility === 'public'}
-        />
-      ),
+      label: t('settings.runners'),
+      render: () => <ProjectRunners canManage={canManage} projectId={detail.project.id} />,
     },
     {
-      key: 'directories',
-      label: t('settings.workLocations'),
-      render: () => <WorkingDirectorySettings projectId={detail.project.id} />,
+      key: 'environment',
+      label: t('settings.environment'),
+      render: () => <ProjectEnvironment canManage={canManage} projectId={detail.project.id} />,
     },
+    // Everyone sees Advanced for Sites; it hides its management settings from viewers.
     {
-      key: 'sites',
-      label: t('review.sites.title'),
-      render: () => <SitesSettings projectId={detail.project.id} />,
+      key: 'advanced',
+      label: t('settings.advanced'),
+      render: () => <AdvancedSettings project={detail.project} />,
     },
-    // Destructive settings need edit permission, so the tab is hidden from viewers.
-    ...(canManage
-      ? [
-          {
-            key: 'advanced',
-            label: t('settings.advanced'),
-            render: () => <AdvancedSettings project={detail.project} />,
-          },
-        ]
-      : []),
   ];
-  const activeSection = sections.find((item) => item.key === section) ?? sections[0];
+  const sectionKey = resolveProjectSettingsSection(section);
+  const activeSection = sections.find((item) => item.key === sectionKey) ?? sections[0];
 
   return (
     <Flexbox flex={1} padding={isMobile ? 16 : 32} style={{ overflow: 'auto' }}>

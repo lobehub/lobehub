@@ -182,7 +182,7 @@ describe('NavPanel', () => {
   });
 
   it('shapes the skeleton per nav key: discover is header-plus-nav with no body', async () => {
-    pathname = '/community';
+    pathname = '/marketplace';
 
     render(<NavPanel />);
 
@@ -242,7 +242,7 @@ describe('NavPanelShell', () => {
   });
 
   it('still yields to a dedicated route panel', async () => {
-    pathname = '/community';
+    pathname = '/marketplace';
 
     render(<NavPanelShell />);
 
@@ -270,7 +270,7 @@ describe('SideBarLayout scroll restoration', () => {
   });
 
   it('keeps offsets isolated per nav key', () => {
-    pathname = '/community';
+    pathname = '/marketplace';
     const first = render(<SideBarLayout body={<div>body</div>} />);
     const viewport = getViewport(first.container);
     viewport.scrollTop = 80;

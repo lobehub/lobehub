@@ -1,39 +1,62 @@
 import { type KnowledgeItem } from '@lobechat/types';
-import { Alert, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
-import { BookOpen, ServerCrash } from 'lucide-react';
-import React, { memo, useMemo, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Center,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Segmented,
+  Select,
+} from '@lobehub/ui';
+import { BookOpen, FileText, PlusIcon, SearchX, ServerCrash } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useAgentStore } from '@/store/agent';
 import { agentKnowledgeSelectors } from '@/store/agent/selectors';
-import { useGlobalStore } from '@/store/global';
 
+import { useCreateNewModal } from '../CreateNew';
+import {
+  filterPickerItems,
+  itemsOfKind,
+  type PickerKind,
+  type PickerSort,
+} from './filterPickerItems';
 import Item from './Item';
-import MasonryItemWrapper from './Item/MasonryItemWrapper';
 import Loading from './Loading';
-import MasonrySkeleton from './MasonrySkeleton';
 import { resolvePickerScope } from './resolvePickerScope';
-import { useViewTransition } from './useViewTransition';
-import ViewSwitcher from './ViewSwitcher';
-import { type ViewMode } from './ViewSwitcher';
 import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
 
 /** Stable empty list so an un-loaded surface never hands Virtuoso a new array each render. */
 const EMPTY_KNOWLEDGE: KnowledgeItem[] = [];
 
-export const List = memo(() => {
-  const { t } = useTranslation(['file', 'chat']);
+interface ListProps {
+  defaultKind: PickerKind;
+}
 
-  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility, agentWorkspaceId] =
-    useAgentStore((s) => [
-      s.useFetchFilesAndKnowledgeBases,
-      s.activeAgentId,
-      s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
-      s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
-    ]);
+export const List = memo<ListProps>(({ defaultKind }) => {
+  const { t } = useTranslation(['chat', 'file']);
 
+  const [
+    useFetchFilesAndKnowledgeBases,
+    activeAgentId,
+    agentVisibility,
+    agentWorkspaceId,
+    addKnowledgeBaseToAgent,
+  ] = useAgentStore((s) => [
+    s.useFetchFilesAndKnowledgeBases,
+    s.activeAgentId,
+    s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
+    s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
+    s.addKnowledgeBaseToAgent,
+  ]);
+
+  const [kind, setKind] = useState<PickerKind>(defaultKind);
+  const [keyword, setKeyword] = useState('');
+  const [sort, setSort] = useState<PickerSort>('updatedAt');
   const [mode, setMode] = useState<PickerVisibility>('public');
   const { effectiveVisibility, showPublicAgentHint, showVisibilityTabs } = resolvePickerScope({
     agentVisibility,
@@ -50,113 +73,121 @@ export const List = memo(() => {
     ),
   );
   const items = data ?? EMPTY_KNOWLEDGE;
+  const visibleItems = useMemo(
+    () => filterPickerItems({ items, keyword, kind, sort }),
+    [items, keyword, kind, sort],
+  );
+  const libraryCount = useMemo(() => itemsOfKind(items, 'library').length, [items]);
+  const fileCount = useMemo(() => itemsOfKind(items, 'file').length, [items]);
 
-  const [columnCount, setColumnCount] = useState(2);
+  // A new library is created for this agent, so it is attached as soon as it exists.
+  const { open: openCreateLibrary } = useCreateNewModal();
+  const createLibrary = () =>
+    // Created in the tab's scope, so a library made from the Private tab stays private and
+    // remains in this list once attached.
+    openCreateLibrary({
+      onSuccess: (id) => void addKnowledgeBaseToAgent(id),
+      visibility: effectiveVisibility,
+    });
 
-  const viewMode = useGlobalStore((s) => s.status.knowledgeBaseModalViewMode || 'list') as ViewMode;
-  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
-  const { isTransitioning, startTransition } = useViewTransition(viewMode);
-  const setViewMode = (mode: ViewMode) => {
-    startTransition();
-    updateSystemStatus({ knowledgeBaseModalViewMode: mode });
+  const kindEmpty = (kind === 'library' ? libraryCount : fileCount) === 0;
+
+  const renderEmpty = () => {
+    if (error)
+      return (
+        <>
+          <Icon icon={ServerCrash} size={64} />
+          {t('networkError', { ns: 'file' })}
+        </>
+      );
+
+    if (!kindEmpty) return <Empty description={t('knowledgeBase.picker.noMatch')} icon={SearchX} />;
+
+    return kind === 'library' ? (
+      <Empty
+        description={t('knowledgeBase.picker.libraryEmpty')}
+        icon={BookOpen}
+        action={
+          <Button icon={<Icon icon={PlusIcon} />} type={'primary'} onClick={createLibrary}>
+            {t('knowledgeBase.picker.createLibrary')}
+          </Button>
+        }
+      />
+    ) : (
+      <Empty description={t('knowledgeBase.picker.fileEmpty')} icon={FileText} />
+    );
   };
-
-  // Update column count based on window size (max 2 columns for modal)
-  const updateColumnCount = React.useCallback(() => {
-    const width = window.innerWidth;
-    if (width < 480) {
-      setColumnCount(1);
-    } else {
-      setColumnCount(2);
-    }
-  }, []);
-
-  // Initialize column count on mount
-  React.useEffect(() => {
-    updateColumnCount();
-  }, [updateColumnCount]);
-
-  // Set up resize listener when in masonry mode
-  React.useEffect(() => {
-    if (viewMode === 'masonry') {
-      window.addEventListener('resize', updateColumnCount);
-      return () => window.removeEventListener('resize', updateColumnCount);
-    }
-  }, [viewMode, updateColumnCount]);
-
-  const isEmpty = items.length === 0;
-
-  const masonryContext = useMemo(() => ({}), []);
 
   return (
     <Flexbox height={500}>
       {/*
        * Toolbar sits flush with the list items below: Virtuoso uses
        * `marginInline: -16` to pull rows back to the outer edge and each
-       * Item re-applies `paddingInline={16}`. Match that here so the tab
-       * group and view switcher line up with the item icons / add buttons.
+       * Item re-applies `paddingInline={16}`.
        */}
-      <Flexbox gap={8} style={{ paddingBlockEnd: 12 }}>
-        <Flexbox horizontal align={'center'} justify={'space-between'}>
-          {showVisibilityTabs ? <VisibilityTabs value={mode} onChange={setMode} /> : <span />}
-          <ViewSwitcher view={viewMode} onViewChange={setViewMode} />
+      <Flexbox gap={12} style={{ paddingBlockEnd: 8 }}>
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+          <Segmented
+            value={kind}
+            options={[
+              {
+                label: `${t('knowledgeBase.picker.tabs.library')} ${libraryCount || ''}`.trim(),
+                value: 'library',
+              },
+              {
+                label: `${t('knowledgeBase.picker.tabs.file')} ${fileCount || ''}`.trim(),
+                value: 'file',
+              },
+            ]}
+            onChange={(value) => setKind(value as PickerKind)}
+          />
+          {showVisibilityTabs && <VisibilityTabs value={mode} onChange={setMode} />}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Flexbox flex={1}>
+            <SearchBar
+              allowClear
+              value={keyword}
+              variant={'outlined'}
+              placeholder={
+                kind === 'library'
+                  ? t('knowledgeBase.picker.searchLibrary')
+                  : t('knowledgeBase.picker.searchFile')
+              }
+              onInputChange={setKeyword}
+            />
+          </Flexbox>
+          <Select
+            style={{ flex: 'none', width: 136 }}
+            value={sort}
+            variant={'filled'}
+            options={[
+              { label: t('knowledgeBase.picker.sort.updatedAt'), value: 'updatedAt' },
+              { label: t('knowledgeBase.picker.sort.createdAt'), value: 'createdAt' },
+              { label: t('knowledgeBase.picker.sort.name'), value: 'name' },
+              { label: t('knowledgeBase.picker.sort.nameDesc'), value: 'nameDesc' },
+            ]}
+            onChange={(value) => setSort(value as PickerSort)}
+          />
         </Flexbox>
         {showPublicAgentHint && (
-          <Alert
-            showIcon
-            message={t('resources.knowledgePicker.publicAgentHint', { ns: 'chat' })}
-            type={'info'}
-          />
+          <Alert showIcon message={t('resources.knowledgePicker.publicAgentHint')} type={'info'} />
         )}
       </Flexbox>
-      {isLoading || isTransitioning ? (
-        viewMode === 'masonry' ? (
-          <MasonrySkeleton columnCount={columnCount} />
-        ) : (
-          <Loading />
-        )
-      ) : isEmpty ? (
-        <Center gap={12} padding={40}>
-          {error ? (
-            <>
-              <Icon icon={ServerCrash} size={80} />
-              {t('networkError')}
-            </>
-          ) : (
-            <Empty
-              description={t('empty')}
-              descriptionProps={{ fontSize: 14 }}
-              icon={BookOpen}
-              style={{ maxWidth: 400 }}
-            />
-          )}
+      {isLoading ? (
+        <Loading />
+      ) : visibleItems.length === 0 ? (
+        <Center flex={1} gap={12} padding={40}>
+          {renderEmpty()}
         </Center>
-      ) : viewMode === 'list' ? (
+      ) : (
         <Virtuoso
+          data={visibleItems}
           increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
+          itemContent={(_, item) => <Item key={item.id} {...item} />}
           overscan={24}
           style={{ flex: 1, marginInline: -16 }}
-          totalCount={items.length}
-          itemContent={(index) => {
-            const item = items[index];
-            return <Item key={item.id} {...item} />;
-          }}
         />
-      ) : (
-        <div style={{ height: '100%', position: 'relative' }}>
-          <div style={{ inset: 0, position: 'absolute' }}>
-            <VirtuosoMasonry
-              ItemContent={MasonryItemWrapper}
-              columnCount={columnCount}
-              context={masonryContext}
-              data={items}
-              style={{
-                gap: '16px',
-                height: '100%',
-              }}
-            />
-          </div>
-        </div>
       )}
     </Flexbox>
   );

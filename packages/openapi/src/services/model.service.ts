@@ -55,7 +55,7 @@ export class ModelService extends BaseService {
       if (permissionWhere) conditions.push(permissionWhere);
 
       // Handle ModelsListQuery-specific parameters
-      const { page, pageSize, keyword, provider, type, enabled } = request;
+      const { keyword, provider, type, enabled } = request;
 
       // If a keyword is provided, add it to the query conditions
       if (keyword) {
@@ -90,7 +90,7 @@ export class ModelService extends BaseService {
       const finalWhereCondition = conditions.length > 0 ? and(...conditions) : undefined;
 
       // Calculate offset
-      const { limit, offset } = processPaginationConditions({ page, pageSize });
+      const { limit, offset } = processPaginationConditions(request);
 
       // Execute query and count in parallel
       const [result, totalResult] = await Promise.all([

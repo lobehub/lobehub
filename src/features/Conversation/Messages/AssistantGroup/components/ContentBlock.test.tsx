@@ -120,6 +120,8 @@ vi.mock('../../../store', () => ({
     topicId: () => undefined,
   },
   dataSelectors: {
+    getDbMessageById: (id: string) => (s: { dbMessages: { id: string }[] }) =>
+      s.dbMessages.find((message) => message.id === id),
     getDisplayMessageById: () => () => ({ parentId: 'user-1' }),
   },
   messageStateSelectors: {

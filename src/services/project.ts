@@ -52,6 +52,13 @@ class ProjectService {
 
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 
+  /**
+   * The project row alone. `detail` also loads agents, tasks, works and the
+   * knowledge bases, which is the wrong weight for a caller that only needs to
+   * know which agent runs in the project.
+   */
+  find = async (id: string) => lambdaClient.project.find.query({ id });
+
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
 
   move = async (id: string, anchor: { afterId: string } | { beforeId: string }) =>
@@ -65,6 +72,7 @@ class ProjectService {
       description?: string;
       id?: string;
       identifier?: string;
+      additionalRepositories?: { defaultBranch?: string; url: string }[];
       name: string;
       repository?: { defaultBranch?: string; name: string; url: string };
       slug?: string;

@@ -1,9 +1,11 @@
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import { WorkIdentifier } from '@lobechat/builtin-tool-work';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { AiAgentService } from '../../index';
 
 // The share-gate filter now runs at the top of `discoverTools`, before
@@ -99,6 +101,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: mockResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockResolveByIdentifiers),
     };
   }),
 }));
@@ -308,7 +311,7 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     );
   });
 
-  it('enables Agent Documents for this run only after an explicit Share grant', async () => {
+  it('enables Agent Documents only after an explicit Share grant, and Works always', async () => {
     await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Create a document',
@@ -323,6 +326,7 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
     expect(mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins).toEqual([
       AgentDocumentsIdentifier,
+      WorkIdentifier,
     ]);
 
     vi.clearAllMocks();
@@ -345,7 +349,11 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       },
     });
 
-    expect(mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins).toEqual([]);
+    expect(mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins).toEqual([
+      WorkIdentifier,
+    ]);
+    // An always-on builtin is never looked up as a connector.
+    expect(mockResolveByIdentifiers).not.toHaveBeenCalled();
   });
 
   it('reads attached file types through the exact share visitor scope', async () => {

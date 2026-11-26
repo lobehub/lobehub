@@ -85,6 +85,11 @@ export default {
   'creditsChip.balance': 'Balance {{amount}}',
   'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
+  'creditsChip.memberBudget.tooltip': 'Your budget in this workspace',
+  'creditsChip.workspace.sharedNote':
+    "You have no budget limit of your own. Requests use the workspace's shared balance.",
+  'creditsChip.workspace.title': 'Workspace balance',
+  'creditsChip.workspace.tooltip': "Workspace's shared balance",
   'creditsChip.balanceInUse': 'In use',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
   'creditsChip.balanceNote.plan': 'Plan limit reached. Requests now use your balance.',
@@ -219,6 +224,9 @@ export default {
   'credits.dedicatedBudget.createTitle': 'New dedicated budget',
   'credits.dedicatedBudget.details.action': 'View details',
   'credits.dedicatedBudget.details.empty': 'No shared members yet',
+  'credits.dedicatedBudget.details.customLimit': 'Custom limit',
+  'credits.dedicatedBudget.details.limitReached': 'Limit reached',
+  'credits.dedicatedBudget.details.noLimit': 'No limit',
   'credits.dedicatedBudget.details.removedShare': 'Spent by removed members',
   'credits.dedicatedBudget.details.title': 'Dedicated budget details',
   'credits.dedicatedBudget.details.total': 'Total spent',
@@ -229,6 +237,10 @@ export default {
   'credits.dedicatedBudget.membersCount_other': '{{count}} members',
   'credits.dedicatedBudget.membersEmpty': 'No shared members yet',
   'credits.dedicatedBudget.membersPlaceholder': 'Select members to share this budget',
+  'credits.dedicatedBudget.memberLimit': 'Per-member limit',
+  'credits.dedicatedBudget.memberLimitHint':
+    'The most each member can use from this budget per billing cycle. Members who reach it move on to their next budget. Leave empty for no limit.',
+  'credits.dedicatedBudget.memberLimitPlaceholder': 'No limit',
   'credits.dedicatedBudget.desc':
     'Carve out shared allowances for groups of members — consumed before their personal quotas',
   'credits.dedicatedBudget.name': 'Name',
@@ -239,6 +251,21 @@ export default {
   'credits.dedicatedBudget.removeConfirm.desc':
     'Shared members will fall back to their own budget immediately after confirmation.',
   'credits.dedicatedBudget.removeConfirm.title': 'Remove this dedicated budget?',
+  'credits.dedicatedBudget.rules.action': 'Member limits',
+  'credits.dedicatedBudget.rules.defaultHint': 'Applies to members without a rule of their own.',
+  'credits.dedicatedBudget.rules.desc':
+    'Cap how much each member can use from this budget per billing cycle. Members who reach their limit move on to their next budget.',
+  'credits.dedicatedBudget.rules.empty':
+    'Any member can use the whole budget. Add a rule to cap each member.',
+  'credits.dedicatedBudget.rules.emptyTitle': 'No member limits yet',
+  'credits.dedicatedBudget.rules.overrideCount_one': '{{count}} custom',
+  'credits.dedicatedBudget.rules.overrideCount_other': '{{count}} custom',
+  'credits.dedicatedBudget.rules.removeConfirm.defaultDesc':
+    'Members without a rule of their own will no longer be capped. Members with their own rule keep it.',
+  'credits.dedicatedBudget.rules.removeConfirm.memberDesc':
+    'This member will follow the rule for all members again.',
+  'credits.dedicatedBudget.rules.removeConfirm.title': 'Remove the limit for {{name}}?',
+  'credits.dedicatedBudget.rules.title': 'Member limits · {{name}}',
   'credits.dedicatedBudget.saveError': 'Failed to save the dedicated budget',
   'credits.dedicatedBudget.saveSuccess': 'Dedicated budget saved',
   'credits.dedicatedBudget.userPanel.label': 'Dedicated budget',
@@ -410,6 +437,11 @@ export default {
   'limitation.insufficientBudget.exactDesc':
     'This request needs more balance. Top up or upgrade your plan.',
   'limitation.insufficientBudget.required': 'Required amount',
+  'limitation.insufficientBudget.rescue.basic.configApi': 'Set up API key',
+  'limitation.insufficientBudget.rescue.basic.desc':
+    "Basic doesn't include LobeHub-hosted model usage, and your free allowance is used up",
+  'limitation.insufficientBudget.rescue.basic.ownKeyHint':
+    'Models on your own API key keep working.',
   'limitation.insufficientBudget.rescue.desc': 'This request needs {{shortfall}} more to continue',
   'limitation.insufficientBudget.rescue.referral.badge': 'Free',
   'limitation.insufficientBudget.rescue.referral.benefit':
@@ -440,6 +472,18 @@ export default {
   'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
   'limitation.workspace.memberBudget.desc':
     'You have reached the personal budget set by this workspace. Contact a workspace admin to adjust your quota — top-up and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.adminDesc':
+    'You have reached your member budget in this workspace. As an admin, you can raise it in budget settings — top-ups and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.notify.action': 'Notify admins',
+  'limitation.workspace.memberBudget.notify.error': "Couldn't notify admins. Please try again.",
+  'limitation.workspace.memberBudget.notify.manage': 'Adjust in budget settings',
+  'limitation.workspace.memberBudget.notify.noAdmin':
+    'This workspace has no other admin to notify.',
+  'limitation.workspace.memberBudget.notify.sent': 'Admins notified',
+  'limitation.workspace.memberBudget.notify.sentHint':
+    'Retry once an admin has raised your budget.',
+  'limitation.workspace.memberBudget.notifyDesc':
+    'You have reached the member budget this workspace set for you. Let the workspace admins know so they can raise it — top-ups and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.retry': 'Retry',
   'limitation.workspace.memberBudget.title': 'Member budget reached',
   'limitation.hobby.action': 'Configured, continue chatting',
@@ -536,6 +580,7 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud service',
   'plans.compare.agentMemory': 'Agent memory',
+  'plans.compare.agentRunCredit.runs': '{{runs}} runs (no model usage)',
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
@@ -550,9 +595,13 @@ export default {
   'plans.compare.notIncluded': 'Not included',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
+  'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
   'plans.compare.rolling5hSpend': '5-hour limit',
   'plans.compare.rolling7dSpend': 'Weekly limit',
   'plans.compare.sandboxStorage': 'Cloud sandbox storage',
+  'plans.compare.trialCredit': 'Trial credits',
+  'plans.compare.trialCredit.desc': 'Granted once',
+  'plans.compare.trialCredit.runs': 'About {{runs}} agent tasks',
   'plans.compare.ultraWeeklySpend': 'Ultra model weekly limit',
   'plans.compare.ultraWeeklySpend.desc': 'Counts toward the weekly limit and has its own limit',
   'plans.compare.unlimited': 'Unlimited',
@@ -581,12 +630,18 @@ export default {
   'plans.legacy.banner.canceledDesc':
     'Your subscription is canceled and ends with this billing period. You can upgrade to a current plan anytime to keep going.',
   'plans.legacy.banner.desc':
-    'It keeps its current price. You can upgrade to a higher-tier plan anytime, and what you have used this billing period is on us.',
+    'It keeps its current price. You can upgrade to a higher-tier plan anytime: the confirmation compares your current and new quotas side by side, and what you have used this billing period is on us.',
   'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
   'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.banner.viewBenefits': 'View current benefits',
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
+  'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
+  'plans.limits.agentRunCredit.ownKey': 'Use your own API key',
+  'plans.limits.agentRunCredit.runs': '{{runs}} platform run fees/mo',
+  'plans.limits.agentRunCredit.tooltip':
+    'Covers platform run fees for agent tasks only, not model usage. LobeHub adds nothing for models on your own API key; LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
   'plans.limits.agentRunFee.tooltip':
     'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
@@ -600,6 +655,8 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
+  'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
+  'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.monthlySpend.tooltip':
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
@@ -622,6 +679,7 @@ export default {
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
+  'plans.recommended': 'Recommended',
   'plans.restoreSubscription': 'Restore subscription',
   'plans.restoreSubscriptionError': 'Could not restore your subscription',
   'plans.restoreSubscriptionSuccess': 'Subscription has been restored',
@@ -696,6 +754,9 @@ export default {
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
   'plans.plan.free.title': 'Free',
+  'plans.plan.basic.desc':
+    'Run agents with your own model API keys. LobeHub-hosted model usage not included',
+  'plans.plan.basic.title': 'Basic',
   'plans.plan.hobby.desc': 'For users with their own API who pay as they go',
   'plans.plan.hobby.title': 'Hobby',
   'plans.plan.max.title': 'Max',
@@ -747,7 +808,7 @@ export default {
   'plansModal.default.desc': 'Unlock more capacity and advanced features.',
   'plansModal.default.title': 'Upgrade your plan',
   'plansModal.fileStorageLimit.desc':
-    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Resources page</1> to free up space.',
+    'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Library page</1> to free up space.',
   'plansModal.fileStorageLimit.title': 'Storage limit reached',
   'plansModal.messengerWechat.desc':
     'The WeChat System Bot is available on paid personal plans. Upgrade to connect and use it.',
@@ -768,7 +829,7 @@ export default {
     'Vector storage is not equal to the original size of your uploaded or imported dataset, but is calculated based on the vectorization of pure text content in your files. For example, a 1-page PDF file (1000-1500 characters) may only take up about 1 vector storage entry when extracted and vectorized into pure text. You can view your usage under "{{usage}}".',
   'qa.list.embeddings.q': 'How is vector storage calculated?',
   'qa.list.free.limit.newA':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets one-time free usage, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.newA.balance':
     'Keep going with your balance: top up on the <fundsLink>{{funds}}</fundsLink> page, then turn on "{{overflow}}".',
@@ -975,6 +1036,8 @@ export default {
   'usage.window.resetsIn': 'Resets in {{duration}}',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
+  'usage.window.rule.agentRunMonth': 'Monthly agent task limit',
+  'usage.window.rule.freeMonth': 'Trial credits',
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",
   'creditUsageReminder.window.exhausted': '{{rule}} reached',
@@ -991,17 +1054,27 @@ export default {
   'credits.budgetPage.allocate.title': 'Shared allowances',
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
+  'credits.budgetPage.tabs.agentShare': 'Shared agents',
+  'credits.budgetPage.tabs.dedicated': 'Dedicated budgets',
+  'credits.budgetPage.tabs.member': 'Member limits',
+  'credits.budgetPage.tabs.models': 'Model access',
+  'credits.budgetPage.tabs.team': 'Team budgets',
+  'plans.usageHero.agentRunCredit.desc': 'Run fees, no model usage',
+  'plans.usageHero.agentRunCredit.title': '{{runs}}/mo',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
   'balance.hobbyQuotaDesc':
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
+  'cancelPlan.failed': "Couldn't cancel the subscription. Check your connection and try again.",
   'compare.monthlyQuota': 'Monthly usage',
-  'plans.quota.freeLimit': 'Monthly limit, resets every month',
+  'plans.quota.freeLimit': 'One-time trial credits',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
   'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
+  'credits.agentShareBudget.saveFailed':
+    "Couldn't save the Agent Share budget. Check your connection and try again.",
   'creditsChip.rolling.usageTitle': 'Plan usage',
   'creditsChip.rolling.usageTooltip': 'Plan usage toward the nearest limit',
   'creditsChip.usageTitle': 'Usage',
@@ -1028,6 +1101,8 @@ export default {
   'credits.autoTopUp.enable.noChargeNow':
     'Your balance is {{balance}}, above {{threshold}}, so nothing is charged now. Auto top-up runs once it drops to {{threshold}}.',
   'credits.autoTopUp.enable.noPaymentMethod': 'Add a card first',
+  'credits.autoTopUp.enable.openSetupFailed':
+    "Couldn't open payment method setup. Check your connection and try again.",
   'credits.autoTopUp.enable.overflowNote':
     'This also turns on "{{overflow}}". Without it, requests stop at your plan limits and auto top-up never runs.',
   'credits.autoTopUp.enable.paymentMethod': 'Payment method',
@@ -1039,12 +1114,23 @@ export default {
   'credits.autoTopUp.enable.waitingForPaymentMethod':
     'Add the card in the new tab, then come back here to turn it on.',
   'credits.autoTopUp.recommended': 'Recommended',
+  'credits.autoTopUp.saveFailed':
+    "Couldn't save auto top-up settings. Check your connection and try again.",
   'credits.autoTopUp.setupAndEnable': 'Add card and turn on',
   'credits.autoTopUp.summary': 'Refill to {{target}} when the balance is at or below {{threshold}}',
   'credits.autoTopUp.summaryMonthly': 'Charged this month: {{amount}} / {{limit}}',
   'credits.autoTopUp.summaryNoCard':
     'Add a card to refill the balance automatically, so requests keep going after your limits run out',
   'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
+  'credits.autoTopUp.turnOffFailed': "Couldn't turn off auto top-up. Try again.",
+  'credits.costEstimateHint.saveFailedRetry':
+    "Couldn't save the alert threshold. Check your connection and try again.",
+  'credits.dedicatedBudget.saveFailed':
+    "Couldn't save the dedicated budget. Check your connection and try again.",
+  'credits.memberBudget.saveFailed':
+    "Couldn't save the member budget. Check your connection and try again.",
+  'credits.teamBudget.saveFailed':
+    "Couldn't save the team budget. Check your connection and try again.",
   'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
   'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
   'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',
@@ -1061,4 +1147,50 @@ export default {
   'usage.tabs.detail': 'Details',
   'usage.tabs.overview': 'Overview',
   'usage.tabs.records': 'Top-up history',
+  'credits.budgetPage.models.title': 'Model access',
+  'credits.budgetPage.models.desc':
+    'Set the highest model tier members can use. Models are tiered by price, and new models join their tier automatically.',
+  'credits.modelPolicy.title': 'Model tiers',
+  'credits.modelPolicy.desc': 'Members without a rule can use every model',
+  'credits.modelPolicy.actions.addRule': 'Add rule',
+  'credits.modelPolicy.actions.edit': 'Change tier',
+  'credits.modelPolicy.actions.remove': 'Remove rule',
+  'credits.modelPolicy.actions.viewTiers': 'Models by tier',
+  'credits.modelPolicy.addTitle': 'Add a model tier rule',
+  'credits.modelPolicy.editTitle': 'Change model tier',
+  'credits.modelPolicy.empty':
+    'Once set, members only see models up to their tier in the model picker, and requests for higher-tier models are refused.',
+  'credits.modelPolicy.emptyTitle': 'Members can use every model',
+  'credits.modelPolicy.default.badge': 'Default',
+  'credits.modelPolicy.default.hint':
+    'Applies to members without a rule of their own. Owners and admins are not affected.',
+  'credits.modelPolicy.default.title': 'All members',
+  'credits.modelPolicy.maxTier': 'Highest tier',
+  'credits.modelPolicy.availableModels': 'Available models',
+  'credits.modelPolicy.modelCount': '{{count}} models',
+  'credits.modelPolicy.target': 'Applies to',
+  'credits.modelPolicy.adminTargetHint':
+    'Owners and admins are not limited by the default tier, but a tier set for them here applies.',
+  'credits.modelPolicy.noMembersAvailable': 'Every member already has a rule.',
+  'credits.modelPolicy.role.admin': 'Admin',
+  'credits.modelPolicy.role.owner': 'Owner',
+  'credits.modelPolicy.removeConfirm.title': 'Remove this rule?',
+  'credits.modelPolicy.removeConfirm.defaultDesc':
+    'Members without a rule of their own will be able to use every model again.',
+  'credits.modelPolicy.removeConfirm.memberDesc':
+    'This member will follow the default tier, or use every model if there is no default.',
+  'credits.modelPolicy.removeSuccess': 'Rule removed',
+  'credits.modelPolicy.saveError': 'Failed to save model access',
+  'credits.modelPolicy.saveSuccess': 'Model access saved',
+  'credits.modelPolicy.tier.pro': 'Pro',
+  'credits.modelPolicy.tier.standard': 'Basic',
+  'credits.modelPolicy.tier.ultra': 'Ultra',
+  'credits.modelPolicy.tiers.added': 'Adds to {{tier}}',
+  'credits.modelPolicy.tiers.desc': 'Each tier includes every model of the tiers below it.',
+  'credits.modelPolicy.tiers.empty': 'No models in this tier yet',
+  'credits.modelPolicy.tiers.included': 'Included models',
+  'credits.modelPolicy.tiers.showAll': 'Show all · {{count}} more',
+  'credits.modelPolicy.tiers.showLess': 'Show less',
+  'credits.modelPolicy.tiers.title': 'Models by tier',
+  'credits.modelPolicy.tiers.unavailable': 'Not available',
 };

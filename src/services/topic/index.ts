@@ -4,10 +4,12 @@ import type {
   HeteroSessionImportStatus,
   UpdateTopicMetadataInput,
 } from '@lobechat/types';
+import { isRetiredTopicStatus } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { TopicTrigger } from '@/const/topic';
 import { lambdaClient } from '@/libs/trpc/client';
+import { afterTopicsRetired } from '@/services/ownedWorktree';
 import { type BatchTaskResult } from '@/types/service';
 import {
   type ChatTopic,
@@ -188,8 +190,11 @@ export class TopicService {
     ) as unknown as ChatTopic[];
   };
 
-  updateTopic = (id: string, data: Partial<ChatTopic>) => {
-    return lambdaClient.topic.updateTopic.mutate({ id, value: data });
+  updateTopic = async (id: string, data: Partial<ChatTopic>) => {
+    const result = await lambdaClient.topic.updateTopic.mutate({ id, value: data });
+    // Archiving cleans up the worktree the app created for the topic.
+    if (isRetiredTopicStatus(data.status)) afterTopicsRetired();
+    return result;
   };
 
   updateTopicModel = (
@@ -236,31 +241,33 @@ export class TopicService {
     return lambdaClient.topic.disableSharing.mutate({ topicId });
   };
 
-  removeTopic = (id: string, removeFiles?: boolean) => {
-    return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
-  };
+  removeTopic = (id: string, removeFiles?: boolean) =>
+    this.retiring(lambdaClient.topic.removeTopic.mutate({ id, removeFiles }));
 
-  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') => {
-    return lambdaClient.topic.batchDeleteBySessionId.mutate({
-      id: this.toDbSessionId(sessionId),
-      scope,
-    });
-  };
+  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') =>
+    this.retiring(
+      lambdaClient.topic.batchDeleteBySessionId.mutate({
+        id: this.toDbSessionId(sessionId),
+        scope,
+      }),
+    );
 
-  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') => {
-    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope });
-  };
+  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') =>
+    this.retiring(lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope }));
 
-  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') => {
-    return lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope });
-  };
+  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') =>
+    this.retiring(lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope }));
 
-  batchRemoveTopics = (topics: string[]) => {
-    return lambdaClient.topic.batchDelete.mutate({ ids: topics });
-  };
+  batchRemoveTopics = (topics: string[]) =>
+    this.retiring(lambdaClient.topic.batchDelete.mutate({ ids: topics }));
 
-  removeAllTopic = () => {
-    return lambdaClient.topic.removeAllTopics.mutate();
+  removeAllTopic = () => this.retiring(lambdaClient.topic.removeAllTopics.mutate());
+
+  /** Trashing topics cleans up the worktrees the app created for them. */
+  private retiring = async <T>(request: Promise<T>): Promise<T> => {
+    const result = await request;
+    afterTopicsRetired();
+    return result;
   };
 
   private toDbSessionId = (sessionId?: string | null) =>

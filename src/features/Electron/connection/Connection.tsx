@@ -10,7 +10,8 @@ import RemoteStatus from './RemoteStatus';
 
 const isMac = isMacOS();
 
-const Connection = () => {
+/** `statusHidden` drops only the title bar icon; the drawer still opens from elsewhere. */
+const Connection = ({ statusHidden }: { statusHidden?: boolean }) => {
   const [isOpen, setConnectionDrawerOpen] = useElectronStore((s) => [
     s.isConnectionDrawerOpen,
     s.setConnectionDrawerOpen,
@@ -23,6 +24,7 @@ const Connection = () => {
   return (
     <>
       <RemoteStatus
+        hidden={statusHidden}
         onClick={() => {
           setConnectionDrawerOpen(true);
         }}

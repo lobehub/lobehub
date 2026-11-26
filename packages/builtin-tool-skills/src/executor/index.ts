@@ -15,11 +15,13 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
   readonly identifier = SkillsIdentifier;
   protected readonly apiEnum = SkillsApiName;
 
-  private runtime: SkillsExecutionRuntime;
+  private getRuntime: (ctx: BuiltinToolContext) => SkillsExecutionRuntime;
 
-  constructor(runtime: SkillsExecutionRuntime) {
+  constructor(
+    runtime: SkillsExecutionRuntime | ((ctx: BuiltinToolContext) => SkillsExecutionRuntime),
+  ) {
     super();
-    this.runtime = runtime;
+    this.getRuntime = typeof runtime === 'function' ? runtime : () => runtime;
   }
 
   execScript = async (
@@ -35,7 +37,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
       // Server will resolve zipUrls for all activated skills
       const activatedSkills = ctx.stepContext?.activatedSkills;
 
-      const result = await this.runtime.execScript(
+      const result = await this.getRuntime(ctx).execScript(
         {
           ...params,
           activatedSkills: activatedSkills?.map((s) => ({
@@ -82,7 +84,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.activateSkill(params);
+      const result = await this.getRuntime(ctx).activateSkill(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -111,7 +113,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.readReference(params);
+      const result = await this.getRuntime(ctx).readReference(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -140,7 +142,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.runCommand(params);
+      const result = await this.getRuntime(ctx).runCommand(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -169,7 +171,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.exportFile(params);
+      const result = await this.getRuntime(ctx).exportFile(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };

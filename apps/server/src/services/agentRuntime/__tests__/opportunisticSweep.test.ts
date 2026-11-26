@@ -2,11 +2,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS,
+  OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY,
   OPPORTUNISTIC_SWEEP_INTERVAL_MS,
   OPPORTUNISTIC_SWEEP_SLOT_KEY,
   OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS,
   OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY,
   runOpportunisticSweep,
+  scheduleOpportunisticInterventionExpirySweep,
   scheduleOpportunisticStaleSweep,
   scheduleOpportunisticVerifySweep,
 } from '../opportunisticSweep';
@@ -15,6 +18,15 @@ const sweepMock = vi.fn().mockResolvedValue({ abandoned: 0, redriven: 1 });
 vi.mock('../StaleOperationReaper', () => ({
   StaleOperationReaper: vi.fn().mockImplementation(function () {
     return { sweep: sweepMock };
+  }),
+}));
+
+const expirySweepMock = vi
+  .fn()
+  .mockResolvedValue({ answered: 0, examined: 0, expired: 0, failed: 0 });
+vi.mock('../ParkedInterventionExpiry', () => ({
+  ParkedInterventionExpiry: vi.fn().mockImplementation(function () {
+    return { sweep: expirySweepMock };
   }),
 }));
 
@@ -209,5 +221,46 @@ describe('scheduleOpportunisticVerifySweep', () => {
     await expect(flush()).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('scheduleOpportunisticInterventionExpirySweep', () => {
+  beforeEach(() => {
+    afterQueue.length = 0;
+    expirySweepMock
+      .mockReset()
+      .mockResolvedValue({ answered: 0, examined: 0, expired: 0, failed: 0 });
+    redisSetMock.mockReset().mockResolvedValue('OK');
+    redisClient = { set: redisSetMock };
+  });
+
+  const flush = async () => {
+    const pending = [...afterQueue];
+    afterQueue.length = 0;
+    await Promise.all(pending.map((work) => work()));
+  };
+
+  it('claims its own slot and expires parked runs', async () => {
+    scheduleOpportunisticInterventionExpirySweep();
+    await flush();
+
+    expect(redisSetMock).toHaveBeenCalledWith(
+      OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY,
+      expect.any(String),
+      'PX',
+      OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS,
+      'NX',
+    );
+    expect(OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY).not.toBe(OPPORTUNISTIC_SWEEP_SLOT_KEY);
+    expect(expirySweepMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the sweep while its slot TTL is still held', async () => {
+    redisSetMock.mockResolvedValue(null);
+
+    scheduleOpportunisticInterventionExpirySweep();
+    await flush();
+
+    expect(expirySweepMock).not.toHaveBeenCalled();
   });
 });

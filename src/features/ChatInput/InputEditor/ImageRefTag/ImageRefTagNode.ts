@@ -1,4 +1,5 @@
 import { addClassNamesToElement } from '@lexical/utils';
+import { formatImageRef } from '@lobechat/const/imageRef';
 import { getKernelFromEditor } from '@lobehub/editor';
 import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
@@ -21,8 +22,7 @@ export type SerializedImageRefTagNode = Spread<
   SerializedLexicalNode
 >;
 
-/** Text the model receives for an inline image reference, e.g. `[Image #2]`. */
-export const formatImageRef = (number: number) => `[Image #${number}]`;
+export { formatImageRef };
 
 /**
  * An inline reference to one of the draft's image uploads, rendered as a small
@@ -30,8 +30,9 @@ export const formatImageRef = (number: number) => `[Image #${number}]`;
  *
  * `src` is the upload's local preview URL, which identifies the upload for its whole
  * lifetime. `number` is the image's position among the draft's images; it is kept in sync
- * with the attachment list, so the chip, the thumbnail badge and the `[Image #N]` text the
- * model receives always agree.
+ * with the attachment list, so the chip and the `[Image #N]` text the model receives always
+ * agree. The image cards themselves show no number: a sent message's images are read back
+ * without an order, so a number there would promise a position the message cannot keep.
  *
  * `fileId` is the uploaded file's id, recorded once the upload finishes. It survives in the
  * sent message's editor data, so a reference restored into the composer, whose image now has

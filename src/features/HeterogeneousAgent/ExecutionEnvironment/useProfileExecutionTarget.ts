@@ -3,6 +3,7 @@ import type { DeviceExecutionTarget, LobeAgentAgencyConfig } from '@lobechat/typ
 
 import { isApiAuthBlockedOnTarget } from '@/features/HeterogeneousAgent/apiMode';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 
 import { type HeteroProfilePanel, resolveHeteroProfilePanel } from './heteroProfilePanel';
@@ -26,7 +27,7 @@ export interface ProfileExecutionTarget {
 }
 
 /**
- * Where the current caller's NEW topics of a heterogeneous agent run.
+ * Where the current caller's NEW topics of an agent run.
  *
  * The profile's environment picker and its CLI status panel both read this, so
  * the panel always describes the machine the picker names — never the client
@@ -40,9 +41,13 @@ export const useProfileExecutionTarget = (agentId: string): ProfileExecutionTarg
     isPreferenceLoading,
     workspaceScoped,
   } = useEffectiveAgencyConfig(agentId, { topicId: null });
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  // A LobeHub agent resolves the way the chat input's switcher does (`auto` by default where a
+  // gateway can route); a heterogeneous one keeps its own local/sandbox fallback.
   const target = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
-    isHetero: true,
+    deviceRoutingAvailable,
+    isHetero: !!agencyConfig?.heterogeneousProvider,
     workspaceScoped,
   });
 

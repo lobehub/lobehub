@@ -148,7 +148,7 @@ vi.mock('../infrastructure/ProtocolManager', () => ({
   ProtocolManager: vi.fn(function () {
     return {
       initialize: vi.fn(),
-      processPendingUrls: vi.fn().mockResolvedValue(undefined),
+      processPendingTargets: vi.fn().mockResolvedValue(undefined),
     };
   }),
 }));

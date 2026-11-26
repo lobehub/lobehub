@@ -70,6 +70,8 @@ export const channelHistoryProcedures = {
         .object({
           beforeSequence: z.number().int().positive().optional(),
           limit: z.number().int().min(1).max(20).optional(),
+          /** Another Thread of the run's Channel, from `listThreads`. */
+          threadId: z.string().min(1).optional(),
         })
         .strict(),
     )
@@ -77,10 +79,25 @@ export const channelHistoryProcedures = {
   readMessage: historyProcedure
     .input(
       z
-        .object({ messageId: z.string().min(1), offset: z.number().int().nonnegative().optional() })
+        .object({
+          messageId: z.string().min(1),
+          offset: z.number().int().nonnegative().optional(),
+          threadId: z.string().min(1).optional(),
+        })
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelHistory.readMessage(input)),
+  listThreads: historyProcedure
+    .input(
+      z
+        .object({
+          activeOnly: z.boolean().optional(),
+          before: z.string().min(1).optional(),
+          limit: z.number().int().min(1).max(20).optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => ctx.channelHistory.listThreads(input)),
   listChannels: messagingProcedure
     .input(
       z
@@ -92,12 +109,43 @@ export const channelHistoryProcedures = {
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelMessaging.listChannels(input)),
+  /** Posts a card in the run's own conversation asking its requester to connect a connector. */
+  requestConnector: historyProcedure
+    .input(
+      z
+        .object({
+          auth: z.enum(['none', 'oauth']).optional(),
+          identifier: z.string().min(1).max(64),
+          name: z.string().max(64).optional(),
+          reason: z.string().max(280).optional(),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          url: z.string().url().max(2048).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
+    ),
+  /** The run's Agent adds (or with `remove`, removes) its own reaction on a message it can read. */
+  react: historyProcedure
+    .input(
+      z
+        .object({
+          emoji: z.string().min(1).max(32),
+          messageId: z.string().min(1),
+          remove: z.boolean().optional(),
+          threadId: z.string().min(1).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { remove, ...params } }) => ctx.channelHistory.react(params, !remove)),
   sendMessage: messagingProcedure
     .input(
       z
         .object({
-          agentIds: z.array(z.string().min(1)).min(1).max(5),
-          channelId: z.string().min(1),
+          agentIds: z.array(z.string().min(1)).length(1),
+          channelId: z.string().min(1).optional(),
           content: z.string().min(1),
           /** Repeat it to retry without posting twice. */
           requestKey: z.string().min(1).max(100),

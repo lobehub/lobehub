@@ -13,6 +13,9 @@ vi.mock('@/features/NavPanel/SideBarLayout', () => ({
 }));
 vi.mock('./Body', () => ({ default: () => <div>topics</div> }));
 vi.mock('./Header', () => ({ default: () => null }));
+vi.mock('@/features/ShareVisitorTopics/SidebarNav', () => ({
+  default: () => <div>visitor-nav</div>,
+}));
 vi.mock('./ProfileNav', () => ({
   default: ({ active }: { active: string }) => <div>profile-nav:{active}</div>,
 }));
@@ -36,6 +39,17 @@ describe('AgentSidebarContent', () => {
     expect(screen.getByText(`profile-nav:${tab}`)).toBeInTheDocument();
     expect(screen.queryByText('topics')).not.toBeInTheDocument();
   });
+
+  it.each(['/agent/agt_1/visitor', '/agent/agt_1/visitor/tpc_1'])(
+    'lists visitors instead of the Agent topics on %s',
+    (pathname) => {
+      mocks.pathname = pathname;
+      render(<AgentSidebarContent />);
+
+      expect(screen.getByText('visitor-nav')).toBeInTheDocument();
+      expect(screen.queryByText('topics')).not.toBeInTheDocument();
+    },
+  );
 
   it('keeps the topic sidebar in the chat', () => {
     mocks.pathname = '/agent/agt_1';

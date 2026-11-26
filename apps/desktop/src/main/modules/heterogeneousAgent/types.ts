@@ -3,7 +3,10 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
-import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
+import type {
+  HeteroPermissionMode,
+  ServerDefaultHeterogeneousModelDescriptor,
+} from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -18,6 +21,11 @@ export interface HeterogeneousAgentBuildPlan {
    * persisting conversation content for CLIs that cannot read prompts on stdin.
    */
   argvPayload?: string;
+  /**
+   * Keep stdin open after the prompt for as long as the session can use it
+   * (Claude Code, always): the channel for control requests and mid-run messages.
+   */
+  liveInput?: boolean;
   stdinPayload?: string;
 }
 
@@ -36,6 +44,16 @@ export interface HeterogeneousAgentBuildPlanParams {
    * field append `--mcp-config <path>`; others ignore it.
    */
   mcpConfigPath?: string;
+  /**
+   * (Claude Code) Permission mode. Absent: every
+   * action is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
+  /**
+   * (Claude Code) The host answers prompts (an AskUserBridge is up). Without,
+   * a picked mode fails closed: print mode denies what it would ask about.
+   */
+  permissionPrompts?: boolean;
   promptInput: AgentPromptInput;
   resumeSessionId?: string;
 }

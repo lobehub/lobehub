@@ -41,16 +41,18 @@ const SectionTitle = ({ children }: { children: string }) => (
 const AgentOptionRow = ({
   agent,
   checked,
+  disabled,
   fallback,
   onToggle,
 }: {
   agent: ChannelAgentOption;
   checked: boolean;
+  disabled?: boolean;
   fallback: string;
   onToggle: () => void;
 }) => (
-  <label {...stylex.props(styles.row)}>
-    <Checkbox checked={checked} onChange={onToggle} />
+  <label {...stylex.props(styles.row)} aria-disabled={disabled || undefined}>
+    <Checkbox checked={checked} disabled={disabled} onChange={onToggle} />
     <AgentAvatar
       agentId={agent.id}
       avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
@@ -85,7 +87,7 @@ export const MemberSelection = ({
   value: ChannelAgentDraft[];
 }) => {
   const { t } = useTranslation(['channel', 'device', 'chat', 'common']);
-  const { agents, projectAgentIds = [] } = options;
+  const { agents, project, projectAgentIds = [] } = options;
   const [search, setSearch] = useState('');
   const available = (agents ?? []).filter((agent) => !exclude.includes(agent.id));
   const filtered = available.filter((agent) =>
@@ -94,17 +96,32 @@ export const MemberSelection = ({
       .includes(search.trim().toLocaleLowerCase()),
   );
   // Inside a project its own team comes first, so a project Channel starts from the project.
-  const { others, priority } = splitByPriority(filtered, projectAgentIds);
+  // A project Channel seats only the project's Agents; anyone else joins the project too, which
+  // takes the right to manage its members, so without it they are listed but cannot be picked.
+  const { others, priority } = splitByPriority(
+    filtered,
+    project ? project.memberIds : projectAgentIds,
+  );
+  const outsideLocked = !!project && !project.canAddAgents;
+  const showOthersTitle = project
+    ? others.length > 0
+    : !!people || (priority.length > 0 && others.length > 0);
+  const othersTitle = project
+    ? 'invite.outsideProject'
+    : priority.length
+      ? 'otherAgents'
+      : 'agents';
   const toggle = (agentId: string) =>
     onChange((current) =>
       current.some((item) => item.agentId === agentId)
         ? current.filter((item) => item.agentId !== agentId)
         : [...current, { agentId, initialized: false, issue: 'configurationLoading' }],
     );
-  const renderAgent = (agent: ChannelAgentOption) => (
+  const renderAgent = (agent: ChannelAgentOption, disabled?: boolean) => (
     <AgentOptionRow
       agent={agent}
       checked={value.some((item) => item.agentId === agent.id)}
+      disabled={disabled}
       fallback={t('unnamedAgent')}
       key={agent.id}
       onToggle={() => toggle(agent.id)}
@@ -139,15 +156,18 @@ export const MemberSelection = ({
               {priority.length > 0 && (
                 <Flexbox gap={2}>
                   <SectionTitle>{t('projectAgents')}</SectionTitle>
-                  {priority.map(renderAgent)}
+                  {priority.map((agent) => renderAgent(agent))}
                 </Flexbox>
               )}
               <Flexbox gap={2}>
-                {(people || (priority.length > 0 && others.length > 0)) && (
-                  <SectionTitle>{t(priority.length ? 'otherAgents' : 'agents')}</SectionTitle>
+                {showOthersTitle && <SectionTitle>{t(othersTitle)}</SectionTitle>}
+                {outsideLocked && others.length > 0 && (
+                  <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
+                    {t('invite.outsideProjectLocked')}
+                  </Text>
                 )}
                 {others.length ? (
-                  others.map(renderAgent)
+                  others.map((agent) => renderAgent(agent, outsideLocked))
                 ) : priority.length ? null : people?.channelId ? (
                   <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
                     {t(search.trim() ? 'invite.noAgentMatches' : 'invite.noAgents')}

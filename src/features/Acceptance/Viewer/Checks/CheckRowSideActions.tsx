@@ -1,6 +1,7 @@
 import { Button, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Check, MessageSquare, MessageSquareX } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,10 @@ import { styles } from './styles';
 import type { CheckReviewActions } from './useCheckReviewActions';
 
 interface CheckRowSideActionsProps {
+  /** Lay out as one line at every width — the verdict bar under a list row. */
+  inline?: boolean;
+  /** Extra quiet links beside the comment entry (history, trace). */
+  leading?: ReactNode;
   onCommentEvidence?: () => void;
   review: CheckReviewActions;
   reviewPending: boolean;
@@ -15,30 +20,37 @@ interface CheckRowSideActionsProps {
 }
 
 export const CheckRowSideActions = memo<CheckRowSideActionsProps>(
-  ({ onCommentEvidence, review, reviewPending, showDecision }) => {
+  ({ inline, leading, onCommentEvidence, review, reviewPending, showDecision }) => {
     const { t } = useTranslation('verify');
     const { accepting, handleAccept, handleIgnore, ignoring, openReject } = review;
 
+    const commentButton = onCommentEvidence ? (
+      <Button
+        outdent
+        icon={<Icon icon={MessageSquare} />}
+        style={{ alignSelf: inline ? undefined : 'flex-start' }}
+        type={'text'}
+        onClick={(event) => {
+          event.stopPropagation();
+          onCommentEvidence();
+        }}
+      >
+        {t('acceptance.comments.evidenceModalTitle')}
+      </Button>
+    ) : null;
+
     return (
-      <div {...stylex.props(styles.sideActions)}>
-        {onCommentEvidence ? (
-          <Button
-            outdent
-            icon={<Icon icon={MessageSquare} />}
-            style={{ alignSelf: 'flex-start' }}
-            type={'text'}
-            onClick={(event) => {
-              event.stopPropagation();
-              onCommentEvidence();
-            }}
-          >
-            {t('acceptance.comments.evidenceModalTitle')}
-          </Button>
+      <div {...stylex.props(styles.sideActions, inline && styles.sideActionsInline)}>
+        {inline ? (
+          <div {...stylex.props(styles.sideActionsLeading)}>
+            {commentButton}
+            {leading}
+          </div>
         ) : (
-          <span />
+          (commentButton ?? <span />)
         )}
         {showDecision && (
-          <div {...stylex.props(styles.decisionStack)}>
+          <div {...stylex.props(styles.decisionStack, inline && styles.decisionStackInline)}>
             <Button
               disabled={reviewPending && !accepting}
               icon={<Icon icon={Check} />}

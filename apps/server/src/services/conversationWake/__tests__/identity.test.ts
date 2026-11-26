@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { createWakeIdentityLoader } from '../identity';
+import { createWakeIdentityLoader, MAX_AGENT_DESCRIPTION_LENGTH } from '../identity';
 
 const makeDb = (agent: unknown, user: unknown) => ({
   query: {
@@ -18,6 +18,7 @@ describe('createWakeIdentityLoader', () => {
     await expect(
       createWakeIdentityLoader({ agentId: 'a', db: db as never, userId: 'u' })(),
     ).resolves.toEqual({
+      agentDescription: undefined,
       agentName: 'Arvin Agent',
       agentTitle: 'Release helper',
       ownerNames: ['Arvin Zhang', 'arvin'],
@@ -34,6 +35,25 @@ describe('createWakeIdentityLoader', () => {
       agentTitle: undefined,
       ownerNames: ['arvin'],
     });
+  });
+
+  it('reads what the agent is for: its description, else the opening of its system role', async () => {
+    const described = makeDb(
+      { description: ' Triages bug reports ', name: 'A', systemRole: 'You are a long prompt' },
+      { username: 'u' },
+    );
+    await expect(
+      createWakeIdentityLoader({ agentId: 'a', db: described as never, userId: 'u' })(),
+    ).resolves.toMatchObject({ agentDescription: 'Triages bug reports' });
+
+    const role = `You triage bug reports. ${'x'.repeat(MAX_AGENT_DESCRIPTION_LENGTH)}`;
+    const roleOnly = makeDb({ description: null, name: 'A', systemRole: role }, { username: 'u' });
+    const { agentDescription } = await createWakeIdentityLoader({
+      agentId: 'a',
+      db: roleOnly as never,
+      userId: 'u',
+    })();
+    expect(agentDescription).toBe(`${role.slice(0, MAX_AGENT_DESCRIPTION_LENGTH)}…`);
   });
 
   it('reads the database once for a burst of messages', async () => {

@@ -2,6 +2,7 @@ import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builti
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { AiAgentService } from '../../index';
 
 // Feature-flagged builtin tools must leave a server run's tool pool while
@@ -87,6 +88,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: mockResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockResolveByIdentifiers),
     };
   }),
 }));

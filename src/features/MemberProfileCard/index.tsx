@@ -9,6 +9,7 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
+import { densityTokens } from '@/styles/density.stylex';
 
 import type { WorkspaceMemberProfile } from './useWorkspaceMemberProfile';
 
@@ -30,8 +31,8 @@ const styles = stylex.create({
     filter: 'blur(44px)',
   },
   body: {
-    paddingBlock: 12,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockStartWidth: 1,
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -44,14 +45,14 @@ const styles = stylex.create({
   header: {
     position: 'relative',
     marginBlockStart: -24,
-    paddingBlockEnd: 12,
-    paddingInline: 16,
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   inherit: {
     color: 'inherit',
   },
   name: {
-    fontSize: 16,
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 600,
     color: cssVar.colorText,
   },

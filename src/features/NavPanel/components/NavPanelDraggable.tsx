@@ -16,8 +16,11 @@ import {
   NAV_PANEL_MIN_WIDTH,
   systemStatusSelectors,
 } from '@/store/global/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { isMacOS } from '@/utils/platform';
 
+import { NavPanelDensityContext } from '../density';
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
 import { BACK_BUTTON_ID } from './BackButton';
 
@@ -82,12 +85,12 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         width 0.2s ${cssVar.motionEaseOut};
     }
     #${BACK_BUTTON_ID} {
-      width: 24px !important;
+      width: ${densityVars.iconBox} !important;
     }
 
     &:hover {
       #${TOGGLE_BUTTON_ID} {
-        width: 32px !important;
+        width: ${densityVars.iconBox} !important;
         opacity: 1;
       }
 
@@ -120,6 +123,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     systemStatusSelectors.isStatusInit(s),
   ]);
   const handleSizeChange = useNavPanelSizeChangeHandler();
+  const interfaceDensity = useInterfaceDensity();
 
   // Defer DraggablePanel mount until system status hydrates; otherwise defaultSize
   // captures the pre-hydration default and the DOM drifts off NavigationBar's live width.
@@ -159,32 +163,34 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >
-      <div className={draggableStyles.inner}>
-        {/* Home stays mounted while a route-owned panel is active so its list
+      <NavPanelDensityContext value={interfaceDensity}>
+        <div className={draggableStyles.inner}>
+          {/* Home stays mounted while a route-owned panel is active so its list
             state survives the round trip. Activity keeps the fibers but not the
             visibility, so the layer is force-hidden like HomeLayout does. */}
-        {homeContent && (
-          <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
-            <div
-              className={draggableStyles.layer}
-              style={isHomeActive ? undefined : hiddenLayerStyle}
-            >
-              {homeContent}
+          {homeContent && (
+            <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
+              <div
+                className={draggableStyles.layer}
+                style={isHomeActive ? undefined : hiddenLayerStyle}
+              >
+                {homeContent}
+              </div>
+            </Activity>
+          )}
+          {!isHomeActive && (
+            <div className={draggableStyles.layer} key={activeContent.key}>
+              {activeContent.node}
             </div>
-          </Activity>
-        )}
-        {!isHomeActive && (
-          <div className={draggableStyles.layer} key={activeContent.key}>
-            {activeContent.node}
-          </div>
-        )}
-      </div>
-      <Suspense fallback={null}>
-        <NavPanelUpgradeEntry />
-      </Suspense>
-      <Suspense>
-        <Footer />
-      </Suspense>
+          )}
+        </div>
+        <Suspense fallback={null}>
+          <NavPanelUpgradeEntry />
+        </Suspense>
+        <Suspense>
+          <Footer />
+        </Suspense>
+      </NavPanelDensityContext>
     </DraggablePanel>
   );
 });

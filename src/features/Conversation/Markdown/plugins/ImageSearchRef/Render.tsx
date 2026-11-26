@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -9,79 +11,63 @@ import Image from '@/libs/next/Image';
 import { dataSelectors, useConversationStore } from '../../../store';
 import { type MarkdownElementProps } from '../type';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  imageCardLink: css`
-    color: inherit;
-    text-decoration: none;
-    transition: opacity 0.2s;
-
-    &:hover {
-      opacity: 0.75;
-    }
-  `,
-  imageDomain: css`
-    overflow: hidden;
-
-    font-size: 0.8em;
-    line-height: 1;
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  imageThumb: css`
-    display: block;
-
-    width: 100%;
-    height: 160px;
-    border-radius: 6px;
-
-    object-fit: cover;
-  `,
-  imageTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 0.95em;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-  `,
-  refChip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 0.8em;
-    color: ${cssVar.colorTextSecondary};
-    text-decoration: none;
-    vertical-align: -1px;
-
-    background: ${cssVar.colorFillSecondary};
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFill};
-    }
-  `,
-  thumbWrap: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 0;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-  `,
-}));
+const styles = stylex.create({
+  imageCardLink: {
+    color: 'inherit',
+    textDecoration: 'none',
+    transition: 'opacity 0.2s',
+    opacity: { 'default': null, ':hover': 0.75 },
+  },
+  imageDomain: {
+    overflow: 'hidden',
+    fontSize: '0.8em',
+    lineHeight: 1,
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  imageThumb: {
+    display: 'block',
+    width: '100%',
+    height: '160px',
+    borderRadius: '6px',
+    objectFit: 'cover',
+  },
+  imageTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '0.95em',
+    lineHeight: 1.4,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+  },
+  refChip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '0.8em',
+    color: cssVar.colorTextSecondary,
+    textDecoration: 'none',
+    verticalAlign: '-1px',
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFill },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'background 0.15s',
+  },
+  thumbWrap: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 0,
+    width: '16px',
+    height: '16px',
+    borderRadius: '3px',
+  },
+});
 
 interface ImageSearchRefProperties {
   imageIndex: number;
@@ -106,27 +92,27 @@ const Render = memo<MarkdownElementProps<ImageSearchRefProperties>>(({ node, id 
     <Flexbox gap={4} style={{ maxWidth: 240 }}>
       {image.imageUri && (
         <a
-          className={styles.imageCardLink}
+          {...stylex.props(styles.imageCardLink)}
           href={image.imageUri}
           rel="noopener noreferrer"
           target="_blank"
         >
           <img
             alt={image.title ? stripHtml(image.title) : ''}
-            className={styles.imageThumb}
+            {...stylex.props(styles.imageThumb)}
             src={image.imageUri}
           />
         </a>
       )}
       <a
-        className={styles.imageCardLink}
+        {...stylex.props(styles.imageCardLink)}
         href={image.sourceUri || image.imageUri}
         rel="noopener noreferrer"
         target="_blank"
         title={image.title ? stripHtml(image.title) : undefined}
       >
         <Flexbox gap={2}>
-          {image.title && <div className={styles.imageTitle}>{stripHtml(image.title)}</div>}
+          {image.title && <div {...stylex.props(styles.imageTitle)}>{stripHtml(image.title)}</div>}
           {image.domain && (
             <Flexbox horizontal align="center" gap={4}>
               <Image
@@ -137,7 +123,7 @@ const Render = memo<MarkdownElementProps<ImageSearchRefProperties>>(({ node, id 
                 style={{ borderRadius: 2, flexShrink: 0 }}
                 width={12}
               />
-              <div className={styles.imageDomain}>{image.domain}</div>
+              <div {...stylex.props(styles.imageDomain)}>{image.domain}</div>
             </Flexbox>
           )}
         </Flexbox>
@@ -153,9 +139,9 @@ const Render = memo<MarkdownElementProps<ImageSearchRefProperties>>(({ node, id 
         style={{ color: 'inherit', textDecoration: 'none' }}
         target="_blank"
       >
-        <span className={styles.refChip}>
+        <span {...stylex.props(styles.refChip)}>
           {image.imageUri && (
-            <span className={styles.thumbWrap}>
+            <span {...stylex.props(styles.thumbWrap)}>
               <img
                 alt=""
                 src={image.imageUri}

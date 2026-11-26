@@ -16,27 +16,27 @@ import { styles } from './styles';
 
 const AnchorPreview = memo<{ comment: TopicCommentItem }>(({ comment }) => {
   const { t } = useTranslation('chat');
-  const [messageIndex, messageElementId, scrollToIndex] = useChatStore((s) => {
+  const [messageIndex, messageElementId, scrollToMessage] = useChatStore((s) => {
     if (!s.activeAgentId || s.activeTopicId !== comment.topicId)
-      return [-1, undefined, s.mainConversationScrollToIndex] as const;
+      return [-1, undefined, s.mainConversationScrollToMessage] as const;
 
     const location = resolveTopicCommentMessageLocation(
       displayMessageSelectors.mainDisplayChats(s),
       comment.messageId,
     );
 
-    return [location?.index ?? -1, location?.elementId, s.mainConversationScrollToIndex] as const;
+    return [location?.index ?? -1, location?.elementId, s.mainConversationScrollToMessage] as const;
   });
   const canLocateMessage = messageIndex >= 0;
   const isDeleted = isTopicCommentAnchorDeleted(comment.messageId);
 
   const locateMessage = useCallback(() => {
-    if (!messageElementId || !canLocateMessage || !scrollToIndex) return;
+    if (!messageElementId || !canLocateMessage || !scrollToMessage) return;
     requestAnimationFrame(() => {
-      scrollToIndex(messageIndex, { align: 'center', smooth: true });
+      scrollToMessage(messageElementId, { align: 'center', smooth: true });
       highlightMessageWhenScrollSettles(messageElementId);
     });
-  }, [canLocateMessage, messageElementId, messageIndex, scrollToIndex]);
+  }, [canLocateMessage, messageElementId, scrollToMessage]);
 
   if (!comment.anchorPreview) return null;
 

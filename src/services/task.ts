@@ -49,6 +49,8 @@ class TaskService {
     parentTaskId?: string | null;
     priorities?: number[];
     projectId?: string;
+    /** Attach each row's latest N runs and its `awaitingHuman` flag. */
+    recentRuns?: number;
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
     scope?: 'assigned' | 'created';
     statuses?: TaskStatus[];
@@ -155,6 +157,10 @@ class TaskService {
     visibility: 'private' | 'public',
     options?: { takeOwnership?: boolean },
   ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
+
+  /** File a task without a project, with all its subtasks, under `projectId`. */
+  moveTreeToProject = async (id: string, projectId: string) =>
+    lambdaClient.task.moveTreeToProject.mutate({ id, projectId });
 
   update = async (
     id: string,

@@ -309,6 +309,14 @@ export const searchElasticsearchCandidates = async (
       filter.push({ term: { file_type: DOCUMENT_FOLDER_TYPE } });
     } else if (documentKind === 'page') {
       filter.push({ term: { file_type: 'custom/document' } });
+      if (request.filters.excludeFileDerived) {
+        mustNot.push({
+          bool: { filter: [{ term: { source_type: 'file' } }, { exists: { field: 'file_id' } }] },
+        });
+      }
+    } else if (documentKind === 'fileContent') {
+      filter.push({ exists: { field: 'file_id' } }, { term: { source_type: 'file' } });
+      mustNot.push({ term: { file_type: DOCUMENT_FOLDER_TYPE } });
     } else if (documentKind === 'knowledgeBaseDocument') {
       filter.push({ terms: { knowledge_base_ids: request.filters.knowledgeBaseIds ?? [] } });
       mustNot.push({ term: { file_type: DOCUMENT_FOLDER_TYPE } });

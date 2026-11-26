@@ -13,6 +13,8 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useHomeStore } from '@/store/home';
 
 /** The word the user must type to arm the Delete button (mirrors Linear). */
@@ -38,19 +40,21 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [actionError, setActionError] = useState<InlineErrorState | null>(null);
 
   const armed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_WORD;
 
   const handleDelete = async () => {
     if (!armed || loading || archiving) return;
     setLoading(true);
+    setActionError(null);
     try {
       await removeAgentLabel(label.id);
       toast.success(t('workspaceSetting.labels.delete.success'));
       close();
     } catch (error) {
       console.error('Failed to delete label:', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+      setActionError(toInlineError(t('workspaceSetting.labels.delete.failedRetry'), error));
     } finally {
       setLoading(false);
     }
@@ -59,13 +63,14 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
   const handleArchive = async () => {
     if (loading || archiving) return;
     setArchiving(true);
+    setActionError(null);
     try {
       await updateAgentLabel(label.id, { archived: true });
       toast.success(t('workspaceSetting.labels.archive.success'));
       close();
     } catch (error) {
       console.error('Failed to archive label:', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+      setActionError(toInlineError(t('workspaceSetting.labels.archive.failedRetry'), error));
     } finally {
       setArchiving(false);
     }
@@ -86,9 +91,15 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
           disabled={loading || archiving}
           placeholder={DELETE_CONFIRM_WORD}
           value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
           onPressEnter={handleDelete}
+          onChange={(e) => {
+            setConfirmText(e.target.value);
+            setActionError(null);
+          }}
         />
+        {actionError && (
+          <InlineErrorText detail={actionError.detail}>{actionError.summary}</InlineErrorText>
+        )}
       </Flexbox>
       {/* Archive and Delete both mutate the same label, so each locks the other
           out — `loading` alone only disables the button that owns it. */}

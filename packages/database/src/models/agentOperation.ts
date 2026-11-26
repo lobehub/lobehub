@@ -208,7 +208,12 @@ export class AgentOperationModel {
     if (params.requireReservation) {
       const [started] = await this.db
         .update(agentOperations)
-        .set(values)
+        .set({
+          ...values,
+          ...(params.metadata && {
+            metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`,
+          }),
+        })
         .where(reservationIdentity)
         .returning({ id: agentOperations.id });
       if (!started) throw new Error('Operation reservation is no longer available');
@@ -262,11 +267,12 @@ export class AgentOperationModel {
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.
+   *
+   * Returns the written row's provenance and the status it held before this write, so a caller
+   * can act once per transition: a replay of the same terminal status is accepted again and
+   * reads back that status. `undefined` when nothing was written.
    */
-  async recordCompletion(
-    operationId: string,
-    params: RecordOperationCompletionParams,
-  ): Promise<boolean> {
+  async recordCompletion(operationId: string, params: RecordOperationCompletionParams) {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -293,27 +299,42 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    const [row] = await this.db
-      .update(agentOperations)
-      .set(updates)
-      .where(
-        and(
-          eq(agentOperations.id, operationId),
-          or(
-            inArray(agentOperations.status, [
-              'running',
-              'waiting_for_human',
-              'waiting_for_async_tool',
-              'waiting_for_client',
-            ]),
-            eq(agentOperations.status, params.status),
-          ),
-          this.ownership(),
-        ),
-      )
-      .returning({ id: agentOperations.id });
+    return this.db.transaction(async (tx) => {
+      // Lock the row before reading its status: two overlapping terminal writes would otherwise
+      // both read the status from before either committed, and both look like the first one.
+      const [previous] = await tx
+        .select({ status: agentOperations.status })
+        .from(agentOperations)
+        .where(and(eq(agentOperations.id, operationId), this.ownership()))
+        .for('update');
+      if (!previous) return undefined;
 
-    return Boolean(row);
+      const [row] = await tx
+        .update(agentOperations)
+        .set(updates)
+        .where(
+          and(
+            eq(agentOperations.id, operationId),
+            or(
+              inArray(agentOperations.status, [
+                'running',
+                'waiting_for_human',
+                'waiting_for_async_tool',
+                'waiting_for_client',
+              ]),
+              eq(agentOperations.status, params.status),
+            ),
+            this.ownership(),
+          ),
+        )
+        .returning({
+          id: agentOperations.id,
+          parentOperationId: agentOperations.parentOperationId,
+          trigger: agentOperations.trigger,
+        });
+
+      return row && { ...row, previousStatus: previous.status };
+    });
   }
 
   /**

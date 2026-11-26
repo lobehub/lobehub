@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import SegmentBar from '../../../../features/SegmentBar';
 import StatusBadge from '../../../../features/StatusBadge';
@@ -105,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Tonal hero band carrying the headline outcome — the first thing the eye lands on.
   hero: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorFillQuaternary};
   `,

@@ -40,7 +40,7 @@ describe('createWakeClassify', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v4',
+      promptVersion: 'v5',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_classifier',
     });
@@ -169,7 +169,7 @@ describe('createWakeClassify with a decision model (the default)', () => {
 
     expect(mockDecide.mock.calls[0][1].tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'decision-v3',
+      promptVersion: 'decision-v4',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_decision',
     });
@@ -205,13 +205,38 @@ describe('createWakeClassify with a decision model (the default)', () => {
     expect(await stateFor('u-9')).toContain('an earlier message by the same author');
   });
 
+  it('tells the model a reply answers another bot, not a person, when that bot spoke in the log', async () => {
+    mockDecide.mockResolvedValue(answer(0.5));
+
+    await createWakeClassify({ db: {} as never, userId: 'u1' })(
+      {
+        conversation: {
+          botNames: ['Nasa'],
+          recent: [
+            { at: 1, authorId: 'cook-1', authorName: 'Cook', id: 'm1', isBot: true, text: 'done' },
+          ],
+        },
+        signal: { ...signal, replyToAuthorId: 'cook-1', replyToAuthorName: 'Cook' },
+      },
+      new AbortController().signal,
+    );
+
+    const state = mockDecide.mock.calls[0][0].state as string;
+    expect(state).toContain('Cook (bot): done');
+    expect(state).toContain('a reply to a message by Cook, another bot, not the assistant');
+  });
+
   it('tells the model which agent the bot is and who owns it, and marks the owner’s lines', async () => {
     mockDecide.mockResolvedValue(answer(0.5));
 
     await createWakeClassify({ db: {} as never, userId: 'u1' })(
       {
         conversation: {
-          agent: { name: 'Arvin Agent', title: 'Release helper' },
+          agent: {
+            description: 'Reviews release PRs and answers questions about the release schedule',
+            name: 'Arvin Agent',
+            title: 'Release helper',
+          },
           botNames: ['Shadow Arvin'],
           ownerId: 'owner-1',
           ownerNames: ['Arvin Zhang'],
@@ -226,6 +251,9 @@ describe('createWakeClassify with a decision model (the default)', () => {
 
     const state = mockDecide.mock.calls[0][0].state as string;
     expect(state).toContain('Its agent is named Arvin Agent (title: Release helper)');
+    expect(state).toContain(
+      'What the assistant is for:\n"""\nReviews release PRs and answers questions about the release schedule',
+    );
     expect(state).toContain('is called: Arvin Zhang');
     expect(state).toContain('arvin (owner): hi');
   });

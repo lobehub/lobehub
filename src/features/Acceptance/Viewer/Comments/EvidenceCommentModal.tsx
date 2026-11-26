@@ -9,7 +9,6 @@ import {
   Flexbox,
   Icon,
   Text,
-  toast,
   useModalContext,
   useResponsive,
 } from '@lobehub/ui';
@@ -213,14 +212,17 @@ const ImageCommentEditor = ({
     current.current = next;
     setDraft(next);
     saveEvidenceCommentDraft(key, next);
+    setSubmitError(null);
     if (counted) onDraftsChange();
   };
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { rect, content, clientId } = draft;
   const trimmed = content.trim();
   const submit = async () => {
     if (!rect || !trimmed || submitting) return;
     setSubmitting(true);
+    setSubmitError(null);
     onBusyChange(true);
     try {
       setCanDismissByClickOutside(false);
@@ -236,7 +238,7 @@ const ImageCommentEditor = ({
       }
     } catch (cause) {
       console.error('[acceptance:comments]', cause);
-      toast.error(t('acceptance.comments.createFailed'));
+      setSubmitError(t('acceptance.comments.createFailedRetry'));
     } finally {
       setSubmitting(false);
       onBusyChange(false);
@@ -245,7 +247,8 @@ const ImageCommentEditor = ({
   };
 
   let status: string = t('acceptance.comments.draftSaved');
-  if (!rect) status = t('acceptance.comments.draftNeedsRegion');
+  if (submitError) status = submitError;
+  else if (!rect) status = t('acceptance.comments.draftNeedsRegion');
   else if (!trimmed) status = t('acceptance.comments.draftNeedsText', { index: 1 });
 
   const canvas = {
@@ -265,6 +268,7 @@ const ImageCommentEditor = ({
         <DraftFooter
           count={rect ? 1 : 0}
           disabled={!rect || !trimmed}
+          error={Boolean(submitError)}
           loading={submitting}
           status={status}
           onCancel={close}

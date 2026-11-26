@@ -1,0 +1,207 @@
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
+import { classifyCliQuotaMessage } from '@lobechat/heterogeneous-agents/errors';
+import type { ChannelReplyErrorAction, ChatMessageError } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
+
+import { sanitizeVisitorError } from '@/database/models/message/visitor';
+import type {
+  ChannelReplyErrorDraft,
+  ChannelReplyErrorFacts,
+} from '@/database/repositories/channel';
+
+/**
+ * The device-side watchdog's error type for a CLI Agent that stopped producing output. Spelled
+ * out here so the card handles it before every runtime ships the type.
+ */
+export const HETERO_AGENT_SILENCE_TIMEOUT = 'HeteroAgentSilenceTimeout';
+
+/** Why a reply failed, in the terms the card explains and acts on. */
+export type ChannelReplyFailureKind =
+  /** The Agent's owner declined the requester's request to use it. */
+  | 'access_denied'
+  /**
+   * The requester may not use the Agent as it runs: a local CLI Agent (Claude Code, Codex, …)
+   * whose share does not grant them its owner's device. Only its owner can grant that.
+   */
+  | 'access_required'
+  /** The run could not be submitted at all. */
+  | 'dispatch'
+  /** The device the Agent runs on was offline or could not be reached. */
+  | 'device'
+  /** The run ended normally but wrote no reply. */
+  | 'no_reply'
+  /** The CLI's subscription is out of credits: only a top-up (or another account) helps. */
+  | 'quota_credit'
+  /** The CLI's plan window is spent; it reopens by itself. */
+  | 'quota_usage'
+  /** A shared Agent's visitor sent all the messages its creator allows. */
+  | 'share_message_limit'
+  /**
+   * A shared Agent spent the usage its share allows. The copy promises no reset: a zero limit
+   * stops visitor runs for good, and a cap set elsewhere raises the same error.
+   */
+  | 'share_spend_limit'
+  /** The CLI on the device produced no output for too long and was stopped there. */
+  | 'silence'
+  /** The platform found the run without progress for too long and abandoned it. */
+  | 'watchdog'
+  | 'generic';
+
+const DEVICE_ERROR_TYPES = new Set<string>([
+  ChatErrorType.DeviceGatewayNotConfigured,
+  ChatErrorType.ShareHeteroDeviceUnavailable,
+]);
+
+export const classifyReplyFailure = (facts: ChannelReplyErrorFacts): ChannelReplyFailureKind => {
+  const type = facts.operation?.error?.type;
+  const message = facts.operation?.error?.message;
+  // Checked first: no run, retry or other device helps until the Agent's owner allows it.
+  if (facts.job.blockedCode === 'access_denied') return 'access_denied';
+  if (type === ChatErrorType.ShareHeterogeneousAgentUnsupported) return 'access_required';
+  // Checked before `dispatch`: a share limit refuses the run before it takes its input, and
+  // "could not start" would hide that only the creator's limit can change the outcome.
+  if (type === ChatErrorType.ShareSpendLimitExceeded) return 'share_spend_limit';
+  if (type === ChatErrorType.ShareMessageLimitExceeded) return 'share_message_limit';
+  if (type && DEVICE_ERROR_TYPES.has(type)) return 'device';
+  if (type === HETERO_AGENT_SILENCE_TIMEOUT) return 'silence';
+  const quota = classifyCliQuotaMessage(message);
+  if (quota) return quota.kind === 'credit_limit' ? 'quota_credit' : 'quota_usage';
+  if (
+    facts.operation?.status === 'abandoned' ||
+    message?.trim().startsWith(ABANDONED_OPERATION_ERROR_PREFIX)
+  )
+    return 'watchdog';
+  if (!facts.job.acceptedAt) return 'dispatch';
+  if (facts.operation?.status === 'done') return 'no_reply';
+  return 'generic';
+};
+
+/** A run that took its input left a conversation behind that `resume` can continue. */
+export const canResumeReply = (facts: ChannelReplyErrorFacts) =>
+  !!facts.job.topicId && !!facts.job.acceptedAt;
+
+/** The next steps the server can carry out for this failure, best first. */
+export const replyFailureActions = (
+  kind: ChannelReplyFailureKind,
+  facts: ChannelReplyErrorFacts,
+): ChannelReplyErrorAction[] => {
+  const resume = canResumeReply(facts);
+  const actions: ChannelReplyErrorAction[] = (() => {
+    switch (kind) {
+      case 'device': {
+        return ['retry', 'switch_device'];
+      }
+      case 'quota_credit': {
+        return ['switch_device', 'retry'];
+      }
+      case 'quota_usage': {
+        return resume ? ['resume', 'switch_device'] : ['retry', 'switch_device'];
+      }
+      case 'dispatch': {
+        return ['retry'];
+      }
+      // Only the Agent's owner can lift it: ask them. Their answer runs the reply again.
+      case 'access_denied':
+      case 'access_required': {
+        return ['request_access'];
+      }
+      // Resuming or retrying runs into the same limit; only its creator can lift it.
+      case 'share_message_limit':
+      case 'share_spend_limit': {
+        return [];
+      }
+      default: {
+        return resume ? ['resume', 'retry'] : ['retry'];
+      }
+    }
+  })();
+  // A shared Agent's visitor cannot choose its owner's device.
+  return facts.share ? actions.filter((action) => action !== 'switch_device') : actions;
+};
+
+type Copy = Record<ChannelReplyFailureKind, (name: string, started: boolean) => string>;
+
+const ZH: Copy = {
+  access_denied: (name) => `${name} 的主人拒绝了你的使用申请，这次没有回复。可以再次申请。`,
+  access_required: (name) => `${name} 需要主人授权后才能使用。申请后，主人同意即可继续。`,
+  device: (name, started) =>
+    started
+      ? `${name} 所在的设备断开了，回复没能完成。`
+      : `连不上 ${name} 所在的设备，回复没能开始。`,
+  dispatch: (name) => `${name} 的回复没能启动。`,
+  generic: (name) => `${name} 的回复中途出错，没能完成。`,
+  no_reply: (name) => `${name} 运行结束了，但没有写出回复。`,
+  quota_credit: (name) => `${name} 使用的账号额度已用完，需要充值或换一台设备。`,
+  quota_usage: (name) => `${name} 使用的账号已达到用量上限，额度重置后可以继续。`,
+  share_message_limit: (name) =>
+    `发给 ${name} 的消息已达到创建者设置的上限，这次没有回复。需要创建者提高上限才能继续。`,
+  share_spend_limit: (name) =>
+    `${name} 已用完这个分享的用量额度，这次没有回复。需要创建者提高额度才能继续。`,
+  silence: (name) => `${name} 在设备上长时间没有任何输出，这次回复被中止了。`,
+  watchdog: (name) => `${name} 长时间没有进展，这次回复被系统中止了。`,
+};
+
+const EN: Copy = {
+  access_denied: (name) =>
+    `${name}'s owner declined your request to use it, so it did not reply. You can ask again.`,
+  access_required: (name) =>
+    `${name} needs its owner's permission before you can use it. Ask for access; it continues once they allow it.`,
+  device: (name, started) =>
+    started
+      ? `${name}'s device disconnected, so the reply could not finish.`
+      : `${name}'s device could not be reached, so the reply did not start.`,
+  dispatch: (name) => `${name}'s reply could not start.`,
+  generic: (name) => `${name} ran into an error and could not finish this reply.`,
+  no_reply: (name) => `${name} finished running without writing a reply.`,
+  quota_credit: (name) => `${name}'s account is out of credits; top it up or use another device.`,
+  quota_usage: (name) => `${name}'s account hit its usage limit; you can continue once it resets.`,
+  share_message_limit: (name) =>
+    `Messages to ${name} reached the limit its creator set, so it did not reply. Its creator needs to raise the limit.`,
+  share_spend_limit: (name) =>
+    `${name} used up the usage this share allows, so it did not reply. Its creator needs to raise the limit.`,
+  silence: (name) => `${name} went silent on its device for too long, so this reply was stopped.`,
+  watchdog: (name) => `${name} stopped making progress, so the system ended this reply.`,
+};
+
+/** Chinese copy for a Chinese locale, English for everything else. */
+export const isChineseLocale = (locale: string) => locale.toLowerCase().startsWith('zh');
+
+/**
+ * The raw failure as the card shows it under "details". A shared Agent runs under its owner's
+ * credentials, so a shared card never persists that text: it takes the share page's projection
+ * (`sanitizeVisitorError`), the same one `view.ts` reapplies when it hands the card to a reader —
+ * the stored card is read by every member of the Channel, not only by the share's visitor.
+ */
+const visibleError = (facts: ChannelReplyErrorFacts) => {
+  const raw = facts.operation?.error;
+  if (!raw?.message && !raw?.type) return { errorMessage: null, errorType: null };
+  const error = { message: raw.message ?? '', type: raw.type } as ChatMessageError;
+  const shown = facts.share ? sanitizeVisitorError(error) : error;
+  return {
+    errorMessage: shown?.message ? shown.message.slice(0, 2000) : null,
+    errorType: shown?.type?.toString() ?? null,
+  };
+};
+
+/**
+ * The card written as soon as a reply fails: a fixed sentence per failure kind in the requester's
+ * language, and the actions the server allows. A model may refine the sentence later; this one
+ * stands when it cannot.
+ */
+export const ruleBasedReplyError = (
+  facts: ChannelReplyErrorFacts,
+  locale: string,
+  now = new Date(),
+): ChannelReplyErrorDraft & { kind: ChannelReplyFailureKind } => {
+  const kind = classifyReplyFailure(facts);
+  const name = facts.agent.name || 'Agent';
+  const copy = isChineseLocale(locale) ? ZH : EN;
+  return {
+    actions: replyFailureActions(kind, facts),
+    deviceId: kind === 'device' || kind === 'silence' ? facts.deviceId : null,
+    ...visibleError(facts),
+    kind,
+    occurredAt: now.toISOString(),
+    summary: copy[kind](name, !!facts.job.acceptedAt),
+  };
+};

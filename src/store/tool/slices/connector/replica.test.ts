@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { cleanup } from '@testing-library/react';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
@@ -98,6 +98,34 @@ describe('connector slice replica', () => {
     scopes.clear();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  it('loads the active agent bucket once for mounted readers and enables the aggregate on demand', async () => {
+    listByAgentQuery.mockImplementation(async ({ agentId }) => [connector(agentId)]);
+    listAgentBoundQuery.mockResolvedValue([connector('owned')]);
+    listQuery.mockResolvedValue([]);
+    await useToolStore.getState().fetchConnectors();
+
+    const { rerender } = renderHook(
+      ({ agentId, showDetail }) => {
+        const store = useToolStore.getState();
+        store.useFetchAgentConnectors(agentId);
+        store.useFetchAgentConnectors(agentId);
+        store.useFetchAgentBoundConnectors(showDetail);
+      },
+      { initialProps: { agentId: 'a1', showDetail: false } },
+    );
+
+    await waitFor(() => expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true));
+    expect(listByAgentQuery).toHaveBeenCalledExactlyOnceWith({ agentId: 'a1' });
+    expect(listAgentBoundQuery).not.toHaveBeenCalled();
+
+    rerender({ agentId: 'a2', showDetail: true });
+    await waitFor(() => {
+      expect(useToolStore.getState().agentConnectors.a2).toEqual([connector('a2')]);
+      expect(useToolStore.getState().agentBoundConnectors).toEqual([connector('owned')]);
+    });
+    expect(useToolStore.getState().agentConnectors.a1).toEqual([connector('a1')]);
   });
 
   it('paints the persisted list before the network answers', async () => {

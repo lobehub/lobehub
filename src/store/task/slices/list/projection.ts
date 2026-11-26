@@ -40,6 +40,8 @@ export interface TaskListQuery {
   offset?: number;
   orderBy?: 'createdAt' | 'updatedAt';
   projectId?: string;
+  /** Rows carry their latest N runs and `awaitingHuman` (the scheduled tasks table). */
+  recentRuns?: number;
   /** "My tasks": assigned to, or created by, the caller. */
   scope?: 'assigned' | 'created';
   /** Sorted, so the same status set is one entry. */

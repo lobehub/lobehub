@@ -7,6 +7,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 
@@ -30,6 +34,9 @@ const ALL = 'all';
  * list with their live quota — the shared capacity agents are balanced onto.
  * Accounts register themselves when a CLI login reports quota; this page only
  * decides which of them stay in rotation and what they are called.
+ *
+ * In a workspace the shared accounts and the caller's own private ones list
+ * together, the private ones marked with a lock (as on the Devices page).
  */
 const SubscriptionAccounts = () => {
   const { t } = useTranslation('setting');
@@ -42,19 +49,27 @@ const SubscriptionAccounts = () => {
   const loaded = useAgentQuotaStore(agentQuotaSelectors.accounts);
   const [provider, setProvider] = useState<SubscriptionProvider | typeof ALL>(ALL);
   const [keyword, setKeyword] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
   const [openId, setOpenId] = useState<string>();
-
   const accounts = sortAccounts(
     (loaded ?? []).filter((a): a is ProviderAccount => isSubscriptionProvider(a.provider)),
   );
   const present = SUBSCRIPTION_PROVIDERS.filter((p) => accounts.some((a) => a.provider === p));
   // A provider filter that no longer has accounts falls back to everything.
   const active = provider !== ALL && present.includes(provider) ? provider : ALL;
+  // Only workspace accounts carry a visibility, so the filter shows only in a
+  // workspace, where shared and the caller's private accounts list together.
+  const isPrivateAccount = (a: ProviderAccount) => !!a.workspaceId && a.visibility === 'private';
+  const showVisibilityFilter = accounts.some((a) => !!a.workspaceId);
   const visible = accounts.filter(
-    (a) => (active === ALL || a.provider === active) && matchesKeyword(a, keyword),
+    (a) =>
+      (active === ALL || a.provider === active) &&
+      (!showVisibilityFilter || matchesVisibilityFilter(isPrivateAccount(a), visibilityFilter)) &&
+      matchesKeyword(a, keyword),
   );
   const openAccount = accounts.find((a) => a.id === openId);
-  const inRotation = accounts.filter((a) => a.enabled !== false).length;
+  // The summary counts what the filters leave, so it moves with them.
+  const inRotation = visible.filter((a) => a.enabled !== false).length;
 
   // The meters read each account's own readings, which the list sync does not
   // touch: refreshing re-reads them too, or a newer sample would never show.
@@ -120,45 +135,60 @@ const SubscriptionAccounts = () => {
     </Flexbox>
   );
 
+  const summary = (
+    <Text fontSize={13} type={'secondary'}>
+      {accounts.length > 0 &&
+        t('subscriptionAccounts.summary', { count: visible.length, inRotation })}
+    </Text>
+  );
+
   return (
     <Flexbox gap={16} width={'100%'}>
+      {/* The summary and the toolbar share one row. */}
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
-        <Text fontSize={13} type={'secondary'}>
-          {accounts.length > 0 &&
-            t('subscriptionAccounts.summary', { count: accounts.length, inRotation })}
-        </Text>
-        {/* Filters sit on the right as a dropdown: the provider list grows with
-            every coding plan we support, which a segmented control cannot hold. */}
+        {summary}
         <Flexbox horizontal align={'center'} gap={8}>
-          <SearchBar
-            allowClear
-            placeholder={t('subscriptionAccounts.searchPlaceholder')}
-            style={{ width: 240 }}
-            value={keyword}
-            variant={'filled'}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-          <Select
-            style={{ minWidth: 168 }}
-            value={active}
-            variant={'filled'}
-            options={[
-              {
-                label: `${t('subscriptionAccounts.filter.all')} · ${accounts.length}`,
-                value: ALL,
-              },
-              ...present.map((p) => ({
-                label: `${PROVIDER_NAME[p]} · ${accounts.filter((a) => a.provider === p).length}`,
-                value: p,
-              })),
-            ]}
-            onChange={(value) => setProvider(value as SubscriptionProvider | typeof ALL)}
-          />
+          {/* Nothing to search or filter in an empty list. Filters sit on the right
+              as a dropdown: the provider list grows with every coding plan we
+              support, which a segmented control cannot hold. */}
+          {accounts.length > 0 && (
+            <>
+              <SearchBar
+                allowClear
+                placeholder={t('subscriptionAccounts.searchPlaceholder')}
+                style={{ width: 240 }}
+                value={keyword}
+                variant={'filled'}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+              {showVisibilityFilter && (
+                <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+              )}
+              <Select
+                style={{ minWidth: 168 }}
+                value={active}
+                variant={'filled'}
+                options={[
+                  {
+                    label: t('subscriptionAccounts.filter.allProviders'),
+                    value: ALL,
+                  },
+                  ...present.map((p) => ({
+                    label: PROVIDER_NAME[p],
+                    value: p,
+                  })),
+                ]}
+                onChange={(value) => setProvider(value as SubscriptionProvider | typeof ALL)}
+              />
+            </>
+          )}
           <ActionIcon
-            icon={RefreshCwIcon}
             loading={isValidating || refreshing}
             title={t('subscriptionAccounts.refresh')}
             onClick={() => void refresh()}
+            icon={RefreshCwIcon}
+            // A row that runs short of width shrinks its children; the icon keeps its square.
+            style={{ flex: 'none' }}
           />
         </Flexbox>
       </Flexbox>

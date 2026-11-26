@@ -10,14 +10,14 @@ export default {
   'authorize.scenes.connector.description':
     'Market is only used to start this service authorization. Your {{appName}} account stays separate.',
   'authorize.scenes.connector.subtitle':
-    'Sign in to Market to connect and authorize this community service.',
-  'authorize.scenes.connector.title': 'Connect Community Service',
+    'Sign in to Market to connect and authorize this Marketplace service.',
+  'authorize.scenes.connector.title': 'Connect Marketplace Service',
   'authorize.scenes.mcp.subtitle':
-    'Create a community profile to install and run this skill from the community.',
-  'authorize.scenes.mcp.title': 'Install Community Skill',
+    'Create a community profile to install and run this skill from the Marketplace.',
+  'authorize.scenes.mcp.title': 'Install Marketplace Skill',
   'authorize.scenes.sandbox.subtitle':
-    'Create a community profile to run this tool in the community sandbox.',
-  'authorize.scenes.sandbox.title': 'Try the Community Sandbox',
+    'Create a community profile to run this tool in the Marketplace sandbox.',
+  'authorize.scenes.sandbox.title': 'Try the Marketplace Sandbox',
   'authorize.subtitle': 'Create a community profile to use community features.',
   'authorize.title': 'Create Community Profile',
   'callback.buttons.close': 'Close Window',
@@ -39,6 +39,7 @@ export default {
   'callback.titles.error': 'Authorization Failed',
   'callback.titles.loading': 'LobeHub Market Authorization',
   'callback.titles.success': 'Authorization Successful',
+  'claimResources.failedRetry': "Couldn't claim these resources. Check your network and try again.",
   'errors.authorizationFailed': 'Authorization failed, please try again.',
   'errors.browserOnly': 'The authorization process can only be initiated in a browser.',
   'errors.codeConsumed': 'The authorization code has already been used. Please try again.',

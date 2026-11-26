@@ -7,6 +7,7 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { isDeletableItem, type StorageAnalysisItem, type StorageCategory } from './analysis';
@@ -33,7 +34,7 @@ const styles = stylex.create({
     borderTopColor: cssVar.colorBorderSecondary,
     borderTopStyle: 'solid',
     borderTopWidth: 1,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
   },
   size: {
     flex: 'none',

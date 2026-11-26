@@ -15,10 +15,12 @@ const otherUserId = 'plugin-lookup-other-user';
 const messageModel = new MessageModel(serverDB, userId);
 
 interface SeedArgs {
+  arguments?: string;
   content?: string;
   createdAt?: Date;
   id: string;
   identifier?: string | null;
+  intervention?: { status: 'pending' };
   metadata?: Record<string, unknown>;
   ownerId?: string;
   parentId?: string;
@@ -59,8 +61,10 @@ const seedToolMessage = async (args: SeedArgs) => {
 
   await serverDB.insert(messagePlugins).values({
     apiName: args.id,
+    arguments: args.arguments,
     id: args.id,
     identifier: args.identifier === undefined ? 'lobe-tool' : args.identifier,
+    intervention: args.intervention,
     state: args.state,
     toolCallId: args.toolCallId === undefined ? `tc-${args.id}` : args.toolCallId,
     type: args.type === undefined ? undefined : args.type,
@@ -233,6 +237,122 @@ describe('MessageModel.listMessagePluginsByTopic', () => {
   });
 });
 
+describe('MessageModel.listToolCallIndexByTopic', () => {
+  const interventionStateKey = 'heterogeneousIntervention';
+  const pendingIntervention = { deadline: 1_700_000_000_000, transition: 'pending' };
+
+  const seedIndexRows = async () => {
+    await seedToolMessage({
+      arguments: '{"question":"approve?"}',
+      createdAt: new Date('2026-10-01T00:00:01Z'),
+      id: 'plug-approval',
+      intervention: { status: 'pending' },
+      metadata: {
+        heterogeneousToolStateOperationId: 'op-1',
+        heterogeneousToolStateSeq: 3,
+        operationId: 'op-1',
+        usage: { totalTokens: 42 },
+      },
+      state: { [interventionStateKey]: pendingIntervention, todos: ['large payload'] },
+    });
+    await seedToolMessage({
+      arguments: '{"command":"cat a-very-large-file"}',
+      createdAt: new Date('2026-10-01T00:00:02Z'),
+      id: 'plug-plain',
+      metadata: { phase: 'second' },
+      state: { todos: ['large payload'] },
+    });
+  };
+
+  it('returns only the index columns, with arguments only for intervention rows', async () => {
+    await seedIndexRows();
+
+    const rows = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey,
+    });
+
+    expect(rows).toEqual([
+      {
+        apiName: 'plug-approval',
+        arguments: '{"question":"approve?"}',
+        id: 'plug-approval',
+        identifier: 'lobe-tool',
+        intervention: { status: 'pending' },
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 3,
+          operationId: 'op-1',
+        },
+        state: { [interventionStateKey]: pendingIntervention },
+        toolCallId: 'tc-plug-approval',
+      },
+      {
+        apiName: 'plug-plain',
+        id: 'plug-plain',
+        identifier: 'lobe-tool',
+        metadata: {},
+        toolCallId: 'tc-plug-plain',
+      },
+    ]);
+  });
+
+  it('agrees with listMessagePluginsByTopic on every field the index reads', async () => {
+    await seedIndexRows();
+
+    const index = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey,
+    });
+    const full = await messageModel.listMessagePluginsByTopic('plugin-topic');
+
+    expect(index.map((row) => row.id)).toEqual(full.map((row) => row.id));
+    for (const [i, row] of full.entries()) {
+      const stored = row.state?.[interventionStateKey];
+      // `toEqual` treats an undefined field and a missing one alike.
+      expect({
+        apiName: index[i].apiName,
+        identifier: index[i].identifier,
+        intervention: index[i].intervention,
+        metadata: index[i].metadata,
+        toolCallId: index[i].toolCallId,
+      }).toEqual({
+        apiName: row.apiName,
+        identifier: row.identifier,
+        intervention: row.intervention,
+        metadata: {
+          heterogeneousToolStateOperationId: row.metadata?.heterogeneousToolStateOperationId,
+          heterogeneousToolStateSeq: row.metadata?.heterogeneousToolStateSeq,
+          operationId: row.metadata?.operationId,
+        },
+        toolCallId: row.toolCallId,
+      });
+      expect(index[i].state?.[interventionStateKey]).toEqual(stored);
+      if (stored) expect(index[i].arguments).toBe(row.arguments);
+    }
+  });
+
+  it('applies the topic and ownership scope of listMessagePluginsByTopic', async () => {
+    await seedToolMessage({ id: 'plug-index-in-scope', topicId: 'plugin-topic' });
+    await seedToolMessage({ id: 'plug-index-other-topic', topicId: 'plugin-topic-2' });
+    await seedToolMessage({
+      id: 'plug-index-other-message',
+      ownerId: otherUserId,
+      pluginOwnerId: userId,
+      topicId: 'plugin-topic',
+    });
+    await seedToolMessage({
+      id: 'plug-index-other-plugin',
+      pluginOwnerId: otherUserId,
+      topicId: 'plugin-topic',
+    });
+
+    const rows = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey,
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(['plug-index-in-scope']);
+  });
+});
+
 describe('MessageModel.listMessagePluginsByIds', () => {
   it('returns an empty list without querying when ids are empty', async () => {
     await expect(
@@ -323,6 +443,55 @@ describe('MessageModel.listMessagePluginsByIds', () => {
   });
 });
 
+describe('MessageModel.getInterventionSnapshot', () => {
+  const snapshot = (ids: string[]) =>
+    messageModel.getInterventionSnapshot({ ids, topicId: 'plugin-topic' });
+
+  it('returns each card status and null for a card outside the topic or owner', async () => {
+    await seedToolMessage({ id: 'snap-pending', intervention: { status: 'pending' } });
+    await seedToolMessage({ id: 'snap-plain' });
+    await seedToolMessage({ id: 'snap-other-topic', topicId: 'plugin-topic-2' });
+    await seedToolMessage({ id: 'snap-theirs', ownerId: otherUserId });
+
+    const { statuses } = await snapshot([
+      'snap-pending',
+      'snap-plain',
+      'snap-other-topic',
+      'snap-theirs',
+      'snap-missing',
+    ]);
+
+    expect(statuses).toEqual({
+      'snap-missing': null,
+      'snap-other-topic': null,
+      'snap-pending': 'pending',
+      'snap-plain': null,
+      'snap-theirs': null,
+    });
+  });
+
+  it('moves the revision when a message is added or a card argument is edited', async () => {
+    await seedToolMessage({
+      arguments: '{"q":1}',
+      id: 'snap-card',
+      intervention: { status: 'pending' },
+    });
+    const initial = (await snapshot(['snap-card'])).revision;
+    expect((await snapshot(['snap-card'])).revision).toBe(initial);
+
+    // Plugin rows do not bump the message updatedAt, so the arguments must count.
+    await serverDB
+      .update(messagePlugins)
+      .set({ arguments: '{"q":2}' })
+      .where(eq(messagePlugins.id, 'snap-card'));
+    const edited = (await snapshot(['snap-card'])).revision;
+    expect(edited).not.toBe(initial);
+
+    await seedAssistantMessage('snap-new-row');
+    expect((await snapshot(['snap-card'])).revision).not.toBe(edited);
+  });
+});
+
 describe('MessageModel.findToolMessageIdByToolCallId', () => {
   it('resolves the message id for a tool call id', async () => {
     await seedToolMessage({ id: 'plug-tc-a', toolCallId: 'call-1', topicId: 'plugin-topic' });
@@ -370,5 +539,43 @@ describe('MessageModel.findToolMessageIdByToolCallId', () => {
     });
 
     await expect(messageModel.findToolMessageIdByToolCallId('call-other')).resolves.toBeNull();
+  });
+});
+
+describe('MessageModel.listToolCallIndexByTopic', () => {
+  it('carries the run metadata and leaves absent columns undefined', async () => {
+    await seedToolMessage({
+      id: 'idx-full',
+      identifier: 'lobe-tool',
+      metadata: {
+        heterogeneousToolStateOperationId: 'op-hetero',
+        heterogeneousToolStateSeq: 4,
+        operationId: 'op-run',
+      },
+      state: { answer_render: 'streaming' },
+    });
+    // A row with no api name, no identifier and no intervention state at all.
+    await seedToolMessage({ id: 'idx-bare' });
+    await serverDB
+      .update(messagePlugins)
+      .set({ apiName: null, identifier: null })
+      .where(eq(messagePlugins.id, 'idx-bare'));
+
+    const rows = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey: 'answer_render',
+    });
+    const full = rows.find((row) => row.id === 'idx-full');
+    const bare = rows.find((row) => row.id === 'idx-bare');
+
+    expect(full?.metadata).toMatchObject({
+      heterogeneousToolStateOperationId: 'op-hetero',
+      heterogeneousToolStateSeq: 4,
+      operationId: 'op-run',
+    });
+    expect(full?.state).toEqual({ answer_render: 'streaming' });
+    expect(bare?.apiName).toBeUndefined();
+    expect(bare?.identifier).toBeUndefined();
+    expect(bare?.state).toBeUndefined();
+    expect(bare?.metadata).toEqual({});
   });
 });

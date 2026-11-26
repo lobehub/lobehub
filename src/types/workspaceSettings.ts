@@ -11,21 +11,22 @@ export enum WorkspaceSettingsTabs {
   APIKey = 'apikey',
   Appearance = 'appearance',
   AuditLog = 'audit-log',
+  Automations = 'automations',
   Billing = 'billing',
   Budget = 'budget',
-  ChatPreference = 'chat-preference',
+  /** Optional business tab; listed only where `useCodingPlansTab` supplies it. */
+  CodingPlans = 'coding-plans',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
   Environments = 'environments',
   General = 'general',
   Hotkey = 'hotkey',
-  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   Members = 'members',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   Plans = 'plans',
@@ -39,6 +40,7 @@ export enum WorkspaceSettingsTabs {
   Teams = 'teams',
   Trash = 'trash',
   Usage = 'usage',
+  Webhooks = 'webhooks',
 }
 
 export const DEFAULT_WORKSPACE_SETTINGS_TAB = WorkspaceSettingsTabs.General;

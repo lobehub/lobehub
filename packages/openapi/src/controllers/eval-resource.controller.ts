@@ -17,11 +17,11 @@ export class EvalResourceController extends BaseController {
         this.getUserId(c)!,
         this.getWorkspaceId(c),
       );
-      return this.success(
+      return this.list(
         c,
+        'benchmarks',
         await service.listBenchmarks(this.getQuery<EvalPagination>(c)),
-        'Eval resource retrieved',
-        200,
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);
@@ -95,11 +95,11 @@ export class EvalResourceController extends BaseController {
         this.getUserId(c)!,
         this.getWorkspaceId(c),
       );
-      return this.success(
+      return this.list(
         c,
+        'datasets',
         await service.listDatasets(this.getQuery<EvalPagination & { benchmarkId?: string }>(c)),
-        'Eval resource retrieved',
-        200,
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);
@@ -174,11 +174,11 @@ export class EvalResourceController extends BaseController {
         this.getUserId(c)!,
         this.getWorkspaceId(c),
       );
-      return this.success(
+      return this.list(
         c,
+        'testCases',
         await service.listTestCases(datasetId, this.getQuery<EvalPagination>(c)),
-        'Eval resource retrieved',
-        200,
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);

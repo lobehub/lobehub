@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScmInstallationModel } from '@/database/models/scm';
 import { scmInstallations, users } from '@/database/schemas';
 
-import { githubRepositoryOf, resolveScmCloneCredential } from '../cloneCredential';
+import {
+  githubRepositoryOf,
+  resolveScmCloneCredential,
+  resolveScmCloneCredentials,
+} from '../cloneCredential';
 
 const mintGitHubRepositoryToken = vi.hoisted(() => vi.fn());
 
@@ -163,5 +167,42 @@ describe('resolveScmCloneCredential', () => {
         userId,
       }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('resolveScmCloneCredentials', () => {
+  const resolveAll = (urls: string[]) =>
+    resolveScmCloneCredentials({
+      configuration: { sources: urls.map((url) => ({ kind: 'git', url })) },
+      db: serverDB,
+      userId,
+    });
+
+  it('keeps the single host-wide credential for one repository', async () => {
+    await install({ accountLogin: 'acme', installationId: '200', repositorySelection: 'all' });
+
+    expect(await resolveAll(['https://github.com/acme/app'])).toEqual([
+      expect.objectContaining({ urlPrefix: 'https://github.com/' }),
+    ]);
+  });
+
+  it('scopes one credential to each repository when there are several', async () => {
+    await install({ accountLogin: 'acme', installationId: '201', repositorySelection: 'all' });
+
+    const credentials = await resolveAll([
+      'https://github.com/acme/app',
+      'https://github.com/acme/docs.git',
+      'https://github.com/stranger/public',
+    ]);
+
+    // The third has no installation: it clones only if it is public.
+    expect(credentials.map((credential) => credential.urlPrefix)).toEqual([
+      'https://github.com/acme/app',
+      'https://github.com/acme/docs.git',
+    ]);
+    expect(mintGitHubRepositoryToken).toHaveBeenCalledWith({
+      installationId: '201',
+      repoFullName: 'acme/docs',
+    });
   });
 });

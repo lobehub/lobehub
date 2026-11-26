@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
+import { AgentDocumentEditRejectedError } from './editRejectedError';
 import {
   applyLiteXMLOperations,
   createAgentMarkdownSnapshot,
@@ -223,6 +224,21 @@ describe('agent document headless editor', () => {
         ],
       }),
     ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
+  });
+
+  it("should mark a rejected node edit as the caller's error", async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+
+    await expect(
+      applyLiteXMLOperations({
+        editorData: initial.editorData,
+        fallbackContent: initial.content,
+        operations: [{ action: 'remove', id: 'missing-node' }],
+      }),
+    ).rejects.toBeInstanceOf(AgentDocumentEditRejectedError);
   });
 
   describe('LiteXML that is not well-formed', () => {

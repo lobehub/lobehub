@@ -20,6 +20,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import InlineErrorText from '@/components/InlineErrorText';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { formatSize } from '@/utils/format';
 
@@ -66,6 +67,7 @@ export const PushResourceContent = memo<PushResourceModalProps>(
     const { close } = useModalContext();
     const [content, setContent] = useState('');
     const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
     const [tenantId, setTenantId] = useState(targets?.[0]?.tenantId);
     const [oversizeImageStrategy, setOversizeImageStrategy] =
       useState<MessengerOversizeImageStrategy>(DEFAULT_OVERSIZE_IMAGE_STRATEGY);
@@ -123,6 +125,7 @@ export const PushResourceContent = memo<PushResourceModalProps>(
       if (sending || !canPush) return;
 
       setSending(true);
+      setSendError(null);
       try {
         // Send the file by id — the server resolves it to a stable access URL
         // and reads the name/MIME type off the owned row (a client-side
@@ -169,7 +172,8 @@ export const PushResourceContent = memo<PushResourceModalProps>(
           }
         }
       } catch (error) {
-        toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
+        console.error('[Messenger] Failed to push resource:', error);
+        setSendError(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
         setSending(false);
       }
@@ -255,7 +259,10 @@ export const PushResourceContent = memo<PushResourceModalProps>(
                     label: target.label,
                     value: target.tenantId,
                   }))}
-                  onChange={(value) => setTenantId(value as string)}
+                  onChange={(value) => {
+                    setTenantId(value as string);
+                    setSendError(null);
+                  }}
                 />
               </Flexbox>
             )}
@@ -284,9 +291,13 @@ export const PushResourceContent = memo<PushResourceModalProps>(
               disabled={sending}
               placeholder={t('messenger.push.resource.placeholder')}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
               onPressEnter={handleSend}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setSendError(null);
+              }}
             />
+            {sendError && <InlineErrorText>{sendError}</InlineErrorText>}
           </Flexbox>
         </Flexbox>
 

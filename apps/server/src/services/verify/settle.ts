@@ -17,6 +17,7 @@ import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
+import { postTaskRunToChannel } from '@/server/services/task/channelDelivery';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
 import { AcceptanceService } from './acceptanceService';
@@ -346,6 +347,18 @@ export const driveTaskFromVerify = async (
         );
       }
     }
+
+    // Deferred Channel delivery, like the creator callback below: a verify-bound run's answer
+    // reaches the task's Channel only once verify has accepted it. Idempotent per run and
+    // best-effort: a refused or failed post never blocks the settle.
+    if (outcome === 'passed')
+      await postTaskRunToChannel(db, {
+        operationId,
+        scope: { userId, workspaceId },
+        task,
+      }).catch((error) =>
+        log('verify-settle Channel delivery failed for task %s (non-fatal): %O', task.id, error),
+      );
 
     // Deferred creator callback: verify-bound runs defer
     // the taskCallback from `onTopicComplete` to HERE so the creator only sees the

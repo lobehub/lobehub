@@ -41,6 +41,9 @@ vi.mock('@/features/AgentQuotaCalendar', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+vi.mock('../../HeteroModel/useEffectiveHeteroProvider', () => ({
+  useSelectedHeteroModel: () => undefined,
+}));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   confirmModalMock: vi.fn(),
@@ -94,6 +97,7 @@ vi.mock('@/services/agentQuota', () => ({ agentQuotaService: mockQuotaService })
 // target the exact i18n key + params a snapshot should produce.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US' },
     t: translate,
   }),
 }));
@@ -440,6 +444,44 @@ describe('KimiCodeQuotaMenu', () => {
 });
 
 describe('CodexQuotaMenu', () => {
+  it('shows a stale warning for the confirmed account and clears its quota when the login changes', async () => {
+    mockService.getCodexQuota
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          credits: { balance: '1250.75', unlimited: false },
+          identity: { externalAccountId: 'a' },
+          session: { resetsAt: null, usedPercent: 19, windowMinutes: 300 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          error: 'Codex RPC timed out',
+          identity: { externalAccountId: 'a' },
+          status: 'error',
+        }),
+      )
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          error: 'Codex RPC timed out',
+          identity: { externalAccountId: 'b' },
+          status: 'error',
+        }),
+      );
+
+    render(<CodexQuotaMenu />);
+    expect(await screen.findByText('1250.75')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.quota.refresh' }));
+    expect(await screen.findByText('heteroAgent.quota.refreshFailed')).toBeTruthy();
+    expect(screen.getByText('81%')).toBeTruthy();
+    expect(screen.getByText('1250.75')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.quota.refresh' }));
+    expect(await screen.findByText('heteroAgent.codexQuota.errorGeneric')).toBeTruthy();
+    expect(screen.queryByText('81%')).toBeNull();
+    expect(screen.queryByText('1250.75')).toBeNull();
+  });
+
   it('opens the usage calendar for the codex account from the header switcher', async () => {
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({

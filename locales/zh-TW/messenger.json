@@ -220,7 +220,6 @@
   "verify.error.generic": "發生錯誤。請重試。",
   "verify.error.missingToken": "無效的連結。請從機器人打開此頁面。",
   "verify.error.title": "無法確認連結",
-  "verify.error.unlinkBeforeRelink": "此 LobeHub 帳戶已連結至其他 Telegram 帳戶。請在 設定 → Messenger 中解除連結後再連結新的帳戶。",
   "verify.signInCta": "登入以繼續",
   "verify.signInRequired": "請登入 LobeHub 以確認連結。",
   "verify.success.backToLobeHub": "返回 LobeHub",

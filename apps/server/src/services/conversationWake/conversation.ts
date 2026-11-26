@@ -88,8 +88,9 @@ export const parseLine = (raw: string): WakeConversationLine | undefined => {
 };
 
 /**
- * One line as the classifier reads it: the bot is "Assistant", the bot's owner is marked, and
- * everyone else is named.
+ * One line as the classifier reads it: the bot is "Assistant", the bot's owner is marked, other
+ * bots and agents are marked "(bot)", and everyone else is named. Unmarked, another agent reads as
+ * a person, and its exchange with someone as two people talking to each other.
  */
 export const describeLine = (
   line: WakeConversationLine,
@@ -103,7 +104,9 @@ export const describeLine = (
       ? 'Assistant'
       : isOwner
         ? `${name} (owner)`
-        : name;
+        : line.isBot
+          ? `${name} (bot)`
+          : name;
 
   return `${speaker}: ${line.text}`;
 };

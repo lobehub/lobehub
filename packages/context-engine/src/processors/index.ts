@@ -33,6 +33,15 @@ export {
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export {
+  collectDocumentReads,
+  type DocumentRead,
+  formatRevokedDocumentResult,
+  formatUnverifiedDocumentResult,
+  type RevokedDocumentReads,
+  RevokedDocumentResultFilter,
+  type RevokedDocumentResultFilterConfig,
+} from './RevokedDocumentResultFilter';
+export {
   cacheEconomicsForProvider,
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,
@@ -42,6 +51,10 @@ export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskCallbackMessageProcessor } from './TaskCallbackMessage';
 export { TaskMessageProcessor } from './TaskMessage';
 export { TasksFlattenProcessor } from './TasksFlatten';
+export {
+  type ToolActivationAnchorConfig,
+  ToolActivationAnchorProcessor,
+} from './ToolActivationAnchor';
 export { ToolCallProcessor } from './ToolCall';
 export { ToolMessageReorder } from './ToolMessageReorder';
 export { VerifyMessageProcessor } from './VerifyMessage';

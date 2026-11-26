@@ -97,6 +97,32 @@ describe('FeatureFlagsSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should keep both business tab keys of a published snapshot', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      cloud_device_bundle: ['user-123', 'rollout:10'],
+      cloud_device_bundle_workspaces: ['workspace-123'],
+      webhook: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      cloud_device_bundle: ['user-123', 'rollout:10'],
+      cloud_device_bundle_workspaces: ['workspace-123'],
+      webhook: true,
+    });
+  });
+
+  it('should reject a boolean business tab workspace scope', () => {
+    // Like dev_dock_workspaces: the whole snapshot is refused, so publishers must write a list.
+    expect(FeatureFlagsSchema.safeParse({ cloud_device_bundle_workspaces: true }).success).toBe(
+      false,
+    );
+  });
+
+  it('should keep the business tab off by default', () => {
+    expect(DEFAULT_FEATURE_FLAGS.cloud_device_bundle).toBe(false);
+  });
+
   it('should reject a boolean DevDock workspace scope', () => {
     const result = FeatureFlagsSchema.safeParse({
       dev_dock_workspaces: true,
@@ -361,6 +387,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
+  it('should keep the artboard off outside development and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.artboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableArtboard).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ artboard: true }).enableArtboard).toBe(true);
+
+    const config = { artboard: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableArtboard).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableArtboard).toBe(false);
+  });
+
   it('should keep agent knowledge spaces off by default and enable them per user', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
     expect(
@@ -533,29 +570,32 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableDashboard).toBe(false);
   });
 
-  describe('agent_runtime_strip_operation_toolset', () => {
+  describe('agent_runtime_slim_state', () => {
     it('is off by default', () => {
-      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_slim_state).toBe(false);
+      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableSlimAgentState).toBe(
+        false,
+      );
+    });
+
+    it('maps true and a user allowlist', () => {
       expect(
-        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
-      ).toBe(false);
+        mapFeatureFlagsEnvToState({ agent_runtime_slim_state: true }).enableSlimAgentState,
+      ).toBe(true);
+
+      const config = FeatureFlagsSchema.parse({ agent_runtime_slim_state: ['user-1'] });
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableSlimAgentState).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableSlimAgentState).toBe(false);
     });
+  });
+});
 
-    it('maps true to enabled for every user', () => {
-      const config = { agent_runtime_strip_operation_toolset: true };
-
-      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
-      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
-    });
-
-    it('maps a user allowlist to the listed users only', () => {
-      const config = FeatureFlagsSchema.parse({
-        agent_runtime_strip_operation_toolset: ['user-1'],
-      });
-
-      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
-      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
-      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
-    });
+describe('webhook flag', () => {
+  it('defaults off and only enables allowlisted users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.webhook).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'u1').enableWebhook).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ webhook: true }, 'u1').enableWebhook).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ webhook: ['u1'] }, 'u1').enableWebhook).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ webhook: ['u1'] }, 'u2').enableWebhook).toBe(false);
   });
 });

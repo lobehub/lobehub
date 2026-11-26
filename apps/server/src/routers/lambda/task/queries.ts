@@ -13,7 +13,7 @@ export const queriesRouter = router({
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
-      const detail = await ctx.taskService.getTaskDetail(task.id);
+      const detail = await ctx.taskService.getTaskDetail(task.id, task);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }
@@ -169,7 +169,7 @@ export const queriesRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { completedWithin, parentIdentifier, scope, ...query } = input;
+      const { completedWithin, parentIdentifier, recentRuns, scope, ...query } = input;
       const parentRef = query.parentTaskId !== undefined ? query.parentTaskId : parentIdentifier;
       const parentTaskId =
         typeof parentRef === 'string'
@@ -190,11 +190,18 @@ export const queriesRouter = router({
       const assigneeUserIds = [
         ...new Set(result.tasks.map((t) => t.assigneeUserId).filter((id): id is string => !!id)),
       ];
-      const [agents, users] = await Promise.all([
+      const taskIds = result.tasks.map((t) => t.id);
+      const [agents, users, runsByTaskId, awaitingHumanTaskIds] = await Promise.all([
         assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
         assigneeUserIds.length > 0
           ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
           : [],
+        recentRuns ? ctx.taskTopicModel.findRecentRunsByTaskIds(taskIds, recentRuns) : undefined,
+        // Same rule the schedule and heartbeat ticks skip on: an urgent brief
+        // that is not an error is a question only the user can answer.
+        recentRuns
+          ? ctx.briefModel.findTaskIdsWithUnresolvedUrgent(taskIds, { excludeTypes: ['error'] })
+          : undefined,
       ]);
       const agentMap = new Map(agents.map((a) => [a.id, a]));
       const userMap = new Map(users.map((u) => [u.id, u]));
@@ -225,7 +232,13 @@ export const queriesRouter = router({
             });
           }
         }
-        return { ...task, participants };
+        if (!runsByTaskId || !awaitingHumanTaskIds) return { ...task, participants };
+        return {
+          ...task,
+          awaitingHuman: awaitingHumanTaskIds.has(task.id),
+          participants,
+          recentRuns: runsByTaskId.get(task.id) ?? [],
+        };
       });
 
       return { data, success: true, total: result.total };

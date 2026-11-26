@@ -3,11 +3,13 @@ import {
   FAVORITE_LIMIT,
   type FavoriteItem,
   type FavoriteType,
+  type TaskStatus,
 } from '@lobechat/types';
-import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
-import { userFavorites } from '../schemas';
+import { tasks, userFavorites } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { normalizeWorkspaceId } from '../utils/workspace';
 
 /** Adding another favorite would exceed {@link FAVORITE_LIMIT}. */
@@ -24,10 +26,14 @@ export interface UpdateFavoriteParams {
   title?: string;
 }
 
-const toFavoriteItem = (row: typeof userFavorites.$inferSelect): FavoriteItem => ({
+const toFavoriteItem = (
+  row: typeof userFavorites.$inferSelect,
+  status?: string | null,
+): FavoriteItem => ({
   icon: row.icon,
   id: row.id,
   path: row.path,
+  ...(row.type === 'task' && status ? { status: status as TaskStatus } : {}),
   targetId: row.targetId,
   title: row.title,
   type: row.type,
@@ -57,18 +63,38 @@ export class FavoriteModel {
         : isNull(userFavorites.workspaceId),
     ) as SQL;
 
+  /**
+   * Joins a task favorite to its task, in the same scope the favorite lives
+   * in and only while the member can still see it, so the sidebar can show
+   * the task's current status instead of a snapshot. A deleted, trashed,
+   * moved or since-hidden task simply has no status.
+   */
+  private taskJoin = (): SQL =>
+    and(
+      eq(userFavorites.type, 'task'),
+      eq(tasks.id, userFavorites.targetId),
+      notTrashed(tasks.isDeleted),
+      this.workspaceId
+        ? and(
+            eq(tasks.workspaceId, this.workspaceId),
+            or(eq(tasks.visibility, 'public'), eq(tasks.createdByUserId, this.userId)),
+          )
+        : and(isNull(tasks.workspaceId), eq(tasks.createdByUserId, this.userId)),
+    ) as SQL;
+
   query = async (): Promise<FavoriteItem[]> => {
     const rows = await this.db
-      .select()
+      .select({ favorite: userFavorites, status: tasks.status })
       .from(userFavorites)
+      .leftJoin(tasks, this.taskJoin())
       .where(this.scope())
       .orderBy(asc(userFavorites.sortOrder), asc(userFavorites.createdAt));
 
-    return rows.map(toFavoriteItem);
+    return rows.map((row) => toFavoriteItem(row.favorite, row.status));
   };
 
   /**
-   * Favorite a target, appending it to the end of the section. Favoriting a
+   * Favorite a target, putting it at the top of the section. Favoriting a
    * target that is already there refreshes its link and snapshot in place and
    * keeps its position.
    */
@@ -90,8 +116,10 @@ export class FavoriteModel {
       // Refreshing an existing favorite never grows the list.
       if (existing === 0 && count >= FAVORITE_LIMIT) throw new FavoriteLimitError();
 
+      // One below the current top. The value may go negative; the next
+      // reorder rewrites the whole sidebar to 0..n-1.
       const nextSortOrder = sql<number>`(
-        SELECT COALESCE(MAX(${userFavorites.sortOrder}) + 1, 0)
+        SELECT COALESCE(MIN(${userFavorites.sortOrder}) - 1, 0)
         FROM ${userFavorites}
         WHERE ${this.scope()}
       )`;
@@ -129,7 +157,16 @@ export class FavoriteModel {
         })
         .returning();
 
-      return toFavoriteItem(row);
+      if (row.type !== 'task') return toFavoriteItem(row);
+
+      const [task] = await tx
+        .select({ status: tasks.status })
+        .from(userFavorites)
+        .innerJoin(tasks, this.taskJoin())
+        .where(eq(userFavorites.id, row.id))
+        .limit(1);
+
+      return toFavoriteItem(row, task?.status);
     });
 
   remove = async (id: string): Promise<void> => {
@@ -144,7 +181,9 @@ export class FavoriteModel {
 
   /**
    * Store the order the member arranged. Ids outside this sidebar are ignored;
-   * favorites missing from `ids` keep their position after the listed ones.
+   * favorites missing from `ids` were added after the caller read the list
+   * (on another device, or while this reorder waited its turn), so they stay
+   * on top, ahead of the listed ones, as {@link add} placed them.
    */
   reorder = async (ids: string[]): Promise<void> => {
     await this.db.transaction(async (tx) => {
@@ -157,8 +196,8 @@ export class FavoriteModel {
       const existing = rows.map((row) => row.id);
       const listed = new Set(ids);
       const order = [
-        ...ids.filter((id) => existing.includes(id)),
         ...existing.filter((id) => !listed.has(id)),
+        ...ids.filter((id) => existing.includes(id)),
       ];
       if (order.length === 0) return;
 

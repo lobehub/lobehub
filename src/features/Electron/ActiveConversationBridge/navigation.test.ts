@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  getOrCreateTabRouter,
+  resetTabRouterManager,
+} from '@/features/Electron/TabHost/tabRouterManager';
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
+import { useElectronStore } from '@/store/electron';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { resolveActiveConversationCoordinate } from './coordinate';
@@ -22,6 +28,50 @@ describe('active conversation navigation', () => {
       false,
     );
     useProjectDirectoryStore.setState({ projectTopicsMap: {} }, false);
+  });
+
+  afterEach(() => {
+    resetTabRouterManager();
+    useElectronStore.setState({ activeTabId: null });
+  });
+
+  const seedActiveTabRouter = (url: string) => {
+    useElectronStore.setState({ activeTabId: 't1' });
+    getOrCreateTabRouter('t1', url, (initialUrl) =>
+      createMemoryRouter([{ element: null, path: '*' }], { initialEntries: [initialUrl] }),
+    );
+  };
+
+  it('ignores a topic change made after the tab router has already left the conversation', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'agent-a', topicId: 'topic-a' },
+      resolvedAgentId: 'agent-a',
+      url: '/agent/agent-a/topic-a',
+    });
+    seedActiveTabRouter('/page/doc-1');
+    const navigate = vi.fn();
+    const unsubscribe = subscribeActiveConversationNavigation(() => coordinate, navigate);
+
+    useChatStore.setState({ activeTopicId: null as any }, false);
+
+    expect(navigate).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('rewrites the url when the tab router is still on the conversation', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'agent-a', topicId: 'topic-a' },
+      resolvedAgentId: 'agent-a',
+      url: '/agent/agent-a/topic-a?thread=thread-a',
+    });
+    seedActiveTabRouter('/agent/agent-a/topic-a?thread=thread-a');
+    const navigate = vi.fn();
+    const unsubscribe = subscribeActiveConversationNavigation(() => coordinate, navigate);
+
+    useChatStore.setState({ activeThreadId: undefined, activeTopicId: null as any }, false);
+
+    expect(navigate).toHaveBeenCalledWith('/agent/agent-a', { replace: true });
+    unsubscribe();
   });
 
   it('turns one atomic topic and thread store change into one active-tab navigation', () => {

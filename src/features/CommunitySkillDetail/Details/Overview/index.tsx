@@ -25,6 +25,7 @@ import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
@@ -34,7 +35,7 @@ const styles = stylex.create({
   relatedGrid: {
     display: 'grid',
     gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.sm]: '1fr' },
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   sectionLabel: {
     margin: '0',
@@ -94,7 +95,7 @@ const Overview = memo(() => {
     versions.find((v) => v.version === version) || versions.find((v) => v.isLatest) || versions[0];
 
   const handleMoreRelated = useCallback(() => {
-    navigate(qs.stringifyUrl({ query: { category }, url: '/community/skill' }));
+    navigate(qs.stringifyUrl({ query: { category }, url: '/marketplace/skill' }));
     // In the modal, leave the detail open no longer than the navigation
     close?.();
   }, [category, close, navigate]);

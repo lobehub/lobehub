@@ -1,0 +1,89 @@
+---
+title: Connect to LobeHub as an MCP Server
+description: >-
+  Use LobeHub from Claude Code, Cursor, or Codex through its MCP server at
+  /api/v1/mcp: tools, resources, authentication, and scopes.
+tags:
+  - LobeHub
+  - MCP
+  - MCP Server
+  - Claude Code
+  - Cursor
+---
+
+# Connect to LobeHub as an MCP Server
+
+<Callout type="info">
+  **Coming soon** ([#23318](https://github.com/lobehub/lobehub/pull/23318)). The MCP server is not
+  on LobeHub Cloud yet. It also depends on the Agent runs API
+  ([#23253](https://github.com/lobehub/lobehub/pull/23253)) for its `run:*` scopes. Tool names and
+  limits below come from the pull request and can change before release.
+</Callout>
+
+LobeHub can act as an [MCP](https://modelcontextprotocol.io) server, so a coding assistant or any MCP client can list your Agents, run one, and read Topics, messages, files, and Libraries.
+
+The same pull request adds a user guide for this at `docs/usage/integrations/mcp-server`; this page is the developer reference.
+
+This is the opposite direction from the MCP servers you add **to** LobeHub Agents (managed through `/api/v1/mcp-servers`, available today).
+
+## Endpoint and Authentication
+
+- URL: `https://app.lobehub.com/api/v1/mcp` (or `<your origin>/api/v1/mcp`)
+- Transport: Streamable HTTP, stateless. Clients send JSON-RPC with `POST`; `GET` and `DELETE` return `405`.
+- Authentication: the same as the REST API, `Authorization: Bearer <API key or OIDC token>`. Send `X-Workspace-Id` with an OIDC token to work in a Workspace; a Workspace API key uses its own Workspace.
+
+The server only lists the tools your credential's scopes reach. Create a dedicated API key with only the scopes below that you want the assistant to have.
+
+## Tools
+
+| Tool                                            | What it does                                                               | Scopes                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------- | --------------------------- |
+| `list_agents`, `get_agent`                      | List Agents, read one                                                      | `agent:read`                |
+| `run_agent`                                     | Run an Agent and wait for the reply (`waitSeconds`, default 50, up to 120) | `run:write`, `model:invoke` |
+| `get_run`                                       | Read a run's status and result                                             | `run:read`                  |
+| `search_topics`, `get_topic`, `search_messages` | Find and read conversations                                                | `chat:read`                 |
+| `list_files`, `read_file`                       | List and read files                                                        | `file:read`                 |
+| `upload_file`                                   | Upload a file                                                              | `file:write`                |
+| `list_knowledge_bases`                          | List Libraries                                                             | `knowledge:read`            |
+
+Resources: `lobehub://agents`, `lobehub://agents/{agentId}`, `lobehub://topics/{topicId}`. Prompt: `summarize_topic`.
+
+When `run_agent` does not finish within `waitSeconds`, it returns the run id; call `get_run` later.
+
+## Client Configuration
+
+### Claude Code
+
+```bash
+claude mcp add --transport http lobehub https://app.lobehub.com/api/v1/mcp \
+  --header "Authorization: Bearer sk-lh-your-key"
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "lobehub": {
+      "url": "https://app.lobehub.com/api/v1/mcp",
+      "headers": { "Authorization": "Bearer sk-lh-your-key" }
+    }
+  }
+}
+```
+
+### Codex
+
+Add to `~/.codex/config.toml` and export `LOBEHUB_API_KEY`:
+
+```toml
+[mcp_servers.lobehub]
+url = "https://app.lobehub.com/api/v1/mcp"
+bearer_token_env_var = "LOBEHUB_API_KEY"
+```
+
+## Check the Connection
+
+After adding the server, ask the assistant to "list my LobeHub agents". It should call `list_agents` and show your Agents. If it reports `401`, check the key; if a tool is missing, the key lacks that tool's scope.

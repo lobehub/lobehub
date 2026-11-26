@@ -1,10 +1,11 @@
 import type { RefObject } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { ListRange, VirtuosoHandle } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
+import { useDensityTokens } from '@/styles/density';
 import type { FileListItem } from '@/types/files';
 
 import { useExplorerSelectionActions } from '../hooks/useExplorerSelection';
@@ -17,8 +18,6 @@ import {
 
 const LIST_COMPONENTS = { Footer: ExplorerListFooter };
 
-const ROW_HEIGHT = 48;
-
 /**
  * Rows rendered beyond the viewport. The previous 2000px budget kept ~40
  * off-screen interactive rows mounted, and every scroll step had to mount a
@@ -27,7 +26,10 @@ const ROW_HEIGHT = 48;
  * margin keeps each step short; a deeper one (20 rows) made the blank frames
  * worse, not better.
  */
-const INCREASE_VIEWPORT_BY = { bottom: ROW_HEIGHT * 8, top: ROW_HEIGHT * 4 };
+const getIncreaseViewportBy = (rowHeight: number) => ({
+  bottom: rowHeight * 8,
+  top: rowHeight * 4,
+});
 
 /**
  * Rows before the end at which the next page starts loading. Rendering margin
@@ -73,6 +75,8 @@ const VirtualizedFileList = ({
   showUploader = true,
   virtuosoRef,
 }: VirtualizedFileListProps) => {
+  const { listRowHeight } = useDensityTokens();
+  const increaseViewportBy = useMemo(() => getIncreaseViewportBy(listRowHeight), [listRowHeight]);
   const {
     clearSelectAllState,
     isItemSelectable,
@@ -169,10 +173,10 @@ const VirtualizedFileList = ({
       computeItemKey={computeItemKey}
       context={footerContext}
       data={data}
-      defaultItemHeight={ROW_HEIGHT}
+      defaultItemHeight={listRowHeight}
       endReached={handleEndReached}
-      fixedItemHeight={ROW_HEIGHT}
-      increaseViewportBy={INCREASE_VIEWPORT_BY}
+      fixedItemHeight={listRowHeight}
+      increaseViewportBy={increaseViewportBy}
       initialItemCount={Math.min(30, data.length)}
       rangeChanged={handleRangeChanged}
       ref={virtuosoRef}

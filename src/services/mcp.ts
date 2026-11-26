@@ -10,6 +10,7 @@ import {
   isSyncedMcpToolVisibleTo,
   type McpServerAddress,
 } from '@lobechat/const/mcpApp';
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -31,7 +32,10 @@ import { omit } from 'es-toolkit/compat';
 
 import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
+import {
+  resolveLocalConnectorHttpParams,
+  takeLocalConnectorAccount,
+} from '@/libs/mcp/localConnector';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
@@ -39,6 +43,7 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+import { resolveRunConnector } from './connectorRun';
 import { discoverService } from './discover';
 
 /**
@@ -233,6 +238,7 @@ class MCPService {
       agentId,
       fromMcpApp,
       fromEntrypoint,
+      linkId,
       onThisDevice,
       server,
       signal,
@@ -251,6 +257,7 @@ class MCPService {
        */
       fromMcpApp?: boolean;
       fromEntrypoint?: boolean;
+      linkId?: string;
       /**
        * With `fromMcpApp`: the view's result came from this desktop's own MCP
        * process (it carries this device's id), so its calls run there too;
@@ -281,8 +288,9 @@ class MCPService {
     // for marketplace and protocol-link stdio installs, which ran here as plugins.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
-    // original executor path.
-    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
+    // original executor path. The route follows the row the server resolves for
+    // this conversation: a private stdio row the conversation may not use must
+    // not send its call over IPC when the server runs a shared HTTP row.
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
@@ -290,7 +298,7 @@ class MCPService {
     // An unfinished marketplace install (an interrupted reinstall over a plugin
     // row, a late OAuth callback after a cancel) is not routed to: its tool rows
     // may not match its endpoint. A plugin row still serves the call.
-    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const resolved = await resolveRunConnector(identifier, { agentId, topicId });
     const connector =
       resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
 
@@ -326,10 +334,12 @@ class MCPService {
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
       // Persisted connector projections omit env secrets and may be stale.
       // This protected read retains the connector's credential ownership gate,
-      // and carries the current binding: a connector rebound to another device
-      // since this projection loaded runs there, through the server.
+      // runs the row the server resolves for this conversation (a private
+      // connector the conversation may not use never runs here), and carries
+      // the current binding: a connector rebound to another device since this
+      // projection loaded runs there, through the server.
       const detail = runsHere
-        ? await lambdaClient.connector.getForEdit.query({ id: connector.id })
+        ? await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId })
         : undefined;
       const reboundElsewhere =
         !!detail && runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId);
@@ -344,15 +354,22 @@ class MCPService {
           throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
         if (detail.mcpConnectionType !== 'stdio') {
+          const account = takeLocalConnectorAccount(connector, detail.tools, args, linkId);
+          // The token of the row this conversation runs, read in its scope: a
+          // private agent's own topic may run its owner's personal connector
           const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-            lambdaClient.connector.getLocalCallToken.mutate({ id }),
+            lambdaClient.connector.getLocalCallToken.mutate({
+              id,
+              linkId: account.linkId,
+              run: { agentId, identifier, topicId },
+            }),
           );
           if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
             throw new Error(VIEW_SERVER_MOVED);
           throwIfAborted(signal);
           const result = await ensureElectronIpc().mcp.callTool(
             serializeMcpIpcPayload({
-              args: safeParseJSON(args) ?? {},
+              args: safeParseJSON(account.args) ?? {},
               http,
               mcpApps,
               ...(fromMcpApp && { fromApp: true }),
@@ -427,6 +444,7 @@ class MCPService {
         return (await lambdaClient.connector.callTool.mutate(
           {
             agentId,
+            linkId,
             args,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
@@ -504,7 +522,9 @@ class MCPService {
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
       ...(fromMcpApp && { fromApp: true }),
-      ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
+      // The conversation's agent: the server gates the tool on the row it runs
+      ...((fromMcpApp || fromEntrypoint) && agentId && { agentId }),
+      ...(fromEntrypoint && { fromEntrypoint: true }),
       meta,
       params,
       toolName: apiName,
@@ -609,10 +629,15 @@ class MCPService {
     uri: string,
     {
       agentId,
+      linkId,
+      toolArguments,
       onThisDevice = false,
       server,
+      topicId,
     }: {
       agentId?: string;
+      linkId?: string;
+      toolArguments?: string;
       /**
        * The result came from this desktop's own MCP process (it carries this
        * device's id): read the view there, over IPC. Otherwise it came from the
@@ -621,6 +646,13 @@ class MCPService {
        */
       onThisDevice?: boolean;
       server?: string;
+      /**
+       * The conversation the result belongs to. The server resolves the
+       * connector with the same run scope the tool call used, so a private
+       * agent's own conversation can read a view off its owner's private
+       * connector; without it the read resolves the shared rows only.
+       */
+      topicId?: string;
     },
   ): Promise<ReadResourceResult | undefined> {
     // A result that doesn't name its server can't be matched to one
@@ -641,8 +673,18 @@ class MCPService {
       s = getToolStoreState();
     }
 
-    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    // The row the conversation's calls run on, as in `invokeMcpToolCall`
+    const resolved = await resolveRunConnector(identifier, { agentId, topicId });
+    // Resolve only after the agent's confirmed list loads: a cold view may
+    // otherwise mistake a tool's business link_id for the account selector.
+    if (!linkId && toolArguments && resolved) {
+      const param = resolveConnectorLinkParam(
+        resolved.tools?.map((tool) => tool.inputSchema) ?? [],
+      );
+      const value = toRecord(safeParseJSON(toolArguments))?.[param];
+      if (typeof value === 'string') linkId = value;
+    }
+
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint and a finished install serves the view. Any other (e.g. the
     // endpoint-less row a plugin's tools are synced to) leaves it to the plugin.
@@ -672,8 +714,10 @@ class MCPService {
 
       const { lambdaClient } = await import('@/libs/trpc/client');
       // Persisted connector projections omit env secrets and may be stale.
-      // This protected read retains the connector's credential ownership gate.
-      const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+      // This protected read retains the connector's credential ownership gate,
+      // and reads the row the server resolves for this conversation, as the
+      // tool call did.
+      const detail = await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId });
       const config = detail.mcpStdioConfig;
       if (!detail.isEnabled || detail.mcpConnectionType !== 'stdio' || !config?.command) return;
       if (
@@ -709,10 +753,19 @@ class MCPService {
       if (onThisDevice) {
         if (!isDesktop || !isMcpAppsOn()) return;
         const { lambdaClient } = await import('@/libs/trpc/client');
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        // The row the server resolves for this conversation, as the tool call read
+        const detail = await lambdaClient.connector.getForRun.query({
+          agentId,
+          identifier,
+          topicId,
+        });
         if (!detail.isEnabled) return;
         const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-          lambdaClient.connector.getLocalCallToken.mutate({ id }),
+          lambdaClient.connector.getLocalCallToken.mutate({
+            id,
+            linkId,
+            run: { agentId, identifier, topicId },
+          }),
         );
         if (!(await reaches({ ...http, type: 'http' }))) return;
         return deserializeMcpIpcPayload(
@@ -724,7 +777,9 @@ class MCPService {
       return (await lambdaClient.connector.readUiResource.query({
         agentId,
         identifier,
+        linkId,
         server,
+        topicId,
         uri,
       })) as ReadResourceResult;
     }

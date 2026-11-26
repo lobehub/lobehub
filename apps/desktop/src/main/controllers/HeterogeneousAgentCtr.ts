@@ -194,8 +194,18 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async steerSession(...args: Parameters<Implementation['steerSession']>) {
+    return (await this.getImplementation()).steerSession(...args);
+  }
+
+  @IpcMethod()
   async cancelSession(...args: Parameters<Implementation['cancelSession']>) {
     return (await this.getImplementation()).cancelSession(...args);
+  }
+
+  @IpcMethod()
+  async stopBackgroundTask(...args: Parameters<Implementation['stopBackgroundTask']>) {
+    return (await this.getImplementation()).stopBackgroundTask(...args);
   }
 
   @IpcMethod()
@@ -204,8 +214,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async respondPermission(...args: Parameters<Implementation['respondPermission']>) {
-    return (await this.getImplementation()).respondPermission(...args);
+  async setPermissionMode(...args: Parameters<Implementation['setPermissionMode']>) {
+    return (await this.getImplementation()).setPermissionMode(...args);
+  }
+
+  @IpcMethod()
+  async setCollaborationMode(...args: Parameters<Implementation['setCollaborationMode']>) {
+    return (await this.getImplementation()).setCollaborationMode(...args);
   }
 
   @IpcMethod()

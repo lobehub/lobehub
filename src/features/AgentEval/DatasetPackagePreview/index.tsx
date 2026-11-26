@@ -12,13 +12,14 @@ import { useTranslation } from 'react-i18next';
 
 import { ConnectorBindings } from '@/features/AgentEval/ConnectorBindings';
 import { hasPartialConnectorBindings } from '@/features/AgentEval/ConnectorBindings/bindings';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   sample: {
     borderBlockStartWidth: 1,
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
-    paddingBlockStart: 12,
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
     whiteSpace: 'pre-wrap',
     overflowWrap: 'anywhere',
   },

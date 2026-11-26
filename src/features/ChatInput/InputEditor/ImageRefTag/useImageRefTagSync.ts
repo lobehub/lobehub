@@ -44,7 +44,7 @@ export const planImageRefSync = (
  * Keeps inline image references already in the draft (from editor data saved before new
  * references stopped being inserted) in step with the draft's image uploads: a removed image
  * takes its references with it, and the remaining references follow the images' new numbers.
- * Attaching an image adds no reference; the numbered image cards identify it.
+ * Attaching an image adds no reference.
  */
 export const useImageRefTagSync = (editor: IEditor | undefined) => {
   const key = useChatInputUploadKey();

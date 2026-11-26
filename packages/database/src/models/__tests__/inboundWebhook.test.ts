@@ -3,7 +3,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, inboundWebhooks, topics, users, workspaces } from '../../schemas';
+import {
+  agents,
+  inboundWebhooks,
+  topics,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { CreateInboundWebhook, InboundWebhookPatch } from '../inboundWebhook';
 import { InboundWebhookLimitError, InboundWebhookModel } from '../inboundWebhook';
 
@@ -200,6 +207,7 @@ describe('InboundWebhookModel scope and lifecycle', () => {
     expect(await model.query({ topicId: 'missing-topic' })).toEqual([]);
     expect(await model.query({ agentId: 'missing-agent' })).toEqual([]);
     expect(await model.query({ connectorId: missing })).toEqual([]);
+    expect(await model.query({ kind: 'generic' })).toEqual([]);
     expect(await model.query({ includeHidden: true })).toHaveLength(4);
   });
 
@@ -335,6 +343,27 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     expect((await InboundWebhookModel.queryStalePending(db)).map((r) => r.id)).toEqual([stale.id]);
   });
 
+  it('pages due rows earliest first, continuing after a given row', async () => {
+    const at = (offset: number) => new Date(Date.now() - 10_000 + offset);
+    const rows = await Promise.all(
+      [0, 1000, 1000, 2000].map((offset) =>
+        model.create(input({ nextMaintenanceAt: at(offset), status: 'active' })),
+      ),
+    );
+    const all = await InboundWebhookModel.queryMaintenance(db);
+    expect(all.map((r) => r.id).sort()).toEqual(rows.map((r) => r.id).sort());
+    const pages = [];
+    let after: { id: string; nextMaintenanceAt: Date } | undefined;
+    for (;;) {
+      const page = await InboundWebhookModel.queryMaintenance(db, 1, after);
+      if (!page.length) break;
+      pages.push(page[0].id);
+      after = { id: page[0].id, nextMaintenanceAt: page[0].nextMaintenanceAt! };
+    }
+    // Every row exactly once, in the same order as one unpaged read, ties included.
+    expect(pages).toEqual(all.map((r) => r.id));
+  });
+
   it('atomically reserves a bounded number of wakes and resets an expired hour', async () => {
     const row = await model.create(input({ status: 'active' }));
     const reservations = await Promise.all(
@@ -385,6 +414,33 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     ).toMatchObject({ status: 'active', state: { remoteSubscriptionId: 'manual' } });
   });
 
+  it('applies a status-guarded patch that carries no state at all', async () => {
+    const row = await model.create(input({ status: 'active' }));
+
+    expect(
+      await model.updateIfStatus(row.id, { lastError: 'timeout', status: 'error' }, ['active']),
+    ).toMatchObject({ lastError: 'timeout', status: 'error', state: {} });
+  });
+
+  it('pushes still-due rows past the sweep without touching ones rescheduled since', async () => {
+    const due = new Date(Date.now() - 1000);
+    const rescheduled = new Date(Date.now() + 60_000);
+    const dueRow = await model.create(input({ nextMaintenanceAt: due, status: 'active' }));
+    const laterRow = await model.create(
+      input({ nextMaintenanceAt: rescheduled, status: 'active' }),
+    );
+    const doneRow = await model.create(input({ nextMaintenanceAt: due, status: 'terminated' }));
+    const until = new Date(Date.now() + 3_600_000);
+
+    await InboundWebhookModel.deferMaintenance(db, [], until);
+    expect((await model.findById(dueRow.id))?.nextMaintenanceAt).toEqual(due);
+
+    await InboundWebhookModel.deferMaintenance(db, [dueRow.id, laterRow.id, doneRow.id], until);
+    expect((await model.findById(dueRow.id))?.nextMaintenanceAt).toEqual(until);
+    expect((await model.findById(laterRow.id))?.nextMaintenanceAt).toEqual(rescheduled);
+    expect((await model.findById(doneRow.id))?.nextMaintenanceAt).toEqual(due);
+  });
+
   it('applies topic and user limits, including subscriptions being created or deleted', async () => {
     await model.createWithLimits(input({ status: 'deleting' }), { topic: 1, user: 2 });
     await expect(model.createWithLimits(input(), { topic: 1, user: 2 })).rejects.toBeInstanceOf(
@@ -394,6 +450,44 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     await expect(
       model.createWithLimits(input({ topicId: null }), { topic: 1, user: 2 }),
     ).rejects.toMatchObject({ code: 'limit_reached', message: expect.stringContaining('user') });
+  });
+
+  it("counts a member's webhooks per scope, and a workspace's per active member", async () => {
+    const ws = 'inbound-limit-ws';
+    await db.insert(workspaces).values({ id: ws, name: 'Team', primaryOwnerId: userId, slug: ws });
+    await db.insert(workspaceMembers).values([
+      { role: 'owner', userId, workspaceId: ws },
+      { deletedAt: new Date(), role: 'member', userId: otherUserId, workspaceId: ws },
+    ]);
+    try {
+      const limits = { perMember: 2, topic: 10, user: 5 };
+      // A personal webhook does not count against the same member's workspace quota.
+      await model.createWithLimits(input({ topicId: null }), { ...limits, user: 1 });
+      const inTeam = new InboundWebhookModel(db, userId, ws, gateKeeper);
+      await inTeam.createWithLimits(input({ topicId: null }), { ...limits, user: 1 });
+      await expect(
+        inTeam.createWithLimits(input({ topicId: null }), { ...limits, user: 1 }),
+      ).rejects.toMatchObject({ message: expect.stringContaining('user') });
+      // One active member (the other left): two webhooks in the whole workspace.
+      await inTeam.createWithLimits(input({ kind: 'mcp_events', topicId: null }), limits);
+      await expect(inTeam.createWithLimits(input({ topicId: null }), limits)).rejects.toMatchObject(
+        { message: expect.stringContaining('workspace') },
+      );
+      expect(await InboundWebhookModel.activeMemberCount(db, ws)).toBe(1);
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, ws));
+    }
+  });
+
+  it('opens a new run window ten minutes after the last one started', async () => {
+    const row = await model.create(input());
+    for (let i = 0; i < 30; i++) expect(await model.reserveWake(row.id)).toBeDefined();
+    expect(await model.reserveWake(row.id)).toBeUndefined();
+    await db
+      .update(inboundWebhooks)
+      .set({ wakeWindowStartedAt: new Date(Date.now() - 11 * 60_000) })
+      .where(eq(inboundWebhooks.id, row.id));
+    expect(await model.reserveWake(row.id)).toBeDefined();
   });
 
   it('serializes quota checks from simultaneous subscription requests', async () => {
@@ -414,8 +508,13 @@ describe('InboundWebhookModel delivery recovery', () => {
       lastError: 'http_5xx',
       lastDeliveryAt: null,
     });
+    // A control envelope (gap, terminated) is not an event: it must not move "last event".
     await model.recordDelivery(row.id, false);
-    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'http_5xx' });
+    expect(await model.findById(row.id)).toMatchObject({
+      status: 'error',
+      lastError: 'http_5xx',
+      lastDeliveryAt: null,
+    });
     await model.recordDelivery(row.id, true);
     expect(await model.findById(row.id)).toMatchObject({
       status: 'active',
@@ -431,5 +530,19 @@ describe('InboundWebhookModel delivery recovery', () => {
       status: 'deleting',
       lastError: 'http_5xx',
     });
+  });
+
+  it('clears only the run errors once a run starts, in scope', async () => {
+    const row = await model.create(input({ lastError: 'wake_cap' }));
+    await otherModel.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBe('wake_cap');
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { lastError: 'insufficient_budget' });
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { status: 'error', lastError: 'auth' });
+    await model.recordRunStarted(row.id);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'auth' });
   });
 });

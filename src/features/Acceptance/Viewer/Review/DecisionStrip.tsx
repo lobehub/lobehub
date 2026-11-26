@@ -24,22 +24,31 @@ const styles = stylex.create({
 
 interface DecisionStripProps {
   label: string;
+  /** Applied after `segmentXstyle` to undecided segments only. */
+  pendingXstyle?: StyleXStyles;
   segments: DecisionSegment[];
   segmentXstyle?: StyleXStyles;
   xstyle?: StyleXStyles;
 }
 
-const DecisionStrip = memo<DecisionStripProps>(({ label, segmentXstyle, segments, xstyle }) => (
-  <div aria-label={label} role={'img'} {...stylex.props(styles.strip, xstyle)}>
-    {segments.map((segment, index) => (
-      <i
-        data-decision={segment}
-        key={index}
-        {...stylex.props(styles.segment, styles[segment], segmentXstyle)}
-      />
-    ))}
-  </div>
-));
+const DecisionStrip = memo<DecisionStripProps>(
+  ({ label, pendingXstyle, segmentXstyle, segments, xstyle }) => (
+    <div aria-label={label} role={'img'} {...stylex.props(styles.strip, xstyle)}>
+      {segments.map((segment, index) => (
+        <i
+          data-decision={segment}
+          key={index}
+          {...stylex.props(
+            styles.segment,
+            styles[segment],
+            segmentXstyle,
+            segment === 'pending' && pendingXstyle,
+          )}
+        />
+      ))}
+    </div>
+  ),
+);
 
 DecisionStrip.displayName = 'AcceptanceDecisionStrip';
 
