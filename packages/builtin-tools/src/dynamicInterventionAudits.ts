@@ -1,3 +1,4 @@
+import { ACTIVATE_TOOLS_AUDIT, activateToolsAudit } from '@lobechat/builtin-tool-activator';
 import {
   AGENT_ACCOUNT_OUTBOUND_AUDIT,
   agentAccountOutboundAudit,
@@ -12,6 +13,7 @@ export const dynamicInterventionAudits: Record<string, DynamicInterventionResolv
   // can read the version (agent runtime service, client streaming executor)
   // register a loader-backed audit under the same key.
   [DASHBOARD_DRY_RUN_AUDIT]: createDryRunAudit(),
+  [ACTIVATE_TOOLS_AUDIT]: activateToolsAudit,
   [AGENT_ACCOUNT_OUTBOUND_AUDIT]: agentAccountOutboundAudit,
   // Permanent deletion asks, unless the storage service will itself refuse
   // anything that is not a dependency, cache or build output.

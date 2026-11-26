@@ -41,6 +41,7 @@ export function gitLinkedPullRequest(
     deviceId: string;
     path: string;
     pullRequestNumber?: number;
+    state?: 'all' | 'open';
     userId: string;
     workspaceId?: string;
   },
@@ -53,6 +54,8 @@ export function gitLinkedPullRequest(
       branch: params.branch,
       path: params.path,
       pullRequestNumber: params.pullRequestNumber,
+      // Only when asked: a device that predates `state` keeps listing all.
+      ...(params.state ? { state: params.state } : {}),
     },
   );
 }

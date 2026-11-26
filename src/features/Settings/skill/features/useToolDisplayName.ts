@@ -1,4 +1,5 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import type { ConnectorVisibility } from '@lobechat/types';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
@@ -12,7 +13,11 @@ import type { ToolDetailType } from './SkillDetail';
  * breadcrumb reads `Connectors › <the row you clicked>`. Falls back to the
  * identifier while the entry is still loading.
  */
-export const useToolDisplayName = (identifier: string, type: ToolDetailType): string => {
+export const useToolDisplayName = (
+  identifier: string,
+  type: ToolDetailType,
+  visibility?: ConnectorVisibility,
+): string => {
   const { t } = useTranslation('setting');
 
   const builtinTitle = useToolStore((s) =>
@@ -29,7 +34,7 @@ export const useToolDisplayName = (identifier: string, type: ToolDetailType): st
   const connectorName = useToolStore((s) =>
     type === 'agent-connector'
       ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)?.name
-      : connectorSelectors.connectorByIdentifier(identifier)(s)?.name,
+      : connectorSelectors.connectorByIdentifier(identifier, visibility)(s)?.name,
   );
   const pluginTitle = useToolStore((s) =>
     type === 'plugin' ? pluginSelectors.getPluginMetaById(identifier)(s)?.title : undefined,

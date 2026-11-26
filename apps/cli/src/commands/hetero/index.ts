@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -22,9 +22,6 @@ import {
   preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
-  AgentContentBlock,
-  AgentImageSource,
-  AgentPromptInput,
   AgentStreamEvent,
   UploadHeterogeneousImage,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -33,6 +30,7 @@ import {
   createCodexAgentHandle,
   createFileStoreImageUploader,
   isHeteroStatusGuideErrorData,
+  resolveDshSpawnCommand,
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -51,6 +49,8 @@ import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
 import { buildExtraArgs } from './buildExtraArgs';
+import { dispatchedModeSpawnOptions } from './dispatchedModes';
+import { type ResolvedPrompt, resolvePrompt } from './prompt';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
 export const SUPPORTED_AGENT_TYPES = new Set<string>([
@@ -141,6 +141,7 @@ const spawnAgentOrRuntime = (
       askUserBridge: spawnOpts.askUserBridge,
       clientVersion: cliVersion,
       args: spawnOpts.extraArgs ?? [],
+      collaborationMode: spawnOpts.collaborationMode,
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       env: { ...process.env, ...spawnOpts.env },
@@ -158,20 +159,16 @@ const spawnAgentOrRuntime = (
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
  * without `--resume`.  Two classes of failure:
- *
  *   1. Session file missing (sandbox recycled): the container is ephemeral
  *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
  *      and the stored session id is stale.
- *
  *   2. Context overflow (long conversation): the resumed session carries all
- *      accumulated history; when the combined token count exceeds the model's
- *      context window the API rejects the request immediately after CC
- *      initialises.  Starting fresh (no `--resume`) drops the old history and
- *      lets CC respond to the new prompt alone.
+ *      accumulated history past the model's context window, so the API rejects
+ *      the request right after CC initialises. Starting fresh (no `--resume`)
+ *      drops the old history and lets CC respond to the new prompt alone.
  *
- * Checked against:
- *   - `error` stream events emitted by the CC adapter from CC's result event
- *   - Accumulated stderr output (fallback when CC exits without a result event)
+ * Checked against `error` stream events (from CC's result event) and, when CC
+ * exits without a result event, the accumulated stderr output.
  */
 const RESUME_RETRY_PATTERNS = [
   // Session file missing — sandbox was recycled
@@ -234,141 +231,6 @@ interface ExecOptions extends HeteroCliArgumentOptions {
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
-
-const readStdin = async (): Promise<string> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer));
-  }
-  return Buffer.concat(chunks).toString('utf8');
-};
-
-/**
- * Resolve a raw `--input-json` argument: `'-'` (or empty) reads stdin, anything
- * else is treated as a filesystem path.
- */
-const readInputJson = async (location: string): Promise<string> => {
-  if (location === '-' || location === '') return readStdin();
-  return readFile(location, 'utf8');
-};
-
-const looksLikeJsonInput = (value: string): boolean => {
-  const trimmed = value.trimStart();
-  return trimmed.startsWith('{') || trimmed.startsWith('[');
-};
-
-/**
- * Convert an `--image <value>` argument into an image source. Recognized
- * shapes: `https?://...` URL, `data:` URL, otherwise a filesystem path
- * resolved relative to the CLI's cwd.
- */
-const parseImageArg = (value: string): AgentImageSource => {
-  if (/^https?:\/\//i.test(value)) return { type: 'url', url: value };
-  if (value.startsWith('data:')) {
-    const match = value.match(/^data:([^;,]+);base64,(.+)$/);
-    if (!match) {
-      throw new Error(`Invalid data URL for --image: ${value.slice(0, 40)}…`);
-    }
-    return { data: match[2]!, mediaType: match[1]!, type: 'base64' };
-  }
-  return { path: path.resolve(process.cwd(), value), type: 'path' };
-};
-
-/**
- * Best-effort coercion of a JSON-decoded value into an `AgentPromptInput`.
- * Accepts:
- *   - `'plain text'` → single text block
- *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...], resumeFallback?: [...] }` → unwraps the primary prompt
- *     and reserves the fallback for a retry without native resume
- *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
- */
-const coerceJsonPrompt = (
-  parsed: unknown,
-): Pick<ResolvedPrompt, 'prompt' | 'resumeFallbackPrompt'> => {
-  if (typeof parsed === 'string') return { prompt: parsed };
-  if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
-  if (parsed && typeof parsed === 'object') {
-    const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.content)) {
-      return {
-        prompt: obj.content as AgentContentBlock[],
-        ...(Array.isArray(obj.resumeFallback)
-          ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
-          : {}),
-      };
-    }
-    if (obj.type === 'text' || obj.type === 'image') {
-      return { prompt: [obj as unknown as AgentContentBlock] };
-    }
-  }
-  throw new Error(
-    'Invalid --input-json shape: expected a string, array of content blocks, ' +
-      'or `{ content: [...] }` envelope.',
-  );
-};
-
-interface ResolvedPrompt {
-  /** Human-readable description for the empty-input check. */
-  describe: () => string;
-  prompt: AgentPromptInput;
-  /** Full prompt used only when native resume fails and the CLI retries fresh. */
-  resumeFallbackPrompt?: AgentPromptInput;
-}
-
-const buildPromptFromText = (text: string, images: string[]): ResolvedPrompt => {
-  if (images.length === 0) {
-    return { describe: () => text.trim(), prompt: text };
-  }
-  const blocks: AgentContentBlock[] = [];
-  if (text.length > 0) blocks.push({ text, type: 'text' });
-  for (const image of images) {
-    blocks.push({ source: parseImageArg(image), type: 'image' });
-  }
-  return {
-    describe: () =>
-      blocks
-        .map((b) => (b.type === 'text' ? b.text.trim() : '[image]'))
-        .filter(Boolean)
-        .join(' ')
-        .trim(),
-    prompt: blocks,
-  };
-};
-
-/**
- * Decide which input mode the user requested and produce a unified prompt.
- *
- * Mode resolution (mutually exclusive):
- *   1. `--input-json` → read JSON file or stdin, parse to content blocks
- *   2. `--prompt` (with optional `--image` flags) → text + images
- *   3. (default) read stdin: auto-detect JSON vs plain text by first char
- */
-const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
-  const images = options.image ?? [];
-
-  if (options.inputJson !== undefined) {
-    if (options.prompt !== undefined) {
-      throw new Error('--prompt and --input-json are mutually exclusive.');
-    }
-    if (images.length > 0) {
-      throw new Error('--image cannot be combined with --input-json (put images in the JSON).');
-    }
-    const raw = await readInputJson(options.inputJson);
-    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
-  }
-
-  if (options.prompt !== undefined && options.prompt !== '-') {
-    return buildPromptFromText(options.prompt, images);
-  }
-
-  // No --prompt or --prompt -: read stdin and auto-detect.
-  const raw = await readStdin();
-  if (looksLikeJsonInput(raw)) {
-    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
-  }
-  return buildPromptFromText(raw, images);
-};
 
 interface RawStreamDumpAttempt {
   /** Flush + close both file streams. Resolves once the bytes are on disk. */
@@ -572,9 +434,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         })
       : undefined;
 
-  // DSH is a protocol runtime (its `acp` profile) with no CLI descriptor. Keep
-  // it on the same public `hetero exec` surface, but drive its ACP session
-  // directly instead of passing it through `spawnAgent`.
+  // DSH (an `acp`-profile runtime, no CLI descriptor) keeps the CLI agents' surface and
+  // identity echo, but drives its ACP session directly on the validated `dsh` + its PATH.
   if (agentType === DSH_AGENT_TYPE) {
     const hasImages =
       typeof resolved.prompt !== 'string' &&
@@ -605,15 +466,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
 
     try {
+      const dshCommand = await resolveDshSpawnCommand(options.command);
       session = spawnDshAcpSession({
         args: options.agentArg,
         clientVersion: 'lobehub-cli',
-        command: options.command,
+        command: dshCommand.command,
         cwd: options.cwd || process.cwd(),
-        // Same identity echo as the CLI agents, so `lh` commands the harness
-        // runs for this conversation can name its operation and topic.
         env: buildAgentProcessEnv({
           operationId: serverIngest ? operationId : undefined,
+          pathEnv: dshCommand.pathEnv,
           topicId: options.topic,
         }),
         model: options.model,
@@ -703,34 +564,32 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (
-    serverIngest &&
-    (agentType === 'claude-code' ||
-      (agentType === 'codex' && options.codexAppServer) ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'droid' ||
-      agentType === 'devin' ||
-      agentType === 'qoder') &&
-    serverIngester
-  ) {
-    if (
-      agentType === 'codex' ||
-      agentType === 'copilot' ||
-      agentType === 'cursor' ||
-      agentType === 'devin' ||
-      agentType === 'droid'
-    ) {
+  const mcpAskUserProvider =
+    agentType === 'claude-code' || agentType === 'qoder' ? agentType : undefined;
+  const nativeAskUserProvider =
+    agentType === 'antigravity' ||
+    (agentType === 'codex' && options.codexAppServer) ||
+    agentType === 'copilot' ||
+    agentType === 'cursor' ||
+    agentType === 'devin' ||
+    agentType === 'droid'
+      ? agentType
+      : undefined;
+  if (serverIngest && serverIngester && (mcpAskUserProvider || nativeAskUserProvider)) {
+    if (nativeAskUserProvider) {
       askBridge = new AskUserBridge(operationId, {
-        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
-        provider: agentType,
+        identifier: nativeAskUserProvider === 'cursor' ? 'claude-code' : nativeAskUserProvider,
+        provider: nativeAskUserProvider,
       });
-    } else {
+    } else if (mcpAskUserProvider) {
       askServer = new LobeBuiltinMcpServer();
       await askServer.start();
       askBridge = askServer.registerOperation(
         operationId,
-        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+        new AskUserBridge(operationId, {
+          identifier: mcpAskUserProvider,
+          provider: mcpAskUserProvider,
+        }),
       );
       askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
       await writeFile(
@@ -1057,7 +916,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Stream events (steering Claude Code or native Codex, see withHeteroSteer); each is optionally written as JSONL
+    // Stream events (steering Claude Code, native Codex or Antigravity, see withHeteroSteer); each is optionally written as JSONL
     // and pushed into the ingester. A resume `error` is withheld and flags a retry instead.
     let resumeNotFound = false;
     let sawTerminalError = false;
@@ -1215,6 +1074,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // early makes print mode kill background tasks after 10 minutes.
     liveInput: options.type === 'claude-code',
     operationId,
+    // Claude Code permission mode, Codex Plan switch.
+    ...dispatchedModeSpawnOptions(options.type, resolved),
     uploadImage,
   };
 

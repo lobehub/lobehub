@@ -8,7 +8,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import {
@@ -19,6 +19,7 @@ import {
   SkillResourceError,
   SkillResourceService,
 } from '@/server/services/skill';
+import { resolveVaultGitHubToken, workspaceOwned } from '@/server/services/skill/vaultGitHubToken';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -26,19 +27,30 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 
 const skillImportErrorToTRPCCode = (
   code: SkillImportError['code'],
-): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' | 'FORBIDDEN' => {
+):
+  | 'CONFLICT'
+  | 'BAD_REQUEST'
+  | 'NOT_FOUND'
+  | 'BAD_GATEWAY'
+  | 'FORBIDDEN'
+  | 'PRECONDITION_FAILED' => {
   switch (code) {
+    case 'CONNECT_GITHUB': {
+      return 'PRECONDITION_FAILED';
+    }
+
+    case 'GITHUB_ACCESS':
+    case 'NOT_FOUND':
+    case 'FILE_NOT_FOUND': {
+      return 'NOT_FOUND';
+    }
+
     case 'CONFLICT': {
       return 'CONFLICT';
     }
 
     case 'FORBIDDEN': {
       return 'FORBIDDEN';
-    }
-
-    case 'NOT_FOUND':
-    case 'FILE_NOT_FOUND': {
-      return 'NOT_FOUND';
     }
 
     case 'DOWNLOAD_FAILED': {
@@ -70,12 +82,40 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   const workspaceId = ctx.workspaceId ?? undefined;
   const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId);
 
+  const githubProxy: MarketService['proxyOAuthRequest'] = async (request) => {
+    const { marketAccessToken, marketUserInfo } = await resolveMarketUserContext(ctx);
+    const market = new MarketService({
+      // Keep the workspace claim on trusted requests and personal bearer tokens in personal mode.
+      accessToken: workspaceId ? undefined : (marketAccessToken ?? ctx.marketAccessToken),
+      userInfo: marketUserInfo,
+    });
+    return market.proxyOAuthRequest(request);
+  };
+
+  // Read lazily: only a repository the anonymous request cannot read asks the Vault.
+  const githubToken = async () => {
+    const { marketAccessToken, marketUserInfo } = await resolveMarketUserContext(ctx);
+    const market = new MarketService({
+      accessToken: marketAccessToken ?? ctx.marketAccessToken,
+      userInfo: marketUserInfo,
+    }).market;
+    return resolveVaultGitHubToken([
+      market.creds,
+      ...(workspaceId ? [workspaceOwned(market.organizations.creds({ workspaceId }))] : []),
+    ]);
+  };
+
   return opts.next({
     ctx: {
+      githubProxy,
+      githubToken,
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, {
+        githubProxy,
+        githubToken,
+      }),
       skillModel,
     },
   });
@@ -97,6 +137,8 @@ const skillWriteProcedure = skillProcedure
     return opts.next({
       ctx: {
         skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
+          githubProxy: ctx.githubProxy,
+          githubToken: ctx.githubToken,
           workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
         }),
       },
@@ -197,6 +239,53 @@ export const agentSkillsRouter = router({
   getByName: skillProcedure.input(z.object({ name: z.string() })).query(async ({ ctx, input }) => {
     return ctx.skillModel.findByName(input.name);
   }),
+
+  checkGitHubUpdates: skillProcedure.query(({ ctx }) => ctx.skillImporter.checkGitHubUpdates()),
+
+  applyGitHubUpdate: skillWriteProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        commit: z.string().regex(/^[a-f0-9]{40}$/),
+        revision: z.string(),
+        overwriteLocal: z.boolean().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.applyGitHubUpdate(input).catch(handleSkillImportError),
+    ),
+
+  trackLegacyGitHubSkill: skillWriteProcedure
+    .input(
+      z.object({ id: z.string(), revision: z.string(), ref: z.string().trim().min(1).max(255) }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter
+        .trackLegacyGitHubSkill(input.id, input.revision, input.ref)
+        .catch(handleSkillImportError),
+    ),
+
+  discoverGitHubSkills: skillWriteProcedure
+    .input(z.object({ gitUrl: z.string().url() }))
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.discoverGitHubSkills(input.gitUrl).catch(handleSkillImportError),
+    ),
+
+  importGitHubSkills: skillWriteProcedure
+    .input(
+      z.object({
+        commit: z.string().regex(/^[a-f0-9]{40}$/),
+        gitUrl: z.string().url(),
+        scope: z.string(),
+        selections: z
+          .array(z.object({ path: z.string(), revision: z.string().nullable() }))
+          .min(1)
+          .max(200),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.importGitHubSkills(input).catch(handleSkillImportError),
+    ),
 
   importFromGitHub: skillWriteProcedure
     .input(

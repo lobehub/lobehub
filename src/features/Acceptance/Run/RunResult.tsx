@@ -5,13 +5,15 @@ import { Info, Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useVerifyResults, useVerifyState } from '../hooks';
 import { countResults, type DockPhase, phaseFromStatus } from '../utils';
 
 const styles = stylex.create({
   body: {
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     fontSize: '13px',
     lineHeight: 1.7,
     color: cssVar.colorTextSecondary,
@@ -31,7 +33,7 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     paddingBlock: '10px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -43,7 +45,7 @@ const styles = stylex.create({
     gap: '14px',
     alignItems: 'flex-start',
     paddingBlock: '14px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,

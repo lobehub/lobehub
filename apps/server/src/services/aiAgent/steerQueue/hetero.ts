@@ -1,13 +1,16 @@
-import type { AgentSenderMetadata, FollowUpMode } from '@lobechat/types';
+import type { AgentSenderMetadata, ChatImageItem } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
+import { isModelImageFileType } from '@/database/models/message/attachments';
+import { getFileProxyUrl } from '@/server/services/file';
 import {
   collectMarkdownImageUrls,
   type InlineImage,
   resolveInlineImages,
 } from '@/server/services/file/inlineImages';
+import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
@@ -23,6 +26,7 @@ import {
   returnFollowUps,
   takeSameSenderFollowUps,
 } from './index';
+import { isRunAlive } from './liveRuns';
 
 const log = debug('lobe-server:steer-queue:hetero');
 
@@ -39,8 +43,9 @@ export interface HeteroSteerDelivery {
   drainId: string;
   editorData?: unknown;
   entryId: string;
-  /** Every follow-up merged into this delivery, when there were several (Steer mode). */
+  /** Every follow-up merged into this delivery, when there were several. */
   entryIds?: string[];
+  fileIds?: string[];
   groupId?: string;
   scope: SteerQueueScope;
   trigger?: string;
@@ -48,24 +53,25 @@ export interface HeteroSteerDelivery {
 
 export interface HeteroSteerMessage {
   content: string;
-  /**
-   * Images pasted into the follow-up's body, which `content` only holds as
-   * markdown links: signed URLs for the session to take as image input.
-   */
+  /** Signed URLs for uploaded attachments and images linked from the body. */
   imageList?: InlineImage[];
   messageId: string;
+  /** An upload is part of the message; a producer must return it if the image fails. */
+  requiresImages?: true;
 }
 
 /**
- * Whether a follow-up can be typed into the running agent session: plain text
- * for the same agent. Attachments, attached selections, tool or skill
- * selections and @-mentions need a turn configured for them, and wait for the
- * run to end.
+ * Whether a follow-up can use the existing session's configuration. Uploaded
+ * files also need a producer that takes attachments and a successful image lookup.
  */
-export const canSteerHeteroRun = (entry: QueuedFollowUp, agentId: string | null): boolean => {
+export const canSteerHeteroRun = (
+  entry: QueuedFollowUp,
+  agentId: string | null,
+  acceptsImageAttachments = false,
+): boolean => {
   const { request } = entry;
   if (!request.prompt.trim()) return false;
-  if (request.fileIds?.length) return false;
+  if (request.fileIds?.length && !acceptsImageAttachments) return false;
   if (request.userMessage?.metadata) return false;
   if (request.selectedToolIds?.length || request.selectedSkillIds?.length) return false;
   if (request.mentionedAgents?.length) return false;
@@ -86,6 +92,40 @@ export const renewHeteroSteers = async (operationId: string) => {
   }
 };
 
+/**
+ * Hold a delivery for the run, unless the run ended meanwhile: then put it
+ * back in the queue and report that it is not held.
+ *
+ * A poll can outlive the producer that sent it (a host that does not cancel a
+ * request when its client disconnects keeps the long-poll running), and take
+ * the follow-ups the run's end just returned. Nothing would renew or return
+ * that hold, so they would read as being delivered, and hold every later send
+ * behind them, until their lease lapsed. A run's end writes its terminal
+ * status before it releases what the run holds, and this writes the hold
+ * before it reads the status: either the release finds this hold, or this
+ * read finds the end.
+ *
+ * @returns whether the run holds the delivery
+ */
+const holdHeteroDelivery = async (
+  ctx: StoreContext,
+  operationId: string,
+  messageId: string,
+  delivery: HeteroSteerDelivery,
+): Promise<boolean> => {
+  await redisService.steerQueue.putHeteroDelivery(operationId, messageId, delivery);
+  const alive = await isRunAlive(ctx, ctx.userId, operationId).catch((error) => {
+    // Unknown: keep the hold, whose lease still puts it back if the run is gone.
+    log('[%s] checking the run before holding %s failed: %O', operationId, messageId, error);
+    return true;
+  });
+  if (alive) return true;
+
+  log('[%s] run ended meanwhile, putting %s back', operationId, messageId);
+  await returnHeteroSteer(operationId, messageId);
+  return false;
+};
+
 /** Whether a session that takes image input only if `acceptsImages` can take this follow-up now. */
 const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) =>
   acceptsImages || collectMarkdownImageUrls(entry.request.prompt).length === 0;
@@ -96,9 +136,8 @@ const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) 
  * attachment, a tool selection…) stops the take, and it and everything behind
  * it wait for the run to end.
  *
- * In Steer mode (`mode: 'steer'`) every leading follow-up that can join, from
- * one author, goes as one merged message; otherwise one goes per delivery.
- * Either way the agent reads it when it is ready (Claude Code: at its next
+ * Every leading follow-up that can join, from one author, goes as one merged
+ * message. The agent reads it when it is ready (Claude Code: at its next
  * tool boundary), so a running tool is never cut short.
  *
  * Images pasted into the body go along as `imageList` when the session takes
@@ -111,15 +150,14 @@ const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) 
 export const takeHeteroSteer = async (
   ctx: StoreContext,
   params: {
+    acceptsImageAttachments?: boolean;
     acceptsImages?: boolean;
     agentId: string | null;
-    mode?: FollowUpMode;
     operationId: string;
     scope: SteerQueueScope;
   },
 ): Promise<HeteroSteerMessage | undefined> => {
-  const { acceptsImages, agentId, operationId, scope } = params;
-  const merging = params.mode === 'steer';
+  const { acceptsImageAttachments, acceptsImages, agentId, operationId, scope } = params;
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
   if (drained.entries.length === 0) return;
@@ -138,42 +176,64 @@ export const takeHeteroSteer = async (
     const ids = new Set(delivery.entryIds ?? [delivery.entryId]);
     const others = drained.entries.filter((entry) => !ids.has(entry.id));
     await returnFollowUps(scope, drained, others, 'behind a delivery the session holds');
-    await redisService.steerQueue.putHeteroDelivery(operationId, lapsedId, {
+    await holdHeteroDelivery(ctx, operationId, lapsedId, {
       ...delivery,
       drainId: drained.drainId,
-    } satisfies HeteroSteerDelivery);
+    });
     return;
   }
 
-  // A session that only takes text gets no image follow-up: decided from the
-  // markdown alone, since the run asks again on every poll.
   const canGo = (entry: QueuedFollowUp) =>
-    canSteerHeteroRun(entry, agentId) && fitsSession(entry, acceptsImages);
+    canSteerHeteroRun(entry, agentId, acceptsImages && acceptsImageAttachments) &&
+    fitsSession(entry, acceptsImages);
   const firstHeld = drained.entries.findIndex((entry) => !canGo(entry));
   const ready = firstHeld === -1 ? drained.entries : drained.entries.slice(0, firstHeld);
-  const joining = merging ? takeSameSenderFollowUps(ready).taken : ready.slice(0, 1);
+  const candidates = takeSameSenderFollowUps(ready).taken;
+
+  // Resolve only the files this poll could deliver. The metadata lookup checks
+  // file ownership without parsing documents that must wait for another turn.
+  const candidateFileIds = [...new Set(candidates.flatMap((entry) => entry.request.fileIds ?? []))];
+  const attachments = new Map<string, InlineImage>();
+  if (candidateFileIds.length > 0) {
+    try {
+      const files = await resolveAttachmentMetadata({
+        ...ctx,
+        fileIds: candidateFileIds,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      for (const { fileType, id, url } of files) {
+        if (url && isModelImageFileType(fileType)) attachments.set(id, { id, url });
+      }
+    } catch (error) {
+      await returnFollowUps(scope, drained, drained.entries, error);
+      return;
+    }
+  }
+  const firstUnsupported = candidates.findIndex((entry) =>
+    entry.request.fileIds?.some((id) => !attachments.has(id)),
+  );
+  const joining = firstUnsupported === -1 ? candidates : candidates.slice(0, firstUnsupported);
   if (joining.length === 0) {
     await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
     return;
   }
 
   const request = joining.length === 1 ? joining[0].request : mergeQueuedFollowUps(joining);
-  let imageList: InlineImage[] = [];
+  const fileIds = [...new Set(request.fileIds)];
+  const imageList = fileIds.map((id) => attachments.get(id)!);
   if (collectMarkdownImageUrls(request.prompt).length > 0) {
     try {
-      imageList = await resolveInlineImages(ctx, request.prompt);
+      const inline = fileIds.length
+        ? await resolveInlineImages(ctx, request.prompt, fileIds)
+        : await resolveInlineImages(ctx, request.prompt);
+      imageList.push(...inline);
     } catch (error) {
       await returnFollowUps(scope, drained, drained.entries, error);
       return;
     }
   }
   const rest = drained.entries.filter((entry) => !joining.includes(entry));
-  await returnFollowUps(
-    scope,
-    drained,
-    rest,
-    merging ? 'waits for the next join' : 'delivered one at a time',
-  );
+  await returnFollowUps(scope, drained, rest, 'waits for the next join');
 
   const messageId = queuedUserMessageId(ctx.userId, joining, request);
 
@@ -188,10 +248,10 @@ export const takeHeteroSteer = async (
     // Keep holding it under the new batch instead of sending it twice.
     const earlier = held[messageId];
     if (earlier) {
-      await redisService.steerQueue.putHeteroDelivery(operationId, messageId, {
+      await holdHeteroDelivery(ctx, operationId, messageId, {
         ...earlier,
         drainId: drained.drainId,
-      } satisfies HeteroSteerDelivery);
+      });
       return;
     }
 
@@ -201,17 +261,19 @@ export const takeHeteroSteer = async (
       return;
     }
 
-    await redisService.steerQueue.putHeteroDelivery(operationId, messageId, {
+    const holding = await holdHeteroDelivery(ctx, operationId, messageId, {
       agentSender: joining[0].agentSender,
       content: request.prompt,
       drainId: drained.drainId,
       editorData: request.userMessage?.editorData,
       entryId: joining[0].id,
       ...(joining.length > 1 && { entryIds: joining.map((entry) => entry.id) }),
+      ...(fileIds.length > 0 && { fileIds }),
       groupId: request.appContext?.groupId ?? undefined,
       scope,
       trigger: request.trigger,
-    } satisfies HeteroSteerDelivery);
+    });
+    if (!holding) return;
   } catch (error) {
     await returnFollowUps(scope, drained, joining, error);
     return;
@@ -222,6 +284,7 @@ export const takeHeteroSteer = async (
     content: request.prompt,
     ...(imageList.length > 0 && { imageList }),
     messageId,
+    ...(fileIds.length > 0 && { requiresImages: true }),
   };
 };
 
@@ -260,6 +323,13 @@ export const releaseHeteroSteers = async (operationId: string) => {
   }
 };
 
+const readSteerImages = async (messageModel: MessageModel, messageId: string) => {
+  const [message] = await messageModel.queryByIds([messageId], {
+    postProcessUrl: async (path, file) => (file.id ? getFileProxyUrl(file.id) : (path ?? '')),
+  });
+  return message?.imageList?.length ? message.imageList : undefined;
+};
+
 /**
  * The agent replayed a delivered message: write it into the conversation as a
  * steer user message under `parentId`, and acknowledge its follow-up.
@@ -279,7 +349,13 @@ export const consumeHeteroSteer = async (
     messageId: string;
   },
 ): Promise<
-  | { content: string; id: string; metadata: Record<string, unknown>; parentId: string | null }
+  | {
+      content: string;
+      id: string;
+      imageList?: ChatImageItem[];
+      metadata: Record<string, unknown>;
+      parentId: string | null;
+    }
   | undefined
 > => {
   const { messageId, operationId } = params;
@@ -289,10 +365,13 @@ export const consumeHeteroSteer = async (
   if (!delivery) {
     const written = await messageModel.findById(messageId);
     if (written?.role !== 'user' || written.topicId !== params.topicId) return;
+    const metadata = (written.metadata ?? {}) as Record<string, unknown>;
+    const imageList = metadata.steer ? await readSteerImages(messageModel, messageId) : undefined;
     return {
       content: written.content ?? '',
       id: written.id,
-      metadata: (written.metadata ?? {}) as Record<string, unknown>,
+      ...(imageList && { imageList }),
+      metadata,
       parentId: written.parentId ?? null,
     };
   }
@@ -313,6 +392,7 @@ export const consumeHeteroSteer = async (
         agentId: params.agentId ?? undefined,
         content: delivery.content,
         editorData: delivery.editorData,
+        files: delivery.fileIds,
         groupId: delivery.groupId,
         metadata,
         parentId: params.parentId,
@@ -324,8 +404,18 @@ export const consumeHeteroSteer = async (
     );
   }
 
+  const imageList = delivery.fileIds?.length
+    ? await readSteerImages(messageModel, messageId)
+    : undefined;
+
   await ackFollowUps(delivery.scope, delivery);
   await redisService.steerQueue.removeHeteroDelivery(operationId, messageId);
 
-  return { content: delivery.content, id: messageId, metadata, parentId: params.parentId };
+  return {
+    content: delivery.content,
+    id: messageId,
+    ...(imageList && { imageList }),
+    metadata,
+    parentId: params.parentId,
+  };
 };

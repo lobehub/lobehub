@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "보너스 잔액 추가됨",
   "storage_overage_cap_reached": "귀하의 스토리지 종량제 월 한도 ${{monthlyCap}}에 도달했습니다. 이번 청구 주기의 예상 요금은 ${{estimatedCycleCharge}}입니다. 포함된 스토리지를 초과하는 새로운 업로드는 다음 청구 주기까지 또는 한도를 늘릴 때까지 차단됩니다.",
   "storage_overage_cap_reached_title": "스토리지 종량제 한도 도달",
-  "subscription_one_time_expired": "일회성 {{plan}} 플랜이 종료되어 계정이 무료 플랜으로 전환되었습니다. {{plan}}을 갱신하여 혜택을 다시 받으세요.",
   "subscription_one_time_expired_action": "{{plan}} 갱신",
   "subscription_one_time_expired_title": "{{plan}} 플랜이 종료되었습니다",
   "subscription_payment_failed": "구독 갱신 결제가 실패했습니다. 구독을 유지하려면 결제 방법을 업데이트하세요.",

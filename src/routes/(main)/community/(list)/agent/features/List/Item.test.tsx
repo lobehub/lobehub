@@ -54,7 +54,7 @@ describe('AssistantItem', () => {
       fireEvent.click(screen.getByText('LobeHub'));
 
       expect(openSpy).toHaveBeenCalledWith(
-        '/community/user/lobehub',
+        '/marketplace/user/lobehub',
         '_blank',
         'noopener,noreferrer',
       );
@@ -74,7 +74,7 @@ describe('AssistantItem', () => {
       fireEvent.click(screen.getByText('Acme Labs'));
 
       expect(openSpy).toHaveBeenCalledWith(
-        '/community/org/acme-labs',
+        '/marketplace/org/acme-labs',
         '_blank',
         'noopener,noreferrer',
       );

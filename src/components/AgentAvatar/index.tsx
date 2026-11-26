@@ -7,7 +7,7 @@ import Avatar, { type AvatarProps } from '@/components/Avatar';
 
 import { pickDomProps, resolveAgentAvatar } from './resolve';
 
-export { isDefaultAgentAvatar } from './resolve';
+export { isDefaultAgentAvatar, isGeneratedAgentAvatar } from './resolve';
 
 export interface AgentAvatarProps extends Omit<AvatarProps, 'avatar' | 'brokenFallback' | 'name'> {
   /**
@@ -17,8 +17,16 @@ export interface AgentAvatarProps extends Omit<AvatarProps, 'avatar' | 'brokenFa
   agentId?: string | null;
   /** Play the `state` animation of the generated character. */
   animated?: boolean;
-  /** Emoji or image URL. Empty (or the legacy default image) draws the generated character. */
+  /**
+   * Emoji, image URL or a picked character (`agent-avatar:<shape>:<color>`). Empty (or the
+   * legacy default image) draws the character generated from the id.
+   */
   avatar?: string | null;
+  /**
+   * Turn the generated character's eyes and body toward the pointer. Only applies while it is
+   * `animated`.
+   */
+  followPointer?: boolean;
   /** Display name: labels the avatar and seeds the character when `agentId` is absent. */
   name?: string | null;
   /** Activity state of the generated character. */
@@ -37,6 +45,7 @@ const AgentAvatar = memo<AgentAvatarProps>(
     avatar,
     background,
     className,
+    followPointer,
     name,
     onClick,
     ref,
@@ -60,7 +69,9 @@ const AgentAvatar = memo<AgentAvatarProps>(
         onClick={onClick as MouseEventHandler<HTMLSpanElement>}
       >
         <GeneratedAgentAvatar
+          {...(resolved.kind === 'generated' ? resolved.choice : undefined)}
           animated={animated}
+          followPointer={followPointer}
           name={resolved.label}
           seed={resolved.seed}
           size={size}

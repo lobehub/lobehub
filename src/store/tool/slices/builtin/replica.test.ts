@@ -7,7 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { defaultUninstalledBuiltinTools, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
@@ -21,7 +21,12 @@ import { userService } from '@/services/user';
 
 import { useToolStore } from '../../store';
 import { initialBuiltinToolState } from './initialState';
-import { UNINSTALLED_BUILTIN_TOOLS_KEY, uninstalledBuiltinToolsResource } from './projection';
+import {
+  installedImplicitBuiltinSkillIds,
+  legacyDisabledBuiltinSkillsForRun,
+  UNINSTALLED_BUILTIN_TOOLS_KEY,
+  uninstalledBuiltinToolsResource,
+} from './projection';
 
 vi.mock('@/services/user', () => ({
   userService: {
@@ -77,6 +82,71 @@ describe('uninstalled builtin tools replica', () => {
     scopes.clear();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  it('waits for confirmed settings and reuses them across sends in the same scope', async () => {
+    const settings = Promise.withResolvers<ReturnType<typeof userState>>();
+    vi.mocked(userService.getUserState).mockReturnValue(settings.promise);
+    const read = useToolStore.getState().getUninstalledBuiltinToolsForRun;
+    const first = read();
+    const second = read();
+    settings.resolve(userState({ uninstalledBuiltinTools: ['lobe-calculator'] }));
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      ['lobe-calculator'],
+      ['lobe-calculator'],
+    ]);
+    await expect(read()).resolves.toEqual(['lobe-calculator']);
+    expect(userService.getUserState).toHaveBeenCalledTimes(1);
+  });
+
+  it('only offers installed legacy skills after confirming the current scope', async () => {
+    const skills = (createdAt: string) =>
+      installedImplicitBuiltinSkillIds(useToolStore.getState(), createdAt, undefined);
+    const oldAgent = '2026-11-01T00:00:00Z';
+    expect(skills(oldAgent)).toEqual([]);
+    vi.mocked(userService.getUserState).mockResolvedValue(
+      userState({ uninstalledBuiltinTools: ['lobe-agent-browser'] }),
+    );
+    await useToolStore.getState().getUninstalledBuiltinToolsForRun();
+    expect(skills(oldAgent)).toContain('lobe-artifacts');
+    expect(skills(oldAgent)).not.toContain('lobe-agent-browser');
+    expect(skills('2026-11-18T15:53:51Z')).toEqual([]);
+    useScope(`other-${randomUUID()}:personal`);
+    expect(skills(oldAgent)).toEqual([]);
+  });
+
+  it('applies the stored uninstall to old agent entries and honors only the new choice on this agent', async () => {
+    const id = 'lobe-artifacts';
+    vi.mocked(userService.getUserState).mockResolvedValue(
+      userState({ uninstalledBuiltinTools: [id] }),
+    );
+    await useToolStore.getState().getUninstalledBuiltinToolsForRun();
+    const state = useToolStore.getState();
+    expect(legacyDisabledBuiltinSkillsForRun(state, [id])).toEqual([id]);
+    expect(
+      legacyDisabledBuiltinSkillsForRun(state, [
+        { builtinOverride: true, identifier: id, mode: 'auto' },
+      ]),
+    ).toEqual([]);
+    expect(legacyDisabledBuiltinSkillsForRun(state, [])).toEqual([id]);
+  });
+
+  it('withholds on-demand tools after a failed read and retries on the next send', async () => {
+    vi.mocked(userService.getUserState)
+      .mockRejectedValueOnce(new Error('settings unavailable'))
+      .mockResolvedValueOnce(userState({ uninstalledBuiltinTools: [] }));
+    const read = useToolStore.getState().getUninstalledBuiltinToolsForRun;
+    await expect(read()).resolves.toEqual(onDemandBuiltinToolIds);
+    await expect(read()).resolves.toEqual([]);
+  });
+
+  it('discards the settings response when the active scope changes during a send', async () => {
+    const settings = Promise.withResolvers<ReturnType<typeof userState>>();
+    vi.mocked(userService.getUserState).mockReturnValue(settings.promise);
+    const pendingRead = useToolStore.getState().getUninstalledBuiltinToolsForRun();
+    useScope(`other-${randomUUID()}:personal`);
+    settings.resolve(userState({ uninstalledBuiltinTools: [] }));
+    await expect(pendingRead).resolves.toEqual(onDemandBuiltinToolIds);
   });
 
   it('paints the persisted list before the network answers', async () => {
@@ -189,6 +259,11 @@ describe('uninstalled builtin tools replica', () => {
     await waitFor(() => expect(updateSpy).toHaveBeenCalled());
     expect(useToolStore.getState().uninstalledBuiltinTools).toEqual(['b']);
 
+    await expect(useToolStore.getState().getUninstalledBuiltinToolsForRun()).resolves.toEqual([
+      'a',
+      'b',
+    ]);
+
     // The refresh that follows the write sees the server's new state.
     vi.mocked(userService.getUserState).mockResolvedValue(
       userState({ uninstalledBuiltinTools: ['b'] }),
@@ -198,6 +273,9 @@ describe('uninstalled builtin tools replica', () => {
       await operation;
     });
     expect(useToolStore.getState().uninstalledBuiltinTools).toEqual(['b']);
+    await expect(useToolStore.getState().getUninstalledBuiltinToolsForRun()).resolves.toEqual([
+      'b',
+    ]);
   });
 
   it('shows a toggle immediately even before the replica has painted', async () => {

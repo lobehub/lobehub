@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { channelJobs, channelMembers, channelMessages } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { appendMessage } from '../delivery';
+import { openingRequestKey } from '../opening';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -62,6 +64,7 @@ describe('Channel public view', () => {
     expect(view.hasMore).toBe(true);
     expect(view.members.find((member) => member.id === agent.id)?.name).toBe('Researcher');
     expect(view.jobs[0]).not.toHaveProperty('topicId');
+    expect(view.jobs[0]).not.toHaveProperty('topicTitle');
     expect(view.jobs[0]).not.toHaveProperty('operationId');
     expect(view.jobs[0]).not.toHaveProperty('executionConfig');
     expect(view).not.toHaveProperty('member');
@@ -224,6 +227,7 @@ describe('Channel public view', () => {
 
     const main = await asOwner.detail(channel.id);
     expect(main.threads.find((entry) => entry.id === thread.id)).toMatchObject({
+      lastNewsAt: expect.any(Date),
       lastReply: { author: { type: 'user' }, content: 'Latest reply' },
       replyCount: 2,
     });
@@ -238,6 +242,57 @@ describe('Channel public view', () => {
     expect(inThread.threads.find((entry) => entry.id === thread.id)).not.toHaveProperty(
       'replyCount',
     );
+  });
+
+  it('does not count an Agent acknowledgement as unread news in a thread summary', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const acked = await asOwner.send(channel.id, {
+      content: 'Acked root',
+      requestKey: 'acked',
+      routing: 'fallback',
+    });
+    const busy = await asOwner.send(channel.id, {
+      content: 'Busy root',
+      requestKey: 'busy',
+      routing: 'fallback',
+    });
+    const fresh = await asOwner.createThread(channel.id, { rootMessageId: acked.id });
+    const ongoing = await asOwner.createThread(channel.id, { rootMessageId: busy.id });
+    const person = await asOwner.send(channel.id, {
+      content: 'Unread person reply',
+      requestKey: 'person',
+      routing: 'fallback',
+      threadId: ongoing.id,
+    });
+    const ack = (threadId: string, jobId: string, replyToId: string) =>
+      db.transaction((tx) =>
+        appendMessage(tx, {
+          agentId: agent.agentId,
+          channelId: channel.id,
+          content: 'On it',
+          replyToId,
+          requestKey: openingRequestKey(jobId),
+          routingStatus: 'reply',
+          threadId,
+        }),
+      );
+    await ack(fresh.id, 'job_fresh', acked.id);
+    await ack(ongoing.id, 'job_ongoing', person.id);
+
+    const { threads } = await asOwner.detail(channel.id);
+    // The acknowledgement still previews what is happening, but is not news on its own.
+    expect(threads.find((entry) => entry.id === fresh.id)).toMatchObject({
+      lastNewsAt: null,
+      lastReply: { author: { type: 'agent' }, content: 'On it' },
+      replyCount: 1,
+    });
+    // Nor does it hide the earlier reply that still is.
+    expect(threads.find((entry) => entry.id === ongoing.id)).toMatchObject({
+      lastNewsAt: person.createdAt,
+      lastReply: { content: 'On it' },
+      replyCount: 2,
+    });
   });
 
   it.each([false, true])(
@@ -388,6 +443,39 @@ describe('Channel public view', () => {
     expect(await listed()).toMatchObject({ mentionCount: 2, unreadCount: 2 });
     await asMember.markRead(channel.id, reply.sequence);
     expect(await listed()).toMatchObject({ mentionCount: 0, unreadCount: 0 });
+  });
+
+  it('lists the newest Thread mention of the caller however far the Channel was read', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (content: string, mentions: string[] = [], threadId?: string) =>
+      asOwner.send(channel.id, {
+        content,
+        mentions,
+        requestKey: content,
+        routing: 'fallback',
+        threadId,
+      });
+    const root = await send('Root');
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    await send('First ping', [member.id], thread.id);
+    const latest = await send('Second ping', [member.id], thread.id);
+    await send('No ping', [], thread.id);
+    await send('Main ping', [member.id]);
+
+    const listed = async () => (await asMember.list()).find((item) => item.id === channel.id);
+    const mentioned = [{ createdAt: latest.createdAt, threadId: thread.id }];
+    expect((await listed())?.threadMentions).toEqual(mentioned);
+    expect((await asOwner.list()).find((item) => item.id === channel.id)?.threadMentions).toEqual(
+      [],
+    );
+
+    // Reading the main conversation consumes the count but not the Thread mention.
+    await asMember.markRead(channel.id, latest.sequence + 2);
+    expect(await listed()).toMatchObject({ mentionCount: 0, threadMentions: mentioned });
+
+    // A trashed Thread cannot be opened, so its mentions are no longer listed.
+    await asOwner.removeThread(channel.id, thread.id);
+    expect((await listed())?.threadMentions).toEqual([]);
   });
 
   it('preserves the actual reply author when a member is rebound', async () => {

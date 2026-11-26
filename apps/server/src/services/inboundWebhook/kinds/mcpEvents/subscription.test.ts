@@ -218,6 +218,20 @@ describe('subscription maintenance', () => {
     });
   });
 
+  it('keeps a Channel post failure through a healthy renewal, which says nothing about the Channel', async () => {
+    const { ctx, stored } = createContext({ lastError: 'channel_unavailable' });
+    await applySubscriptionResult(ctx, { id: 'remote', refreshBefore: null });
+    expect(stored).toMatchObject({ lastError: 'channel_unavailable', status: 'active' });
+
+    // An upstream failure still reads as one, and makes the row an error.
+    await applySubscriptionResult(ctx, {
+      deliveryStatus: { active: false },
+      id: 'remote',
+      refreshBefore: null,
+    });
+    expect(stored).toMatchObject({ lastError: 'delivery_suspended', status: 'error' });
+  });
+
   it('renews finite subscriptions halfway through their grant and carries cursor/maxAge', async () => {
     const { ctx, stored } = createContext();
     const refreshBefore = new Date(NOW.getTime() + 120_000).toISOString();

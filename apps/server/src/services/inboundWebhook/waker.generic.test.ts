@@ -391,4 +391,37 @@ describe('generic webhook wakes', () => {
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'gone' });
     expect(await model.findById(id)).toBeUndefined();
   });
+
+  it('runs a Channel delivery headless, with the hook that posts its answer there', async () => {
+    await seedWebhook({ autoApprove: true, delivery: { channelId: 'chn_1', threadId: 'cht_1' } });
+    await seedSignal();
+
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+
+    const [params] = execute.mock.calls[0];
+    // Nobody can approve a tool in the Channel: never park, whatever the user's settings.
+    expect(params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(params.instructions).toContain('posted as your message in the Channel');
+    // It may answer with a card, so the card tool is in the run.
+    expect(params.additionalPluginIds).toEqual(['lobe-a2ui']);
+    expect(params.hooks).toEqual([
+      expect.objectContaining({ id: `inbound-webhook-report:${id}`, type: 'onComplete' }),
+    ]);
+  });
+
+  it('runs a webhook without a Channel delivery with no report hook', async () => {
+    await seedWebhook({ autoApprove: true });
+    await seedSignal();
+
+    await wakeInboundWebhook(db, id, deps);
+
+    const [params] = execute.mock.calls[0];
+    expect(params.hooks).toBeUndefined();
+    expect(params.instructions).toBeUndefined();
+    expect(params.additionalPluginIds).toBeUndefined();
+    expect(params.userInterventionConfig).toEqual({
+      allowList: ['safe-read'],
+      approvalMode: 'auto-run',
+    });
+  });
 });

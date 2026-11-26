@@ -9,6 +9,7 @@ import type {
   OperationSkillSet,
   OperationToolSet,
   ProjectInstructionFile,
+  SkillIndexSnapshot,
   ToolExecutor,
   ToolSource,
   UserMemoryConfig,
@@ -185,6 +186,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.
@@ -373,6 +375,13 @@ export interface AgentRunBinding {
     platform?: string;
     systemInfo?: Record<string, string>;
   };
+  /**
+   * The skill-index snapshot (rows + change notes) this run renders from,
+   * pinned on its first step so later steps send the same `<available_skills>`
+   * block and `<skills_changes>` notes (see `resolveSkillIndex`). Replaced only
+   * when the history is compressed mid-run.
+   */
+  skillIndex?: SkillIndexSnapshot;
 }
 
 /**
@@ -617,7 +626,20 @@ export interface AgentState {
    * Only signatures present in the latest tool-calling turn are retained.
    */
   toolCallRepeatGuard?: {
+    /**
+     * Calls each budgeted API (`maxCallsPerOperation` on its manifest entry)
+     * was asked for so far in this operation, keyed by tool identity without
+     * arguments. Unlike `counts` it is never reset by a turn that skips the
+     * API: the budget is for the whole operation.
+     */
+    apiCalls?: Record<string, number>;
     counts: Record<string, number>;
+    /**
+     * Consecutive LLM turns that asked for a budgeted API past its budget.
+     * Each of those turns got a rejected tool result; the run stops once the
+     * model has ignored that feedback too many turns in a row.
+     */
+    overBudgetRounds?: number;
     /**
      * Set on the turn the guard cut short. The run still lands in `status:
      * 'done'` — the turn was finalized without tool calls, which is what

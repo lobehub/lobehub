@@ -1,7 +1,9 @@
-import { randomUUID } from 'node:crypto';
-
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { LocalExecutionHeterogeneousAgentTypeSchema } from '@lobechat/types';
+import {
+  CODEX_COLLABORATION_MODES,
+  HETERO_PERMISSION_MODES,
+  LocalExecutionHeterogeneousAgentTypeSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
@@ -9,9 +11,7 @@ import { z } from 'zod';
 
 import {
   getHeteroInterventionReview,
-  onHeteroInterventionResolutionPublished,
   resolveHeteroIntervention,
-  rollbackHeteroInterventionResolution,
 } from '@/business/server/agent-run/heteroInterventionReview';
 import { agentOperations } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -26,19 +26,27 @@ import {
   returnHeteroSteer,
   takeHeteroSteer,
 } from '@/server/services/aiAgent/steerQueue/hetero';
+import { setHeteroCollaborationMode } from '@/server/services/aiAgent/steerQueue/heteroCollaborationMode';
 import {
   type HeteroControlMessage,
   reportHeteroControlResult,
   takeHeteroControl,
 } from '@/server/services/aiAgent/steerQueue/heteroControl';
+import { setHeteroPermissionMode } from '@/server/services/aiAgent/steerQueue/heteroPermissionMode';
 import { stopHeteroBackgroundTask } from '@/server/services/aiAgent/steerQueue/heteroStopTask';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
+import { resolveHeteroRunShareVisitor } from '@/server/services/heterogeneousAgent/shareVisitor';
 
 import { assertCanUseOperationAgent, resolveHeteroTopicWorkspace } from './guards';
+import {
+  publishClaimedHeteroIntervention,
+  submitHeteroInterventionAs,
+  SubmitHeteroInterventionSchema,
+} from './heteroInterventionSubmit';
 import { aiAgentBaseProcedure, aiAgentWriteProcedure, heteroAgentProcedure } from './procedures';
 
 const log = debug('lobe-server:ai-agent-router');
@@ -153,6 +161,8 @@ const WaitHeteroSteerSchema = z.object({
    * it: they never get one, so a control message for their run expires.
    */
   acceptsControl: z.boolean().optional(),
+  /** The producer can deliver uploaded images without falling back to text on failure. */
+  acceptsImageAttachments: z.boolean().optional(),
   /**
    * The producer types image blocks into the session (`imageList` on the
    * message). Older producers omit it and only ever get text-only follow-ups.
@@ -171,6 +181,18 @@ const WaitHeteroSteerSchema = z.object({
 const StopHeteroBackgroundTaskSchema = z.object({
   operationId: z.string().min(1),
   taskId: z.string().min(1).max(256),
+});
+
+/** Schema for `aiAgent.setHeteroPermissionMode` — switch a running Claude Code's mode. */
+const SetHeteroPermissionModeSchema = z.object({
+  mode: z.enum(HETERO_PERMISSION_MODES),
+  operationId: z.string().min(1),
+});
+
+/** Schema for `aiAgent.setHeteroCollaborationMode` — the Codex Plan switch, mid-run. */
+const SetHeteroCollaborationModeSchema = z.object({
+  mode: z.enum(CODEX_COLLABORATION_MODES),
+  operationId: z.string().min(1),
 });
 
 /** Schema for `aiAgent.returnHeteroSteer` — the session could not take the message. */
@@ -232,26 +254,6 @@ const waitOrAbort = (ms: number, signal: AbortSignal | undefined) =>
     signal?.addEventListener('abort', done, { once: true });
   });
 
-/**
- * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
- * Human-in-the-loop. The user's answer to an `agent_intervention_request` is
- * published back onto the op's Redis stream as an `agent_intervention_response`,
- * where both the renderer (card → resolved) and the exec long-poll converge on
- * it by `toolCallId`. Mutually exclusive: `result` on submit, `cancelled` on
- * skip/cancel.
- */
-const SubmitHeteroInterventionSchema = z.object({
-  cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
-  cancelled: z.boolean().optional(),
-  operationId: z.string().min(1),
-  /** Optional only for backward compatibility with pre-contract Web clients. */
-  resolutionRequestId: z.string().uuid().optional(),
-  result: z.unknown().optional(),
-  /** Producer step index; harmless placeholder — correlation is by toolCallId. */
-  stepIndex: z.number().int().nonnegative().default(0),
-  toolCallId: z.string().min(1),
-});
-
 const HeteroInterventionReviewTokenSchema = z.object({
   /** 32 random bytes encoded as base64url without padding. */
   reviewToken: z.string().regex(/^[\w-]{43}$/),
@@ -263,76 +265,6 @@ const ResolveHeteroInterventionReviewSchema = z.object({
   result: z.unknown().optional(),
   reviewToken: z.string().regex(/^[\w-]{43}$/),
 });
-
-const publishClaimedHeteroIntervention = async (params: {
-  claim: Extract<
-    Awaited<ReturnType<typeof resolveHeteroIntervention>>,
-    { handled: true; state: 'claimed' }
-  >;
-  userId: string;
-  workspaceId?: string | null;
-}) => {
-  const { claim, userId, workspaceId } = params;
-  const resolvedWorkspaceId = claim.workspaceId ?? workspaceId ?? undefined;
-  const streamEventManager = createStreamEventManager();
-
-  try {
-    await streamEventManager.publishStreamEvent(claim.operationId, {
-      data: {
-        ...claim.response,
-        producerAck: false,
-        resolutionRequestId: claim.resolutionRequestId,
-      },
-      stepIndex: claim.stepIndex ?? 0,
-      type: 'agent_intervention_response',
-    });
-  } catch (error) {
-    await rollbackHeteroInterventionResolution({
-      claimId: claim.claimId,
-      operationId: claim.operationId,
-      resolutionRequestId: claim.resolutionRequestId,
-      toolCallId: claim.response.toolCallId,
-      userId,
-      workspaceId: resolvedWorkspaceId,
-    }).catch((rollbackError) => {
-      log(
-        'conditional intervention rollback failed claim=%s op=%s: %O',
-        claim.claimId,
-        claim.operationId,
-        rollbackError,
-      );
-    });
-    throw error;
-  }
-
-  // Notification surfaces may switch to `resolving` only after XADD has
-  // succeeded. This best-effort side effect must not roll back a response the
-  // producer can already consume from the stream.
-  await onHeteroInterventionResolutionPublished({
-    claimId: claim.claimId,
-    operationId: claim.operationId,
-    resolutionRequestId: claim.resolutionRequestId,
-    status: 'resolving',
-    toolCallId: claim.response.toolCallId,
-    userId,
-    workspaceId: resolvedWorkspaceId,
-  }).catch((notificationError) => {
-    log(
-      'intervention published hook failed claim=%s op=%s: %O',
-      claim.claimId,
-      claim.operationId,
-      notificationError,
-    );
-  });
-
-  return {
-    // XADD only acknowledges transport acceptance. The producer's echoed
-    // response is the authoritative terminal transition persisted by the
-    // intervention reducer; until then the durable row remains resolving.
-    status: 'resolving' as const,
-    success: true as const,
-  };
-};
 
 const authorizeOperationCallback = async (
   ctx: {
@@ -364,6 +296,30 @@ const authorizeOperationCallback = async (
       message: error.message,
     });
   }
+};
+
+/** Only the user who started the run, still allowed to use its agent, controls its live process. */
+const assertControlsHeteroRun = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  operationId: string,
+) => {
+  const [operation] = await ctx.serverDB
+    .select({ userId: agentOperations.userId })
+    .from(agentOperations)
+    .where(eq(agentOperations.id, operationId))
+    .limit(1);
+  if (operation?.userId !== ctx.userId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Operation not found or not owned by the caller',
+    });
+  }
+  await assertCanUseOperationAgent({
+    db: ctx.serverDB,
+    operationId,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
 };
 
 export const heteroRouter = router({
@@ -400,7 +356,13 @@ export const heteroRouter = router({
         topicId,
         userId: ctx.userId,
       });
+      const shareVisitor = await resolveHeteroRunShareVisitor({
+        db: ctx.serverDB,
+        operationId,
+        topicId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
+        shareVisitor,
         workspaceId: wsId,
       });
 
@@ -494,13 +456,23 @@ export const heteroRouter = router({
         topicId,
         userId: ctx.userId,
       });
+      const shareVisitor = await resolveHeteroRunShareVisitor({
+        db: ctx.serverDB,
+        operationId,
+        topicId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
+        shareVisitor,
         // Follow-ups queued behind the run start as its next turn through the
-        // composer pipeline, under the run owner and its workspace.
-        startQueuedFollowUp: (params) =>
-          new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }).startQueuedFollowUp(
-            params,
-          ),
+        // composer pipeline, under the run owner and its workspace. Not for a
+        // share visitor run: that start carries no share gate, so it would run
+        // the visitor's queued text as an ungated creator turn.
+        startQueuedFollowUp: shareVisitor
+          ? undefined
+          : (params) =>
+              new AiAgentService(ctx.serverDB, ctx.userId, {
+                workspaceId: wsId,
+              }).startQueuedFollowUp(params),
         workspaceId: wsId,
       });
 
@@ -601,7 +573,14 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
-      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
+      const {
+        acceptsControl,
+        acceptsImageAttachments,
+        acceptsImages,
+        blockMs,
+        holdSteer,
+        operationId,
+      } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -650,7 +629,7 @@ export const heteroRouter = router({
 
       if (scope) await renewHeteroSteers(operationId);
       // Queue mode leaves the follow-ups to the run end; read once per poll.
-      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : undefined;
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -667,9 +646,9 @@ export const heteroRouter = router({
         }
         if (scope && followUpMode !== 'queue' && !holdSteer) {
           const message = await takeHeteroSteer(storeCtx, {
+            acceptsImageAttachments,
             acceptsImages,
             agentId: operation.agentId,
-            mode: followUpMode,
             operationId,
             scope,
           });
@@ -759,25 +738,26 @@ export const heteroRouter = router({
   stopHeteroBackgroundTask: aiAgentWriteProcedure
     .input(StopHeteroBackgroundTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      // Only the user who started the run controls its live process.
-      const [operation] = await ctx.serverDB
-        .select({ userId: agentOperations.userId })
-        .from(agentOperations)
-        .where(eq(agentOperations.id, input.operationId))
-        .limit(1);
-      if (operation?.userId !== ctx.userId) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Operation not found or not owned by the caller',
-        });
-      }
-      await assertCanUseOperationAgent({
-        db: ctx.serverDB,
-        operationId: input.operationId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
+      await assertControlsHeteroRun(ctx, input.operationId);
       return stopHeteroBackgroundTask(input.operationId, input.taskId);
+    }),
+  /**
+   * Switch the permission mode of a running Claude Code hosted by
+   * `lh hetero exec` (the composer's mode chip). Rides the run's control
+   * channel; Claude Code's mode report then updates the topic.
+   */
+  setHeteroPermissionMode: aiAgentWriteProcedure
+    .input(SetHeteroPermissionModeSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertControlsHeteroRun(ctx, input.operationId);
+      return setHeteroPermissionMode(input.operationId, input.mode);
+    }),
+  /** Flip a running native Codex thread's Plan switch; it applies from the next turn. */
+  setHeteroCollaborationMode: aiAgentWriteProcedure
+    .input(SetHeteroCollaborationModeSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertControlsHeteroRun(ctx, input.operationId);
+      return setHeteroCollaborationMode(input.operationId, input.mode);
     }),
   /** Token-only atomic resolution path used by Mobile review/deep links. */
   resolveHeteroIntervention: aiAgentWriteProcedure
@@ -817,69 +797,20 @@ export const heteroRouter = router({
   submitHeteroIntervention: aiAgentWriteProcedure
     .input(SubmitHeteroInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const {
-        operationId,
-        toolCallId,
-        stepIndex,
-        result,
-        cancelled,
-        resolutionRequestId = randomUUID(),
-      } = input;
-
       log(
         'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
-        operationId,
-        toolCallId,
-        cancelled ?? false,
+        input.operationId,
+        input.toolCallId,
+        input.cancelled ?? false,
       );
 
       await assertCanUseOperationAgent({
         db: ctx.serverDB,
-        operationId,
+        operationId: input.operationId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
 
-      // Cloud overrides this as an atomic first-winner claim shared by Web and
-      // Mobile. OSS returns `handled:false` and preserves the legacy stream
-      // publish below. A claimed response is authoritative: client-supplied
-      // operation/tool fields cannot override what Cloud resolved durably.
-      const businessResolution = await resolveHeteroIntervention({
-        action: cancelled ? 'skip' : 'submit',
-        cancelReason: cancelled ? 'user_cancelled' : undefined,
-        result: cancelled ? undefined : result,
-        resolutionRequestId,
-        target: { operationId, toolCallId },
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-      if (businessResolution.handled) {
-        if (businessResolution.state === 'already_resolved') {
-          return { status: businessResolution.status, success: true as const };
-        }
-        return publishClaimedHeteroIntervention({
-          claim: businessResolution,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-      }
-
-      const streamEventManager = createStreamEventManager();
-      await streamEventManager.publishStreamEvent(operationId, {
-        data: {
-          // Client-driven cancellation cannot impersonate producer timeout or
-          // session teardown; those terminal reasons originate from bridge ACKs.
-          cancelReason: cancelled ? 'user_cancelled' : undefined,
-          cancelled,
-          producerAck: false,
-          result: cancelled ? undefined : result,
-          resolutionRequestId,
-          toolCallId,
-        },
-        stepIndex,
-        type: 'agent_intervention_response',
-      });
-
-      return { status: 'resolving' as const, success: true as const };
+      return submitHeteroInterventionAs(input, ctx);
     }),
 });

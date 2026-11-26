@@ -7,11 +7,12 @@ import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SkeletonBar } from '@/components/Skeleton';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   // Same frame as `SectionCard`.
   card: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

@@ -47,6 +47,11 @@ canonical conversation at every step boundary:
   carries what other writers changed between the two steps.
 - `agent_runtime_end.data` carries `{ messagePatchMode: true, messageRevision }` and omits
   both `uiMessages` and `finalState`. The client settles only after it has that revision.
+  An `interrupted` end one past the current step's revision (the later of the last
+  applied patch and the last `step_start`) is a Stop mid-step: a client holding
+  streamed text that is not persisted yet keeps it instead of querying. Two or more
+  past means a finished step's patch is missing (a Stop between two inline steps
+  overtakes it), and the client queries.
 - A missing revision or insertion anchor falls back to the existing authorized full-message
   query; patches are an optimization, not a second source of truth.
 

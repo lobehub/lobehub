@@ -15,12 +15,12 @@ const Related = memo(() => {
 
   return (
     <Flexbox gap={16}>
-      <Title more={t('providers.details.related.more')} moreLink={'/community/provider'}>
+      <Title more={t('providers.details.related.more')} moreLink={'/marketplace/provider'}>
         {t('providers.details.related.listTitle')}
       </Title>
       <Flexbox gap={8}>
         {related?.map((item, index) => {
-          const link = urlJoin('/community/provider', item.identifier);
+          const link = urlJoin('/marketplace/provider', item.identifier);
           return (
             <WorkspaceLink key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <Item {...item} />

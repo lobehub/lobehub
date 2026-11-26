@@ -1,13 +1,19 @@
 import type { TaskStatus, WorkListItem } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
+import { openArtboard } from '@/features/Artboard/openArtboard';
+import { openCollectionModal } from '@/features/CollectionModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import VersionList from './VersionList';
 
@@ -24,39 +30,48 @@ const TASK_STATUS_SET = new Set<TaskStatus>([
 const toTaskStatus = (status?: string | null): TaskStatus =>
   status && TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  context: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  header: css`
-    cursor: pointer;
-    user-select: none;
-    padding-block: 10px;
-    padding-inline: 8px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  title: css`
-    min-width: 0;
-    font-size: 14px;
-    font-weight: 500;
-  `,
-  toggle: css`
-    flex-shrink: 0;
-  `,
-  workCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  context: {
+    flexShrink: 0,
+    fontSize: sidebarRow.metaFontSize,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  header: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    minHeight: sidebarRow.height,
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  icon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.textLineHeight,
+    color: cssVar.colorTextTertiary,
+  },
+  title: { minWidth: '0', fontSize: 'inherit', color: 'inherit' },
+  toggle: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const [expanded, setExpanded] = useState(false);
+  const density = useDensityTokens();
   const [openCanvas, openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
     s.openCanvas,
     s.openDocument,
@@ -82,6 +97,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const handleTitleClick = (() => {
     if (!openTarget) return undefined;
     switch (openTarget.kind) {
+      case 'artboard': {
+        return () => void openArtboard(openTarget.artboardId);
+      }
       case 'document': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
@@ -99,6 +117,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
       case 'filePreview': {
         return () => openFilePreview({ fileId: openTarget.fileId });
       }
+      case 'collection': {
+        return () => void openCollectionModal(openTarget);
+      }
       case 'task': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
@@ -108,30 +129,34 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   })();
 
   return (
-    <Flexbox className={styles.workCard}>
+    <Flexbox>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.header}
-        gap={8}
+        className={stylex.props(styles.header).className}
+        gap={density.gap}
         onClick={() => setExpanded((value) => !value)}
       >
-        <ToggleIcon className={styles.toggle} size={16} />
+        <span {...stylex.props(styles.toggle)}>
+          <ToggleIcon size={12} />
+        </span>
         {work.type === 'task' ? (
           <>
             <TaskPriorityTag disableDropdown priority={work.task.priority} size={14} />
             <TaskStatusTag disableDropdown size={14} status={toTaskStatus(work.task.status)} />
           </>
         ) : (
-          <TypeIcon className={styles.context} size={16} />
+          <span {...stylex.props(styles.icon)}>
+            <TypeIcon size={density.iconSize} />
+          </span>
         )}
-        <Text className={styles.context} style={{ flexShrink: 0 }}>
+        <Text className={stylex.props(styles.context).className} style={{ flexShrink: 0 }}>
           {label}
         </Text>
         {title && (
           <Text
             ellipsis
-            className={styles.title}
+            className={stylex.props(styles.title).className}
             onClick={
               handleTitleClick &&
               ((event) => {

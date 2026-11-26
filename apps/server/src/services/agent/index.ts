@@ -1,11 +1,12 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL } from '@lobechat/const';
+import { DEFAULT_MODEL, isAgentShareModelRestrictionExempt } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
   type CreateAgentConfig,
+  isLiveAgentShareVisibility,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
 } from '@lobechat/types';
@@ -32,16 +33,29 @@ import {
   RedisKeys,
 } from '@/server/modules/Redis';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { merge } from '@/utils/merge';
 
 import { type UpdateAgentResult } from './type';
 
 const log = debug('lobe-agent:service');
 
 /**
+ * Whether a config patch can change what a shared agent's model restriction sees: the model
+ * selection itself, or the driver that exempts it. Clearing a Claude Code driver turns the
+ * stored selection back into a native one, so it is checked under the same lock.
+ */
+const touchesShareModel = (value: PartialDeep<AgentItem>): boolean =>
+  'model' in value ||
+  'provider' in value ||
+  value.agencyConfig === null ||
+  (!!value.agencyConfig && 'heterogeneousProvider' in value.agencyConfig);
+
+/**
  * Agent config with required id field.
  * Used when returning agent config from database (id is always present).
  */
 export type AgentConfigWithId = LobeAgentConfig &
+  Partial<Pick<AgentItem, 'createdAt'>> &
   Pick<AgentItem, 'id' | 'slug' | 'userId' | 'visibility' | 'workspaceId'> & {
     /**
      * Raw callSubAgent chatConfig override, stamped by execAgent alongside the
@@ -96,7 +110,6 @@ export class AgentService {
 
     const agent = await this.agentModel.create({
       ...input.config,
-      plugins: input.config?.plugins as unknown as string[] | undefined,
       sessionGroupId: input.groupId,
       ...(visibility || folderVisibility ? { visibility: visibility ?? folderVisibility } : {}),
     });
@@ -112,16 +125,48 @@ export class AgentService {
     return { agentId: agent.id };
   }
 
-  /** Validate the effective selection at configuration boundaries, including inherited defaults. */
+  /**
+   * Validate the effective selection at configuration boundaries, including inherited defaults.
+   *
+   * Returns the resolved selection to pin, or `undefined` when there is nothing to check.
+   * A locally executed CLI agent (Claude Code, Codex, …) is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
+   * creator's device and calls none of `provider`'s models. The decision reads the effective
+   * driver, the stored one merged with the patch, so switching back to LobeHub
+   * (`heterogeneousProvider: null`) is checked as usual, and a real provider saved next to the
+   * driver is checked too, since clearing the driver would make it the native selection.
+   */
   async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
     if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
 
     const agent = await this.agentModel.getAgentConfigById(agentId);
     if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
+    // Same deep merge as `AgentModel.updateConfig`, so a partial driver edit (`env` only) keeps
+    // the stored `type`. `agencyConfig: null` clears the whole block and must not fall back to it.
+    const effectiveAgencyConfig =
+      'agencyConfig' in patch
+        ? patch.agencyConfig === null
+          ? null
+          : merge(agent.agencyConfig ?? {}, patch.agencyConfig)
+        : agent.agencyConfig;
+    const provider = 'provider' in patch ? patch.provider : agent.provider;
+    if (
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: effectiveAgencyConfig as AgentItem['agencyConfig'],
+        provider,
+      })
+    )
+      return;
+    // Moving between two heterogeneous drivers clears the old one first and writes the new
+    // one second. The cleared row keeps only the runtime stamp, which names no chat provider.
+    if (
+      !effectiveAgencyConfig?.heterogeneousProvider &&
+      isAgentShareModelRestrictionExempt({ agencyConfig: agent.agencyConfig, provider })
+    )
+      return;
+
     const selection = await this.resolveModelSelection({ ...agent, ...patch });
-    const { provider } = selection;
-    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(selection.provider)) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
@@ -371,11 +416,7 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
-    if (
-      AGENT_SHARE_ALLOWED_PROVIDERS &&
-      !this.workspaceId &&
-      ('model' in value || 'provider' in value)
-    ) {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && !this.workspaceId && touchesShareModel(value)) {
       return this.withShareModelLock(agentId, (service) =>
         service.saveAgentConfig(agentId, value, replaceWorkingDirDeviceIds),
       );
@@ -388,22 +429,23 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
-    if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
+    // The prompt editor prefers editorData over systemRole, so a systemRole-only
+    // write must drop the old rich document or the editor shows stale content.
+    if ('systemRole' in value && !('editorData' in value)) {
+      value = { ...value, editorData: null } as PartialDeep<AgentItem>;
+    }
+
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && touchesShareModel(value)) {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
         agentId,
       );
-      if (share?.visibility === 'link') {
+      if (isLiveAgentShareVisibility(share?.visibility)) {
         const selection = await this.assertShareModelAllowed(agentId, value);
         value = { ...value, ...selection };
       }
     }
 
     // 1. Execute update
-    // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
-    // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer
-    // AgentItem, whose `plugins` column type is intentionally left as
-    // `string[]` (only the domain types are widened for the tri-state
-    // rollout, not the JSONB column's compile-time annotation).
     await this.agentModel.updateConfig(agentId, value as any, replaceWorkingDirDeviceIds);
 
     // 2. Query and return updated data (with default config merged)

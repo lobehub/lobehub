@@ -46,6 +46,7 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { resolveTaskAcceptanceGoal } from './resolveTaskAcceptanceGoal';
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
@@ -65,7 +66,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     cursor: pointer;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -79,8 +80,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
   `,
   subtitle: css`
     color: ${cssVar.colorTextSecondary};

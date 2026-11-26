@@ -2,6 +2,7 @@ import type {
   ClaudeCodeControlRequest,
   ClaudeCodeControlRequestHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexCollaborationMode } from '@lobechat/types';
 
 /**
  * A command the server queued for this run (`enqueueHeteroControl`), handed
@@ -34,6 +35,8 @@ export interface HeteroControlContext {
   sendControlRequest: (
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
+  /** (native Codex) Switch the thread's collaboration mode from its next turn. */
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
   /** Aborted when the run's event stream ends. */
   signal: AbortSignal;
 }

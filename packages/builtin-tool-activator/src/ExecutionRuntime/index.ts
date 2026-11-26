@@ -1,7 +1,13 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { Md5 } from 'ts-md5';
 
-import type { ActivatedToolInfo, ActivateSkillParams, ActivateToolsParams } from '../types';
+import type {
+  ActivatedToolInfo,
+  ActivateSkillParams,
+  ActivateToolsParams,
+  ActivateToolsState,
+  UnavailableToolInfo,
+} from '../types';
 
 export interface ToolManifestInfo {
   apiDescriptions: Array<{ description: string; name: string }>;
@@ -22,8 +28,20 @@ export interface ToolManifestInfo {
   type?: string;
 }
 
+export interface ActivateSkillOptions {
+  /**
+   * The name is an `activateTools` identifier that matched no tool, tried as a
+   * skill name. A miss then means the identifier names nothing, not that a
+   * skill failed to open.
+   */
+  probe?: boolean;
+}
+
 export interface ActivatorRuntimeService {
-  activateSkill?: (args: ActivateSkillParams) => Promise<BuiltinServerRuntimeOutput>;
+  activateSkill?: (
+    args: ActivateSkillParams,
+    options?: ActivateSkillOptions,
+  ) => Promise<BuiltinServerRuntimeOutput>;
   /**
    * Why an identifier that exists is withheld from this run, if the host knows.
    * A bare "Not found" for a tool the model has seen before reads as a typo, so
@@ -31,7 +49,11 @@ export interface ActivatorRuntimeService {
    */
   explainNotFound?: (identifier: string) => string | undefined;
   getActivatedToolIds: () => string[];
-  getToolManifests: (identifiers: string[]) => Promise<ToolManifestInfo[]>;
+  /**
+   * `run` is the conversation the activation runs in: what is discoverable
+   * (a private agent's own connectors among it) depends on it.
+   */
+  getToolManifests: (identifiers: string[], run?: ActivatorRun) => Promise<ToolManifestInfo[]>;
   /**
    * Full list of discoverable tool manifests for this run, when the host can
    * provide it. Two uses, both about requests the identifier-keyed
@@ -48,8 +70,14 @@ export interface ActivatorRuntimeService {
    * Scoping to discoverable tools stays the host's responsibility, same as
    * `getToolManifests`.
    */
-  listToolManifests?: () => Promise<ToolManifestInfo[]>;
+  listToolManifests?: (run?: ActivatorRun) => Promise<ToolManifestInfo[]>;
   markActivated: (identifiers: string[]) => void;
+}
+
+/** The conversation an activation runs in. */
+export interface ActivatorRun {
+  agentId?: string;
+  topicId?: string;
 }
 
 export interface ActivatorExecutionRuntimeOptions {
@@ -206,7 +234,10 @@ export class ActivatorExecutionRuntime {
     return this.service.activateSkill(args);
   }
 
-  async activateTools(args: ActivateToolsParams): Promise<BuiltinServerRuntimeOutput> {
+  async activateTools(
+    args: ActivateToolsParams,
+    run?: ActivatorRun,
+  ): Promise<BuiltinServerRuntimeOutput> {
     const { identifiers } = args;
 
     if (!identifiers || identifiers.length === 0) {
@@ -244,6 +275,7 @@ export class ActivatorExecutionRuntime {
           const prefix = id.slice(0, separatorIndex);
           return prefix !== id ? [id, prefix] : [id];
         }),
+        run,
       );
       const unresolved = identifiers.filter(
         (id) => resolveActivationIdentifier(id, discoveryManifests) === undefined,
@@ -253,7 +285,7 @@ export class ActivatorExecutionRuntime {
         needsDiscoveryList(unresolved) &&
         typeof this.service.listToolManifests === 'function'
       ) {
-        discoveryManifests = await this.service.listToolManifests();
+        discoveryManifests = await this.service.listToolManifests(run);
       }
       // Deduplicate after resolution: two wire names of the same plugin
       // (`lobe-web-browsing____search`, `…____crawlSinglePage`) both resolve
@@ -277,7 +309,7 @@ export class ActivatorExecutionRuntime {
       }
 
       // Fetch manifests for tools to activate
-      const manifests = await this.service.getToolManifests(toActivate);
+      const manifests = await this.service.getToolManifests(toActivate, run);
 
       const foundIdentifiers = new Set(manifests.map((m) => m.identifier));
       const notFoundAsTools = toActivate.filter((id) => !foundIdentifiers.has(id));
@@ -289,7 +321,7 @@ export class ActivatorExecutionRuntime {
       if (notFoundAsTools.length > 0 && this.service.activateSkill) {
         for (const id of notFoundAsTools) {
           try {
-            const skillResult = await this.service.activateSkill({ name: id });
+            const skillResult = await this.service.activateSkill({ name: id }, { probe: true });
             if (skillResult.success) {
               activatedSkillResults.push(skillResult);
             } else {
@@ -343,27 +375,31 @@ export class ActivatorExecutionRuntime {
         parts.push(`\nAlready active: ${alreadyActiveList.join(', ')}`);
       }
 
+      const notAvailable: UnavailableToolInfo[] = [];
       const unexplained: string[] = [];
       for (const id of notFound) {
-        const explanation = this.service.explainNotFound?.(id);
-        if (explanation) parts.push(`\nNot available: ${id}. ${explanation}`);
-        else unexplained.push(id);
+        const reason = this.service.explainNotFound?.(id);
+        if (reason) {
+          parts.push(`\nNot available: ${id}. ${reason}`);
+          notAvailable.push({ identifier: id, reason });
+        } else {
+          unexplained.push(id);
+        }
       }
 
       if (unexplained.length > 0) {
         parts.push(`\nNot found: ${unexplained.join(', ')}`);
       }
 
-      return {
-        content: parts.join('\n'),
-        state: {
-          activatedSkills: activatedSkillResults.map((r) => r.state),
-          activatedTools,
-          alreadyActive: alreadyActiveList,
-          notFound,
-        },
-        success: true,
+      const state: ActivateToolsState = {
+        activatedSkills: activatedSkillResults.map((r) => r.state),
+        activatedTools,
+        alreadyActive: alreadyActiveList,
+        notAvailable,
+        notFound,
       };
+
+      return { content: parts.join('\n'), state, success: true };
     } catch (e) {
       return {
         content: `Failed to activate tools: ${(e as Error).message}`,

@@ -57,6 +57,16 @@ const MESSAGE_CHILD_ANCHORS = [
 ] as const;
 
 /**
+ * SET fragment clearing references to session shells that stayed in the source
+ * scope, so deleting that scope cannot cascade into rows that moved away.
+ * Applied in the scope rewrite because that already updates every row.
+ */
+const detachSessionsSet = (detachSessionIds?: string[]) =>
+  detachSessionIds?.length
+    ? sql`, session_id = CASE WHEN session_id IN ${detachSessionIds} THEN NULL ELSE session_id END`
+    : sql``;
+
+/**
  * Move ALL message rows anchored to the given topics — plus their child-table
  * rows and the topics' message_groups — into the target scope.
  *
@@ -73,6 +83,7 @@ export const rewriteMessageScopeForTopics = async (
   executor: Executor,
   topicIds: string[],
   target: AgentTransferTargetScope,
+  detachSessionIds?: string[],
 ): Promise<void> => {
   if (topicIds.length === 0) return;
 
@@ -80,7 +91,7 @@ export const rewriteMessageScopeForTopics = async (
 
   await executor.execute(sql`
     UPDATE ${messages}
-    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}
+    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}${detachSessionsSet(detachSessionIds)}
     WHERE ${inTopics}
   `);
 
@@ -108,11 +119,13 @@ export const rewriteMessageScopeForTopics = async (
  */
 export const rewriteResidualMessageScope = async (
   executor: Executor,
-  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
+  /** `sessionIds` is only set by jobs enqueued before transfers went agent-only. */
+  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds?: string[] },
   target: AgentTransferTargetScope,
+  detachSessionIds?: string[],
 ): Promise<void> => {
   const arms: SQL[] = [];
-  if (linkage.sessionIds.length > 0) arms.push(inArray(messages.sessionId, linkage.sessionIds));
+  if (linkage.sessionIds?.length) arms.push(inArray(messages.sessionId, linkage.sessionIds));
   if (linkage.agentIds.length > 0) arms.push(inArray(messages.agentId, linkage.agentIds));
   if (linkage.groupIds && linkage.groupIds.length > 0)
     arms.push(inArray(messages.groupId, linkage.groupIds));
@@ -122,7 +135,7 @@ export const rewriteResidualMessageScope = async (
 
   await executor.execute(sql`
     UPDATE ${messages}
-    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}
+    SET user_id = ${target.userId}, workspace_id = ${target.workspaceId}${detachSessionsSet(detachSessionIds)}
     WHERE ${residual}
   `);
 
@@ -254,6 +267,8 @@ export interface CreateAgentTransferJobParams {
    * `residualAgentIds`.
    */
   agentIds: string[];
+  /** Session shells that stayed in the source scope; moved rows drop their reference. */
+  detachSessionIds?: string[];
   groupIds?: string[];
   /**
    * Agent linkage for the final topicless-residual rewrite; defaults to
@@ -267,7 +282,6 @@ export interface CreateAgentTransferJobParams {
    * drift this framework exists to avoid.
    */
   residualAgentIds?: string[];
-  sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
   /** Topics whose messages await rewrite; `activityAt` orders the drain. */
@@ -306,10 +320,16 @@ export class AgentTransferJobModel {
         // `payload` is the generic per-job slot; the remap only exists for
         // group transfers, so it stays out of the columns.
         payload:
-          params.agentIdRemap && params.agentIdRemap.length > 0
-            ? { agentIdRemap: params.agentIdRemap }
+          params.agentIdRemap?.length || params.detachSessionIds?.length
+            ? {
+                ...(params.agentIdRemap?.length ? { agentIdRemap: params.agentIdRemap } : {}),
+                ...(params.detachSessionIds?.length
+                  ? { detachSessionIds: params.detachSessionIds }
+                  : {}),
+              }
             : undefined,
-        sessionIds: params.sessionIds,
+        // NOT NULL column kept for jobs already queued; new jobs are agent-only.
+        sessionIds: [],
         sourceUserId: params.source.userId,
         sourceWorkspaceId: params.source.workspaceId,
         targetUserId: params.target.userId,
@@ -662,6 +682,7 @@ export class AgentTransferJobModel {
       // contract as the scope rewrite itself: the synchronous branch does this
       // inline, so the drain must do it on exactly the same rows.
       const agentIdRemap = job.payload?.agentIdRemap;
+      const detachSessionIds = job.payload?.detachSessionIds;
 
       const [next] = await trx
         .select({ topicId: agentHistoryJobTopics.topicId })
@@ -675,6 +696,7 @@ export class AgentTransferJobModel {
           trx,
           { agentIds: job.agentIds, groupIds: job.groupIds, sessionIds: job.sessionIds },
           target,
+          detachSessionIds,
         );
         if (agentIdRemap) await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);
         await trx
@@ -690,7 +712,7 @@ export class AgentTransferJobModel {
         return { done: true };
       }
 
-      await rewriteMessageScopeForTopics(trx, [next.topicId], target);
+      await rewriteMessageScopeForTopics(trx, [next.topicId], target, detachSessionIds);
       if (agentIdRemap) await remapMessageAgentIdsForTopics(trx, [next.topicId], agentIdRemap);
       await trx
         .delete(agentHistoryJobTopics)

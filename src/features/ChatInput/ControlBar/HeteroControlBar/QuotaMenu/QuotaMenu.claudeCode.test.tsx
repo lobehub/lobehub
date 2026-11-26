@@ -708,15 +708,19 @@ describe('ClaudeCodeQuotaMenu', () => {
     // The regression: after five idle hours the session window rolls over and
     // the panel used to drop the row entirely, leaving the weekly limit alone
     // as if the plan had no session limit. A reset window is free, not absent.
-    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    // Both readings come from one sample, so they share its capture time: a
+    // weekly reading even 1 ms newer would make the panel retire the reset
+    // session as a limit the plan stopped reporting.
+    const sampledAt = Date.now() - 60_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(sampledAt)]);
     mockQuotaService.getLatestReadings.mockResolvedValue([
       {
-        ...persistedSessionReading(Date.now() - 60_000),
+        ...persistedSessionReading(sampledAt),
         resetsAt: Date.now() - 30 * 60_000,
         utilization: 83,
       },
       {
-        capturedAt: Date.now() - 60_000,
+        capturedAt: sampledAt,
         limitType: 'weekly_all',
         resetsAt: Date.now() + 4 * 24 * 60 * 60_000,
         scopeKey: '',

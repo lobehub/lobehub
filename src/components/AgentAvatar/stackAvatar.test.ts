@@ -20,6 +20,14 @@ describe('toStackAvatar', () => {
     expect(item.background).toBeUndefined();
   });
 
+  it('draws a picked character with its shape and color', () => {
+    const item = toStackAvatar({ avatar: 'agent-avatar:cat:green', seed: 'agent-1' }, 0);
+    const props = (item.avatar as ReactElement<{ color: string; seed: string; shape: string }>)
+      .props;
+
+    expect(props).toMatchObject({ color: 'green', seed: 'agent-1', shape: 'cat' });
+  });
+
   it('keeps members without a seed apart by their position', () => {
     const seedAt = (index: number) =>
       (toStackAvatar({}, index).avatar as ReactElement<{ seed: string }>).props.seed;

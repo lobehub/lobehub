@@ -25,6 +25,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 import { useDetailActionContext } from '../../DetailProvider';
 import { getSkillInstructionsUrl } from './getSkillInstructionsUrl';
@@ -33,7 +34,7 @@ import VsCodeIcon from './VsCodeIcon';
 const fallback = createStaticStyles(({ css }) => ({
   lite: css`
     pre {
-      padding: 12px !important;
+      padding: ${densityVars.contentGap} !important;
     }
   `,
 }));

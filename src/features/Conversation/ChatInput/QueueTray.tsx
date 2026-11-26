@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +22,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -32,109 +35,97 @@ import {
 
 const PREVIEW_SIZE = 28;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    container-type: inline-size;
+const NARROW = '@container (max-width: 480px)';
 
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-block-end: none;
-    border-radius: 12px 12px 0 0;
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  fileChip: css`
-    overflow: hidden;
-    flex-shrink: 0;
-
-    max-width: 160px;
-    height: 28px;
-    padding-block: 0;
-    padding-inline: 6px;
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-  fileChipName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-  `,
-  hint: css`
-    display: inline-flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  hintGlyph: css`
-    cursor: help;
-
-    display: none;
-
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-
-    color: inherit;
-
-    background: none;
-
-    /* Too narrow to spare a sentence on the send timing: keep the meaning on the
-       glyph's tooltip instead of squeezing the message text. */
-    @container (max-width: 480px) {
-      display: inline-flex;
-    }
-  `,
-  hintText: css`
-    white-space: nowrap;
-
-    @container (max-width: 480px) {
-      display: none;
-    }
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  imageThumb: css`
-    flex-shrink: 0;
-
-    width: 28px !important;
-    height: 28px !important;
-    margin-block: 0 !important;
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: 6px;
-
-    box-shadow: none;
-
-    img {
-      width: 28px !important;
-      height: 28px !important;
-      object-fit: cover;
-    }
-  `,
-  item: css`
-    padding-block: 6px;
-    padding-inline: 12px 8px;
-  `,
-  itemDivider: css`
-    border-block-start: 1px solid ${cssVar.colorFillTertiary};
-  `,
-  text: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    containerType: 'inline-size',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
+    borderStartStartRadius: '12px',
+    borderStartEndRadius: '12px',
+    borderEndStartRadius: 0,
+    borderEndEndRadius: 0,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  fileChip: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    maxWidth: '160px',
+    height: '28px',
+    paddingBlock: 0,
+    paddingInline: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+  fileChipName: { overflow: 'hidden', textOverflow: 'ellipsis' },
+  hint: {
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+  },
+  // Too narrow to spare a sentence on the send timing: keep the meaning on the
+  // glyph's tooltip instead of squeezing the message text.
+  hintGlyph: {
+    cursor: 'help',
+    display: { default: 'none', [NARROW]: 'inline-flex' },
+    padding: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  hintText: {
+    whiteSpace: 'nowrap',
+    display: { default: null, [NARROW]: 'none' },
+  },
+  icon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  imageThumb: {
+    flexShrink: 0,
+    width: '28px',
+    height: '28px',
+    marginBlock: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: '6px',
+    boxShadow: 'none',
+  },
+  imageThumbImage: { width: '28px', height: '28px', objectFit: 'cover' },
+  item: {
+    paddingBlock: '6px',
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
+    paddingInlineEnd: '8px',
+  },
+  itemDivider: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorFillTertiary,
+  },
+  text: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontSize: '13px',
+    lineHeight: 1.4,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const isImageFile = (f: QueuedFile) => f.mimeType.startsWith('image') && !!f.url;
 
@@ -150,12 +141,15 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
     return (
       <Image
         alt={file.name}
-        classNames={{ wrapper: styles.imageThumb }}
         objectFit={'cover'}
         size={PREVIEW_SIZE}
         src={file.url}
         title={file.name}
         variant={'borderless'}
+        classNames={{
+          image: stylex.props(styles.imageThumbImage).className,
+          wrapper: stylex.props(styles.imageThumb).className,
+        }}
         styles={{
           image: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
           wrapper: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
@@ -165,9 +159,15 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
   }
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.fileChip} gap={4} title={file.name}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      {...stylex.props(styles.fileChip)}
+      gap={4}
+      title={file.name}
+    >
       <FileIcon fileName={file.name} fileType={file.mimeType} size={14} />
-      <span className={styles.fileChipName}>{file.name}</span>
+      <span {...stylex.props(styles.fileChipName)}>{file.name}</span>
     </Flexbox>
   );
 });
@@ -282,11 +282,9 @@ const QueueTray = memo(() => {
           setSendingId(msg.id);
           try {
             const outcome = await sendQueuedMessageNow({
-              chat: useChatStore.getState(),
               context,
               contextKey,
-              isQueued: (id) =>
-                !!useChatStore.getState().queuedMessages[contextKey]?.some((q) => q.id === id),
+              getChat: useChatStore.getState,
               msg,
               withdraw: (queued) => withdrawQueuedMessage(contextKey, queued.id),
             });
@@ -320,7 +318,7 @@ const QueueTray = memo(() => {
   const hintText = t(getQueuedHintKey({ count: waitingCount, mode: followUpMode, waitsForRunEnd }));
 
   return (
-    <Flexbox className={styles.container} gap={0}>
+    <Flexbox {...stylex.props(styles.container)} gap={0}>
       {queuedMessages.map((msg, index) => {
         const previews = msg.filesPreview ?? [];
         // A "send now" in progress keeps its row as is: it is interrupting the
@@ -340,11 +338,11 @@ const QueueTray = memo(() => {
           <Flexbox
             horizontal
             align="center"
-            className={index > 0 ? `${styles.item} ${styles.itemDivider}` : styles.item}
+            {...stylex.props(styles.item, index > 0 && styles.itemDivider)}
             gap={8}
             key={msg.id}
           >
-            <Icon className={styles.icon} icon={ListEnd} size={14} />
+            <Icon {...stylex.props(styles.icon)} icon={ListEnd} size={14} />
             <Flexbox
               horizontal
               align={'center'}
@@ -360,7 +358,7 @@ const QueueTray = memo(() => {
                 </Flexbox>
               )}
               {msg.content && (
-                <Flexbox className={styles.text} flex={'0 1 auto'}>
+                <Flexbox {...stylex.props(styles.text)} flex={'0 1 auto'}>
                   {msg.content}
                 </Flexbox>
               )}
@@ -369,16 +367,16 @@ const QueueTray = memo(() => {
                 message row right after the content instead of taking a line.
                 Several queued messages are merged into a single send on drain,
                 so the wording changes with the queue size. */}
-            <span className={styles.hint}>
+            <span {...stylex.props(styles.hint)}>
               {/* Collapsed form. It is display:none while the sentence fits, so
                   it adds no tab stop there; when it shows it is a real
                   focusable control carrying the wording as its name. */}
               <Tooltip title={rowHint}>
-                <button aria-label={rowHint} className={styles.hintGlyph} type={'button'}>
+                <button aria-label={rowHint} {...stylex.props(styles.hintGlyph)} type={'button'}>
                   <Icon icon={Info} size={13} />
                 </button>
               </Tooltip>
-              <span className={styles.hintText}>{rowHint}</span>
+              <span {...stylex.props(styles.hintText)}>{rowHint}</span>
             </span>
             <div style={{ flex: 1 }} />
             {!delivering && (

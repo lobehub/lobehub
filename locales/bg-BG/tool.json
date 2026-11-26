@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "Няма налични шаблони.",
   "agentMarketplace.picker.failedToLoad": "Неуспешно зареждане на шаблоните. Моля, опитайте отново по-късно.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} налични шаблони.",
-  "agentMarketplace.render.alreadyInLibraryTag": "Вече в библиотеката",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} вече в библиотеката",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} вече в библиотеката",
   "askUserQuestion.checkStatus": "Проверете състоянието на изпращането",
   "askUserQuestion.checking": "Проверка на състоянието на изпращането…",
   "askUserQuestion.customOption.placeholder": "Или напишете свой собствен…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio конекторите могат да се синхронизират само в десктоп приложението. Отворете LobeHub Desktop, за да синхронизирате този конектор.",
   "connector.kind.agent": "Конектор за агент",
   "connector.kind.builtin": "Вграден инструмент",
-  "connector.kind.community": "Инструмент на общността",
+  "connector.kind.community": "Инструмент от Пазар",
   "connector.kind.custom": "Персонализиран конектор",
   "connector.kind.oauth": "OAuth конектор",
   "connector.manageOnlyCreator": "Само създателят или собственикът на работното пространство може да управлява този конектор",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "Добави елемент",
   "updateArgs.form.key": "Ключ на полето",
   "updateArgs.form.value": "Стойност на полето",
-  "updateArgs.formValidationFailed": "Валидирането на формата не бе успешно, моля проверете формата на параметрите",
   "updateArgs.keyRequired": "Ключът на полето не може да бъде празен",
   "updateArgs.stringifyError": "Неуспешно сериализиране на параметрите, моля проверете формата на параметрите"
 }

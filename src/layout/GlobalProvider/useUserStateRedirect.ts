@@ -26,6 +26,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'goals',
   'group',
   'image',
+  'marketplace',
   'me',
   'memory',
   'next-auth',

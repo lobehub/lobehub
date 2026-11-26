@@ -20,5 +20,5 @@ export const HOME_PORTRAIT_HEIGHT = 200;
 export const HOME_PORTRAIT_CARD_GAP = 24;
 
 /** Keep the visible fraction consistent with the artwork studio at every size. */
-export const getHomePortraitOverlap = (height: number) =>
-  height * (1 - HOME_PORTRAIT_VISIBLE_RATIO) + HOME_PORTRAIT_CARD_GAP;
+export const getHomePortraitOverlap = (height: number, cardGap = HOME_PORTRAIT_CARD_GAP) =>
+  height * (1 - HOME_PORTRAIT_VISIBLE_RATIO) + cardGap;

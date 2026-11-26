@@ -15,6 +15,8 @@ import {
 import { memo, type ReactNode, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   connectorPath,
   type DecisionEffect,
@@ -40,7 +42,7 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     position: 'relative',
     zIndex: 1,
   },

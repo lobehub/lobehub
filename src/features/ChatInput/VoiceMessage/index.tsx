@@ -7,6 +7,8 @@ import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { sx } from '@/styles/sx';
 
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
@@ -205,6 +207,7 @@ VoiceMessageControl.displayName = 'VoiceMessageControl';
 
 const VoiceMessage = memo(() => {
   const { t } = useTranslation('chat');
+  const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
   const fallbackCanRecordVoiceMessage = useVoiceMessageCapability(model, provider, agentId);
@@ -222,7 +225,8 @@ const VoiceMessage = memo(() => {
     s.sendButtonProps,
     s.setActiveAudioInputMode,
   ]);
-  const canRecordVoiceMessage = injectedCanRecordVoiceMessage ?? fallbackCanRecordVoiceMessage;
+  const canRecordVoiceMessage =
+    enableVoiceMessage && (injectedCanRecordVoiceMessage ?? fallbackCanRecordVoiceMessage);
   const isGenerating = Boolean(sendButtonProps?.generating);
   const canUseVoiceMessage = canRecordVoiceMessage && !isGenerating;
   const recorder = useVoiceMessageRecorder();
@@ -265,8 +269,8 @@ const VoiceMessage = memo(() => {
   }, [recorder, setActiveAudioInputMode]);
 
   useEffect(() => {
-    if (isGenerating && isActive) discard();
-  }, [discard, isActive, isGenerating]);
+    if ((isGenerating || !enableVoiceMessage) && isActive) discard();
+  }, [discard, enableVoiceMessage, isActive, isGenerating]);
 
   const commitRecording = useCallback(
     async (captured?: VoiceMessageRecording) => {

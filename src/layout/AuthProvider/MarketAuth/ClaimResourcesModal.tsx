@@ -6,6 +6,8 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -27,6 +29,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
     const [selectedPlugins, setSelectedPlugins] = useState<Set<string>>(() => new Set());
     const [selectedSkills, setSelectedSkills] = useState<Set<string>>(() => new Set());
     const [isClaiming, setIsClaiming] = useState(false);
+    const [claimError, setClaimError] = useState<InlineErrorState | null>(null);
 
     useEffect(() => {
       if (!open) {
@@ -40,6 +43,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
     }, [open, resources]);
 
     const togglePlugin = useCallback((id: string) => {
+      setClaimError(null);
       setSelectedPlugins((prev) => {
         const next = new Set(prev);
         if (next.has(id)) {
@@ -52,6 +56,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
     }, []);
 
     const toggleSkill = useCallback((id: string) => {
+      setClaimError(null);
       setSelectedSkills((prev) => {
         const next = new Set(prev);
         if (next.has(id)) {
@@ -74,6 +79,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
       }
 
       setIsClaiming(true);
+      setClaimError(null);
       try {
         await lambdaClient.market.socialProfile.claimResources.mutate({
           pluginIds,
@@ -91,10 +97,13 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
         onClose();
       } catch (error) {
         console.error('[ClaimResources] Failed to claim:', error);
-        toast.error(
-          t('claimResources.error', {
-            defaultValue: 'Failed to claim resources. Please try again.',
-          }),
+        setClaimError(
+          toInlineError(
+            t('claimResources.failedRetry', {
+              defaultValue: "Couldn't claim these resources. Check your network and try again.",
+            }),
+            error,
+          ),
         );
       } finally {
         setIsClaiming(false);
@@ -218,6 +227,12 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
               defaultValue: `${totalSelected} item(s) selected`,
             })}
           </Text>
+        )}
+
+        {claimError && (
+          <div style={{ marginTop: 12 }}>
+            <InlineErrorText detail={claimError.detail}>{claimError.summary}</InlineErrorText>
+          </div>
         )}
       </ImperativeModal>
     );

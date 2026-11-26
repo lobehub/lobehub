@@ -28,6 +28,18 @@ describe('agent signal memory writer prompt', () => {
 
   /**
    * @example
+   * "你是我的文案助理" configures the agent; it must not become a user memory.
+   */
+  it('skips agent self-configuration', () => {
+    const systemRole = createAgentSignalMemoryWriterSystemRole({ memoryLanguage: 'zh-CN' });
+
+    expect(systemRole).toContain('configures the agent itself');
+    expect(systemRole).toContain('你是我的文案助理');
+    expect(systemRole).toContain('你的工作空间是我 win 电脑上的文档目录');
+  });
+
+  /**
+   * @example
    * User prompt keeps routing context inspectable.
    */
   it('renders the user memory prompt with routing context blocks', () => {

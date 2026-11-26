@@ -1,3 +1,5 @@
+import { connectedAgentDefaultName } from '@lobechat/heterogeneous-agents/connectAgent';
+
 import { getUserStoreState } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -20,15 +22,15 @@ export const heteroAgentDefaultName = ({
   visibility,
   workspaceId,
 }: HeteroAgentDefaultNameOptions): string | undefined => {
-  const product = productTitle?.trim();
-  if (!product) return undefined;
-
-  if (!workspaceId || visibility === 'private') return product;
-
   const userStore = getUserStoreState();
-  const owner = authSelectors.isLogin(userStore)
-    ? userProfileSelectors.nickName(userStore)?.trim()
+  const ownerName = authSelectors.isLogin(userStore)
+    ? userProfileSelectors.nickName(userStore)
     : undefined;
 
-  return owner ? `${owner}’s ${product}` : product;
+  return connectedAgentDefaultName({
+    ownerName,
+    productTitle: productTitle ?? undefined,
+    visibility,
+    workspaceId,
+  });
 };

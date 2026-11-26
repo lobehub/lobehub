@@ -1,19 +1,34 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import {
+  example,
+  FILE_LIST_EXAMPLE,
+  QUERY_FILES_EXAMPLE,
+  QUERY_FILES_RESULT_EXAMPLE,
+} from '../common/examples';
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { FileController } from '../controllers/file.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
+  BatchFileUploadResponseSchema,
   BatchGetFilesRequestSchema,
+  BatchGetFilesResponseSchema,
   FileChunkRequestSchema,
+  FileChunkStatusResponseSchema,
+  FileChunkTaskResponseSchema,
+  FileDetailSchema,
   FileIdParamSchema,
   FileListQuerySchema,
+  FileListResponseSchema,
   FileParseRequestSchema,
+  FileParseResultSchema,
   FileUrlRequestSchema,
+  FileUrlResponseSchema,
   UpdateFileSchema,
 } from '../types/file.type';
 
@@ -35,6 +50,12 @@ const app = new Hono();
  */
 app.get(
   '/',
+  routeDoc({
+    data: FileListResponseSchema,
+    responseExample: FILE_LIST_EXAMPLE,
+    summary: 'List files',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),
@@ -64,7 +85,9 @@ app.get(
  */
 app.post(
   '/',
-  describeRoute({
+  routeDoc({
+    data: FileDetailSchema,
+    errors: [400],
     requestBody: {
       content: {
         'multipart/form-data': {
@@ -108,6 +131,13 @@ app.post(
  */
 app.get(
   '/:id',
+  routeDoc({
+    data: FileDetailSchema,
+    description:
+      'Non-image files include their parse result. A file that does not exist answers 400.',
+    summary: 'Get a file',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),
@@ -132,6 +162,11 @@ app.get(
  */
 app.get(
   '/:id/url',
+  routeDoc({
+    data: FileUrlResponseSchema,
+    summary: 'Get a pre-signed file URL',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),
@@ -159,6 +194,12 @@ app.get(
  */
 app.patch(
   '/:id',
+  routeDoc({
+    data: FileDetailSchema,
+    errors: [404],
+    summary: 'Update a file',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_UPDATE'),
@@ -181,6 +222,7 @@ app.patch(
  */
 app.delete(
   '/:id',
+  routeDoc({ data: DeletedResourceSchema, summary: 'Delete a file', tags: ['files'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_DELETE'),
@@ -209,6 +251,12 @@ app.delete(
  */
 app.post(
   '/:id/parses',
+  routeDoc({
+    operationId: 'files.parse',
+    data: FileParseResultSchema,
+    summary: 'Parse file content',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_UPDATE'),
@@ -235,6 +283,11 @@ app.post(
  */
 app.post(
   '/:id/chunks',
+  routeDoc({
+    data: FileChunkTaskResponseSchema,
+    summary: 'Start a file chunking task',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_UPDATE'),
@@ -262,6 +315,11 @@ app.post(
  */
 app.get(
   '/:id/chunks',
+  routeDoc({
+    data: FileChunkStatusResponseSchema,
+    summary: 'Get file chunking status',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),
@@ -290,7 +348,10 @@ app.get(
  */
 app.post(
   '/batches',
-  describeRoute({
+  routeDoc({
+    operationId: 'files.uploadBatch',
+    data: BatchFileUploadResponseSchema,
+    errors: [400],
     requestBody: {
       content: {
         'multipart/form-data': {
@@ -345,6 +406,14 @@ app.post(
  */
 app.post(
   '/queries',
+  routeDoc({
+    operationId: 'files.query',
+    data: BatchGetFilesResponseSchema,
+    requestExample: example(BatchGetFilesRequestSchema, QUERY_FILES_EXAMPLE),
+    responseExample: QUERY_FILES_RESULT_EXAMPLE,
+    summary: 'Get several files',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),

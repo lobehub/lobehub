@@ -11,6 +11,8 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentRunBoardService } from '@/services/agentRunBoard';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
@@ -26,9 +28,10 @@ const WINDOW_OPTIONS: AgentRunBoardWindowHours[] = [1, 6, 24];
 const styles = stylex.create({
   // Clears the floating Home tabs above.
   root: { paddingBlockStart: 24 },
+  rootCompact: { paddingBlockStart: 16 },
   columns: {
     display: 'grid',
-    gap: 16,
+    gap: densityTokens['--lobe-density-section-gap'],
     gridTemplateColumns: {
       'default': 'minmax(0, 1fr) 340px',
       '@media (max-width: 1100px)': 'minmax(0, 1fr)',
@@ -48,15 +51,16 @@ const styles = stylex.create({
     borderStyle: 'dashed',
     borderWidth: 1,
     color: cssVar.colorTextTertiary,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     paddingBlock: 48,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     textAlign: 'center',
   },
 });
 
 const HomeTeamBoard = () => {
   const { t } = useTranslation('home');
+  const { compact, tokens } = useDensity();
   const cacheScope = useCacheScope();
   const [windowHours, setWindowHours] = useState<AgentRunBoardWindowHours>(1);
   const [scope, setScope] = useState<AgentRunBoardScope>('all');
@@ -89,11 +93,15 @@ const HomeTeamBoard = () => {
   const hasAttention = attention.length > 0;
 
   return (
-    <Flexbox data-testid={'team-board'} gap={20} {...stylex.props(styles.root)}>
+    <Flexbox
+      data-testid={'team-board'}
+      gap={compact ? 12 : 20}
+      {...stylex.props(styles.root, compact && styles.rootCompact)}
+    >
       {!data ? (
         <Skeleton height={420} width={'100%'} />
       ) : (
-        <Flexbox gap={16}>
+        <Flexbox gap={tokens.sectionGap}>
           <ActivityPanel
             activity={data.activity}
             summary={data.summary}

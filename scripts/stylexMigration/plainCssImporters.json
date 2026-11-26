@@ -5,6 +5,7 @@
   "apps/workbench/app/root.tsx",
   "apps/workbench/src/entry.tsx",
   "apps/workbench/src/localReport/entry.tsx",
+  "packages/artboard-viewer/src/index.tsx",
   "packages/canvas-runtime/src/index.tsx",
   "packages/style-equivalence/src/report/main.tsx",
   "packages/style-equivalence/test/fixtures/mini-project/host.tsx",

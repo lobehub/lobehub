@@ -16,6 +16,7 @@ import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 import { usePermission } from '@/hooks/usePermission';
@@ -30,6 +31,7 @@ interface MembersProps {
 }
 
 const Members = memo<MembersProps>(({ itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('chat');
   const { allowed: hasEditPermission, reason } = usePermission('edit_own_content');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -63,10 +65,8 @@ const Members = memo<MembersProps>(({ itemKey }) => {
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {`${t('groupSidebar.tabs.members')} ${membersCount}`}
-          </Text>
+        <AccordionTrigger style={sectionTriggerStyle}>
+          <SectionTitle>{`${t('groupSidebar.tabs.members')} ${membersCount}`}</SectionTitle>
         </AccordionTrigger>
         <div
           className={cx(

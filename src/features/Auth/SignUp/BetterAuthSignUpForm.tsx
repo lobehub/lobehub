@@ -8,6 +8,7 @@ import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { AuthCard } from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
@@ -18,7 +19,8 @@ import { useSignUp } from './useSignUp';
 const FIELD_STYLE: CSSProperties = { gap: 0, paddingBlock: '0 24px' };
 
 const BetterAuthSignUpForm = () => {
-  const { agreementChecked, businessElement, form, loading, setAgreementChecked } = useSignUp();
+  const { agreementChecked, businessElement, form, formError, loading, setAgreementChecked } =
+    useSignUp();
 
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
@@ -62,7 +64,7 @@ const BetterAuthSignUpForm = () => {
           style={FIELD_STYLE}
           validate={(value: string) => {
             if (!value) return t('betterAuth.errors.emailRequired');
-            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.emailInvalid');
+            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.signupEmailInvalid');
           }}
         >
           <Input
@@ -135,6 +137,7 @@ const BetterAuthSignUpForm = () => {
         {businessElement && <div style={{ paddingBlockEnd: 24 }}>{businessElement}</div>}
 
         <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
+        {formError && <InlineErrorText style={{ marginBlockEnd: 12 }}>{formError}</InlineErrorText>}
         <Button block htmlType="submit" loading={loading} size="large" type="primary">
           {t('betterAuth.signup.submit')}
         </Button>

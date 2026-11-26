@@ -12,14 +12,6 @@ import type {
 } from './types';
 import { normalizeUserMemorySearchQueries, shouldRunUserMemoryLexicalSearch } from './utils';
 
-interface HybridLayerLimitRecord {
-  activities?: number;
-  contexts?: number;
-  experiences?: number;
-  identities?: number;
-  preferences?: number;
-}
-
 const createEmptySearchLayerMeta = (): Record<SearchLayerKey, HybridSearchLayerMeta> => ({
   activities: { hasMore: false, returned: 0, total: 0 },
   contexts: { hasMore: false, returned: 0, total: 0 },
@@ -35,7 +27,7 @@ export const searchMemory = async (
 ): Promise<UserMemoryHybridSearchAggregatedResult> => {
   const appliedQueries = normalizeUserMemorySearchQueries(params.queries);
   const lexicalSearch = shouldRunUserMemoryLexicalSearch(appliedQueries, queryEmbeddings);
-  const limits: HybridLayerLimitRecord = {
+  const limits: Record<SearchLayerKey, number> = {
     activities: params.topK?.activities ?? DEFAULT_HYBRID_SEARCH_LIMIT,
     contexts: params.topK?.contexts ?? DEFAULT_HYBRID_SEARCH_LIMIT,
     experiences: params.topK?.experiences ?? DEFAULT_HYBRID_SEARCH_LIMIT,
@@ -49,36 +41,16 @@ export const searchMemory = async (
       if (layer === LayersEnum.Experience) return false;
       switch (layer) {
         case LayersEnum.Activity: {
-          return (
-            (limits.activities ??
-              // v8 ignore start -- unreachable: limits.activities always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
-              0) > 0
-            // v8 ignore stop
-          );
+          return limits.activities > 0;
         }
         case LayersEnum.Context: {
-          return (
-            (limits.contexts ??
-              // v8 ignore start -- unreachable: limits.contexts always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
-              0) > 0
-            // v8 ignore stop
-          );
+          return limits.contexts > 0;
         }
         case LayersEnum.Identity: {
-          return (
-            (limits.identities ??
-              // v8 ignore start -- unreachable: limits.identities always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
-              0) > 0
-            // v8 ignore stop
-          );
+          return limits.identities > 0;
         }
         case LayersEnum.Preference: {
-          return (
-            (limits.preferences ??
-              // v8 ignore start -- unreachable: limits.preferences always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
-              0) > 0
-            // v8 ignore stop
-          );
+          return limits.preferences > 0;
         }
       }
     }),
@@ -86,7 +58,7 @@ export const searchMemory = async (
 
   const layerMeta = createEmptySearchLayerMeta();
 
-  const [activities, contexts, experiences, identities, preferences] = await Promise.all([
+  const [activities, contexts, identities, preferences] = await Promise.all([
     requestedLayers.has(LayersEnum.Activity)
       ? ctx.searchHybridActivities({
           embeddings: queryEmbeddings,
@@ -103,16 +75,6 @@ export const searchMemory = async (
           queries: appliedQueries,
         })
       : Promise.resolve([]),
-    requestedLayers.has(LayersEnum.Experience)
-      ? // v8 ignore start -- unreachable: requestedLayers filters out LayersEnum.Experience; the pair is ignored because a skipped first arm shifts the second arm's count
-        ctx.searchHybridExperiences({
-          embeddings: queryEmbeddings,
-          lexicalSearch,
-          params,
-          queries: appliedQueries,
-        })
-      : Promise.resolve([]),
-    // v8 ignore stop
     requestedLayers.has(LayersEnum.Identity)
       ? ctx.searchHybridIdentities({
           embeddings: queryEmbeddings,
@@ -137,11 +99,7 @@ export const searchMemory = async (
     key: SearchLayerKey,
     items: RankedSearchCandidate<T>[],
   ) => {
-    const limit =
-      limits[key] ??
-      // v8 ignore start -- unreachable: every limits entry is already defaulted
-      DEFAULT_HYBRID_SEARCH_LIMIT;
-    // v8 ignore stop
+    const limit = limits[key];
     const sorted = items.sort((left, right) => right.score.final - left.score.final);
     const selected = sorted.slice(0, limit).map((entry) => entry.item);
     ranking[key] = Object.fromEntries(
@@ -160,7 +118,7 @@ export const searchMemory = async (
   return {
     activities: finalizeLayer('activities', activities),
     contexts: finalizeLayer('contexts', contexts),
-    experiences: finalizeLayer('experiences', experiences),
+    experiences: finalizeLayer('experiences', []),
     identities: finalizeLayer('identities', identities),
     meta: {
       appliedFilters: {

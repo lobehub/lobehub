@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { files } from '@/database/schemas/file';
+import { SESSION_TYPE } from '@/database/schemas/session';
+
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type {
   PublicFile,
   PublicMessage,
@@ -7,8 +11,9 @@ import type {
   PublicTopic,
 } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
 import { EvalPaginationSchema } from './eval-resource.type';
+import { TopicSummarySchema } from './topic.type';
 
 // ==================== Message Query Types ====================
 
@@ -235,3 +240,84 @@ export type MessageListResponse = PaginationQueryResponse<{
 export const MessageIdParamSchema = z.object({
   id: z.string().min(1, 'Message ID cannot be empty'),
 });
+
+// ==================== Response Schemas ====================
+
+type ShapeOf<T> = Record<keyof T, z.ZodType>;
+
+/** A file attached to a message, projected through `PUBLIC_FILE_FIELDS`; `url` is absolute. */
+const MessageFileSchema = z
+  .object({
+    createdAt: dateTimeSchema,
+    fileType: z.string(),
+    id: z.string(),
+    metadata: jsonObjectSchema.nullable(),
+    name: z.string(),
+    parentId: z.string().nullable(),
+    size: z.number().int(),
+    source: z.string().nullable(),
+    updatedAt: dateTimeSchema,
+    url: z.string(),
+    visibility: z.enum(files.visibility.enumValues),
+  } satisfies ShapeOf<PublicFile>)
+  .strict();
+
+/** The legacy session a message belongs to, projected through `PUBLIC_SESSION_FIELDS`. */
+const MessageSessionSchema = z
+  .object({
+    avatar: z.string().nullable(),
+    backgroundColor: z.string().nullable(),
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    groupId: z.string().nullable(),
+    id: z.string(),
+    pinned: z.boolean().nullable(),
+    slug: z.string(),
+    title: z.string().nullable(),
+    type: z.enum(SESSION_TYPE).nullable(),
+    updatedAt: dateTimeSchema,
+  } satisfies ShapeOf<PublicSession>)
+  .strict();
+
+export const MessageSchema = z
+  .object({
+    agentId: z.string().nullable(),
+    content: z.string().nullable(),
+    createdAt: dateTimeSchema,
+    error: jsonObjectSchema.nullable(),
+    favorite: z.boolean().nullable(),
+    /** Attached files; empty when the message has none. */
+    files: z.array(MessageFileSchema),
+    groupId: z.string().nullable(),
+    id: z.string(),
+    messageGroupId: z.string().nullable(),
+    metadata: jsonObjectSchema.nullable(),
+    model: z.string().nullable(),
+    observationId: z.string().nullable(),
+    parentId: z.string().nullable(),
+    provider: z.string().nullable(),
+    quotaId: z.string().nullable(),
+    reasoning: jsonObjectSchema.nullable(),
+    role: z.string(),
+    search: jsonObjectSchema.nullable(),
+    session: MessageSessionSchema.nullable(),
+    sessionId: z.string().nullable(),
+    summary: z.string().nullable(),
+    targetId: z.string().nullable(),
+    threadId: z.string().nullable(),
+    /** Tool calls the message made. */
+    tools: z.array(jsonObjectSchema).nullable(),
+    topic: TopicSummarySchema.nullable(),
+    topicId: z.string().nullable(),
+    traceId: z.string().nullable(),
+    updatedAt: dateTimeSchema,
+    usage: jsonObjectSchema.nullable(),
+  } satisfies ShapeOf<MessageResponse>)
+  .strict()
+  .meta({ id: 'Message' });
+
+export const MessageListSchema = z
+  .object({ ...pageInfoShape, messages: z.array(MessageSchema), ...totalShape })
+  .strict();
+
+export const MessageCountSchema = z.object({ count: z.number().int().min(0) }).strict();

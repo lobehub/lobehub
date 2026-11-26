@@ -18,9 +18,9 @@ export const resolveSelfIterationResponseLanguage = async (
   userId: string,
 ): Promise<string | undefined> => {
   try {
-    const { responseLanguage } = await UserModel.getInfoForAIGeneration(db, userId);
+    const { preferredReplyLanguage } = await UserModel.getInfoForAIGeneration(db, userId);
 
-    return responseLanguage;
+    return preferredReplyLanguage;
   } catch {
     return undefined;
   }

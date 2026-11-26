@@ -35,6 +35,7 @@ const buildMenuInfo = (key: string): MenuInfo =>
 const baseFields = (item: {
   desc?: unknown;
   disabled?: boolean;
+  extra?: unknown;
   label?: unknown;
   sfSymbol?: SFSymbol;
 }) =>
@@ -42,7 +43,8 @@ const baseFields = (item: {
     enabled: item.disabled ? false : undefined,
     label: toLabel(item.label),
     sfSymbol: item.sfSymbol,
-    sublabel: toSublabel(item.desc),
+    // canGoNative only lets a plain-text `extra` through when `desc` is absent.
+    sublabel: toSublabel(item.desc) ?? toSublabel(item.extra),
   });
 
 const convertChildren = (

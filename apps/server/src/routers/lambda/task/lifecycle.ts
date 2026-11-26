@@ -8,6 +8,7 @@ import { router } from '@/libs/trpc/lambda';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { assertNotInOpenGoal } from '@/server/services/task/archiveGuard';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
+import { checkTaskDeliveryConfig } from '@/server/services/task/channelDelivery';
 import {
   assertTaskOriginAccessible,
   taskOriginInputSchema,
@@ -162,6 +163,13 @@ export const lifecycleRouter = router({
         origin,
       );
     }
+    // A Channel delivery is checked against the task's Agent before it is stored.
+    createInput.config = await checkTaskDeliveryConfig(
+      ctx.serverDB,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+      createInput.assigneeAgentId,
+      createInput.config,
+    );
     try {
       const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};

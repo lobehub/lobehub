@@ -25,8 +25,10 @@ import {
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCurrentMachine } from '@/features/DeviceManager/devicePicker';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+import { densityVars } from '@/styles/densityVars';
 
 import SplitView from './SplitView';
 import type { TerminalTab } from './store';
@@ -84,12 +86,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     min-height: 0;
     padding-block: 4px 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
 }));
 
 const Content = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'device']);
 
   const topicId = useChatStore((s) => s.activeTopicId);
   const agentId = useChatStore((s) => s.activeAgentId);
@@ -111,6 +113,7 @@ const Content = memo(() => {
   const setActivePane = useChatTerminalStore((s) => s.setActivePane);
   const setPaneFlex = useChatTerminalStore((s) => s.setPaneFlex);
 
+  const currentMachine = useCurrentMachine();
   const { canSpawn, cwd, selectTarget, targetDeviceId, targets } = useTerminalTarget(
     topicKey,
     agentId || undefined,
@@ -152,10 +155,11 @@ const Content = memo(() => {
     },
   ];
 
-  const targetOptions = buildTargetOptions(
-    targets,
-    isDesktop ? t('terminalPanel.targetLocal') : undefined,
-  );
+  // This computer goes by its own name, tagged, as in every other device picker.
+  const localLabel = currentMachine.hostname
+    ? `${currentMachine.hostname} · ${t('picker.thisDevice', { ns: 'device' })}`
+    : t('terminalPanel.targetLocal');
+  const targetOptions = buildTargetOptions(targets, isDesktop ? localLabel : undefined);
 
   return (
     <Flexbox className={styles.container}>

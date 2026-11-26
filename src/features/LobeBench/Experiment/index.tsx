@@ -74,6 +74,7 @@ import {
   useLobeBenchExperiments,
   useRunResultsMap,
 } from '@/features/LobeBench/useLobeBench';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { heatStyle } from './heatStyle';
 import { LaunchPage } from './LaunchPage';
@@ -93,7 +94,7 @@ const styles = stylex.create({
   insights: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
   grid: { display: 'grid', columnGap: 8, rowGap: 2, alignItems: 'center' },

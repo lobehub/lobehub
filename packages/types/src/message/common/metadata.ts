@@ -487,6 +487,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   selectedSkillIds: z.array(z.string()).optional(),
+  selectedToolIds: z.array(z.string()).optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
@@ -778,6 +779,12 @@ export interface MessageMetadata {
    * on this and every later turn of the topic by the server runtime.
    */
   selectedSkillIds?: string[];
+  /**
+   * Tools the user selected (or triggered via @agent mention) for this user
+   * turn, kept enabled on this and every later turn of the topic by the server
+   * runtime so the prompt-cache prefix and tool availability stay stable.
+   */
+  selectedToolIds?: string[];
   /**
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,

@@ -20,6 +20,13 @@ export type DeviceGitPullRequestCiStatus = 'failure' | 'pending' | 'success' | '
 /** A GitHub pull request linked to a branch. */
 export interface DeviceGitLinkedPullRequest {
   ciStatus?: DeviceGitPullRequestCiStatus;
+  /** The PR's head branch on GitHub. */
+  headRefName?: string;
+  /**
+   * `owner/repo` the PR's head branch lives in — differs from the PR's own
+   * repository for a fork PR. Absent from devices that predate it.
+   */
+  headRepoFullName?: string;
   isDraft?: boolean;
   mergeable?: string;
   mergedAt?: string | null;
@@ -67,7 +74,7 @@ export interface WorkingDirGitState {
   activeWorktree?: string;
   /**
    * True when {@link activeWorktree} was created by the app on the topic's
-   * first send (Better Coding Experience "New worktree"), not picked by the
+   * first send ("New worktree"), not picked by the
    * user. Such a worktree belongs to this one conversation — the record a
    * later cleanup keys on. Ownership only: where a CLI session starts is
    * {@link WorkingDirConfig.sessionPath}, which outlives a later move.
@@ -82,13 +89,38 @@ export interface WorkingDirGitState {
   branch?: string;
   /** True when the effective working directory is currently detached. */
   detached?: boolean;
-  /** GitHub-specific branch metadata such as linked PR and check status. */
+  /**
+   * GitHub-specific branch metadata such as linked PR and check status.
+   *
+   * @deprecated Nothing in this app reads it: a topic's PRs come from its Work
+   * rows (`work.listTopicPullRequests`). Kept in the schema because released
+   * desktop clients still write and read this snapshot — dropping it from
+   * `workingDirConfigSchema` would strip it from their writes. Branch changes
+   * still clear it so those clients never show another branch's PR.
+   */
   github?: WorkingDirGithubState;
   /**
    * True when the effective working directory is a linked worktree rather than
    * the source path itself.
    */
   isWorktree?: boolean;
+  /**
+   * A branch this conversation created — the worktree branch made on its first
+   * send, or one its agent created
+   * (`git switch -c`, `git worktree add -b`). Only while the topic is on it does
+   * the run end ask GitHub which PR the branch has: another branch may carry
+   * someone else's PR.
+   */
+  ownBranch?: string;
+  /** The nonce the server signed {@link ownerToken} with, for the creator only. */
+  ownerNonce?: string;
+  /**
+   * The creation receipt the device wrote into {@link activeWorktree} when the
+   * app created it (set with {@link autoCreated}, only once the device echoed
+   * it). A cleanup presents it; the device acts only when it matches, so a
+   * client-written claim on someone else's worktree path is worthless.
+   */
+  ownerToken?: string;
   /**
    * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
    * whenever the branch changes — a stale remote ref would bind the topic to
@@ -131,6 +163,8 @@ export const dropStaleAutoCreated = <T extends WorkingDirGitState>(
   if (git.activeWorktree !== previousWorktree) {
     delete git.autoCreated;
     delete git.autoCreatedAt;
+    delete git.ownerToken;
+    delete git.ownerNonce;
   }
   return git;
 };
@@ -169,6 +203,8 @@ export const getWorkingDirSessionPath = (
 
 const gitLinkedPullRequestSchema = z.object({
   ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
+  headRefName: z.string().optional(),
+  headRepoFullName: z.string().optional(),
   isDraft: z.boolean().optional(),
   mergeable: z.string().optional(),
   mergeStateStatus: z.string().optional(),
@@ -189,6 +225,7 @@ export const workingDirConfigSchema = z.object({
       autoCreatedAt: z.string().optional(),
       branch: z.string().optional(),
       detached: z.boolean().optional(),
+      // Deprecated: see `WorkingDirGitState.github`.
       github: z
         .object({
           extraPullRequestCount: z.number().optional(),
@@ -197,6 +234,9 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      ownBranch: z.string().optional(),
+      ownerNonce: z.string().max(64).optional(),
+      ownerToken: z.string().max(128).optional(),
       // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
       // unvalidated — zod strips it, so it would never survive a write.
       upstream: z

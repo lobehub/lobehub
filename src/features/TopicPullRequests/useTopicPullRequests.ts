@@ -2,8 +2,6 @@ import { useMemo } from 'react';
 
 import { gitPullRequestKey } from '@/store/device/gitReview/projection';
 import { useGitReviewStore } from '@/store/device/gitReview/store';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { useWorkStore, workActions, workSelectors } from '@/store/work';
 
 import {
@@ -22,8 +20,6 @@ export interface UseTopicPullRequestsParams {
 }
 
 export interface TopicPullRequests {
-  /** Under Better Coding Experience only; false means "show the old surfaces". */
-  enabled: boolean;
   primary?: TopicPullRequestView;
   /**
    * Numbers to read on the execution device (mount {@link TopicPullRequestProbes}):
@@ -35,17 +31,16 @@ export interface TopicPullRequests {
 }
 
 /**
- * The pull requests a topic's Work rows link (Better Coding Experience), each
- * resolved to a displayable state. Without the lab — or before a topic exists
- * (new conversation) — nothing is read and the list is empty.
+ * The pull requests a topic's Work rows link, each resolved to a displayable
+ * state. Before a topic exists (new conversation) nothing is read and the list
+ * is empty.
  */
 export const useTopicPullRequests = ({
   deviceId,
   path,
   topicId,
 }: UseTopicPullRequestsParams): TopicPullRequests => {
-  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  const activeTopicId = betterCoding && topicId ? topicId : undefined;
+  const activeTopicId = topicId || undefined;
 
   workActions.useFetchTopicPullRequests(activeTopicId ? { topicId: activeTopicId } : null);
   const items = useWorkStore(workSelectors.topicPullRequests(activeTopicId));
@@ -65,12 +60,11 @@ export const useTopicPullRequests = ({
       );
     });
     return {
-      enabled: betterCoding,
       probes: path
         ? list.map((item) => ({ number: item.number, version: new Date(item.linkedAt).getTime() }))
         : [],
       primary: pickPrimaryPullRequest(views),
       views,
     };
-  }, [betterCoding, detailEntries, detailMap, deviceId, items, path]);
+  }, [detailEntries, detailMap, deviceId, items, path]);
 };

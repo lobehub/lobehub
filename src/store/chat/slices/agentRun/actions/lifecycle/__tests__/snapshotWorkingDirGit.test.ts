@@ -17,13 +17,11 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 
 const gitMocks = vi.hoisted(() => ({
   getGitBranch: vi.fn(),
-  getLinkedPullRequest: vi.fn(),
 }));
 
 vi.mock('@/services/git', () => ({
   gitService: {
     getGitBranch: gitMocks.getGitBranch,
-    getLinkedPullRequest: gitMocks.getLinkedPullRequest,
   },
 }));
 
@@ -77,13 +75,6 @@ vi.mock('../../../../topic/selectors', () => ({
   },
 }));
 
-const labMocks = vi.hoisted(() => ({ betterCoding: false }));
-
-vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableBetterCodingExperience: () => labMocks.betterCoding },
-}));
-
 const PR = {
   ciStatus: 'pending' as const,
   number: 123,
@@ -111,19 +102,22 @@ const makeGet = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  labMocks.betterCoding = false;
   mockConstEnv.isDesktop = true;
   env.currentDeviceId = undefined;
   env.targetDeviceId = undefined;
   deviceMocks.workingDirs = [];
   electronGitMocks.detectRepoType.mockResolvedValue(undefined);
   gitMocks.getGitBranch.mockResolvedValue({ branch: 'fix/remote-review', detached: false });
-  gitMocks.getLinkedPullRequest.mockResolvedValue({ pullRequest: PR, pullRequestStatus: 'ok' });
 });
 
 describe('snapshotTopicWorkingDirGit', () => {
-  it('snapshots the live branch + linked PR onto the topic config', async () => {
+  it('records the branch and its remote ref, never a PR guessed for the branch', async () => {
     topicMocks.getTopicById.mockReturnValue(githubTopic);
+    gitMocks.getGitBranch.mockResolvedValue({
+      branch: 'fix/remote-review',
+      detached: false,
+      upstream: { branch: 'fix/remote-review', remote: 'origin' },
+    });
     const { get, updateTopicMetadata } = makeGet();
 
     await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
@@ -132,8 +126,8 @@ describe('snapshotTopicWorkingDirGit', () => {
       workingDirectoryConfig: {
         git: {
           branch: 'fix/remote-review',
-          github: { pullRequest: PR, pullRequestStatus: 'ok' },
           isWorktree: false,
+          upstream: { branch: 'fix/remote-review', remote: 'origin' },
         },
         path: '/repo',
         repoType: 'github',
@@ -152,11 +146,7 @@ describe('snapshotTopicWorkingDirGit', () => {
 
     expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
       workingDirectoryConfig: {
-        git: {
-          branch: 'fix/remote-review',
-          github: { pullRequest: PR, pullRequestStatus: 'ok' },
-          isWorktree: false,
-        },
+        git: { branch: 'fix/remote-review', isWorktree: false },
         path: '/repo',
         repoType: 'github',
       },
@@ -205,14 +195,13 @@ describe('snapshotTopicWorkingDirGit', () => {
     expect(updateTopicMetadata).not.toHaveBeenCalled();
   });
 
-  it('leaves the prior snapshot on a detached HEAD (no branch to query)', async () => {
+  it('leaves the prior snapshot on a detached HEAD (no branch to record)', async () => {
     topicMocks.getTopicById.mockReturnValue(githubTopic);
     gitMocks.getGitBranch.mockResolvedValue({ branch: 'abc1234', detached: true });
     const { get, updateTopicMetadata } = makeGet();
 
     await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
 
-    expect(gitMocks.getLinkedPullRequest).not.toHaveBeenCalled();
     expect(updateTopicMetadata).not.toHaveBeenCalled();
   });
 
@@ -220,11 +209,7 @@ describe('snapshotTopicWorkingDirGit', () => {
     topicMocks.getTopicById.mockReturnValue({
       metadata: {
         workingDirectoryConfig: {
-          git: {
-            branch: 'fix/remote-review',
-            github: { pullRequest: PR, pullRequestStatus: 'ok' },
-            isWorktree: false,
-          },
+          git: { branch: 'fix/remote-review', isWorktree: false },
           path: '/repo',
           repoType: 'github',
         },
@@ -246,37 +231,6 @@ describe('snapshotTopicWorkingDirGit', () => {
 
     expect(gitMocks.getGitBranch).not.toHaveBeenCalled();
     expect(updateTopicMetadata).not.toHaveBeenCalled();
-  });
-});
-
-describe('snapshotTopicWorkingDirGit — Better Coding Experience', () => {
-  beforeEach(() => {
-    labMocks.betterCoding = true;
-  });
-
-  it('records the branch and its remote ref without asking gh for a PR', async () => {
-    topicMocks.getTopicById.mockReturnValue(githubTopic);
-    gitMocks.getGitBranch.mockResolvedValue({
-      branch: 'fix/remote-review',
-      detached: false,
-      upstream: { branch: 'fix/remote-review', remote: 'origin' },
-    });
-    const { get, updateTopicMetadata } = makeGet();
-
-    await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
-
-    expect(gitMocks.getLinkedPullRequest).not.toHaveBeenCalled();
-    expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-      workingDirectoryConfig: {
-        git: {
-          branch: 'fix/remote-review',
-          isWorktree: false,
-          upstream: { branch: 'fix/remote-review', remote: 'origin' },
-        },
-        path: '/repo',
-        repoType: 'github',
-      },
-    });
   });
 
   it('drops a recorded PR once the branch moved, keeps it while it stays', async () => {

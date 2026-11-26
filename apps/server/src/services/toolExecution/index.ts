@@ -1,6 +1,10 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
-import { type ChatToolPayload, type DeviceClient } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  connectorIdentifierCandidates,
+  type DeviceClient,
+} from '@lobechat/types';
 import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
@@ -13,6 +17,7 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { isMCPSSRFBlockedError } from '@/libs/mcp/ssrf';
+import { createMCPError } from '@/libs/mcp/types';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveLinkedCall } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
@@ -188,7 +193,7 @@ export class ToolExecutionService {
         identifier,
         apiName,
         context.workspaceId,
-        context.agentId,
+        { agentId: context.agentId, topicId: context.topicId },
       );
       if (permission === ConnectorToolPermission.disabled) {
         log('Tool %s:%s is disabled by user — blocking execution', identifier, apiName);
@@ -339,9 +344,21 @@ export class ToolExecutionService {
     }
 
     try {
+      if (
+        (manifest as { connectorReauthorizationRequired?: boolean })
+          .connectorReauthorizationRequired
+      ) {
+        throw createMCPError('AUTHORIZATION_ERROR', 'Reconnect this connector to continue.');
+      }
       const marker = (manifest as { connectorLinks?: { connectorId: string; param: string } })
         .connectorLinks;
-      if (marker) {
+      // A connector row's manifest (`manifest.connector`) was built at
+      // discovery with that row's endpoint and credentials. The row may since
+      // have left this conversation's scope (made private, disabled, deleted):
+      // every call resolves it again, in the run's conversation, and runs only
+      // while the tool prefix still names that same row.
+      const rowRef = (manifest as { connector?: { id: string } }).connector;
+      if (rowRef || marker) {
         if (!context.serverDB || !context.userId)
           throw new Error(
             'Connector account resolution requires an authenticated execution context',
@@ -357,51 +374,58 @@ export class ToolExecutionService {
         // The marker rides in a manifest, and a plugin row can carry any
         // manifest. Only the connector this call's identifier resolves to for
         // the run (the one the permission gate checked) may lend its accounts,
-        // and only to a tool it serves and has not disabled.
-        const [connector] = await connectorModel.resolveByIdentifiers(
-          [identifier],
-          context.agentId,
-        );
-        if (!connector || connector.id !== marker.connectorId || !connector.isEnabled)
+        // and only to a tool it serves and has not disabled. It resolves in the
+        // run's conversation, as discovery did: a private agent's own topic
+        // admits its owner's private and personal rows, each a tool set of its
+        // own, so the row is the one this tool prefix names.
+        const connector = (
+          await connectorModel.resolveToolSets(
+            { agentId: context.agentId, topicId: context.topicId },
+            connectorIdentifierCandidates(identifier),
+          )
+        ).find((row) => row.toolIdentifier === identifier);
+        const expectedId = marker?.connectorId ?? rowRef?.id;
+        if (!connector || connector.id !== expectedId || !connector.isEnabled)
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
           );
-        const tool = (
-          await new ConnectorToolModel(
-            context.serverDB,
-            context.userId,
-            workspaceId,
-          ).queryByConnector(connector.id)
-        ).find((item) => item.toolName === apiName);
-        if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
-        if (tool.permission === ConnectorToolPermission.disabled)
-          return buildBlockedToolResponse(apiName);
-        const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
-        if (
-          context.agentShareVisitor &&
-          !context.agentShareVisitor.canUseDevice &&
-          isDeviceOnlyMcpEndpoint(currentEndpoint)
-        ) {
-          const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
-          return {
-            content: message,
-            error: { code: 'SHARE_GATE_BLOCKED', message },
-            success: false,
-          };
+        if (marker) {
+          const tool = // A run model reads the tools of the owner's personal row too
+            (
+              await new ConnectorToolModel(context.serverDB, context.userId, workspaceId, {
+                agentRun: true,
+              }).queryByConnector(connector.id)
+            ).find((item) => item.toolName === apiName);
+          if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
+          if (tool.permission === ConnectorToolPermission.disabled)
+            return buildBlockedToolResponse(apiName);
+          const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
+          if (
+            context.agentShareVisitor &&
+            !context.agentShareVisitor.canUseDevice &&
+            isDeviceOnlyMcpEndpoint(currentEndpoint)
+          ) {
+            const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
+            return {
+              content: message,
+              error: { code: 'SHARE_GATE_BLOCKED', message },
+              success: false,
+            };
+          }
+          const resolved = await resolveLinkedCall(
+            {
+              connector,
+              argsStr: args,
+              param: marker.param,
+              isShareVisitor: !!context.agentShareVisitor,
+            },
+            { connectorModel },
+          );
+          args = resolved.argsStr;
+          payload = { ...payload, arguments: args };
+          linkName = resolved.linkName;
+          mcpParams = buildConnectorMcpParams(resolved.connector);
         }
-        const resolved = await resolveLinkedCall(
-          {
-            connector,
-            argsStr: args,
-            param: marker.param,
-            isShareVisitor: !!context.agentShareVisitor,
-          },
-          { connectorModel },
-        );
-        args = resolved.argsStr;
-        payload = { ...payload, arguments: args };
-        linkName = resolved.linkName;
-        mcpParams = buildConnectorMcpParams(resolved.connector);
       }
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
@@ -690,9 +714,11 @@ export class ToolExecutionService {
     payload: ChatToolPayload,
     context: ToolExecutionContext,
 
-    _mcpParams: CloudMCPParams,
+    mcpParams: CloudMCPParams,
   ): Promise<ToolExecutionResult> {
-    const { identifier, apiName, arguments: args } = payload;
+    const { apiName, arguments: args } = payload;
+    // The gateway knows the connector, not a private row's tool prefix
+    const identifier = mcpParams.name || payload.identifier;
 
     log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
 

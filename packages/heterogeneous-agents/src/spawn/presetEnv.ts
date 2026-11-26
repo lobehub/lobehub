@@ -2,6 +2,7 @@ import {
   CLAUDE_CODE_ENTRYPOINT_ENV,
   dropClearedClaudeCodeEntrypoint,
 } from '../claudeCodeEntrypoint';
+import { getAntigravitySpawnEnv } from './antigravity';
 
 /**
  * Environment variables a host always sets for a heterogeneous agent, shared by
@@ -49,9 +50,11 @@ export const getHeterogeneousAgentSpawnEnv = <T extends Record<string, string | 
   agentType: string,
   agentEnv?: Readonly<Record<string, string>>,
   inheritedEnv?: T,
-): T =>
-  dropClearedClaudeCodeEntrypoint({
+): T => {
+  const env = dropClearedClaudeCodeEntrypoint({
     ...inheritedEnv,
     ...getHeterogeneousAgentPresetEnv(agentType, agentEnv),
     ...agentEnv,
   } as T);
+  return agentType === 'antigravity' ? getAntigravitySpawnEnv(env) : env;
+};

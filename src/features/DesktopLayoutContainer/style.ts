@@ -2,6 +2,8 @@ import { createStaticStyles } from '@lobehub/ui';
 
 import { isDesktop } from '@/const/version';
 
+import { CONTAINER_BORDER_WIDTH } from './cssVariables';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Inner container
   innerContainer: css`
@@ -9,7 +11,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
 
-    border: 1px solid var(--container-border-color, ${cssVar.colorBorder});
+    border: ${CONTAINER_BORDER_WIDTH}px solid var(--container-border-color, ${cssVar.colorBorder});
     border-radius: var(--container-border-radius, ${cssVar.borderRadius});
     border-end-end-radius: var(
       --container-border-bottom-right-radius,

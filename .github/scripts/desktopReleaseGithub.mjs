@@ -208,7 +208,12 @@ export function createGithubStore(options) {
       return delivered;
     },
     async assertReleasePr(intent) {
-      const pr = await (await request(`${root}/pulls/${intent.prNumber}`)).json();
+      // GitHub removed merge_commit_sha from pull request responses in 2026-03-10.
+      const pr = await (
+        await request(`${root}/pulls/${intent.prNumber}`, {
+          headers: { 'X-GitHub-Api-Version': '2022-11-28' },
+        })
+      ).json();
       if (
         pr.number !== intent.prNumber ||
         pr.merged !== true ||

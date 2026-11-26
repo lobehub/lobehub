@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import {
   acceptanceComments,
@@ -59,7 +60,7 @@ const markIdsOf = async (reviewId: string) => {
 };
 
 beforeEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.insert(users).values([{ id: owner }, { id: reviewer }]);
   await serverDB
     .insert(workspaces)
@@ -85,7 +86,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.delete(workspaces);
 });
 

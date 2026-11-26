@@ -221,6 +221,7 @@ export const runOperationInit = async (
         ephemeralUserMessage: request.ephemeralUserMessage,
         evalAllowedTools: request.evalAllowedTools,
         evalMemory: request.evalMemory,
+        exclusivePluginIds: request.exclusivePluginIds,
         globalMemoryEnabled: request.globalMemoryEnabled,
         hasMentionedAgents: request.hasMentionedAgents,
         loadHistoryMessages: deps.loadHistoryMessages,

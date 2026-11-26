@@ -3,6 +3,8 @@
 import { Center, cssVar, Flexbox } from '@lobehub/ui';
 
 import { isDesktop } from '@/const/version';
+import { getContainerTopInset } from '@/features/DesktopLayoutContainer/cssVariables';
+import { type DensityTokens, usePanelDensityTokens } from '@/styles/density';
 import { isMacOS } from '@/utils/platform';
 
 import SkeletonBar from '../Bar';
@@ -11,8 +13,8 @@ const isMacDesktop = isDesktop && isMacOS();
 
 export type SideBarHeaderVariant = 'breadcrumb' | 'title';
 
-const headerContentHeight = (variant: SideBarHeaderVariant) => {
-  if (variant === 'title') return 32;
+const headerContentHeight = (variant: SideBarHeaderVariant, tokens: DensityTokens | null) => {
+  if (variant === 'title') return (tokens?.headerAvatarSize ?? 28) + 4;
   return isMacDesktop ? 22 : 28;
 };
 
@@ -20,24 +22,55 @@ export const SideBarHeaderSkeleton = ({
   variant = 'breadcrumb',
 }: {
   variant?: SideBarHeaderVariant;
-}) => (
-  <Flexbox horizontal align={'center'} flex={'none'} padding={'8px 6px'}>
-    <Flexbox flex={1} height={headerContentHeight(variant)} justify={'center'} paddingInline={6}>
-      <SkeletonBar height={variant === 'title' ? 18 : 14} width={variant === 'title' ? 96 : 72} />
-    </Flexbox>
-  </Flexbox>
-);
+}) => {
+  const tokens = usePanelDensityTokens();
+  const topInset = getContainerTopInset();
 
-const SkeletonNavItem = ({ width }: { width: string }) => (
-  <Flexbox horizontal align={'center'} flex={'none'} gap={8} height={36} paddingInline={4}>
-    <Center flex={'none'} height={28} width={28}>
-      <SkeletonBar height={18} radius={cssVar.borderRadiusSM} width={18} />
-    </Center>
-    <Flexbox flex={1}>
-      <SkeletonBar height={14} width={width} />
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      flex={'none'}
+      height={tokens ? tokens.headerHeight + topInset : undefined}
+      padding={tokens ? undefined : '8px 6px'}
+      paddingInline={tokens ? 6 : undefined}
+      style={tokens ? { paddingBlockStart: topInset } : undefined}
+    >
+      <Flexbox
+        flex={1}
+        height={headerContentHeight(variant, tokens)}
+        justify={'center'}
+        paddingInline={6}
+      >
+        <SkeletonBar height={variant === 'title' ? 18 : 14} width={variant === 'title' ? 96 : 72} />
+      </Flexbox>
     </Flexbox>
-  </Flexbox>
-);
+  );
+};
+
+const SkeletonNavItem = ({ width }: { width: string }) => {
+  const tokens = usePanelDensityTokens();
+  const iconBox = tokens?.iconBox ?? 28;
+  const iconSize = tokens?.iconSize ?? 18;
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      flex={'none'}
+      gap={tokens?.gap ?? 8}
+      height={tokens?.rowHeight ?? 36}
+      paddingInline={tokens?.paddingInline ?? 4}
+    >
+      <Center flex={'none'} height={iconBox} width={iconBox}>
+        <SkeletonBar height={iconSize} radius={cssVar.borderRadiusSM} width={iconSize} />
+      </Center>
+      <Flexbox flex={1}>
+        <SkeletonBar height={tokens?.fontSize ?? 14} width={width} />
+      </Flexbox>
+    </Flexbox>
+  );
+};
 
 const TITLE_WIDTHS = [56, 72, 48, 64];
 const ITEM_WIDTHS = ['62%', '44%', '70%', '52%', '66%', '48%', '58%', '74%'];
@@ -76,20 +109,27 @@ export const NavSideBarSkeleton = ({
   bodyGap = 0,
   bodyPaddingBlock = 0,
   groups,
-  groupTitleHeight = 32,
+  groupTitleHeight,
   headerVariant = 'breadcrumb',
   leadingRows = 0,
   navGap = 1,
   navRows = 0,
   search = false,
 }: NavSkeletonShape) => {
+  const tokens = usePanelDensityTokens();
+  const panelPaddingInline = tokens?.panelPaddingInline ?? 4;
+  const titleHeight = groupTitleHeight ?? tokens?.sectionHeaderHeight ?? 32;
   const hasBody = search || leadingRows > 0 || !!groups?.length;
 
   return (
     <Flexbox data-testid={'nav-sidebar-skeleton'} gap={1} style={{ height: '100%' }}>
       <SideBarHeaderSkeleton variant={headerVariant} />
       {navRows > 0 && (
-        <Flexbox data-testid={'nav-sidebar-skeleton-nav'} flex={'none'} paddingInline={4}>
+        <Flexbox
+          data-testid={'nav-sidebar-skeleton-nav'}
+          flex={'none'}
+          paddingInline={panelPaddingInline}
+        >
           <SkeletonRows count={navRows} gap={navGap} paddingBlock={0} />
         </Flexbox>
       )}
@@ -97,7 +137,7 @@ export const NavSideBarSkeleton = ({
         <Flexbox
           gap={bodyGap}
           paddingBlock={bodyPaddingBlock}
-          paddingInline={4}
+          paddingInline={panelPaddingInline}
           style={{ overflow: 'hidden' }}
         >
           {search && (
@@ -107,12 +147,12 @@ export const NavSideBarSkeleton = ({
           )}
           {leadingRows > 0 && <SkeletonRows count={leadingRows} paddingBlock={0} />}
           {!!groups?.length && (
-            <Flexbox gap={8}>
+            <Flexbox gap={tokens?.sectionGap ?? 8}>
               {groups.map((rows, groupIndex) => (
                 <Flexbox key={groupIndex}>
                   <Flexbox
                     flex={'none'}
-                    height={groupTitleHeight}
+                    height={titleHeight}
                     justify={'center'}
                     paddingBlock={4}
                     paddingInline={'8px 4px'}

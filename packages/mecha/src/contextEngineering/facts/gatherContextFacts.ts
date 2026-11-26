@@ -276,7 +276,8 @@ const gatherPlanTodo = async (
   // document is a best-effort mirror the run keeps with `lobe-agent`.
   const messageTodos = extractTodosFromMessages(request.messages);
   const canReadPlan =
-    request.enabledToolIds.includes(LobeAgentIdentifier) &&
+    (request.enabledToolIds.includes(LobeAgentIdentifier) ||
+      request.discoverableTools?.some((tool) => tool.identifier === LobeAgentIdentifier)) &&
     !!request.topicId &&
     !!providers.getPlanDocument;
   const planDoc = canReadPlan
@@ -331,8 +332,14 @@ const gatherComposioServices = async (
   // Disabled services are dropped from both lists — neither "connected, use
   // directly" nor "available to connect" — the agent isn't meant to see them.
   const disabledIdSet = new Set(request.disabledPluginIds ?? []);
+  const reachable = new Set([
+    ...request.enabledToolIds,
+    ...(request.discoverableTools ?? []).map((tool) => tool.identifier),
+  ]);
   const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
-    COMPOSIO_APP_TYPES.filter((tool) => connectedIds.has(tool.identifier)),
+    COMPOSIO_APP_TYPES.filter(
+      (tool) => connectedIds.has(tool.identifier) && reachable.has(tool.identifier),
+    ),
     disabledIdSet,
   ).map((tool) => ({ identifier: tool.identifier, name: tool.label }));
   const available = resolveAvailableComposioServices(
@@ -551,12 +558,15 @@ export const gatherContextFacts = async (
   const docsAgentId = documentsAgentId(request);
   const sandboxEnabled = request.enabledToolIds.includes(CloudSandboxIdentifier);
   // Two tools reach the sandbox, and the optional one is not the common case:
-  // `lobe-skills` is always on, and its runCommand / execScript open the SAME
-  // session in the SAME directory as the cloud-sandbox tool. Asking only
-  // whether the optional tool is enabled told a skills-driven run the
-  // ephemeral wording while its commands ran in a persistent workspace — so it
-  // cloned into /tmp and the user's file browser stayed empty.
-  const sandboxShellEnabled = sandboxEnabled || request.enabledToolIds.includes(SkillsIdentifier);
+  // `lobe-skills` keeps its shell on even for a run without skills, and when no
+  // device is routed its runCommand / execScript open the SAME session in the
+  // SAME directory as the cloud-sandbox tool. When a device IS routed and the
+  // cloud-sandbox tool is not enabled, `lobe-skills` executes on the device and
+  // uses `deviceSystemPrompt` (which has no `{{sandbox_workspace}}`
+  // placeholder), so no sandbox lookup is needed.
+  const sandboxShellEnabled =
+    sandboxEnabled ||
+    (!request.activeDeviceId && request.enabledToolIds.includes(SkillsIdentifier));
 
   const tasks = [
     () =>
@@ -665,7 +675,10 @@ export const gatherContextFacts = async (
       // Left out entirely for an ephemeral run so the variable generators'
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
-      ...(isPersistentSandboxMode(sandboxPersistence?.mode)
+      // Also for an ephemeral run whose environment checks repositories out:
+      // the model is told where they are (see `formatSandboxRepositoriesPrompt`).
+      ...(isPersistentSandboxMode(sandboxPersistence?.mode) ||
+      sandboxPersistence?.repositories?.length
         ? formatSandboxStoragePromptVariables(sandboxPersistence)
         : {}),
       topic_id: request.topicId ?? '',

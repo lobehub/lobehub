@@ -106,13 +106,16 @@ class ScopeChangedError extends Error {}
 
 export class AgentListActionImpl {
   readonly #set: Setter;
+  readonly #get: () => HomeStore;
   readonly #agentList;
   readonly #agents;
   #pinnedOrderQueue: Promise<unknown> = Promise.resolve();
+  #recommendedQueue: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
     this.#set = set;
+    this.#get = get;
     this.#agentList = createReplicaSlice(agentListResource, {
       actionPrefix: n('agentList'),
       entity: sidebarAgentEntity,
@@ -183,6 +186,48 @@ export class AgentListActionImpl {
       );
     } catch (error) {
       // Nothing to report: the user left the account/workspace the drag was made in.
+      if (error instanceof ScopeChangedError) return;
+      throw error;
+    }
+  };
+
+  /**
+   * Replace the workspace's recommended Agents (owner/admin only): the Agents
+   * page updates now and rolls back if the save fails.
+   */
+  updateRecommendedAgents = async (ids: string[]): Promise<void> => {
+    // Only public rows can be recommended: drop ids of rows deleted or made
+    // private since, so they never count toward the list's cap.
+    const state = this.#get();
+    const available = new Set(
+      [
+        ...state.pinnedAgents,
+        ...state.ungroupedAgents,
+        ...state.agentGroups.flatMap((group) => group.items),
+      ].map((item) => item.id),
+    );
+    const next = ids.filter((id) => available.has(id));
+
+    // Each save replaces the whole list, so saves run one after another: two
+    // quick drags reach the server in the order they were made. A save still
+    // queued when the cache scope changes is dropped (see reorderPinnedAgents).
+    const scope = cacheScope.get();
+    try {
+      await this.#agentList.optimistic(
+        AGENT_LIST_KEY,
+        (data) => (data ? { ...data, recommendedIds: next } : data),
+        () => {
+          const operation = this.#recommendedQueue
+            .catch(() => undefined)
+            .then(async () => {
+              if (cacheScope.get() !== scope) throw new ScopeChangedError();
+              await homeService.updateRecommendedAgents(next);
+            });
+          this.#recommendedQueue = operation;
+          return operation;
+        },
+      );
+    } catch (error) {
       if (error instanceof ScopeChangedError) return;
       throw error;
     }

@@ -11,6 +11,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const runtimeAgentConfig = (chatConfig: Record<string, unknown>, id: string, slug: string) => ({
   chatConfig,
@@ -136,6 +137,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([])),
     };
   }),
 }));
@@ -175,6 +177,7 @@ vi.mock('@/database/models/user', () => ({
   UserModel: class {
     static getInfoForAIGeneration = mockGetInfoForAIGeneration;
     getUserPreference = mockGetUserPreference;
+    getUserSettings = vi.fn().mockResolvedValue(undefined);
   },
 }));
 
@@ -307,7 +310,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'en-US',
+      preferredReplyLanguage: 'en-US',
       userName: 'Test User',
     });
     mockGetModelMetadata.mockResolvedValue(undefined);
@@ -470,7 +473,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'zh-CN',
+      preferredReplyLanguage: 'zh-CN',
       userName: 'Test User',
     });
     mockGetAgentConfig.mockResolvedValue({
@@ -511,7 +514,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
+    expect(callArgs.agentConfig.systemRole).toBe(`${customSystemRole}\n\n${REPLY_LANGUAGE_ONLY}`);
   });
 
   // Regular agents get no builtin runtime prompt. They do get the user's reply
@@ -794,7 +797,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.plugins).toEqual(['lobe-agent-documents']);
+    // No page agent without a sandbox; the saved documents pin loads on demand.
+    expect(callArgs.agentConfig.plugins).toEqual([]);
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {
@@ -822,7 +826,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       documentId: 'docs-1',
       scope: 'page',
     });
-    expect(callArgs.agentConfig.plugins).toEqual([PageAgentIdentifier, 'lobe-agent-documents']);
+    // The page agent is a runtime addition; the saved documents pin loads on demand.
+    expect(callArgs.agentConfig.plugins).toEqual([PageAgentIdentifier]);
     expect(callArgs.agentConfig.chatConfig.enableHistoryCount).toBe(false);
     expect(callArgs.agentConfig.systemRole).toContain('Custom role.');
     expect(callArgs.agentConfig.systemRole).toContain(
@@ -833,10 +838,13 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       expect.anything(),
       expect.objectContaining({
         agentConfig: expect.objectContaining({
-          plugins: [PageAgentIdentifier, 'lobe-agent-documents'],
+          plugins: [PageAgentIdentifier],
         }),
       }),
     );
+    // …and stays discoverable rather than cut as an unselected builtin.
+    const engineArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];
+    expect(engineArgs.disabledPluginIds).not.toContain('lobe-agent-documents');
   });
 
   it('should normalize task identifier from appContext before creating runtime operation', async () => {

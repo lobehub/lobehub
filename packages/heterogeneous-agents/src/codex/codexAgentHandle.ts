@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 
+import type { CodexCollaborationMode } from '@lobechat/types';
+
 import type { AskUserBridge } from '../askUser';
 import type { AgentPromptInput } from '../protocol';
 import { createEventQueue } from '../spawn/agentEventQueue';
@@ -23,6 +25,11 @@ export interface CodexAgentHandleOptions {
   askUserBridge?: AskUserBridge;
   /** Caller version sent in the native initialize handshake. */
   clientVersion: string;
+  /**
+   * Codex Plan switch: the collaboration mode every turn sends (omitted sends
+   * none). Codex keeps it on the thread until a turn sends another.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /** Resolved, validated Codex executable path. */
   commandPath: string;
   /** Working directory already authorized by device dispatch. */
@@ -158,6 +165,7 @@ export const createCodexAgentHandle = async (
   options.onStartupControl?.({ cancel });
   const turnOptions = {
     askUserBridge: options.askUserBridge,
+    collaborationMode: options.collaborationMode,
     // Keep the already materialized user input and attachment paths unchanged.
     input: buildCodexAppServerInput(input),
     onRawMessage: (line: string) => options.onRawStdout?.(Buffer.from(line)),
@@ -219,6 +227,9 @@ export const createCodexAgentHandle = async (
     get sessionId() {
       return nativeSessionId;
     },
+    /** The Plan switch flipped mid-run: Codex takes it from the next turn. */
+    setCollaborationMode: (mode: CodexCollaborationMode) => session.setCollaborationMode(mode),
     stderr,
+    supportsSteerImageAttachments: true,
   };
 };

@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -18,6 +17,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import Breadcrumb from '../shared/Breadcrumb';
 import { useTaskListCrumbTarget } from '../shared/taskListOrigin';
@@ -37,6 +37,7 @@ interface TaskDetailPageProps {
 
 const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelToggle = true }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
   const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
@@ -102,7 +103,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           <>
             <ActionIcon
               icon={SearchIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
               title={t('taskDetail.find.open')}
               tooltipProps={{ hotkey: findHotkey, placement: 'bottom' }}
               onClick={openFind}

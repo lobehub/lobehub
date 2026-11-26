@@ -15,6 +15,7 @@ import {
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { restoreOwnedWorktreeBeforeServerRun } from '@/server/services/worktreeCleanup';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -27,6 +28,8 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
+import { forDeviceRuntime } from './codexCollaboration';
+import { recordHeteroDeviceRoute } from './deviceRoute';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -120,7 +123,7 @@ export const dispatchToCliDevice = async (
     heteroExecArgs,
     heteroParams,
     resumeSessionId,
-    topic,
+    topic: preparedTopic,
     topicRepos,
     unansweredUserTurns,
   } = prepared;
@@ -189,6 +192,30 @@ export const dispatchToCliDevice = async (
     );
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+  const collaborationMode = forDeviceRuntime(heteroParams.collaborationMode, {
+    native: !!nativeCodex,
+    supportsCollaborationMode: !!nativeCodex?.supportsCollaborationMode,
+  });
+
+  // A turn the server starts on its own (a delegated task reporting back)
+  // never passed the composer's restore step: bring back the worktree a
+  // cleanup removed, so the CLI does not spawn in a folder that is gone.
+  const restored =
+    preparedTopic && topicId
+      ? await traceHeteroStage('device restore_owned_worktree', () =>
+          restoreOwnedWorktreeBeforeServerRun({
+            db: deps.db,
+            metadata: preparedTopic.metadata,
+            topicId,
+            userId: deps.userId,
+            workspaceId: deps.workspaceId,
+          }),
+        )
+      : undefined;
+  const topic =
+    preparedTopic && restored
+      ? { ...preparedTopic, metadata: restored.metadata ?? undefined }
+      : preparedTopic;
 
   // Resolve the working directory for the run: a topic-level override
   // wins, else the device's user-configured defaultCwd.
@@ -289,6 +316,7 @@ export const dispatchToCliDevice = async (
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
           ...(claudeAccountRouting && { claudeAccountRouting }),
           clientKinds: nativeCodex?.clientKinds,
+          collaborationMode,
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
@@ -362,6 +390,16 @@ export const dispatchToCliDevice = async (
         heteroType,
       }),
     );
+    // A background sub-agent outlives its parent's marker; keep the route
+    // where a later Stop can still find it.
+    if (dispatchDeviceId) {
+      await recordHeteroDeviceRoute(deps, operationId, {
+        deviceId: dispatchDeviceId,
+        deviceUserId: deps.userId,
+        deviceWorkspaceId: dispatchWorkspaceId,
+        heteroType,
+      });
+    }
     log(
       'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
       patched,

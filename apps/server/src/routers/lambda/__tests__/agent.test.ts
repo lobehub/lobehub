@@ -314,6 +314,19 @@ describe('agentRouter', () => {
       workspaceId: 'ws-1',
     };
 
+    it('returns null from getAgentConfigById for an agent outside the caller scope', async () => {
+      // Another member's private agent is filtered out by the scoped lookup.
+      vi.mocked(resolveAgentReference).mockRejectedValueOnce(
+        new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' }),
+      );
+      agentServiceMock.getAgentConfigById = vi.fn();
+
+      const caller = agentRouter.createCaller({ ...mockCtx, serverDB: {}, workspaceId: 'ws-1' });
+
+      await expect(caller.getAgentConfigById({ agentId: 'agt_private' })).resolves.toBeNull();
+      expect(agentServiceMock.getAgentConfigById).not.toHaveBeenCalled();
+    });
+
     it('redacts getAgentConfigById for a member who can view but not edit', async () => {
       agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(fullConfig);
       vi.mocked(canPerformResourceAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true);

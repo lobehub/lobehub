@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  executeToolCall: vi.fn(),
   findAll: vi.fn(),
   findById: vi.fn(),
   findByName: vi.fn(),
   getAgentConfigById: vi.fn(),
+  getAgentSkills: vi.fn(),
+  listCatalog: vi.fn(),
+  loadRuntimeSkills: vi.fn(),
+  resolveContentWorkspaceId: vi.fn(),
+  resolveRunWorkspaceId: vi.fn(),
 }));
 
 vi.mock('@lobechat/builtin-skills', () => ({
@@ -35,6 +41,38 @@ vi.mock('@/helpers/skillFilters', () => ({
   }),
 }));
 
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn(function () {
+    return {
+      getAgentSkills: mocks.getAgentSkills,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mocks.executeToolCall(...args),
+}));
+
+vi.mock('@/server/services/userSkill', async () => {
+  const actual = await vi.importActual('@/server/services/userSkill');
+
+  return {
+    ...(actual as Record<string, unknown>),
+    UserSkillService: vi.fn(function () {
+      return {
+        listCatalog: mocks.listCatalog,
+        loadRuntimeSkills: mocks.loadRuntimeSkills,
+      };
+    }),
+  };
+});
+
+vi.mock('../resolveWorkspaceScope', () => ({
+  resolveContentWorkspaceId: mocks.resolveContentWorkspaceId,
+  resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
+}));
+
 vi.mock('@/server/services/agentSignal/procedure', () => ({
   emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
   resolveToolOutcomeScope: vi.fn(function () {
@@ -57,9 +95,16 @@ describe('activatorRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+    mocks.getAgentSkills.mockResolvedValue([]);
     mocks.findAll.mockResolvedValue({ data: [], total: 0 });
     mocks.findById.mockResolvedValue(undefined);
     mocks.findByName.mockResolvedValue(undefined);
+    mocks.listCatalog.mockResolvedValue([]);
+    mocks.loadRuntimeSkills.mockResolvedValue([]);
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
+    mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
   });
 
   describe('activateSkill — disabled skill enforcement', () => {
@@ -171,6 +216,167 @@ describe('activatorRuntime', () => {
 
       expect(result.content).toContain('Not found: lobe-remote-device');
     });
+  });
+
+  describe('activateTools — what the run already offers and what it reports', () => {
+    const webBrowsingManifest = {
+      api: [{ name: 'search', parameters: {} }],
+      identifier: 'lobe-web-browsing',
+      meta: { title: 'Web Browsing' },
+      type: 'builtin',
+    } as never;
+
+    it('answers "Already active" for a tool the run already offers', async () => {
+      // The runtime is rebuilt for every tool call, so an in-memory list of
+      // what it activated is always empty; what the run offers comes from
+      // `enabledToolIds` (operation tool set plus earlier activations).
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        enabledToolIds: ['lobe-web-browsing'],
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      expect(result.content).toContain('Already active: lobe-web-browsing');
+      expect(result.content).not.toContain('Successfully activated');
+      expect(result.state.alreadyActive).toEqual(['lobe-web-browsing']);
+      expect(result.state.activatedTools).toEqual([]);
+    }, 20_000);
+
+    it('reports an activated tool as a tool, outside the skill domain', async () => {
+      // Activating a tool used to be reported as `activateSkill` on
+      // `skill:builtin-skill` with the tool id as a skill object, which wrote
+      // skill procedure records, markers and receipts for something that is
+      // not a skill.
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      await vi.waitFor(() => expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1));
+      const outcome = vi.mocked(emitToolOutcomeSafely).mock.calls[0][0];
+      expect(outcome).toMatchObject({
+        apiName: 'activateTools',
+        relatedObjects: [
+          { objectId: 'lobe-web-browsing', objectType: 'tool', relation: 'selected' },
+        ],
+        status: 'succeeded',
+        toolAction: 'activate',
+      });
+      expect(outcome.domainKey).toBeUndefined();
+    }, 20_000);
+
+    it('activates a tool without opening the skill sources', async () => {
+      // The factory runs for every tool call. Opening the skill runtime there
+      // read the agent config, its workspace and all its skill documents for
+      // a call that names only tools.
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      expect(result.state.activatedTools).toHaveLength(1);
+      expect(mocks.getAgentConfigById).not.toHaveBeenCalled();
+      expect(mocks.resolveContentWorkspaceId).not.toHaveBeenCalled();
+      expect(mocks.getAgentSkills).not.toHaveBeenCalled();
+    }, 20_000);
+
+    it('opens the skill sources once for several identifiers that are not tools', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['no-such-a', 'no-such-b'] });
+
+      expect(result.state.notFound).toEqual(['no-such-a', 'no-such-b']);
+      expect(mocks.getAgentSkills).toHaveBeenCalledTimes(1);
+      expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledTimes(1);
+    }, 20_000);
+
+    it('still reports a skill opened through the activateTools fallback as a skill', async () => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill' ? userSkillRow() : undefined,
+      );
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'auto' }],
+      });
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      await runtime.activateTools({ identifiers: ['user-skill'] });
+
+      expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(emitToolOutcomeSafely).mock.calls[0][0]).toMatchObject({
+        apiName: 'activateSkill',
+        domainKey: 'skill:builtin-skill',
+        relatedObjects: [{ objectId: 'user-skill', objectType: 'skill', relation: 'selected' }],
+      });
+    }, 20_000);
+
+    it('reports nothing when a requested identifier is neither a tool nor a skill', async () => {
+      // The skill lookup answers a miss with `success: false` instead of
+      // throwing. That used to be reported as a successful skill selection, so
+      // every mistyped tool identifier left a skill record behind.
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing-typo'] });
+
+      expect(result.state.notFound).toEqual(['lobe-web-browsing-typo']);
+      expect(emitToolOutcomeSafely).not.toHaveBeenCalled();
+    }, 20_000);
+
+    it('reports a skill that could not be opened by name as a failed skill activation', async () => {
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'missing-skill' });
+
+      expect(result.success).toBe(false);
+      expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(emitToolOutcomeSafely).mock.calls[0][0]).toMatchObject({
+        apiName: 'activateSkill',
+        domainKey: 'skill:builtin-skill',
+        errorReason: expect.stringContaining('Skill not found: "missing-skill"'),
+        relatedObjects: [{ objectId: 'missing-skill', objectType: 'skill', relation: 'selected' }],
+        status: 'failed',
+      });
+    }, 20_000);
   });
 
   describe('activateTools — wire-name resolution', () => {
@@ -382,6 +588,116 @@ describe('activatorRuntime', () => {
 
       expect(result.content).toContain('Not found: tituwork-feishu-mcp');
       expect(result.content).not.toContain('Successfully activated');
+    }, 20_000);
+  });
+
+  describe('activateTools — full skill source parity with lobe-skills', () => {
+    it('resolves agent-document, project filesystem, and user-library skills via fallback', async () => {
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Agent workflow body',
+          description: 'Agent workflow',
+          identifier: 'agent-skills:workflow',
+          name: 'agent-skills:workflow',
+          title: 'Workflow',
+        },
+      ]);
+      mocks.executeToolCall.mockResolvedValue({
+        content: '# Deploy skill body',
+        success: true,
+      });
+      mocks.loadRuntimeSkills.mockResolvedValue([
+        {
+          body: '# Saved plan body',
+          content: '# Saved plan body',
+          description: 'Saved plan',
+          identifier: 'user-skills:saved-plan',
+          name: 'user-skills:saved-plan',
+          title: 'Saved Plan',
+        },
+      ]);
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        activeDeviceId: 'device-1',
+        agentId: 'agent-1',
+        projectSkills: [
+          {
+            description: 'Project deploy',
+            location: '/repo/.agents/skills/deploy/SKILL.md',
+            name: 'deploy',
+            source: 'project',
+          },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['agent-skills:workflow', 'deploy', 'user-skills:saved-plan'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('# Agent workflow body');
+      expect(result.content).toContain('# Deploy skill body');
+      expect(result.content).toContain('# Saved plan body');
+      expect(result.state?.notFound).toEqual([]);
+      expect(result.state?.activatedSkills).toHaveLength(3);
+    }, 20_000);
+
+    it('still blocks ungranted agent/project/user skills for share visitors', async () => {
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Secret agent skill',
+          description: 'Secret',
+          identifier: 'agent-skills:secret',
+          name: 'agent-skills:secret',
+        },
+      ]);
+      mocks.loadRuntimeSkills.mockResolvedValue([
+        {
+          body: '# Secret user skill',
+          content: '# Secret user skill',
+          description: 'Secret',
+          identifier: 'user-skills:secret',
+          name: 'user-skills:secret',
+          title: 'Secret',
+        },
+      ]);
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        activeDeviceId: 'device-1',
+        agentId: 'agent-1',
+        agentShareVisitor: {
+          skillGrants: ['allowed-skill'],
+          toolGrants: [{ identifier: 'lobe-calculator' }],
+        } as never,
+        projectSkills: [
+          {
+            location: '/repo/.agents/skills/secret-proj/SKILL.md',
+            name: 'secret-proj',
+            source: 'project',
+          },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['agent-skills:secret', 'secret-proj', 'user-skills:secret'],
+      });
+
+      expect(result.state?.activatedSkills).toEqual([]);
+      expect(result.state?.notFound).toEqual([
+        'agent-skills:secret',
+        'secret-proj',
+        'user-skills:secret',
+      ]);
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.loadRuntimeSkills).not.toHaveBeenCalled();
     }, 20_000);
   });
 });

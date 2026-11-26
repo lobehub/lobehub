@@ -14,6 +14,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { ProjectIdentifierTakenError, ProjectModel } from '@/database/models/project';
 import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
+import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
 import { ProjectOverviewRepository } from '@/database/repositories/projectOverview';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -192,6 +193,20 @@ export const projectRouter = router({
         id: z.string().regex(PROJECT_ID_REGEX).optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
+        /**
+         * More GitHub repositories the project's environment checks out beside
+         * `repository` — the create dialog's advanced options. Laid out side
+         * by side, each in a folder named after it.
+         */
+        additionalRepositories: z
+          .array(
+            z.object({
+              defaultBranch: z.string().max(255).optional(),
+              url: z.string().min(1).max(2048),
+            }),
+          )
+          .max(9)
+          .optional(),
         repository: z
           .object({
             defaultBranch: z.string().max(255).optional(),
@@ -480,6 +495,10 @@ export const projectRouter = router({
           previousVisibility = project.visibility;
         }
         const updated = requireResult(await ctx.projectModel.update(id, input));
+        // The environment is named after the project and not editable on its
+        // own, so a rename carries over at once rather than on its next read.
+        if (input.name !== undefined)
+          await ProjectEnvironmentRepository.ensure(ctx.serverDB, updated);
         // Members can no longer see the project, so they must not keep opening its goals.
         if (input.visibility === 'private' && previousVisibility === 'public')
           await new GoalService(

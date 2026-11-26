@@ -1,5 +1,6 @@
 import { CHANNEL_LIMITS, type UploadFileItem } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
+import { formatSize } from '@lobechat/utils/format';
 import { toast } from '@lobehub/ui';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,16 @@ import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useFileStore } from '@/store/file';
 
 export type DraftFile = UploadFileItem & { fileId?: string };
+
+/** What a conversation accepts, checked before uploading. */
+export interface AttachmentLimits {
+  /** Files per message. */
+  maxFiles: number;
+  /** Bytes per file; unbounded when omitted. */
+  maxFileSize?: number;
+}
+
+const CHANNEL_ATTACHMENT_LIMITS: AttachmentLimits = { maxFiles: CHANNEL_LIMITS.attachments };
 
 /** An image is shown from the local file while it uploads; the URL lives as long as the draft. */
 const localPreview = (file: File) =>
@@ -37,8 +48,16 @@ const draftFor = (key: string) => {
   return draft;
 };
 
-/** Each Channel/Thread composer owns its uploads; ordinary chat's global draft is untouched. */
-export function useAttachments(draftKey: string) {
+/**
+ * Each Channel/Thread composer owns its uploads; ordinary chat's global draft is untouched.
+ * `workspaceId` pins the scope files upload into (`null` personal); `undefined` follows the
+ * active workspace. `limits` narrows what one message accepts, as a shared Agent's share does.
+ */
+export function useAttachments(
+  draftKey: string,
+  workspaceId?: string | null,
+  limits: AttachmentLimits = CHANNEL_ATTACHMENT_LIMITS,
+) {
   const { t } = useTranslation('channel');
   const upload = useFileStore((s) => s.uploadWithProgress);
   const draft = draftFor(draftKey);
@@ -81,13 +100,14 @@ export function useAttachments(draftKey: string) {
     patch(item.id, { abortController, error: undefined, errorCode: undefined, status: 'pending' });
     try {
       const file = COMPRESSIBLE_IMAGE_TYPES.has(item.file.type)
-        ? await compressImageFile(item.file)
+        ? await compressImageFile(item.file, { webp: true })
         : item.file;
       if (abortController.signal.aborted) return;
       const result = await upload({
         file,
         abortController,
         uploadId: item.id,
+        workspaceId,
         onStatusUpdate: (event) => {
           if (abortController.signal.aborted) return;
           if (event.type === 'updateFile') patch(item.id, event.value);
@@ -116,8 +136,13 @@ export function useAttachments(draftKey: string) {
         : undefined,
     upload: async (files: File[]) => {
       const accepted = files.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
-      if (draft.items.length + accepted.length > CHANNEL_LIMITS.attachments) {
-        toast.error(t('attachments.limit', { count: CHANNEL_LIMITS.attachments }));
+      if (draft.items.length + accepted.length > limits.maxFiles) {
+        toast.error(t('attachments.limit', { count: limits.maxFiles }));
+        return;
+      }
+      const { maxFileSize } = limits;
+      if (maxFileSize && accepted.some((file) => file.size > maxFileSize)) {
+        toast.error(t('attachments.tooLarge', { size: formatSize(maxFileSize) }));
         return;
       }
       const added = accepted.map((file): DraftFile => ({

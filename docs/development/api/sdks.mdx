@@ -1,0 +1,269 @@
+---
+title: LobeHub TypeScript and Python SDKs and File Uploads
+description: >-
+  Call the LobeHub public API with @lobehub/sdk for TypeScript and the
+  upcoming lobehub package for Python, and upload files over REST.
+tags:
+  - LobeHub
+  - SDK
+  - TypeScript
+  - Python
+  - File Upload
+---
+
+# LobeHub TypeScript and Python SDKs and File Uploads
+
+Both SDKs are generated from the same OpenAPI specification, so resources and method names match: `agents.list` is `lobehub.agents.list()` in TypeScript and `client.agents.list()` in Python.
+
+| SDK        | Package                                                             | Status                                                                |
+| ---------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| TypeScript | [`@lobehub/sdk`](https://www.npmjs.com/package/@lobehub/sdk) on npm | Available                                                             |
+| Python     | `lobehub` on PyPI                                                   | Coming soon ([#23337](https://github.com/lobehub/lobehub/pull/23337)) |
+
+## TypeScript SDK
+
+```bash
+npm install @lobehub/sdk
+```
+
+### Create a Client
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({
+  apiKey: process.env.LOBEHUB_API_KEY!, // an API key (sk-lh-…) or an OIDC access token
+  // baseURL: 'https://lobehub.example.com', // a self-hosted deployment
+});
+```
+
+Options: `apiKey`, `accessToken` (a function returning the current token, which takes precedence over `apiKey`), `baseURL` (default `https://app.lobehub.com`), and any client option such as a custom `fetch` or `headers`.
+
+### Call Methods
+
+Resources follow the API's top-level paths (`agents`, `topics`, `messages`, `files`, `knowledgeBases`, `tasks`, `goals`, `responses`, …). Methods are `list`, `get`, `create`, `update`, and `delete`, plus named actions such as `files.uploadBatch`, `tasks.run`, and `users.me`.
+
+Methods do not throw on HTTP errors. They return `{ data, error, response }`, where `data` is the full response envelope:
+
+```ts
+const { data, error } = await lobehub.agents.get({ path: { id: 'agt_xxx' } });
+if (error) {
+  console.error('Request failed', error);
+} else {
+  console.log(data.data.title);
+}
+
+const created = await lobehub.topics.create({
+  body: { agentId: 'agt_xxx', title: 'Weekly review' },
+});
+```
+
+Send `X-Workspace-Id` per call, or set it once with `headers`:
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const team = createLobeHub({
+  apiKey: process.env.LOBEHUB_TOKEN!,
+  headers: { 'X-Workspace-Id': 'ws_xxx' },
+});
+```
+
+### Stream a Response
+
+```ts
+const { response } = await lobehub.responses.create({
+  body: { model: 'agt_xxx', input: 'Summarize my week', stream: true },
+  parseAs: 'stream',
+});
+if (!response?.ok || !response.body) throw new Error(`Stream failed: ${response?.status}`);
+
+const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+let buffer = '';
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  buffer += value;
+  const frames = buffer.split('\n\n');
+  buffer = frames.pop()!;
+  for (const frame of frames) {
+    const data = frame.split('\n').find((line) => line.startsWith('data: '));
+    if (!data) continue;
+    const event = JSON.parse(data.slice(6));
+    if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+  }
+}
+```
+
+Event types are listed in [Streaming](/docs/development/api/streaming#with-streaming).
+
+### Sign In with OIDC and PKCE
+
+For native and desktop apps where each user signs in through a **public client** (no client secret), such as LobeHub's built-in clients. These helpers never send a client secret, so they do not work with a web OAuth app registered in Settings, which is a confidential client; see [OIDC with PKCE](/docs/development/api/authentication#oidc-with-pkce).
+
+```ts
+import {
+  createAuthorizationUrl,
+  createLobeHub,
+  createPkcePair,
+  exchangeAuthorizationCode,
+  parseAuthorizationCallback,
+  refreshAccessToken,
+} from '@lobehub/sdk';
+
+const client = { clientId: 'your-public-client-id', redirectUri: 'http://127.0.0.1:8765/callback' };
+const state = crypto.randomUUID();
+const pkce = await createPkcePair();
+const url = createAuthorizationUrl({ ...client, codeChallenge: pkce.challenge, state });
+// open `url` in the system browser, then receive `callbackUrl`
+
+const code = parseAuthorizationCallback(callbackUrl, state);
+let tokens = await exchangeAuthorizationCode({ ...client, code, codeVerifier: pkce.verifier });
+
+const lobehub = createLobeHub({
+  accessToken: async () => {
+    if (tokens.expiresAt - Date.now() < 60_000) {
+      tokens = await refreshAccessToken({
+        clientId: client.clientId,
+        refreshToken: tokens.refreshToken!,
+      });
+      // persist tokens.refreshToken: refresh tokens rotate
+    }
+    return tokens.accessToken;
+  },
+});
+```
+
+A `LobeHubOAuthError` with `code: 'invalid_grant'` means the user has to sign in again.
+
+### Coming Soon in the TypeScript SDK
+
+[#23246](https://github.com/lobehub/lobehub/pull/23246) adds:
+
+```ts
+import { createLobeHub, LobeHubAPIError } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({
+  apiKey: process.env.LOBEHUB_API_KEY!,
+  workspaceId: 'ws_xxx', // sent as X-Workspace-Id
+  maxRetries: 2, // default
+  timeout: 600_000, // default, ms per attempt
+});
+
+// typed errors
+const { error } = await lobehub.agents.get({ path: { id } });
+if (error instanceof LobeHubAPIError && error.code === 'not_found') {
+  // error.status, error.code, error.message, error.details, error.requestId
+}
+
+// a POST that is safe to retry
+await lobehub.agents.create({ body: { title: 'Researcher' }, idempotencyKey: crypto.randomUUID() });
+
+// walk every page
+for await (const agent of lobehub.paginate(lobehub.agents.list, { query: { limit: 100 } })) {
+  console.log(agent.id);
+}
+
+// typed stream events
+const stream = lobehub.responses.stream({ model: 'agt_xxx', input: 'Summarize my week' });
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+}
+
+// upload from a path, Blob, File, or bytes
+await lobehub.files.upload('./report.pdf', { knowledgeBaseId: 'kb_xxx' });
+```
+
+It also exports `LobeHubConnectionError` and `LobeHubTimeoutError`, lets you pass `throwOnError: true` to throw instead of returning `error`, and documents each method's API key scopes.
+
+## Python SDK
+
+<Callout type="info">
+  **Coming soon** ([#23337](https://github.com/lobehub/lobehub/pull/23337)). The `lobehub` package
+  is not published to PyPI yet. The examples below show the interface in that pull request and can
+  change before release.
+</Callout>
+
+```bash
+pip install lobehub
+```
+
+Python 3.9 or later. Both a sync client (`LobeHub`) and an async client (`AsyncLobeHub`) are provided. Methods return the `data` of the response envelope as plain dicts, typed with `TypedDict`.
+
+```python
+from lobehub import LobeHub, NotFoundError
+
+client = LobeHub(api_key="sk-lh-...")  # or set LOBEHUB_API_KEY; workspace_id="ws_..." for a Workspace
+
+me = client.users.me()
+print(me["id"])
+
+for agent in client.agents.iter_list(limit=50):
+    print(agent["id"], agent["title"])
+
+agent = client.agents.create({"title": "Reviewer"}, idempotency_key="create-reviewer-1")
+
+try:
+    client.agents.get("agt_missing")
+except NotFoundError as error:
+    print(error.status_code, error.code, error.request_id)
+
+with client.responses.stream({"model": "agt_...", "input": "Summarize my week"}) as stream:
+    for event in stream:
+        if event["type"] == "response.output_text.delta":
+            print(event["delta"], end="", flush=True)
+    final = stream.final_response()
+```
+
+```python
+import asyncio
+from lobehub import AsyncLobeHub
+
+
+async def main() -> None:
+    async with AsyncLobeHub() as client:
+        me = await client.users.me()
+        print(me["id"])
+
+
+asyncio.run(main())
+```
+
+Options: `api_key`, `access_token` (string or callable), `base_url` (or `LOBEHUB_BASE_URL`), `workspace_id`, `timeout` (seconds, default 600), and `max_retries` (default 2). Errors are `APIError` subclasses by status (`BadRequestError`, `AuthenticationError`, `PermissionDeniedError`, `NotFoundError`, `ConflictError`, `UnprocessableEntityError`, `RateLimitError`, `InternalServerError`), and `APIConnectionError` / `APITimeoutError` when no answer arrives. `lobehub.oauth` provides the same PKCE helpers as the TypeScript SDK.
+
+## File Uploads
+
+Uploads are `multipart/form-data` and need the `file:write` scope.
+
+| Endpoint                     | Fields                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/files`         | `file` (required); optional `knowledgeBaseId`, `agentId`, `sessionId`, `directory`, `skipCheckFileType`, `skipDeduplication` |
+| `POST /api/v1/files/batches` | `files` (1–20 files); the same optional fields except `skipDeduplication`                                                    |
+
+Limits: up to 100 MB per file, names up to 255 characters, and a type allowlist covering images, video, audio, text, PDF, Office documents, YAML, JSON, Markdown, and CSV. An upload can also be refused when the account is over its storage limit.
+
+```bash
+curl https://app.lobehub.com/api/v1/files \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -F "file=@./report.pdf" \
+  -F "knowledgeBaseId=kb_xxx"
+```
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const bytes = await readFile('./report.pdf');
+const { data, error } = await lobehub.files.create({
+  body: {
+    file: new File([bytes], 'report.pdf', { type: 'application/pdf' }),
+    knowledgeBaseId: 'kb_xxx',
+  },
+});
+if (!error) console.log(data.data.file.id);
+```
+
+The response contains the file record, `{ file: { id, name, fileType, url, … } }`. After uploading:
+
+- `GET /files/{id}/url?expiresIn=3600` returns a temporary download URL.
+- `POST /files/{id}/parses` extracts the text; `POST /files/{id}/chunks` splits and embeds it for search.
+- Adding `knowledgeBaseId` at upload puts the file in that Library directly.

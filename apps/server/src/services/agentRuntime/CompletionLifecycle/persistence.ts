@@ -138,9 +138,18 @@ export async function settleRunThread(
 }
 
 /**
+ * The row this completion moved out of an in-flight status, read from the write itself. Absent
+ * for a replay of a status the row already held, and when the write did not land.
+ */
+export interface CompletionTransition {
+  parentOperationId: string | null;
+  trigger: string | null;
+}
+
+/**
  * Persist terminal state to `agent_operations`. Fire-and-forget: a DB
  * outage must never block hook dispatch or the executor's terminal
- * cleanup path.
+ * cleanup path. `false` when a conflicting terminal owner holds the row.
  */
 export async function persistCompletion(
   deps: CompletionLifecycleDeps,
@@ -148,7 +157,8 @@ export async function persistCompletion(
   state: any,
   reason: string,
   settledAsAbandoned?: boolean,
-): Promise<boolean> {
+  terminalClaimed?: boolean,
+): Promise<false | { transition?: CompletionTransition }> {
   const completionReason: any = settledAsAbandoned
     ? 'lease_expired'
     : reason === 'max_steps' ||
@@ -203,6 +213,7 @@ export async function persistCompletion(
   // but NOT when a terminal owner got there first with a different one — see
   // the fallback below.
   let durableStatus: AgentOperationStatus = status;
+  let transition: CompletionTransition | undefined;
   try {
     const accepted = await deps.agentOperationModel.recordCompletion(operationId, {
       completedAt,
@@ -237,6 +248,10 @@ export async function persistCompletion(
     });
     if (accepted) {
       completionDurable = true;
+      // An abandonment pre-claims the row with its own compare-and-set, which runs once; this
+      // write lands on the claimed status, so it still is the run's end.
+      if (accepted.previousStatus !== status || terminalClaimed)
+        transition = { parentOperationId: accepted.parentOperationId, trigger: accepted.trigger };
     } else {
       const operation = await deps.agentOperationModel.findById(operationId);
       // Preserve the historical best-effort behavior when no durable start
@@ -285,7 +300,7 @@ export async function persistCompletion(
     }
   }
 
-  return true;
+  return { transition };
 }
 
 /**

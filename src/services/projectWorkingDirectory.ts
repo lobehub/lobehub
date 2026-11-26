@@ -14,15 +14,19 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.listEnvironments.query({ projectId });
   saveEnvironment = (input: Parameters<Client['saveEnvironment']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.saveEnvironment.mutate(input);
-  attachEnvironment = (projectId: string, environmentId: string) =>
-    lambdaClient.projectWorkingDirectory.attachEnvironment.mutate({ projectId, environmentId });
-  detachEnvironment = (projectId: string, environmentId: string) =>
-    lambdaClient.projectWorkingDirectory.detachEnvironment.mutate({ projectId, environmentId });
-  attachRepository = (input: Parameters<Client['attachRepository']['mutate']>[0]) =>
-    lambdaClient.projectWorkingDirectory.attachRepository.mutate(input);
+  getEnvironment = (projectId: string) =>
+    lambdaClient.projectWorkingDirectory.getEnvironment.query({ projectId });
+  updateEnvironment = (input: Parameters<Client['updateEnvironment']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.updateEnvironment.mutate(input);
   bind = (input: BindProjectDirectoryInput) =>
     lambdaClient.projectWorkingDirectory.bind.mutate(input);
   list = (projectId?: string) => lambdaClient.projectWorkingDirectory.list.query({ projectId });
+
+  executionOrder = (projectId: string) =>
+    lambdaClient.projectWorkingDirectory.executionOrder.query({ projectId });
+
+  reorderExecutionEnvironments = (input: { order: string[]; projectId: string }) =>
+    lambdaClient.projectWorkingDirectory.reorderExecutionEnvironments.mutate(input);
   listTopics = (id: string) => lambdaClient.projectWorkingDirectory.listTopics.query({ id });
   listEnvironmentTopics = async (directoryIds: string[]) => {
     const responses = await Promise.all(directoryIds.map((id) => this.listTopics(id)));

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
+import { BlockedPageError } from '../../utils/errorType';
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { jina } from '../jina';
 
@@ -218,5 +219,77 @@ describe('jina crawler', () => {
     await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
       'Network error',
     );
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    mockFetch.mockResolvedValue(
+      createMockResponse(
+        {
+          code: 200,
+          data: { content: 'Enable JavaScript and cookies to continue', title: 'Just a moment...' },
+        },
+        { ok: true },
+      ),
+    );
+
+    await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
+  });
+
+  describe('CAPTCHA warning', () => {
+    const warning =
+      'This page maybe requiring CAPTCHA, please make sure you are authorized to access this page.';
+
+    it('should throw BlockedPageError for a short page flagged as requiring a CAPTCHA', async () => {
+      mockFetch.mockResolvedValue(
+        createMockResponse(
+          {
+            code: 200,
+            data: {
+              content:
+                '## example.com\n\nOne more step before you proceed. Please complete the check below so we can confirm this request comes from a person.',
+              title: 'One more step',
+              warning,
+            },
+          },
+          { ok: true },
+        ),
+      );
+
+      await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+        BlockedPageError,
+      );
+    });
+
+    it.each([
+      ['an empty body', ''],
+      ['a body under the minimum length', 'Verify to continue'],
+    ])(
+      'should throw BlockedPageError for %s flagged as requiring a CAPTCHA',
+      async (_, content) => {
+        mockFetch.mockResolvedValue(
+          createMockResponse({ code: 200, data: { content, title: '', warning } }, { ok: true }),
+        );
+
+        await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+          BlockedPageError,
+        );
+      },
+    );
+
+    it('should keep a full page that only embeds a captcha widget', async () => {
+      const content = 'A real article paragraph. '.repeat(200);
+      mockFetch.mockResolvedValue(
+        createMockResponse(
+          { code: 200, data: { content, title: 'Real article', warning } },
+          { ok: true },
+        ),
+      );
+
+      const result = await jina('https://example.com', { filterOptions: {} });
+
+      expect(result).toMatchObject({ content, title: 'Real article' });
+    });
   });
 });

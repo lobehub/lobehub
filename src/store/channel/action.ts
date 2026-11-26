@@ -39,6 +39,23 @@ import { initialState, useChannelStore } from './store';
 export const CHANNEL_ACTIVE_REFRESH_MS = 3000;
 export const CHANNEL_IDLE_REFRESH_MS = 60_000;
 
+/**
+ * Several mounted views poll the same list or detail (sidebar + agent manager, page header +
+ * conversation), each on its own timer. `useClientDataSWR` dedupes nothing by default, so every
+ * extra mount multiplied the fast poll; one read per window serves all of them.
+ *
+ * The window stays the same in both states: SWR keeps the dedupe window a key had when it was
+ * first mounted, so views that mounted idle with no window kept separate fast polls once the
+ * channel turned active. A window shorter than one fast interval delays at most the first fast
+ * poll after an idle read, by under one interval.
+ */
+const CHANNEL_POLL_DEDUPE_MS = CHANNEL_ACTIVE_REFRESH_MS - 500;
+
+const pollDedupe = (pending: boolean) => ({
+  dedupingInterval: CHANNEL_POLL_DEDUPE_MS,
+  refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS,
+});
+
 type ChannelSendInput = Parameters<typeof channelService.send>[0];
 
 /** What the composer hands over; the outbox adds the request key, time and status. */
@@ -56,18 +73,13 @@ class ChannelActionImpl {
   /** Pass `false` where the list is only needed behind a user choice, so nothing polls before. */
   useFetchList = (enabled = true) => {
     const pending = useChannelStore(channelSelectors.listHasPendingWork);
-    return this.#private.list.useSync(
-      {},
-      { enabled, refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
-    );
+    return this.#private.list.useSync({}, { enabled, ...pollDedupe(pending) });
   };
   useFetchDetail = (params: ChannelViewParams | null) => {
     // Subscribe to the replica, not just SWR's last response: sending a message
     // updates this view imperatively and must shorten an already scheduled idle poll.
     const pending = useChannelStore(channelSelectors.hasPendingWork(params));
-    return this.#private.detail.useSync(params, {
-      refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS,
-    });
+    return this.#private.detail.useSync(params, pollDedupe(pending));
   };
   refreshList = () => this.#private.list.fetch({}, { fresh: true });
   refreshDetail = (params: ChannelViewParams) =>
@@ -123,6 +135,16 @@ class ChannelActionImpl {
     const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
     if (existing) return existing.id;
     const channelId = await channelService.openDirect({ agentId });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
+  };
+  /**
+   * The caller's direct Channel with a shared Agent, opened on first use from its share id or
+   * handle. The server resolves the share every time, so a paused or revoked share fails here
+   * even when a Channel already exists.
+   */
+  openShared = async (share: string) => {
+    const channelId = await channelService.openShared({ share });
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
@@ -323,7 +345,10 @@ class ChannelActionImpl {
   retrySend = (message: ChannelOutgoingMessage) => {
     if (findOutgoing(useChannelStore.getState().outbox, message)?.status !== 'failed')
       return Promise.resolve(undefined);
-    this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'sending' }), 'retry');
+    this.#setOutbox(
+      (outbox) => patchOutgoing(outbox, message, { errorType: undefined, status: 'sending' }),
+      'retry',
+    );
     return this.#deliver(message);
   };
   discardSend = (message: ChannelOutgoingMessage) => {
@@ -398,7 +423,12 @@ class ChannelActionImpl {
       return data;
     } catch (error) {
       console.error('Failed to send Channel message', error);
-      this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'failed' }), 'failed');
+      // A refusal names its category as the message (`ChannelError`); anything else stays generic.
+      const errorType = error instanceof Error ? error.message : undefined;
+      this.#setOutbox(
+        (outbox) => patchOutgoing(outbox, message, { errorType, status: 'failed' }),
+        'failed',
+      );
     }
   };
   #refreshAfterSend = (input: ChannelSendInput, threadId: string | null) =>
@@ -411,6 +441,22 @@ class ChannelActionImpl {
         this.refreshList(),
       ]),
     );
+  /** Answers an Agent's question card; the answer posts as the person's reply to it. */
+  answerAsk = async (
+    input: Parameters<typeof channelService.answerAsk>[0] & { threadId: string | null },
+  ) => {
+    const { threadId, ...answer } = input;
+    await channelService.answerAsk(answer);
+    // The answer is committed once the write returns. A refresh that fails afterwards must not
+    // read back as a failed answer: the card would stay actionable and the question could be
+    // answered twice. Same policy as every other write path: log the refresh, keep the write.
+    await this.#refreshAfterWrite(() =>
+      Promise.all([
+        this.refreshDetail({ channelId: input.channelId, threadId }),
+        this.refreshList(),
+      ]),
+    );
+  };
   stop = async (channelId: string, scope: Parameters<typeof channelService.stop>[1]) => {
     await channelService.stop(channelId, scope);
     await this.refreshDetail({ channelId, threadId: 'threadId' in scope ? scope.threadId : null });

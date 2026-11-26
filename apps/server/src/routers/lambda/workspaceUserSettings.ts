@@ -1,5 +1,6 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { HETERO_PERMISSION_MODES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,11 +8,15 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { HomeRepository } from '@/database/repositories/home';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { EditLockService } from '@/server/services/editLock';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+
+import { TEAM_PINS_RETIRED_AT } from './_helpers/sidebarPin';
 
 /**
  * Per-user preferences scoped to the current workspace. Every procedure is
@@ -46,6 +51,48 @@ const workspaceUserSettingsProcedure = wsCompatProcedure.use(serverDatabase).use
 // type layer already constrains the write paths.
 const preferencePatchSchema = z.object({}).passthrough().partial();
 
+/**
+ * Set a member's sidebar up from the workspace the first time their
+ * preference is read (lazy, so every way of joining a workspace is covered):
+ *
+ * - A member who joined while team pins were shown
+ *   ({@link TEAM_PINS_RETIRED_AT}) keeps them as their own pins, after the
+ *   pins they already had — nothing they saw disappears.
+ * - Anyone else gets the workspace's recommended Agents added to their
+ *   sidebar, unpinned.
+ *
+ * A failure only logs: the sidebar then shows the member's own choices and
+ * the next read tries again.
+ */
+const initializeSidebar = async (
+  ctx: {
+    serverDB: LobeChatDatabase;
+    userId: string;
+    workspaceId: string;
+    workspaceUserSettingsModel: WorkspaceUserSettingsModel;
+  },
+  preference: WorkspaceUserPreference,
+): Promise<WorkspaceUserPreference> => {
+  try {
+    const joinedAt = await ctx.workspaceUserSettingsModel.getJoinedAt();
+    if (!joinedAt) return preference;
+
+    const homeRepository = new HomeRepository(ctx.serverDB, ctx.userId, ctx.workspaceId);
+    if (joinedAt < TEAM_PINS_RETIRED_AT) {
+      // Settled even without team pins: such a member never gets the
+      // recommended list, so a later read has nothing to add.
+      const pinIds = await homeRepository.getTeamPinnedIds();
+      return await ctx.workspaceUserSettingsModel.initializeSidebar({ final: true, pinIds });
+    }
+
+    const listIds = await homeRepository.getRecommendedIds();
+    return await ctx.workspaceUserSettingsModel.initializeSidebar({ listIds });
+  } catch (error) {
+    console.error('[workspaceUserSettings:initializeSidebar]', error);
+    return preference;
+  }
+};
+
 export const workspaceUserSettingsRouter = router({
   /**
    * Fetch the caller's preference for the current workspace. Returns an
@@ -55,7 +102,10 @@ export const workspaceUserSettingsRouter = router({
   getPreference: workspaceUserSettingsProcedure.query(
     async ({ ctx }): Promise<WorkspaceUserPreference> => {
       try {
-        return await ctx.workspaceUserSettingsModel.getPreference();
+        const preference = await ctx.workspaceUserSettingsModel.getPreference();
+        if (preference.sidebarInitialized) return preference;
+
+        return await initializeSidebar(ctx, preference);
       } catch (error) {
         console.error('[workspaceUserSettings:getPreference]', error);
         throw new TRPCError({
@@ -75,6 +125,20 @@ export const workspaceUserSettingsRouter = router({
     .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
     .mutation(async ({ ctx, input }) =>
       ctx.workspaceUserSettingsModel.setWorktreeModeDir(input.key, input.enabled),
+    ),
+
+  /** Whether this member last left the Codex Plan switch on for one directory. */
+  setHeteroPlanModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setHeteroPlanModeDir(input.key, input.enabled),
+    ),
+
+  /** The Claude Code permission mode this member last picked for one directory. */
+  setHeteroPermissionModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ key: z.string().min(1).max(4096), mode: z.enum(HETERO_PERMISSION_MODES) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setHeteroPermissionModeDir(input.key, input.mode),
     ),
 
   /**

@@ -17,6 +17,7 @@ import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
+import { artboardHookExecutor } from './artboard';
 import {
   ampExecutor,
   antigravityExecutor,
@@ -34,6 +35,7 @@ import {
   qoderExecutor,
   traeExecutor,
 } from './heteroCli';
+import { a2uiExecutor } from './lobe-a2ui';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { attachmentsExecutor } from './lobe-attachments';
@@ -67,10 +69,12 @@ export const builtinToolExecutors = [
   qoderExecutor,
   traeExecutor,
   agentBuilderExecutor,
+  artboardHookExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,
   attachmentsExecutor,
   auvExecutor,
+  a2uiExecutor,
   calculatorExecutor,
   canvasExecutor,
   withPageEditHooks(cloudSandboxExecutor),

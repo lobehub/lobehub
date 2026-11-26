@@ -40,7 +40,7 @@ const devices = [
 ];
 
 describe('DeviceGroupSubmenu', () => {
-  it('keeps one first-level row with the online count, and lists the devices in the submenu', () => {
+  it('keeps one first-level row by title only, and lists the devices in the submenu', () => {
     render(
       <DeviceGroupSubmenu
         devices={devices}
@@ -52,14 +52,16 @@ describe('DeviceGroupSubmenu', () => {
 
     const groupRow = screen.getByTestId('device-group-private');
     expect(groupRow.textContent).toContain('Private Devices');
-    expect(groupRow.textContent).toContain('"online":2');
-    expect(groupRow.textContent).toContain('"total":3');
+    expect(groupRow.textContent).toBe('Private Devices');
     expect(groupRow.textContent).not.toContain('row:');
 
     const submenu = screen.getByTestId('submenu');
     expect(submenu.textContent).toContain('row:hetzner');
     expect(submenu.textContent).toContain('row:zeabur');
-    expect(submenu.textContent).toContain('row:lin-pc');
+    // Offline machines fold behind a toggle at the end of the submenu.
+    expect(submenu.textContent).not.toContain('row:lin-pc');
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByTestId('submenu').textContent).toContain('row:lin-pc');
   });
 
   it('names the picked device on the first level when it is in the group', () => {
@@ -74,21 +76,6 @@ describe('DeviceGroupSubmenu', () => {
     );
 
     expect(screen.getByTestId('device-group-private').textContent).toContain('Hetzner 8C64G');
-  });
-
-  it('says presence is still being checked instead of counting cached rows as offline', () => {
-    render(
-      <DeviceGroupSubmenu
-        devices={[{ ...device('cached', false), onlineUnknown: true } as DeviceListItem]}
-        kind={'devices'}
-        label={'Devices'}
-        renderDevice={(d) => <div key={d.deviceId}>row:{d.deviceId}</div>}
-      />,
-    );
-
-    const groupRow = screen.getByTestId('device-group-devices');
-    expect(groupRow.textContent).toContain('heteroAgent.executionTarget.presenceChecking');
-    expect(groupRow.textContent).not.toContain('"online":0');
   });
 
   it('hands a device click to the row the caller renders', () => {

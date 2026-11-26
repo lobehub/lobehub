@@ -179,7 +179,7 @@ describe('agentBuilderRuntime', () => {
   });
 
   describe('updateConfig - togglePlugin', () => {
-    it('appends a new pinned entry when enabling an absent identifier', async () => {
+    it('appends a new auto entry when enabling an absent identifier', async () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['plugin-a'] });
       mockFindById.mockResolvedValue({ identifier: 'plugin-b', manifest: { api: [] } });
 
@@ -192,11 +192,11 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'auto' }],
       });
     });
 
-    it('flips an existing disabled object entry back to pinned in place, without duplicating it', async () => {
+    it('flips an existing disabled object entry back to auto in place, without duplicating it', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }],
@@ -212,11 +212,11 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'auto' }],
       });
     });
 
-    it('disabling (enabled: false) reverts the entry to auto, removing it from the array', async () => {
+    it('disabling (enabled: false) writes an explicit disabled entry so the tool stays off in Agent mode', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: ['plugin-a', 'plugin-b'],
@@ -230,7 +230,9 @@ describe('agentBuilderRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { plugins: ['plugin-a'] });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }],
+      });
     });
 
     // Vent msg_3TSVUmdD8G68gRPPKH: `tg_mcp` was reported enabled while the
@@ -271,7 +273,7 @@ describe('agentBuilderRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'tg-mcp', mode: 'pinned' }],
+        plugins: [{ identifier: 'tg-mcp', mode: 'auto' }],
       });
     });
 
@@ -304,7 +306,7 @@ describe('agentBuilderRuntime', () => {
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
-    it('still disables an id that no longer resolves, so stale entries can be removed', async () => {
+    it('still disables an id that no longer resolves, so stale entries can be turned off', async () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['tg_mcp'] });
 
       const result = await createRuntime().updateConfig(
@@ -313,7 +315,9 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { plugins: [] });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: [{ identifier: 'tg_mcp', mode: 'disabled' }],
+      });
     });
 
     it('returns the invocation target for a successful no-op', async () => {
@@ -420,7 +424,7 @@ describe('agentBuilderRuntime', () => {
   });
 
   describe('installPlugin', () => {
-    it('flips an existing disabled builtin-tool entry back to pinned, without duplicating it', async () => {
+    it('flips an existing disabled builtin-tool entry back to auto, without duplicating it', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: [{ identifier: 'lobe-web-browsing', mode: 'disabled' }],
@@ -435,11 +439,29 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }],
+        plugins: [{ identifier: 'lobe-web-browsing', mode: 'auto' }],
       });
     });
 
-    it('is a no-op write when the builtin-tool identifier is already pinned', async () => {
+    it('writes builtinOverride when enabling an on-demand builtin tool', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        id: 'agent-1',
+        plugins: [],
+      });
+
+      const runtime = createRuntime();
+      const result = await runtime.installPlugin(
+        { identifier: 'lobe-calculator', source: 'official' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: [{ builtinOverride: true, identifier: 'lobe-calculator', mode: 'auto' }],
+      });
+    });
+
+    it('is a no-op write when the builtin-tool identifier is already enabled', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: ['lobe-web-browsing'],
@@ -456,7 +478,7 @@ describe('agentBuilderRuntime', () => {
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
-    it('flips an existing disabled market-plugin entry back to pinned, without duplicating it', async () => {
+    it('flips an existing disabled market-plugin entry back to auto, without duplicating it', async () => {
       mockGetAgentConfigById.mockResolvedValue({
         id: 'agent-1',
         plugins: [{ identifier: 'market-plugin', mode: 'disabled' }],
@@ -472,7 +494,7 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'market-plugin', mode: 'pinned' }],
+        plugins: [{ identifier: 'market-plugin', mode: 'auto' }],
       });
     });
   });
@@ -537,7 +559,7 @@ describe('agentBuilderRuntime', () => {
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'ads-mcp', mode: 'pinned' }],
+        plugins: [{ identifier: 'ads-mcp', mode: 'auto' }],
       });
     });
 
@@ -594,7 +616,7 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).not.toContain('next run');
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
-        plugins: [{ identifier: 'ads-mcp', mode: 'pinned' }],
+        plugins: [{ identifier: 'ads-mcp', mode: 'auto' }],
       });
     });
 

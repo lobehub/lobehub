@@ -85,7 +85,7 @@ export class WorkActionImpl {
     options?: ReplicaSyncOptions<WorkListItem[], WorkListItem[]>,
   ): ReplicaSyncResult => this.#private.conversationWorks.useSync(params, options);
 
-  /** Pull requests linked to a topic (Better Coding Experience); `null` disables the read. */
+  /** Pull requests linked to a topic; `null` disables the read. */
   useFetchTopicPullRequests = (
     params: TopicPullRequestsParams | null,
     options?: ReplicaSyncOptions<TopicPullRequestItem[], TopicPullRequestItem[]>,

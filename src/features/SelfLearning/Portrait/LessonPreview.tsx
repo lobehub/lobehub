@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityVars } from '@/styles/densityVars';
 
 import { previewSections } from '../helpers';
 import { useExpertiseLesson } from '../hooks';
@@ -32,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
   section: css`
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: baseline;
   `,
   separator: css`

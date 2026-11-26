@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Kon geen uitvoerapparaat bereiken voor deze agent. Verbind een apparaat, of configureer de apparaatgateway op de server en probeer het opnieuw.",
   "response.DeviceResponseTimeout": "Het apparaat reageerde niet op tijd. Het kan offline of in slaapstand zijn, of het kan nog bezig zijn met het starten van deze run. Controleer of het apparaat is verbonden en of deze run al in uitvoering is, en probeer het opnieuw.",
   "response.ExceededContextWindowCloud": "Het gesprek is te lang om te verwerken. Bewerk uw laatste bericht om de invoer te verkleinen of verwijder enkele berichten en probeer het opnieuw.",
-  "response.FreePlanLimit": "Je gebruikt momenteel een gratis abonnement en kunt deze functie niet gebruiken. Upgrade naar een betaald abonnement om verder te gaan.",
   "response.GoogleAIBlockReason.BLOCKLIST": "De inhoud bevat geblokkeerde termen. Formuleer het opnieuw en probeer het opnieuw.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "De gegenereerde afbeelding is geblokkeerd om veiligheidsredenen. Probeer uw verzoek aan te passen.",
   "response.GoogleAIBlockReason.LANGUAGE": "De gevraagde taal wordt niet ondersteund. Probeer het opnieuw in een ondersteunde taal.",

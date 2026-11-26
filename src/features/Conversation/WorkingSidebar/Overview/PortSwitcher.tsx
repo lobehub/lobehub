@@ -1,7 +1,5 @@
 import type { DeviceListeningPort } from '@lobechat/types';
 import {
-  createStaticStyles,
-  cx,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -11,6 +9,8 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CopyIcon,
   GlobeIcon,
@@ -34,168 +34,125 @@ import type { DeviceTunnelLink } from '@/store/device';
 import { OverviewRow, PickerGlyph } from './OverviewRow';
 import { usePortTunnels } from './usePortTunnels';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  action: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  actions: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 2px;
-    align-items: center;
-
-    /* Pull the last glyph flush with the text trailing of the other rows. */
-    margin-inline-end: -4px;
-  `,
-  available: css`
-    font-size: 12px;
-    color: ${cssVar.colorPrimary};
-  `,
-  command: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-    width: 260px;
-    padding: 4px;
-  `,
-  empty: css`
-    padding-block: 10px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  expose: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    font-weight: 500;
-  `,
+const styles = stylex.create({
+  action: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    padding: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  actions: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '2px',
+    alignItems: 'center',
+    // Pull the last glyph flush with the text trailing of the other rows.
+    marginInlineEnd: '-4px',
+  },
+  available: { fontSize: '12px', color: cssVar.colorPrimary },
+  command: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  container: { display: 'flex', flexDirection: 'column', width: '260px', padding: '4px' },
+  empty: {
+    paddingBlock: '10px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  expose: { flexShrink: 0, fontSize: '12px', fontWeight: 500 },
   /**
    * A port that is running but not exposed yet stays one step quieter than an
    * exposed one; the full text color is kept for what is actually reachable.
    * Port, glyph and "Open" inherit it, so hover lifts the whole row at once.
    */
-  idle: css`
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover,
-    &[data-highlighted] {
-      color: ${cssVar.colorText};
-    }
-  `,
-  host: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  header: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 6px 4px;
-    padding-inline: 8px 4px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  item: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  othersList: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-
-    /* A dev machine listens on dozens of ports; the list scrolls inside the
-       menu instead of pushing it past the viewport. */
-    max-height: 200px;
-  `,
-  port: css`
-    flex-shrink: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  portIdle: css`
-    color: inherit;
-  `,
-  retry: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: none;
-
-    font-size: 12px;
-    color: ${cssVar.colorInfo};
-
-    background: transparent;
-  `,
-  spacer: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  state: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  toggle: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  idle: {
+    color: {
+      'default': cssVar.colorTextSecondary,
+      ':hover': cssVar.colorText,
+      '[data-highlighted]': cssVar.colorText,
+    },
+  },
+  host: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '4px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '4px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+  },
+  item: { display: 'flex', gap: '8px', alignItems: 'center' },
+  othersList: {
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    // A dev machine listens on dozens of ports; the list scrolls inside the
+    // menu instead of pushing it past the viewport.
+    maxHeight: '200px',
+  },
+  port: {
+    flexShrink: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  portIdle: { color: 'inherit' },
+  retry: {
+    cursor: 'pointer',
+    padding: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    fontSize: '12px',
+    color: cssVar.colorInfo,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  spacer: { flex: '1', minWidth: 0 },
+  state: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  toggle: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 interface PortSwitcherProps {
   /** Whether the working panel is showing; detection only runs while it is. */
@@ -247,13 +204,13 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
    */
   const renderLabel = (port: number, info?: DeviceListeningPort) => (
     <>
-      <span className={cx(styles.port, styles.portIdle)}>{port}</span>
+      <span {...stylex.props(styles.port, styles.portIdle)}>{port}</span>
       {info?.command && (
-        <span className={styles.command} title={info.cwd}>
+        <span {...stylex.props(styles.command)} title={info.cwd}>
           {info.command}
         </span>
       )}
-      <span className={styles.spacer} />
+      <span {...stylex.props(styles.spacer)} />
     </>
   );
 
@@ -276,7 +233,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
 
   const renderLink = (link: DeviceTunnelLink) => (
     <DropdownMenuItem
-      className={styles.item}
+      {...stylex.props(styles.item)}
       key={link.slug}
       onClick={(event) => {
         event.preventDefault();
@@ -292,21 +249,21 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
           right beside it. A link starts with its port (`5199--slug.lobe.sh`),
           so the port is drawn as the link's own prefix instead of repeated
           before it — that leaves room for the whole domain. */}
-      <span className={styles.host} title={link.hostname}>
+      <span {...stylex.props(styles.host)} title={link.hostname}>
         {link.hostname.startsWith(`${link.port}--`) ? (
           <>
-            <span className={styles.port}>{link.port}</span>
+            <span {...stylex.props(styles.port)}>{link.port}</span>
             {link.hostname.slice(String(link.port).length)}
           </>
         ) : (
           link.hostname
         )}
       </span>
-      <span className={styles.actions}>
+      <span {...stylex.props(styles.actions)}>
         <Tooltip title={t('workingPanel.overview.ports.copy')}>
           <button
             aria-label={t('workingPanel.overview.ports.copy')}
-            className={styles.action}
+            {...stylex.props(styles.action)}
             type={'button'}
             {...ownPress(() => void copyLink(link))}
           >
@@ -316,7 +273,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
         <Tooltip title={t('workingPanel.overview.ports.revoke')}>
           <button
             aria-label={t('workingPanel.overview.ports.revoke')}
-            className={styles.action}
+            {...stylex.props(styles.action)}
             type={'button'}
             {...ownPress(() => void revokeLink(link))}
           >
@@ -329,7 +286,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
 
   const renderDetected = (item: DeviceListeningPort) => (
     <DropdownMenuItem
-      className={cx(styles.item, styles.idle)}
+      {...stylex.props(styles.item, styles.idle)}
       // A port from an earlier probe may have stopped: shown, not exposable,
       // until the device confirms it still listens.
       disabled={detectionChecking}
@@ -345,21 +302,23 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
         spin={creatingPort === item.port}
       />
       {renderLabel(item.port, item)}
-      <span className={styles.expose}>{t('workingPanel.overview.ports.detected.expose')}</span>
+      <span {...stylex.props(styles.expose)}>
+        {t('workingPanel.overview.ports.detected.expose')}
+      </span>
     </DropdownMenuItem>
   );
 
   const checkingState = (
-    <div className={styles.state}>
+    <div {...stylex.props(styles.state)}>
       <Icon spin icon={LoaderCircleIcon} size={13} />
       {t('workingPanel.overview.ports.detected.checking')}
     </div>
   );
 
   const loadFailedState = (
-    <div className={styles.state}>
+    <div {...stylex.props(styles.state)}>
       {t('workingPanel.overview.ports.loadFailed')}
-      <button className={styles.retry} type={'button'} onClick={() => void refresh()}>
+      <button {...stylex.props(styles.retry)} type={'button'} onClick={() => void refresh()}>
         {tCommon('retry')}
       </button>
     </div>
@@ -368,7 +327,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
   let body: ReactNode;
   if (isLoading) {
     body = (
-      <div className={styles.state}>
+      <div {...stylex.props(styles.state)}>
         <Icon spin icon={LoaderCircleIcon} size={13} />
         {t('workingPanel.overview.ports.loading')}
       </div>
@@ -381,7 +340,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
     body = checkingState;
   } else if (tunnels.length === 0 && detected.length === 0) {
     body = (
-      <div className={styles.empty}>
+      <div {...stylex.props(styles.empty)}>
         {detectionAvailable
           ? t('workingPanel.overview.ports.detected.none')
           : t('workingPanel.overview.ports.unavailable')}
@@ -414,7 +373,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
                 // A running dev server the user hasn't exposed yet — say so
                 // without making them open the menu. Ports from an earlier
                 // probe are not known to be running, so they wait for the device.
-                <span className={styles.available}>
+                <span {...stylex.props(styles.available)}>
                   {t('workingPanel.overview.ports.detected.available', { count: detected.length })}
                 </span>
               )}
@@ -426,15 +385,15 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
       <DropdownMenuPortal>
         <DropdownMenuPositioner placement={'bottomLeft'} sideOffset={8}>
           <DropdownMenuPopup>
-            <div className={styles.container}>
-              <div className={styles.header}>
+            <div {...stylex.props(styles.container)}>
+              <div {...stylex.props(styles.header)}>
                 {t('workingPanel.overview.ports.title')}
                 {/* Kept even when detection is unavailable: a device that just came
                     back online is otherwise stuck on the stale answer. */}
                 <Tooltip title={t('workingPanel.overview.ports.detected.refresh')}>
                   <button
                     aria-label={t('workingPanel.overview.ports.detected.refresh')}
-                    className={styles.action}
+                    {...stylex.props(styles.action)}
                     type={'button'}
                     {...ownPress(() => void refreshDetected())}
                   >
@@ -448,7 +407,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
               {otherPorts.length > 0 && (
                 <>
                   <DropdownMenuItem
-                    className={styles.toggle}
+                    {...stylex.props(styles.toggle)}
                     closeOnClick={false}
                     onClick={() => setShowOthers((value) => !value)}
                   >
@@ -459,7 +418,7 @@ const PortSwitcher = memo<PortSwitcherProps>(({ active, deviceId, workingDirecto
                         })}
                   </DropdownMenuItem>
                   {showOthers && (
-                    <div className={styles.othersList}>{otherPorts.map(renderDetected)}</div>
+                    <div {...stylex.props(styles.othersList)}>{otherPorts.map(renderDetected)}</div>
                   )}
                 </>
               )}

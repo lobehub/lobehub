@@ -14,12 +14,14 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 
 import LibraryList from './LibraryList';
 
 const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
 
@@ -48,10 +50,8 @@ const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('docs.recentLibraries')}
-          </Text>
+        <AccordionTrigger style={sectionTriggerStyle}>
+          <SectionTitle>{t('docs.recentLibraries')}</SectionTitle>
         </AccordionTrigger>
         <div
           className={cx(

@@ -20,8 +20,11 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { expertiseService, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 export const composeStyles = createStaticStyles(({ css }) => ({
   body: css`
@@ -41,11 +44,11 @@ export const composeStyles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-height: 150px;
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: none;
 
     font: inherit;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.7;
     color: inherit;
 
@@ -59,7 +62,7 @@ export const composeStyles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     position: relative;
-    padding-block: 16px 8px;
+    padding-block: ${densityVars.cardPadding} 8px;
     padding-inline: 20px;
   `,
   inputShell: css`
@@ -131,6 +134,8 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
   // Ingestion reads this literally when deciding which rejections belong, so it is kept.
   const [outOfScope, setOutOfScope] = useState(group?.domain.outOfScope ?? '');
   const [busy, setBusy] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const ready = Boolean(title.trim() && gate.trim());
 
   const draft = async () => {
@@ -142,8 +147,8 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
       setTitle(drafted.title);
       setGate(drafted.gate);
       setOutOfScope(drafted.outOfScope ?? '');
-    } catch (error) {
-      console.error('[MemoryRules] group draft failed:', error);
+    } catch (err) {
+      console.error('[MemoryRules] group draft failed:', err);
       setTitle(text.slice(0, 40));
       toast.warning(t('rules.group.generateFailed'));
     }
@@ -152,6 +157,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
 
   const submit = async () => {
     if (!ready || busy) return;
+    setError(null);
     setBusy(true);
     try {
       if (group) {
@@ -170,9 +176,9 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
         onDone(id ? { gate: gate.trim(), id, title: title.trim() } : undefined);
       }
       close();
-    } catch (error) {
-      console.error('[MemoryRules] group save failed:', error);
-      toast.error(t('rules.saveFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] group save failed:', err);
+      setError(toInlineError(t('rules.saveFailedRetry'), err));
     } finally {
       setBusy(false);
     }
@@ -255,6 +261,12 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
             />
           </Flexbox>
         </Flexbox>
+      )}
+
+      {error && (
+        <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
+          <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>
+        </div>
       )}
 
       <Flexbox horizontal align={'center'} className={composeStyles.footer} justify={'flex-end'}>

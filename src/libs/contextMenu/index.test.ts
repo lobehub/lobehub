@@ -52,7 +52,9 @@ describe('showContextMenu routing', () => {
 
   it('delegates to the web menu on darwin when the menu is not native-safe', () => {
     stubDarwin();
-    const items = [{ extra: 'x', key: '1', label: 'Copy' }] as unknown as NativeContextMenuItem[];
+    const items = [
+      { key: '1', label: 'Copy', loading: true },
+    ] as unknown as NativeContextMenuItem[];
 
     showContextMenu(items);
 
@@ -243,7 +245,7 @@ describe('registerNativeContextMenuInterceptor', () => {
 
     stubDarwin();
     interceptor.show?.(
-      [{ extra: 'x', key: '1', label: 'Copy' }] as unknown as NativeContextMenuItem[],
+      [{ key: '1', label: 'Copy', loading: true }] as unknown as NativeContextMenuItem[],
       undefined,
       fallback,
     );

@@ -53,6 +53,8 @@
 | `components/Skeleton`、`ListSkeleton` | 路由级骨架和列表占位                         | 骨架形状要贴近真实布局；路由骨架登记方式见 `spa-routes` skill  |
 | `features/CommandMenu`                | 全局命令面板                                 | 新的全局动作登记进来，不另做搜索弹窗                           |
 
+市场中的应用和 MCP 共用 `SkillListRow` 目录行。用户已安装的 MCP 和技能分别在各自目录顶部展示，复用 `CatalogSection` 的预览和「查看全部」。未连接项的行尾用 `RowAddAction` 显示加号，已连接项用 `RowMoreMenu` 打开管理菜单。
+
 #### mobile 外壳（桌面页面在 mobile 全屏打开）
 
 mobile 与 web 是同一套 DOM 组件；分类同 web（薄包装 / 重复 / 业务组件），没有单独的 RN 原子层。

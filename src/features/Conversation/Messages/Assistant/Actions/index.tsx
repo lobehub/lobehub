@@ -12,9 +12,9 @@ import {
 
 const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['delAndRegenerate', 'copy'];
 const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
-// The developer-facing actions live one level down, under Advanced: each is
-// gated (dev mode, Labs) and rare, so flat they were noise in the menu that
-// every user opens. It sits with the other utilities rather than after Delete —
+// The developer-facing actions live one level down, under Advanced: they are
+// rare (and eval capture is gated on Labs), so flat they were noise in the menu
+// that every user opens. It sits with the other utilities rather than after Delete —
 // trailing the destructive group made a debugging aid read as a last resort.
 // The submenu drops itself when none of its children apply.
 const ADVANCED_GROUP: MessageActionSlot = {
@@ -63,7 +63,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
   const { content, error, tools } = data;
 
   // Empty error messages render only an interception card — nothing to edit
-  // or copy, so only the dev-mode operation-id action remains menu-worthy
+  // or copy, so only the operation-id action remains menu-worthy
   // (failed runs are exactly what it traces; the menu collapses away when the
   // action opts out). When the turn streamed content before erroring, keep
   // edit/copy so the partial reply stays salvageable.

@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "ボーナス残高を追加しました",
   "storage_overage_cap_reached": "ストレージの従量課金制月額上限${{monthlyCap}}に達しました。このサイクルの推定料金は${{estimatedCycleCharge}}です。次の請求サイクルまで、または上限を増加させるまで、含まれるストレージを超える新しいアップロードはブロックされます。",
   "storage_overage_cap_reached_title": "ストレージ従量課金制上限に達しました",
-  "subscription_one_time_expired": "一度限りの{{plan}}プランが終了し、アカウントは現在無料プランになっています。{{plan}}を更新して特典を取り戻してください。",
   "subscription_one_time_expired_action": "{{plan}}を更新する",
   "subscription_one_time_expired_title": "{{plan}}プランが終了しました",
   "subscription_payment_failed": "サブスクリプションの更新支払いが失敗しました。サブスクリプションを継続するために、支払い方法を更新してください。",

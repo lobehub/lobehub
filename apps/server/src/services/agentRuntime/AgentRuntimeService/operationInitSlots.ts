@@ -1,5 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import { extractActivatedToolIdsFromMessages, UsageCounter } from '@lobechat/agent-runtime';
+import { extractToolActivationsFromMessages, UsageCounter } from '@lobechat/agent-runtime';
 
 import { type OperationCreationParams } from '../types';
 
@@ -41,11 +41,13 @@ export type OperationInitSlots = Pick<
 export const buildPreInitState = (
   params: OperationCreationParams,
   {
+    artboardWorksAccepted,
     fileWorksAccepted,
     llmExecutor,
   }: {
     /** The client's `file` Works declaration, inherited by a group member. */
     fileWorksAccepted?: boolean;
+    artboardWorksAccepted?: boolean;
     llmExecutor?: NonNullable<AgentState['host']>['llmExecutor'];
   },
 ): Partial<AgentState> => {
@@ -84,6 +86,7 @@ export const buildPreInitState = (
     // What the host needs to deliver and retry the run. Hooks are stamped
     // right after creation once the dispatcher has serialized them.
     host: {
+      ...(artboardWorksAccepted === true && { acceptsArtboardWorks: true }),
       ...(fileWorksAccepted === true && { acceptsFileWorks: true }),
       ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
       ...(params.includeFinalState === true && { includeFinalState: true }),
@@ -216,14 +219,14 @@ export const applyOperationInitSlots = (
   const messages = slots.initialMessages ?? [];
 
   const activatableToolIds = new Set(operationToolSet.activatableToolIds ?? []);
-  const restoredActivatedToolIds = extractActivatedToolIdsFromMessages(messages)?.filter((id) =>
+  const restoredActivations = extractToolActivationsFromMessages(messages)?.filter(({ id }) =>
     activatableToolIds.has(id),
   );
-  const activatedStepTools = restoredActivatedToolIds?.length
-    ? restoredActivatedToolIds.map((id) => ({
+  const activatedStepTools = restoredActivations?.length
+    ? restoredActivations.map((activation) => ({
         activatedAtStep: state.stepCount ?? 0,
-        id,
-        manifest: operationToolSet.manifestMap[id],
+        ...activation,
+        manifest: operationToolSet.manifestMap[activation.id],
         source: 'discovery' as const,
       }))
     : undefined;

@@ -19,6 +19,8 @@ vi.mock('../middleware/auth', () => ({
 }));
 
 const { default: ChatGroupRoutes } = await import('./chat-groups.route');
+const { ChatGroupListSchema, ChatGroupSchema } = await import('../types/chat-group.type');
+const { DeletedResourceSchema } = await import('../types/common.type');
 
 const USER = 'chat-group-user';
 const OTHER = 'chat-group-other';
@@ -105,6 +107,7 @@ describe('POST /chat-groups', () => {
       { agentId: 'agt_a', enabled: true, order: 0, role: 'participant' },
       { agentId: 'agt_b', enabled: true, order: 1, role: 'assistant' },
     ]);
+    expect(() => ChatGroupSchema.parse(group)).not.toThrow();
   });
 
   it('rolls the group back when a member is not visible to the caller', async () => {
@@ -175,6 +178,8 @@ describe('GET /chat-groups', () => {
 
     expect(await json(await request('/', { userId: OTHER }))).toEqual({
       chatGroups: [],
+      hasMore: false,
+      nextCursor: null,
       total: 0,
     });
     expect((await request(`/${group.id}`, { userId: OTHER })).status).toBe(404);
@@ -232,6 +237,7 @@ describe('/chat-groups/:id/members', () => {
       await request(`/${group.id}/members`, { body: { agentIds: ['agt_b'] }, method: 'DELETE' }),
     );
     expect(removed.members.map((m: any) => m.agentId).slice(1)).toEqual(['agt_a', 'agt_c']);
+    expect(() => ChatGroupSchema.parse(removed)).not.toThrow();
     expect(await db.select().from(agents).where(eq(agents.id, 'agt_b'))).toHaveLength(1);
   });
 
@@ -276,6 +282,9 @@ describe('DELETE /chat-groups/:id', () => {
     const res = await request(`/${group.id}`, { method: 'DELETE' });
 
     expect(res.status).toBe(200);
+    const deleted = await json(res);
+    expect(deleted).toEqual({ deleted: true, id: group.id });
+    expect(() => DeletedResourceSchema.parse(deleted)).not.toThrow();
     expect((await request(`/${group.id}`)).status).toBe(404);
     expect(await db.select().from(agents).where(eq(agents.id, supervisorId))).toHaveLength(0);
     expect(await db.select().from(agents).where(eq(agents.id, 'agt_a'))).toHaveLength(1);
@@ -310,6 +319,8 @@ describe('personal chat groups', () => {
     const ids = async (query: string) =>
       (await json(await request(`/${query}`))).chatGroups.map((group: { id: string }) => group.id);
 
+    const list = await json(await request('/'));
+    expect(() => ChatGroupListSchema.parse(list)).not.toThrow();
     expect(await ids('?personal=true')).toEqual([personal.id]);
     expect(await ids('?personal=false')).toEqual([other.id]);
     expect((await ids('')).sort()).toEqual([personal.id, other.id].sort());
