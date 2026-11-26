@@ -1,0 +1,85 @@
+# Self-hosted QStash-compatible queue for this Compose deployment.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.qstash.yml up -d --build
+#
+# LobeHub stays on the official image: @upstash/qstash reads QSTASH_URL from the
+# environment, so pointing the client at a local queue needs no code change.
+#
+# hellostash is built locally from ./qstash, which pins the upstream release and
+# applies three patches it needs to deliver to a LobeHub instance (patch.js).
+#
+# Two things to know before enabling it:
+#   - the image registers only lobe-task-schedule-dispatch and lobe-goal-sweep,
+#     the same two schedules it creates against hosted QStash
+#   - it builds every callback and schedule destination from APP_URL, so APP_URL
+#     must be reachable from the hellostash container. The public domain works:
+#     the container then leaves through the edge and comes back in.
+#
+# Add to .env:
+#   HELLOSTASH_DB_PASSWORD, QSTASH_TOKEN,
+#   QSTASH_CURRENT_SIGNING_KEY, QSTASH_NEXT_SIGNING_KEY
+services:
+  lobe:
+    depends_on:
+      hellostash:
+        condition: service_healthy
+    environment:
+      - 'QSTASH_URL=http://hellostash:8080'
+      - 'QSTASH_TOKEN=${QSTASH_TOKEN}'
+      - 'QSTASH_CURRENT_SIGNING_KEY=${QSTASH_CURRENT_SIGNING_KEY}'
+      - 'QSTASH_NEXT_SIGNING_KEY=${QSTASH_NEXT_SIGNING_KEY}'
+
+  hellostash:
+    build:
+      context: ./qstash
+      args:
+        HELLOSTASH_VERSION: '0.1.0'
+    # Local tag only: the image is built here and never published.
+    image: hellostash-patched:0.1.0
+    container_name: lobe-hellostash
+    depends_on:
+      hellostash-db:
+        condition: service_healthy
+    ports:
+      # Host-only, for creating schedules and inspecting the queue.
+      - '127.0.0.1:${HELLOSTASH_PORT:-8081}:8080'
+    environment:
+      - 'DATABASE_URL=postgresql://hellostash:${HELLOSTASH_DB_PASSWORD}@hellostash-db:5432/hellostash'
+      - 'QSTASH_TOKEN=${QSTASH_TOKEN}'
+      - 'QSTASH_CURRENT_SIGNING_KEY=${QSTASH_CURRENT_SIGNING_KEY}'
+      - 'QSTASH_NEXT_SIGNING_KEY=${QSTASH_NEXT_SIGNING_KEY}'
+      # The destination is this deployment's public URL; the guard stays open in
+      # case the domain resolves to a private address inside the container.
+      - 'ALLOW_PRIVATE_DESTINATIONS=true'
+      # agent-runtime publishes payloads sized for the QStash 10 MiB quota, while
+      # hellostash defaults to 1 MiB.
+      - 'MAX_BODY_BYTES=10485760'
+      - 'MAX_HTTP_TIMEOUT_MS=120000'
+      # Must exceed MAX_HTTP_TIMEOUT_MS: a shorter lease re-delivers a request that
+      # is still in flight and turns at-least-once into at-least-twice.
+      - 'LEASE_MS=150000'
+    restart: always
+    networks:
+      - lobe-network
+
+  hellostash-db:
+    image: postgres:17-alpine
+    container_name: lobe-hellostash-db
+    environment:
+      - 'POSTGRES_DB=hellostash'
+      - 'POSTGRES_USER=hellostash'
+      - 'POSTGRES_PASSWORD=${HELLOSTASH_DB_PASSWORD}'
+    volumes:
+      - 'hellostash-data:/var/lib/postgresql/data'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hellostash -d hellostash']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+    networks:
+      - lobe-network
+
+volumes:
+  hellostash-data:
+    driver: local
