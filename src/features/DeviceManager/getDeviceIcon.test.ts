@@ -1,4 +1,7 @@
-import { SiAndroid, SiApple, SiIos, SiLinux } from '@icons-pack/react-simple-icons';
+import SiAndroid from '@icons-pack/react-simple-icons/icons/SiAndroid';
+import SiApple from '@icons-pack/react-simple-icons/icons/SiApple';
+import SiIos from '@icons-pack/react-simple-icons/icons/SiIos';
+import SiLinux from '@icons-pack/react-simple-icons/icons/SiLinux';
 import { Microsoft } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { CpuIcon, MonitorIcon } from 'lucide-react';
