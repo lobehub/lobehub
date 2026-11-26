@@ -118,6 +118,9 @@ class ProjectFileSearchManager {
     const child = spawn(finder.command, finder.args, {
       cwd: scope,
       stdio: ['ignore', 'pipe', 'ignore'],
+      // The device host often runs windowless (detached CLI daemon): without
+      // this, Windows allocates a visible console for every finder child.
+      windowsHide: true,
     });
     const files: string[] = [];
     const seen = new Set<string>();
