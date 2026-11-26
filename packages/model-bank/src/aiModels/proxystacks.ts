@@ -406,11 +406,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Funsion Fable 5.1 delivers deep extended thinking and multi-step coding across a 1M context window.',
-    displayName: 'Funsion Fable 5.1',
+      'Claude Fable 5.1 delivers deep extended thinking and multi-step coding across a 1M context window.',
+    displayName: 'Claude Fable 5.1',
     enabled: false,
-    id: 'funsion-fable-5-1',
+    family: 'claude',
+    id: 'claude-fable-5-1',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
@@ -431,11 +433,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Funsion Fable 5 combines deep reasoning and creative synthesis over 1M input tokens.',
-    displayName: 'Funsion Fable 5',
+      'Claude Fable 5 combines deep reasoning and creative synthesis over 1M input tokens.',
+    displayName: 'Claude Fable 5',
     enabled: false,
-    id: 'funsion-fable-5',
+    family: 'claude',
+    id: 'claude-fable-5',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
@@ -456,11 +460,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Funsion Opus 5.5 provides flagship agentic coding, complex reasoning, and multimodal analysis.',
-    displayName: 'Funsion Opus 5.5',
+      'Claude Opus 5.5 provides flagship agentic coding, complex reasoning, and multimodal analysis.',
+    displayName: 'Claude Opus 5.5',
     enabled: true,
-    id: 'funsion-opus-5-5',
+    family: 'claude',
+    id: 'claude-opus-5-5',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
@@ -481,11 +487,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Funsion Sonnet 5.5 balances strong software engineering intelligence with fast streaming throughput.',
-    displayName: 'Funsion Sonnet 5.5',
+      'Claude Sonnet 5.5 balances strong software engineering intelligence with fast streaming throughput.',
+    displayName: 'Claude Sonnet 5.5',
     enabled: true,
-    id: 'funsion-sonnet-5-5',
+    family: 'claude',
+    id: 'claude-sonnet-5-5',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
@@ -505,11 +513,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_000_000,
-    description: 'Funsion Sonnet 5 supports 1M-context reasoning, tool calling, and vision.',
-    displayName: 'Funsion Sonnet 5',
+    description: 'Claude Sonnet 5 supports 1M-context reasoning, tool calling, and vision.',
+    displayName: 'Claude Sonnet 5',
     enabled: false,
-    id: 'funsion-sonnet-5',
+    family: 'claude',
+    id: 'claude-sonnet-5',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
@@ -530,11 +540,13 @@ const proxystacksChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Funsion Haiku 5.5 delivers instant, ultra-economical multimodal responses and tool calls.',
-    displayName: 'Funsion Haiku 5.5',
+      'Claude Haiku 5.5 delivers instant, ultra-economical multimodal responses and tool calls.',
+    displayName: 'Claude Haiku 5.5',
     enabled: false,
-    id: 'funsion-haiku-5-5',
+    family: 'claude',
+    id: 'claude-haiku-5-5',
     maxOutput: 128_000,
+    organization: 'Anthropic',
     pricing: {
       currency: 'USD',
       units: [
