@@ -30,6 +30,7 @@ describe('ExaImpl', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.EXA_API_KEY;
+    delete process.env.EXA_URL;
   });
 
   describe('query', () => {
@@ -137,6 +138,24 @@ describe('ExaImpl', () => {
 
       const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
       expect(body.category).toBeUndefined();
+    });
+
+    it('should call the default Exa endpoint', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(createMockResponse(makeExaResponse([])));
+
+      await impl.query('test');
+
+      expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://api.exa.ai/search');
+    });
+
+    it('should use EXA_URL from env when set', async () => {
+      process.env.EXA_URL = 'https://exa-proxy.example.com/v1';
+
+      vi.mocked(fetch).mockResolvedValueOnce(createMockResponse(makeExaResponse([])));
+
+      await impl.query('test');
+
+      expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://exa-proxy.example.com/v1/search');
     });
 
     it('should include API key in request headers', async () => {
