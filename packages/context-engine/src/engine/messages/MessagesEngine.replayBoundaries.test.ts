@@ -108,21 +108,18 @@ it('resolves tool placeholders before committing them and never rerenders histor
 
 it('keeps invocation ownership when an assistant group is flattened', async () => {
   const first = await run('a1', [user('u1')]);
-  const next = await run(
-    'a2',
-    [
-      user('u1'),
-      {
-        id: 'group',
-        role: 'assistantGroup',
-        content: '',
-        children: [answer('a1', first.metadata.contextReplaySnapshot!)],
-      } as UIChatMessage,
-      user('u2'),
-    ],
-    { systemRole: 'new preference' },
-  );
+  const next = await run('a2', [
+    user('u1'),
+    {
+      id: 'group',
+      role: 'assistantGroup',
+      content: '',
+      children: [answer('a1', first.metadata.contextReplaySnapshot!)],
+    } as UIChatMessage,
+    user('u2'),
+  ]);
   expect(next.messages[0]).toEqual(first.messages[0]);
+  expect(next.metadata.contextReplaySnapshot?.system).toBeUndefined();
 });
 
 it('freezes a message reference and does not attach it to a later user turn', async () => {

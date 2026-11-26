@@ -36,10 +36,9 @@ describe('durable context replay', () => {
       role: 'assistant',
       metadata: { contextReplay: first.metadata.contextReplaySnapshot },
     } as UIChatMessage;
-    const continuation = await process('a2', [user('u1'), previous, user('u2')], {
-      systemRole: 'Changed preference',
-    });
+    const continuation = await process('a2', [user('u1'), previous, user('u2')]);
     expect(continuation.messages[0]).toEqual(first.messages[0]);
+    expect(continuation.metadata.contextReplaySnapshot?.system).toBeUndefined();
     const branch = await process('b1', [user('u1')], { systemRole: 'Independent baseline' });
     expect(JSON.stringify(branch.messages)).toContain('Independent baseline');
     expect(JSON.stringify(branch.messages)).not.toContain('Original persona');

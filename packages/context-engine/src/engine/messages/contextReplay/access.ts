@@ -107,7 +107,7 @@ export const prepareContextReplay = async (
   const revoked = new Set([...denied].filter((source) => !isWithholdableContextSource(source)));
   if (
     replay.committedSnapshot?.invalidated ||
-    replay.committedSnapshot?.sourceIds.some((source) => denied.has(source))
+    replay.committedSnapshot?.sourceIds.some((source) => revoked.has(source))
   ) {
     throw new Error(
       'Context source access changed; start a new invocation instead of retrying revoked input',

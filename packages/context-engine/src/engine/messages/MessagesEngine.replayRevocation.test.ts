@@ -83,4 +83,50 @@ describe('context replay after source changes', () => {
       }),
     ).rejects.toThrow('database unavailable');
   });
+
+  it('does not carry a withheld memory into the next dependencies', async () => {
+    const first = await run();
+    const snapshot: ContextReplaySnapshot = {
+      ...first.metadata.contextReplaySnapshot!,
+      changes: [
+        {
+          key: 'UserMemoryInjector',
+          messages: [{ content: 'LIKES GREEN TEA', id: 'memory-0', role: 'user' }],
+          sourceIds: ['memory:preferences:m1'],
+        },
+      ],
+      sourceIds: ['memory:preferences:m1'],
+    };
+    const next = await run({
+      contextReplay: {
+        invocationId: 'a2',
+        validateSources: async (ids) => ids.filter((id) => id.startsWith('memory:')),
+      },
+      messages: [user('u1'), assistant(snapshot), user('u2')],
+    });
+    expect(next.metadata.contextReplaySnapshot?.sourceIds).not.toContain('memory:preferences:m1');
+  });
+
+  it('retries a committed invocation without the text of a deleted memory', async () => {
+    const first = await run();
+    const committed: ContextReplaySnapshot = {
+      ...first.metadata.contextReplaySnapshot!,
+      changes: [
+        {
+          key: 'UserMemoryInjector',
+          messages: [{ content: 'LIKES GREEN TEA', id: 'memory-0', role: 'user' }],
+          sourceIds: ['memory:preferences:m1'],
+        },
+      ],
+      sourceIds: ['memory:preferences:m1'],
+    };
+    const retry = await run({
+      contextReplay: {
+        committedSnapshot: committed,
+        invocationId: 'a1',
+        validateSources: async (ids) => ids.filter((id) => id.startsWith('memory:')),
+      },
+    });
+    expect(JSON.stringify(retry.messages)).not.toContain('LIKES GREEN TEA');
+  });
 });

@@ -18,6 +18,7 @@ import { PARSED_FILE_CONTENT_MAX_CHARS } from '../parsedFileCap';
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/file');
+vi.mock('../../contextReplay/scrub', () => ({ scrubDeletedContextSources: vi.fn() }));
 vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
 vi.mock('../history');
@@ -784,7 +785,6 @@ describe('DocumentService', () => {
 
       // Should have deleted child-doc-1's associated file
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-child-1');
-      // Should have deleted all documents
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('child-doc-1');
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('child-folder-2');
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('folder-1');

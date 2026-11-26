@@ -63,17 +63,17 @@ describe('context replay drift', () => {
     expect(JSON.stringify(next.messages.slice(first.messages.length))).toContain('Ship v2');
   });
 
-  it('applies an edited system role after the stable baseline', async () => {
+  it('rebuilds the system baseline when the system role is edited', async () => {
     const first = await run();
     const next = await continueAfter(first, { systemRole: 'Changed preference' });
-    expect(next.messages[0]).toEqual(first.messages[0]);
-    expect(JSON.stringify(next.messages.slice(first.messages.length))).toContain(
-      'Changed preference',
-    );
+    const system = next.messages.filter((message) => message.role === 'system');
+    expect(JSON.stringify(system)).toContain('Changed preference');
+    expect(JSON.stringify(next.messages)).not.toContain('Original persona');
+    expect(next.metadata.contextReplaySnapshot?.system).toBeDefined();
   });
 
   it.each(['before-system', 'system-append', 'system-replace'] as const)(
-    'applies an edited %s document after the stable baseline',
+    'applies an edited %s document with system authority',
     async (loadPosition) => {
       const doc = (content: string) => ({
         content,
@@ -85,8 +85,9 @@ describe('context replay drift', () => {
       });
       const first = await run({ agentDocuments: [doc('ORIGINAL RULE')] });
       const next = await continueAfter(first, { agentDocuments: [doc('UPDATED RULE')] });
-      expect(next.messages[0]).toEqual(first.messages[0]);
-      expect(JSON.stringify(next.messages.slice(first.messages.length))).toContain('UPDATED RULE');
+      const system = next.messages.filter((message) => message.role === 'system');
+      expect(JSON.stringify(system)).toContain('UPDATED RULE');
+      expect(JSON.stringify(next.messages)).not.toContain('ORIGINAL RULE');
     },
   );
 

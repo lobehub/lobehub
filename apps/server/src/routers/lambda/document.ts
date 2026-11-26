@@ -15,7 +15,6 @@ import { WorkModel } from '@/database/models/work';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { scrubDeletedContextSources } from '@/server/services/contextReplay/scrub';
 import { DocumentService } from '@/server/services/document';
 import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import {
@@ -232,9 +231,6 @@ export const documentRouter = router({
       await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
       const result = await ctx.documentService.deleteDocument(input.id);
-      await scrubDeletedContextSources(ctx, {
-        ids: [`document:${input.id}`, `document-read:${input.id}`],
-      });
       if (ctx.workspaceId) {
         await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
           'document',
@@ -260,9 +256,6 @@ export const documentRouter = router({
       await assertContentsNotInRestrictedKnowledgeBase(ctx, ids);
 
       const result = await ctx.documentService.deleteDocuments(ids);
-      await scrubDeletedContextSources(ctx, {
-        ids: ids.flatMap((id) => [`document:${id}`, `document-read:${id}`]),
-      });
       if (ctx.workspaceId) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
         await Promise.all(ids.map((id) => permissionModel.removeAll('document', id)));

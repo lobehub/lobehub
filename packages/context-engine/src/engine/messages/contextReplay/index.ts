@@ -55,7 +55,6 @@ const messageProviders = new Set([
   'TopicReferenceContextInjector',
   'SkillImportRouteInjector',
 ]);
-// The stable baseline keeps their first rendering; later edits replay as one appended update.
 const systemProviders = new Set([
   'AgentDocumentBeforeSystemInjector',
   'SystemRoleInjector',
@@ -100,7 +99,6 @@ const structuralProcessors = new Set([
   'ToolActivationAnchorProcessor',
   'MessageCleanupProcessor',
 ]);
-const SYSTEM_UPDATE_KEY = 'SystemInstructions';
 
 export const contextReplayProcessorScope = (name: string) => {
   if (sessionProviders.has(name)) return 'session' as const;
@@ -227,14 +225,19 @@ export class ContextReplayCoordinator {
       });
       const own = this.input.committedSnapshot;
       const previous = history.at(-1)?.snapshot;
-      const baseline =
-        own?.system ??
-        (previous?.sessionKey === this.sessionKey
+      const historicalBaseline =
+        previous?.sessionKey === this.sessionKey
           ? history.findLast((entry) => entry.snapshot.system)?.snapshot.system
-          : undefined);
+          : undefined;
       const currentSystem = context.messages
         .filter((message) => message.role === 'system')
         .map(wireMessage);
+      // An edited system prompt starts a new baseline so it keeps system authority.
+      const baseline = own
+        ? (own.system ?? historicalBaseline)
+        : historicalBaseline && comparable(historicalBaseline) === comparable(currentSystem)
+          ? historicalBaseline
+          : undefined;
       const system = baseline ?? currentSystem;
       const withheld = new Set(this.input.withheldSourceIds ?? []);
       const visibleChanges = (snapshot: ContextReplaySnapshot) =>
@@ -244,39 +247,22 @@ export class ContextReplayCoordinator {
       const latest = new Map<string, ContextReplaySegment>();
       for (const entry of history)
         for (const change of visibleChanges(entry.snapshot)) latest.set(change.key, change);
-      const systemUpdate: ContextReplaySegment[] =
-        baseline &&
-        (latest.has(SYSTEM_UPDATE_KEY) || comparable(currentSystem) !== comparable(baseline))
-          ? [
-              {
-                key: SYSTEM_UPDATE_KEY,
-                sourceIds: this.input.sourceIdsByProvider?.SystemDocumentSources ?? [],
-                messages: [
-                  {
-                    id: `${SYSTEM_UPDATE_KEY}:0`,
-                    role: 'user',
-                    content: currentSystem.map((message) => text(message.content)).join('\n\n'),
-                  },
-                ],
-              },
-            ]
-          : [];
       const candidates = await Promise.all(
-        [...this.candidates.values(), ...systemUpdate].map(async (candidate) => {
+        [...this.candidates.values()].map(async (candidate) => {
           const resolved = await new PlaceholderVariablesProcessor({
             variableGenerators: this.variables,
           }).process({ ...context, messages: candidate.messages });
           return { ...candidate, messages: resolved.messages as ContextReplaySegment['messages'] };
         }),
       );
-      const changes =
-        own?.changes ??
-        candidates.filter(
-          (candidate) =>
-            !(messageProviders.has(candidate.key.split(':')[0]) && latest.has(candidate.key)) &&
-            comparable(candidate.messages) !==
-              comparable(latest.get(candidate.key)?.messages ?? []),
-        );
+      const changes = own
+        ? visibleChanges(own)
+        : candidates.filter(
+            (candidate) =>
+              !(messageProviders.has(candidate.key.split(':')[0]) && latest.has(candidate.key)) &&
+              comparable(candidate.messages) !==
+                comparable(latest.get(candidate.key)?.messages ?? []),
+          );
       const canonicalChanges = own ? changes : this.canonicalize(changes);
       const sourceIds = [
         ...new Set([
@@ -284,7 +270,7 @@ export class ContextReplayCoordinator {
           ...canonicalChanges.flatMap((change) => change.sourceIds),
           ...Object.values(this.input.sourceIdsByProvider ?? {}).flat(),
         ]),
-      ];
+      ].filter((source) => !withheld.has(source));
       const snapshot: ContextReplaySnapshot = own ?? {
         executionBinding: this.input.executionBinding,
         toolDefinitions: Object.fromEntries(
