@@ -18,6 +18,26 @@ inputs:
 runs:
   using: composite
   steps:
+    # Several self-hosted runners share one Linux user. Give each runner its own
+    # HOME so pnpm (~/setup-pnpm), bun (~/.bun) and caches do not race.
+    - name: Isolate HOME on self-hosted runners
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      run: |
+        home="$(dirname "$RUNNER_WORKSPACE")/_home"
+        mkdir -p "$home"
+        echo "HOME=$home" >> "$GITHUB_ENV"
+        # GitHub-hosted runners are UTC. Some tests compare against a UTC date,
+        # so match it instead of the host's local zone.
+        echo "TZ=UTC" >> "$GITHUB_ENV"
+        # Vitest defaults to (CPU cores - 1) workers per job. Runners on one host
+        # share its cores. RUNNERS_PER_HOST comes from the runner .env; hosts set
+        # up before it existed run 3 runners, so default to 3.
+        per_host="${RUNNERS_PER_HOST:-3}"
+        workers=$(( $(nproc) / per_host ))
+        if [ "$workers" -lt 1 ]; then workers=1; fi
+        echo "VITEST_MAX_WORKERS=$workers" >> "$GITHUB_ENV"
+
     - name: Install pnpm
       uses: pnpm/action-setup@v6
       with:
