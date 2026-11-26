@@ -37,7 +37,7 @@ describe('pluginRouter legacy create routes', () => {
 
   const caller = () =>
     pluginRouter.createCaller({
-      clientMetadata: { type: 'desktop', version: '2.1.4' },
+      clientMetadata: { app: 'lobehub', type: 'desktop', version: '2.1.4' },
       userId: 'user-1',
     } as any);
 
@@ -73,6 +73,7 @@ describe('pluginRouter legacy create routes', () => {
       type: 'plugin',
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'lobehub',
       client_type: 'desktop',
       client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'plugin',
@@ -111,6 +112,7 @@ describe('pluginRouter legacy create routes', () => {
       type: 'customPlugin',
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'lobehub',
       client_type: 'desktop',
       client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'customPlugin',

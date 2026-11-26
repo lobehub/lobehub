@@ -12,7 +12,11 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
-import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
+} from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -591,6 +595,16 @@ export class UserModel {
     (await this.mutatePreference((prev) => {
       const worktreeModeDirs = applyWorktreeModeDir(prev.worktreeModeDirs, key, enabled);
       return { next: { ...prev, worktreeModeDirs }, result: worktreeModeDirs };
+    })) ?? [];
+
+  /**
+   * Personal-mode Codex Plan switch remembered for one directory; returns the
+   * stored list, capped here like the worktree switch.
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPlanModeDirs = applyHeteroPlanModeDir(prev.heteroPlanModeDirs, key, enabled);
+      return { next: { ...prev, heteroPlanModeDirs }, result: heteroPlanModeDirs };
     })) ?? [];
 
   /**

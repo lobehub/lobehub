@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DEVICE_BOUND_TO_FIXED_AGENT, getDeviceActionErrorMessage } from './deviceActionError';
+import {
+  DEVICE_BOUND_TO_FIXED_AGENT,
+  getDeviceActionErrorMessage,
+  getDeviceShareErrorView,
+} from './deviceActionError';
 
 vi.mock('i18next', () => ({
   t: (key: string, options?: { ns?: string }) => `${options?.ns}:${key}`,
@@ -31,5 +35,31 @@ describe('getDeviceActionErrorMessage', () => {
   it('falls back to the generic copy when the error has no message', () => {
     expect(getDeviceActionErrorMessage({ message: '  ' })).toBe('common:operationFailed');
     expect(getDeviceActionErrorMessage(undefined)).toBe('common:operationFailed');
+  });
+});
+
+describe('getDeviceShareErrorView', () => {
+  it('keeps the fixed-agent refusal as the summary', () => {
+    const error = trpcError('fixed', { code: DEVICE_BOUND_TO_FIXED_AGENT });
+
+    expect(getDeviceShareErrorView(error, 'Mac')).toEqual({
+      summary: 'setting:devices.errors.boundToFixedAgent',
+    });
+  });
+
+  it('shows a retry line and folds the raw server message into detail', () => {
+    const error = trpcError('Device went offline');
+
+    expect(getDeviceShareErrorView(error, 'Mac')).toEqual({
+      detail: 'Device went offline',
+      summary: 'setting:devices.share.failedRetry',
+    });
+  });
+
+  it('omits detail when the error carries no message', () => {
+    expect(getDeviceShareErrorView(undefined, 'Mac')).toEqual({
+      detail: undefined,
+      summary: 'setting:devices.share.failedRetry',
+    });
   });
 });

@@ -35,7 +35,7 @@ import { redisService } from '@/server/services/redis';
 
 import { SkillImportError, SkillManifestError, SkillParseError } from './errors';
 import { readGitHubArchive } from './githubArchive';
-import { GitHubSkillRepository } from './githubRepository';
+import { GitHubSkillRepository, type GitHubTokenResolver } from './githubRepository';
 import {
   checkGitHubRows,
   installedFingerprint,
@@ -87,14 +87,23 @@ export class SkillImporter {
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    options?: { githubProxy?: MarketService['proxyOAuthRequest']; workspaceRole?: string },
+    options?: {
+      githubProxy?: MarketService['proxyOAuthRequest'];
+      /** The caller's GitHub token from their Vault, tried before the connector. */
+      githubToken?: GitHubTokenResolver;
+      workspaceRole?: string;
+    },
   ) {
     this.skillModel = new AgentSkillModel(db, userId, workspaceId);
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.github = new GitHub({ userAgent: 'LobeHub-Skill-Importer' });
-    this.repository = new GitHubSkillRepository(this.github, options?.githubProxy);
+    this.repository = new GitHubSkillRepository(
+      this.github,
+      options?.githubProxy,
+      options?.githubToken,
+    );
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.workspaceRole = options?.workspaceRole;

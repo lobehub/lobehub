@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "沒有可用的範本。",
   "agentMarketplace.picker.failedToLoad": "範本載入失敗。請稍後再試。",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} 個範本可用。",
-  "agentMarketplace.render.alreadyInLibraryTag": "已在資料庫中",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} 已在資料庫中",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} 已在資料庫中",
   "askUserQuestion.checkStatus": "檢查提交狀態",
   "askUserQuestion.checking": "正在檢查提交狀態…",
   "askUserQuestion.customOption.placeholder": "或者寫下自己的選項…",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "新增一項",
   "updateArgs.form.key": "欄位鍵",
   "updateArgs.form.value": "欄位值",
-  "updateArgs.formValidationFailed": "表單驗證失敗，請檢查參數格式",
   "updateArgs.keyRequired": "欄位鍵不可為空",
   "updateArgs.stringifyError": "無法序列化參數，請檢查參數格式"
 }

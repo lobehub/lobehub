@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { Surface } from '@lobehub/ui/dashboard';
 import * as stylex from '@stylexjs/stylex';
 
 import { catalogStyles } from '@/features/Marketplace/Catalog/styles';
@@ -45,6 +46,68 @@ export const MarketplaceCatalogSkeleton = ({ chrome = 'page' }: RouteSkeletonPro
         <SkeletonBar height={32} width={132} />
         <CatalogRowsSkeleton />
       </div>
+    </div>
+  </CommunityPageChrome>
+);
+
+const FACT_WIDTHS = ['36%', '24%', '30%', '42%'];
+
+/**
+ * A Marketplace page (Agent, skill, app) while it loads, in the shape it
+ * renders: the 56px picture with name, blurb and actions, the source line, then
+ * the content cards (rows, then the facts).
+ */
+export const MarketplaceDetailBodySkeleton = () => (
+  <Flexbox aria-busy gap={24}>
+    <Flexbox horizontal align={'center'} gap={16}>
+      <SkeletonBar height={56} radius={14} width={56} />
+      <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+        <SkeletonBar height={22} width={'min(100%, 220px)'} />
+        <SkeletonBar height={14} width={'min(100%, 420px)'} />
+      </Flexbox>
+      <Flexbox horizontal flex={'none'} gap={8}>
+        <SkeletonBar height={32} radius={8} width={88} />
+        <SkeletonBar height={32} radius={8} width={88} />
+      </Flexbox>
+    </Flexbox>
+    <SkeletonBar height={14} width={'min(100%, 320px)'} />
+    <Flexbox gap={8}>
+      <SkeletonBar height={16} width={64} />
+      <Surface>
+        <Flexbox gap={12} padding={16}>
+          {Array.from({ length: 3 }, (_, index) => (
+            <Flexbox horizontal align={'center'} gap={12} key={index}>
+              <SkeletonBar height={36} radius={8} width={36} />
+              <Flexbox flex={1} gap={6}>
+                <SkeletonBar height={14} width={'32%'} />
+                <SkeletonBar height={12} width={'58%'} />
+              </Flexbox>
+            </Flexbox>
+          ))}
+        </Flexbox>
+      </Surface>
+    </Flexbox>
+    <Flexbox gap={8}>
+      <SkeletonBar height={16} width={64} />
+      <Surface>
+        <Flexbox gap={10} padding={16}>
+          {FACT_WIDTHS.map((width, index) => (
+            <Flexbox horizontal gap={24} key={index}>
+              <SkeletonBar height={14} width={96} />
+              <SkeletonBar height={14} width={width} />
+            </Flexbox>
+          ))}
+        </Flexbox>
+      </Surface>
+    </Flexbox>
+  </Flexbox>
+);
+
+/** The detail routes' skeleton: the page chrome, then the detail body in the centered column. */
+export const MarketplaceDetailSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
+  <CommunityPageChrome chrome={chrome}>
+    <div {...stylex.props(catalogStyles.frame, catalogStyles.pageTop)}>
+      <MarketplaceDetailBodySkeleton />
     </div>
   </CommunityPageChrome>
 );

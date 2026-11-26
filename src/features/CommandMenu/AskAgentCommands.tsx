@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { preventDefault } from '@lobehub/ui';
 import { Command } from 'cmdk';
@@ -34,7 +35,10 @@ const AskAgentCommands = memo(() => {
 
   // Filter agents based on the query after "@"
   const filteredAgents = useMemo(() => {
-    const agents = allAgents.filter((item) => item.type === 'agent');
+    // Lobe AI has its own fixed `@` row, so its list item is left out.
+    const agents = allAgents.filter(
+      (item) => item.type === 'agent' && item.slug !== INBOX_SESSION_ID,
+    );
     if (!mentionQuery) {
       return agents.slice(0, 10);
     }

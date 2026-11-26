@@ -1,3 +1,4 @@
+import { OFFICIAL_MCP_SERVERS } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
 
 import { CONNECTOR_PAGE_IDS } from '@/features/Integrations/connectorPage';
@@ -9,6 +10,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useToolStore } from '@/store/tool';
 import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { buildMarketplaceApps } from './catalog';
@@ -45,6 +47,12 @@ export const useMarketplaceApps = () => {
       .filter((s) => s.status === LobehubSkillStatus.CONNECTED)
       .map((s) => s.identifier),
   );
+  const connectors = useToolStore(connectorSelectors.connectorList, isEqual);
+  const connectedOfficialIds = new Set(
+    connectors
+      .filter((c) => c.status === 'connected' && c.visibility !== 'private')
+      .map((c) => c.identifier),
+  );
   const tools = buildIntegrationItems({
     pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
     connectorAvailability: { composio, lobehub },
@@ -61,7 +69,9 @@ export const useMarketplaceApps = () => {
       (id === 'github' && Boolean(github?.length)) ||
       (id === 'linear' && Boolean(linear.data?.length)),
     installedChannels: new Set(installations?.map((s) => s.platform)),
+    isOfficialMcpConnected: (id) => connectedOfficialIds.has(id),
     linkedChannels: new Set(links?.map((s) => s.platform)),
+    officialMcpServers: OFFICIAL_MCP_SERVERS,
     tools,
   });
   const syncs = [

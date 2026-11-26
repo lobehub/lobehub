@@ -113,4 +113,18 @@ describe('buildHeteroExecStdinPayload', () => {
       expect.arrayContaining([expect.objectContaining({ text: 'hello', type: 'text' })]),
     );
   });
+
+  it('carries the Codex Plan switch in the envelope older lh releases unwrap', () => {
+    const payload = JSON.parse(
+      buildHeteroExecStdinPayload({ collaborationMode: 'default', prompt: 'hello' }),
+    );
+    expect(payload).toEqual({
+      collaborationMode: 'default',
+      content: [{ text: 'hello', type: 'text' }],
+    });
+  });
+
+  it('keeps the historical plain shape without a Plan switch', () => {
+    expect(buildHeteroExecStdinPayload({ prompt: 'hello' })).toBe(JSON.stringify('hello'));
+  });
 });

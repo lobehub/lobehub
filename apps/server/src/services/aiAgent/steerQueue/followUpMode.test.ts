@@ -2,15 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readFollowUpMode } from './followUpMode';
 
-const mocks = vi.hoisted(() => ({ getUserPreference: vi.fn(), getUserSettings: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getUserSettings: vi.fn() }));
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn().mockImplementation(function () {
-    return { getUserPreference: mocks.getUserPreference, getUserSettings: mocks.getUserSettings };
+    return { getUserSettings: mocks.getUserSettings };
   }),
 }));
 
 const db = {} as any;
-const lab = (enabled: boolean) => ({ lab: { enableBetterCodingExperience: enabled } });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -18,30 +17,19 @@ beforeEach(() => {
 });
 
 describe('readFollowUpMode', () => {
-  it('keeps the legacy behavior while the lab is off, without reading settings', async () => {
-    mocks.getUserPreference.mockResolvedValue(lab(false));
-    mocks.getUserSettings.mockResolvedValue({ general: { followUpBehavior: 'queue' } });
-
-    await expect(readFollowUpMode(db, 'user-1')).resolves.toBe('legacy');
-    expect(mocks.getUserSettings).not.toHaveBeenCalled();
-  });
-
-  it('defaults to steer with the lab on', async () => {
-    mocks.getUserPreference.mockResolvedValue(lab(true));
-
+  it('defaults to steer', async () => {
     await expect(readFollowUpMode(db, 'user-1')).resolves.toBe('steer');
   });
 
-  it('reads the stored setting with the lab on', async () => {
-    mocks.getUserPreference.mockResolvedValue(lab(true));
+  it('reads the stored setting', async () => {
     mocks.getUserSettings.mockResolvedValue({ general: { followUpBehavior: 'queue' } });
 
     await expect(readFollowUpMode(db, 'user-1')).resolves.toBe('queue');
   });
 
-  it('falls back to the legacy behavior when the read fails', async () => {
-    mocks.getUserPreference.mockRejectedValue(new Error('db down'));
+  it('falls back to steer when the read fails', async () => {
+    mocks.getUserSettings.mockRejectedValue(new Error('db down'));
 
-    await expect(readFollowUpMode(db, 'user-1')).resolves.toBe('legacy');
+    await expect(readFollowUpMode(db, 'user-1')).resolves.toBe('steer');
   });
 });

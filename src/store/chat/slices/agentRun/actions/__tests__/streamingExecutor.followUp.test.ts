@@ -13,7 +13,7 @@ import { messageMapKey } from '../../../../utils/messageMapKey';
 import { TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
-const mode = vi.hoisted(() => ({ value: 'legacy' as 'legacy' | 'queue' | 'steer' }));
+const mode = vi.hoisted(() => ({ value: 'steer' as 'queue' | 'steer' }));
 vi.mock('../lifecycle/followUpMode', () => ({ getFollowUpMode: () => mode.value }));
 vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
@@ -86,8 +86,8 @@ const firstStepSeesQueue = async () => {
 };
 
 describe('client run and the Follow-up behavior', () => {
-  it('hands the turn back for queued messages on the legacy behavior', async () => {
-    mode.value = 'legacy';
+  it('hands the turn back for queued messages in Steer mode', async () => {
+    mode.value = 'steer';
     await expect(firstStepSeesQueue()).resolves.toBe(true);
   });
 

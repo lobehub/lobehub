@@ -1,3 +1,4 @@
+import { A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
@@ -325,6 +326,8 @@ async function runClaim(
         markTopicRunning: true,
         externalOrigin: run.externalOrigin,
         ...(delivery && {
+          // Its answer may be a card; the cards it draws are posted with it, like a Channel reply's.
+          additionalPluginIds: [A2uiIdentifier],
           hooks: [createWebhookChannelReportHook(db, id)],
           instructions: CHANNEL_DELIVERY_INSTRUCTION,
         }),

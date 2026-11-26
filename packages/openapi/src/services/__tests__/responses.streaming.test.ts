@@ -7,18 +7,24 @@ import type * as ResumeModule from '../client-tool-resume.responses';
 import { ResponsesService } from '../responses.service';
 
 const {
+  assertAgentMock,
+  assertConversationMock,
   createStreamEventManagerMock,
   drainPushesMock,
   executeResponseRunMock,
   executeSyncMock,
   execAgentMock,
+  findTopicMock,
   resumeParkedClientToolsMock,
 } = vi.hoisted(() => ({
+  assertAgentMock: vi.fn(),
+  assertConversationMock: vi.fn(),
   createStreamEventManagerMock: vi.fn(),
   drainPushesMock: vi.fn(),
   executeResponseRunMock: vi.fn(),
   executeSyncMock: vi.fn(),
   execAgentMock: vi.fn(),
+  findTopicMock: vi.fn(),
   resumeParkedClientToolsMock: vi.fn(),
 }));
 
@@ -34,6 +40,17 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {
     execAgent = execAgentMock;
   },
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = findTopicMock;
+  },
+}));
+vi.mock('@/server/routers/lambda/_helpers/workspaceAgentGuard', () => ({
+  assertCanUseWorkspaceAgent: assertAgentMock,
+}));
+vi.mock('@/server/routers/lambda/aiAgent/guards', () => ({
+  assertCanUseAgentRunConversation: assertConversationMock,
 }));
 vi.mock('../client-tool-resume.responses', async (importOriginal) => {
   const actual = await importOriginal<typeof ResumeModule>();
@@ -51,8 +68,24 @@ vi.mock('../../common/base.service', () => ({
     workspaceId = 'ws_1';
     constructor() {}
     log() {}
+    resolveOperationPermission = vi.fn().mockResolvedValue({ isPermitted: true });
+    createAuthorizationError(message: string) {
+      return Object.assign(new Error(message), { name: 'AuthorizationError' });
+    }
+    createNotFoundError(message: string) {
+      return Object.assign(new Error(message), { name: 'NotFoundError' });
+    }
   },
 }));
+
+// Authorization happy path for every test here: these files exercise the run
+// and streaming machinery, with `responses.authorization.test.ts` owning the
+// denial matrix.
+beforeEach(() => {
+  assertAgentMock.mockResolvedValue(undefined);
+  assertConversationMock.mockResolvedValue(undefined);
+  findTopicMock.mockResolvedValue({ id: 'tpc_1' });
+});
 
 const buildService = () => new (ResponsesService as any)(null, 'user_1', { workspaceId: 'ws_1' });
 

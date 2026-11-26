@@ -6,6 +6,7 @@ import { useProfileExecutionTarget } from './useProfileExecutionTarget';
 
 const testState = vi.hoisted(() => ({
   agencyConfig: undefined as LobeAgentAgencyConfig | undefined,
+  gateway: true,
   isDesktop: true,
   isPreferenceLoading: false,
   workspaceScoped: false,
@@ -16,6 +17,10 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   get isDesktop() {
     return testState.isDesktop;
   },
+}));
+
+vi.mock('@/helpers/gatewayMode', () => ({
+  useIsGatewayModeEnabled: () => testState.gateway,
 }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
@@ -33,6 +38,7 @@ vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
 describe('useProfileExecutionTarget', () => {
   beforeEach(() => {
     testState.agencyConfig = undefined;
+    testState.gateway = true;
     testState.isDesktop = true;
     testState.isPreferenceLoading = false;
     testState.workspaceScoped = false;
@@ -164,5 +170,43 @@ describe('useProfileExecutionTarget', () => {
 
     expect(result.current.isPending).toBe(true);
     expect(result.current.isSelectable).toBe(false);
+  });
+
+  it('resolves a LobeHub agent with no target to Auto where a gateway can route', () => {
+    testState.isDesktop = false;
+    testState.agencyConfig = {};
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.target).toBe('auto');
+  });
+
+  it('keeps a LobeHub agent on No device without a gateway on the web', () => {
+    testState.gateway = false;
+    testState.isDesktop = false;
+    testState.agencyConfig = {};
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.target).toBe('none');
+  });
+
+  it('names the device a LobeHub agent is bound to', () => {
+    testState.isDesktop = false;
+    testState.agencyConfig = { boundDeviceId: 'device-us-1', executionTarget: 'device' };
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.target).toBe('device');
+    expect(result.current.deviceId).toBe('device-us-1');
+  });
+
+  it('keeps a heterogeneous agent off Auto even where a gateway can route', () => {
+    testState.isDesktop = false;
+    testState.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.target).toBe('sandbox');
   });
 });

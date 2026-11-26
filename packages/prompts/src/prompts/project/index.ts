@@ -22,6 +22,29 @@ export interface ProjectContextTask extends TaskSummary {
   assigneeAgentId?: string | null;
 }
 
+/** One place the project's work can run, in the project's priority order. */
+export type ProjectContextRunner =
+  | { kind: 'sandbox' }
+  | {
+      kind: 'device';
+      name: string;
+      /** Whether the device is connected now; absent when presence is unknown. */
+      online?: boolean;
+      /** The workspace folder on the device the code is prepared in. */
+      path: string;
+      platform?: string | null;
+    };
+
+/** What every runner prepares before work starts: the project's environment. */
+export interface ProjectContextEnvironment {
+  bootstrapCommand?: string;
+  /** Names only, never values: they are set in the cloud sandbox and nowhere else. */
+  envNames?: string[];
+  /** Free-text notes on what a run needs from a machine. */
+  notes?: string;
+  repositories: { folder?: string; ref?: string; setupCommand?: string; url: string }[];
+}
+
 export interface ProjectContextPromptInput {
   /**
    * Whether the run can message Agents in other Channels (`lobe-channel`, only injected into
@@ -35,6 +58,8 @@ export interface ProjectContextPromptInput {
   coordinationRules?: boolean;
   /** The agent this run executes as. */
   currentAgentId: string;
+  /** The project's environment; absent when it could not be read. */
+  environment?: ProjectContextEnvironment;
   knowledgeBases: ProjectContextKnowledgeBase[];
   /** Enabled members, coordinator included. */
   members: ProjectContextMember[];
@@ -48,9 +73,66 @@ export interface ProjectContextPromptInput {
     name: string;
     status: string;
   };
+  /** Where the work can run, in priority order; absent when it could not be read. */
+  runners?: ProjectContextRunner[];
   /** Count of every open task, which may exceed `openTasks`. */
   totalOpenTasks: number;
 }
+
+const runnerLine = (runner: ProjectContextRunner, index: number) => {
+  if (runner.kind === 'sandbox')
+    return `  ${index + 1}. Cloud sandbox — a temporary cloud machine, removed after use; the environment variables are set here`;
+  const presence =
+    runner.online === undefined ? 'presence unknown' : runner.online ? 'online' : 'offline';
+  const platform = runner.platform ? `${runner.platform}, ` : '';
+  return `  ${index + 1}. Device "${runner.name}" (${platform}${presence}) — workspace folder: ${runner.path}`;
+};
+
+/** The runners and the environment they prepare, for an agent that picks where to work. */
+const runnersAndEnvironment = (
+  runners: ProjectContextRunner[] | undefined,
+  environment: ProjectContextEnvironment | undefined,
+) => {
+  const lines: string[] = [];
+  if (runners && runners.length > 0) {
+    lines.push(
+      '<runners hint="Where this project\'s work can run, in the project\'s priority order. A new conversation starts on the first one that can take it.">',
+      ...runners.map(runnerLine),
+      '</runners>',
+    );
+  }
+  if (!environment) return lines;
+  const notes = environment.notes?.trim();
+  const setup = environment.bootstrapCommand?.trim();
+  if (environment.repositories.length === 0 && !setup && !notes && !environment.envNames?.length)
+    return lines;
+  lines.push(
+    '<environment hint="What a runner prepares before work. On a device, work inside its workspace folder: reuse a checkout of the repository already there with a new git worktree, otherwise clone it there; never touch files outside the folder.">',
+  );
+  if (environment.repositories.length > 0) {
+    lines.push('  <repositories>');
+    for (const repository of environment.repositories) {
+      const details = [
+        repository.ref && `ref ${repository.ref}`,
+        repository.folder && `folder ${repository.folder}`,
+        repository.setupCommand?.trim() && `setup: ${repository.setupCommand.trim()}`,
+      ].filter(Boolean);
+      lines.push(`    - ${repository.url}${details.length > 0 ? ` (${details.join('; ')})` : ''}`);
+    }
+    lines.push('  </repositories>');
+  }
+  if (setup) lines.push(`  <setup>${setup}</setup>`);
+  if (environment.envNames?.length)
+    lines.push(
+      `  <variables only_in="cloud sandbox">${environment.envNames.join(', ')}</variables>`,
+    );
+  if (notes)
+    lines.push(
+      `  <notes hint="What a run needs from a machine; weigh it when picking a runner">${notes}</notes>`,
+    );
+  lines.push('</environment>');
+  return lines;
+};
 
 /** A member as it is addressed, so a named agent recognises itself when called by name. */
 const memberLabel = (member?: ProjectContextMember) =>
@@ -79,10 +161,12 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
     channelMessaging = false,
     coordinationRules = true,
     currentAgentId,
+    environment,
     knowledgeBases,
     members,
     openTasks,
     project,
+    runners,
     totalOpenTasks,
   } = input;
   const isCoordinator = project.coordinatorAgentId === currentAgentId;
@@ -120,6 +204,8 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
     }
     lines.push('</knowledge_bases>');
   }
+
+  lines.push(...runnersAndEnvironment(runners, environment));
 
   lines.push(`<open_tasks total="${totalOpenTasks}">`);
   if (openTasks.length === 0) lines.push('  (none)');

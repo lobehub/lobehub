@@ -46,6 +46,28 @@ import type {
 const MAX_AGENT_GLOB_RESULTS = 1000;
 
 /**
+ * Whether a shell result's combined `output` carries nothing beyond its
+ * `stdout` and `stderr`.
+ *
+ * The local shell reports `output = stdout + stderr` next to both streams, so
+ * persisting it stored the command's output twice in `RunCommandState`. Readers
+ * take `stdout` first (`getRunCommandStdout` in `@lobechat/shared-tool-ui`) and
+ * render `stderr` on its own, so a derived `output` is dropped. One that holds
+ * something else — a backend reporting no `stdout`, or a notice only `output`
+ * carries — is kept.
+ */
+const isDerivedCommandOutput = (result: {
+  output?: unknown;
+  stderr?: unknown;
+  stdout?: unknown;
+}): boolean => {
+  const { output, stderr, stdout } = result;
+  if (typeof output !== 'string' || typeof stdout !== 'string') return false;
+  if (output === stdout) return true;
+  return typeof stderr === 'string' && output === stdout + stderr;
+};
+
+/**
  * ComputerRuntime — abstract base for computer operations (file system, shell, search).
  *
  * Subclasses implement `callService` to delegate to their specific backend
@@ -405,7 +427,7 @@ export abstract class ComputerRuntime {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         isBackground: args.background || false,
-        output: r.output,
+        ...(isDerivedCommandOutput(r) ? {} : { output: r.output }),
         outputFiles,
         running: r.running,
         sandboxed: r.sandboxed,

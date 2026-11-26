@@ -24,14 +24,19 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { dataSelectors, useConversationStore, useConversationStoreApi } from '../../store';
+import { useCompressedHistoryInline } from '../Contexts/CompressedHistoryInlineContext';
+import { CompactIcon } from './CompactIcon';
 import CompressedMessageItem from './CompressedMessageItem';
 import {
   getCompressedTurnCount,
   isCompressionSummaryGenerating,
   shouldShowCompressedGroupPanel,
 } from './logic';
+import { openCompressionSummary } from './SummaryModal';
+import { useFollowCompressingRow } from './useFollowCompressingRow';
 import { useGroupPreferences } from './useGroupPreferences';
+import { useIsSlow } from './useIsSlow';
 
 const styles = stylex.create({
   collapsedButton: {
@@ -49,6 +54,22 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.2s ease',
   },
+  // A quiet status line at the compression point, like a turn's own status rows.
+  statusRow: {
+    cursor: 'default',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingBlock: '4px',
+    paddingInline: '0',
+    borderStyle: 'none',
+    fontSize: '14px',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  statusRowButton: { cursor: 'pointer' },
   container: { marginBlockEnd: '8px' },
   divider: { margin: '0' },
   messagesContainer: { paddingBlock: '8px' },
@@ -62,17 +83,28 @@ export interface CompressedGroupMessageProps {
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
+  // The chat list renders the original conversation as rows above this group,
+  // so the group is just the divider at the compression point plus its summary.
+  const historyInline = useCompressedHistoryInline();
 
   const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
 
-  const handleCancelCompression = useCallback(() => {
-    confirmModal({
-      content: t('compression.cancelConfirm'),
-      onOk: () => cancelCompression(id),
-      title: t('compression.cancel'),
-    });
-  }, [id, cancelCompression, t]);
+  const handleCancelCompression = useCallback(
+    (onDone?: () => void) => {
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('compression.cancelConfirm'),
+        okText: t('compression.cancel'),
+        onOk: async () => {
+          await cancelCompression(id);
+          onDone?.();
+        },
+        title: t('compression.cancel'),
+      });
+    },
+    [id, cancelCompression, t],
+  );
 
   const content = message?.content;
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;
@@ -95,6 +127,10 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   // Check if generateSummary operation is running for this message
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
   const isGeneratingSummary = isCompressionSummaryGenerating(runningOp?.type);
+
+  const storeApi = useConversationStoreApi();
+  useFollowCompressingRow(isGeneratingSummary && historyInline, storeApi.getState);
+  const isSlow = useIsSlow(isGeneratingSummary);
 
   const showPanelContent = shouldShowCompressedGroupPanel({
     expanded,
@@ -130,6 +166,23 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     [t],
   );
 
+  // Compression should stay out of the reader's way: while the summary is
+  // generated the group is a single in-progress row at the compression point,
+  // and the summary only appears when the reader opens it afterwards.
+  if (isGeneratingSummary && historyInline) {
+    return (
+      <Flexbox className={stylex.props(styles.container).className}>
+        <div {...stylex.props(styles.statusRow)}>
+          <Icon icon={CompactIcon} size={16} />
+          <span className={cx(shinyTextStyles.shinyText)}>
+            {t('compression.compacting')}
+            {isSlow && ` · ${t('compression.compactingSlow')}`}
+          </span>
+        </div>
+      </Flexbox>
+    );
+  }
+
   if (isGeneratingSummary) {
     return (
       <Flexbox className={stylex.props(styles.container).className} gap={8}>
@@ -137,6 +190,41 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           <span className={cx(shinyTextStyles.shinyText)}>{t('compressedHistory')}</span>
         </Flexbox>
         <StreamingMarkdown>{content}</StreamingMarkdown>
+      </Flexbox>
+    );
+  }
+
+  const collapsedLabel =
+    compressedTurnCount > 0
+      ? t('compression.collapsed', { turns: compressedTurnCount })
+      : t('compression.collapsedUnknown');
+
+  const cancelAction = (
+    <ActionIcon
+      icon={Undo2}
+      size={'small'}
+      title={t('compression.cancel')}
+      onClick={() => handleCancelCompression()}
+    />
+  );
+
+  // The original conversation sits right above as ordinary rows, so the
+  // compression point is just a status line; its summary opens in a modal.
+  if (historyInline) {
+    return (
+      <Flexbox className={stylex.props(styles.container).className}>
+        {/* The reader scrolls through the history right above; a turn count adds nothing. */}
+        <button
+          {...stylex.props(styles.statusRow, styles.statusRowButton)}
+          aria-haspopup={'dialog'}
+          type={'button'}
+          onClick={() =>
+            openCompressionSummary({ content, onCancelCompression: handleCancelCompression })
+          }
+        >
+          <Icon icon={CompactIcon} size={16} />
+          <span>{t('compression.compacted')}</span>
+        </button>
       </Flexbox>
     );
   }
@@ -153,12 +241,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
               onChange={setActiveTab}
             />
             <Flexbox horizontal gap={4}>
-              <ActionIcon
-                icon={Undo2}
-                size={'small'}
-                title={t('compression.cancel')}
-                onClick={handleCancelCompression}
-              />
+              {cancelAction}
               <ActionIcon icon={ChevronUp} size={'small'} onClick={toggleExpanded} />
             </Flexbox>
           </Flexbox>
@@ -179,12 +262,8 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             type={'button'}
             onClick={toggleExpanded}
           >
-            <Icon icon={History} size={14} />
-            <span>
-              {compressedTurnCount > 0
-                ? t('compression.collapsed', { turns: compressedTurnCount })
-                : t('compression.collapsedUnknown')}
-            </span>
+            <Icon icon={CompactIcon} size={14} />
+            <span>{collapsedLabel}</span>
             <Icon icon={ChevronDown} size={14} />
           </button>
         </Divider>

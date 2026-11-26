@@ -15,11 +15,12 @@ const execution = new ChannelExecutionRepository(db);
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
-const createFile = async (name: string, fileType = 'text/plain') => {
+const createFile = async (name: string, fileType = 'text/plain', metadata?: object) => {
   const [file] = await db
     .insert(files)
     .values({
       fileType,
+      metadata,
       name,
       size: 1,
       url: `files/${name}`,
@@ -102,5 +103,44 @@ describe('channel message attachments', () => {
         content: '',
       },
     });
+  });
+
+  // Mobile sized an image's box only after fetching it, so the row grew and the feed jumped.
+  it("returns an image attachment's recorded pixel size and ThumbHash, and nothing else from its metadata", async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const shot = await createFile('shot.png', 'image/png', {
+      filename: 'shot.png',
+      height: 2622,
+      path: 'files/private/shot.png',
+      ratio: 1206 / 2622,
+      thumbhash: 'HBkSHYSIeHiPiHh8eJd4eTN0EEQG',
+      width: 1206,
+    });
+    const legacy = await createFile('old.png', 'image/png', { path: 'files/old.png' });
+    const half = await createFile('half.png', 'image/png', { thumbhash: '<script>', width: 10 });
+    const text = await createFile('a.txt');
+    await asMember.send(channel.id, {
+      content: '',
+      fileIds: [shot, legacy, half, text],
+      requestKey: 'req-1',
+      routing: 'decision',
+    });
+
+    const { attachments } = await asMember.detail(channel.id);
+    const byId = new Map(attachments.map((file) => [file.id, file]));
+
+    expect(byId.get(shot)).toEqual({
+      fileType: 'image/png',
+      height: 2622,
+      id: shot,
+      name: 'shot.png',
+      size: 1,
+      thumbhash: 'HBkSHYSIeHiPiHh8eJd4eTN0EEQG',
+      url: 'files/shot.png',
+      width: 1206,
+    });
+    for (const id of [legacy, half, text]) {
+      expect(byId.get(id)).toMatchObject({ height: null, thumbhash: null, width: null });
+    }
   });
 });

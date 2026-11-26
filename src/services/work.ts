@@ -132,12 +132,18 @@ class WorkService {
   }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
     lambdaClient.work.registerShellWorksForRun.mutate(params);
 
-  /** Better Coding Experience: the pull requests a topic's Work rows link, with App state. */
+  /** The pull requests a topic's Work rows link, with App state. */
   listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
     lambdaClient.work.listTopicPullRequests.query({ topicId });
 
+  /** {@link listTopicPullRequests} for up to 100 topics, keyed by topic id. */
+  listTopicsPullRequests = async (
+    topicIds: string[],
+  ): Promise<Record<string, TopicPullRequestItem[]>> =>
+    lambdaClient.work.listTopicsPullRequests.query({ topicIds });
+
   /**
-   * Better Coding Experience: link the pull requests a `git push` tool call
+   * Link the pull requests a `git push` tool call
    * updated. `pullRequests` is the execution device's `gh pr list --head`
    * answer; the server re-reads the push itself and prefers the GitHub App.
    */
@@ -156,7 +162,7 @@ class WorkService {
   }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
 
   /**
-   * Better Coding Experience: keep a PR on the topic itself — found on its own
+   * Keep a PR on the topic itself — found on its own
    * branch (`branch`) or linked by hand (`manual`). Display-only links: they
    * never feed the SCM links that accept deliveries or wake agents.
    */
@@ -170,7 +176,7 @@ class WorkService {
   }): Promise<{ identifier: string; linked: boolean }> =>
     lambdaClient.work.linkTopicPullRequest.mutate(params);
 
-  /** Better Coding Experience: remove a PR from the topic's lists, or bring it back. */
+  /** Remove a PR from the topic's lists, or bring it back. */
   setTopicPullRequestDismissed = async (params: {
     dismissed: boolean;
     identifier: string;

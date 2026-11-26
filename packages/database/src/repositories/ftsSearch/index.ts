@@ -9,6 +9,7 @@ import type {
   FtsSearchCandidateRequest,
   FtsSearchCandidateResult,
   FtsSearchDatabaseResult,
+  FtsSearchFileResult,
   FtsSearchKnowledgeBaseDocumentHit,
   FtsSearchOptions,
   FtsSearchRepoOptions,
@@ -171,11 +172,7 @@ export class FtsSearchRepo {
       );
     }
     if ((!type || type === 'file') && limits.file > 0) {
-      searches.push(
-        this.execute(
-          this.createRequest('files', trimmedQuery, limits.file, { excludeKnowledgeBaseIds }),
-        ),
-      );
+      searches.push(this.searchFiles(trimmedQuery, limits.file, excludeKnowledgeBaseIds));
     }
     if ((!type || type === 'folder') && limits.folder > 0) {
       searches.push(
@@ -192,6 +189,7 @@ export class FtsSearchRepo {
         this.execute(
           this.createRequest('documents', trimmedQuery, limits.page, {
             documentKind: 'page',
+            excludeFileDerived: !type,
             excludeKnowledgeBaseIds,
             timeRange,
           }),
@@ -215,6 +213,34 @@ export class FtsSearchRepo {
 
     /** Each backend item already carries the existing hydrated response schema and display order. */
     return responses.flatMap((response) => response.items as FtsSearchDatabaseResult[]);
+  }
+
+  private async searchFiles(
+    query: string,
+    limit: number,
+    excludeKnowledgeBaseIds: string[],
+  ): Promise<FtsSearchBackendResponse> {
+    const [byName, byContent] = await Promise.all([
+      this.execute(this.createRequest('files', query, limit, { excludeKnowledgeBaseIds })),
+      this.execute(
+        this.createRequest('documents', query, limit, {
+          documentKind: 'fileContent',
+          excludeKnowledgeBaseIds,
+        }),
+      ),
+    ]);
+    const contentItems = byContent.items as FtsSearchFileResult[];
+    const contentById = new Map(contentItems.map((item) => [item.id, item]));
+    const nameItems = (byName.items as FtsSearchFileResult[]).map((item) => {
+      const description = contentById.get(item.id)?.description;
+      return description ? { ...item, description } : item;
+    });
+    const nameIds = new Set(nameItems.map(({ id }) => id));
+
+    return {
+      candidates: [...byName.candidates, ...byContent.candidates],
+      items: [...nameItems, ...contentItems.filter(({ id }) => !nameIds.has(id))].slice(0, limit),
+    };
   }
 
   /** Candidate-only retrieval for legacy and hybrid paths that own their PostgreSQL hydration. */

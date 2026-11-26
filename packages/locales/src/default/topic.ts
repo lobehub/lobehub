@@ -17,6 +17,8 @@ export default {
   'actions.archiveMergedPullRequestsOwn': 'Archive My Topics with Merged PRs',
   'actions.archiveMergedPullRequestsWorkspace': 'Archive All Topics with Merged PRs',
   'actions.archiveMergedPullRequestsNone': 'No topics with merged PRs found.',
+  'actions.archiveMergedPullRequestsFailed':
+    "Couldn't check which topics have merged PRs. Check your network and try again.",
   'actions.archiveMergedPullRequestsSuccess_one': 'Archived {{count}} topic with a merged PR.',
   'actions.archiveMergedPullRequestsSuccess_other': 'Archived {{count}} topics with merged PRs.',
   'actions.confirmArchiveMergedPullRequestsWorkspace':
@@ -90,6 +92,7 @@ export default {
   'doctor.summary_other': '{{count}} messages exist in this topic but are not being shown.',
   'doctor.title': 'Message Chain Check',
   'displayItems': 'Display Items',
+  'doctor.repairFailedRetry': "Couldn't repair this topic. Check your network and try again.",
   'draft': '[Draft]',
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
@@ -293,6 +296,8 @@ export default {
   'management.moveModal.doneOk': 'Done',
   'management.moveModal.error': 'Move failed, please try again',
   'management.moveModal.goToTarget': 'Go to “{{title}}”',
+  'management.moveModal.moveFailedRetry':
+    "Couldn't move the topics. Check your network and try again.",
   'management.moveModal.moving': 'Moving…',
   'management.moveModal.title': 'Move topics',
   'management.searchPlaceholder': "Search this agent's topics…",
@@ -334,13 +339,14 @@ export default {
   'scheduledStatusTip': 'Scheduled to run at {{time}}.',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
+  'shareVisitorTopics.backToShare': 'Back to Share',
+  'shareVisitorTopics.empty': 'No visitor conversations yet',
   'shareVisitorTopics.readOnly': 'Read-only',
   'shareVisitorTopics.readOnlyHint':
     "A visitor's conversation through your share link. You can read it, but not reply or change it.",
   'shareVisitorTopics.title': 'Visitors',
   'shareVisitorTopics.unavailable': 'This conversation is no longer available',
   'shareVisitorTopics.untitled': 'Untitled conversation',
-  'shareVisitorTopics.viewAll': 'View all visitor conversations',
   'sidebar.collapseAll': 'Collapse all groups',
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',

@@ -58,6 +58,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['retryWorktreeTurn', 'mutation'],
     ['returnHeteroSteer', 'mutation'],
     ['scheduleAgentRun', 'mutation'],
+    ['setHeteroCollaborationMode', 'mutation'],
     ['setHeteroPermissionMode', 'mutation'],
     ['setQueuedMessages', 'mutation'],
     ['startExecution', 'mutation'],

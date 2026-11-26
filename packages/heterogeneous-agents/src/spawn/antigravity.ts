@@ -1,59 +1,75 @@
-/** agy reads a single JSONL user message, then finishes the turn when stdin closes. */
-export const ANTIGRAVITY_BASE_ARGS = [
-  '--input-format',
-  'stream-json',
-  '--output-format',
-  'stream-json',
-  '--dangerously-skip-permissions',
-] as const;
+/** A Connect service can inherit an old SSH session that makes agy skip the desktop keyring. */
+export const getAntigravitySpawnEnv = <T extends Record<string, string | undefined>>(env: T): T => {
+  if (env.LOBEHUB_CONNECT_SERVICE !== '1') return env;
 
-// agy 1.5.7+ defaults to Auto on supported systems. Use per-run settings
-// so Full access does not depend on the CLI's saved sandbox or startup mode.
-const FULL_ACCESS_SETTINGS = JSON.stringify({
-  agentMode: '',
-  allowNonWorkspaceAccess: true,
-  enableTerminalSandbox: false,
-});
+  const childEnv = { ...env };
+  delete childEnv.SSH_CLIENT;
+  delete childEnv.SSH_CONNECTION;
+  delete childEnv.SSH_TTY;
+  return childEnv;
+};
 
-interface AntigravitySpawnArgsOptions {
-  extraArgs?: string[];
-  resumeSessionId?: string;
-}
-
+/**
+ * Flags LobeHub owns: the ACP session carries the prompt, output and
+ * conversation, and `agy acp` has no per-run `--settings`.
+ */
 const MANAGED_FLAGS = new Set([
   '--',
+  '--continue',
+  '--conversation',
   '--input-format',
   '--output-format',
   '--print',
   '--prompt',
   '--prompt-interactive',
   '--remote-control',
+  '--settings',
+  '-c',
   '-i',
   '-p',
-  '--continue',
-  '-c',
-  '--conversation',
 ]);
 
-export const buildAntigravityArgs = ({
-  extraArgs = [],
-  resumeSessionId,
-}: AntigravitySpawnArgsOptions): string[] => {
-  const conflicting = extraArgs.find((arg) => MANAGED_FLAGS.has(arg.split('=')[0]));
-  if (conflicting) {
-    throw new Error(
-      `LobeHub manages Antigravity's prompt, output and session flags: ${conflicting}`,
-    );
+/** Selector flags applied through ACP `session/set_config_option` instead of argv. */
+const SESSION_CONFIG_FLAGS = {
+  '--effort': 'effort',
+  '--mode': 'mode',
+  '--model': 'model',
+} as const;
+
+export interface AntigravityAcpLaunch {
+  /** Full `agy` argv. */
+  args: string[];
+  effort?: string;
+  mode?: string;
+  model?: string;
+}
+
+/**
+ * Split user/selector args into the `agy acp` argv and the session options
+ * ACP sets per session (`--model` full ids such as `gemini-4-neon-xhigh`,
+ * `--effort`, `--mode`). Tool permissions are always auto-approved, as the
+ * print-mode runs were.
+ */
+export const buildAntigravityAcpLaunch = (extraArgs: string[] = []): AntigravityAcpLaunch => {
+  const launch: AntigravityAcpLaunch = { args: ['acp', '--dangerously-skip-permissions'] };
+
+  for (let index = 0; index < extraArgs.length; index += 1) {
+    const arg = extraArgs[index];
+    const [flag, inlineValue] = arg.split(/=(.*)/s, 2);
+    if (MANAGED_FLAGS.has(flag)) {
+      throw new Error(`LobeHub manages Antigravity's prompt, session and settings flags: ${flag}`);
+    }
+
+    const key = SESSION_CONFIG_FLAGS[flag as keyof typeof SESSION_CONFIG_FLAGS];
+    if (!key) {
+      if (arg !== '--dangerously-skip-permissions') launch.args.push(arg);
+      continue;
+    }
+
+    const value = inlineValue ?? extraArgs[++index];
+    if (!value?.trim()) throw new Error(`Antigravity flag ${flag} needs a value`);
+    launch[key] = value.trim();
   }
 
-  const hasCustomPermissionSettings = extraArgs.some((arg) =>
-    ['--mode', '--sandbox', '--settings'].includes(arg.split('=')[0]),
-  );
-
-  return [
-    ...ANTIGRAVITY_BASE_ARGS,
-    ...(hasCustomPermissionSettings ? [] : ['--settings', FULL_ACCESS_SETTINGS]),
-    ...(resumeSessionId ? ['--conversation', resumeSessionId] : []),
-    ...extraArgs,
-  ];
+  return launch;
 };

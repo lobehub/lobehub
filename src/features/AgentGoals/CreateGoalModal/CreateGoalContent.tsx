@@ -34,6 +34,8 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -254,6 +256,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
+  /** Create failure, shown above the footer buttons: the modal stays on the review step with the user's plan. */
+  const [createError, setCreateError] = useState<InlineErrorState | null>(null);
   // Drafting failed, so the review step offers to draft again.
   const [generateFailed, setGenerateFailed] = useState(false);
   // The stopgap title a failed draft leaves behind; still unedited at submit,
@@ -420,6 +424,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       instruction,
     });
 
+    setCreateError(null);
     setIsCreating(true);
     try {
       const { agentId: goalAgentId, taskAgentId } = buildGoalAgents(plannerId, executorId);
@@ -463,7 +468,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      toast.error(t('createGoal.createFailed'));
+      setCreateError(toInlineError(t('createGoal.createFailedRetry'), error));
     } finally {
       setIsCreating(false);
     }
@@ -796,6 +801,14 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           </Flexbox>
         </Flexbox>
+      )}
+
+      {createError && (
+        <div
+          style={{ flexShrink: 0, paddingBlock: '8px 0', paddingInline: densityVars.cardPadding }}
+        >
+          <InlineErrorText detail={createError.detail}>{createError.summary}</InlineErrorText>
+        </div>
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>

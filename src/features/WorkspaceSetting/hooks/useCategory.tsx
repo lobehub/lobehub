@@ -4,16 +4,20 @@ import {
   AppWindowIcon,
   BellIcon,
   Brain,
+  BrainCircuit,
   Building2,
   ChartColumnBigIcon,
   ChartPieIcon,
+  CodeXmlIcon,
   Coins,
   ContainerIcon,
   CreditCard,
   Database,
   EllipsisIcon,
+  EthernetPort,
   FlaskConical,
   GaugeIcon,
+  Gift,
   HandCoins,
   Info,
   KeyboardIcon,
@@ -25,6 +29,7 @@ import {
   ScrollText,
   Sparkles,
   TagIcon,
+  TerminalSquare,
   Trash2,
   Users,
   UsersRound,
@@ -34,9 +39,12 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
+import { type SettingsScope } from '@/features/SettingsSwitch/settingsScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
+import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
   serverConfigSelectors,
@@ -51,21 +59,38 @@ export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
   Connection = 'connection',
+  Data = 'data',
   General = 'general',
   Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
 }
 
+/**
+ * Account tabs that only exist as personal pages. The workspace account set
+ * still lists them so the set is the same in every space; they open the
+ * personal page through `href`.
+ */
+export type PersonalOnlyAccountTab =
+  | SettingsTabs.Notification
+  | SettingsTabs.Memory
+  | SettingsTabs.Proxy
+  | SettingsTabs.Referral
+  | SettingsTabs.SystemTools;
+
 export interface WorkspaceSettingCategoryItem {
+  /** Set for a personal-only account tab: the personal page it opens. */
+  href?: string;
   icon: any;
-  key: WorkspaceSettingsTabs;
+  key: WorkspaceSettingsTabs | PersonalOnlyAccountTab;
   label: string;
 }
 
 export interface WorkspaceSettingCategoryGroup {
   items: WorkspaceSettingCategoryItem[];
   key: WorkspaceSettingsGroupKey;
+  /** Account settings follow the user; space settings belong to this workspace. */
+  scope: SettingsScope;
   title: string;
 }
 
@@ -84,6 +109,8 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const codingPlansTab = useCodingPlansTab();
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -101,12 +128,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys)
-        // follow the user, not the workspace. They are mirrored here so members
-        // can reach them without leaving the workspace; the pages are the
-        // personal ones.
-        // Leads the sidebar so the user's own identity stays on top, like the
-        // personal settings sidebar.
+        // ── Account settings (profile / appearance / hotkeys / conversation)
+        // follow the user, not the workspace. They are mirrored under the
+        // workspace prefix so opening them never leaves the workspace; the
+        // pages are the personal ones. The sidebar shows them as their own set.
         {
           items: [
             {
@@ -134,8 +159,31 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Conversation,
               label: t('tab.conversation'),
             },
-          ],
+            // Notification preferences, memory and referral exist only as
+            // personal pages; listing them keeps the account set the same in
+            // every space. The workspace's own Notifications tab stays in the
+            // Workspace group.
+            (enableBusinessFeatures || isDesktop) && {
+              href: `/settings/${SettingsTabs.Notification}`,
+              icon: BellIcon,
+              key: SettingsTabs.Notification,
+              label: t('tab.notification'),
+            },
+            {
+              href: `/settings/${SettingsTabs.Memory}`,
+              icon: BrainCircuit,
+              key: SettingsTabs.Memory,
+              label: t('tab.memory'),
+            },
+            enableBusinessFeatures && {
+              href: `/settings/${SettingsTabs.Referral}`,
+              icon: Gift,
+              key: SettingsTabs.Referral,
+              label: tSubscription('tab.referral'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Account,
+          scope: 'account',
           title: t('group.profile'),
         },
         {
@@ -167,6 +215,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.General,
+          scope: 'space',
           title: t('workspaceSetting.group.workspace'),
         },
         {
@@ -180,6 +229,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ChartPieIcon,
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
+            },
+            // An optional business tab: listed only where its slot supplies a label.
+            codingPlansTab && {
+              icon: CodeXmlIcon,
+              key: WorkspaceSettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
             },
             // Credits / Billing are readable by Admin-or-higher; the pages
             // themselves keep the money-moving controls (top-up, payment
@@ -203,6 +258,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
+          scope: 'space',
           title: t('group.subscription'),
         },
         {
@@ -230,6 +286,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
+          scope: 'space',
           title: t('workspaceSetting.group.agent'),
         },
         enableWebhook && {
@@ -249,6 +306,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
+          scope: 'space',
           title: t('group.connection'),
         },
         // What the workspace's agents run on and spend: machines, coding-agent
@@ -278,6 +336,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,
+          scope: 'space',
           title: t('group.resource'),
         },
         // The Admin group is available to Admin and Owner.
@@ -295,14 +354,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Admin,
+          scope: 'space',
           title: t('workspaceSetting.group.admin'),
         },
-        // System & developer sits last and starts collapsed, mirroring the
-        // personal sidebar. Storage stays in Admin because it is
-        // workspace-scoped there. Trash is visible to every role — the server
-        // shows owners the whole bin and members only what they deleted.
-        // Advanced and Labs are user preferences; API Key / OAuth apps keep
-        // their gates.
+        // What the workspace stores and the keys that act on it. Trash is
+        // visible to every role — the server shows owners the whole bin and
+        // members only what they deleted. API Key keeps its member-level gate.
         {
           items: [
             {
@@ -310,15 +367,37 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Trash,
               label: t('tab.trash'),
             },
-            {
-              icon: EllipsisIcon,
-              key: WorkspaceSettingsTabs.Advanced,
-              label: t('tab.advanced'),
-            },
             canCreateContent && {
               icon: KeyIcon,
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Data,
+          scope: 'space',
+          title: t('group.data'),
+        },
+        // App preferences of the account set — low-frequency, so the sidebar
+        // starts it collapsed. Advanced and Labs are user preferences; OAuth
+        // apps keep their Labs gate.
+        {
+          items: [
+            isDesktop && {
+              href: `/settings/${SettingsTabs.Proxy}`,
+              icon: EthernetPort,
+              key: SettingsTabs.Proxy,
+              label: t('tab.proxy'),
+            },
+            isDesktop && {
+              href: `/settings/${SettingsTabs.SystemTools}`,
+              icon: TerminalSquare,
+              key: SettingsTabs.SystemTools,
+              label: t('tab.systemTools'),
+            },
+            {
+              icon: EllipsisIcon,
+              key: WorkspaceSettingsTabs.Advanced,
+              label: t('tab.advanced'),
             },
             enableOAuthApps && {
               icon: AppWindowIcon,
@@ -337,6 +416,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.System,
+          scope: 'account',
           title: t('group.systemDeveloper'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
@@ -351,6 +431,8 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       canCreateContent,
       hideDocs,
       enableWebhook,
+      enableBusinessFeatures,
+      codingPlansTab,
       avatarUrl,
       username,
     ],

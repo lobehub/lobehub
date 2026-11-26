@@ -129,6 +129,35 @@ export const mockAssistantItems: DiscoverAssistantItem[] = [
   },
 ];
 
+/**
+ * LobeHub's curated Agents (`market.agent.getOnboardingFull`), keyed by
+ * category: the Agents page's "All" and "Verified" tabs.
+ */
+export const mockOnboardingAgents = {
+  'engineering': [
+    {
+      author: { name: 'LobeHub' },
+      avatar: '🧑‍💻',
+      description: 'Reviews pull requests and points out risky changes.',
+      forkCount: 120,
+      identifier: 'agent-template-code-reviewer',
+      name: 'Code Reviewer',
+      pluginCount: 1,
+    },
+  ],
+  'product-management': [
+    {
+      author: { name: 'LobeHub' },
+      avatar: '📋',
+      description: 'Turns rough ideas into a dated scope document.',
+      forkCount: 300,
+      identifier: 'agent-template-release-planner',
+      name: 'Release Planner',
+      pluginCount: 0,
+    },
+  ],
+};
+
 export const mockAssistantList: AssistantListResponse = {
   currentPage: 1,
   items: mockAssistantItems,

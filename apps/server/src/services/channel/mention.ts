@@ -1,7 +1,8 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, not } from 'drizzle-orm';
 
 import { notifyChannelMention } from '@/business/server/channel-mention/notifyActivity';
+import { notificationsMutedSql } from '@/database/repositories/channel/notificationMute';
 import { channelMembers, workspaceMembers } from '@/database/schemas';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -45,6 +46,8 @@ export const notifyChannelMentions = (
             inArray(channelMembers.id, message.mentions),
             eq(channelMembers.actorType, 'user'),
             eq(channelMembers.status, 'active'),
+            // Muting the Channel's notifications stops even an @mention's push.
+            not(notificationsMutedSql()),
           ),
         );
       const recipientUserIds = [

@@ -1,16 +1,12 @@
 'use client';
 
-import { ActionIcon, ContextMenuTrigger, cx, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, ContextMenuTrigger, cx, type DropdownItem, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/components/AgentAvatar';
-import Avatar from '@/components/Avatar';
-import WorkspaceAvatar from '@/components/WorkspaceAvatar';
-import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
@@ -23,6 +19,7 @@ import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
+import TabMetaIcon from './TabMetaIcon';
 
 // 20px box on an 8px-round tab, inset a uniform 3px: 8 - 3 = 5 keeps the button's curve
 // concentric with the tab's own. ActionIcon writes blockSize and borderRadius straight
@@ -286,30 +283,7 @@ const TabItem = memo<TabItemProps>(
 
     const indicator = (
       <span className={styles.avatarWrapper}>
-        {meta.avatarKind === 'agent' ? (
-          <AgentAvatar
-            agentId={meta.avatarSeed}
-            avatar={meta.avatar}
-            background={meta.backgroundColor}
-            name={meta.title}
-            size={16}
-          />
-        ) : meta.avatarSeed ? (
-          <ProjectAvatar avatar={meta.avatar} id={meta.avatarSeed} name={meta.title} size={16} />
-        ) : meta.avatarKind === 'workspace' ? (
-          <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
-        ) : meta.avatar ? (
-          <Avatar
-            emojiScaleWithBackground
-            avatar={meta.avatar}
-            background={meta.backgroundColor}
-            name={meta.title}
-            shape="square"
-            size={16}
-          />
-        ) : (
-          meta.icon && <Icon className={styles.tabIcon} icon={meta.icon} size="small" />
-        )}
+        <TabMetaIcon iconClassName={styles.tabIcon} meta={meta} />
         {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
         {showUnreadDot && <span aria-label={t('tab.unread')} className={styles.unreadDot} />}
       </span>

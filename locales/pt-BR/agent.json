@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Os visitantes não apenas leem este Agente — eles o executam. Cada resposta é gerada no Espaço de Trabalho e cobrada do orçamento compartilhado, sem consumir a cota do criador ou de outro membro. O Agente só age com o acesso ao visitante que você concede abaixo.",
   "share.settings.notice.workspaceTitle": "Os visitantes executam este Agente no orçamento do Espaço de Trabalho",
   "share.settings.permissions.allowCreatorViewSessions": "Permitir que eu leia conversas de visitantes",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Desativado por padrão: as conversas dos visitantes permanecem privadas para eles.",
   "share.settings.permissions.allowReadMemory": "Permitir leitura da minha memória",
   "share.settings.permissions.allowReadMemoryHint": "O Agente pode usar sua memória de longo prazo ao responder a um visitante.",
   "share.settings.permissions.desc": "O que a execução de um visitante pode ler e o que o visitante pode ver de volta.",

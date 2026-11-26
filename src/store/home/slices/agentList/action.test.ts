@@ -155,6 +155,58 @@ describe('sidebar agent list replica', () => {
   });
 });
 
+describe('updateRecommendedAgents', () => {
+  it('shows the new list right away, drops unknown rows, and rolls back on failure', async () => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ recommendedIds: ['a'], ungrouped: [agent('a'), agent('b')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a']));
+
+    let reject!: (error: Error) => void;
+    const save = vi
+      .spyOn(homeService, 'updateRecommendedAgents')
+      .mockImplementation(() => new Promise<void>((_, fail) => (reject = fail)));
+
+    // `gone` was deleted (or made private) since it was recommended.
+    const update = useHomeStore.getState().updateRecommendedAgents(['b', 'gone', 'a']);
+    expect(useHomeStore.getState().recommendedAgentIds).toEqual(['b', 'a']);
+    await waitFor(() => expect(save).toHaveBeenCalledWith(['b', 'a']));
+
+    reject(new Error('boom'));
+    await expect(update).rejects.toThrow('boom');
+    expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a']);
+  });
+});
+
+describe('updateRecommendedAgents ordering', () => {
+  it('saves quick successive changes one after another, in order', async () => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ recommendedIds: ['a', 'b'], ungrouped: [agent('a'), agent('b')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a', 'b']));
+
+    const pending: Array<() => void> = [];
+    const save = vi
+      .spyOn(homeService, 'updateRecommendedAgents')
+      .mockImplementation(() => new Promise<void>((resolve) => pending.push(resolve)));
+
+    const first = useHomeStore.getState().updateRecommendedAgents(['b', 'a']);
+    const second = useHomeStore.getState().updateRecommendedAgents(['a', 'b']);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    // The second save waits for the first instead of racing it.
+    expect(save).toHaveBeenLastCalledWith(['b', 'a']);
+
+    pending[0]();
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save).toHaveBeenLastCalledWith(['a', 'b']);
+    pending[1]();
+    await act(() => Promise.all([first, second]));
+    expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a', 'b']);
+  });
+});
+
 describe('reorderPinnedAgents across a scope change', () => {
   it.each([
     ['another workspace', (from: string) => from.replace(/:[^:]*$/, ':ws-2')],

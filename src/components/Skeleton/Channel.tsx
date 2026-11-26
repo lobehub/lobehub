@@ -15,6 +15,12 @@ const MESSAGE_ROWS = [
 ];
 
 const styles = stylex.create({
+  /** Centered and capped like the loaded conversation's feed and composer. */
+  column: (maxWidth: number) => ({
+    alignSelf: 'center',
+    inlineSize: '100%',
+    maxInlineSize: maxWidth,
+  }),
   // `ChatInput`'s container border and fill, so the real composer paints over the same box.
   composer: {
     borderWidth: '1px',
@@ -54,14 +60,23 @@ const MessageRowSkeleton = ({ lines, name }: (typeof MESSAGE_ROWS)[number]) => (
   </Flexbox>
 );
 
+interface ChannelConversationSkeletonProps {
+  /**
+   * The conversation's column cap (`ChannelConversation`'s `maxWidth`). Without it the
+   * placeholder spans the full width and the capped conversation narrows on arrival.
+   */
+  maxWidth?: number;
+}
+
 /**
  * Body of a Channel conversation (`features/Channels/ChannelConversation.tsx`):
- * the full-width feed with 24px gutters, then the composer's activity line and
- * its one-row input (attach, editor, send). Also the conversation's own
- * data-loading state, so route load and detail fetch share one shape.
+ * the feed with 16px gutters, then the composer's activity line and its one-row
+ * input (attach, editor, send), in the same column as the loaded conversation.
+ * Also the conversation's own data-loading state, so route load and detail fetch
+ * share one shape.
  */
-export const ChannelConversationSkeleton = () => (
-  <div aria-busy {...stylex.props(styles.root)}>
+export const ChannelConversationSkeleton = ({ maxWidth }: ChannelConversationSkeletonProps) => (
+  <div aria-busy {...stylex.props(styles.root, !!maxWidth && styles.column(maxWidth))}>
     <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={16} style={{ minHeight: 0 }}>
       {MESSAGE_ROWS.map((row, index) => (
         <MessageRowSkeleton key={index} {...row} />

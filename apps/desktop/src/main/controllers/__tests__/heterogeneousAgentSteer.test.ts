@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 
-import { AntigravityLiveInput, ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
+import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it, vi } from 'vitest';
 
 import { endLiveCliRun, writeCliPrompt } from '../heterogeneousAgentLiveInput';
@@ -75,29 +75,43 @@ describe('steerAgentSession', () => {
     );
   });
 
-  it('steers a live Antigravity CLI with text and rejects image attachments', async () => {
-    const stdin = new PassThrough();
-    const written = readLines(stdin);
-    const liveInput = new AntigravityLiveInput(stdin);
-    const agy = session({ agentType: 'antigravity', command: 'agy', liveInput });
-
-    await expect(steerAgentSession(agy, params, '/tmp')).resolves.toEqual({
-      status: 'accepted',
+  it('steers a running Antigravity ACP session with text and image blocks', async () => {
+    const steer = vi.fn(() => true);
+    const agy = session({
+      agentType: 'antigravity',
+      antigravityAcpSession: { steer } as unknown as AgentSession['antigravityAcpSession'],
+      command: 'agy',
     });
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(written[0]).toEqual({
-      event: 'user',
-      message: { content: expect.stringContaining('also run the tests') },
-    });
-    expect(liveInput.takeSteerUuid()).toBe('steer-1');
+    const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
 
     await expect(
       steerAgentSession(
         agy,
-        { ...params, imageList: [{ id: 'img-1', url: 'https://example.com/a.png' }] },
+        { ...params, imageList: [{ id: 'img-1', url: `data:image/png;base64,${image}` }] },
         '/tmp',
       ),
+    ).resolves.toEqual({ status: 'accepted' });
+
+    expect(steer).toHaveBeenCalledWith(
+      [
+        { text: expect.stringContaining('also run the tests'), type: 'text' },
+        { data: image, mimeType: 'image/png', type: 'image' },
+      ],
+      'steer-1',
+    );
+  });
+
+  it('refuses an Antigravity steer the session cannot take, so it runs as the next turn', async () => {
+    const steer = vi.fn(() => false);
+    const running = session({
+      agentType: 'antigravity',
+      antigravityAcpSession: { steer } as unknown as AgentSession['antigravityAcpSession'],
+    });
+    await expect(steerAgentSession(running, params, '/tmp')).resolves.toEqual({
+      status: 'rejected',
+    });
+    await expect(
+      steerAgentSession(session({ agentType: 'antigravity' }), params, '/tmp'),
     ).resolves.toEqual({ status: 'rejected' });
   });
 

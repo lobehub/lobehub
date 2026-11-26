@@ -10,7 +10,6 @@ import type {
 
 import { defineReplica } from '@/libs/replica';
 import { deviceKeys } from '@/libs/swr/keys';
-import type { GitLinkedPRSummary } from '@/services/git';
 
 /**
  * The Working Sidebar Review and Pull Request tab reads. They are replicas so
@@ -127,17 +126,6 @@ export interface GitReviewPatchesParams {
   path: string;
 }
 
-export interface GitLinkedPRParams {
-  branch: string;
-  deviceId?: string;
-  path: string;
-  /**
-   * The PR a topic recorded for this branch, so the lookup follows that PR even
-   * after another one opens on the branch. Absent for the composer's lookup.
-   */
-  pullRequestNumber?: number;
-}
-
 export interface GitPullRequestParams {
   deviceId?: string;
   number: number;
@@ -152,12 +140,6 @@ export interface GitPullRequestMergeContextParams extends GitPullRequestParams {
 
 export const gitReviewPatchesKey = ({ baseRef, deviceId, mode, path }: GitReviewPatchesParams) =>
   joinKey(deviceId ?? LOCAL, path, mode, baseRef ?? '');
-
-/** Without a PR number this is the composer's key, so both readers share one row. */
-export const gitLinkedPRKey = ({ branch, deviceId, path, pullRequestNumber }: GitLinkedPRParams) =>
-  pullRequestNumber === undefined
-    ? joinKey(deviceId ?? LOCAL, path, branch)
-    : joinKey(deviceId ?? LOCAL, path, branch, pullRequestNumber);
 
 export const gitPullRequestKey = ({ deviceId, number, path }: GitPullRequestParams) =>
   joinKey(deviceId ?? LOCAL, path, number);
@@ -185,19 +167,6 @@ export const gitReviewPatchesResource = defineReplica<GitReviewPatchesParams, Re
   storage: 'indexedDB',
   syncKey: ({ baseRef, deviceId, mode, path }) =>
     deviceKeys.gitReviewPatches(deviceId ?? LOCAL, path, mode, baseRef ?? ''),
-  version: 1,
-});
-
-export const gitLinkedPRResource = defineReplica<
-  GitLinkedPRParams,
-  GitReviewRead<GitLinkedPRSummary>
->({
-  key: gitLinkedPRKey,
-  name: 'deviceGitLinkedPR',
-  persist: { maxEntries: 50 },
-  storage: 'indexedDB',
-  syncKey: ({ branch, deviceId, path, pullRequestNumber }) =>
-    deviceKeys.gitLinkedPR(deviceId ?? LOCAL, path, branch, pullRequestNumber),
   version: 1,
 });
 

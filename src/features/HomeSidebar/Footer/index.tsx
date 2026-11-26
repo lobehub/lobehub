@@ -18,7 +18,6 @@ import {
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useHelpMenuBugReportItem } from '@/business/client/hooks/useHelpMenuBugReportItem';
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
@@ -33,7 +32,6 @@ import { useAnalytics } from '@/libs/analytics/client';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
 type FooterMenuItems = NonNullable<DropdownItem[]>;
 
@@ -80,13 +78,10 @@ const Footer = memo(() => {
   const { t } = useTranslation('common');
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
-  const hasActiveWorkspace = useHasActiveWorkspace();
-  const settingLabelKey = hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting';
   const activeNavKey = useActiveNavKey();
   const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
   const bugReportItem = useHelpMenuBugReportItem();
 
@@ -116,13 +111,17 @@ const Footer = memo(() => {
     helpMenuItems: DropdownItem[];
     trackedMenuKeys: string[];
   }>(() => {
+    // The compact footer gives Settings its own icon beside Help; only the
+    // expanded footer, which has no such icon, lists it in the menu.
     const settingsGroup: FooterMenuItems =
-      footer.showSettingsEntry && !isDevMode
+      footer.showSettingsEntry && footer.layout === 'expanded'
         ? [
             {
               icon: <Icon icon={Settings2} />,
               key: 'setting',
-              label: <WorkspaceLink to="/settings">{t(settingLabelKey)}</WorkspaceLink>,
+              // Opens account settings in the active space; the settings
+              // sidebar card switches to the space's own settings.
+              label: <WorkspaceLink to="/settings/profile">{t('userPanel.setting')}</WorkspaceLink>,
             },
           ]
         : [];
@@ -241,9 +240,7 @@ const Footer = memo(() => {
     bugReportItem,
     handleOpenChangelogModal,
     handleOpenFeedbackModal,
-    isDevMode,
     t,
-    settingLabelKey,
     billboardMenuItems,
     isHomeSidebar,
   ]);
@@ -304,13 +301,13 @@ const Footer = memo(() => {
               size={FOOTER_ICON_SIZE}
             />
           </DropdownMenu>
-          {isDevMode && (
-            <WorkspaceLink to="/settings">
+          {footer.showSettingsEntry && (
+            <WorkspaceLink to="/settings/profile">
               <ActionIcon
-                aria-label={t(settingLabelKey)}
+                aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}
                 size={FOOTER_ICON_SIZE}
-                title={t(settingLabelKey)}
+                title={t('userPanel.setting')}
               />
             </WorkspaceLink>
           )}

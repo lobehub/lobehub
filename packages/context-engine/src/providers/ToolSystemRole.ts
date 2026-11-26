@@ -62,6 +62,10 @@ export const toToolPrompt = (manifest: LobeToolManifest): Tool => {
   };
 };
 
+/** Render the same tool definitions in the initial prompt and after discovery. */
+export const renderToolInstructions = (manifests: LobeToolManifest[]): string =>
+  pluginPrompts({ tools: selectToolPromptManifests(manifests).map(toToolPrompt) });
+
 /**
  * Tool System Role Provider
  * Responsible for injecting tool-related system roles for models that support tool calling
@@ -116,14 +120,7 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return undefined;
     }
 
-    const tools: Tool[] = selectToolPromptManifests(manifests).map(toToolPrompt);
-
-    if (tools.length === 0) {
-      log('No meaningful tools to inject (all manifests have empty APIs and no systemRole)');
-      return undefined;
-    }
-
-    const toolSystemRole = pluginPrompts({ tools });
+    const toolSystemRole = renderToolInstructions(manifests);
 
     if (!toolSystemRole) {
       log('Failed to generate tool system role content');

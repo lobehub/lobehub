@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   type SidebarAgentItem,
   type SidebarAgentLabel,
@@ -20,13 +21,25 @@ import {
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
-import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import {
+  isInboxAgentIdentity,
+  keywordMatchesInboxTitle,
+  listedAgentWhere,
+  normalizeInboxAgentMeta,
+} from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { ilikeContains } from '../../utils/like';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { notTrashed } from '../../utils/softDelete';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { FtsSearchCandidateSource } from '../ftsSearch';
-import { applyPinnedOrder, MAX_PINNED_ORDER_ITEMS, parsePinnedOrder } from './pinnedOrder';
+import {
+  applyPinnedOrder,
+  MAX_PINNED_ORDER_ITEMS,
+  MAX_RECOMMENDED_ITEMS,
+  parsePinnedOrder,
+} from './pinnedOrder';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
@@ -86,12 +99,15 @@ export class HomeRepository {
    * @param includeLabels - whether the caller holds `agent_label:read`. The
    *   router decides; defaulting to `true` keeps personal mode and every
    *   existing caller unchanged, since that grant only exists in a workspace.
+   * @param includeInbox - list the scope's inbox (Lobe AI) as an ordinary item.
+   *   Off by default: released clients render the inbox as their own row.
    */
   async getSidebarAgentList(
     includeLabels = true,
     includeGroups = true,
+    includeInbox = false,
   ): Promise<SidebarAgentListResponse> {
-    // 1. Query all non-virtual agents.
+    // 1. Query all non-virtual agents, plus the scope's inbox (Lobe AI).
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
     //    private rows via the workspace-aware predicate.
@@ -122,7 +138,7 @@ export class HomeRepository {
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
           }),
-          not(eq(agents.virtual, true)),
+          includeInbox ? listedAgentWhere() : not(eq(agents.virtual, true)),
         ),
       )
       .orderBy(desc(agents.updatedAt));
@@ -213,7 +229,105 @@ export class HomeRepository {
       result.pinned = applyPinnedOrder(result.pinned, await this.getPinnedOrder());
     }
 
+    // 6. A workspace recommends Agents to every member; until owners/admins
+    // save that list, the team pins (just laid out in team order) stand in.
+    if (this.workspaceId) {
+      result.recommendedIds =
+        (await this.getStoredRecommendedIds()) ?? result.pinned.map((item) => item.id);
+    }
+
     return result;
+  }
+
+  /**
+   * The workspace's saved recommended Agents / chat groups
+   * (`settings.sidebar.recommendedAgentIds`), or `null` while owners/admins
+   * never saved one.
+   */
+  private async getStoredRecommendedIds(): Promise<string[] | null> {
+    if (!this.workspaceId) return null;
+
+    const [row] = await this.db
+      .select({
+        ids: sql<unknown>`${workspaces.settings} #> '{sidebar,recommendedAgentIds}'`,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, this.workspaceId));
+    return Array.isArray(row?.ids) ? parsePinnedOrder(row.ids) : null;
+  }
+
+  /**
+   * The Agents / chat groups owners and admins recommend to every member of
+   * the workspace, in their order. Until a list is saved, the team pins
+   * (public rows with the shared `pinned` column, in team order) are the
+   * list. Empty outside a workspace.
+   */
+  async getRecommendedIds(): Promise<string[]> {
+    if (!this.workspaceId) return [];
+    return (await this.getStoredRecommendedIds()) ?? this.getTeamPinnedIds();
+  }
+
+  /**
+   * Replace the workspace's recommended list (see {@link getRecommendedIds}).
+   * One UPDATE that rewrites only this key. Callers authorize the write: it
+   * changes what every member is recommended.
+   */
+  async updateRecommendedIds(ids: string[]): Promise<void> {
+    if (!this.workspaceId) return;
+
+    const list = JSON.stringify([...new Set(ids)].slice(0, MAX_RECOMMENDED_ITEMS));
+    await this.db
+      .update(workspaces)
+      .set({
+        settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
+          'sidebar',
+          coalesce(${workspaces.settings} -> 'sidebar', '{}'::jsonb)
+            || jsonb_build_object('recommendedAgentIds', ${list}::jsonb)
+        )`,
+      })
+      .where(eq(workspaces.id, this.workspaceId));
+  }
+
+  /**
+   * Ids of the workspace's team pins — public Agents / chat groups whose
+   * shared `pinned` column owners/admins set — in the team order. Members who
+   * joined while team pins were shown keep them as their own pins (see
+   * `WorkspaceUserSettingsModel.initializeSidebar`). Empty outside a
+   * workspace.
+   */
+  async getTeamPinnedIds(): Promise<string[]> {
+    if (!this.workspaceId) return [];
+
+    const pinnedAgents = await this.db
+      .select({ id: agents.id, updatedAt: agents.updatedAt })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.workspaceId, this.workspaceId),
+          eq(agents.visibility, 'public'),
+          eq(agents.pinned, true),
+          notTrashed(agents.isDeleted),
+          sql`${agents.virtual} IS NOT TRUE`,
+        ),
+      );
+    const pinnedGroups = await this.db
+      .select({ id: chatGroups.id, updatedAt: chatGroups.updatedAt })
+      .from(chatGroups)
+      .where(
+        and(
+          eq(chatGroups.workspaceId, this.workspaceId),
+          eq(chatGroups.visibility, 'public'),
+          eq(chatGroups.pinned, true),
+          notTrashed(chatGroups.isDeleted),
+        ),
+      );
+
+    const rows = [...pinnedAgents, ...pinnedGroups].sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
+    if (rows.length === 0) return [];
+
+    return applyPinnedOrder(rows, await this.getPinnedOrder()).map((row) => row.id);
   }
 
   /**
@@ -465,8 +579,14 @@ export class HomeRepository {
       }),
     ];
 
-    // Sort all items by updatedAt descending
-    allItems.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    // Sort all items by updatedAt descending. The inbox (LobeAI) leads its
+    // bucket: its row is rarely updated, so by recency alone the default
+    // Agent would sink below the page-size cut and vanish from the sidebar.
+    allItems.sort(
+      (a, b) =>
+        Number(isInboxAgentIdentity(b)) - Number(isInboxAgentIdentity(a)) ||
+        b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
 
     // Categorize: pinned / grouped / ungrouped, split by visibility. Pinned
     // wins over grouping, but stays within its visibility bucket — a pinned
@@ -540,8 +660,11 @@ export class HomeRepository {
   /**
    * Search agents and chat groups by keyword
    * Searches in title and description fields
+   *
+   * @param includeInbox - also match the scope's inbox (Lobe AI); see
+   *   {@link getSidebarAgentList}.
    */
-  async searchAgents(keyword: string): Promise<SidebarAgentItem[]> {
+  async searchAgents(keyword: string, includeInbox = false): Promise<SidebarAgentItem[]> {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
@@ -585,10 +708,30 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, agents),
-            not(eq(agents.virtual, true)),
-            agentCandidateIds
-              ? inJsonStringArray(agents.id, agentCandidateIds)
-              : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+            or(
+              and(
+                not(eq(agents.virtual, true)),
+                agentCandidateIds
+                  ? inJsonStringArray(agents.id, agentCandidateIds)
+                  : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+              ),
+              // The inbox is a virtual row the search index skips, so it is matched by name
+              // here. Its stored title is usually blank and shown as Lobe AI, so a blank
+              // title also matches that default name.
+              includeInbox
+                ? and(
+                    eq(agents.slug, INBOX_SESSION_ID),
+                    or(
+                      ilikeContains(agents.title, keyword.trim()),
+                      ilikeContains(agents.name, keyword.trim()),
+                      ilikeContains(agents.description, keyword.trim()),
+                      keywordMatchesInboxTitle(keyword)
+                        ? sql`nullif(trim(${agents.title}), '') is null`
+                        : undefined,
+                    ),
+                  )
+                : undefined,
+            ),
           ),
         )
         .orderBy(desc(agents.updatedAt)),
@@ -638,6 +781,7 @@ export class HomeRepository {
           id: a.id,
           name: a.name,
           pinned: a.pinned ?? false,
+          slug: a.slug,
           title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,

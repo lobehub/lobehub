@@ -73,11 +73,15 @@ describe('asynchronous Channel routing', () => {
     });
     const [firstJob] = await jobsOf(db, root.id);
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
+    // Once routed, the earlier request runs first and answers the same person's follow-up with it.
     const first = await execution.claim(channel.id, firstJob.id, lease);
-    expect(first).not.toBeNull();
+    expect(first?.job.manifest).toMatchObject({
+      requestMessageId: next.id,
+      requestMessageIds: [root.id, next.id],
+    });
+    expect(await jobById(db, nextJob.id)).toMatchObject({ status: 'merged' });
     await finish(channel.id, firstJob.id);
-    const second = await execution.claim(channel.id, nextJob.id, lease);
-    expect(second?.topic.id).toBe(first?.topic.id);
+    expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
   });
 
   it.each(['skipped', 'unassigned'] as const)(

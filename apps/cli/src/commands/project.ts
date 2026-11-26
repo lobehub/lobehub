@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { registerProjectRunnerCommands } from './projectRunner';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
@@ -189,6 +190,8 @@ export function registerProjectCommand(program: Command) {
       console.log(`${pc.green('✓')} Removed knowledge base ${pc.bold(knowledgeBaseId)}`);
     },
   );
+
+  registerProjectRunnerCommands(project);
 
   const task = project.command('task').description('Manage project tasks');
   task

@@ -27,7 +27,7 @@ const log = debug('lobe-server:worktree-cleanup');
 
 /**
  * Automatic cleanup of the worktrees the app created for a conversation
- * (Better Coding Experience "New worktree"), mirroring how Claude Desktop
+ * ("New worktree"), mirroring how Claude Desktop
  * tidies a session's worktree when it is archived:
  *
  * - archiving a topic (status `completed`) or moving it to the recycle bin

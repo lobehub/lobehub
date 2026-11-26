@@ -6,9 +6,8 @@ import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ConnectorActionErrorText, {
-  InlineErrorText,
-} from '@/features/Connectors/ConnectorActionErrorText';
+import InlineErrorText from '@/components/InlineErrorText';
+import ConnectorActionErrorText from '@/features/Connectors/ConnectorActionErrorText';
 import { type ConnectorLinkSummary } from '@/store/tool/slices/connector';
 import { type ConnectorActionError } from '@/utils/connectorActionError';
 

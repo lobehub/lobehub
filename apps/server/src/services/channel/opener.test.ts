@@ -45,7 +45,7 @@ describe('createChannelReplyOpener', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v2',
+      promptVersion: 'v3',
       scenario: 'channel_reply_opener',
       schemaName: 'channel_reply_opener',
     });
@@ -133,5 +133,22 @@ describe('normalizeChannelReplyOpening', () => {
         { canOpenThread: true },
       ),
     ).toEqual({ placement: 'channel' });
+  });
+
+  it('drops an acknowledgement that is only punctuation', () => {
+    for (const ack of [':', '：', '…', ' - ', '。']) {
+      expect(
+        normalizeChannelReplyOpening(
+          { ...answer, ack, acknowledge: true },
+          { canOpenThread: true },
+        ),
+      ).toEqual({ placement: 'channel' });
+    }
+    expect(
+      normalizeChannelReplyOpening(
+        { ...answer, ack: '好', acknowledge: true },
+        { canOpenThread: false },
+      ),
+    ).toEqual({ ack: '好', placement: 'channel' });
   });
 });

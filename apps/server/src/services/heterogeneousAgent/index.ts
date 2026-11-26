@@ -10,7 +10,7 @@ import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
 } from '@lobechat/heterogeneous-agents/processFailure';
-import { type ChatMessageError, ThreadStatus } from '@lobechat/types';
+import { type ChatMessageError, ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -29,6 +29,7 @@ import type { OperationCompletionShareVisitor } from '@/server/services/agentRun
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
+import { mirrorInterventionsToChannel } from '@/server/services/channel/interventionAsk';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -98,6 +99,9 @@ export interface HeterogeneousFinishParams {
 }
 
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+const isInterventionEvent = (event: AgentStreamEvent) =>
+  event.type === 'agent_intervention_request' || event.type === 'agent_intervention_response';
 
 /**
  * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
@@ -307,6 +311,11 @@ export class HeterogeneousAgentService {
       }
       throw err;
     }
+
+    // A run answering a Channel request asks its questions there too. Before publishing, so a
+    // topic card refetched on the request event already knows it is asked in the Channel.
+    if (events.some(isInterventionEvent))
+      await mirrorInterventionsToChannel(this.db, { events, operationId, topicId });
 
     // Publish only events not yet delivered to the stream. The publish gate
     // (`publishedKeys`, peer of the persistence dedupe) makes a BatchIngester
@@ -584,7 +593,13 @@ export class HeterogeneousAgentService {
       : result === 'error' && resumeSessionInvalidated
         ? { heteroSessionId: undefined }
         : undefined;
-    if (resumeBindingUpdate) {
+    // A sub-agent run in an isolation thread keeps its session on that thread:
+    // the topic's binding belongs to the conversation's own agent.
+    const bindsThreadSession =
+      !!resumeBindingUpdate &&
+      !!isolationThreadId &&
+      (await this.bindIsolationThreadSession(isolationThreadId, resumeBindingUpdate));
+    if (resumeBindingUpdate && !bindsThreadSession) {
       try {
         // Only the producer can distinguish a missing native session from a
         // transient pre-init error such as Codex's "already has an active writer".
@@ -598,11 +613,13 @@ export class HeterogeneousAgentService {
     // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
     // if the CLI stream missed it. A stale callback that belongs to neither the
     // root operation nor one of its children returns above.
-    await this.streamEventManager.publishStreamEvent(operationId, {
-      data: endData,
-      stepIndex: 0,
-      type: 'agent_runtime_end',
-    });
+    const publishRuntimeEnd = () =>
+      this.streamEventManager.publishStreamEvent(operationId, {
+        data: endData,
+        stepIndex: 0,
+        type: 'agent_runtime_end',
+      });
+    if (result !== 'success') await publishRuntimeEnd();
 
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
@@ -744,41 +761,53 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+    const lifecycle = new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
       includeShareVisitor: !!this.shareVisitor,
-    }).completeOperation(
-      {
-        agentId,
-        assistantMessageId,
-        cost: { total: totals?.totalCost ?? null },
-        deliverable: lastAssistantContent ?? '',
-        error: error ?? undefined,
-        goal: goalContent,
-        // Backfilled executed model/provider — the verify gate bails when absent.
-        model: totals?.model,
-        operationId,
-        orchestrationRole,
-        provider: totals?.provider,
-        serializedHooks,
-        shareVisitor: this.shareVisitor,
-        stepCount: totals?.stepCount ?? null,
-        topicId,
-        usage: {
-          llm: {
-            apiCalls: totals?.llmCalls ?? null,
-            tokens: {
-              input: totals?.totalInputTokens ?? null,
-              output: totals?.totalOutputTokens ?? null,
-              total: totals?.totalTokens ?? null,
-            },
+    });
+    const completionInput = {
+      agentId,
+      assistantMessageId,
+      cost: { total: totals?.totalCost ?? null },
+      deliverable: lastAssistantContent ?? '',
+      error: error ?? undefined,
+      goal: goalContent,
+      // Backfilled executed model/provider — the verify gate bails when absent.
+      model: totals?.model,
+      operationId,
+      orchestrationRole,
+      provider: totals?.provider,
+      serializedHooks,
+      shareVisitor: this.shareVisitor,
+      stepCount: totals?.stepCount ?? null,
+      topicId,
+      usage: {
+        llm: {
+          apiCalls: totals?.llmCalls ?? null,
+          tokens: {
+            input: totals?.totalInputTokens ?? null,
+            output: totals?.totalOutputTokens ?? null,
+            total: totals?.totalTokens ?? null,
           },
-          tools: { totalCalls: totals?.toolCalls ?? null },
         },
-        userId: this.userId,
+        tools: { totalCalls: totals?.toolCalls ?? null },
       },
-      completionReason,
-    );
+      userId: this.userId,
+    };
+    // The client refetches messages on `agent_runtime_end`; Works registered after it
+    // (the lifecycle backstop) leave the Work card missing until a manual reload.
+    let worksRegistered = false;
+    if (result === 'success') {
+      worksRegistered = await lifecycle.registerOperationWorks(completionInput);
+      await publishRuntimeEnd();
+    }
+    await lifecycle.completeOperation({ ...completionInput, worksRegistered }, completionReason);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
+
+    // The completion's thread hooks rewrite the thread's metadata from what the
+    // run claimed it with, which predates this run's session. Bind it again.
+    if (bindsThreadSession && resumeBindingUpdate && isolationThreadId) {
+      await this.bindIsolationThreadSession(isolationThreadId, resumeBindingUpdate);
+    }
 
     // Follow-ups the user queued behind this run start as the next turn here,
     // as they do when a native run ends. The completion above released the
@@ -805,6 +834,44 @@ export class HeterogeneousAgentService {
     } catch (err) {
       log('heteroFinish: starting queued follow-ups failed (non-fatal): %O', err);
     }
+  }
+
+  /**
+   * Record an external agent's native session on the isolation thread it runs
+   * in (a sub-agent), so a follow-up to that sub-agent resumes it. Returns
+   * false when the thread is not an isolation thread — the session then binds
+   * to the topic as before. Never throws.
+   */
+  private async bindIsolationThreadSession(
+    threadId: string,
+    update: { heteroSessionId?: string },
+  ): Promise<boolean> {
+    try {
+      const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
+      const thread = await threadModel.findById(threadId);
+      if (thread?.type !== ThreadType.Isolation) return false;
+      await threadModel.update(threadId, {
+        metadata: { ...thread.metadata, heteroSessionId: update.heteroSessionId },
+      });
+      return true;
+    } catch (err) {
+      log('heteroFinish: binding thread %s session failed (non-fatal): %O', threadId, err);
+      return true;
+    }
+  }
+
+  /**
+   * Resume session for a run inside a thread. An isolation thread (a
+   * sub-agent) holds its own session, undefined while it is new; any other
+   * thread shares the topic's. The thread's type decides, as it does for the
+   * writes ({@link bindIsolationThreadSession}): a message the user sends in a
+   * sub-agent's thread later is an ordinary run, and still resumes what that
+   * sub-agent started.
+   */
+  async getThreadResumeSessionId(threadId: string, topicId: string): Promise<string | undefined> {
+    const thread = await new ThreadModel(this.db, this.userId, this.workspaceId).findById(threadId);
+    if (thread?.type === ThreadType.Isolation) return thread.metadata?.heteroSessionId;
+    return this.getHeterogeneousResumeSessionId(topicId);
   }
 
   /**

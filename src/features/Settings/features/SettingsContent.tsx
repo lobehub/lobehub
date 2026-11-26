@@ -3,6 +3,7 @@
 import { Text } from '@lobehub/ui';
 import { Fragment, useEffect, useState } from 'react';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
@@ -10,7 +11,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { SettingsTabs } from '@/store/global/initialState';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import { ManageMemoryButton } from '../memory/features/ManageMemoryButton';
 import { componentMap } from './componentMap';
 import { getSettingsContainerMaxWidth, OWN_FRAME_TABS } from './ownFrameTabs';
 import { SettingsPageActionsContext, SettingsPageActionsRow } from './SettingsPageActions';
@@ -32,7 +32,10 @@ interface SettingsContentProps {
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const navigate = useWorkspaceAwareNavigate();
-  const title = useSettingsTabTitle(activeTab);
+  const codingPlansTab = useCodingPlansTab();
+  // The optional business tab is titled by its slot; the rest by static copy.
+  const staticTitle = useSettingsTabTitle(activeTab);
+  const title = activeTab === SettingsTabs.CodingPlans ? codingPlansTab?.label : staticTitle;
   const [pageActions, setPageActions] = useState<HTMLElement | null>(null);
 
   useSettingsAnchorScroll();
@@ -89,7 +92,6 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);
         if (OWN_FRAME_TABS.has(tabKey)) return <Fragment key={tabKey}>{content}</Fragment>;
-        const headerExtra = tabKey === SettingsTabs.Memory ? <ManageMemoryButton /> : undefined;
         return (
           <Fragment key={tabKey}>
             <NavHeader styles={{ center: { alignItems: 'center' } }}>
@@ -102,7 +104,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
                 paddingInline={24}
               >
                 {/* Page actions sit in the content column so they align with the body. */}
-                <SettingsPageActionsRow ref={setPageActions}>{headerExtra}</SettingsPageActionsRow>
+                <SettingsPageActionsRow ref={setPageActions} />
                 {content}
               </SettingContainer>
             </SettingsPageActionsContext>

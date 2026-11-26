@@ -42,6 +42,7 @@ import {
 } from '../../daemon/manager';
 import { listTasks } from '../../daemon/taskRegistry';
 import { ActivityReporter } from '../../device/activityHook';
+import { createAgentCredentialDeps } from '../../device/agentCredentials';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
@@ -154,6 +155,7 @@ export function registerConnectCommand(program: Command) {
       }
 
       const isServiceChild = options.serviceChild || process.env.LOBEHUB_CONNECT_SERVICE === '1';
+      if (isServiceChild) process.env.LOBEHUB_CONNECT_SERVICE = '1';
       const isDaemonChild =
         options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 
@@ -596,6 +598,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   });
 
   const deviceControlDeps: DeviceControlDeps = {
+    // Provider credentials the server installs for this device's agent runs;
+    // `spawnHeteroAgentRun` applies them.
+    ...createAgentCredentialDeps(),
     checkCliUpdate: maintenance.check,
     ...createTerminalDeps(terminals),
     getCliUpdateState: maintenance.getState,

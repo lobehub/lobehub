@@ -6,3 +6,16 @@
 export const SELECTABLE_ROLES = new Set(['user', 'assistant', 'assistantGroup']);
 
 export const isSelectableRole = (role?: string): boolean => !!role && SELECTABLE_ROLES.has(role);
+
+/**
+ * Whether a rendered message row takes a checkbox. Compressed history rows are
+ * read-only: selecting one would let the selection footer delete a stored
+ * original message behind its compression summary.
+ */
+export const isSelectableRow = ({
+  readOnlyHistory,
+  role,
+}: {
+  readOnlyHistory?: boolean;
+  role?: string;
+}): boolean => !readOnlyHistory && isSelectableRole(role);

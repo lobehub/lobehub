@@ -1,4 +1,4 @@
-import { Blocks, ShapesIcon } from 'lucide-react';
+import { Blocks, LayoutGridPlus } from 'lucide-react';
 
 import { SkillCatalogPageSkeleton } from '@/components/Skeleton/Settings/tabs/SkillCatalog';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -12,7 +12,7 @@ const InstalledSkillsSkeleton = () => <SkillCatalogPageSkeleton viewMode={'skill
 const ConnectorsSkeleton = () => <SkillCatalogPageSkeleton viewMode={'connector'} />;
 
 export const marketplaceInstalledSkillsRouteMeta = routeMeta({
-  icon: ShapesIcon,
+  icon: LayoutGridPlus,
   Skeleton: InstalledSkillsSkeleton,
   titleKey: 'navigation.marketplaceInstalledSkills',
 });

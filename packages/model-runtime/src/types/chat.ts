@@ -3,6 +3,7 @@ import type {
   ModelReasoning,
   ModelTokensUsage,
   ModelUsage,
+  ResolveToolActivationContext,
   ToolActivationPlan,
 } from '@lobechat/types';
 import type OpenAI from 'openai';
@@ -233,6 +234,8 @@ export interface ChatMethodOptions {
    * after the provider returns, while diagnostics can contain a large payload.
    */
   diagnostics?: ModelRuntimeDiagnostics;
+  /** Evaluated only by a route supporting transcript-anchored tool definitions. */
+  getToolActivationContext?: ResolveToolActivationContext;
   /**
    * response headers
    */

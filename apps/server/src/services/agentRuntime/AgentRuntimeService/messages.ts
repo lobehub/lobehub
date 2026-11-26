@@ -44,6 +44,11 @@ export async function queryUiMessages(
     skipWorks?: boolean;
     /** See `QueryMessageParams.skipCompressedMembers`. */
     skipCompressedMembers?: boolean;
+    /**
+     * See `QueryMessageParams.viewModelPluginState`. Only for reads that end in
+     * a projected message patch; a pushed snapshot must stay whole.
+     */
+    viewModelPluginState?: boolean;
   },
 ): Promise<UIChatMessage[] | undefined> {
   const agentId: string | undefined = agentState?.origin?.agentId;
@@ -83,6 +88,7 @@ export async function queryUiMessages(
         ...(includeArtboardWorks && { includeArtboardWorks: true }),
         ...(includeFileWorks && { includeFileWorks: true }),
         ...(options?.skipCompressedMembers && { skipCompressedMembers: true }),
+        ...(options?.viewModelPluginState && { viewModelPluginState: true }),
         skipWorks: options?.skipWorks,
         threadId,
         topicId,
@@ -257,14 +263,23 @@ export async function queryStepEntryMessages(
     // only the message patch diffed against it does, which fills in the members
     // of a group the step changed (`publishStepMessagePatch`). A protocol-1 run
     // pushes this read as the `step_start` snapshot, so it keeps them.
+    //
+    // For the same reason a protocol-2 run also leaves out the tool payload
+    // keys the UI projection drops (`viewModelPluginState`): the patch is
+    // diffed after projection, so it comes out identical, and the model and
+    // device discovery read none of them. Command output, document text and
+    // crawled pages were most of this read's bytes on long tool-heavy topics.
+    // A protocol-1 snapshot is rendered unprojected, so it keeps them too.
+    const messagePatch = usesGatewayMessagePatch(state);
     messages = await deps.messageModel.query(
       {
         agentId: state.origin.agentId,
         groupId: state.origin.groupId,
-        skipCompressedMembers: usesGatewayMessagePatch(state),
+        skipCompressedMembers: messagePatch,
         skipWorks: true,
         threadId: state.origin.threadId,
         topicId: state.origin.topicId,
+        viewModelPluginState: messagePatch,
       },
       { allowShareVisitor: true },
     );

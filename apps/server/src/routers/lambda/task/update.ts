@@ -10,6 +10,7 @@ import { router } from '@/libs/trpc/lambda';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
+import { checkTaskDeliveryConfig } from '@/server/services/task/channelDelivery';
 import {
   assertProjectReadable,
   projectMoveRefused,
@@ -344,9 +345,16 @@ export const updateRouter = router({
       try {
         const model = ctx.taskModel;
         const resolved = await resolveTaskOrThrow(model, id);
+        // A Channel delivery is checked against the task's Agent before it is stored.
+        const checked = await checkTaskDeliveryConfig(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          resolved.assigneeAgentId,
+          config,
+        );
         const task = await model.updateTaskConfig(
           resolved.id,
-          (await normalizeTaskConfig(model, config, resolved.config))!,
+          (await normalizeTaskConfig(model, checked, resolved.config))!,
         );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: task, message: 'Config updated', success: true };

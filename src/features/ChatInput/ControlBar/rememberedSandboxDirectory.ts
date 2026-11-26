@@ -3,13 +3,6 @@ import type { SandboxSelection } from './useSandboxPlacement';
 /** Prefix of every entry; each user + workspace + agent has a key of its own. */
 export const REMEMBERED_SANDBOX_DIRECTORY_PREFIX = 'lobechat-sandbox-last-directory';
 
-/**
- * Prefix of the temporary sandbox's memory, kept apart from the folder: the
- * persistent sandbox remembers which folder of the drive, the temporary one
- * which repository it was initialized from — or that it used none.
- */
-export const REMEMBERED_SANDBOX_REPOSITORY_PREFIX = 'lobechat-sandbox-last-repository';
-
 /** The folder part of a selection: which drive, and where on it. */
 export type RememberedSandboxDirectory = Pick<SandboxSelection, 'drive' | 'workingDirectory'>;
 
@@ -31,9 +24,6 @@ const scopedKey = (prefix: string, { userId, workspaceId }: RememberScope, agent
 
 export const rememberedSandboxDirectoryKey = (scope: RememberScope, agentId: string) =>
   scopedKey(REMEMBERED_SANDBOX_DIRECTORY_PREFIX, scope, agentId);
-
-export const rememberedSandboxRepositoryKey = (scope: RememberScope, agentId: string) =>
-  scopedKey(REMEMBERED_SANDBOX_REPOSITORY_PREFIX, scope, agentId);
 
 const readEntry = (key: string): unknown => {
   try {
@@ -68,35 +58,11 @@ export const getRememberedSandboxDirectory = (
 };
 
 /**
- * What the agent's last temporary sandbox was initialized from: `{ environmentId }`
- * for a repository, `{}` for none picked on purpose, `undefined` when nothing
- * is remembered yet.
- */
-export const getRememberedSandboxRepository = (
-  scope: RememberScope,
-  agentId: string,
-): Pick<SandboxSelection, 'environmentId'> | undefined => {
-  const key = rememberedSandboxRepositoryKey(scope, agentId);
-  if (!key) return undefined;
-
-  const value = readEntry(key) as { environmentId?: unknown } | undefined;
-  if (!value || typeof value !== 'object') return undefined;
-  if (value.environmentId === undefined) return {};
-  return typeof value.environmentId === 'string' && value.environmentId
-    ? { environmentId: value.environmentId }
-    : undefined;
-};
-
-/**
- * Remember a pick so the next conversation starts where this one was put:
- *
- * - a folder on the drive — the persistent sandbox — is remembered as its
- *   folder;
- * - the temporary sandbox is remembered as the repository it starts from, or
- *   as none; the folder memory stays, for the next time the persistent
- *   sandbox is used;
- * - a legacy environment directory says nothing about either and changes
- *   nothing.
+ * Remember a pick so the next conversation starts where this one was put: a
+ * folder on the drive is remembered as the folder, and switching the drive off
+ * leaves that memory alone, for the next time it is switched on. A legacy
+ * environment directory changes nothing. The cloud sandbox is not set up from
+ * an environment, so none is remembered.
  *
  * Storage unavailable (private mode, quota) is ignored: the next conversation
  * starts at the plan's default, as it did before anything was remembered.
@@ -107,27 +73,15 @@ export const rememberSandboxSelection = (
   selection: SandboxSelection,
 ): void => {
   const key = rememberedSandboxDirectoryKey(scope, agentId);
-  if (!key) return;
-
-  const repositoryKey = rememberedSandboxRepositoryKey(scope, agentId)!;
-  if (selection.instanceId) return;
+  if (!key || selection.instanceId || !selection.workingDirectory) return;
 
   try {
-    if (selection.workingDirectory) {
-      localStorage.setItem(
-        key,
-        JSON.stringify(
-          selection.drive
-            ? { drive: selection.drive, workingDirectory: selection.workingDirectory }
-            : { workingDirectory: selection.workingDirectory },
-        ),
-      );
-      return;
-    }
-
     localStorage.setItem(
-      repositoryKey,
-      JSON.stringify(selection.environmentId ? { environmentId: selection.environmentId } : {}),
+      key,
+      JSON.stringify({
+        ...(selection.drive && { drive: selection.drive }),
+        workingDirectory: selection.workingDirectory,
+      }),
     );
   } catch {
     // Storage unavailable: nothing is remembered, as described above.

@@ -12,7 +12,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useCreateMenuItems } from '../../hooks';
 
 interface AgentActionsDropdownMenuProps {
-  openConfigGroupModal: (scope?: 'private' | 'public') => void;
+  openConfigGroupModal: () => void;
 }
 
 export const useAgentActionsDropdownMenu = ({
@@ -25,26 +25,15 @@ export const useAgentActionsDropdownMenu = ({
 
   // Create menu items
   const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
-  // The workspace Agents section also holds the member's private folders
-  // (formerly managed from the separate Private section).
+  // The workspace sidebar is personal: it only renders the member's private
+  // folders, so a category added from here is private too.
   const isWorkspace = !!useActiveWorkspaceId();
 
   return useMemo(() => {
-    const createSessionGroupItem = createSessionGroupMenuItem();
-    const configItem = configMenuItem(() => openConfigGroupModal('public'));
-    const privateFolderItems = isWorkspace
-      ? [
-          {
-            ...createSessionGroupMenuItem({ visibility: 'private' }),
-            label: t('navPanel.createPrivateFolder'),
-          },
-          {
-            ...configMenuItem(() => openConfigGroupModal('private')),
-            key: 'configPrivate',
-            label: t('navPanel.managePrivateFolders'),
-          },
-        ]
-      : [];
+    const createSessionGroupItem = createSessionGroupMenuItem(
+      isWorkspace ? { visibility: 'private' } : undefined,
+    );
+    const configItem = configMenuItem(openConfigGroupModal);
 
     const pageSizeOptions = [5, 10, 15, 20];
     const pageSizeItems = pageSizeOptions.map((size) => ({
@@ -59,7 +48,6 @@ export const useAgentActionsDropdownMenu = ({
     return [
       createSessionGroupItem,
       configItem,
-      ...privateFolderItems,
       { type: 'divider' as const },
       {
         children: pageSizeItems,

@@ -4,6 +4,8 @@ import debug from 'debug';
 
 import { ProjectModel } from '@/database/models/project';
 
+import { readProjectRunnersContext } from './projectRunners';
+
 const log = debug('lobe-server:ai-agent-service');
 
 /** Open work is anything a member may still act on. */
@@ -33,11 +35,14 @@ export const buildRunProjectContextPrompt = async (
 
   try {
     const projectModel = new ProjectModel(deps.db, deps.userId, deps.workspaceId);
-    const [project, members, knowledgeBases, tasks] = await Promise.all([
+    const [project, members, knowledgeBases, tasks, place] = await Promise.all([
       projectModel.findById(projectId),
       projectModel.listAgents(projectId),
       projectModel.listKnowledgeBases(projectId),
       projectModel.listTasks(projectId),
+      // Where the work can run and what each runner prepares, so the agent can
+      // say where a task belongs; a failed read leaves only this part out.
+      readProjectRunnersContext(deps, projectId).catch(() => ({})),
     ]);
     if (!project) return;
     const [resolvedProject] = await projectModel.resolveCoordinatorAgents([project]);
@@ -47,6 +52,7 @@ export const buildRunProjectContextPrompt = async (
       channelMessaging: options.channelMessaging,
       coordinationRules: options.coordinationRules,
       currentAgentId: agentId,
+      environment: 'environment' in place ? place.environment : undefined,
       knowledgeBases: (knowledgeBases ?? [])
         .filter(({ binding }) => binding.enabled)
         .map(({ knowledgeBase }) => ({
@@ -71,6 +77,7 @@ export const buildRunProjectContextPrompt = async (
         status: task.status,
       })),
       project: resolvedProject,
+      runners: 'runners' in place ? place.runners : undefined,
       totalOpenTasks: openTasks.length,
     });
   } catch (error) {

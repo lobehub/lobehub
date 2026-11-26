@@ -11,7 +11,7 @@ import type {
   AgentShareVisibility,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -695,6 +695,55 @@ export class AgentShareModel {
     return !!live;
   };
 
+  /**
+   * Admit a person because the share's owner approved their request to use the Agent
+   * (`channel_agent_grants`). The owner's decision is newer than any earlier withdrawal, so it
+   * restores a revoked grant, and it takes over the source of a live one: a request grant is also
+   * what lets {@link resolveShareVisitorDeviceAccess} admit the person to the device without being
+   * in the owner's address book. Idempotent.
+   */
+  static grantByRequest = async (
+    db: Pick<LobeChatDatabase, 'insert'>,
+    params: { channelId: string; grantId: string; shareId: string; userId: string },
+  ): Promise<void> => {
+    const source: AgentShareGrantSource = {
+      channelId: params.channelId,
+      grantId: params.grantId,
+      type: 'request',
+    };
+    await db
+      .insert(agentShareGrants)
+      .values({ shareId: params.shareId, source, userId: params.userId })
+      .onConflictDoUpdate({
+        set: { revokedAt: null, source },
+        target: [agentShareGrants.shareId, agentShareGrants.userId],
+      });
+  };
+
+  /**
+   * Of `userIds`, those a live grant admits because the owner approved their request (see
+   * {@link grantByRequest}), rather than a card they added the Agent from.
+   */
+  static requestGrantedUserIds = async (
+    db: LobeChatDatabase,
+    shareId: string,
+    userIds: string[],
+  ): Promise<string[]> => {
+    if (!userIds.length) return [];
+    const rows = await db
+      .select({ userId: agentShareGrants.userId })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, shareId),
+          inArray(agentShareGrants.userId, userIds),
+          isNull(agentShareGrants.revokedAt),
+          sql`${agentShareGrants.source} ->> 'type' = 'request'`,
+        ),
+      );
+    return rows.map((row) => row.userId);
+  };
+
   /** The people this Agent's share admits by card, newest first, for its owner. */
   listGrants = async (agentId: string): Promise<AgentShareGrantItem[]> => {
     const share = await this.getByAgentId(agentId);
@@ -847,12 +896,14 @@ export class AgentShareModel {
    * Kept as the single access-check implementation so callers that already
    * hold a resolved row (e.g. via `findBySlugOrId`) don't need a second
    * lookup just to reuse the gate.
+   *
+   * `viewerId` is empty for a signed-out caller, which is never the owner.
    */
   static assertShareAccess = (
     share: Pick<AgentShareData, 'ownerId' | 'visibility'>,
-    viewerId: string,
+    viewerId: string | null | undefined,
   ): void => {
-    const isOwner = viewerId === share.ownerId;
+    const isOwner = !!viewerId && viewerId === share.ownerId;
     // NOT_FOUND, not FORBIDDEN: a paused (private) share must be
     // indistinguishable from a share that never existed, otherwise a
     // stranger can probe custom slugs / ids to learn which private shares

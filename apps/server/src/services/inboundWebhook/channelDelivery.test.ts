@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
+import { MessageModel } from '@/database/models/message';
 import { ChannelRepository } from '@/database/repositories/channel';
 import {
   agentOperations,
@@ -92,6 +93,34 @@ const finishedRun = async (operationId: string, content: string, status = 'done'
   });
 };
 
+const surface = (surfaceId: string, fallback: string) => ({
+  catalogId: 'https://lobehub.com/a2ui/catalog/v1',
+  fallback,
+  operations: [{ createSurface: { surfaceId }, version: '1.0' }],
+  surfaceId,
+  version: '1.0',
+});
+
+/** A step of the run that drew a card, as the agent runtime writes it. */
+const drawCard = async (operationId: string, card: ReturnType<typeof surface>) => {
+  const messageModel = new MessageModel(db, userId);
+  const step = await messageModel.create({
+    content: '',
+    metadata: { operationId },
+    role: 'assistant',
+    topicId,
+  });
+  await messageModel.create({
+    content: 'Card drawn',
+    parentId: step.id,
+    plugin: { apiName: 'renderUI', arguments: '{}', identifier: 'lobe-a2ui', type: 'builtin' },
+    pluginState: { surface: card },
+    role: 'tool',
+    tool_call_id: `call-${card.surfaceId}`,
+    topicId,
+  });
+};
+
 const agentPosts = () =>
   db
     .select()
@@ -147,6 +176,60 @@ describe('reportWebhookRunToChannel', () => {
     await reportWebhookRunToChannel(db, { operationId: 'op_main', webhookId });
 
     expect(await agentPosts()).toEqual([expect.objectContaining({ threadId: null })]);
+  });
+
+  it('posts the cards the run drew with its answer, like a published reply', async () => {
+    await seedWebhook();
+    const card = surface('build', 'Nightly build · e2e failed');
+    await db
+      .insert(agentOperations)
+      .values({ agentId, id: 'op_card', status: 'done', topicId, userId });
+    await drawCard('op_card', card);
+    await db.insert(messages).values({
+      agentId,
+      content: 'Here is the build.',
+      metadata: { operationId: 'op_card' },
+      role: 'assistant',
+      topicId,
+      userId,
+    });
+
+    expect(await reportWebhookRunToChannel(db, { operationId: 'op_card', webhookId })).toBe(
+      'posted',
+    );
+
+    expect(await agentPosts()).toEqual([
+      expect.objectContaining({
+        content: 'Here is the build.\n\n[Card] Nightly build · e2e failed',
+        metadata: expect.objectContaining({
+          source: 'inbound-webhook',
+          surfaces: [card],
+          surfacesBodyLength: 'Here is the build.'.length,
+        }),
+      }),
+    ]);
+  });
+
+  it('posts a card-only answer instead of treating it as silence', async () => {
+    await seedWebhook(threadId);
+    const card = surface('status', 'All green');
+    await db
+      .insert(agentOperations)
+      .values({ agentId, id: 'op_card_only', status: 'done', topicId, userId });
+    await drawCard('op_card_only', card);
+
+    expect(await reportWebhookRunToChannel(db, { operationId: 'op_card_only', webhookId })).toBe(
+      'posted',
+    );
+    await reportWebhookRunToChannel(db, { operationId: 'op_card_only', webhookId });
+
+    expect(await agentPosts()).toEqual([
+      expect.objectContaining({
+        content: '[Card] All green',
+        metadata: expect.objectContaining({ surfaces: [card], surfacesBodyLength: 0 }),
+        threadId,
+      }),
+    ]);
   });
 
   it('posts nothing for NO_REPLY or a run that has not finished', async () => {

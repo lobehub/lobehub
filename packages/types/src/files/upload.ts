@@ -180,6 +180,11 @@ export const FileMetadataSchema = z.object({
    */
   ratio: z.number().optional(),
   /**
+   * base64 ThumbHash of the image, recorded for images so consumers can paint a
+   * blurred placeholder before the file loads
+   */
+  thumbhash: z.string().optional(),
+  /**
    * intrinsic image width in pixels, recorded for images
    */
   width: z.number().optional(),

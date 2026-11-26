@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { activityListLoader } from './activityListLoader';
 import { desktopRoutes } from './desktopRouter.config';
+import { LegacyMemoryRedirect } from './legacyPathRedirect';
 
 const loaderModule = vi.hoisted(() => ({ evaluated: false }));
 
@@ -23,7 +24,12 @@ describe('activity list loader wiring', () => {
   });
 
   it('pre-hydrates the activity list on the desktop activities route', () => {
-    const routes = flatten(desktopRoutes).filter((r) => r.path === 'activities');
+    const routes = flatten(desktopRoutes).filter(
+      (r) =>
+        r.path === 'activities' &&
+        // The old `/memory/activities` URLs only forward to Settings.
+        (r.element as { type?: unknown } | undefined)?.type !== LegacyMemoryRedirect,
+    );
 
     expect(routes.length).toBeGreaterThan(0);
 

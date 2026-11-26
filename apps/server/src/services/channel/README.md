@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -145,8 +145,29 @@ select that member. Explicit mentions cannot overtake those decisions; unrelated
 and other Channels remain independent. A failed, skipped or stopped decision releases the wait.
 `channel.retryRouting({ channelId, messageId })` lets the author/admin retry an unassigned message;
 sending a new message with an explicit mention remains available.
-`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue a reply that failed
-because its device could not be reached; it waits for the device like any queued reply.
+`channel.retryJob({ channelId, jobId })` lets the requester/admin run a failed reply again from
+the start; it waits for its device like any queued reply. `channel.resumeJob({ channelId, jobId })`
+runs it again in the topic it stopped in, so a CLI Agent resumes its session
+(`topic.metadata.heteroSessionId`); the run gets the request with a short continuation block
+(`channel_resume`) instead of the full context.
+
+A reply that fails for a system reason (error, interruption, the inactivity watchdog, a
+dispatch or device failure, a run that ended without text) gets a card in the Agent's reply slot,
+not a job-level note only. `reportChannelReplyFailure` (`replyError/`) posts a rule-based card per
+failure kind right away, in the requester's language, then lets the deployment's mini model
+(`channel_reply_error` tracing scenario, 10 s budget) rewrite the sentence and order the allowed
+actions in place. A shared Agent's card keeps the visitor-safe error projection and gets no model
+rewrite. A stop through the Channel cancels the job and writes no card. The job's own
+`errorMessage` / `errorType` / `deviceId` stay in the detail view for older clients.
+
+Each member answers a branch in message order, but not one run per message: when a job is
+claimed, the same person's owed answers queued right behind it from that member in that branch
+are merged into the run (`claim.ts`, `merge.ts`). The manifest's cutoff and `requestMessageId`
+move to the newest of them and `requestMessageIds` lists them all; their jobs settle as `merged`,
+and only the first opens a reply. A message woken as a `mention` (a follow-up window, its name in
+the text) is owed an answer and merges like an addressed one. Merging stops at someone else's
+request, a `followup` wake or one deferred behind another member, a relay or brought-back answer, or a message whose routing is still undecided, and never applies
+to a shared Agent, whose visitors are metered per request. Retrying the run re-queues them.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive
@@ -207,50 +228,30 @@ their system context from `heteroDispatch/prepare.ts`.
 A Native run can also reach Agents outside its Channel, so "tell / ask that Agent" is a message
 the Agent decides on, not a task created for it. `lobe-channel.listChannels` lists the requester's
 active Channels (archived and trashed ones are left out) with their active Agent members.
-`lobe-channel.sendMessage` posts into one of them through `ChannelService.send`, @mentioning the
-chosen Agents (`ChannelMessagingService`).
+`lobe-channel.sendMessage` asks one of those Agents (`ChannelMessagingService`). Nothing is ever
+posted as the requester: Agents never write in a person's conversation or a group on their behalf.
 
-- **Who sends it.** The run's requester is the sender and execution identity, as if they had
-  posted it, so the target Channel's membership, routing and Agent permissions apply unchanged.
-  A Channel message has exactly one sender and an Agent-authored row is always a `reply` that
-  routes nowhere, so the relaying Agent is recorded in `metadata.via` instead. The timeline shows
-  "Relayed by", and the woken run sees a `via` attribute on its `channel_request`.
 - **What it may do.** Every call first passes the same live-run check as a history read
-  (`ChannelHistoryRepository.currentRun`). The target must be one of the requester's Channels and
-  each `agentId` an active member there; at most five Agents, never the sender itself or the
-  Channel it is answering in (its final answer is posted there).
-- **One hop.** A run answering a relayed request cannot relay again, so two Agents cannot keep
-  waking each other on the requester's behalf.
-- **Retries.** The request key is `agent-relay:<operationId>:<toolCallId>`, so a retried call
-  returns the message already posted.
-- **Where the answer goes.** The addressed Agent answers in its own Channel, and the tool returns
-  a link to it for the relaying run's final answer. When that reply is published,
-  `deliverRelayReceipt` (called from `ChannelCoordinator.complete`) posts it back into the Channel
-  and branch the relay came from (`metadata.via.origin`), as the same requester, @mentioning the
-  relaying Agent. That receipt carries `metadata.receipt` (the answering Channel and reply) and the
-  answering Agent in `via`. The timeline shows "<Agent> replied in #<Channel>", and the woken run
-  sees `via` and `reply_from` on its `channel_request`. Because the receipt has `via`, the run it
-  wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
-  Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
-  so a repeated completion posts it once.
-- **One Agent is asked between the two Agents.** The relay above is only for several Agents
-  addressed together in a group. A Channel run addressing one Agent never relays, whichever
-  Channel it named or none: a relayed request lands in a group or the person's conversation as
-  the person, and its receipt occupies the channel they use to talk to their Agent. The Agent is
-  located through the requester's Channels, its own conversation first (`findAgent`). A bot run
-  has no Channel for the conclusion to come back to, so it still relays.
-  `askAgent` instead opens the conversation between the two Agents (`channels.agentPairKey`, one
-  per pair, person and scope), giving each Agent the environment it has where the person already
-  talks to it. The asking Agent writes the request itself (`channel_messages.agent_id` on a
-  request); the person is the owner member, the requester and the execution identity, and only
-  watches. The request is not a relay and carries no `via`: `metadata.exchange` keeps the origin
-  and `hops`. When the other Agent's reply is published,
+  (`ChannelHistoryRepository.currentRun`), so only a Channel run can ask. One Agent per call, never
+  the asking Agent itself; asking several means one call each.
+- **Where it is asked.** The Agent is located through the requester's Channels, its own
+  conversation first (`findAgent`); a named `channelId` is only a hint. `askAgent` opens the
+  conversation between the two Agents (`channels.agentPairKey`, one per pair, person and scope),
+  giving each Agent the environment it has where the person already talks to it. The asking Agent
+  writes the request itself (`channel_messages.agent_id` on a request); the person is the owner
+  member, the requester and the execution identity, and only watches. `metadata.exchange` keeps
+  the origin and `hops`.
+- **Where the answer goes.** When the other Agent's reply is published,
   `ChannelExecutionRepository.deliverAnswerToAsker` queues the asking Agent on that reply in the
   same conversation; that run's `currentRun().exchange` names the origin. Its own reply answers a
   reply, so it wakes no one, and `reportAgentExchange` posts it where the asking began as the
   Agent's own message (`postAgentMessage`, with `metadata.receipt` linking back and naming the
-  answering Agent in `receipt.agent`; the timeline shows a "Messages from <Agent>" line above it). Asking again
-  from that run continues the exchange (`hops + 1`) up to three asks; the answering Agent's run (`requestByAgent`) cannot pass the question on. `deliverRelayReceipt` skips Agent-written requests.
+  answering Agent in `receipt.agent`; the timeline shows a "Messages from <Agent>" line above it).
+- **No loops.** Asking again from that run continues the exchange (`hops + 1`) up to three asks.
+  The answering Agent's run (`requestByAgent`) and a run answering a request an Agent posted in its
+  own Channel (`requestVia`: a Thread it opened, a scheduled report) cannot ask further.
+- **Retries.** The request key is `agent-ask:<operationId>:<toolCallId>`, so a retried call
+  returns the message already posted.
 - **@mentions in replies.** An Agent's published reply has its `@Name` text turned into real
   mentions (`ChannelExecutionRepository.deliverReplyMentions`, called from
   `ChannelCoordinator.complete`): the reply is parsed as Markdown (remark + GFM) and only its
@@ -262,27 +263,8 @@ chosen Agents (`ChannelMessagingService`).
   between two Agents only records them; its exchange has its own limit.
 - **External runtimes.** `lh channel list` and `lh channel send` call the same service through
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
-  the `channel:message` capability that every Channel dispatch is minted alongside
+  the `channel:message` capability that only a Channel dispatch is minted, alongside
   `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
-
-### Messaging people for the requester
-
-"Let Alice know when you are done" is a message to a person, not a request for an Agent.
-`lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
-the run's scope (`AddressBook.listPeople`, a business slot that lists nobody by default). `lobe-channel.messagePerson` (`lh channel dm`)
-posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
-first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
-
-- **Who sends it.** The requester, with the writing Agent in `metadata.via`, like a relay: the
-  timeline shows "Relayed by". The conversation between two people decides who can be reached
-  (`requirePeerRelation`, checked on opening and on every send), so an Agent reaches exactly the
-  people its requester could message by hand. A conversation the requester trashed is refused.
-- **Notification.** It is an ordinary message there, so `notifyChannelDirectMessages` notifies the
-  person as of any message from the requester.
-- **Nothing comes back.** No Agent is in that conversation; the `via` has no `origin`, so no
-  receipt is delivered. Unlike `sendMessage` there is no hop rule: a person does not wake anyone.
-- **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
-- Shared-Agent runs do not get it: the share gate allows only history reads.
 
 ### Why history reads stay on `lobe-channel`
 

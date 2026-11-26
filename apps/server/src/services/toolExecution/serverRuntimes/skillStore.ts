@@ -124,7 +124,14 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
         summary: 'Skill store imported a GitHub skill.',
         toolAction: 'import',
       });
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     } catch (error) {
       await this.emitSkillOutcome({
         apiName: 'importFromGitHub',
@@ -151,7 +158,14 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
         summary: 'Skill store imported a skill from URL.',
         toolAction: 'import',
       });
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     } catch (error) {
       await this.emitSkillOutcome({
         apiName: 'importFromUrl',
@@ -181,7 +195,14 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
         summary: 'Skill store imported a zipped skill.',
         toolAction: 'import',
       });
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
+      return {
+        skill: {
+          description: result.skill.description ?? undefined,
+          id: result.skill.id,
+          name: result.skill.name,
+        },
+        status: result.status,
+      };
     } catch (error) {
       await this.emitSkillOutcome({
         apiName: 'importFromZipUrl',

@@ -4,13 +4,20 @@ import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
 
 import { fileEnv } from '@/envs/file';
-import { lambdaClient } from '@/libs/trpc/client';
+import { scopedLambdaClient } from '@/libs/trpc/client';
 import type { FileMetadata, UploadBase64ToS3Result } from '@/types/files';
 import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 
 import { hashFile } from './hashFile';
 
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
+export const UPLOAD_STALLED_ERROR = 'UploadStalled';
+
+/**
+ * A PUT that sends no bytes for this long is dropped. A stalled connection fires neither `error`
+ * nor `load`, so without this the file spins forever instead of offering a retry.
+ */
+export const UPLOAD_STALL_TIMEOUT = 30_000;
 
 const MAX_MULTIPART_PARTS = 10_000;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
@@ -71,7 +78,9 @@ const readStorageError = (xhr: XMLHttpRequest): UploadRequestError => {
 };
 
 const isRetryableUploadError = (error: unknown) =>
-  error === UPLOAD_NETWORK_ERROR || (error instanceof UploadRequestError && error.retryable);
+  error === UPLOAD_NETWORK_ERROR ||
+  (error instanceof Error && error.message === UPLOAD_STALLED_ERROR) ||
+  (error instanceof UploadRequestError && error.retryable);
 
 const waitBeforeRetry = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -122,6 +131,13 @@ const generateFilePathMetadata = (
   };
 };
 
+/** A single-PUT upload signed ahead of time; see {@link UploadService.signUpload}. */
+export interface SignedUpload {
+  metadata: ReturnType<typeof generateFilePathMetadata>;
+  url: Promise<string>;
+  workspaceId?: string | null;
+}
+
 interface UploadFileToS3Options {
   abortController?: AbortController;
   directory?: string;
@@ -129,16 +145,50 @@ interface UploadFileToS3Options {
   onNotSupported?: () => void;
   onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
   pathname?: string;
+  /** Signed by {@link UploadService.signUpload}; replaces `directory` and `pathname`. */
+  signed?: SignedUpload;
   skipCheckFileType?: boolean;
+  /** Pins the scope the upload is reserved in; `undefined` follows the active workspace. */
+  workspaceId?: string | null;
 }
 
+type LambdaClient = ReturnType<typeof scopedLambdaClient>;
+
 class UploadService {
-  releaseUpload = async (pathname: string) => {
+  releaseUpload = async (pathname: string, workspaceId?: string | null) => {
     try {
-      await lambdaClient.upload.abortS3Upload.mutate({ pathname });
+      await scopedLambdaClient(workspaceId).upload.abortS3Upload.mutate({ pathname });
     } catch (error) {
       console.error('Failed to clean S3 upload:', error);
     }
+  };
+
+  /**
+   * Signs a single-PUT upload ahead of time, so the signing round trip overlaps whatever the
+   * caller awaits meanwhile (hashing, the duplicate check). Signing reserves the key against the
+   * user's quota: pass it to {@link uploadFileToS3}, or {@link releaseSignedUpload} it when the
+   * upload is skipped. Files too large for a single PUT get nothing.
+   */
+  signUpload = (file: File, workspaceId?: string | null): SignedUpload | undefined => {
+    if (file.size > MAX_UPLOAD_FILE_SIZE || file.size >= MULTIPART_UPLOAD_THRESHOLD) return;
+    const metadata = generateFilePathMetadata(file.name);
+    const url = scopedLambdaClient(workspaceId).upload.createS3PreSignedUrl.mutate({
+      pathname: metadata.pathname,
+      size: file.size,
+    });
+    // Surfaced where the upload awaits it; a skipped upload must not report it as unhandled.
+    url.catch(() => {});
+    return { metadata, url, workspaceId };
+  };
+
+  releaseSignedUpload = async ({ metadata, url, workspaceId }: SignedUpload) => {
+    try {
+      await url;
+    } catch {
+      // Never signed, so nothing was reserved.
+      return;
+    }
+    await this.releaseUpload(metadata.pathname, workspaceId);
   };
 
   /**
@@ -146,7 +196,14 @@ class UploadService {
    */
   uploadFileToS3 = async (
     file: File,
-    { onProgress, directory, pathname, abortController }: UploadFileToS3Options,
+    {
+      onProgress,
+      directory,
+      pathname,
+      abortController,
+      signed,
+      workspaceId,
+    }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
     if (file.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
 
@@ -159,6 +216,8 @@ class UploadService {
       directory,
       onProgress,
       pathname,
+      signed,
+      workspaceId,
     });
     return { data, success: true };
   };
@@ -226,32 +285,44 @@ class UploadService {
       directory,
       pathname,
       abortController,
+      signed,
+      workspaceId,
     }: {
       abortController?: AbortController;
       directory?: string;
       onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
       pathname?: string;
+      signed?: SignedUpload;
+      workspaceId?: string | null;
     },
   ): Promise<FileMetadata> => {
+    const client = scopedLambdaClient(workspaceId);
     const {
       date,
       dirname,
       filename,
       pathname: uploadPathname,
-    } = generateFilePathMetadata(file.name, { directory, pathname });
+    } = signed?.metadata ?? generateFilePathMetadata(file.name, { directory, pathname });
     const result = { date, dirname, filename, path: uploadPathname };
     const startTime = Date.now();
 
     try {
       if (file.size >= MULTIPART_UPLOAD_THRESHOLD) {
-        await this.uploadMultipart(file, uploadPathname, abortController?.signal, (loaded) => {
-          onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
-        });
+        await this.uploadMultipart(
+          client,
+          file,
+          uploadPathname,
+          abortController?.signal,
+          (loaded) => {
+            onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
+          },
+        );
       } else {
-        const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({
-          pathname: uploadPathname,
-          size: file.size,
-        });
+        const preSignUrl = await (signed?.url ??
+          client.upload.createS3PreSignedUrl.mutate({
+            pathname: uploadPathname,
+            size: file.size,
+          }));
 
         await this.putBlob(
           preSignUrl,
@@ -264,7 +335,7 @@ class UploadService {
         );
       }
     } catch (error) {
-      await this.releaseUpload(uploadPathname);
+      await this.releaseUpload(uploadPathname, workspaceId);
       if (abortController?.signal.aborted) {
         onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
       }
@@ -349,10 +420,21 @@ class UploadService {
     const xhr = new XMLHttpRequest();
     const abort = () => xhr.abort();
     signal?.addEventListener('abort', abort, { once: true });
+    let stall: ReturnType<typeof setTimeout> | undefined;
 
     try {
       return await new Promise<string | undefined>((resolve, reject) => {
+        // Restarted on every progress tick: a slow upload that keeps moving is never cut off.
+        const watch = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => {
+            // Rejected first: aborting fires the `abort` listener, which would report a cancel.
+            reject(new Error(UPLOAD_STALLED_ERROR));
+            xhr.abort();
+          }, UPLOAD_STALL_TIMEOUT);
+        };
         xhr.upload.addEventListener('progress', (event) => {
+          watch();
           if (event.lengthComputable) onProgress(event.loaded);
         });
         xhr.addEventListener('load', () => {
@@ -368,8 +450,10 @@ class UploadService {
         xhr.open('PUT', url);
         if (contentType) xhr.setRequestHeader('Content-Type', contentType);
         xhr.send(blob);
+        watch();
       });
     } finally {
+      clearTimeout(stall);
       signal?.removeEventListener('abort', abort);
     }
   };
@@ -379,6 +463,7 @@ class UploadService {
    * with a freshly signed URL so a single dropped part does not fail a large file.
    */
   private uploadPart = async ({
+    client,
     blob,
     onProgress,
     partNumber,
@@ -387,6 +472,7 @@ class UploadService {
     uploadId,
   }: {
     blob: Blob;
+    client: LambdaClient;
     onProgress: (loaded: number) => void;
     partNumber: number;
     pathname: string;
@@ -394,7 +480,7 @@ class UploadService {
     uploadId: string;
   }): Promise<string | undefined> => {
     for (let attempt = 1; ; attempt++) {
-      const url = await lambdaClient.upload.createS3MultipartUploadPartUrl.mutate({
+      const url = await client.upload.createS3MultipartUploadPartUrl.mutate({
         partNumber,
         pathname,
         uploadId,
@@ -418,13 +504,14 @@ class UploadService {
   };
 
   private uploadMultipart = async (
+    client: LambdaClient,
     file: File,
     pathname: string,
     signal: AbortSignal | undefined,
     onProgress: (loaded: number) => void,
   ): Promise<void> => {
     const parts: Array<{ etag: string; partNumber: number }> = [];
-    const upload = await lambdaClient.upload.createS3MultipartUpload.mutate({
+    const upload = await client.upload.createS3MultipartUpload.mutate({
       contentType: file.type || undefined,
       pathname,
       size: file.size,
@@ -442,6 +529,7 @@ class UploadService {
         const end = Math.min(offset + partSize, file.size);
         const etag = await this.uploadPart({
           blob: file.slice(offset, end),
+          client,
           onProgress: (loaded) => onProgress(offset + loaded),
           partNumber,
           pathname,
@@ -454,7 +542,7 @@ class UploadService {
 
       if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
       // Removing the chip while the parts are being merged cancels this request too.
-      await lambdaClient.upload.completeS3MultipartUpload.mutate(
+      await client.upload.completeS3MultipartUpload.mutate(
         {
           partCount,
           parts: parts.length === partCount ? parts : undefined,
@@ -465,7 +553,7 @@ class UploadService {
       );
     } catch (error) {
       try {
-        await lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });
+        await client.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });
       } catch (abortError) {
         console.error('Failed to abort S3 multipart upload:', abortError);
       }

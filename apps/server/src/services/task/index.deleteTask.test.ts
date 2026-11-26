@@ -168,6 +168,7 @@ describe('TaskService.deleteTask', () => {
 
   const mockWorkspaceMemberModel = {
     getMember: vi.fn().mockResolvedValue({ role: 'member', userId: 'member-1' }),
+    getNicknames: vi.fn().mockResolvedValue(new Map()),
   };
 
   beforeEach(() => {

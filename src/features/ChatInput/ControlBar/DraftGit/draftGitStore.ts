@@ -24,8 +24,7 @@ export interface DraftGitTarget {
 }
 
 /**
- * Before the first send, picking a branch only records it (Better Coding
- * Experience): the checkout or worktree happens when the message is sent. The
+ * Before the first send, picking a branch only records it: the checkout or worktree happens when the message is sent. The
  * pick lives here, per agent + device + directory, so it survives the switcher
  * closing but not a reload — it is a draft, never persisted.
  */

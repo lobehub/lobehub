@@ -303,7 +303,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // WorkingDirectorySection: a persisted-worktree topic has no matching
   // `workingDirs` entry, and committing the worktree path as sourcePath would
   // rewrite the topic's repo source (see that component's comment).
-  const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
     if (!workingDirectory) return undefined;
@@ -368,14 +367,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   });
   const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
-  const snapshotConfig =
-    (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
-    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
-      ? topicWorkingDirectoryConfig
-      : deviceDirs.find((entry) => getWorkingDirEffectivePath(entry) === workingDirectory);
-  const isGithub =
-    repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
-  const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
     dismissPullRequest,
     linkPullRequest,
@@ -388,9 +379,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   } = useSidebarPullRequests({
     available: filesystemEnvironmentAvailable && !!workingDirectory,
     deviceId: remoteDeviceId,
-    gitPath,
-    isGithub,
-    snapshot: snapshotConfig?.git,
     topicId,
     workingDirectory: sourceWorkingDirectory ?? workingDirectory,
   });

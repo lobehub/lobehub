@@ -68,15 +68,20 @@ export function MemberStatus({
   const direct = !!channel.agentId;
   // A direct conversation is a chat with one Agent: no roster to show, only its actions, like an
   // IM header. Its title is the Agent's name, so it cannot be renamed here.
-  const directMenu = () => [
-    ...(directAgent
+  const directAgentMenu = () =>
+    directAgent
       ? [
-          {
-            icon: Bot,
-            key: 'openAgent',
-            label: t('openAgentNamed', { name: directAgent.name }),
-            onClick: () => navigate(`/agent/${channel.agentId}`),
-          },
+          // A colleague's private Agent can be chatted with here, but its page is not theirs to open.
+          ...(directAgent.member.canOpenAgent
+            ? [
+                {
+                  icon: Bot,
+                  key: 'openAgent',
+                  label: t('openAgentNamed', { name: directAgent.name }),
+                  onClick: () => navigate(`/agent/${channel.agentId}`),
+                },
+              ]
+            : []),
           // The member list is hidden here, so its device and directory setup lives in this menu.
           ...(directAgent.member.status === 'active' &&
           channel.canDelete &&
@@ -90,14 +95,18 @@ export function MemberStatus({
                 },
               ]
             : []),
-          { type: 'divider' as const },
         ]
-      : []),
-    // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
-    ...channelMenu(channel).filter(
-      (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
-    ),
-  ];
+      : [];
+  const directMenu = () => {
+    const agentItems = directAgentMenu();
+    return [
+      ...(agentItems.length > 0 ? [...agentItems, { type: 'divider' as const }] : []),
+      // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
+      ...channelMenu(channel).filter(
+        (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
+      ),
+    ];
+  };
 
   // Managing a group lives on its settings page; deleting it is not one click from the header.
   const groupMenu = () => [

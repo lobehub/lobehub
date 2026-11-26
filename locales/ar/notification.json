@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "تمت إضافة رصيد المكافأة",
   "storage_overage_cap_reached": "تم الوصول إلى الحد الأقصى الشهري للدفع حسب الاستخدام للتخزين بقيمة ${{monthlyCap}}. التكاليف المقدرة لهذه الدورة هي ${{estimatedCycleCharge}}. سيتم حظر التحميلات الجديدة خارج التخزين المضمن حتى دورة الفوترة التالية أو حتى زيادة الحد الأقصى.",
   "storage_overage_cap_reached_title": "تم الوصول إلى الحد الأقصى للدفع حسب الاستخدام للتخزين",
-  "subscription_one_time_expired": "انتهت خطة {{plan}} لمرة واحدة وحسابك الآن على الخطة المجانية. قم بتجديد {{plan}} لاستعادة مزاياك.",
   "subscription_one_time_expired_action": "جدد {{plan}}",
   "subscription_one_time_expired_title": "انتهت خطة {{plan}} الخاصة بك",
   "subscription_payment_failed": "فشل دفع تجديد الاشتراك الخاص بك. يرجى تحديث طريقة الدفع الخاصة بك للحفاظ على اشتراكك نشطًا.",
