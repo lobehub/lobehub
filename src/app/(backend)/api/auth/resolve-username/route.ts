@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { getServerDB } from '@/database/core/db-adaptor';
 import { users } from '@/database/schemas/user';
+import { serverDB } from '@/database/server';
 
 export interface ResolveUsernameResponseData {
   email?: string | null;
@@ -17,7 +17,6 @@ export interface ResolveUsernameResponseData {
  */
 export async function POST(req: NextRequest) {
   try {
-    const serverDB = await getServerDB();
     const body = await req.json();
     const { username } = body;
 

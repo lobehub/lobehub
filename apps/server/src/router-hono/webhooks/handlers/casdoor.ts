@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-import { serverDB } from '@/database/core/server-db';
+import { serverDB } from '@/database/server';
 import { authEnv } from '@/envs/auth';
 import { WebhookUserService } from '@/server/services/webhookUser';
 

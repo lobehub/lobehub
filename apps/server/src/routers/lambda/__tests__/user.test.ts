@@ -14,10 +14,10 @@ import {
   getSubscriptionPlan,
   onUserActivityForBusiness,
 } from '@/business/server/user';
-import { serverDB } from '@/database/core/server-db';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
+import { serverDB } from '@/database/server';
 import { router } from '@/libs/trpc/lambda';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';

@@ -1,4 +1,4 @@
-import { serverDB } from '../../core/server-db';
+import { serverDB } from '../../core/db-adaptor';
 import { FtsSearchSyncOutboxRepository } from '.';
 
 /** Application singleton kept separate so standalone tooling can import the repository class. */

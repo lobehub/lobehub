@@ -25,7 +25,7 @@ vi.mock('@/database/repositories/ftsSearchSyncOutbox/server', () => ({
   },
 }));
 
-vi.mock('@/database/core/server-db', () => ({ serverDB: { id: 'database' } }));
+vi.mock('@/database/server', () => ({ serverDB: { id: 'database' } }));
 
 vi.mock('../ftsSearch', () => ({
   loadElasticsearchFtsSearchConfig: mocks.loadElasticsearchFtsSearchConfig,

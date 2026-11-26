@@ -20,3 +20,5 @@ export const getServerDB = async (): Promise<LobeChatDatabase> => {
     throw error;
   }
 };
+
+export { serverDB } from './server-db';

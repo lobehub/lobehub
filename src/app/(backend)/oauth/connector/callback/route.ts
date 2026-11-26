@@ -2,10 +2,10 @@ import { IssuerMismatchError } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { getServerDB } from '@/database/core/db-adaptor';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveLinkIdentity } from '@/server/services/connector/identity';
@@ -99,7 +99,6 @@ const renderFailure = (error: string, cause?: unknown): NextResponse => {
 };
 
 export const GET = async (req: NextRequest) => {
-  const serverDB = await getServerDB();
   const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');

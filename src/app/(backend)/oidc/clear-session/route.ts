@@ -1,9 +1,9 @@
+import { serverDB } from '@lobechat/database';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { getServerDB } from '@/database/core/db-adaptor';
 import type { OIDCSessionCookieContext } from '@/libs/oidc-provider/session-cleanup';
 import { clearCurrentOIDCSession } from '@/libs/oidc-provider/session-cleanup';
 
@@ -22,7 +22,6 @@ const log = debug('lobe-oidc:clear-session');
  * Session verification and cleanup are delegated to the shared OIDC session service.
  */
 export async function POST() {
-  const serverDB = await getServerDB();
   try {
     // Ensure the caller is authenticated (still has a valid better-auth session)
     const { userId } = await getUserAuth();

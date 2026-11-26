@@ -2,8 +2,8 @@ import { sleep } from '@lobechat/utils';
 import debug from 'debug';
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
 
-import { serverDB } from '@/database/core/server-db';
 import { PushTokenModel } from '@/database/models/pushToken';
+import { serverDB } from '@/database/server';
 
 import { DEFAULT_PUSH_CHANNEL_ID } from './constants';
 import type { PushDeliveryContext, PushDeliveryResult, PushTicketRecord } from './types';

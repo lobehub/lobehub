@@ -13,8 +13,9 @@ describe('db-adaptor', () => {
     vi.stubEnv('DATABASE_URL', '');
     vi.stubEnv('KEY_VAULTS_SECRET', '');
 
-    await expect(import('./db-adaptor')).resolves.toMatchObject({
-      getServerDB: expect.any(Function),
-    });
+    const adaptor = await import('./db-adaptor');
+
+    expect(adaptor.getServerDB).toEqual(expect.any(Function));
+    expect(adaptor.serverDB).toEqual(expect.any(Object));
   }, 20_000);
 });

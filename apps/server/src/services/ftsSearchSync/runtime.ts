@@ -1,10 +1,10 @@
-import { serverDB } from '@/database/core/server-db';
 import {
   FTS_SEARCH_DOCUMENT_ENTITIES,
   FtsSearchDocumentBuilder,
   getFtsSearchIndexAlias,
 } from '@/database/repositories/ftsSearchDocument';
 import { ftsSearchSyncOutboxRepository } from '@/database/repositories/ftsSearchSyncOutbox/server';
+import { serverDB } from '@/database/server';
 import { ftsSearchEnv } from '@/envs/ftsSearch';
 
 import { loadElasticsearchFtsSearchConfig } from '../ftsSearch';

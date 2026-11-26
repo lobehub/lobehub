@@ -2,9 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { getServerDB } from '@/database/core/db-adaptor';
 import { account } from '@/database/schemas/betterAuth';
 import { users } from '@/database/schemas/user';
+import { serverDB } from '@/database/server';
 
 export interface CheckUserResponseData {
   exists: boolean;
@@ -18,7 +18,6 @@ export interface CheckUserResponseData {
  */
 export async function POST(req: NextRequest) {
   try {
-    const serverDB = await getServerDB();
     const body = await req.json();
     const { email } = body;
 
