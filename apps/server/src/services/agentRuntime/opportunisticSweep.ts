@@ -6,6 +6,7 @@ import { recoverChannels } from '@/server/services/channel/recover';
 import { sweepStuckVerifyRuns } from '@/server/services/verify/sweep';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { ParkedInterventionExpiry } from './ParkedInterventionExpiry';
 import { StaleOperationReaper } from './StaleOperationReaper';
 
 const log = debug('lobe-server:agent-runtime:opportunistic-sweep');
@@ -36,6 +37,17 @@ export const OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /** The Redis slot that decides which caller runs the verify sweep. */
 export const OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY = 'agent_runtime:verify_sweep:slot';
+
+/**
+ * Spacing between two parked-intervention expiry sweeps, cluster-wide. Expiry
+ * waits a day, so a minute of slack is immaterial; the cadence only sets how
+ * fast a backlog drains (one bounded batch per tick).
+ */
+export const OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS = 60_000;
+
+/** The Redis slot that decides which caller runs the parked-intervention expiry. */
+export const OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY =
+  'agent_runtime:intervention_expiry_sweep:slot';
 
 export interface OpportunisticSweepDeps {
   /** Resolves true for exactly one caller per interval, cluster-wide. */
@@ -176,6 +188,24 @@ export const scheduleOpportunisticVerifySweep = (): void => {
     async () => {
       const result = await sweepStuckVerifyRuns(await getServerDB());
       log('verify sweep: %O', result);
+    },
+  );
+};
+
+/**
+ * End runs parked on a human answer for over a day (see
+ * `ParkedInterventionExpiry`), on the same always-exercised path as the stale
+ * operation sweep. Nothing else ever ends such a run, and an open legacy tab
+ * polls its pending card every 2 s for as long as it stays parked.
+ */
+export const scheduleOpportunisticInterventionExpirySweep = (): void => {
+  scheduleSlottedSweep(
+    'opportunistic-intervention-expiry-sweep',
+    OPPORTUNISTIC_INTERVENTION_EXPIRY_SLOT_KEY,
+    OPPORTUNISTIC_INTERVENTION_EXPIRY_INTERVAL_MS,
+    async () => {
+      const result = await new ParkedInterventionExpiry(await getServerDB()).sweep();
+      log('intervention expiry sweep: %O', result);
     },
   );
 };

@@ -46,6 +46,21 @@ describe('getTemplatesByCategories', () => {
 });
 
 describe('normalizeAgentTemplate', () => {
+  it('keeps the author name, add count and skill count when the API has them', () => {
+    expect(
+      normalizeAgentTemplate(
+        {
+          author: { name: 'LobeHub' },
+          forkCount: 12,
+          identifier: 'agent-template-release-manager',
+          name: 'Release Manager',
+          pluginCount: 2,
+        },
+        'product-management',
+      ),
+    ).toMatchObject({ author: 'LobeHub', forkCount: 12, pluginCount: 2 });
+  });
+
   it('maps an onboarding-full item using the outer category key', () => {
     const result = normalizeAgentTemplate(
       {

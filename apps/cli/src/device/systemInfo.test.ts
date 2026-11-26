@@ -35,7 +35,10 @@ describe('probeNativeRuntimes', () => {
   });
 
   it('advertises native Codex after a successful handshake on the resolved binary', async () => {
-    await expect(probeNativeRuntimes()).resolves.toEqual(['codex-app-server-v1']);
+    await expect(probeNativeRuntimes()).resolves.toEqual([
+      'codex-app-server-v1',
+      'codex-collaboration-mode-v1',
+    ]);
     /** @example Resolution PATH is carried into the exact probed executable. */
     expect(codexProbe.options).toHaveBeenCalledWith(
       expect.objectContaining({

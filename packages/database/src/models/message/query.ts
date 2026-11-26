@@ -110,6 +110,7 @@ export class MessageConversationQueries extends MessageScope {
       topicId,
       groupId,
       threadId,
+      viewModelPluginState,
     }: QueryMessageParams = {},
     options: {
       /**
@@ -204,6 +205,7 @@ export class MessageConversationQueries extends MessageScope {
         allowShareVisitor: effectiveIncludeVisitor,
         before,
         current,
+        groupMemberScope: threadCondition,
         includeArtboardWorks,
         includeFileWorks,
         pageSize,
@@ -212,6 +214,7 @@ export class MessageConversationQueries extends MessageScope {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: and(threadScopeCondition, threadCondition),
       });
@@ -236,6 +239,8 @@ export class MessageConversationQueries extends MessageScope {
         allowShareVisitor: effectiveIncludeVisitor,
         before,
         current,
+        // Main-conversation page: leave out the groups of the topic's threads.
+        groupMemberScope: this.matchThread(threadId),
         includeArtboardWorks,
         includeFileWorks,
         pageSize,
@@ -244,6 +249,7 @@ export class MessageConversationQueries extends MessageScope {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
+        viewModelPluginState,
         workAccessScope: options.workAccessScope,
         where: whereCondition,
       });
@@ -272,6 +278,8 @@ export class MessageConversationQueries extends MessageScope {
       allowShareVisitor: effectiveIncludeVisitor,
       before,
       current,
+      // Main-conversation page: leave out the groups of the topic's threads.
+      groupMemberScope: this.matchThread(threadId),
       includeArtboardWorks,
       includeFileWorks,
       pageSize,
@@ -280,6 +288,7 @@ export class MessageConversationQueries extends MessageScope {
       skipWorks,
       timing,
       topicId: topicId ?? undefined,
+      viewModelPluginState,
       where: whereCondition,
       workAccessScope: options.workAccessScope,
     });
@@ -480,6 +489,8 @@ export class MessageConversationQueries extends MessageScope {
     const messages = await this.page.queryWithWhere({
       allowShareVisitor: true,
       current: 0,
+      // The windowed `where` would drop groups whose members predate the page.
+      groupMemberScope: this.matchThread(undefined),
       includeArtboardWorks,
       includeFileWorks,
       pageSize: CURSOR_PAGE_CEILING,

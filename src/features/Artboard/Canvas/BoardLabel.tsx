@@ -55,7 +55,7 @@ const styles = stylex.create({
     flexGrow: 1,
   },
   star: {
-    color: artboardTokens.accent,
+    color: artboardTokens.recommendation,
     flexShrink: 0,
     marginBlockStart: 5,
     marginInlineStart: 5,
@@ -70,11 +70,11 @@ const styles = stylex.create({
     marginInlineStart: 6,
   },
   tag: {
-    borderColor: `color-mix(in srgb, ${artboardTokens.accent} 35%, transparent)`,
+    borderColor: `color-mix(in srgb, ${artboardTokens.recommendation} 35%, transparent)`,
     borderRadius: 4,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: artboardTokens.accentStrong,
+    color: artboardTokens.recommendation,
     flexShrink: 0,
     fontSize: 10,
     lineHeight: '13px',

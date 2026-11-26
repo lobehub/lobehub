@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { State } from '../../initialState';
 import { dataSelectors } from './selectors';
 
-const stateWith = (displayMessages: unknown[]): State => ({ displayMessages }) as unknown as State;
+const stateWith = (
+  displayMessages: unknown[],
+  compressedHistoryPages: Record<string, { messages: unknown[]; nextUntilId?: string }> = {},
+): State => ({ compressedHistoryPages, displayMessages }) as unknown as State;
 
 describe('taskCallbackTaskIds', () => {
   it('collects task ids from landed taskCallback messages only', () => {
@@ -129,6 +132,27 @@ describe('getBlockMetadata', () => {
   });
 });
 
+describe('getBlockContent', () => {
+  it('resolves compression members paged in on scroll', () => {
+    const state = stateWith([{ id: 'compressed-1', role: 'compressedGroup' }], {
+      'compressed-1': {
+        messages: [
+          { content: 'paged answer', id: 'a0', role: 'assistant' },
+          {
+            children: [{ content: 'paged step', id: 'step-0', tools: [{ id: 'call-0' }] }],
+            id: 'group-0',
+            role: 'assistantGroup',
+          },
+        ],
+      },
+    });
+
+    expect(dataSelectors.getBlockContent('a0')(state)).toBe('paged answer');
+    expect(dataSelectors.getBlockContent('step-0')(state)).toBe('paged step');
+    expect(dataSelectors.getBlockHasTools('step-0')(state)).toBe(true);
+  });
+});
+
 describe('rowTailId', () => {
   // A steered row keeps its host id (`g1`) while rendering the continuation (`g2`)
   // underneath it — the row tail is what the user is actually looking at.
@@ -150,5 +174,26 @@ describe('rowTailId', () => {
     expect(dataSelectors.rowTailId('g2')(steeredRow)).toBe('g2');
     expect(dataSelectors.rowTailId('u2')(steeredRow)).toBe('u2');
     expect(dataSelectors.rowTailId('g3')(steeredRow)).toBe('g3');
+  });
+});
+
+describe('getDisplayMessageById', () => {
+  it('finds compression members, both the node slice and paged-in ones', () => {
+    const state = stateWith(
+      [
+        {
+          compressedMessages: [{ content: 'newest', id: 'u2', role: 'user' }],
+          id: 'group',
+          role: 'compressedGroup',
+        },
+        { id: 'u3', role: 'user' },
+      ],
+      { group: { messages: [{ content: 'paged', id: 'u1', role: 'user' }] } },
+    );
+
+    expect(dataSelectors.getDisplayMessageById('u3')(state)?.id).toBe('u3');
+    expect(dataSelectors.getDisplayMessageById('u2')(state)?.content).toBe('newest');
+    expect(dataSelectors.getDisplayMessageById('u1')(state)?.content).toBe('paged');
+    expect(dataSelectors.getDisplayMessageById('missing')(state)).toBeUndefined();
   });
 });

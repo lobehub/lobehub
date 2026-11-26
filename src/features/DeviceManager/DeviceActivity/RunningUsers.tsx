@@ -59,9 +59,14 @@ RunUserAvatar.displayName = 'RunUserAvatar';
 /**
  * Running-topic counts for every device in the list, from one request. Keyed
  * per workspace by `useClientDataSWR`, like the device list itself.
+ *
+ * Every device card mounts its own reader, each on its own timer, and
+ * `useClientDataSWR` dedupes nothing by default: N cards meant N requests every
+ * 15s. The dedupe window lets one read serve them all.
  */
 export const useDeviceRunningSummary = () =>
   useClientDataSWR(['device/runningSummary'], () => deviceService.getRunningSummary(), {
+    dedupingInterval: REFRESH_INTERVAL_MS - 1000,
     focusThrottleInterval: 1000,
     refreshInterval: REFRESH_INTERVAL_MS,
   });

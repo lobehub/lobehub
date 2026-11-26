@@ -3,7 +3,10 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { PRE_PAINT_HYDRATE_TIMEOUT, settleWithin } from '@/libs/replica/prePaint';
 import { getTaskStoreState } from '@/store/task';
-import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
+import {
+  SCHEDULED_TASK_RECENT_RUNS,
+  TASK_COLLECTION_PAGE_SIZE,
+} from '@/store/task/slices/list/action';
 
 // Route loaders run before React commits the route: the only point where the
 // persisted scheduled page (an async read) can land before the Tasks page
@@ -25,6 +28,7 @@ export const scheduledTaskListLoader = async ({
       limit: TASK_COLLECTION_PAGE_SIZE,
       offset: 0,
       projectId: params.projectId,
+      recentRuns: SCHEDULED_TASK_RECENT_RUNS,
     }),
     PRE_PAINT_HYDRATE_TIMEOUT,
   );

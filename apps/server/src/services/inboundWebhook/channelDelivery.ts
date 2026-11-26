@@ -1,4 +1,4 @@
-import type { InboundWebhookChannelDelivery } from '@lobechat/types';
+import type { ChannelMessageMetadata, InboundWebhookChannelDelivery } from '@lobechat/types';
 import { BOT_NO_REPLY_TOKEN } from '@lobechat/types';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -14,6 +14,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { extractTextFromMessage } from '@/server/services/agentRuntime/CompletionLifecycle/messageContent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { notifyChannel } from '@/server/services/channel/notify';
+import { runSurfaces } from '@/server/services/channel/runSurfaces';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
@@ -21,8 +22,11 @@ const log = debug('lobe-server:inbound-webhook:channel-delivery');
 
 export const INBOUND_WEBHOOK_REPORT_WEBHOOK = '/api/agent/webhooks/inbound-webhook-report';
 
-/** Told to a run whose answer is posted to a Channel, so it writes for the people there. */
-export const CHANNEL_DELIVERY_INSTRUCTION = `Your final answer is posted as your message in the Channel (or Thread) this webhook delivers to, so write it for the people there. If nothing here is worth telling them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted.`;
+/**
+ * Told to a run whose answer is posted to a Channel from outside it (an inbound webhook, a scheduled
+ * task), so it writes for the people there and knows it may answer with a card.
+ */
+export const CHANNEL_DELIVERY_INSTRUCTION = `Your final answer is posted as your message in the Channel (or Thread) this run delivers to, so write it for the people there. You may answer with a card (lobe-a2ui renderUI): the cards you draw are posted with your answer, even with no words after them. If nothing here is worth telling them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted.`;
 
 /**
  * Nobody can approve a tool call in a run whose answer goes to a Channel: the run's Topic is not
@@ -110,13 +114,76 @@ export async function channelOriginOfRun(
   return job;
 }
 
-export type WebhookChannelReportResult = 'gone' | 'not-done' | 'posted' | 'silent' | 'unavailable';
+export type RunChannelPostResult = 'not-done' | 'posted' | 'silent' | 'unavailable';
+
+/**
+ * Post what a finished run concluded to a Channel (or Thread) as the Agent's message: its final
+ * text and the cards it drew, stored like a published reply. The run stays in its Topic; only its
+ * answer reaches the Channel. A card-only answer posts; NO_REPLY with no card posts nothing. A post
+ * the Channel refuses (requester or Agent no longer a member, Agent muted, Channel archived) is
+ * `unavailable`.
+ *
+ * Shared by every run whose answer is delivered to a Channel from outside it (an inbound webhook,
+ * a scheduled task). Idempotent per `requestKey`: a repeated completion finds the post there.
+ */
+export async function postRunAnswerToChannel(
+  db: LobeChatDatabase,
+  params: {
+    /** The Agent that posts; defaults to the run's own Agent. */
+    agentId?: string;
+    delivery: InboundWebhookChannelDelivery;
+    metadata: ChannelMessageMetadata;
+    operationId: string;
+    requestKey: string;
+    scope: Scope;
+  },
+): Promise<{ error?: ChannelError; result: RunChannelPostResult; topicId?: string }> {
+  const { scope } = params;
+  const operation = await new AgentOperationModel(db, scope.userId, scope.workspaceId).findById(
+    params.operationId,
+  );
+  if (operation?.status !== 'done' || !operation.topicId) return { result: 'not-done' };
+  const topicId = operation.topicId;
+  const agentId = params.agentId ?? operation.agentId;
+  if (!agentId) return { result: 'unavailable', topicId };
+
+  const messages = new MessageModel(db, scope.userId, scope.workspaceId);
+  const [final, surfaces] = await Promise.all([
+    messages.findLatestAssistantByOperationId({ operationId: params.operationId, topicId }),
+    runSurfaces(messages, params.operationId, topicId),
+  ]);
+  // A run that stopped on a tool call (out of steps) has nothing to tell yet, unless it drew a
+  // card: a card is posted even with no words after it, like a Channel reply's.
+  const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
+  const silent = !content?.trim() || detectNoReply({ content, wakeKind: 'followup' });
+  if (silent && !surfaces.length) return { result: 'silent', topicId };
+
+  try {
+    await new ChannelRepository(db, scope.userId, scope.workspaceId).postAgentMessage(
+      params.delivery.channelId,
+      {
+        agentId,
+        content: silent ? '' : content!,
+        metadata: { ...params.metadata, operationId: params.operationId, topicId },
+        requestKey: params.requestKey,
+        ...(surfaces.length > 0 && { surfaces }),
+        threadId: params.delivery.threadId ?? null,
+      },
+    );
+  } catch (error) {
+    if (!(error instanceof ChannelError)) throw error;
+    return { error, result: 'unavailable', topicId };
+  }
+  await notifyChannel(db, params.delivery.channelId);
+  return { result: 'posted', topicId };
+}
+
+export type WebhookChannelReportResult = 'gone' | RunChannelPostResult;
 
 /**
  * Post what a webhook-woken run concluded to the Channel (or Thread) the webhook delivers to, as
- * the Agent's message. The run stays in its Topic; only its final answer reaches the Channel.
- * A post the Channel refuses (creator or Agent no longer a member, Agent muted, Channel archived)
- * is recorded on the webhook as `channel_unavailable`.
+ * the Agent's message (see {@link postRunAnswerToChannel}). A post the Channel refuses is recorded
+ * on the webhook as `channel_unavailable`.
  *
  * Idempotent per run: a repeated completion callback finds the post already there.
  */
@@ -131,48 +198,23 @@ export async function reportWebhookRunToChannel(
   if (!found || !delivery) return 'gone';
   const { row } = found;
   const workspaceId = row.workspaceId ?? undefined;
-  const operation = await new AgentOperationModel(db, row.userId, workspaceId).findById(
-    params.operationId,
-  );
-  if (operation?.status !== 'done' || !operation.topicId) return 'not-done';
 
-  const final = await new MessageModel(
-    db,
-    row.userId,
-    workspaceId,
-  ).findLatestAssistantByOperationId({
+  const { error, result } = await postRunAnswerToChannel(db, {
+    agentId: row.agentId,
+    delivery,
+    metadata: { source: 'inbound-webhook', webhookId: row.id },
     operationId: params.operationId,
-    topicId: operation.topicId,
+    requestKey: `inbound-webhook:${params.operationId}`,
+    scope: { userId: row.userId, workspaceId },
   });
-  // A run that stopped on a tool call (out of steps) has nothing to tell yet.
-  const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
-  if (!content?.trim() || detectNoReply({ content, wakeKind: 'followup' })) return 'silent';
-
-  try {
-    await new ChannelRepository(db, row.userId, workspaceId).postAgentMessage(delivery.channelId, {
-      agentId: row.agentId,
-      content,
-      metadata: {
-        operationId: params.operationId,
-        source: 'inbound-webhook',
-        topicId: operation.topicId,
-        webhookId: row.id,
-      },
-      requestKey: `inbound-webhook:${params.operationId}`,
-      threadId: delivery.threadId ?? null,
-    });
-  } catch (error) {
-    if (!(error instanceof ChannelError)) throw error;
-    log('webhook %s cannot post to channel %s: %s', row.id, delivery.channelId, error.message);
+  if (result === 'unavailable') {
+    log('webhook %s cannot post to channel %s: %s', row.id, delivery.channelId, error?.message);
     await new InboundWebhookModel(db, row.userId, workspaceId).update(row.id, {
       lastError: 'channel_unavailable',
     });
-    return 'unavailable';
-  }
-  if (row.lastError === 'channel_unavailable')
+  } else if (result === 'posted' && row.lastError === 'channel_unavailable')
     await new InboundWebhookModel(db, row.userId, workspaceId).update(row.id, { lastError: null });
-  await notifyChannel(db, delivery.channelId);
-  return 'posted';
+  return result;
 }
 
 /**

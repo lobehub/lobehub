@@ -74,7 +74,7 @@ export interface WorkingDirGitState {
   activeWorktree?: string;
   /**
    * True when {@link activeWorktree} was created by the app on the topic's
-   * first send (Better Coding Experience "New worktree"), not picked by the
+   * first send ("New worktree"), not picked by the
    * user. Such a worktree belongs to this one conversation — the record a
    * later cleanup keys on. Ownership only: where a CLI session starts is
    * {@link WorkingDirConfig.sessionPath}, which outlives a later move.
@@ -89,7 +89,15 @@ export interface WorkingDirGitState {
   branch?: string;
   /** True when the effective working directory is currently detached. */
   detached?: boolean;
-  /** GitHub-specific branch metadata such as linked PR and check status. */
+  /**
+   * GitHub-specific branch metadata such as linked PR and check status.
+   *
+   * @deprecated Nothing in this app reads it: a topic's PRs come from its Work
+   * rows (`work.listTopicPullRequests`). Kept in the schema because released
+   * desktop clients still write and read this snapshot — dropping it from
+   * `workingDirConfigSchema` would strip it from their writes. Branch changes
+   * still clear it so those clients never show another branch's PR.
+   */
   github?: WorkingDirGithubState;
   /**
    * True when the effective working directory is a linked worktree rather than
@@ -98,7 +106,7 @@ export interface WorkingDirGitState {
   isWorktree?: boolean;
   /**
    * A branch this conversation created — the worktree branch made on its first
-   * send (Better Coding Experience), or one its agent created
+   * send, or one its agent created
    * (`git switch -c`, `git worktree add -b`). Only while the topic is on it does
    * the run end ask GitHub which PR the branch has: another branch may carry
    * someone else's PR.
@@ -217,6 +225,7 @@ export const workingDirConfigSchema = z.object({
       autoCreatedAt: z.string().optional(),
       branch: z.string().optional(),
       detached: z.boolean().optional(),
+      // Deprecated: see `WorkingDirGitState.github`.
       github: z
         .object({
           extraPullRequestCount: z.number().optional(),

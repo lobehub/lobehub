@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
 import { useMemo } from 'react';
 
+import { isCurrentMachineDevice, useCurrentMachine } from '@/features/DeviceManager/devicePicker';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -60,12 +61,14 @@ export const useTerminalTarget = (topicKey: string, agentId?: string): TerminalT
   // live connections are all from a desktop without terminal support, answers
   // a terminal RPC with a refusal — offering it would fail the session the
   // moment it is claimed. This desktop's own row is "this machine" already.
+  const currentMachine = useCurrentMachine();
   const targets = useMemo(
     () =>
       devices.filter(
-        (device) => canHostTerminal(device) && !(isDesktop && device.deviceId === currentDeviceId),
+        (device) =>
+          canHostTerminal(device) && !(isDesktop && isCurrentMachineDevice(device, currentMachine)),
       ),
-    [devices, currentDeviceId],
+    [devices, currentMachine],
   );
   const { deviceId: targetDeviceId, ready: canSpawn } = resolveTerminalDevice({
     configLoading: isPreferenceLoading,

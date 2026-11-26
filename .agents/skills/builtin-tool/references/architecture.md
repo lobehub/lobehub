@@ -270,7 +270,7 @@ Five core files plus optional ones. Miss any and you'll see "tool not found", a 
 Lists in the same file you may need to touch:
 
 - `defaultToolIds` — added to the agent's tool list by default
-- `alwaysOnToolIds` — forced on regardless of user selection (use sparingly)
+- `alwaysOnToolIds` — forced on regardless of user selection (use sparingly). `lobe-skills` is the one exception to "always in full": a run with no skill to offer keeps only its sandbox shell (`runCommand` / `exportFile`), and the full manifest waits in `OperationToolSet.deferredManifestMap` until a skill is installed mid-run (`planSkillsToolDeferral` in `packages/mecha/src/toolSet/deferSkillsTool.ts`)
 - `runtimeManagedToolIds` — enable state controlled by runtime, not user UI; **must mirror the rules map** in `apps/server/src/modules/Mecha/AgentToolsEngine/index.ts` and `src/helpers/toolEngineering/index.ts`
 
 ---

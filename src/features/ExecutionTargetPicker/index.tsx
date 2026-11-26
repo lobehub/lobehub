@@ -2,7 +2,7 @@
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
-import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
+import { BoxIcon, LaptopIcon, MonitorOffIcon, MonitorSmartphoneIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
@@ -295,7 +295,9 @@ export const ExecutionTargetIcon = memo<ExecutionTargetIconProps>(
   ({ devicePlatform, size = 14, target }) => {
     switch (target) {
       case 'auto': {
-        return <Icon icon={SparklesIcon} size={size} />;
+        // A device family, not sparkles: `auto` picks among the user's
+        // devices, and sparkles read as an AI mode next to the model picker.
+        return <Icon icon={MonitorSmartphoneIcon} size={size} />;
       }
       case 'device': {
         return <>{getDeviceIcon(devicePlatform, size)}</>;

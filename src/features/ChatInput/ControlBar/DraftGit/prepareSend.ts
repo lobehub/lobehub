@@ -13,8 +13,6 @@ import { gitStatusKey } from '@/store/device/gitStatus/projection';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
 import { desktopStateSelectors } from '@/store/electron/selectors';
-import { getUserStoreState } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { findWorktreeForBranch, getPathName } from '../worktreeHelpers';
 import {
@@ -64,14 +62,13 @@ const PASS: DraftGitSendResult = { ok: true };
 const STOP: DraftGitSendResult = { ok: false };
 
 /**
- * The directory the send acts on, when it should act at all: the lab is on and
- * the send starts a new topic in an agent's composer that shows a git directory.
+ * The directory the send acts on, when it should act at all: the send starts a
+ * new topic in an agent's composer that shows a git directory.
  */
 export const resolveDraftGitTarget = (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
   editorData?: Record<string, any>,
 ): DraftGitTarget | undefined => {
-  if (!labPreferSelectors.enableBetterCodingExperience(getUserStoreState())) return;
   if (context.topicId || context.groupId || context.threadId || !context.agentId) return;
   // A message that starts with a single `@Agent` runs that agent, on its own
   // device and directory: the composer's directory is not where it runs.

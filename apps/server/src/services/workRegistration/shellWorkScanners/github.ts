@@ -1,8 +1,8 @@
 import type { ShellWorkScanner } from './types';
 
 /**
- * github issue/PR Works from `gh issue|pr create/edit` runs — plus, under the
- * Better Coding Experience lab, numbered `gh pr ready|merge` runs. Parsing reuses
+ * github issue/PR Works from `gh issue|pr create/edit` runs — plus, when the
+ * scan carries pull request linking, numbered `gh pr ready|merge` runs. Parsing reuses
  * the github skill's gh-CLI normalizer (via
  * `workModel.registerShellGithubResult` → `normalizeGithubShellToolResult`),
  * so identity lands on the same `owner/repo#number` Work row as

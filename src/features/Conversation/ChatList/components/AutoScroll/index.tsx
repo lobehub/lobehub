@@ -9,6 +9,8 @@ import {
   useConversationStoreApi,
   virtuaListSelectors,
 } from '../../../store';
+import { followRowGrowth } from '../../utils/followRowGrowth';
+import { useReplySettling } from './useReplySettling';
 
 /**
  * AutoScroll component - handles auto-scrolling logic during AI generation.
@@ -42,28 +44,43 @@ const AutoScroll = memo(() => {
     }
   }, [shouldAutoScroll, scrollToBottom, dbMessages.length, lastMessageContentLength]);
 
+  // A finished reply keeps growing (a card's charts lay out after the last chunk): keep following
+  // the rows until they stay still.
+  const { settle, settling } = useReplySettling(isGenerating);
+
+  const shouldFollowGrowth =
+    atBottom && !autoScrollDetached && !isScrolling && (isGenerating || settling);
+
   // Rows also grow outside the content-length change above (e.g. markdown
   // rendering a chunk in a later commit), and virtua only resizes the list
   // after measuring them. Follow every rendered row's growth before paint so
   // the newest lines never sit below the fold. Unlike virtua's own imperative
-  // scroll, this stops as soon as the user scrolls away (`shouldAutoScroll`
+  // scroll, this stops as soon as the user scrolls away (`shouldFollowGrowth`
   // turns false).
   useEffect(() => {
-    if (!shouldAutoScroll) return;
+    if (!shouldFollowGrowth) return;
 
     const content = virtuaScrollMethods?.getScrollElement()?.firstElementChild;
     if (!content) return;
 
-    const observer = new ResizeObserver(() => {
-      // The user may have started scrolling since this effect last ran.
-      const { autoScrollDetached, isScrolling } = storeApi.getState();
-      if (autoScrollDetached || isScrolling) return;
-      scrollToBottom(false);
+    return followRowGrowth(content, {
+      onGrow: () => {
+        // The user may have started scrolling since this effect last ran.
+        const { autoScrollDetached, isScrolling } = storeApi.getState();
+        if (autoScrollDetached || isScrolling) return;
+        scrollToBottom(false);
+      },
+      onSettled: isGenerating ? undefined : settle,
     });
-    observer.observe(content);
-    for (const row of content.children) observer.observe(row);
-    return () => observer.disconnect();
-  }, [shouldAutoScroll, scrollToBottom, storeApi, virtuaScrollMethods, dbMessages.length]);
+  }, [
+    isGenerating,
+    settle,
+    shouldFollowGrowth,
+    scrollToBottom,
+    storeApi,
+    virtuaScrollMethods,
+    dbMessages.length,
+  ]);
 
   // No visual output - this component only handles auto-scroll logic
   return null;

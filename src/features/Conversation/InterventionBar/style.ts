@@ -19,6 +19,11 @@ export const styles = stylex.create({
     backgroundImage: 'none',
     display: { 'default': null, ':empty': 'none' },
   },
+  actionsCompact: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '8px',
+    paddingInline: '8px',
+  },
   container: {
     marginBlockEnd: '12px',
   },

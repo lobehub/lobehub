@@ -37,6 +37,11 @@ which then follows the Thread. Deleting a bound Agent cascades its direct conver
 While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
 name, with the Agent on the device and directory a new Channel would give it
 (`createAgentDirectChannel`).
+A project's default Channel (`createDefaultChannel`, titled `General`) carries
+`metadata.projectDefault`. Every Channel the router hands a client gets `displayTitle`
+(`withDisplayTitles`): the project's name for that marked Channel while the project is live and
+named, else `title`. It is read each time, so a project rename shows at once, and renaming the
+Channel edits only `title`, keeping the mark.
 Inviting from a direct conversation leaves it as it is and starts a group instead
 (`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
 plus the invited Agents and people. `userCandidates` lists those people from a direct
@@ -64,6 +69,19 @@ nullable reference exists for deletion history, not for creating an unbound Agen
 member's `config` contains only the Channel device, device owner and working directory. Its name
 and description are Channel routing/execution labels; message author names come from the actual sender.
 
+In a workspace Channel, an Agent member may run on a device that is not shared with the workspace
+only under a `channel_member_grants` row for exactly its device, owner and directory
+(`grants.ts`). Writing the environment (`addAgent`, `updateAgentEnvironment`) keeps the row in
+step: the device owner picking their own device approves it at once; anyone else's pick (only the
+Agent owner's private devices are offered to them) waits as `pending`. Saving the same environment
+keeps the decision; any other environment replaces it. A claim that finds no row (the device was
+made private after it was picked) files a pending request for the waiting requester. The device
+owner lists requests with `listDeviceGrants` and approves, rejects or revokes with
+`decideDeviceGrant`, which refuses a grant whose environment has since moved. The server also asks
+them as the Agent (`announceDeviceGrants` in the channel services): a card in their direct
+conversation with it, `metadata.deviceGrant` under request key `device-grant:<grantId>`. The view
+adds the grant's live status for the device owner, `expired` once the grant is gone.
+
 Every claim rechecks the actual requester's Agent access and reads the Agent's current settings.
 Configuration uses the same merge function as AgentService: system defaults, server defaults,
 personal defaults (personal scope only), then the Agent. Workers must supply trusted
@@ -81,8 +99,8 @@ A link share is open to anyone signed in, so neither friendship nor a contact en
 `createSharedDirect` from an Agent the person added to their contacts (which shows they reached the
 share). Only those paths pass `sharedAgent` to `create`; a bare Agent id never binds someone else's
 Agent. `requireChannelAgent` and `resolveExecutionConfig` then accept it for that conversation
-shape only, while the share is `link` and the Agent is not trashed; groups and workspace channels
-never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
+shape only, while the share admits the requester and the Agent is not trashed; a group runs one
+only for a requester its owner allowed there (see Access requests). The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
 
 - The run executes as the owner, like a visit to the share page. Its topic and operation belong
   to the owner and the Agent's scope, with the requester as `topics.senderId`, so the owner's own
@@ -95,6 +113,27 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
   (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
   `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
 - Each requester can send at most the share's `maxMessagesPerVisitor` messages in total, counted across all their topics with this Agent; sending refuses the next one. Topics still roll over only after the staleness window.
+
+## Access requests
+
+A requester who may not use an Agent member asks its owner instead of failing (`agentAccess.ts`).
+`resolveChannelAgentAccess` is the database half of the one access answer (the server's
+`resolveAgentAccess` adds the device half of a share): `own` (`agentUsableByWhere`), `share` (a
+share that admits them, `agentShareAdmits`, in their direct conversation with it or in a group
+under an approved `channel_agent_grants` row for them), `request` (what is missing and their
+latest request), or `unavailable` (trashed, gone, or theirs in another scope).
+
+The claim checks it before any ordering. Without access it files a pending grant for the
+requester (`fileAgentAccessRequest`, one live request per person and Agent member) and blocks the
+job as `access_request_pending`; such a job is out of the member's queue order (`notAwaitingAccess`
+in the head check and `candidates`), so it never holds back the people who may use the Agent, and
+is tried on its own until the owner answers. A declined request settles the job `failed` with
+`blockedCode: 'access_denied'` and the manifest its reply card is written from; it never ran, so
+it has no operation. The owner decides on a card the Agent posts in the owner's direct
+conversation with it (`metadata.agentAccess`, request key `agent-access:<grantId>`, kind
+`agentAccess`); the view adds the request's live status for the owner only. An approval also
+grants the share (a request grant, `AgentShareGrantSource.type = 'request'`), so a later
+`share` path admits them; a revoked share grant retires the approval at the next request.
 
 ## Conversations between contacts
 
@@ -243,9 +282,19 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
   Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
-  `retryJob` re-queues only a failed job whose device could not be reached
-  (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
-  the next claim opens a fresh operation.
+  `retryJob` re-queues a failed job at its requester's (or an admin's) request, once its writer
+  is released and nothing was published; the next claim opens a fresh operation. In `resume`
+  mode it keeps the failed run's topic, and the claim continues there (`resumableTopic`, with
+  `manifest.resumed`) while that topic is still the Agent's, in scope, unheld and on the same
+  runtime, device and directory; otherwise it starts like a retry.
+- A job that fails leaves one card in its reply slot (`replyError.ts`): its opening
+  acknowledgement in the reply's branch turned into the card, else an Agent message under the
+  reply's own request key `job:<jobId>`, with `metadata.replyError`. A later failure rewrites that
+  message (`attempts`, keyed by the failed operation), and `publish` writes the reply over it,
+  clearing `replyError`. Each rewrite moves the message to the end of its timeline (a Thread root
+  stays) so it reads as new and unread. Cards carry no mentions and never route; manifests and
+  routing history show other Agents only "<Agent> did not finish this reply.", and a card does not
+  count as the Agent's last reply for wake rules.
 - A job blocked only by another writer in its member's directory moves its conversation branch
   (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
   the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under

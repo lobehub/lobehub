@@ -100,6 +100,9 @@ const describeReplyTo = ({
   if (id === signal.applicationId) return { name, who: 'assistant' };
   if (id === signal.author?.id) return { name, who: 'author' };
   if (conversation?.ownerId && id === conversation.ownerId) return { name, who: 'owner' };
+  if (conversation?.recent.some((line) => line.authorId === id && line.isBot)) {
+    return { name, who: 'bot' };
+  }
 
   return { name, who: 'other' };
 };

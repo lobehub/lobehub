@@ -237,7 +237,6 @@
   "rules.distill.truncated": "ماده طولانی است؛ فقط ابتدای آن خوانده شد.",
   "rules.distill.untitled": "بدون عنوان",
   "rules.distill.upload": "بارگذاری یک فایل",
-  "rules.distill.uploadFailed": "فایل بارگذاری نشد.",
   "rules.distill.uploadHint": "Markdown، PDF، Word، PowerPoint یا متن ساده",
   "rules.enforcement.block": "مسدود کردن",
   "rules.enforcement.blockDesc": "تحویل را متوقف می‌کند تا زمانی که اجازه دهید. هنوز در اثر نیست: فعلاً فقط یادآوری می‌کند",

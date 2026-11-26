@@ -32,7 +32,6 @@
   "features.messageTextSelectionActions.title": "Acciones de Selección de Texto en Mensajes",
   "features.oauthApps.desc": "Mostrar la gestión de aplicaciones OAuth en la configuración personal y del espacio de trabajo. Esta función está oculta por defecto.",
   "features.oauthApps.title": "Aplicaciones OAuth",
-  "features.projects.desc": "Organiza objetivos a largo plazo en espacios de trabajo dedicados con sus propios agentes, bases de conocimiento y tareas.",
   "features.projects.title": "Espacios de Trabajo de Proyectos",
   "features.selfLearning.desc": "Muestra lo que cada agente ha aprendido de la práctica real: su base de reglas, qué reglas se utilizan realmente y qué capas aún están en blanco.",
   "features.selfLearning.note": "Esto ejecuta llamadas al modelo en segundo plano y consume cuota adicional. Cada revisión nocturna abarca hasta 50 conversaciones.",

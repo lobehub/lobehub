@@ -17,7 +17,7 @@ import type { HeteroPermissionMode } from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 
 /*
- * Claude Code permission modes on this machine (Better Coding Experience lab).
+ * Claude Code permission modes on this machine.
  * The CLI asks over stdio (`--permission-prompt-tool stdio`, see the driver),
  * the SDK through `canUseTool`; both raise their cards on the run's
  * AskUserBridge, so the renderer answers them like any other question card

@@ -1,11 +1,6 @@
-import debug from 'debug';
-
 import { ScmChangeRequestModel } from '@/database/models/scm';
-import { UserModel } from '@/database/models/user';
 import type { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
-
-const log = debug('lobe-server:pull-request-linking');
 
 /** A pull request a `git push` updated, as the GitHub App last reported it. */
 export interface PushedPullRequest {
@@ -18,8 +13,9 @@ export interface PushedPullRequest {
 
 /**
  * What the shell Work scan needs to tie pull requests to a topic beyond
- * `gh pr create|edit` (Better Coding Experience). Present only while the lab
- * is on for the run's user, so a scan without it behaves exactly as before.
+ * `gh pr create|edit`: a `git push` of a branch with an open PR, and numbered
+ * `gh pr ready|merge` runs. A scan without it (a share visitor's run, fenced
+ * off from the creator's topics) registers only what the commands name.
  */
 export interface ShellPullRequestLinking {
   /** Open pull requests of `repoFullName` headed by one of `branches`. */
@@ -30,20 +26,6 @@ export interface ShellPullRequestLinking {
   /** `owner/repo#n` of every pull request already linked to the topic. */
   listTopicPullRequestIds: () => Promise<string[]>;
 }
-
-/** `users.preference.lab.enableBetterCodingExperience`, false when unreadable. */
-export const isBetterCodingExperienceEnabled = async (
-  db: LobeChatDatabase,
-  userId: string,
-): Promise<boolean> => {
-  try {
-    const preference = await new UserModel(db, userId).getUserPreference();
-    return preference?.lab?.enableBetterCodingExperience === true;
-  } catch (error) {
-    log('Failed to read the Better Coding Experience preference: %O', error);
-    return false;
-  }
-};
 
 /**
  * Pull request lookups for one topic's scan. The push lookup reads
@@ -83,11 +65,3 @@ export const createShellPullRequestLinking = (params: {
       (await params.workModel.listTopicPullRequests(params.topicId)).map((item) => item.identifier),
   };
 };
-
-/** {@link createShellPullRequestLinking} when the lab is on for `userId`, else undefined. */
-export const resolveShellPullRequestLinking = async (
-  params: Parameters<typeof createShellPullRequestLinking>[0],
-): Promise<ShellPullRequestLinking | undefined> =>
-  (await isBetterCodingExperienceEnabled(params.db, params.userId))
-    ? createShellPullRequestLinking(params)
-    : undefined;

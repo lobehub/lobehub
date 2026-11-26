@@ -23,6 +23,7 @@ import {
   type BuiltinToolResult,
   type DiscoverAssistantDetail,
   parsePluginEntry,
+  setBuiltinPluginMode,
   upsertConnectorEnabled,
 } from '@lobechat/types';
 
@@ -30,7 +31,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
-import { pluginSelectors } from '@/store/tool/selectors';
+import { builtinToolSelectors, pluginSelectors } from '@/store/tool/selectors';
 
 import { describeHeterogeneousAgent, renderHeteroRuntimeLines } from '../heteroAgentDescriptor';
 import type {
@@ -183,7 +184,13 @@ export class AgentManagerRuntime {
           : false;
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
-        const newPlugins = upsertConnectorEnabled(previousConfig?.plugins, pluginId, shouldEnable);
+        const newPlugins = builtinToolSelectors.needsBuiltinOverride(pluginId)
+          ? setBuiltinPluginMode(
+              previousConfig?.plugins,
+              pluginId,
+              shouldEnable ? 'auto' : 'disabled',
+            )
+          : upsertConnectorEnabled(previousConfig?.plugins, pluginId, shouldEnable);
 
         finalConfig = { ...finalConfig, plugins: newPlugins };
 

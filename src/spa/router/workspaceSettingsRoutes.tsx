@@ -195,6 +195,19 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/coding-plans'),
+        'Desktop > Workspace > Settings > Coding Plans',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.CodingPlans,
+          createSurfaceSkeleton('grid'),
+        ),
+      },
+      path: 'coding-plans',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
         'Desktop > Workspace > Settings > Service Model',
       ),
@@ -444,15 +457,20 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/chat-preference'),
-        'Desktop > Workspace > Settings > Chat Preference',
+        () => import('@/routes/(main)/[workspaceSlug]/settings/conversation'),
+        'Desktop > Workspace > Settings > Conversation',
       ),
       handle: {
         meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.ChatPreference,
+          WorkspaceSettingsTabs.Conversation,
           createSurfaceSkeleton('form'),
         ),
       },
+      path: 'conversation',
+    },
+    // Legacy `/:slug/settings/chat-preference` URLs — the page became Conversation.
+    {
+      element: redirectElement('../conversation'),
       path: 'chat-preference',
     },
     // Developer tools mirrored inside the workspace (user preferences).

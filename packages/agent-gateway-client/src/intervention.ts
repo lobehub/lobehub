@@ -12,6 +12,7 @@ const INTERACTION_KINDS = new Set<AgentInterventionInteractionKind>([
   'question',
 ]);
 const PROVIDERS = new Set<AgentInterventionProvider>([
+  'antigravity',
   'claude-code',
   'codex',
   'copilot',

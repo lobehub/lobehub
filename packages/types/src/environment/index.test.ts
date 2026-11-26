@@ -22,6 +22,12 @@ describe('toExecutionConfiguration', () => {
     expect(toExecutionConfiguration({ kind: 'code' })).toEqual({});
   });
 
+  it('keeps the notes out of what the execution plane digests', () => {
+    expect(toExecutionConfiguration({ ...before, notes: 'dev needs 8 GB of memory' })).toEqual(
+      before,
+    );
+  });
+
   it('leaves a definition without a kind as it was', () => {
     expect(toExecutionConfiguration(before)).toEqual(before);
   });

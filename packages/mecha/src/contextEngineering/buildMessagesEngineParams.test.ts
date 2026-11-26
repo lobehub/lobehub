@@ -11,6 +11,17 @@ const baseSnapshot = (): ContextSnapshot => ({
 });
 
 describe('buildMessagesEngineParams', () => {
+  it('prepares activation proposals for Responses providers even with a logical model alias', () => {
+    const forProvider = (provider: string) =>
+      buildMessagesEngineParams({ ...baseSnapshot(), model: { model: 'my-model', provider } })
+        .toolsConfig?.anchorActivatedTools;
+    expect(forProvider('openai')).toBe(true);
+    expect(forProvider('chatgpt')).toBe(true);
+    expect(forProvider('lobehub')).toBe(true);
+    expect(forProvider('my-openai-relay')).toBe(true);
+    expect(forProvider('anthropic')).toBe(false);
+  });
+
   it('hides the page agent system role unless the run enabled the tool', () => {
     expect(buildMessagesEngineParams(baseSnapshot()).toolsConfig?.disabledToolIdentifiers).toEqual([
       PageAgentIdentifier,

@@ -1,7 +1,13 @@
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError, UnsupportedContentError } from '../utils/errorType';
+import { assertNotChallengePage } from '../utils/challengePage';
+import {
+  BlockedPageError,
+  PageNotFoundError,
+  toFetchError,
+  UnsupportedContentError,
+} from '../utils/errorType';
 import { htmlToMarkdown, MAX_HTML_SIZE } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
 import { isNonDocumentContentType } from '../utils/urlPreflight';
@@ -106,13 +112,10 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
 
     const result = htmlToMarkdown(html, { filterOptions, url });
 
+    assertNotChallengePage(result);
+
     // if the content is empty or too short, just return
     if (!result.content || result.content.length < 100) {
-      return;
-    }
-
-    // It's blocked by Cloudflare.
-    if (result.title === 'Just a moment...') {
       return;
     }
 
@@ -127,6 +130,8 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
       url,
     } satisfies CrawlSuccessResult;
   } catch (error) {
+    if (error instanceof BlockedPageError) throw error;
+
     console.error('[naive]', error);
   }
 

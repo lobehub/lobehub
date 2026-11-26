@@ -26,7 +26,7 @@ interface TopicPullRequestChipProps {
 }
 
 /**
- * Better Coding Experience: the pull requests the agent's own commands linked
+ * The pull requests the agent's own commands linked
  * to this topic. Shows the latest one still open (else the latest), plus how
  * many more; with more than one, a click lists them all. Nothing renders until
  * a PR is linked.

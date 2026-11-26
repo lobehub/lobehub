@@ -441,6 +441,14 @@ export const execAgentTurn = async (
   // other forever; past the bound a person has to step in.
   assertAgentRelayHop(agentSender);
 
+  // When the user @-mentions agents (multi-mention, non-group), enable the
+  // agent-management tool for this run so the supervisor can `callAgent` to
+  // delegate. Mirrors the client runtime, which injects a callAgent manifest.
+  // Single-mention takes a client-only deterministic-router path and never
+  // reaches here. The delegation *context* (which agents were mentioned) is
+  // injected separately via `initialContext.mentionedAgents` below.
+  const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
+
   // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
   // model), device-access policy, hetero detection, attachment ingestion, and
   // the persisted user/assistant rows (see `pipeline/turnSetup`).
@@ -472,6 +480,7 @@ export const execAgentTurn = async (
         webhookThread,
         openedByTopicId,
         files,
+        hasMentionedAgents,
         modelOverride,
         operationTaskId,
         parentMessageId,
@@ -490,6 +499,7 @@ export const execAgentTurn = async (
         resume,
         runFromHistory,
         selectedSkillIds,
+        selectedToolIds,
         shareGate,
         steer,
         throwIfExecutionAborted,
@@ -682,14 +692,6 @@ export const execAgentTurn = async (
       selfMessageIds,
     },
   );
-
-  // When the user @-mentions agents (multi-mention, non-group), enable the
-  // agent-management tool for this run so the supervisor can `callAgent` to
-  // delegate. Mirrors the client runtime, which injects a callAgent manifest.
-  // Single-mention takes a client-only deterministic-router path and never
-  // reaches here. The delegation *context* (which agents were mentioned) is
-  // injected separately via `initialContext.mentionedAgents` below.
-  const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
 
   // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
   const operationId =

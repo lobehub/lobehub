@@ -21,11 +21,14 @@ const LOCAL_SANDBOX_CAPABILITY_SWR_KEY = 'local-sandbox-capability';
  * happens, which is why callers revalidate when they are about to show the
  * option rather than trusting the first answer forever.
  *
- * Web has no local machine to fence, so it never asks.
+ * Web has no local machine to fence, so it never asks. Neither does a caller
+ * that passes `enabled: false` because it does not offer the option.
  */
-export const useLocalSandboxCapability = (): SWRResponse<DeviceSandboxCapabilityResult> =>
+export const useLocalSandboxCapability = (
+  enabled = true,
+): SWRResponse<DeviceSandboxCapabilityResult> =>
   useClientDataSWR<DeviceSandboxCapabilityResult>(
-    isDesktop ? [LOCAL_SANDBOX_CAPABILITY_SWR_KEY] : null,
+    isDesktop && enabled ? [LOCAL_SANDBOX_CAPABILITY_SWR_KEY] : null,
     () => localFileService.getSandboxCapability(),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );

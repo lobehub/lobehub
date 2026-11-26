@@ -680,7 +680,7 @@ describe('TrashModel', () => {
 
   describe('removeRootsUnderAgents', () => {
     it('is a no-op without agents and drops topic/message roots owned by the purged agents', async () => {
-      await model.removeRootsUnderAgents({ agentIds: [], sessionIds: [] });
+      await model.removeRootsUnderAgents({ agentIds: [] });
 
       await serverDB.insert(agents).values({ id: 'agt_purged', userId });
       await serverDB.insert(topics).values({ agentId: 'agt_purged', id: 'tpc_root', userId });
@@ -706,14 +706,14 @@ describe('TrashModel', () => {
         root: { projectId: null, resourceId: 'tpc_keep', resourceType: 'topic' },
       });
 
-      await model.removeRootsUnderAgents({ agentIds: ['agt_purged'], sessionIds: [] });
+      await model.removeRootsUnderAgents({ agentIds: ['agt_purged'] });
 
       expect(await model.findById(topicRoot.id)).toBeUndefined();
       expect(await model.findById(messageRoot.id)).toBeUndefined();
       expect(await model.findById(unrelated.id)).toBeDefined();
     });
 
-    it('matches legacy session shells and runs inside a caller transaction', async () => {
+    it('matches topics listed by id and runs inside a caller transaction', async () => {
       await serverDB.insert(sessions).values({ id: 'sess_1', slug: 'sess-1', userId });
       await serverDB.insert(topics).values({ id: 'tpc_sess', sessionId: 'sess_1', userId });
       const root = await model.register({
@@ -722,10 +722,56 @@ describe('TrashModel', () => {
       });
 
       await serverDB.transaction(async (tx) => {
-        await model.removeRootsUnderAgents({ agentIds: ['agt_x'], sessionIds: ['sess_1'] }, tx);
+        await model.removeRootsUnderAgents({ agentIds: ['agt_x'], topicIds: ['tpc_sess'] }, tx);
       });
 
       expect(await model.findById(root.id)).toBeUndefined();
+    });
+
+    it('leaves the root of a session-only topic the purge does not remove', async () => {
+      await serverDB.insert(sessions).values({ id: 'sess_2', slug: 'sess-2', userId });
+      await serverDB.insert(topics).values({ id: 'tpc_keep2', sessionId: 'sess_2', userId });
+      const root = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'tpc_keep2', resourceType: 'topic' },
+      });
+
+      await model.removeRootsUnderAgents({ agentIds: ['agt_x'] });
+
+      expect(await model.findById(root.id)).toBeDefined();
+    });
+  });
+
+  describe('findChildrenOutsideAgents', () => {
+    it('lists only the children the agent FK cascade will not reach', async () => {
+      await serverDB.insert(agents).values({ id: 'agt_root', userId });
+      await serverDB.insert(sessions).values({ id: 'sess_3', slug: 'sess-3', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'agt_root', id: 'tpc_by_agent', userId },
+        { id: 'tpc_by_session', sessionId: 'sess_3', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { agentId: 'agt_root', id: 'msg_by_agent', role: 'user', userId },
+        { id: 'msg_by_session', role: 'user', sessionId: 'sess_3', userId },
+      ]);
+      const root = await model.register({
+        children: ['tpc_by_agent', 'tpc_by_session']
+          .map((resourceId) => ({ projectId: null, resourceId, resourceType: 'topic' as const }))
+          .concat(
+            ['msg_by_agent', 'msg_by_session'].map((resourceId) => ({
+              projectId: null,
+              resourceId,
+              resourceType: 'message' as any,
+            })),
+          ),
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'agt_root', resourceType: 'agent' },
+      });
+
+      expect(await model.findChildrenOutsideAgents(root.id, ['agt_root'])).toEqual({
+        messageIds: ['msg_by_session'],
+        topicIds: ['tpc_by_session'],
+      });
     });
   });
 

@@ -16,6 +16,7 @@ import { linear } from './linear';
 import { openapi } from './openapi';
 import { pageCollab } from './pageCollab';
 import { qqPassive } from './qqPassive';
+import { skillIndex } from './skillIndex';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
 import { taskRunDelivery } from './taskRunDelivery';
@@ -42,6 +43,7 @@ export const redisService = {
   openapi,
   pageCollab,
   qqPassive,
+  skillIndex,
   skillTools,
   steerQueue,
   taskRunDelivery,

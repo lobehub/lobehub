@@ -100,4 +100,36 @@ describe('InterventionController.interruptTask', () => {
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
+
+  // A background sub-agent outlives its parent's marker entry; its own
+  // operation row still names the device.
+  it('stops a device run the topic marker no longer lists, from its operation row', async () => {
+    executeToolCall.mockResolvedValue({ state: { exited: true }, success: true });
+    const { controller, deps } = createController();
+    deps.topicModel.findById.mockResolvedValue({ id: TOPIC_ID, metadata: {} } as any);
+    deps.agentOperationModel.findById.mockResolvedValue({
+      createdAt: new Date(),
+      id: OPERATION_ID,
+      metadata: {
+        heteroDeviceRoute: {
+          deviceId: 'device_1',
+          deviceUserId: 'user_1',
+          heteroType: 'claude-code',
+        },
+      },
+      topicId: TOPIC_ID,
+    } as any);
+
+    const result = await controller.interruptTask({ operationId: OPERATION_ID });
+
+    expect(executeToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'device_1', userId: 'user_1' }),
+      expect.objectContaining({
+        apiName: 'cancelHeteroTask',
+        arguments: JSON.stringify({ signal: 'SIGINT', taskId: OPERATION_ID }),
+      }),
+      10_000,
+    );
+    expect(result).toMatchObject({ deviceCancellationConfirmed: true, success: true });
+  });
 });

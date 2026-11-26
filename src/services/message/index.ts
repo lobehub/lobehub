@@ -202,6 +202,10 @@ export class MessageService {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
   };
 
+  /** Status per pending card id (`null` when gone) plus a revision of the topic, for the approval poll. */
+  getInterventionSnapshot = async (topicId: string, messageIds: string[]) =>
+    lambdaClient.message.getInterventionSnapshot.query({ messageIds, topicId });
+
   /**
    * Bulk form, for surfaces that need every omitted row at once (export).
    *
@@ -271,6 +275,21 @@ export class MessageService {
     });
 
     return { messages: data as unknown as UIChatMessage[] };
+  };
+
+  /**
+   * One older page of a compression group's members (see the
+   * `getCompressedGroupMembers` procedure), oldest first, plus the `untilId`
+   * of the page before it.
+   */
+  getCompressedGroupMembers = async (params: {
+    groupId: string;
+    topicId: string;
+    untilId: string;
+  }): Promise<{ messages: UIChatMessage[]; nextUntilId?: string }> => {
+    const page = await lambdaClient.message.getCompressedGroupMembers.query(params);
+
+    return page as unknown as { messages: UIChatMessage[]; nextUntilId?: string };
   };
 
   searchInTopic = async (params: {

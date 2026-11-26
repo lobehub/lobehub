@@ -49,7 +49,6 @@ MemoryRoutes.get(
   routeDoc({
     data: MemoryPersonaSchema.nullable(),
     description: '`data` is null until a persona has been written.',
-    operationId: 'getMemoryPersona',
     summary: 'Get the current persona document',
     tags: ['memories'],
   }),
@@ -63,7 +62,6 @@ MemoryRoutes.get(
   '/persona/versions',
   routeDoc({
     data: z.array(MemoryPersonaVersionSchema),
-    operationId: 'listMemoryPersonaVersions',
     summary: 'List persona document versions',
     tags: ['memories'],
   }),
@@ -79,7 +77,7 @@ MemoryRoutes.delete(
     data: DeletedResourcesSchema,
     description:
       'Removes every memory, the persona and the per-topic extraction status; `count` is the number of memories removed.',
-    operationId: 'deleteAllMemories',
+    operationId: 'memories.deleteAll',
     summary: 'Delete all memory entries',
     tags: ['memories'],
   }),
@@ -94,7 +92,7 @@ MemoryRoutes.delete(
   routeDoc({
     data: DeletedResourceSchema,
     errors: [404],
-    operationId: 'deleteMemoryEntry',
+    operationId: 'memories.deleteEntry',
     summary: 'Delete a memory entry',
     tags: ['memories'],
   }),
@@ -111,7 +109,7 @@ MemoryRoutes.get(
     data: MemoryCategoryEntriesSchema,
     description:
       'Every identity, or the newest entries of the other categories; the array shape follows `category`.',
-    operationId: 'listMemoryCategory',
+    operationId: 'memories.listCategory',
     summary: 'List the entries of a memory category',
     tags: ['memories'],
   }),

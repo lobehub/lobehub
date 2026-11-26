@@ -686,7 +686,10 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: this.formatDocumentReadContent(doc, args),
-      state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
+      // State carries only what the inspector chip reads. The document itself is
+      // the message body (the model's copy); storing it again here as both
+      // markdown and LiteXML tripled every read in `message_plugins.state`.
+      state: { id: doc.id, title: doc.title },
       success: true,
     };
   }

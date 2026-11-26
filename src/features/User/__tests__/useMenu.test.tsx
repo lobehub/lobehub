@@ -109,7 +109,7 @@ describe('useMenu', () => {
       result.current.mainItems?.find((item: any) => item?.key === key) as any;
 
     findItem('setting').onClick();
-    expect(mockNavigate).toHaveBeenLastCalledWith('/settings');
+    expect(mockNavigate).toHaveBeenLastCalledWith('/settings/profile');
 
     findItem('get-app').onClick();
     expect(mockNavigate).toHaveBeenLastCalledWith('/apps');

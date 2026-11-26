@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   Block,
   DropdownMenu,
   Flexbox,
@@ -31,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

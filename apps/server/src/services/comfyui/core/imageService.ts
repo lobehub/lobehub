@@ -5,6 +5,7 @@
  * and workflow execution
  */
 import { type CreateImagePayload, type CreateImageResponse } from '@lobechat/model-runtime';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { type PromptBuilder } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
@@ -115,8 +116,9 @@ export class ImageService {
       }
 
       // Fetch image from URL (both S3 and Desktop static server use HTTP)
+      // The URL is user-supplied, so the download goes through the SSRF policy (T-07).
       log('Fetching image from URL:', imageUrl);
-      const response = await fetch(imageUrl);
+      const response = await ssrfSafeFetch(imageUrl);
 
       if (!response.ok) {
         throw new ServicesError(

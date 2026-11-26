@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
+import { uniqueSymbol } from 'hono-openapi';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  documentedScopes,
+  requireAllPermissions,
   requireAnyPermission,
   requireAnyPermissionWithApiKeyScope,
   requireApiKeyScope,
@@ -121,5 +124,52 @@ describe('requireApiKeyScope', () => {
     );
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('documented scopes', () => {
+  const specOf = (middleware: object) =>
+    (middleware as Record<symbol, { spec: Record<string, unknown> }>)[uniqueSymbol].spec;
+
+  it('maps an OR gate over one resource onto its single scope', () => {
+    expect(documentedScopes(['agent:read:all', 'agent:read:owner'], 'OR')).toEqual({
+      scopes: ['agent:read'],
+    });
+  });
+
+  it('only admits a full-access key when no permission maps to a scope', () => {
+    expect(documentedScopes(['rbac:read'], 'OR')).toEqual({ scopes: ['*'] });
+    expect(documentedScopes(['agent:read', 'rbac:read'], 'AND')).toEqual({ scopes: ['*'] });
+    // An OR gate still passes on the mappable alternative.
+    expect(documentedScopes(['agent:read', 'rbac:read'], 'OR')).toEqual({
+      scopes: ['agent:read'],
+    });
+  });
+
+  it('prefers the explicit apiKeyScope', () => {
+    expect(documentedScopes(['user:read'], 'OR', 'usage:read')).toEqual({ scopes: ['usage:read'] });
+  });
+
+  it('reports a genuine either-or gate instead of flattening it into an all-of list', () => {
+    expect(documentedScopes(['agent:read', 'file:read'], 'OR')).toEqual({
+      error: expect.stringContaining('pass an explicit apiKeyScope'),
+      scopes: ['agent:read', 'file:read'],
+    });
+    // Declaring the gate never throws; the spec build reports it instead.
+    expect(specOf(requireAnyPermission(['agent:read', 'file:read']))).toMatchObject({
+      'x-spec-error': [expect.stringContaining('accepts any of agent:read, file:read')],
+    });
+  });
+
+  it('attaches the scopes to the middleware for the spec builder', () => {
+    expect(specOf(requireApiKeyScope('model:invoke'))).toEqual({
+      'x-required-scopes': ['model:invoke'],
+    });
+    expect(specOf(requireAllPermissions(['file:create', 'knowledge_base:update']))).toEqual({
+      'x-required-scopes': ['file:write', 'knowledge:write'],
+    });
+    expect(specOf(requireAnyPermissionWithApiKeyScope(['user:read'], 'usage:read'))).toEqual({
+      'x-required-scopes': ['usage:read'],
+    });
   });
 });

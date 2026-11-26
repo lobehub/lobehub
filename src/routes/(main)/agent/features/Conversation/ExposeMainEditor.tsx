@@ -14,17 +14,17 @@ import { useExposeMainEditor } from './useExposeMainEditor';
  */
 const ExposeMainEditor = memo(() => {
   useExposeMainEditor(useConversationStore((s) => s.editor));
-  const scrollToIndex = useConversationStore((s) => s.scrollToIndex);
+  const scrollToMessage = useConversationStore((s) => s.scrollToMessage);
 
   useEffect(() => {
-    useChatStore.setState({ mainConversationScrollToIndex: scrollToIndex });
+    useChatStore.setState({ mainConversationScrollToMessage: scrollToMessage });
 
     return () => {
-      if (useChatStore.getState().mainConversationScrollToIndex === scrollToIndex) {
-        useChatStore.setState({ mainConversationScrollToIndex: null });
+      if (useChatStore.getState().mainConversationScrollToMessage === scrollToMessage) {
+        useChatStore.setState({ mainConversationScrollToMessage: null });
       }
     };
-  }, [scrollToIndex]);
+  }, [scrollToMessage]);
 
   return null;
 });

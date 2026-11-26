@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "Solde bonus ajouté",
   "storage_overage_cap_reached": "Votre plafond mensuel de paiement à l'utilisation pour le stockage de ${{monthlyCap}} a été atteint. Les frais estimés pour ce cycle sont de ${{estimatedCycleCharge}}. Les nouveaux téléchargements au-delà de votre stockage inclus seront bloqués jusqu'au prochain cycle de facturation ou jusqu'à ce que vous augmentiez le plafond.",
   "storage_overage_cap_reached_title": "Plafond de paiement à l'utilisation pour le stockage atteint",
-  "subscription_one_time_expired": "Votre plan {{plan}} unique a expiré et votre compte est maintenant sur le plan Gratuit. Renouvelez {{plan}} pour récupérer vos avantages.",
   "subscription_one_time_expired_action": "Renouveler {{plan}}",
   "subscription_one_time_expired_title": "Votre plan {{plan}} a expiré",
   "subscription_payment_failed": "Le paiement de renouvellement de votre abonnement a échoué. Veuillez mettre à jour votre mode de paiement pour maintenir votre abonnement actif.",

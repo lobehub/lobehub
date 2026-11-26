@@ -1,32 +1,40 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { confirmModal, Empty, Flexbox, Icon, Tag, toast, Tooltip } from '@lobehub/ui';
-import { EyeOffIcon, GlobeIcon, Link2Off } from 'lucide-react';
+import { Empty, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { EyeOffIcon, GlobeIcon, LockIcon, UsersIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import PrivateLockIcon from '@/components/PrivateLockIcon';
+import Avatar from '@/components/Avatar';
 import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { matchesVisibilityFilter, type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { confirmCredModal } from './confirmCredModal';
 import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
 import { credErrorKey } from './credError';
+import { type CredFilter, filterCreds } from './credFilter';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
 import { type CredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
+import { type CredDetailAction } from './ViewCredModal/Content';
 
 type Visibility = 'private' | 'public';
 
 interface WorkspaceCredsListProps {
   /** The workspace binding (`workspaceCreds`), with `setVisibility`. */
   credsApi: CredsApi;
+  /** The vault toolbar's search and type filter; every row when omitted. */
+  filter?: CredFilter;
   /** Narrow the list to private or shared credentials; every row when omitted. */
   visibilityFilter?: VisibilityFilterValue;
 }
@@ -40,16 +48,19 @@ interface WorkspaceCredsListProps {
  */
 const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
   credsApi,
+  filter = {},
   visibilityFilter = 'all',
 }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { session } = useMarketAuth();
   const { allowed: isAdmin } = usePermission('manage_provider_key');
   const myAccountId = session?.userInfo?.accountId;
+  const myAvatar = useUserStore(userProfileSelectors.userAvatar);
+  const myName = useUserStore(userProfileSelectors.displayUserName);
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery();
   const credentials = data?.data ?? [];
-  const visibleCredentials = credentials.filter((cred) =>
+  const visibleCredentials = filterCreds(credentials, filter).filter((cred) =>
     matchesVisibilityFilter(cred.visibility === 'private', visibilityFilter),
   );
 
@@ -75,7 +86,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
       : credsApi.setVisibility!(cred.id, next);
 
   const handlePublish = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: <VisibilityConfirmContent variant={'publish'} />,
       okText: t('creds.visibility.publish'),
       onOk: () => run(() => changeVisibility(cred, 'public')),
@@ -83,24 +94,48 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
     });
 
   const handleMakePrivate = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: <VisibilityConfirmContent variant={'makePrivate'} />,
-      okButtonProps: { danger: true },
+      danger: true,
       okText: t('makePrivate.confirm.ok', { ns: 'common' }),
       onOk: () => run(() => changeVisibility(cred, 'private')),
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
 
   const handleUnshare = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: t('creds.share.unshareConfirmDesc'),
-      okButtonProps: { danger: true },
+      danger: true,
       okText: t('creds.share.revoke'),
       onOk: () => run(() => lambdaClient.market.creds.unshare.mutate({ id: cred.id })),
       title: t('creds.share.unshareConfirmTitle'),
     });
 
   const handleDelete = (id: number) => run(() => credsApi.client.delete.mutate({ id }));
+
+  /**
+   * Who a row belongs to: a shared personal credential names its owner; a
+   * workspace credential is attributed only when the viewer created it —
+   * Market returns no profile for other creators.
+   */
+  const authorOf = (cred: UserCredSummary): { avatar?: string; name: string } | undefined => {
+    if (cred.ownerType === 'user') {
+      return isOwnCredRow(cred, myAccountId)
+        ? { avatar: myAvatar, name: myName }
+        : cred.ownerDisplayName
+          ? { name: cred.ownerDisplayName }
+          : undefined;
+    }
+    if (myAccountId !== undefined && cred.createdByAccountId === myAccountId) {
+      return { avatar: myAvatar, name: myName };
+    }
+    return undefined;
+  };
+
+  const visibilityLabel = (cred: UserCredSummary) =>
+    cred.visibility === 'private'
+      ? t('visibilityFilter.private', { ns: 'common' })
+      : t('visibilityFilter.workspace', { ns: 'common' });
 
   return (
     <AsyncBoundary
@@ -123,11 +158,12 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
         {visibleCredentials.map((cred) => {
           const access = workspaceCredRowAccess(cred, { isAdmin, myAccountId });
           const writeOnly = isWriteOnlyCredRow(cred);
-          const extraMenuItems = [
+          const author = authorOf(cred);
+          const actions: CredDetailAction[] = [
             ...(access.publish
               ? [
                   {
-                    icon: <Icon icon={GlobeIcon} />,
+                    icon: GlobeIcon,
                     key: 'publish',
                     label: t('creds.visibility.publish'),
                     onClick: () => handlePublish(cred),
@@ -137,7 +173,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
             ...(access.makePrivate
               ? [
                   {
-                    icon: <Icon icon={EyeOffIcon} />,
+                    icon: EyeOffIcon,
                     key: 'makePrivate',
                     label: t('makePrivate', { ns: 'common' }),
                     onClick: () => handleMakePrivate(cred),
@@ -148,7 +184,6 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
               ? [
                   {
                     danger: true,
-                    icon: <Icon icon={Link2Off} />,
                     key: 'unshare',
                     label: t('creds.share.revoke'),
                     onClick: () => handleUnshare(cred),
@@ -159,42 +194,78 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
 
           return (
             <CredItem
-              canManage={access.manage}
               cred={cred}
-              extraMenuItems={extraMenuItems}
               key={cred.id}
-              titleSuffix={cred.visibility === 'private' && <PrivateLockIcon />}
-              tags={
-                cred.ownerType === 'user' ? (
-                  <Tag>
-                    {isOwnCredRow(cred, myAccountId)
-                      ? t('creds.owner.fromPersonal')
-                      : t('creds.owner.sharedBy', { name: cred.ownerDisplayName })}
-                  </Tag>
-                ) : (
-                  writeOnly && (
-                    <Tooltip title={t('creds.writeOnly.tooltip')}>
-                      <Tag>{t('creds.writeOnly.tag')}</Tag>
+              extra={
+                <>
+                  {author && (
+                    <Tooltip title={author.name}>
+                      <span data-testid={`cred-author-${cred.id}`} style={{ display: 'flex' }}>
+                        <Avatar
+                          avatar={author.avatar}
+                          name={author.name}
+                          size={24}
+                          title={author.name}
+                        />
+                      </span>
                     </Tooltip>
-                  )
-                )
+                  )}
+                </>
               }
-              onDelete={access.manage ? handleDelete : undefined}
-              onEdit={
-                access.manage
-                  ? (cred) =>
-                      createEditCredModal({
-                        cred,
-                        credsApi,
-                        onSuccess: () => refetch(),
-                        writeOnly,
-                      })
-                  : undefined
+              titleSuffix={
+                <Tooltip title={visibilityLabel(cred)}>
+                  <span
+                    aria-label={visibilityLabel(cred)}
+                    data-testid={`cred-visibility-${cred.id}`}
+                    data-visibility={cred.visibility === 'private' ? 'private' : 'workspace'}
+                    role={'img'}
+                    style={{
+                      color: cssVar.colorTextTertiary,
+                      display: 'inline-flex',
+                      flex: 'none',
+                    }}
+                  >
+                    <Icon icon={cred.visibility === 'private' ? LockIcon : UsersIcon} size={14} />
+                  </span>
+                </Tooltip>
               }
-              onView={
-                access.manage && !writeOnly
-                  ? (cred) => createViewCredModal({ cred, credsApi })
-                  : undefined
+              onClick={() =>
+                createViewCredModal({
+                  actions,
+                  canReadValues: access.manage && !writeOnly,
+                  cred,
+                  credsApi,
+                  extraItems: [
+                    {
+                      children: visibilityLabel(cred),
+                      key: 'visibility',
+                      label: t('creds.detail.visibility'),
+                    },
+                    ...(author
+                      ? [
+                          {
+                            children:
+                              cred.ownerType === 'user' && isOwnCredRow(cred, myAccountId)
+                                ? t('creds.owner.fromPersonal')
+                                : author.name,
+                            key: 'author',
+                            label: t('creds.detail.author'),
+                          },
+                        ]
+                      : []),
+                  ],
+                  onDelete: access.manage ? handleDelete : undefined,
+                  onEdit: access.manage
+                    ? () =>
+                        createEditCredModal({
+                          cred,
+                          credsApi,
+                          onSuccess: () => refetch(),
+                          writeOnly,
+                        })
+                    : undefined,
+                  valuesHint: access.manage && writeOnly ? t('creds.writeOnly.tooltip') : undefined,
+                })
               }
             />
           );

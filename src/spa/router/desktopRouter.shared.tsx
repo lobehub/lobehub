@@ -46,7 +46,7 @@ import {
   legacySettingsMarketplaceRedirects,
   marketplaceRoute,
 } from '@/spa/router/marketplaceRoutes';
-import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { legacyMemoryRedirects, settingsMemoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
@@ -63,6 +63,7 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import { collaborationRoutes } from './collaborationRoutes';
+import { legacySettingsTabRedirects, legacyWorkspaceBillingRoute } from './legacySettingsRoutes';
 
 export { ResourceCategorySkeleton };
 
@@ -198,14 +199,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   resourceRoute,
 
-  // Memory routes
+  // Memory moved under Settings; these forward its old URLs.
   {
-    children: memoryChildren,
-    element: dynamicLayout(
-      () => import('@/routes/(main)/memory/_layout'),
-      'Desktop > Memory > Layout',
-      { preloadId: 'memory' },
-    ),
+    children: legacyMemoryRedirects,
     errorElement: <ErrorBoundary />,
     handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
     path: 'memory',
@@ -383,11 +379,26 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         path: 'provider',
       },
       {
-        element: dynamicElement(
-          () => import('@/routes/(main)/settings'),
-          'Desktop > Settings > Memory',
-        ),
-        handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/settings'),
+              'Desktop > Settings > Memory',
+            ),
+            handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
+            index: true,
+          },
+          // The memory pages draw their own header, so they skip the settings frame.
+          {
+            children: settingsMemoryChildren,
+            element: dynamicLayout(
+              () => import('@/routes/(main)/settings/memory/_layout'),
+              'Desktop > Settings > Memory > Layout',
+              { preloadId: 'memory' },
+            ),
+            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+          },
+        ],
         path: 'memory',
       },
       // The personal vault is a tab of the Environments & Vault page; old
@@ -406,6 +417,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       ...legacySettingsMarketplaceRedirects,
       // Sandbox storage moved to Docs (`/resource/sandbox-storage`).
       { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+      // Retired tab keys (`agent`, `image`, `common`, …) open their replacement.
+      ...legacySettingsTabRedirects,
       // Devices list and detail are explicit routes so the page title resolves
       // without a `:tab` param; their skeleton comes from the devices tab entry.
       {
@@ -521,17 +534,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         errorElement: <ErrorBoundary />,
         path: 'settings',
       },
-      // Legacy `/:slug/billing/*` URLs — redirect to the corresponding
-      // `/:slug/settings/*` page. Kept for deep-links and bookmarks.
-      {
-        children: [
-          { element: redirectElement('../settings/plans'), path: 'plans' },
-          { element: redirectElement('../settings/usage'), path: 'usage' },
-          { element: redirectElement('../settings/credits'), path: 'credits' },
-          { element: redirectElement('../settings/billing'), path: 'billing' },
-        ],
-        path: 'billing',
-      },
+      // Legacy `/:slug/billing/*` URLs open the matching `/:slug/settings/*` page.
+      legacyWorkspaceBillingRoute,
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/[workspaceSlug]/_layout'),

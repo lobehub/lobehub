@@ -200,6 +200,8 @@ const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
   ChatErrorType.ShareMessageLimitExceeded,
   ChatErrorType.ShareSpendLimitExceeded,
   ChatErrorType.SharePromptTooLong,
+  ChatErrorType.ShareAttachmentTooLarge,
+  ChatErrorType.ShareFileStorageExceeded,
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
   ChatErrorType.ShareHeteroDeviceUnavailable,
   ChatErrorType.AgentShareProviderNotSupported,
@@ -288,7 +290,7 @@ const sanitizeVisitorMetadata = (
  * The identity keys are omitted rather than nulled (`userId` is non-nullable on
  * `WorkItem`); no visitor-facing Work surface reads them.
  */
-const sanitizeVisitorWorks = (
+export const sanitizeVisitorWorks = (
   works: WorkSummaryItem[] | undefined,
 ): WorkSummaryItem[] | undefined =>
   works?.map((work) => {

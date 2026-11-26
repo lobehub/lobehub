@@ -1,8 +1,7 @@
 import { ChatErrorType } from '@lobechat/types';
-import { TRPCClientError } from '@trpc/client';
 import { describe, expect, it } from 'vitest';
 
-import { contactRequestOutcome, shareRefusalOf, withoutShareRefusals } from './shareRefusal';
+import { shareRefusalOf, withoutShareRefusals } from './shareRefusal';
 
 const owner = { avatar: null, fullName: 'Ada', id: 'owner', username: 'ada' };
 
@@ -32,6 +31,16 @@ describe('shareRefusalOf', () => {
     ).toEqual({ errorType: ChatErrorType.ShareSpendLimitExceeded, owner });
   });
 
+  // A visitor refused a local Agent was told to ask its creator, with no way to reach them.
+  it('offers the owner as a contact when their machine needs their permission', () => {
+    expect(
+      shareRefusalOf(
+        detail({ errorType: ChatErrorType.ShareHeterogeneousAgentUnsupported, status: 'failed' }),
+        'msg',
+      ),
+    ).toEqual({ errorType: ChatErrorType.ShareHeterogeneousAgentUnsupported, owner });
+  });
+
   it('only explains a message that is too long, which the visitor fixes themselves', () => {
     expect(
       shareRefusalOf(
@@ -57,24 +66,6 @@ describe('shareRefusalOf', () => {
         'msg',
       ),
     ).toBeUndefined();
-  });
-});
-
-describe('contactRequestOutcome', () => {
-  it('reads an accepted or pending request', () => {
-    expect(contactRequestOutcome({ result: { status: 'accepted' } })).toBe('added');
-    expect(contactRequestOutcome({ result: { status: 'pending' } })).toBe('requestSent');
-  });
-
-  it('treats a conflict as already reaching the owner, and anything else as an error', () => {
-    expect(
-      contactRequestOutcome({
-        error: new TRPCClientError('Already a contact', {
-          result: { error: { data: { code: 'CONFLICT' } } },
-        } as any),
-      }),
-    ).toBe('alreadyContact');
-    expect(contactRequestOutcome({ error: new Error('network') })).toBeUndefined();
   });
 });
 

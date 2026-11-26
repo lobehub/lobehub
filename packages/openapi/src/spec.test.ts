@@ -3,7 +3,12 @@ import { describeRoute } from 'hono-openapi';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { isValidApiKeyScope } from '@/const/apiKeyScope';
+
+import { example } from './common/examples';
 import { routeDoc } from './common/openapi';
+import { OPERATION_ID_PATTERN, operationResource } from './common/operation-id';
+import { zValidator } from './common/validator';
 import { buildSpecDocument, collectSpecDocument } from './spec';
 
 type Schema = Record<string, unknown>;
@@ -276,6 +281,135 @@ describe('generated OpenAPI document', () => {
       expect.arrayContaining(['error', 'requestId']),
     );
   });
+
+  it('declares no 409 on the health check', () => {
+    const responses = (spec.paths?.['/api/v1/health'] as any).get.responses;
+    expect(Object.keys(responses)).toEqual(['200']);
+  });
+
+  it('names every operation <resource>.<method> after its own path, uniquely', () => {
+    const ids = operations().map(({ key, op }) => ({ id: op.operationId as string, key }));
+    expect(ids.filter(({ id }) => !OPERATION_ID_PATTERN.test(id))).toEqual([]);
+    expect(
+      ids.filter(({ id, key }) => id.split('.')[0] !== operationResource(key.split(' ')[1])),
+    ).toEqual([]);
+    expect(new Set(ids.map(({ id }) => id)).size).toBe(ids.length);
+    // Spot-check the names the SDK has always exposed.
+    const byKey = Object.fromEntries(ids.map(({ id, key }) => [key, id]));
+    expect(byKey).toMatchObject({
+      'DELETE /api/v1/memories/{category}/{id}': 'memories.deleteEntry',
+      'GET /api/v1/agents': 'agents.list',
+      'GET /api/v1/agents/{id}': 'agents.get',
+      'GET /api/v1/files/{id}/chunks': 'files.listChunks',
+      'GET /api/v1/health': 'health.check',
+      'GET /api/v1/users/me': 'users.me',
+      'POST /api/v1/files/batches': 'files.uploadBatch',
+      'POST /api/v1/tasks/{id}/runs': 'tasks.run',
+    });
+  });
+
+  it('gives every operation a summary', () => {
+    expect(
+      operations()
+        .filter(({ op }) => !op.summary?.trim())
+        .map(({ key }) => key),
+    ).toEqual([]);
+  });
+
+  it('declares the API key scopes of every authenticated operation', () => {
+    const authenticated = operations().filter(({ op }) => !Array.isArray(op.security));
+    expect(authenticated.length).toBeGreaterThan(100);
+    const invalid = authenticated.filter(
+      ({ op }) =>
+        !Array.isArray(op['x-required-scopes']) ||
+        !op['x-required-scopes'].every((scope: string) => isValidApiKeyScope(scope)) ||
+        !op.description?.includes('**API key scopes:**'),
+    );
+    expect(invalid.map(({ key }) => key)).toEqual([]);
+
+    const scopesOf = (key: string) => operations().find((entry) => entry.key === key)!.op;
+    expect(scopesOf('GET /api/v1/agents')['x-required-scopes']).toEqual(['agent:read']);
+    expect(scopesOf('POST /api/v1/agents')['x-required-scopes']).toEqual(['agent:write']);
+    // Stacked gates collapse into one all-of list.
+    expect(scopesOf('POST /api/v1/responses')['x-required-scopes']).toEqual([
+      'agent:write',
+      'chat:write',
+      'model:invoke',
+    ]);
+    // Reachable by every key on purpose (`lh login` resolves its identity here).
+    expect(scopesOf('GET /api/v1/users/me')['x-required-scopes']).toEqual([]);
+    expect(scopesOf('GET /api/v1/health')['x-required-scopes']).toBeUndefined();
+  });
+
+  it('documents X-Workspace-Id on every authenticated operation', () => {
+    const missing = operations()
+      .filter(({ op }) => !Array.isArray(op.security))
+      .filter(
+        ({ op }) =>
+          !(op.parameters ?? []).some(
+            (parameter: Schema) => parameter.$ref === '#/components/parameters/WorkspaceId',
+          ),
+      );
+    expect(missing.map(({ key }) => key)).toEqual([]);
+    const parameter = (spec.components?.parameters as Record<string, any>).WorkspaceId;
+    expect(parameter).toMatchObject({ in: 'header', name: 'X-Workspace-Id', required: false });
+    expect(parameter.description).toContain('workspace_mismatch');
+  });
+
+  it('publishes request and response examples for the core resources', () => {
+    const media = (path: string, method: string) => {
+      const op = (spec.paths as Record<string, any>)[path][method];
+      return {
+        request: op.requestBody?.content?.['application/json']?.example,
+        response: op.responses['200'].content['application/json'].example,
+      };
+    };
+    for (const path of ['/api/v1/agents', '/api/v1/topics', '/api/v1/messages', '/api/v1/files'])
+      expect(media(path, 'get').response, path).toMatchObject({ success: true });
+    for (const path of [
+      '/api/v1/agents',
+      '/api/v1/topics',
+      '/api/v1/messages',
+      '/api/v1/files/queries',
+    ]) {
+      const { request, response } = media(path, 'post');
+      expect(request, path).toBeDefined();
+      expect(response, path).toMatchObject({ success: true });
+    }
+    expect(media('/api/v1/responses', 'post').request).toMatchObject({ model: expect.any(String) });
+    expect(media('/api/v1/responses', 'post').response).toMatchObject({ object: 'response' });
+  });
+
+  it('declares the JSON body of /audio/speech, which its handler validates itself', () => {
+    const op = (spec.paths as Record<string, any>)['/api/v1/audio/speech'].post;
+    const schema = op.requestBody?.content?.['application/json']?.schema;
+
+    expect(op.requestBody?.required).toBe(true);
+    expect(schema?.required).toEqual(['input', 'model']);
+    expect(Object.keys(schema?.properties ?? {})).toEqual(
+      expect.arrayContaining(['input', 'model', 'voice', 'response_format', 'params']),
+    );
+  });
+
+  it('types the /responses event stream as the OpenResponses event union', () => {
+    const op = (spec.paths as Record<string, any>)['/api/v1/responses'].post;
+    expect(op.responses['200'].content['text/event-stream'].schema).toEqual({
+      $ref: '#/components/schemas/ResponseStreamEvent',
+    });
+    const union = spec.components?.schemas?.ResponseStreamEvent as { oneOf: Schema[] };
+    const types = union.oneOf.map(
+      (ref) => (resolveRef(spec, ref).properties as Record<string, Schema>).type.const,
+    );
+    expect(types).toEqual(
+      expect.arrayContaining([
+        'response.created',
+        'response.output_text.delta',
+        'response.completed',
+        'response.failed',
+        'response.function_call_arguments.done',
+      ]),
+    );
+  });
 });
 
 describe('route-declared responses', () => {
@@ -310,6 +444,65 @@ describe('route-declared responses', () => {
       properties: { id: { type: 'string' } },
       required: ['id'],
     });
+  });
+
+  it('keeps a declared operationId and derives the rest from the path', async () => {
+    const app = buildApp();
+    app.post(
+      '/api/v1/things/:id/archive',
+      routeDoc({
+        data: z.object({ id: z.string() }),
+        operationId: 'things.archive',
+        requestExample: example(z.object({ reason: z.string() }), { reason: 'done' }),
+        summary: 'Archive a thing',
+      }),
+      zValidator('json', z.object({ reason: z.string() })),
+      (c) => c.json({}),
+    );
+    const spec = await buildSpecDocument(app);
+    const paths = spec.paths as Record<string, any>;
+
+    expect(paths['/api/v1/things'].post.operationId).toBe('things.create');
+    expect(paths['/api/v1/things/{id}/runs'].post.operationId).toBe('things.createRuns');
+    const archive = paths['/api/v1/things/{id}/archive'].post;
+    expect(archive.operationId).toBe('things.archive');
+    expect(archive.requestBody.content['application/json'].example).toEqual({ reason: 'done' });
+    expect(archive['x-request-example']).toBeUndefined();
+  });
+
+  it('refuses two operations with the same operationId', async () => {
+    const app = buildApp();
+    app.get(
+      '/api/v1/things/:id',
+      routeDoc({ data: z.object({}), operationId: 'things.create', summary: 'Clash' }),
+      (c) => c.json({}),
+    );
+    await expect(buildSpecDocument(app)).rejects.toThrow('already used');
+  });
+
+  it('fails the spec build, not the route declaration, on an example that does not match', async () => {
+    const app = buildApp();
+    // Declaring the route must not throw: a doc slip cannot stop the server from booting.
+    const declare = () =>
+      app.post(
+        '/api/v1/things/:id/bad',
+        routeDoc({
+          data: z.object({ id: z.string() }),
+          requestExample: example(z.object({ reason: z.string() }), { reason: 1 } as never),
+          responseExample: { id: 1 },
+          summary: 'Bad examples',
+        }),
+        zValidator('json', z.object({ reason: z.string() })),
+        (c) => c.json({}),
+      );
+    expect(declare).not.toThrow();
+
+    const { invalid } = await collectSpecDocument(app);
+    expect(invalid).toEqual([
+      expect.stringContaining('POST /api/v1/things/{id}/bad: requestExample does not match'),
+      expect.stringContaining('POST /api/v1/things/{id}/bad: responseExample does not match'),
+    ]);
+    await expect(buildSpecDocument(app)).rejects.toThrow('Invalid route documentation');
   });
 
   it('refuses to emit a route without a declared success response', async () => {

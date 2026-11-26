@@ -1,11 +1,29 @@
 import { TRPCError } from '@trpc/server';
 
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { MAX_PINNED_ORDER_ITEMS } from '@/database/repositories/home/pinnedOrder';
 import type { LobeChatDatabase } from '@/database/type';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
-/** Upper bound for one member's personal pin list in a workspace. */
-export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+/**
+ * Upper bound for one member's pin list in a workspace. It may be seeded with
+ * every team pin, so this matches the team order cap.
+ */
+export const MAX_SIDEBAR_PINNED_ITEMS = MAX_PINNED_ORDER_ITEMS;
+
+/**
+ * When the workspace sidebar stopped showing team pins to every member and
+ * started recommending Agents instead (lobehub/lobehub#23520). Members who
+ * joined before keep the team pins as their own pins the first time their
+ * sidebar is set up; members who join later start from the recommended
+ * Agents, unpinned. A member who joined between this date and the deploy
+ * reaching their server is treated as new, which is the intended behavior
+ * anyway.
+ */
+export const TEAM_PINS_RETIRED_AT = new Date('2026-11-24T00:00:00Z');
+
+export const RECOMMENDED_AGENTS_FORBIDDEN_MESSAGE =
+  'Only workspace owners and admins can change recommended agents';
 
 export const TEAM_PIN_FORBIDDEN_MESSAGE = 'Only workspace owners and admins can change team pins';
 
@@ -16,14 +34,19 @@ interface TeamPinCtx {
 }
 
 /**
- * In a workspace, `pinned` on a PUBLIC Agent / chat group is the team pin every
- * member sees in the fixed section of the Agents sidebar, so only roles holding
+ * In a workspace, `pinned` on a PUBLIC Agent / chat group is a legacy team
+ * pin (still read for members who joined while it was shown, and as the
+ * recommended Agents until a list is saved), so only roles holding
  * the all-resource `agent:update` grant (owner, admin) may write it. Members
  * pin for themselves through `workspace_user_settings.sidebarPinnedItemIds`.
  * Personal mode and private rows (only their creator can see them) are not
- * team pins and skip this check.
+ * team pins and skip this check. The workspace's recommended Agents list is
+ * gated the same way (pass {@link RECOMMENDED_AGENTS_FORBIDDEN_MESSAGE}).
  */
-export const assertCanWriteTeamPin = async (ctx: TeamPinCtx): Promise<void> => {
+export const assertCanWriteTeamPin = async (
+  ctx: TeamPinCtx,
+  message = TEAM_PIN_FORBIDDEN_MESSAGE,
+): Promise<void> => {
   if (!ctx.workspaceId) return;
 
   const { hasAllScope } = await getWorkspaceScopedPermissionMatches({
@@ -36,7 +59,7 @@ export const assertCanWriteTeamPin = async (ctx: TeamPinCtx): Promise<void> => {
   });
 
   if (!hasAllScope) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: TEAM_PIN_FORBIDDEN_MESSAGE });
+    throw new TRPCError({ code: 'FORBIDDEN', message });
   }
 };
 

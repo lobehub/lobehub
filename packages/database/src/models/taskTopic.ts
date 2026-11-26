@@ -3,8 +3,8 @@ import {
   QUOTA_LIMITED_RUN_STATUS,
   TRANSIENT_FAILED_RUN_STATUS,
 } from '@lobechat/const/goal';
-import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
-import { and, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import type { BriefDecision, TaskRecentRun, TaskTopicHandoff } from '@lobechat/types';
+import { and, count, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import { agentOperations } from '../schemas/agentOperations';
@@ -515,6 +515,62 @@ export class TaskTopicModel {
       .select()
       .from(taskTopics)
       .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
+  }
+
+  /**
+   * The latest `limit` runs of each task, newest first within a task.
+   *
+   * Use when:
+   * - A task list shows each row's recent outcomes (the scheduled tasks table)
+   *
+   * Expects:
+   * - `taskIds` already scoped to tasks the caller may read; run rows are
+   *   still narrowed by their own visibility
+   */
+  async findRecentRunsByTaskIds(
+    taskIds: string[],
+    limit: number,
+  ): Promise<Map<string, TaskRecentRun[]>> {
+    const runsByTaskId = new Map<string, TaskRecentRun[]>();
+    if (taskIds.length === 0 || limit <= 0) return runsByTaskId;
+
+    const ranked = this.db
+      .select({
+        createdAt: taskTopics.createdAt,
+        rank: sql<number>`row_number() over (partition by ${taskTopics.taskId} order by ${taskTopics.seq} desc)`.as(
+          'run_rank',
+        ),
+        seq: taskTopics.seq,
+        status: taskTopics.status,
+        taskId: taskTopics.taskId,
+        topicId: taskTopics.topicId,
+        trigger: taskTopics.trigger,
+      })
+      .from(taskTopics)
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()))
+      .as('ranked_task_runs');
+
+    const rows = await this.db
+      .select({
+        completedAt: topics.completedAt,
+        createdAt: ranked.createdAt,
+        seq: ranked.seq,
+        status: ranked.status,
+        taskId: ranked.taskId,
+        topicId: ranked.topicId,
+        trigger: ranked.trigger,
+      })
+      .from(ranked)
+      .leftJoin(topics, eq(ranked.topicId, topics.id))
+      .where(lte(ranked.rank, limit))
+      .orderBy(ranked.taskId, desc(ranked.seq));
+
+    for (const { taskId, ...run } of rows) {
+      const runs = runsByTaskId.get(taskId) ?? [];
+      runs.push(run);
+      runsByTaskId.set(taskId, runs);
+    }
+    return runsByTaskId;
   }
 
   async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {

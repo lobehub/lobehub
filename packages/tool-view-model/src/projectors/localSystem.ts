@@ -11,8 +11,9 @@ const OUTPUT_KEYS = new Set(['output', 'stdout']);
  * `RunCommand` card — `lobe-local-system/runCommand`,
  * `codex/command_execution`, `claude-code/Bash`, `opencode/bash`, `pi/bash`.
  *
- * The command's output is stored THREE times: the tool message body,
- * `state.stdout`, and the legacy `state.output`. All three go. What stays is the
+ * The command's output lives in the tool message body and `state.stdout`;
+ * older rows also repeat it in the legacy `state.output`, which writers no
+ * longer persist when it is derivable. All of them go. What stays is the
  * small settled metadata the collapsed row reads — exit code, success,
  * background flag, command id, stderr, produced files.
  *

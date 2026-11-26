@@ -1,9 +1,16 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, agents, channelMessages, workspaceMembers } from '../../../schemas';
+import {
+  agentOperations,
+  agents,
+  channelMembers,
+  channelMessages,
+  channels,
+  workspaceMembers,
+} from '../../../schemas';
 import {
   ChannelError,
   ChannelExecutionRepository,
@@ -84,13 +91,31 @@ const setup = async () => {
 describe('A conversation between Agents', () => {
   // An Agent's request is not the person reading: their unseen answers stay unread.
   it('leaves the person’s unread count alone when an Agent asks', async () => {
-    const { answer, ask, pair, repository } = await setup();
+    const { answer, ask, pair } = await setup();
     const first = await ask('First?');
     await answer(first.id, 'First answer');
     await ask('Second?');
 
-    const listed = (await repository.list()).find((item) => item.id === pair.channel.id);
-    expect(listed?.unreadCount).toBe(3);
+    const [row] = await db
+      .select({ lastRead: channelMembers.lastReadSequence, sequence: channels.sequence })
+      .from(channelMembers)
+      .innerJoin(channels, eq(channels.id, channelMembers.channelId))
+      .where(
+        and(
+          eq(channelMembers.channelId, pair.channel.id),
+          eq(channelMembers.userId, fixture.ownerId),
+        ),
+      );
+    expect(row.sequence - (row.lastRead ?? 0)).toBe(3);
+  });
+
+  // It opens from the report where the asking began, never as a row of its own.
+  it("stays out of the person's list but still opens by id", async () => {
+    const { pair, repository } = await setup();
+
+    expect((await repository.list()).some((item) => item.id === pair.channel.id)).toBe(false);
+    const detail = await repository.detail(pair.channel.id);
+    expect(detail?.channel.agentPairKey).toBeTruthy();
   });
 
   it('is one per pair, whichever Agent opens it', async () => {

@@ -1,3 +1,4 @@
+import type { IconProps } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 export interface BusinessSendErrorAlert {
@@ -5,6 +6,8 @@ export interface BusinessSendErrorAlert {
   action?: ReactNode;
   /** Replaces the line under the title, so it names only the actions offered. */
   description?: string;
+  /** Replaces the notice icon, e.g. an hourglass for a limit that resets. */
+  icon?: IconProps['icon'];
   /** Replaces the default notice text. */
   title?: string;
 }

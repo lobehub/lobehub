@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "Les visiteurs ne se contentent pas de lire cet Ajan — ils l'exécutent. Chaque réponse est générée dans l'espace de travail et facturée à son budget partagé, sans consommer le quota du créateur ou d'un autre membre. L'Ajan agit uniquement avec l'accès visiteur que vous accordez ci-dessous.",
   "share.settings.notice.workspaceTitle": "Les visiteurs exécutent cet Ajan sur le budget de l'espace de travail",
   "share.settings.permissions.allowCreatorViewSessions": "Me permettre de lire les conversations des visiteurs",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "Désactivé par défaut : les conversations des visiteurs restent privées pour eux.",
   "share.settings.permissions.allowReadMemory": "Autoriser la lecture de ma mémoire",
   "share.settings.permissions.allowReadMemoryHint": "L'Agent peut s'appuyer sur votre mémoire à long terme pour répondre à un visiteur.",
   "share.settings.permissions.desc": "Ce qu'une exécution par un visiteur peut lire, et ce que le visiteur peut voir en retour.",

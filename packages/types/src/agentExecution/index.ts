@@ -26,10 +26,14 @@ export * from './modelFacts';
  */
 export const initialTopicMetadataSchema = z.object({
   /**
-   * Claude Code permission mode the composer chip showed (Better Coding
-   * Experience); the topic's first dispatched run starts in it.
+   * Claude Code permission mode the composer chip showed; the topic's first dispatched run starts in it.
    */
   heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
+  /**
+   * Codex Plan switch the composer showed; the
+   * topic's first native turn sends `plan` / `default` from it.
+   */
+  heteroPlanMode: z.boolean().optional(),
   repos: z.array(z.string()).optional(),
   /**
    * Cloud-sandbox placement the composer chose before any topic existed — an

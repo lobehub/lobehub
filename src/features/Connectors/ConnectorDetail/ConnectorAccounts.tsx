@@ -16,10 +16,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import Avatar from '@/components/Avatar';
+import InlineErrorText from '@/components/InlineErrorText';
 import type { ConnectorLinkSummary, ConnectorWithTools } from '@/store/tool/slices/connector';
 import { densityTokens } from '@/styles/density.stylex';
 
-import { InlineErrorText } from '../ConnectorActionErrorText';
 import { getAccountDetails, getAccountsSectionModel, getRowBusyAction } from './accountsModel';
 import ManageTooltip from './ManageTooltip';
 import Section from './Section';

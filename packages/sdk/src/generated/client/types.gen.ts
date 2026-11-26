@@ -13,6 +13,16 @@ export type ResponseStyle = 'data' | 'fields';
 export interface Config<T extends ClientOptions = ClientOptions>
   extends Omit<RequestInit, 'body' | 'headers' | 'method'>, CoreConfig {
   /**
+   * Retries on 408/429/5xx and network errors, for idempotent methods or a
+   * POST with an `idempotencyKey` only. Applied by `createLobeHub`; default 2.
+   */
+  maxRetries?: number;
+  /**
+   * Milliseconds to wait for the response headers, per attempt; `0` disables.
+   * Applied by `createLobeHub`; default 600000 (10 minutes).
+   */
+  timeout?: number;
+  /**
    * Base URL for all requests made by this client.
    */
   baseUrl?: T['baseUrl'];
@@ -73,6 +83,11 @@ export interface RequestOptions<
       | 'sseMaxRetryAttempts'
       | 'sseMaxRetryDelay'
     > {
+  /**
+   * Sent as `Idempotency-Key`: the server runs the request once and replays
+   * its answer for repeats, which also makes a POST safe to retry.
+   */
+  idempotencyKey?: string;
   /**
    * Any body that you want to add to your request.
    *

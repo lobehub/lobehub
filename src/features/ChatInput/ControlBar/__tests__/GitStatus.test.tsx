@@ -1,9 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { gitService } from '@/services/git';
-import { useUserStore } from '@/store/user';
 
 import GitStatus from '../GitStatus';
 
@@ -23,26 +22,28 @@ const deviceStoreMock = vi.hoisted(() => ({
 const gitHookMocks = vi.hoisted(() => ({
   mutateAheadBehind: vi.fn(),
   mutateBranch: vi.fn(),
-  mutatePR: vi.fn(),
   mutateReviewPatches: vi.fn(),
   mutateWorktrees: vi.fn(),
   setDiffStats: vi.fn(),
   useFetchGitAheadBehind: vi.fn(),
   useFetchGitBranch: vi.fn(),
   useFetchGitDiffStats: vi.fn(),
-  useFetchGitLinkedPR: vi.fn(),
   useReviewPatches: vi.fn(),
   useFetchGitWorktrees: vi.fn(),
 }));
 
 vi.mock('../BranchSwitcher', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+  default: ({ children }: { children: ReactNode }) => (
+    <span data-testid="branch-switcher">{children}</span>
+  ),
 }));
 
-vi.mock('../WorktreeSwitcher', () => ({
-  default: ({ disabled }: { disabled?: boolean }) => (
-    <span data-disabled={Boolean(disabled)} data-testid="worktree-switcher" />
-  ),
+vi.mock('../DraftGit/useDraftBranch', () => ({
+  useDraftBranch: () => ({ keyDeviceId: 'local', select: vi.fn(), selectedBranch: undefined }),
+}));
+
+vi.mock('../DraftGit/WorktreeToggle', () => ({
+  WorktreeToggle: () => <span data-testid="worktree-toggle" />,
 }));
 
 vi.mock('../TopicPullRequestChip', () => ({
@@ -67,7 +68,6 @@ vi.mock('@/store/device', () => ({
   useFetchGitAheadBehind: gitHookMocks.useFetchGitAheadBehind,
   useFetchGitBranch: gitHookMocks.useFetchGitBranch,
   useFetchGitDiffStats: gitHookMocks.useFetchGitDiffStats,
-  useFetchGitLinkedPR: gitHookMocks.useFetchGitLinkedPR,
   useReviewPatches: gitHookMocks.useReviewPatches,
   useFetchGitWorktrees: gitHookMocks.useFetchGitWorktrees,
 }));
@@ -115,10 +115,6 @@ beforeEach(() => {
     data: { branch: 'fix/remote-review', detached: false },
     isConfirmed: true,
     mutate: gitHookMocks.mutateBranch,
-  });
-  gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-    data: { pullRequest: null },
-    mutate: gitHookMocks.mutatePR,
   });
   gitHookMocks.useReviewPatches.mockReturnValue({
     data: {
@@ -179,32 +175,6 @@ describe('GitStatus', () => {
     expect(globalStoreMock.openWorkingSidebar).toHaveBeenCalledWith('review');
   });
 
-  it('renders the linked GitHub PR number as a live display (no topic write)', async () => {
-    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-      data: {
-        pullRequest: {
-          ciStatus: 'pending',
-          mergeStateStatus: 'CLEAN',
-          number: 123,
-          state: 'OPEN',
-          title: 'Improve worktree handling',
-          url: 'https://github.com/lobehub/lobehub/pull/123',
-        },
-        pullRequestStatus: 'ok',
-      },
-      mutate: gitHookMocks.mutatePR,
-    });
-
-    render(<GitStatus isGithub agentId="agent-1" path="/repo" />);
-
-    // Pure display: the chip shows the current branch's PR number. Persisting it
-    // onto the topic now happens at send time (see snapshotWorkingDirGit), so
-    // opening a topic must never mutate its stored branch/PR here.
-    await waitFor(() => {
-      expect(screen.getByText('#123')).toBeInTheDocument();
-    });
-  });
-
   // The diff counts come from a separate read. Their persisted copy keeps the
   // composer cluster stable while that read is still in flight.
   it('paints the persisted change counts while the review patches load', () => {
@@ -246,11 +216,9 @@ describe('GitStatus', () => {
 
     render(<GitStatus isGithub agentId="agent-1" path="/repo" sourcePath="/repo" />);
 
-    // The branch label still paints…
+    // The branch label still paints, but the picker waits for confirmation.
     expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
-    // …and the worktree entry stays mounted (removing it would shift the branch
-    // chip when it returns) but is inert until confirmation.
-    expect(screen.getByTestId('worktree-switcher')).toHaveAttribute('data-disabled', 'true');
+    expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
     const push = screen.getByText('2').closest('[role="button"]')!;
     const pull = screen.getByText('1').closest('[role="button"]')!;
     expect(push).toHaveAttribute('aria-disabled', 'true');
@@ -306,7 +274,7 @@ describe('GitStatus', () => {
   // Review P1: the branch picker routes through the worktree list. A confirmed
   // branch alone must not enable a picker that still holds last session's
   // worktrees — it could point at a worktree removed externally.
-  it('keeps both pickers inert until the worktree list itself is confirmed', () => {
+  it('keeps the branch picker inert until the worktree list itself is confirmed', () => {
     gitHookMocks.useFetchGitBranch.mockReturnValue({
       data: { branch: 'fix/remote-review', detached: false },
       isConfirmed: true,
@@ -324,7 +292,8 @@ describe('GitStatus', () => {
     render(<GitStatus isGithub agentId="agent-1" path="/repo" sourcePath="/repo" />);
 
     // The trigger keeps its width (no layout jump) but cannot switch.
-    expect(screen.getByTestId('worktree-switcher')).toHaveAttribute('data-disabled', 'true');
+    expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
   });
 
   describe('deleted working directory', () => {
@@ -363,7 +332,7 @@ describe('GitStatus', () => {
         'data-branch',
         'feat/task-list-subtask-nesting',
       );
-      expect(screen.queryByTestId('worktree-switcher')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
     });
 
     // Worktrees picked from the bar were persisted without a branch. The dead
@@ -436,24 +405,6 @@ describe('GitStatus', () => {
       });
     });
 
-    it('skips the linked-PR lookup, which has no directory to run `gh` in', () => {
-      render(
-        <GitStatus
-          isGithub
-          agentId="agent-1"
-          fallbackGit={fallbackGit}
-          path="/tmp/lobehub-wt-subtask"
-        />,
-      );
-
-      expect(gitHookMocks.useFetchGitLinkedPR).toHaveBeenCalledWith(
-        undefined,
-        '/tmp/lobehub-wt-subtask',
-        undefined,
-        true,
-      );
-    });
-
     it('does not flash the dead-directory snapshot while the probe is still pending', () => {
       gitHookMocks.useFetchGitBranch.mockReturnValue({
         data: undefined,
@@ -499,7 +450,7 @@ describe('GitStatus', () => {
         undefined,
         false,
       );
-      // No branch either: the counts describe HEAD, as without the lab.
+      // No branch either: the counts describe HEAD.
       expect(gitHookMocks.useFetchGitAheadBehind).toHaveBeenCalledWith(
         undefined,
         undefined,
@@ -568,20 +519,17 @@ describe('GitStatus', () => {
         data: undefined,
         mutate: gitHookMocks.mutateBranch,
       });
-      gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-        data: undefined,
-        mutate: gitHookMocks.mutatePR,
-      });
     });
 
     // Regression: the bar rendered nothing until the branch probe answered, so
-    // the whole branch / PR cluster popped in after every reload even though the
+    // the whole branch cluster popped in after every reload even though the
     // topic already carried a persisted git snapshot.
-    it('paints the persisted branch and PR snapshot instead of collapsing', () => {
+    it('paints the persisted branch snapshot instead of collapsing', () => {
       render(<GitStatus isGithub agentId="agent-1" fallbackGit={fallbackGit} path="/repo" />);
 
       expect(screen.getByText('feat/stale-first')).toBeInTheDocument();
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      // A PR an older client recorded on the branch is never shown.
+      expect(screen.queryByText('#42')).not.toBeInTheDocument();
       expect(screen.queryByTestId('stale-git-snapshot')).not.toBeInTheDocument();
     });
 
@@ -592,122 +540,38 @@ describe('GitStatus', () => {
     });
   });
 
-  it('keeps the recorded PR chip while the linked-PR lookup for the same branch loads', () => {
-    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-      data: undefined,
-      mutate: gitHookMocks.mutatePR,
-    });
-
-    render(
-      <GitStatus
-        isGithub
-        agentId="agent-1"
-        path="/repo"
-        fallbackGit={{
-          branch: 'fix/remote-review',
-          github: {
-            pullRequest: { number: 7, state: 'OPEN', title: 'Remote review', url: 'https://x/7' },
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText('#7')).toBeInTheDocument();
-  });
-
-  it('drops the recorded PR chip once the live branch differs from the snapshot', () => {
-    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-      data: undefined,
-      mutate: gitHookMocks.mutatePR,
-    });
-
-    render(
-      <GitStatus
-        isGithub
-        agentId="agent-1"
-        path="/repo"
-        fallbackGit={{
-          branch: 'other-branch',
-          github: {
-            pullRequest: { number: 7, state: 'OPEN', title: 'Other', url: 'https://x/7' },
-          },
-        }}
-      />,
-    );
-
-    expect(screen.queryByText('#7')).not.toBeInTheDocument();
-  });
-
-  it('keeps branch switching visible when worktrees are available', () => {
-    gitHookMocks.useFetchGitWorktrees.mockReturnValue({
-      data: [
-        { branch: 'fix/remote-review', current: true, path: '/repo' },
-        { branch: 'canary', current: false, path: '/repo-canary' },
-      ],
-      isConfirmed: true,
-      mutate: gitHookMocks.mutateWorktrees,
-    });
-
+  it('offers the branch picker on a new conversation once the reads are confirmed', () => {
     render(<GitStatus isGithub agentId="agent-1" path="/repo" sourcePath="/repo" />);
 
-    expect(screen.getByTestId('worktree-switcher')).toHaveAttribute('data-disabled', 'false');
+    expect(screen.getByTestId('branch-switcher')).toHaveTextContent('fix/remote-review');
+    expect(screen.getByTestId('worktree-toggle')).toBeInTheDocument();
+  });
+
+  it("shows an existing topic's branch as a label, not a picker", () => {
+    render(
+      <GitStatus isGithub agentId="agent-1" path="/repo" sourcePath="/repo" topicId="topic-1" />,
+    );
+
     expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('worktree-toggle')).not.toBeInTheDocument();
   });
 });
 
-describe('GitStatus — Better Coding Experience pull requests', () => {
-  const setLab = (on: boolean) => {
-    const preference = useUserStore.getState().preference;
-    useUserStore.setState({
-      preference: { ...preference, lab: { ...preference.lab, enableBetterCodingExperience: on } },
-    });
-  };
-
-  afterEach(() => setLab(false));
-
-  it('shows the topic PR chip instead of the branch PR, and never asks gh for the branch', () => {
-    setLab(true);
-    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-      data: {
-        pullRequest: { number: 77, state: 'OPEN', title: 'guessed', url: 'https://x/77' },
-      },
-      mutate: gitHookMocks.mutatePR,
-    });
-
+describe('GitStatus — topic pull requests', () => {
+  it("shows the topic's PR chip", () => {
     render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId="topic-1" />);
 
-    expect(gitHookMocks.useFetchGitLinkedPR).toHaveBeenCalledWith(
-      undefined,
-      '/repo',
-      'fix/remote-review',
-      false,
-    );
-    expect(screen.queryByText('#77')).toBeNull();
     expect(screen.getByTestId('topic-pull-request-chip')).toHaveTextContent('topic-1');
   });
 
   it('shows no PR at all on a new conversation', () => {
-    setLab(true);
-
     render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId={null} />);
 
     expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
   });
 
-  it('keeps the branch PR chip without the lab', () => {
-    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
-      data: { pullRequest: { number: 77, state: 'OPEN', title: 'branch', url: 'https://x/77' } },
-      mutate: gitHookMocks.mutatePR,
-    });
-
-    render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId="topic-1" />);
-
-    expect(screen.getByText('#77')).toBeInTheDocument();
-    expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
-  });
-
   it('keeps the topic PR chip while the device cannot be read', () => {
-    setLab(true);
     deviceStoreMock.devices = [{ deviceId: 'device-1', online: false }];
     gitHookMocks.useFetchGitBranch.mockReturnValue({
       data: undefined,

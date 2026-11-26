@@ -1,37 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAntigravityArgs } from './antigravity';
-import { buildAgentInput } from './input/buildAgentInput';
+import { buildAntigravityAcpLaunch } from './antigravity';
 
-describe('Antigravity process input', () => {
-  it('sends long prompts as one JSONL stdin message rather than Windows command-line arguments', async () => {
-    const prompt = '中文 "quoted"\n& echo %USERPROFILE% '.repeat(5000);
-    const input = await buildAgentInput('antigravity', prompt);
-    expect(input.args).toEqual([]);
-    expect(input.stdin.split('\n')).toHaveLength(2);
-    expect(JSON.parse(input.stdin)).toEqual({ event: 'user', message: { content: prompt } });
+describe('buildAntigravityAcpLaunch', () => {
+  it('runs the ACP server with auto-approved tools and moves selectors into the session', () => {
+    expect(
+      buildAntigravityAcpLaunch([
+        '--model',
+        'gemini-4-neon-xhigh',
+        '--effort=high',
+        '--mode',
+        'plan',
+        '--add-dir',
+        '/repo/shared',
+      ]),
+    ).toEqual({
+      args: ['acp', '--dangerously-skip-permissions', '--add-dir', '/repo/shared'],
+      effort: 'high',
+      mode: 'plan',
+      model: 'gemini-4-neon-xhigh',
+    });
+    expect(buildAntigravityAcpLaunch()).toEqual({
+      args: ['acp', '--dangerously-skip-permissions'],
+    });
   });
 
-  it('resumes the exact conversation in YOLO mode while retaining user model settings', () => {
-    expect(
-      buildAntigravityArgs({
-        extraArgs: ['--model', 'custom-model', '--effort', 'high'],
-        resumeSessionId: 'conv-1',
-      }),
-    ).toEqual([
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
+  it('does not repeat a user-supplied --dangerously-skip-permissions', () => {
+    expect(buildAntigravityAcpLaunch(['--dangerously-skip-permissions']).args).toEqual([
+      'acp',
       '--dangerously-skip-permissions',
-      '--conversation',
-      'conv-1',
-      '--model',
-      'custom-model',
-      '--effort',
-      'high',
     ]);
-    expect(buildAntigravityArgs({})).toContain('--dangerously-skip-permissions');
   });
 
   it.each([
@@ -39,20 +37,17 @@ describe('Antigravity process input', () => {
     '--input-format',
     '--prompt-interactive=hello',
     '--remote-control',
+    '--settings={}',
     '-i',
     '-p',
     '--continue',
     '--conversation=other',
     '--',
-  ])('rejects custom %s that breaks protocol or session ownership', (flag) => {
-    expect(() => buildAntigravityArgs({ extraArgs: [flag] })).toThrow('LobeHub manages');
+  ])('rejects %s, which LobeHub owns over ACP', (flag) => {
+    expect(() => buildAntigravityAcpLaunch([flag])).toThrow('LobeHub manages');
   });
 
-  it('rejects image attachments instead of silently dropping them', async () => {
-    await expect(
-      buildAgentInput('antigravity', [
-        { type: 'image', source: { type: 'path', path: '/tmp/image.png' } },
-      ]),
-    ).rejects.toThrow('does not support image attachments');
+  it('rejects a selector flag without a value', () => {
+    expect(() => buildAntigravityAcpLaunch(['--model'])).toThrow('needs a value');
   });
 });

@@ -906,6 +906,12 @@ export default {
   'channel.feishu.fetchOwnerIdFailed': 'Failed to read the app owner',
   'channel.feishu.fetchOwnerIdMissingCredentials':
     'Enter the Application ID and App Secret first — the lookup runs as your app.',
+  'channel.imessage.bridgeTestFailedRetry':
+    "Couldn't reach BlueBubbles. Check the server URL and password, then test again.",
+  'channel.imessage.bridgeToggleFailedRetry':
+    "Couldn't change the bridge status. Check the BlueBubbles server URL and password, then try again.",
+  'channel.line.fetchBotInfoFailedRetry':
+    "Couldn't fetch the bot info. Check the Channel Access Token and try again.",
   'channel.userIdHint.imessage':
     'Use your iMessage handle as seen in BlueBubbles, usually an email address or E.164 phone number.',
   'channel.userIdHint.line':
@@ -922,6 +928,7 @@ export default {
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
+  'channel.updateFailedRetry': "Couldn't save this change. Check your network and try again.",
 
   'share.entry': 'Share this Agent',
   'share.settings.autoGrant.desc':
@@ -948,6 +955,7 @@ export default {
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
   'share.settings.limits.monthlySpendLimitUnit': 'USD',
+  'share.settings.limits.saved': 'Limits saved',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -998,49 +1006,85 @@ export default {
     '{{count}} tools or skills turned on in this Agent aren’t open to visitors yet',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
-    "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
+    "You can read visitors' conversations with the Agent.",
+  'share.settings.permissions.allowCreatorViewSessionsOffHint':
+    'Visitor conversations stay private to each visitor. Turn this on to read them.',
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
   'share.settings.permissions.deviceAccessConfirm.messageLimit':
     'The monthly spend cap does not limit that usage. Only the message limit per visitor does.',
-  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific people from contacts',
-  'share.settings.permissions.deviceAccessConfirm.okContacts': 'Allow everyone in contacts',
-  'share.settings.permissions.deviceAccessOption.contacts': 'Everyone in contacts',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Allowlist',
+  'share.settings.permissions.deviceAccessConfirm.okContacts': 'Allow all friends',
+  'share.settings.permissions.deviceAccessOption.contacts': 'Friends only',
   'share.settings.permissions.deviceAccessOption.none': 'No visitors',
   'share.settings.permissions.deviceAccessOption.noneDesc':
     'Visitors can chat with this Agent but never run it on your execution environment.',
   'share.settings.permissions.deviceAccessOption.contactsDesc':
-    'Everyone in this Agent’s contacts can use it, including people added later. Removing someone from contacts also removes their access.',
+    'All your friends can use it, including friends you add later. Removing a friend also removes their access.',
   'share.settings.permissions.deviceAccessOption.allowlistDesc':
-    'Only the people you pick below from this Agent’s contacts can use it.',
-  'share.settings.limits.saved': 'Limits saved',
+    'Only the friends you add to the allowlist below can use it.',
   'share.settings.permissions.deviceAccessConfirm.commands':
     'They can run any command and read or write any file on the machine this Agent runs on, including through a local CLI Agent such as Claude Code or Codex.',
   'share.settings.permissions.deviceAccessConfirm.contactsScope':
-    'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
+    'Friends you add later get this access too, not only your friends now.',
   'share.settings.permissions.deviceAccessConfirm.intro':
     'People you grant access will run this Agent on your execution environment:',
-  'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
+  'share.settings.permissions.deviceAccessConfirm.ok': 'Allow people on the allowlist',
   'share.settings.permissions.deviceAccessConfirm.subscription':
     'Local CLI Agents such as Claude Code and Codex use the model subscription or key signed in on that machine.',
   'share.settings.permissions.deviceAccessConfirm.title':
     'Let people use your execution environment?',
   'share.settings.permissions.deviceAllowContactsUnavailable':
-    'Device access works through contacts, and contacts aren’t available for your account yet.',
+    'Device access works through friends, and friends aren’t available for your account yet.',
   'share.settings.permissions.deviceAllowHint':
-    'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
+    'Only your friends can be added. Removing a friend also removes their access.',
   'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
   'share.settings.permissions.deviceAllowLoadFailed':
-    'Couldn’t load your contacts. Refresh to try again.',
+    'Couldn’t load your friends. Refresh to try again.',
   'share.settings.permissions.deviceAllowNoContacts':
-    'Your contacts are empty. Add people to your contacts first.',
-  'share.settings.permissions.deviceAllowPlaceholder': 'Choose people from your contacts',
+    'You haven’t added any friends yet. Add a friend first.',
+  'share.settings.permissions.deviceAllowPlaceholder': 'Choose from your friends',
   'share.settings.permissions.deviceAllowUnlisted':
-    'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
+    'No longer your friends, so they can’t use it: {{names}}. They’re removed the next time you edit the allowlist.',
+  'share.settings.permissions.deviceAccessOption.contactsWorkspace':
+    'Workspace members and contacts',
+  'share.settings.permissions.deviceAccessOption.contactsWorkspaceDesc':
+    'Every member and contact of this workspace can use it, including people who join later. Anyone who leaves the workspace or is removed from its contacts loses access too.',
+  'share.settings.permissions.deviceAccessOption.allowlistWorkspaceDesc':
+    'Only the members or contacts you add to the allowlist below can use it.',
+  'share.settings.permissions.deviceAccessOption.everyone': 'Anyone with the link',
+  'share.settings.permissions.deviceAccessOption.everyoneDesc':
+    'Anyone who signs in with the share link can use it, friend or not. Choose this only for an Agent you mean to open to the public.',
+  'share.settings.permissions.deviceAccessConfirm.contactsScopeWorkspace':
+    'People who join this workspace or its contacts later get this access too.',
+  'share.settings.permissions.deviceAccessConfirm.everyoneScope':
+    'Anyone who gets the link gets this access, including people you don’t know. A forwarded link can’t be taken back: to stop it, change this setting or turn off sharing.',
+  'share.settings.permissions.deviceAccessConfirm.okContactsWorkspace':
+    'Allow all members and contacts',
+  'share.settings.permissions.deviceAccessConfirm.okEveryone': 'Allow anyone with the link',
+  'share.settings.permissions.deviceAllowContactsUnavailableWorkspace':
+    'Device access works through contacts, and contacts aren’t available for this workspace yet.',
+  'share.settings.permissions.deviceAllowHintWorkspace':
+    'Only members and contacts of this workspace can be added. Anyone who leaves the workspace or is removed from its contacts loses access too.',
+  'share.settings.permissions.deviceAllowLoadFailedWorkspace':
+    'Couldn’t load members and contacts. Refresh to try again.',
+  'share.settings.permissions.deviceAllowNoContactsWorkspace':
+    'This workspace has no other members or contacts yet.',
+  'share.settings.permissions.deviceAllowPlaceholderWorkspace': 'Choose from members and contacts',
+  'share.settings.permissions.deviceAllowUnlistedWorkspace':
+    'No longer a member or contact of this workspace, so they can’t use it: {{names}}. They’re removed the next time you edit the allowlist.',
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.permissions.visitorConversations.topics_one': '{{count}} conversation',
+  'share.settings.permissions.visitorConversations.topics_other': '{{count}} conversations',
+  'share.settings.permissions.visitorConversations.view': 'View conversations',
+  'share.settings.permissions.visitorConversations.visitors_one': '{{count}} visitor',
+  'share.settings.permissions.visitorConversations.visitors_other': '{{count}} visitors',
+  'share.settings.profile.demoCases.item': 'Example {{number}}',
+  'share.settings.profile.featuredWorks.select': 'Feature',
+  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
   'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
@@ -1156,6 +1200,7 @@ export default {
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
   'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
+  'share.visitor.profile.free': 'Free',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
   'share.visitor.profile.lobotFallback.description':
@@ -1179,6 +1224,7 @@ export default {
     'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.free': 'Free to use — doesn’t use your credits.',
   'share.visitor.profile.terms.messages_one': 'You can send up to {{count}} message.',
   'share.visitor.profile.terms.messages_other': 'You can send up to {{count}} messages.',
   'share.visitor.profile.terms.title': 'Before you start',
@@ -1293,6 +1339,7 @@ export default {
   'share.visitor.profile.metrics.durationCaption': 'per operation',
   'share.visitor.profile.metrics.cost': 'Average cost',
   'share.visitor.profile.metrics.costCaption': 'per work · paid by the creator',
+  'share.visitor.profile.metrics.costPerWorkCaption': 'per work',
   'share.visitor.profile.works.title': 'Featured works',
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
@@ -1315,7 +1362,6 @@ export default {
   'share.settings.profile.saveError': 'Could not save. Your draft is preserved. Try again.',
   'share.settings.profile.invalid':
     'Each example needs a task prompt. Keep at most 20 examples and 100 featured works.',
-  'share.settings.profile.demoCases.item': 'Example {{number}}',
   'share.settings.profile.demoCases.promptLabel': 'Task prompt (required)',
   'share.settings.profile.demoCases.promptHint':
     'Shown as the example title. Clicking it fills the visitor’s chat input without sending.',
@@ -1336,8 +1382,6 @@ export default {
   'share.settings.profile.featuredWorks.title': 'Featured works',
   'share.settings.profile.featuredWorks.desc':
     'Choose this agent’s works to showcase. Visitor works are never included.',
-  'share.settings.profile.featuredWorks.selected': 'Selected: {{count}} / 100',
-  'share.settings.profile.featuredWorks.select': 'Feature',
   'share.settings.profile.featuredWorks.withdraw': 'Remove',
   'share.settings.profile.featuredWorks.empty':
     'No eligible works yet. Create a work with this agent first.',
@@ -1348,6 +1392,21 @@ export default {
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'share.settings.profile.demoCases.untitled': 'No task prompt yet',
+  'share.settings.profile.discard': 'Discard changes',
+  'share.settings.profile.featuredWorks.pick': 'Choose works',
+  'share.settings.profile.featuredWorks.pickConfirm': 'Done',
+  'share.settings.profile.featuredWorks.pickTitle': 'Choose featured works',
+  'share.settings.profile.preview.desktop': 'Desktop',
+  'share.settings.profile.preview.draft': 'Draft',
+  'share.settings.profile.preview.loadFailed': 'Could not load the preview.',
+  'share.settings.profile.preview.mobile': 'Mobile',
+  'share.settings.profile.preview.open': 'Open the published page',
+  'share.settings.profile.preview.published': 'Published',
+  'share.settings.profile.preview.retry': 'Retry',
+  'share.settings.profile.preview.show': 'Preview',
+  'share.settings.profile.preview.title': 'Visitor preview',
+  'share.settings.profile.preview.unsaved': 'Unsaved changes',
   'webhook.actions.delete': 'Delete',
   'webhook.actions.deliveries': 'Recent calls',
   'webhook.actions.edit': 'Edit',

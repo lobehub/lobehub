@@ -99,7 +99,6 @@
   "promotion_gift_granted_title": "已新增獎勵餘額",
   "storage_overage_cap_reached": "您的儲存空間按使用量付費的每月上限 ${{monthlyCap}} 已達到。本周期的預估費用為 ${{estimatedCycleCharge}}。超出包含的儲存空間的新上傳將被阻止，直到下一個計費周期或您提高上限為止。",
   "storage_overage_cap_reached_title": "儲存空間按使用量付費上限已達到",
-  "subscription_one_time_expired": "您的一次性 {{plan}} 計劃已結束，您的帳戶現在已切換到免費計劃。續訂 {{plan}} 以恢復您的權益。",
   "subscription_one_time_expired_action": "續訂 {{plan}}",
   "subscription_one_time_expired_title": "您的 {{plan}} 計劃已結束",
   "subscription_payment_failed": "您的訂閱續約付款失敗。請更新您的付款方式以保持訂閱有效。",

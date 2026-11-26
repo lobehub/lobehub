@@ -197,7 +197,7 @@ interface BranchSwitcherProps {
   /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
   placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   /**
-   * Pick-only mode (Better Coding Experience, before a topic's first send): a
+   * Pick-only mode (before a topic's first send): a
    * click records `onSelect` instead of checking out — the send switches, or
    * forks a worktree — and the create / rename / delete actions and the
    * footer are gone. A branch another worktree holds is pickable too; the send

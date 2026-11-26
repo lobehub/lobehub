@@ -4,6 +4,7 @@ export {
   agentShareSystemPrompt,
   resolveSkillsRestrictedManifest,
 } from './resolveRestrictedManifest';
+export { resolveSkillsShellManifest, SKILL_BOUND_API_NAMES } from './resolveShellManifest';
 export { deviceSystemPrompt, systemPrompt } from './systemRole';
 export {
   type ActivateSkillParams,

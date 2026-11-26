@@ -9,7 +9,7 @@ import { uuid } from '@lobechat/utils';
 import { Accordion, Button, confirmModal, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { RotateCcwIcon } from 'lucide-react';
+import { RotateCcwIcon, WalletIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,6 +25,26 @@ const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
 const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const MONTHLY_WINDOW_MIN_MINUTES = 28 * 24 * 60;
 const MONTHLY_WINDOW_MAX_MINUTES = 31 * 24 * 60;
+
+// Reference API usage value from the published Codex token rates.
+// https://learn.chatgpt.com/docs/pricing#token-rates
+const ESTIMATED_USD_PER_CODEX_CREDIT = 0.04;
+
+const formatCreditsUsdEstimate = (credits: CodexQuotaSnapshot['credits'], locale: string) => {
+  if (credits?.unlimited || !credits?.balance?.trim()) return;
+
+  const balance = Number(credits.balance);
+  if (!Number.isFinite(balance) || balance < 0) return;
+
+  const estimate = balance * ESTIMATED_USD_PER_CODEX_CREDIT;
+  return new Intl.NumberFormat(locale, {
+    currency: 'USD',
+    currencyDisplay: 'narrowSymbol',
+    maximumFractionDigits: estimate < 1 ? 2 : 0,
+    minimumFractionDigits: 0,
+    style: 'currency',
+  }).format(estimate);
+};
 
 const isConnectionError = (quota: CodexQuotaSnapshot) =>
   /error sending request for url|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(
@@ -90,7 +110,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorSuccessBg,
     backgroundImage: 'none',
   },
-  resetCredits: {
+  footerSection: {
     paddingBlockStart: '8px',
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
@@ -139,7 +159,7 @@ interface ResetFeedback {
 }
 
 const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) => {
-  const { t } = useTranslation('chat');
+  const { i18n, t } = useTranslation('chat');
   const agentId = useAgentId();
   const sourceKey = createQuotaSourceKey('codex', agentId, deviceId, command, env);
   const activeSourceKeyRef = useRef(sourceKey);
@@ -217,7 +237,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
   );
 
   const hasExtraData = useCallback(
-    (quota: CodexQuotaSnapshot) => !deviceId && !!quota.rateLimitResetCredits,
+    (quota: CodexQuotaSnapshot) => !!quota.credits || (!deviceId && !!quota.rateLimitResetCredits),
     [deviceId],
   );
 
@@ -313,7 +333,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
     [consumeReset, sourceKey, t],
   );
 
-  const renderFooter = useCallback(
+  const renderResetCredits = useCallback(
     (
       quota: CodexQuotaSnapshot,
       { applyQuota, formatDuration, now }: QuotaMenuHelpers<CodexQuotaSnapshot>,
@@ -322,7 +342,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
 
       if (!resetCredits) {
         return (
-          <Flexbox className={stylex.props(styles.resetCredits).className} gap={4}>
+          <Flexbox className={stylex.props(styles.footerSection).className} gap={4}>
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={RotateCcwIcon} size={14} />
               <Text style={{ fontSize: 12 }} type="secondary">
@@ -345,7 +365,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
       }));
 
       return (
-        <Flexbox className={stylex.props(styles.resetCredits).className}>
+        <Flexbox className={stylex.props(styles.footerSection).className}>
           <Accordion
             className={stylex.props(styles.creditCollapse).className}
             defaultValue={[]}
@@ -470,13 +490,50 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
       getErrorText={getErrorText}
-      getRefreshErrorText={getErrorText}
       getWindows={getWindows}
       hasExtraData={hasExtraData}
-      renderFooter={renderFooter}
+      retainLastSnapshotOnError={false}
       sourceKey={sourceKey}
       title={t('heteroAgent.codexQuota.title')}
       tooltip={t('heteroAgent.codexQuota.tooltip')}
+      renderFooter={(quota, helpers) => {
+        const { credits } = quota;
+        const usdEstimate = formatCreditsUsdEstimate(credits, i18n.language);
+
+        return (
+          <>
+            {renderResetCredits(quota, helpers)}
+            {credits && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.footerSection).className}
+                gap={8}
+                justify={'space-between'}
+              >
+                <Flexbox horizontal align={'center'} gap={4}>
+                  <Icon icon={WalletIcon} size={14} />
+                  <Text style={{ fontSize: 12 }} type="secondary">
+                    {t('heteroAgent.codexQuota.creditsBalance')}
+                  </Text>
+                </Flexbox>
+                <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
+                  <Text style={{ fontSize: 12 }}>
+                    {credits.unlimited
+                      ? t('heteroAgent.codexQuota.creditsUnlimited')
+                      : credits.balance}
+                  </Text>
+                  {usdEstimate && (
+                    <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="secondary">
+                      {t('heteroAgent.codexQuota.creditsUsdEstimate', { amount: usdEstimate })}
+                    </Text>
+                  )}
+                </Flexbox>
+              </Flexbox>
+            )}
+          </>
+        );
+      }}
       renderHeader={(quota) => (
         <QuotaAccountSwitcher placement="top" provider="codex" snapshot={quota} />
       )}

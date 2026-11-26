@@ -1,35 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
-
 import { getAvailableSidebarItems, getSortableSidebarItemIds } from './CustomizeSidebarModal';
 
 describe('CustomizeSidebarModal', () => {
-  it('keeps Memory available in personal mode', () => {
-    const items = getAvailableSidebarItems(false);
-
-    expect(items.some((item) => item.id === 'memory')).toBe(true);
-  });
-
   it('allows Projects to be reordered and hidden', () => {
     expect(getAvailableSidebarItems(false).some((item) => item.id === 'project')).toBe(true);
     expect(getSortableSidebarItemIds(false).has('project')).toBe(true);
-  });
-
-  it('removes Memory from workspace mode customization', () => {
-    const items = getAvailableSidebarItems(true);
-
-    expect(items.some((item) => item.id === 'memory')).toBe(false);
-  });
-
-  it('keeps the spacer in the sortable item set', () => {
-    expect(getSortableSidebarItemIds(false).has(SIDEBAR_SPACER_ID)).toBe(true);
-    expect(getSortableSidebarItemIds(true).has(SIDEBAR_SPACER_ID)).toBe(true);
-  });
-
-  it('keeps workspace-only exclusions in the sortable item set', () => {
-    expect(getSortableSidebarItemIds(false).has('memory')).toBe(true);
-    expect(getSortableSidebarItemIds(true).has('memory')).toBe(false);
   });
 
   it('offers Dashboards only while the dashboard flag is on, and never in workspace mode', () => {
@@ -42,13 +18,13 @@ describe('CustomizeSidebarModal', () => {
     );
   });
 
-  it.each([false, true])(
-    'shows the separate Goals option only in workspace mode (%s)',
-    (workspace) => {
-      expect(getSortableSidebarItemIds(workspace).has('goals')).toBe(workspace);
-      expect(getSortableSidebarItemIds(workspace).has('tasks')).toBe(true);
-    },
-  );
+  it.each([false, true])('offers one combined Tasks entry (workspace: %s)', (workspace) => {
+    expect(getSortableSidebarItemIds(workspace).has('goals')).toBe(false);
+    expect(getAvailableSidebarItems(workspace).find((item) => item.id === 'tasks')).toMatchObject({
+      labelKey: 'tab.goalsAndTasks',
+      labelNs: 'chat',
+    });
+  });
 
   it('offers Channels, hideable, only while Channels are enabled', () => {
     expect(getSortableSidebarItemIds(false).has('channels')).toBe(false);

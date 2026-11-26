@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useDensity } from '@/styles/density';
 
 import { revealStyles } from '../revealStyles';
 import { type ChatItemProps } from '../type';
@@ -22,6 +23,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, quiet, titleAddon }) 
   const { t } = useTranslation('chat');
   const title = agentDisplayName(avatar, t('untitledAgent'));
   const { text: timeText, title: timeTitle } = useActivityTime(time);
+  const { tokens } = useDensity();
 
   return (
     <>
@@ -30,7 +32,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, quiet, titleAddon }) 
           // `type="secondary"` is the description colour, the time's own step; a quiet name sits
           // one step above it.
           color={quiet ? cssVar.colorTextSecondary : undefined}
-          fontSize={14}
+          fontSize={tokens.fontSize}
           style={{ whiteSpace: 'nowrap' }}
           weight={500}
         >

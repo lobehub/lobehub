@@ -1,9 +1,9 @@
 /**
  * @vitest-environment happy-dom
  */
-import { type IEditor } from '@lobehub/editor';
-import { moment } from '@lobehub/editor';
-import { useEditor } from '@lobehub/editor/react';
+import { type IEditor, type ISlashMenuOption, type ISlashService } from '@lobehub/editor';
+import { genServiceId, moment } from '@lobehub/editor';
+import { type EditorProps, useEditor } from '@lobehub/editor/react';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -850,6 +850,73 @@ describe('InternalEditor', () => {
         },
         { timeout: 2000 },
       );
+    });
+  });
+
+  describe('mention menu', () => {
+    // The package exports the service type but not its id; ids are keyed by name.
+    const SLASH_SERVICE_ID = genServiceId<ISlashService>('SlashService');
+    const member: ISlashMenuOption = { key: 'member-lin', label: 'Lin' };
+    const mentionOptionWith = (items: ISlashMenuOption[]): EditorProps['mentionOption'] => ({
+      items,
+      onSelect: vi.fn(),
+    });
+
+    // Workspace members load asynchronously, so a comment box usually mounts
+    // before they arrive. The kernel only instantiates plugins that registered
+    // before it initialised: the `@` menu must already be live at mount and
+    // pick up the members once they land.
+    it('serves members that arrive after the editor mounted', async () => {
+      let editor: IEditor | undefined;
+      const onEditorReady = (instance: IEditor) => {
+        editor = instance;
+      };
+
+      const { rerender } = render(
+        <TestWrapper
+          floatingToolbar={false}
+          mentionOption={mentionOptionWith([])}
+          onEditorReady={onEditorReady}
+        />,
+      );
+
+      await waitFor(() => expect(editor?.getLexicalEditor?.()).toBeTruthy());
+
+      rerender(
+        <TestWrapper
+          floatingToolbar={false}
+          mentionOption={mentionOptionWith([member])}
+          onEditorReady={onEditorReady}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(editor!.requireService(SLASH_SERVICE_ID)?.getSlashOptions('@')?.items).toEqual([
+          member,
+        ]),
+      );
+    });
+
+    it('keeps the slash menu next to the mention menu', async () => {
+      let editor: IEditor | undefined;
+      const slashItem: ISlashMenuOption = { key: 'h1', label: 'Heading 1' };
+
+      render(
+        <TestWrapper
+          floatingToolbar={false}
+          mentionOption={mentionOptionWith([member])}
+          slashItems={[slashItem]}
+          onEditorReady={(instance) => {
+            editor = instance;
+          }}
+        />,
+      );
+
+      await waitFor(() => expect(editor?.getLexicalEditor?.()).toBeTruthy());
+
+      const service = editor!.requireService(SLASH_SERVICE_ID);
+      expect(service?.getSlashOptions('/')?.items).toEqual([slashItem]);
+      expect(service?.getSlashOptions('@')?.items).toEqual([member]);
     });
   });
 });
