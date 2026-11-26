@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "在預覽頁面上對此接受進行評論，並接受或退回。",
   "consent.scope.acceptance-review-site": "從網站本身對此網站的檢視進行評論，持續 8 小時",
   "consent.scope.email": "訪問您的電子郵件地址",
+  "consent.scope.generation-read": "檢視您生成的圖片、影片和音訊",
+  "consent.scope.generation-write": "生成圖片、影片和音訊並刪除結果，使用您的配額",
   "consent.scope.offline_access": "允許客戶端訪問您的資料",
   "consent.scope.openid": "使用您的 LobeChat 帳戶進行身份驗證",
   "consent.scope.profile": "訪問您的基本資料信息（名稱、頭像等）",

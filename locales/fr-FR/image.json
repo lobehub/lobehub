@@ -33,6 +33,7 @@
   "config.resolution.options.512": "512px",
   "config.seed.label": "Graine",
   "config.seed.random": "Graine aléatoire",
+  "config.size.autoByOpenAI": "Auto (déterminé par OpenAI)",
   "config.size.label": "Taille",
   "config.steps.label": "Étapes",
   "config.title": "Configuration",
