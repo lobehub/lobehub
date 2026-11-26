@@ -2,12 +2,15 @@
 import type OpenAI from 'openai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { LobeAzureOpenAI } from '../../providers/azureOpenai';
 import { LobeChatGPTAI } from '../../providers/chatGPT';
 import { LobeOpenAI } from '../../providers/openai';
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../types';
 
+// A plain function, not `vi.fn()`: `vi.restoreAllMocks()` in `afterEach` resets a
+// `vi.fn()` implementation, so every test after the first saw `undefined` models.
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  loadModels: vi.fn().mockResolvedValue([]),
+  loadModels: async () => [],
 }));
 
 const fn = (name: string): ChatCompletionTool => ({
@@ -102,7 +105,7 @@ type ResponsesRequest = {
 };
 
 const captureRun = async (
-  runtime: LobeOpenAI | LobeChatGPTAI,
+  runtime: LobeOpenAI | LobeChatGPTAI | LobeAzureOpenAI,
   model: string,
 ): Promise<ResponsesRequest[]> => {
   const create = vi
@@ -207,6 +210,89 @@ describe('Responses tool anchoring', () => {
     expect(wire).not.toContain('additional_tools');
     expect(wire).not.toContain('tool_search');
     expect(wire).not.toContain('toolsAdded');
+  });
+
+  it('anchors on a relay whose channel opts in, without the process-wide env', async () => {
+    const requests = await captureRun(
+      new LobeOpenAI({
+        apiKey: 'test',
+        baseURL: 'https://relay.example.com/v1',
+        responsesToolAnchoring: 'additional_tools',
+      }),
+      'gpt-6.1-sol',
+    );
+
+    expectGrowingPrefix(requests);
+    expect(toolNames(requests.at(-1)!.tools)).toEqual([activator.function.name]);
+  });
+
+  it('lets a channel opt out when the env opts every relay in', async () => {
+    vi.stubEnv('OPENAI_RESPONSES_TOOL_ANCHORING', 'additional_tools');
+
+    const requests = await captureRun(
+      new LobeOpenAI({
+        apiKey: 'test',
+        baseURL: 'https://relay.example.com/v1',
+        responsesToolAnchoring: 'off',
+      }),
+      'gpt-6.1-sol',
+    );
+
+    expect(toolNames(requests.at(-1)!.tools)).toEqual([
+      activator.function.name,
+      search.function.name,
+      notion.function.name,
+    ]);
+    expect(JSON.stringify(requests)).not.toContain('additional_tools');
+  });
+
+  describe('Azure', () => {
+    const azure = (options: Record<string, unknown> = {}) =>
+      new LobeAzureOpenAI({
+        apiKey: 'test',
+        baseURL: 'https://test.cognitiveservices.azure.com',
+        ...options,
+      });
+
+    it('keeps every tool in the top-level list unless the channel opts in', async () => {
+      // The env targets OpenAI relays; an Azure deployment needs its own verification.
+      vi.stubEnv('OPENAI_RESPONSES_TOOL_ANCHORING', 'additional_tools');
+
+      const requests = await captureRun(azure(), 'gpt-5.6-sol');
+
+      expect(toolNames(requests.at(-1)!.tools)).toEqual([
+        activator.function.name,
+        search.function.name,
+        notion.function.name,
+      ]);
+      expect(JSON.stringify(requests)).not.toContain('additional_tools');
+    });
+
+    it('anchors every Azure endpoint when its own env opts in, unless the channel opts out', async () => {
+      vi.stubEnv('AZURE_OPENAI_RESPONSES_TOOL_ANCHORING', 'additional_tools');
+
+      const anchored = await captureRun(azure(), 'gpt-5.6-sol');
+      expectGrowingPrefix(anchored);
+      expect(toolNames(anchored.at(-1)!.tools)).toEqual([activator.function.name]);
+
+      const optedOut = await captureRun(azure({ responsesToolAnchoring: 'off' }), 'gpt-5.6-sol');
+      expect(toolNames(optedOut.at(-1)!.tools)).toHaveLength(3);
+    });
+
+    it.each(['additional_tools', 'tool_search'] as const)(
+      'keeps the request prefix stable when the channel opts into %s',
+      async (mode) => {
+        const requests = await captureRun(azure({ responsesToolAnchoring: mode }), 'gpt-5.6-sol');
+
+        expectGrowingPrefix(requests);
+        const last = requests.at(-1)!;
+        expect(toolNames(last.tools)).toEqual([activator.function.name]);
+        expect(last.input.some((item) => item.type === mode)).toBe(mode === 'additional_tools');
+        expect(last.input.some((item) => item.type === 'tool_search_output')).toBe(
+          mode === 'tool_search',
+        );
+      },
+    );
   });
 
   it('keeps the Codex backend prefix stable, Responses Lite included', async () => {
