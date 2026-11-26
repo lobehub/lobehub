@@ -154,6 +154,23 @@ interface ReplayIndex {
 }
 
 const LOCAL_SYSTEM = 'lobe-local-system';
+const CLOUD_SANDBOX = 'lobe-cloud-sandbox';
+const SKILLS = 'lobe-skills';
+
+/**
+ * Tools whose readFile / writeFile / editFile results carry a file path. The
+ * cloud sandbox runs the same `ComputerRuntime` as the local system, so its
+ * file results supersede each other the same way.
+ */
+const FILE_TOOL_IDENTIFIERS = new Set([LOCAL_SYSTEM, CLOUD_SANDBOX]);
+
+/** Command-style APIs per tool whose old output is trimmed to a head + tail excerpt. */
+const COMMAND_APIS_BY_IDENTIFIER: Record<string, ReadonlySet<string>> = {
+  [CLOUD_SANDBOX]: new Set(['runCommand', 'getCommandOutput', 'executeCode']),
+  [LOCAL_SYSTEM]: new Set(['runCommand', 'getCommandOutput']),
+  // The always-on cloud sandbox shell offered through the Skills tool.
+  [SKILLS]: new Set(['runCommand', 'execScript']),
+};
 
 const imageCountOf = (message: Message) =>
   (message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0;
@@ -231,7 +248,6 @@ export const cacheEconomicsForProvider = (provider?: string): CacheEconomics =>
 
 const READ_APIS = new Set(['readFile']);
 const WRITE_APIS = new Set(['writeFile', 'editFile']);
-const COMMAND_APIS = new Set(['runCommand', 'getCommandOutput']);
 const CRAWL_APIS = new Set(['search', 'crawlSinglePage', 'crawlMultiPages']);
 const MESSAGE_READ_APIS = new Set(['readMessages', 'searchMessages']);
 
@@ -281,10 +297,30 @@ const locOf = (message: Message, plugin: PluginInfo | undefined): [number, numbe
 };
 
 /**
- * The window a readFile call actually returned. An omitted `loc` defaults to
- * the first 200 lines in the service (`readLocalFile` slices `loc ?? [0, 200]`)
- * unless `fullContent` was requested — treating it as an unbounded full-file
- * read would let a later default read claim to cover ranges it never returned.
+ * Key for per-path indexes, namespaced by tool: a local path and a sandbox
+ * path that happen to match are different files, so a write on one side must
+ * never supersede a read on the other.
+ */
+const pathKeyOf = (message: Message, plugin: PluginInfo | undefined): string | undefined => {
+  const identifier = plugin?.identifier;
+  if (!identifier || !FILE_TOOL_IDENTIFIERS.has(identifier)) return undefined;
+  const path = pathOf(message, plugin);
+  return path ? `${identifier}:${path}` : undefined;
+};
+
+const lineArgOf = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+/**
+ * The window a readFile call actually returned, 0-based end-exclusive.
+ *
+ * Local reads: an omitted `loc` defaults to the first 200 lines in the service
+ * (`readLocalFile` slices `loc ?? [0, 200]`) unless `fullContent` was
+ * requested — treating it as an unbounded full-file read would let a later
+ * default read claim to cover ranges it never returned.
+ *
+ * Cloud sandbox reads return no `loc`; they take independently optional
+ * 1-based inclusive `startLine` / `endLine` and read to EOF without them.
  */
 const effectiveReadWindow = (
   message: Message,
@@ -292,10 +328,29 @@ const effectiveReadWindow = (
 ): [number, number] => {
   const explicit = locOf(message, plugin);
   if (explicit) return explicit;
-  return parseArguments(plugin?.arguments)?.fullContent
-    ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
-    : [0, 200];
+  const args = parseArguments(plugin?.arguments);
+  if (plugin?.identifier === CLOUD_SANDBOX) {
+    const state = message.pluginState as { endLine?: unknown; startLine?: unknown } | undefined;
+    const startLine = lineArgOf(state?.startLine) ?? lineArgOf(args?.startLine);
+    const endLine = lineArgOf(state?.endLine) ?? lineArgOf(args?.endLine);
+    return [Math.max((startLine ?? 1) - 1, 0), endLine ?? Number.POSITIVE_INFINITY];
+  }
+  return args?.fullContent ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY] : [0, 200];
 };
+
+/** Human-readable range for the readSupersededByRead placeholder, in the tool's own line convention. */
+const readRangeLabel = (identifier: string | undefined, [start, end]: [number, number]): string => {
+  if (identifier !== CLOUD_SANDBOX) return `lines ${start}-${end}`;
+  if (start <= 0 && end === Number.POSITIVE_INFINITY) return 'whole file';
+  return end === Number.POSITIVE_INFINITY ? `lines ${start + 1}-EOF` : `lines ${start + 1}-${end}`;
+};
+
+/**
+ * A read the service cut at its char cap never delivered the tail of its
+ * window, so it cannot stand in for an earlier read of that range.
+ */
+const isTruncatedRead = (message: Message): boolean =>
+  (message.pluginState as { truncated?: unknown } | undefined)?.truncated === true;
 
 /**
  * `UIChatMessage.createdAt` is an epoch-milliseconds number on the canonical
@@ -430,8 +485,8 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       const touchedPaths = new Set<string>();
       for (const candidate of current.accepted) {
         const m = messages[candidate.index];
-        const path = pathOf(m, getPlugin(m));
-        if (path) touchedPaths.add(path);
+        const pathKey = pathKeyOf(m, getPlugin(m));
+        if (pathKey) touchedPaths.add(pathKey);
       }
       for (const path of touchedPaths) {
         const reads = replay.untrimmedReadsByPath.get(path);
@@ -574,10 +629,8 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
       if (m.pluginError) continue;
       const plugin = getPlugin(m);
-      if (plugin?.identifier !== LOCAL_SYSTEM) continue;
-
-      const path = pathOf(m, plugin);
-      if (!path) continue;
+      const path = pathKeyOf(m, plugin);
+      if (!plugin || !path) continue;
 
       const earlierReads = replay.untrimmedReadsByPath.get(path) ?? [];
       if (WRITE_APIS.has(plugin.apiName ?? '')) {
@@ -592,13 +645,18 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       } else if (READ_APIS.has(plugin.apiName ?? '')) {
         const loc = effectiveReadWindow(m, plugin);
         const window = { end: loc[1], index, start: loc[0] };
-        const windows = replay.readWindowsByPath.get(path) ?? [];
-        windows.push(window);
-        replay.readWindowsByPath.set(path, windows);
+        // A truncated read can still be superseded itself, but covers nothing.
+        const covers = !isTruncatedRead(m);
+        if (covers) {
+          const windows = replay.readWindowsByPath.get(path) ?? [];
+          windows.push(window);
+          replay.readWindowsByPath.set(path, windows);
+        }
         // A re-read only changes the earlier reads it fully covers; one that is
         // already pending stays superseded either way.
         for (const read of earlierReads) {
           if (
+            covers &&
             !replay.pending.has(read.index) &&
             window.start <= read.start &&
             window.end >= read.end
@@ -734,11 +792,12 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     const apiName = plugin?.apiName ?? '';
     const content = message.content as string;
 
-    if (identifier === LOCAL_SYSTEM && READ_APIS.has(apiName)) {
+    if (identifier && FILE_TOOL_IDENTIFIERS.has(identifier) && READ_APIS.has(apiName)) {
       const path = pathOf(message, plugin);
-      if (!path) return undefined;
+      const pathKey = pathKeyOf(message, plugin);
+      if (!path || !pathKey) return undefined;
 
-      const writeIndex = lastWriteIndexByPath.get(path);
+      const writeIndex = lastWriteIndexByPath.get(pathKey);
       if (writeIndex !== undefined && writeIndex > index) {
         return {
           content: `[readFile result trimmed: ${path} — superseded by a later write to this file. Call readFile again if you need the current content.]`,
@@ -747,12 +806,12 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       }
 
       const loc = effectiveReadWindow(message, plugin);
-      const covered = (readWindowsByPath.get(path) ?? []).some(
+      const covered = (readWindowsByPath.get(pathKey) ?? []).some(
         (w) => w.index > index && w.start <= loc[0] && w.end >= loc[1],
       );
       if (covered) {
         return {
-          content: `[readFile result trimmed: ${path} (lines ${loc[0]}-${loc[1]}) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]`,
+          content: `[readFile result trimmed: ${path} (${readRangeLabel(identifier, loc)}) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]`,
           rule: 'readSupersededByRead',
         };
       }
@@ -801,8 +860,8 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     }
 
     if (
-      identifier === LOCAL_SYSTEM &&
-      COMMAND_APIS.has(apiName) &&
+      identifier &&
+      COMMAND_APIS_BY_IDENTIFIER[identifier]?.has(apiName) &&
       content.length > this.config.commandKeepChars * 2
     ) {
       const head = content.slice(0, this.config.commandKeepChars);
