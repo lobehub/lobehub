@@ -162,13 +162,7 @@ export const channelMessageSurfaces = (
 ): ChannelMessageSurface[] => toSurfaceRecords(metadata?.surfaces);
 
 /** A reply's cards as text, for where cards can't be drawn: history an Agent reads, previews. */
-<<<<<<< HEAD
-export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) =>
-  surfaces
-    .map((surface) => surface.fallback || surface.title)
-    .filter(Boolean)
-    .map((line) => `[Card] ${line}`)
-    .join('\n');
+export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) => surfacesToText(surfaces);
 
 /**
  * A message the running Agent posts as itself (`lobe-channel.postMessage`): on the main timeline
@@ -196,6 +190,3 @@ export interface ChannelPostedMessage {
   threadId: string | null;
   url: string;
 }
-=======
-export const channelSurfacesText = (surfaces: ChannelMessageSurface[]) => surfacesToText(surfaces);
->>>>>>> 4eda66170fe (♻️ refactor(a2ui): make the card tool a thin adapter over the @lobehub/a2ui processor)
