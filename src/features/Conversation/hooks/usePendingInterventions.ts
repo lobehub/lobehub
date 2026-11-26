@@ -1,5 +1,3 @@
-import type { PendingMcpElicitation } from '@/services/mcpElicitation';
-
 import { dataSelectors, useConversationStore } from '../store';
 import type { PendingIntervention } from '../store/slices/data/pendingInterventions';
 import {
@@ -27,7 +25,7 @@ export const usePendingInterventions = () => {
   );
   const { data } = useFetchMcpElicitations();
   const mcp =
-    (data as PendingMcpElicitation[] | undefined)?.map((item): PendingIntervention => ({
+    data?.map((item): PendingIntervention => ({
       apiName: item.apiName,
       assistantGroupId: item.assistantMessageId,
       batchId: item.batchId,

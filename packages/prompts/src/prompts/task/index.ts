@@ -1,5 +1,8 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
+import { buildGoalMarksSection, type TaskRunPromptGoalMarks } from './goalMarks';
+import { buildGoalObjectiveSection, type TaskRunPromptGoalObjective } from './goalObjective';
+
 // ── Formatting helpers for Task tool responses ──
 
 const priorityLabel = (p?: number | null): string => {
@@ -276,6 +279,15 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   if (t.labels?.length) lines.push(`Labels: ${t.labels.map((label) => label.name).join(', ')}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
+  if (t.channelDelivery) {
+    const { channelId, lastError, threadId } = t.channelDelivery;
+    const refused = lastError
+      ? ` — the latest post was refused (${lastError.code}${lastError.message ? `: ${lastError.message}` : ''}, ${lastError.at}); results reach the Channel again once the Agent can post there`
+      : '';
+    lines.push(
+      `Channel delivery: ${channelId}${threadId ? ` (Thread ${threadId})` : ' (main timeline)'}${refused}`,
+    );
+  }
 
   if (t.dependencies && t.dependencies.length > 0) {
     lines.push(
@@ -571,6 +583,8 @@ export interface TaskRunPromptGoalLoop {
   askedQuestions?: Array<{ answer?: string; questions: string[] }>;
   /** Feedback from the automatic Acceptance review of the previous delivery. */
   automaticReviewFeedback?: string;
+  /** Criteria a panel already ruled on after the builder disputed them. */
+  disputeRulings?: Array<{ outcome: 'overruled' | 'upheld'; title: string }>;
   /** Checks that did not pass in the previous round, with the verifier's why/suggestion. */
   failedChecks?: Array<{ title: string; why?: string }>;
   /** Round budget. Null/undefined = uncapped. */
@@ -593,6 +607,10 @@ export interface TaskRunPromptInput {
   extraPrompt?: string;
   /** Present only for rounds spawned by the goal outer loop. */
   goalLoop?: TaskRunPromptGoalLoop;
+  /** Present only for runs of a Task that works for a Goal. */
+  goalMarks?: TaskRunPromptGoalMarks;
+  /** Present only for runs of a Task whose Goal has an objective. */
+  goalObjective?: TaskRunPromptGoalObjective;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
     id?: string;
@@ -698,7 +716,16 @@ const briefIcon = (type: string): string => {
  * 4. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
-  const { task, activities, extraPrompt, goalLoop, workspace, parentTask } = input;
+  const {
+    task,
+    activities,
+    extraPrompt,
+    goalLoop,
+    goalMarks,
+    goalObjective,
+    workspace,
+    parentTask,
+  } = input;
   const sections: string[] = [];
 
   // ── 1. High Priority Instruction ──
@@ -726,6 +753,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
+    `Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.`,
     `${taskIdentity(task)} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
   ];
@@ -737,7 +765,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
           ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
           : task.automationMode;
     taskLines.push(
-      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, mark this task completed as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, request completion (\`lh task complete <id>\` with a shell) as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+    );
+  } else if (!task.verify?.enabled && !task.review?.enabled) {
+    taskLines.push(
+      'When all deliverables are ready, request completion of this task (`lh task complete <id>` with a shell).',
     );
   }
   taskLines.push(`Instruction: ${task.instruction}`);
@@ -842,6 +874,9 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     taskLines.push(
       '  Do not judge the Acceptance — submit evidence only; an independent verifier decides whether this Task is complete.',
     );
+    taskLines.push(
+      '  If a criterion is itself wrong — outside the requirement, contradicting it or another criterion, or impossible for any delivery — dispute it instead of bending the work to it: `disputeCriterion` with kind `invalid_criterion`, or `lh acceptance plan dispute "$LOBEHUB_OPERATION_ID" --item <checkItemId> --kind invalid_criterion --reason <why>` with a shell. Three review models rule on it at once and the majority decides; an upheld criterion is waived, an overruled one stands and cannot be disputed again. "Too hard" or "no time" is overruled.',
+    );
   }
 
   // Goal loop — context handed over from the previous round of the outer loop
@@ -867,6 +902,9 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     if (reviewFeedback) {
       taskLines.push('  Review feedback on the last delivery (address this first):');
       taskLines.push(`    "${reviewFeedback}"`);
+      taskLines.push(
+        '  If a rejection is wrong because your evidence already proves the criterion, you may argue it instead of redoing the work: re-submit that evidence to this run, then dispute the criterion with kind `missed_evidence`, pointing at exactly what proves it. The next review reads your note next to the evidence; the note alone passes nothing.',
+      );
     }
     if (goalLoop.failedChecks && goalLoop.failedChecks.length > 0) {
       taskLines.push('  Unresolved checks from the last round:');
@@ -888,6 +926,16 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     taskLines.push(
       "  Do not ask the owner again about anything an earlier round already asked or that the owner's feedback answers: treat those answers as final. If an earlier question got no answer, do not ask it again or wait for one — go with the option you would recommend, state it in your delivery as an assumption the owner can overturn, and finish the work.",
     );
+    if (goalLoop.disputeRulings && goalLoop.disputeRulings.length > 0) {
+      taskLines.push('  Disputed criteria already ruled on:');
+      for (const ruling of goalLoop.disputeRulings) {
+        taskLines.push(
+          ruling.outcome === 'upheld'
+            ? `    - ${ruling.title} — upheld. File the same \`invalid_criterion\` dispute in this run to carry the waiver; no new ruling is needed.`
+            : `    - ${ruling.title} — overruled. It stands; satisfy it.`,
+        );
+      }
+    }
     taskLines.push(
       '  To read a previous round in full, run: `lh task topic view ' +
         task.identifier +
@@ -1020,6 +1068,8 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
 
   taskLines.push('</task>');
   sections.push(taskLines.join('\n'));
+  if (goalObjective) sections.push(buildGoalObjectiveSection(goalObjective));
+  if (goalMarks) sections.push(buildGoalMarksSection(goalMarks));
 
   return sections.join('\n\n');
 };
@@ -1030,5 +1080,7 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export type { TaskRunPromptGoalMark, TaskRunPromptGoalMarks } from './goalMarks';
+export type { TaskRunPromptGoalObjective, TaskRunPromptObjectiveLane } from './goalObjective';
 export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';

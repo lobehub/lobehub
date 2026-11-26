@@ -21,7 +21,7 @@ const styles = stylex.create({
     borderInlineStartStyle: 'solid',
     borderInlineStartWidth: 2,
     color: cssVar.colorText,
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 1.65,
     overflowWrap: 'anywhere',
     paddingBlock: 6,

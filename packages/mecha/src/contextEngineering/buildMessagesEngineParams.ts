@@ -1,5 +1,6 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import type { MessagesEngineParams } from '@lobechat/context-engine';
+import type { LobeToolManifest, MessagesEngineParams } from '@lobechat/context-engine';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import type { ContextSnapshot } from './types';
 import { createVariableGenerators } from './variableGenerators';
@@ -8,6 +9,38 @@ const definedOnly = <T extends Record<string, unknown>>(record: T): Partial<T> =
   Object.fromEntries(
     Object.entries(record).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+
+const builtInProviders = new Set<string>(Object.values(ModelProvider));
+const responsesProviders = new Set<string>([
+  ModelProvider.OpenAI,
+  ModelProvider.ChatGPT,
+  ModelProvider.LobeHub,
+]);
+
+const CURRENT_DATE_LINE = /Current date: \d{4}-\d{2}-\d{2}/g;
+
+/**
+ * A tool prompt that states the current date (web browsing does, from the
+ * wall clock at load time) is rewritten to the attempt's clock, so the model
+ * sees one consistent "today".
+ */
+const pinManifestDates = (
+  manifests: LobeToolManifest[] | undefined,
+  clock: Date,
+  timezone: string,
+): LobeToolManifest[] | undefined => {
+  if (!manifests) return manifests;
+  const date = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: timezone,
+    year: 'numeric',
+  }).format(clock);
+  return manifests.map((manifest) => {
+    const systemRole = manifest.systemRole?.replaceAll(CURRENT_DATE_LINE, `Current date: ${date}`);
+    return systemRole === manifest.systemRole ? manifest : { ...manifest, systemRole };
+  });
+};
 
 /**
  * Turn a {@link ContextSnapshot} into the parameters the messages engine runs
@@ -18,6 +51,18 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
   const { agent, fileContext, model, run, step, tools, variables, world } = snapshot;
 
   const enabledToolIds = tools?.enabledToolIds;
+
+  // An eval attempt runs on its case clock: every "today" the model sees —
+  // `{{date}}`, the system date line, a tool prompt's current date — renders
+  // from the session date in the case timezone (UTC when none), never from the
+  // wall clock or the caller's timezone.
+  const evalClock = world?.evalContext?.sessionDate
+    ? new Date(world.evalContext.sessionDate)
+    : undefined;
+  const timezone = evalClock ? (world?.evalContext?.timezone ?? 'UTC') : world?.userTimezone;
+  const manifests = evalClock
+    ? pinManifestDates(tools?.manifests, evalClock, timezone!)
+    : tools?.manifests;
   // The page agent's system role is only meaningful while a page is being
   // edited; hide it unless the run enabled the tool explicitly.
   const disabledToolIdentifiers =
@@ -29,6 +74,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     additionalContexts: run.additionalContexts,
     enableAgentMode: run.enableAgentMode,
     enableExpertise: run.enableExpertise,
+    enableMcpAppContext: run.enableMcpAppContext,
     expertise: run.expertise,
     forceFinish: run.forceFinish,
     formatHistorySummary: run.formatHistorySummary,
@@ -38,6 +84,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     stepContext: run.stepContext,
 
     // --- agent definition ---
+    agentDocumentChanges: agent.documentChanges,
     agentDocuments: agent.documents,
     agentIdentity: agent.identity,
     enableHistoryCount: agent.enableHistoryCount,
@@ -45,6 +92,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     historyCount: agent.historyCount,
     inputTemplate: agent.inputTemplate,
     knowledge: agent.knowledge,
+    ...(agent.revokedDocumentReads?.length && { revokedDocumentReads: agent.revokedDocumentReads }),
     systemRole: agent.systemRole,
 
     // --- model ---
@@ -57,10 +105,15 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     // --- tools + skills ---
     selectedSkills: tools?.selectedSkills,
     selectedTools: tools?.selectedTools,
+    ...(tools?.skillChanges && { skillChanges: tools.skillChanges }),
     toolDiscoveryConfig: tools?.toolDiscoveryConfig,
     toolsConfig: {
+      // Custom provider IDs use the OpenAI-compatible runtime. Defer the final
+      // decision until aliases, relays and the effective protocol are resolved.
+      anchorActivatedTools:
+        responsesProviders.has(model.provider) || !builtInProviders.has(model.provider),
       disabledToolIdentifiers,
-      manifests: tools?.manifests,
+      manifests,
       tools: enabledToolIds,
     },
     ...(tools?.enabledSkills?.length && { skillsConfig: { enabledSkills: tools.enabledSkills } }),
@@ -69,11 +122,12 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     fileContext: fileContext ?? { enabled: true, includeFileUrl: true },
     variableGenerators: createVariableGenerators({
       model: model.model,
+      now: evalClock ? () => evalClock : undefined,
       provider: model.provider,
-      timezone: world?.userTimezone,
+      timezone,
       variables,
     }),
-    timezone: world?.userTimezone,
+    timezone,
 
     // --- world (frozen at creation) ---
     ...definedOnly({
@@ -88,6 +142,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
 
     // --- step facts (gathered per step) ---
     ...definedOnly({
+      agentAccountContext: step?.agentAccountContext,
       agentBuilderContext: step?.agentBuilderContext,
       agentManagementContext: step?.agentManagementContext,
       groupAgentBuilderContext: step?.groupAgentBuilderContext,

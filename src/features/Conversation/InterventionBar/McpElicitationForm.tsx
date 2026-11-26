@@ -10,24 +10,22 @@ import type { ElicitRequestParams, ElicitResult } from '@modelcontextprotocol/cl
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate } from '@/libs/swr';
-import { mcpElicitationKeys } from '@/libs/swr/keys';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { electronSystemService } from '@/services/electron/system';
 import { mcpElicitationService, type PendingMcpElicitation } from '@/services/mcpElicitation';
 import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useFetchMcpElicitations } from '../hooks/useFetchMcpElicitations';
 import { useConversationStore } from '../store';
+import { revalidatePendingMcpInputs } from '../store/mcpProjection';
 
 export function McpElicitationForm({ pending }: { pending: PendingMcpElicitation }) {
   return <McpElicitationBatch key={pending.batchId} pending={pending} />;
 }
 function McpElicitationBatch({ pending }: { pending: PendingMcpElicitation }) {
   const { t } = useTranslation('plugin');
-  const userId = useUserStore(userProfileSelectors.userId);
+  const scope = useCacheScope();
   const context = useConversationStore((s) => s.context);
   const refreshMessages = useChatStore((s) => s.refreshMessages);
   const { canUseResource } = useConversationResourceAccess();
@@ -58,7 +56,13 @@ function McpElicitationBatch({ pending }: { pending: PendingMcpElicitation }) {
     try {
       await mcpElicitationService.resolve(pending.id, resolutionRequestId, collected);
       await Promise.all([
-        mutate(mcpElicitationKeys.pending(userId!, context.topicId!, context.threadId)),
+        context.topicId
+          ? revalidatePendingMcpInputs({
+              scope,
+              topicId: context.topicId,
+              threadId: context.threadId,
+            })
+          : undefined,
         refreshMessages(context),
       ]);
     } catch (cause) {

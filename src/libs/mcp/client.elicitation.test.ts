@@ -11,11 +11,13 @@ describe('MCP elicitation against real SDK servers', () => {
   let servers: Awaited<ReturnType<typeof startElicitationServers>>;
   const clients: MCPClient[] = [];
   beforeEach(async () => {
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '127.0.0.1');
     servers = await startElicitationServers();
   });
   afterEach(async () => {
     await Promise.all(clients.splice(0).map((c) => c.disconnect()));
     await servers.close();
+    vi.unstubAllEnvs();
   });
   const connect = async (path: string) => {
     const client = new MCPClient(
@@ -51,13 +53,15 @@ describe('MCP elicitation against real SDK servers', () => {
   );
   it('pauses modern input and resumes the original call with an exact state echo', async () => {
     const client = await connect('/modern');
-    const error = await client.callTool('form', {}).catch((e) => e);
+    const host = { request: vi.fn() };
+    const error = await client.callTool('form', {}, { host }).catch((e) => e);
     expect(error).toBeInstanceOf(McpInputRequiredError);
     expect(error.checkpoint.round).toBe(1);
     const result = await client.callTool(
       'form',
       {},
       {
+        host,
         continuation: {
           ...error.checkpoint,
           inputResponses: { details: { action: 'accept', content: { label: 'hello' } } },
@@ -68,12 +72,14 @@ describe('MCP elicitation against real SDK servers', () => {
   });
   it('preserves a requestState-only URL wait and manually retries the exact original tool', async () => {
     const client = await connect('/modern');
-    const initial = await client.callTool('state_url', {}).catch((e) => e);
+    const host = { request: vi.fn() };
+    const initial = await client.callTool('state_url', {}, { host }).catch((e) => e);
     const waiting = await client
       .callTool(
         'state_url',
         {},
         {
+          host,
           continuation: { ...initial.checkpoint, inputResponses: { answer: { action: 'accept' } } },
         },
       )
@@ -82,14 +88,18 @@ describe('MCP elicitation against real SDK servers', () => {
     expect(Object.keys(waiting.checkpoint.inputRequired.inputRequests ?? {})).toHaveLength(0);
     expect(waiting.checkpoint.inputRequired.requestState).toBe('external-pending');
     const stillWaiting = await client
-      .callTool('state_url', {}, { continuation: { ...waiting.checkpoint, inputResponses: {} } })
+      .callTool(
+        'state_url',
+        {},
+        { host, continuation: { ...waiting.checkpoint, inputResponses: {} } },
+      )
       .catch((e) => e);
     expect(stillWaiting).toBeInstanceOf(McpInputRequiredError);
     await fetch(servers.url + '/external/state_url?complete=success');
     const result = await client.callTool(
       'state_url',
       {},
-      { continuation: { ...stillWaiting.checkpoint, inputResponses: {} } },
+      { host, continuation: { ...stillWaiting.checkpoint, inputResponses: {} } },
     );
     expect(result.content).toEqual([{ type: 'text', text: 'state_url:completed' }]);
     const trace = await (await fetch(servers.url + '/trace')).json();

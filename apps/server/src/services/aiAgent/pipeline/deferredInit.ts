@@ -9,10 +9,13 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import type { AgentShareGate } from '../shareGate';
+import { resolveShareAutoAgentGrants, type ShareAutoGrantAgent } from '../shareGate/autoGrants';
+import { resolveShareVisitorDeviceAccess } from '../shareGate/deviceAccess';
 import type { ExecRunContext } from '../types';
 import { type OperationInitDeps, runOperationInit } from './operationInit';
 import { resolveOperationInitSlots } from './operationInitSlots';
 import { createHistoryMessagesLoader } from './operationPrep';
+import { traceSendStage } from './sendTracing';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -29,11 +32,13 @@ export type DeferredOperationInitDeps = Omit<
  * The share a visitor run was created under, re-read from its live row: the
  * init works under the share's CURRENT grants, never a snapshot of them — the
  * same rule `createShareRunScope` follows for every visitor turn. Fails closed:
- * a share that is gone, no longer public or no longer this agent's ends the run.
+ * a share that is gone, no longer admits the visitor or no longer this agent's ends the run.
  */
 const resolveShareGate = async (
-  deps: Pick<DeferredOperationInitDeps, 'db' | 'userId'>,
+  deps: Pick<DeferredOperationInitDeps, 'db' | 'userId' | 'workspaceId'>,
   shareVisitor: NonNullable<NonNullable<AgentState['principal']>['actor']>['shareVisitor'],
+  agent: ShareAutoGrantAgent,
+  listLobehubSkillProviderIds: () => Promise<string[]>,
 ): Promise<AgentShareGate | undefined> => {
   if (!shareVisitor) return undefined;
 
@@ -42,17 +47,32 @@ const resolveShareGate = async (
     !share ||
     share.agentId !== shareVisitor.agentId ||
     share.ownerId !== deps.userId ||
-    share.visibility !== 'link'
+    !(await AgentShareModel.admitsVisitor(deps.db, share, shareVisitor.visitorUserId))
   ) {
     throw new Error(`Share ${shareVisitor.shareId} no longer authorizes this run`);
   }
 
-  return {
-    agentId: share.agentId,
-    shareConfig: share.shareConfig,
-    shareId: share.shareId,
-    visitorUserId: shareVisitor.visitorUserId,
-  };
+  // Resolved against the operation's own Agent snapshot, as the send path does.
+  return resolveShareAutoAgentGrants(
+    {
+      agentId: share.agentId,
+      canUseDevice: await resolveShareVisitorDeviceAccess(
+        deps.db,
+        share,
+        shareVisitor.visitorUserId,
+      ),
+      shareConfig: share.shareConfig,
+      shareId: share.shareId,
+      visitorUserId: shareVisitor.visitorUserId,
+    },
+    {
+      agent,
+      db: deps.db,
+      listLobehubSkillProviderIds,
+      userId: deps.userId,
+      workspaceId: deps.workspaceId,
+    },
+  );
 };
 
 /**
@@ -108,6 +128,7 @@ const restoreRunContext = async (
       viewedGoal: request.viewedGoal,
     } as ExecRunContext['appContext'],
     assistantMessageId: origin.assistantMessageId,
+    autoSkillIds: state.world?.autoSkillIds ?? [],
     botContext: state.principal?.actor?.bot,
     botPlatformContext: channel?.botPlatform,
     canUseDevice: deviceAccess?.canUseDevice ?? false,
@@ -150,7 +171,17 @@ export const runDeferredOperationInit = async (
   }: { operationId: string; request: AgentRunInitRequest; state: AgentState },
 ): Promise<{ context: AgentRuntimeContext; state: Partial<AgentState> }> => {
   const ctx = await restoreRunContext(deps, state, request);
-  ctx.shareGate = await resolveShareGate(deps, state.principal?.actor?.shareVisitor);
+  ctx.shareGate = await resolveShareGate(
+    deps,
+    state.principal?.actor?.shareVisitor,
+    {
+      autoSkillIds: ctx.autoSkillIds,
+      chatConfig: ctx.agentConfig.chatConfig,
+      disabledPluginIds: ctx.disabledPluginIds,
+      plugins: ctx.agentConfig.plugins,
+    },
+    async () => (await deps.getMarketService(ctx.runFacts)).listLobehubSkillProviderIds(),
+  );
 
   const effectiveResume =
     !!request.resume ||
@@ -182,19 +213,21 @@ export const runDeferredOperationInit = async (
     },
   );
 
-  const { discovery, initialContext, prep } = await runOperationInit(
-    {
-      ...deps,
-      getMarketService: () => deps.getMarketService(ctx.runFacts),
-      loadHistoryMessages,
-      readFileContent: (fileId) => deps.readFileContent(fileId, ctx.shareGate),
-      // A Stop during the init is settled by the step once the init returns
-      // (`runPendingInit`), so the stages need no abort probe of their own.
-      throwIfExecutionAborted: async () => {},
-    },
-    ctx,
-    request,
-    operationId,
+  const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>
+    runOperationInit(
+      {
+        ...deps,
+        getMarketService: () => deps.getMarketService(ctx.runFacts),
+        loadHistoryMessages,
+        readFileContent: (fileId) => deps.readFileContent(fileId, ctx.shareGate),
+        // A Stop during the init is settled by the step once the init returns
+        // (`runPendingInit`), so the stages need no abort probe of their own.
+        throwIfExecutionAborted: async () => {},
+      },
+      ctx,
+      request,
+      operationId,
+    ),
   );
 
   const slots = await resolveOperationInitSlots({ discovery, initialContext, prep });

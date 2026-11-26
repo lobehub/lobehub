@@ -19,7 +19,7 @@ interface IntegrationDetailProps {
   botUsername?: string;
   /** Brand-name label (e.g. `"Slack"`) sourced from the registry. */
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
   platform: MessengerPlatform;
 }
 

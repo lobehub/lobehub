@@ -383,10 +383,10 @@ describe('spawnAgent', () => {
     expect(call.args.filter((a) => a === 'stream-json')).toHaveLength(2);
     expect(call.args).toContain('-p');
     // These tools are disabled at every spawn site so CC does not stall on
-    // built-in interactive Q&A or wakeup/monitor lifecycle calls.
+    // built-in Q&A or wakeup/monitor calls, nor schedule cron jobs that die with the run.
     const disallowedIdx = call.args.indexOf('--disallowedTools');
     expect(disallowedIdx).toBeGreaterThan(-1);
-    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup');
+    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion,Monitor,ScheduleWakeup,CronCreate');
     // Partial deltas are opt-in — terminal/sandbox callers want fewer events.
     expect(call.args).not.toContain('--include-partial-messages');
     // Prompt MUST go through stdin as a stream-json user message — never as argv.
@@ -569,7 +569,7 @@ describe('spawnAgent', () => {
     await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
 
     expect(spawnCalls[0]).toMatchObject({
-      args: ['--model', 'sonnet', '--mode', 'plan', 'acp'],
+      args: ['--model', 'sonnet', '--mode', 'plan', '--force', 'acp'],
       command: 'agent',
     });
     expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
@@ -616,6 +616,7 @@ describe('spawnAgent', () => {
         'initialize',
         'session/new',
         'session/set_config_option',
+        'session/set_config_option',
         'session/prompt',
       ]);
       expect(
@@ -632,7 +633,7 @@ describe('spawnAgent', () => {
     }
   });
 
-  it('applies a permission mode through ACP session/set_config_option', async () => {
+  it('forces the Devin bypass session mode through ACP session/set_config_option', async () => {
     const fake = createFakeAcpProc({
       responseText: 'Devin response',
       sessionId: 'devin-session-1',
@@ -647,7 +648,6 @@ describe('spawnAgent', () => {
         extraArgs: ['--model', 'sonnet'],
         initialModel: 'sonnet',
         operationId: 'op-devin',
-        permissionMode: 'bypass',
         prompt: 'do a thing',
       });
       const events = [];

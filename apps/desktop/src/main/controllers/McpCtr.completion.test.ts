@@ -1,5 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
+import { DeviceMcpRuntime } from '@lobechat/device-mcp';
+
 import type { App } from '@/core/App';
 
 import McpCtr from './McpCtr';
@@ -24,7 +26,7 @@ it('delivers the original receipt after a relay failure with no renderer and nev
     getService: () => config,
   } as unknown as App);
   const execute = vi
-    .spyOn(ctr as unknown as { runMcpToolOnce: () => Promise<unknown> }, 'runMcpToolOnce')
+    .spyOn(DeviceMcpRuntime.prototype, 'runTool')
     .mockResolvedValue({
       content: 'committed receipt',
       state: { mcpApp: { resourceUri: 'ui://fixture/view', server: 'fingerprint' } },

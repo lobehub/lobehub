@@ -22,6 +22,7 @@ import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceView
 import AsyncError from '@/components/AsyncError';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   formatLinearSyncResult,
@@ -39,8 +40,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   row: {
-    paddingBlock: 12,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   rowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -77,6 +78,8 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   // Tucked into each rule's sync menu; applies to the next run of any rule, and
   // re-running with it on fills in the comments already-synced tasks lack.
   const [syncComments, setSyncComments] = useState(true);
+  // Likewise for labels: a run also labels the tasks it reads that were synced without them.
+  const [syncLabels, setSyncLabels] = useState(true);
   // Off by default, as in Linear; on, a run also reaches the rule's archived issues.
   const [includeArchived, setIncludeArchived] = useState(false);
   const optionItems: DropdownItem[] = [
@@ -89,6 +92,15 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
           key: 'syncComments',
           label: t('linear.sync.options.syncComments'),
           onCheckedChange: setSyncComments,
+          type: 'checkbox',
+        },
+        {
+          checked: syncLabels,
+          closeOnClick: false,
+          desc: t('linear.sync.options.syncLabelsRuleDesc'),
+          key: 'syncLabels',
+          label: t('linear.sync.options.syncLabels'),
+          onCheckedChange: setSyncLabels,
           type: 'checkbox',
         },
         {
@@ -129,7 +141,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const runRule = async (rule: LinearSyncRuleView) => {
     setStarting(rule.id);
     try {
-      await linearService.startRuleSync(rule.id, { includeArchived, syncComments });
+      await linearService.startRuleSync(rule.id, { includeArchived, syncComments, syncLabels });
       onJobStarted();
     } catch (error) {
       toast.error(linearSyncErrorMessage(error, t));

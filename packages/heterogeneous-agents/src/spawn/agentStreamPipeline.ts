@@ -184,6 +184,10 @@ export class AgentStreamPipeline {
     return this.toStreamEvents(this.adapter.validateCompletion?.() ?? []);
   }
 
+  resolveExitCode(code: number | null): number | null {
+    return this.adapter.resolveExitCode?.(code) ?? code;
+  }
+
   private async processPayloads(payloads: unknown[]): Promise<AgentStreamEvent[]> {
     const out: AgentStreamEvent[] = this.drainQueuedEvents();
 

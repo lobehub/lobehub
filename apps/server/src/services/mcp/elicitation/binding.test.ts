@@ -93,6 +93,16 @@ describe('MCP private continuation binding', () => {
       expect(mcpConnectionBinding(base)).not.toBe(mcpConnectionBinding({ ...base, ...patch }));
     expect(mcpConnectionBinding(base)).toMatch(/^[a-f0-9]{64}$/);
   });
+  it('pins a linked connector account independently of its rotating OAuth token', () => {
+    const params = { auth: oauth };
+    const account = { connectorId: 'connector', linkId: 'account-a' };
+    expect(mcpConnectionBinding(params, account)).toEqual(
+      mcpConnectionBinding({ auth: { ...oauth, accessToken: 'rotated' } }, account),
+    );
+    expect(mcpConnectionBinding(params, account)).not.toEqual(
+      mcpConnectionBinding(params, { connectorId: 'connector', linkId: 'account-b' }),
+    );
+  });
   it('retains every credential when header names differ only in case', () => {
     expect(
       mcpConnectionBinding({ headers: { Authorization: 'first', authorization: 'last' } }),

@@ -393,6 +393,8 @@ const recoverRun = async (
     );
     const continuation = await runHeterogeneousFromExistingMessage(chatStore, {
       context,
+      // Finishes the interrupted run, which already held its fee.
+      continuesRun: true,
       heterogeneousProvider,
       parentMessageId: tail?.id ?? userTurn.id,
       parentOperationId: operationId,

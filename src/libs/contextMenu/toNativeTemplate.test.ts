@@ -58,6 +58,25 @@ describe('toNativeTemplate', () => {
     expect(template).toEqual([{ id: '0', label: 'Copy', sublabel: 'Ctrl+C', type: 'normal' }]);
   });
 
+  it('maps a plain-text extra to sublabel when there is no desc', () => {
+    const { template } = toNativeTemplate([
+      {
+        children: [{ key: 'a', label: 'Private' }],
+        extra: 'Private',
+        key: 'v',
+        label: 'Visibility',
+      },
+    ] as unknown as NativeContextMenuItem[]);
+    expect(template).toEqual([
+      {
+        label: 'Visibility',
+        sublabel: 'Private',
+        submenu: [{ id: '0.0', label: 'Private', type: 'normal' }],
+        type: 'submenu',
+      },
+    ]);
+  });
+
   it('maps disabled to enabled: false', () => {
     const { template } = toNativeTemplate([{ disabled: true, key: '1', label: 'Copy' }]);
     expect(template).toEqual([{ enabled: false, id: '0', label: 'Copy', type: 'normal' }]);

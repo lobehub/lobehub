@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-import type { PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
+import type { PUBLIC_FILE_FIELDS, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
 
 // ==================== File Upload Types ====================
 
@@ -396,3 +397,186 @@ export interface UpdateFileRequest {
 export const UpdateFileSchema = z.object({
   knowledgeBaseId: z.string().nullish(),
 });
+
+// ==================== Response Schemas ====================
+
+const ASYNC_TASK_STATUSES = ['error', 'pending', 'processing', 'success'] as const;
+
+/** Every column `projectPublicFile` copies, so a new public field fails to compile here. */
+const fileShape = {
+  createdAt: dateTimeSchema,
+  fileType: z.string(),
+  id: z.string(),
+  metadata: jsonObjectSchema.nullable(),
+  name: z.string(),
+  parentId: z.string().nullable(),
+  size: z.number().int(),
+  source: z.string().nullable(),
+  updatedAt: dateTimeSchema,
+  /** Full URL: relative storage keys are expanded before the file is returned. */
+  url: z.string(),
+  visibility: z.enum(['private', 'public']),
+} satisfies Record<(typeof PUBLIC_FILE_FIELDS)[number], z.ZodType>;
+
+export const FileSchema = z.object(fileShape).strict().meta({ id: 'File' });
+
+/** How an async chunking / embedding task failed, as stored on the task row. */
+export const AsyncTaskErrorSchema = z
+  .object({
+    body: z.union([
+      z.string(),
+      z.object({ detail: z.string(), retryAt: dateTimeSchema.optional() }),
+    ]),
+    name: z.string(),
+  })
+  .meta({ id: 'AsyncTaskError' });
+
+export const FileAsyncTaskSchema = z
+  .object({
+    /** Chunk count; only reported on the chunking task. */
+    count: z.number().int().nullable().optional(),
+    error: AsyncTaskErrorSchema.nullable(),
+    /** Absent when the file has chunks but its chunking task row is gone. */
+    id: z.string().optional(),
+    status: z.enum(ASYNC_TASK_STATUSES).nullable(),
+    type: z.enum(['chunk', 'embedding']).optional(),
+  })
+  .strict()
+  .meta({ id: 'FileAsyncTask' });
+
+/** Knowledge base a listed file belongs to (only the columns the list joins). */
+export const FileKnowledgeBaseRefSchema = z
+  .object({
+    avatar: z.string().nullable(),
+    description: z.string().nullable(),
+    id: z.string(),
+    name: z.string(),
+  })
+  .strict()
+  .meta({ id: 'FileKnowledgeBaseRef' });
+
+/** Owner of a listed file (every owner of the same content when the caller has global read). */
+export const FileUserSchema = z
+  .object({
+    avatar: z.string().nullable(),
+    email: z.string().nullable(),
+    fullName: z.string().nullable(),
+    id: z.string(),
+    username: z.string().nullable(),
+  })
+  .strict()
+  .meta({ id: 'FileUser' });
+
+export const FileListItemSchema = FileSchema.extend({
+  chunking: FileAsyncTaskSchema.nullable(),
+  embedding: FileAsyncTaskSchema.nullable(),
+  knowledgeBases: z.array(FileKnowledgeBaseRefSchema),
+  users: z.array(FileUserSchema),
+})
+  .strict()
+  .meta({ id: 'FileListItem' });
+
+export const FileListResponseSchema = z
+  .object({
+    ...pageInfoShape,
+    /** Files sharing the same content hash are listed once. */
+    files: z.array(FileListItemSchema),
+    ...totalShape,
+    /** Sum of the matched files' sizes in bytes, as a decimal string. */
+    totalSize: z.string(),
+  })
+  .strict()
+  .meta({ id: 'FileList' });
+
+export const FileParseResultSchema = z
+  .object({
+    /** Absent when the detail lookup could not parse the file; null for an empty stored document. */
+    content: z.string().nullable().optional(),
+    error: z.string().optional(),
+    fileId: z.string(),
+    fileType: z.string(),
+    metadata: z
+      .object({
+        pages: z.number().int().min(0),
+        title: z.string().optional(),
+        totalCharCount: z.number().int().optional(),
+        totalLineCount: z.number().int().optional(),
+      })
+      .strict()
+      .optional(),
+    name: z.string(),
+    parseStatus: z.enum(['completed', 'failed']),
+    parsedAt: dateTimeSchema.optional(),
+  })
+  .strict()
+  .meta({ id: 'FileParseResult' });
+
+export const FileDetailSchema = z
+  .object({
+    file: FileSchema,
+    /** Parse result; absent for images, which are never parsed. */
+    parsed: FileParseResultSchema.optional(),
+  })
+  .strict()
+  .meta({ id: 'FileDetail' });
+
+export const FileUrlResponseSchema = z
+  .object({
+    expiresAt: dateTimeSchema,
+    expiresIn: z.number().int(),
+    fileId: z.string(),
+    name: z.string(),
+    /** Pre-signed URL, valid for `expiresIn` seconds. */
+    url: z.string(),
+  })
+  .strict()
+  .meta({ id: 'FileUrl' });
+
+export const BatchFileUploadResponseSchema = z
+  .object({
+    failed: z.array(z.object({ error: z.string(), name: z.string() }).strict()),
+    successful: z.array(FileDetailSchema),
+    summary: z
+      .object({
+        failed: z.number().int().min(0),
+        successful: z.number().int().min(0),
+        total: z.number().int().min(0),
+      })
+      .strict(),
+  })
+  .strict()
+  .meta({ id: 'BatchFileUploadResult' });
+
+export const BatchGetFilesResponseSchema = z
+  .object({
+    failed: z.array(z.object({ error: z.string(), fileId: z.string() }).strict()),
+    files: z.array(FileDetailSchema),
+    success: z.number().int().min(0),
+    total: z.number().int().min(0),
+  })
+  .strict()
+  .meta({ id: 'BatchGetFilesResult' });
+
+export const FileChunkTaskResponseSchema = z
+  .object({
+    chunkTaskId: z.string().nullable(),
+    /** Set only when `autoEmbedding` was requested. */
+    embeddingTaskId: z.string().nullable(),
+    fileId: z.string(),
+    message: z.string(),
+    success: z.literal(true),
+  })
+  .strict()
+  .meta({ id: 'FileChunkTask' });
+
+export const FileChunkStatusResponseSchema = z
+  .object({
+    chunkCount: z.number().int().min(0),
+    chunkingError: AsyncTaskErrorSchema.nullable(),
+    chunkingStatus: z.enum(ASYNC_TASK_STATUSES).nullable(),
+    embeddingError: AsyncTaskErrorSchema.nullable(),
+    embeddingStatus: z.enum(ASYNC_TASK_STATUSES).nullable(),
+    finishEmbedding: z.boolean(),
+  })
+  .strict()
+  .meta({ id: 'FileChunkStatus' });

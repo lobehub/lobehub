@@ -94,7 +94,7 @@ beforeEach(() => {
   queryAgentsMock.mockResolvedValue([{ id: 'other-agent', name: 'Coder', title: 'Coding helper' }]);
 
   getInfoForAIGenerationMock.mockResolvedValue({
-    responseLanguage: 'en-US',
+    preferredReplyLanguage: 'en-US',
     userName: 'Some Name',
   });
   getUserSettingsMock.mockResolvedValue({});
@@ -335,5 +335,63 @@ describe('buildServerCallLlmContext - workspace context', () => {
     expect(serverMessagesEngineMock).toHaveBeenCalledWith(
       expect.not.objectContaining({ workspaceContext: expect.anything() }),
     );
+  });
+});
+
+describe('buildServerCallLlmContext - skill index snapshot', () => {
+  it('passes snapshot rows as skillsConfig and delta notes as skillChanges into serverMessagesEngine', async () => {
+    const pinnedSkillIndex = {
+      notes: [
+        {
+          changes: [
+            {
+              description: 'Formats executive memos.',
+              identifier: 'url-memo',
+              kind: 'added' as const,
+              name: 'q4-helper',
+            },
+          ],
+          messageId: 'u2',
+        },
+      ],
+      rows: [],
+      takenAt: '2026-11-25T10:00:00.000Z',
+    };
+
+    await buildServerCallLlmContext({
+      ctx: createCtx({ topicId: 'topic-1' }),
+      llmPayload,
+      model: 'claude-haiku-4-5',
+      provider: 'anthropic',
+      state: createState({
+        binding: { skillIndex: pinnedSkillIndex },
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      }),
+      tooling: {
+        ...tooling,
+        resolvedSkills: {
+          enabledSkills: [
+            {
+              description: 'Formats executive memos.',
+              identifier: 'url-memo',
+              name: 'q4-helper',
+            },
+          ],
+        },
+      },
+    });
+
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.skillsConfig).toBeUndefined();
+    expect(engineInput.skillChanges).toEqual({
+      u2: [
+        {
+          description: 'Formats executive memos.',
+          identifier: 'url-memo',
+          kind: 'added',
+          name: 'q4-helper',
+        },
+      ],
+    });
   });
 });

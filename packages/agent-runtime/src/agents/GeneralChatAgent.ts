@@ -27,13 +27,19 @@ import {
   type SubAgentsBatchResultPayload,
 } from '../types';
 import {
+  buildEmptyArgsToolContent,
   EMPTY_ARGS_TOOL_CONTENT,
   EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
 } from '../utils/emptyArgumentsCalls';
-import { selectEffectiveToolManifestMap, selectRunTools } from '../utils/operationToolSet';
+import {
+  selectEffectiveToolManifestMap,
+  selectOperationToolSet,
+  selectRunTools,
+} from '../utils/operationToolSet';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
+import { buildToolCallBudgetContent, TOOL_CALL_BUDGET_REASON } from '../utils/toolCallRepeatGuard';
 import {
   findCurrentTurnPendingToolMessages,
   isFoldedAssistantGroup,
@@ -55,12 +61,16 @@ const unresolvedToolContent = (names: string) =>
 const REMOTE_DEVICE_IDENTIFIER = 'lobe-remote-device';
 const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
 /**
- * How many times one operation may answer unresolvable tool calls with a
- * rejected tool result before giving up. The feedback exists so the model can
- * fix a garbled name; a model that keeps emitting names nothing can match is
- * broken, and failing loudly beats burning the step budget on it.
+ * How many consecutive LLM turns may be answered with a rejected tool result
+ * for unresolvable tool names before the operation stops retrying. The
+ * feedback exists so the model can fix a garbled name; a model that keeps
+ * emitting names nothing can match, turn after turn, is stuck, and ending the
+ * run beats burning the step budget on it. Any resolved tool call in between
+ * resets the count (see `resetUnresolvedToolFeedback`), so an isolated typo
+ * late in a long, productive run never ends it.
  */
 const UNRESOLVED_TOOL_FEEDBACK_LIMIT = 2;
+const UNRESOLVED_TOOL_STOP_NOTE = `Stopped after ${UNRESOLVED_TOOL_FEEDBACK_LIMIT + 1} consecutive replies called tools that do not exist.`;
 const PLUGIN_SCHEMA_SEPARATOR = '____';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
@@ -182,6 +192,10 @@ export class GeneralChatAgent implements Agent {
     // path-scope audit fences file paths to it).
     const resolverMetadata = {
       ...state.metadata,
+      enabledToolIds: [
+        ...(selectOperationToolSet(state).enabledToolIds ?? []),
+        ...(state.activatedStepTools ?? []).map((activation) => activation.id),
+      ],
       securityBlacklist,
       workingDirectory: state.plan?.workingDirectory,
     };
@@ -660,7 +674,7 @@ export class GeneralChatAgent implements Agent {
 
       case 'llm_result': {
         // LLM response received, check if it contains tool calls
-        const { hasToolsCalling, toolsCalling, parentMessageId, result } =
+        const { hasToolsCalling, overBudgetToolCalls, toolsCalling, parentMessageId, result } =
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
@@ -681,6 +695,9 @@ export class GeneralChatAgent implements Agent {
             instructions.push({
               payload: {
                 blockedContent: EMPTY_ARGS_TOOL_CONTENT,
+                blockedContentByCallId: Object.fromEntries(
+                  emptyArgsCalls.map((call) => [call.id, buildEmptyArgsToolContent(call)]),
+                ),
                 blockedReason: EMPTY_ARGS_TOOL_REASON,
                 parentMessageId,
                 toolsCalling: emptyArgsCalls,
@@ -689,9 +706,40 @@ export class GeneralChatAgent implements Agent {
             } satisfies AgentInstruction);
           }
 
-          if (executableCalls.length === 0) return instructions;
+          // Calls past their API's `maxCallsPerOperation` get a rejected row
+          // that tells the model to answer with what it has; the rest of the
+          // batch still runs. The finalizer counted the turn and stops the run
+          // if the model keeps asking anyway (see `updateToolCallBudget`).
+          const budgetLimitByCallId = new Map(
+            (overBudgetToolCalls ?? []).map(({ id, limit }) => [id, limit]),
+          );
+          const overBudgetCalls = executableCalls.filter((call) =>
+            budgetLimitByCallId.has(call.id),
+          );
+          const withinBudgetCalls = executableCalls.filter(
+            (call) => !budgetLimitByCallId.has(call.id),
+          );
 
-          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(executableCalls);
+          if (overBudgetCalls.length > 0) {
+            instructions.push({
+              payload: {
+                blockedContentByCallId: Object.fromEntries(
+                  overBudgetCalls.map((call) => [
+                    call.id,
+                    buildToolCallBudgetContent(call, budgetLimitByCallId.get(call.id)!),
+                  ]),
+                ),
+                blockedReason: TOOL_CALL_BUDGET_REASON,
+                parentMessageId,
+                toolsCalling: overBudgetCalls,
+              },
+              type: 'resolve_blocked_tools',
+            } satisfies AgentInstruction);
+          }
+
+          if (withinBudgetCalls.length === 0) return instructions;
+
+          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(withinBudgetCalls);
           // Check which tools need human intervention
           const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             allowedTools,
@@ -793,10 +841,9 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // Nothing addressable to reject (nameless calls), or the model has
-          // already been told twice: fail the operation so it surfaces as an
-          // error instead of a silent `done`.
-          if (namedToolCalls.length === 0 || overFeedbackLimit) {
+          // Nothing addressable to reject (nameless calls): fail the operation
+          // so it surfaces as an error instead of a silent `done`.
+          if (namedToolCalls.length === 0) {
             throw new Error(
               `LLM returned ${rawToolCalls.length} unresolvable tool_calls: ${unresolvedNames || 'unnamed'}`,
             );
@@ -822,10 +869,16 @@ export class GeneralChatAgent implements Agent {
             .filter(Boolean)
             .join('\n\n');
 
-          return {
+          const rejection = {
             payload: {
-              blockedContent,
+              blockedContent: overFeedbackLimit
+                ? `${blockedContent}\n\n${UNRESOLVED_TOOL_STOP_NOTE}`
+                : blockedContent,
               blockedReason: UNRESOLVED_TOOL_REASON,
+              // A rejected tool card shows only its reason code, so the stop
+              // note goes on the reply itself, the way the repeat-limit stop
+              // reports itself (see `callLlmFinalizer`).
+              ...(overFeedbackLimit && { parentNote: UNRESOLVED_TOOL_STOP_NOTE }),
               parentMessageId,
               unresolvedToolNames: true,
               toolsCalling: namedToolCalls.map((toolCall): ChatToolPayload => {
@@ -847,6 +900,23 @@ export class GeneralChatAgent implements Agent {
             },
             type: 'resolve_blocked_tools',
           } satisfies AgentInstruction;
+
+          if (!overFeedbackLimit) return rejection;
+
+          // The model has been told on each of the previous consecutive turns
+          // and still names nothing that exists. Stop retrying, but end the
+          // run as `done`, not as an error: the work earlier steps produced
+          // stays, the rejected rows still answer this turn's calls (so the
+          // history stays well-formed for the next operation), and the reason
+          // says why the run stopped.
+          return [
+            rejection,
+            {
+              reason: UNRESOLVED_TOOL_REASON,
+              reasonDetail: `LLM returned ${rawToolCalls.length} unresolvable tool_calls after ${UNRESOLVED_TOOL_FEEDBACK_LIMIT} consecutive rejected rounds: ${unresolvedNames}`,
+              type: 'finish',
+            },
+          ];
         }
 
         // No tool calls, conversation is complete

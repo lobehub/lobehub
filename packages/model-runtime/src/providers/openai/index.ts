@@ -1,8 +1,12 @@
 import { ModelProvider, openaiChatModels } from 'model-bank';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
+import {
+  resolveOpenAIToolAnchoring,
+  type ResponsesToolAnchoringOptions,
+} from '../../core/protocols/openaiResponses/toolAnchoring';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { appendDecisionModels } from '../../utils/postProcessModelList';
@@ -11,6 +15,7 @@ import {
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
+  isToolAnchoringGPTModel,
   supportsOpenAIServiceTierFlex,
 } from './modelId';
 
@@ -139,6 +144,15 @@ export const params = {
         tools: openaiTools,
       } as any;
     },
+    // Read the env per request so an operator's override applies without a rebuild.
+    toolAnchoring: ({ baseURL, model, options }) =>
+      resolveOpenAIToolAnchoring({
+        baseURL,
+        isSupportedModel: isToolAnchoringGPTModel(model),
+        override:
+          (options as ResponsesToolAnchoringOptions).responsesToolAnchoring ??
+          process.env.OPENAI_RESPONSES_TOOL_ANCHORING,
+      }),
   },
 } satisfies OpenAICompatibleFactoryOptions;
 

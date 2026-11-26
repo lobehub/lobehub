@@ -175,6 +175,28 @@ describe('AgentRuntimeService', () => {
       },
     );
 
+    it('leaves the init owed on the state and queues step 0 with the placeholder', async () => {
+      const pendingInitRequest = { prompt: 'hi', runAttachments: {} } as any;
+      const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+      (service as any).queueService = { scheduleMessage };
+
+      await service.createOperation({
+        ...mockParams,
+        initialMessages: [{ content: 'must not land', role: 'user' }],
+        pendingInitRequest,
+      });
+
+      const saved = mockCoordinator.saveAgentState.mock.calls[0][1];
+      expect(saved.request).toEqual(pendingInitRequest);
+      expect(saved.messages).toEqual([]);
+      expect(saved.operationToolSet).toBeUndefined();
+      // The stale-run reaper redrives step 0 from this saved context.
+      expect(saved.initialContext).toEqual(mockParams.initialContext);
+      expect(scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ context: mockParams.initialContext, stepIndex: 0 }),
+      );
+    });
+
     it('mirrors a resumed LLM-call baseline into the usage counter old workers report', async () => {
       await service.createOperation({ ...mockParams, autoStart: false, initialLlmCalls: 7 });
 
@@ -190,6 +212,33 @@ describe('AgentRuntimeService', () => {
       const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
       expect(savedState.llmCalls).toBe(0);
       expect(savedState).not.toHaveProperty('usage');
+    });
+
+    describe('artboard Works declaration', () => {
+      it('persists the independent artboard capability on operation host state', async () => {
+        await service.createOperation({
+          ...mockParams,
+          acceptsArtboardWorks: true,
+          autoStart: false,
+        });
+        const state = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(state.host.acceptsArtboardWorks).toBe(true);
+        expect(state.host.acceptsFileWorks).toBeUndefined();
+      });
+
+      it('inherits the artboard capability for a mirrored group member', async () => {
+        await mockCoordinator.saveAgentState('parent-op', { host: { acceptsArtboardWorks: true } });
+        mockCoordinator.saveAgentState.mockClear();
+        await service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, orchestrationRole: 'member' },
+          autoStart: false,
+          parentOperationId: 'parent-op',
+        });
+        expect(mockCoordinator.saveAgentState.mock.calls[0][1].host.acceptsArtboardWorks).toBe(
+          true,
+        );
+      });
     });
 
     describe('file Works declaration (host.acceptsFileWorks)', () => {

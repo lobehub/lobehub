@@ -12,7 +12,6 @@ import {
   Flexbox,
   Icon,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
@@ -20,6 +19,8 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -42,9 +43,11 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
@@ -72,6 +75,7 @@ export interface CreateTaskContentProps {
    */
   lockAssignee?: boolean;
   onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
+  /** The project the task starts in, e.g. the page it was opened from. The user can change it. */
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -107,6 +111,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const activeWorkspaceId = useActiveWorkspaceId();
 
     const [title, setTitle] = useState('');
+    /** Create failure, shown above the footer buttons: the modal stays open with the user's draft. */
+    const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
     const [priority, setPriority] = useState(defaultPriority);
     const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
     const labelRegistry = useTaskStore(taskLabelSelectors.labels);
@@ -128,6 +134,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
       );
     }, [isLabelsInit, labelRegistry]);
+    const { createProjectId, projectChoice, setProjectChoice } = useTaskProjectChoice(projectId);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -196,7 +203,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const handleContentChange = useCallback(() => {
       if (!canCreateTask) return;
       if (!editor) return;
-      instructionRef.current = String(editor.getDocument('markdown') ?? '');
+      instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     }, [canCreateTask, editor]);
 
     const handleAttach = useCallback(() => {
@@ -209,6 +216,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
 
+      setSubmitError(null);
       const editorJson = editor?.getDocument?.('json') as unknown;
 
       // Only present when the user pinned a run location / directory —
@@ -227,7 +235,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
-          projectId,
+          projectId: createProjectId,
           // Only send visibility in workspace mode; personal mode ignores it.
           visibility: activeWorkspaceId ? visibility : undefined,
         });
@@ -241,8 +249,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             name: result.name ?? undefined,
           });
         }
-      } catch {
-        toast.error(t('createTask.createFailed'));
+      } catch (error) {
+        console.error(error);
+        setSubmitError(toInlineError(t('createTask.createFailedRetry'), error));
       }
     }, [
       activeWorkspaceId,
@@ -250,6 +259,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       assigneeUserId,
       canCreateTask,
       close,
+      createProjectId,
       execution,
       createTask,
       editor,
@@ -258,7 +268,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       labels,
       onCreated,
       priority,
-      projectId,
       scheduleDraft,
       t,
       title,
@@ -331,9 +340,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               outline: 'none',
               padding: '4px 0',
             }}
-            onChange={(e) => setTitle(e.target.value)}
             onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setSubmitError(null);
+            }}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
             {showInlineToggle && (
@@ -364,6 +376,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             />
           </div>
         </div>
+
+        {submitError && (
+          <div style={{ flexShrink: 0, padding: '0 16px 8px' }}>
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+          </div>
+        )}
 
         <Flexbox
           horizontal
@@ -427,6 +445,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 )}
               </Block>
             </TaskLabelPicker>
+
+            <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector
@@ -529,6 +549,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             )}
 
             <TaskExecutionControls
+              canPinPrivateDevices
               assigneeAgentId={assigneeAgentId}
               disabled={!canCreateTask}
               value={execution}

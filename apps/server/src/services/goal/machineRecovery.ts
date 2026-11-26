@@ -111,6 +111,8 @@ const nextQuotaRetryAt = (
  */
 export const planMachineRecovery = (params: {
   error: string | null | undefined;
+  /** A person chose to wait this limit out, however far off its reset is. */
+  holdUntilReset?: boolean;
   now: Date;
   runs: readonly RunLike[];
   taskUpdatedAt: Date | string;
@@ -135,7 +137,10 @@ export const planMachineRecovery = (params: {
     // A wall-clock reset ("resets 4:30am") is the next one after the failure.
     const failure = classifyGoalFailure(error, lastFailureAt);
     const retryAt = nextQuotaRetryAt(failure, failures, lastFailureAt);
-    if (retryAt.getTime() - firstFailureAt.getTime() > QUOTA_MAX_HOLD_MS) {
+    if (
+      !params.holdUntilReset &&
+      retryAt.getTime() - firstFailureAt.getTime() > QUOTA_MAX_HOLD_MS
+    ) {
       return {
         action: 'gate',
         reason:
@@ -144,7 +149,10 @@ export const planMachineRecovery = (params: {
             : `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,
       };
     }
-    if (retries >= MAX_QUOTA_RETRIES) {
+    // The bound stops an automatic retry loop, not the wait a person asked for:
+    // the streak it counts predates their answer, so applying it here would
+    // reopen the decision they just made instead of holding for the reset.
+    if (!params.holdUntilReset && retries >= MAX_QUOTA_RETRIES) {
       return {
         action: 'gate',
         reason: `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,
@@ -186,17 +194,36 @@ export const lastAnsweredGateAt = (
   graph: Pick<GoalGraphSnapshot, 'decisions' | 'edges'>,
   nodeId: string,
 ): Date | undefined => {
+  const decision = lastAnsweredGate(graph, nodeId);
+  return decision ? new Date(decision.resolvedAt!) : undefined;
+};
+
+/** Whether a person's last answer on this Task node was to wait for its limit to reset. */
+export const lastGateAnsweredToWait = (
+  graph: Pick<GoalGraphSnapshot, 'decisions' | 'edges'>,
+  nodeId: string,
+): boolean => {
+  const decision = lastAnsweredGate(graph, nodeId);
+  return (
+    decision?.options?.find((option) => option.id === decision.resolvedOptionId)?.effect ===
+    'retry_after_reset'
+  );
+};
+
+const lastAnsweredGate = (
+  graph: Pick<GoalGraphSnapshot, 'decisions' | 'edges'>,
+  nodeId: string,
+) => {
   const gates = new Set(
     graph.edges
       .filter((edge) => edge.sourceNodeId === nodeId && edge.kind === 'leads_to')
       .map((edge) => edge.targetNodeId),
   );
-  let latest: Date | undefined;
+  let latest: GoalGraphSnapshot['decisions'][number] | undefined;
   for (const decision of graph.decisions) {
     if (!gates.has(decision.nodeId) || decision.status !== 'resolved' || !decision.resolvedAt)
       continue;
-    const at = new Date(decision.resolvedAt);
-    if (!latest || at > latest) latest = at;
+    if (!latest || new Date(decision.resolvedAt) > new Date(latest.resolvedAt!)) latest = decision;
   }
   return latest;
 };

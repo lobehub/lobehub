@@ -47,7 +47,17 @@ class ProjectService {
     return { ...response, data: projects };
   };
 
+  /** Folder-card content (recent topics, task progress, members) for every visible project. */
+  listOverviews = async () => lambdaClient.project.listOverviews.query();
+
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
+
+  /**
+   * The project row alone. `detail` also loads agents, tasks, works and the
+   * knowledge bases, which is the wrong weight for a caller that only needs to
+   * know which agent runs in the project.
+   */
+  find = async (id: string) => lambdaClient.project.find.query({ id });
 
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
 
@@ -58,9 +68,13 @@ class ProjectService {
     params: {
       avatar?: string;
       coordinatorAgentId?: string;
+      dedicatedAgentId?: string;
       description?: string;
+      id?: string;
       identifier?: string;
+      additionalRepositories?: { defaultBranch?: string; url: string }[];
       name: string;
+      repository?: { defaultBranch?: string; name: string; url: string };
       slug?: string;
       visibility?: ProjectVisibility;
     },

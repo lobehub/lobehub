@@ -180,6 +180,26 @@ export const isGPTResponsesModel = (model: string): boolean => {
   return parsed.minorVersion !== undefined && parsed.minorVersion >= 2;
 };
 
+/**
+ * GPT models that take tools declared inside the input (`additional_tools`, client tool
+ * search) and call them like top-level tools.
+ *
+ * GPT-5.5 and older put a tool loaded this way in a namespace named after the tool and
+ * then reject replayed calls that lack it (`Missing namespace for function_call`), which
+ * breaks any history where another model called the same tool. Codex starts dynamic
+ * tool loading at GPT-5.6 for the same reason.
+ *
+ * @see https://github.com/earendil-works/pi/issues/11415
+ */
+export const isToolAnchoringGPTModel = (model: string): boolean => {
+  const parsed = isResponsesEndpointGPTModel(model);
+  if (!parsed || hasModifier(parsed, 'chat')) return false;
+
+  if (parsed.majorVersion >= 6) return true;
+
+  return parsed.minorVersion !== undefined && parsed.minorVersion >= 6;
+};
+
 export const isResponsesAPIModel = (model: string): boolean =>
   responsesAPIModels.has(model) || isGPTResponsesModel(model);
 
@@ -189,14 +209,23 @@ export const isGPTProResponsesModel = (model: string): boolean => {
 };
 
 /**
- * `reasoning.effort: 'none'` is a GPT-5.x-only affordance. GPT-5 Pro never
- * supported it, and GPT-6+ models removed it — their lowest effort is `low`.
+ * GPT-6+ models verified to accept `reasoning.effort: 'none'` on the Responses API.
+ *
+ * @see https://developers.openai.com/api/docs/models/gpt-6.1-terra
+ */
+const GPT6_REASONING_EFFORT_NONE_MODELS = new Set(['gpt-6.1-terra']);
+
+/**
+ * `reasoning.effort: 'none'` is a GPT-5.x affordance that GPT-5 Pro never supported. GPT-6+
+ * models are treated as not accepting it unless listed in `GPT6_REASONING_EFFORT_NONE_MODELS`.
  *
  * @see https://developers.openai.com/docs/guides/latest-model
  */
 export const supportsGPTResponsesReasoningEffortNone = (model: string): boolean => {
   const parsed = isResponsesEndpointGPTModel(model);
-  if (!parsed || parsed.majorVersion !== 5 || parsed.minorVersion === undefined) return false;
+  if (!parsed) return false;
+  if (GPT6_REASONING_EFFORT_NONE_MODELS.has(parsed.normalizedModelId)) return true;
+  if (parsed.majorVersion !== 5 || parsed.minorVersion === undefined) return false;
 
   return !hasModifier(parsed, 'pro');
 };

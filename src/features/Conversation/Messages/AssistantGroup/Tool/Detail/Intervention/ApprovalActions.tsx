@@ -13,6 +13,8 @@ import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/t
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
@@ -88,12 +90,17 @@ const styles = stylex.create({
     alignItems: 'center',
     minHeight: '40px',
     paddingBlock: '7px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
     transition: 'background 120ms, color 120ms',
+  },
+  optionCompact: {
+    minHeight: '30px',
+    paddingBlock: '5px',
+    fontSize: '13px',
   },
   optionLabel: {
     flex: '1',
@@ -125,6 +132,12 @@ const styles = stylex.create({
     'cursor': { 'default': null, ':disabled': 'pointer' },
     '::placeholder': { color: cssVar.colorTextSecondary },
   },
+  rejectInputCompact: {
+    fontSize: '13px',
+  },
+  footerCompact: {
+    marginBlockStart: '6px',
+  },
   shortcutHint: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -135,6 +148,9 @@ const styles = stylex.create({
     minWidth: '88px',
     height: '36px',
     borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
+  },
+  submitButtonCompact: {
+    height: '28px',
   },
 });
 
@@ -151,6 +167,8 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     toolArgs,
   }) => {
     const { t } = useTranslation(['chat', 'plugin']);
+    const { compact } = useDensity();
+    const buttonSize = compact ? 'small' : 'middle';
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
@@ -434,7 +452,11 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               return (
                 <div
                   aria-checked={choice === 'reject'}
-                  {...stylex.props(styles.option, choice === 'reject' && styles.optionSelected)}
+                  {...stylex.props(
+                    styles.option,
+                    compact && styles.optionCompact,
+                    choice === 'reject' && styles.optionSelected,
+                  )}
                   key={c}
                   role="radio"
                   onClick={() => {
@@ -445,7 +467,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                   <span {...stylex.props(styles.number)}>{rejectNumber}.</span>
                   <input
                     aria-label={t('tool.intervention.rejectReasonPlaceholder')}
-                    {...stylex.props(styles.rejectInput)}
+                    {...stylex.props(styles.rejectInput, compact && styles.rejectInputCompact)}
                     disabled={loading || isMessageCreating}
                     placeholder={t('tool.intervention.rejectReasonPlaceholder')}
                     ref={rejectInputRef}
@@ -464,7 +486,11 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               <div
                 aria-checked={effectiveChoice === c}
                 aria-disabled={approveDisabled || undefined}
-                {...stylex.props(styles.option, effectiveChoice === c && styles.optionSelected)}
+                {...stylex.props(
+                  styles.option,
+                  compact && styles.optionCompact,
+                  effectiveChoice === c && styles.optionSelected,
+                )}
                 key={c}
                 role="radio"
                 onClick={() => setChoice(c)}
@@ -478,12 +504,12 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           })}
         </div>
 
-        <div {...stylex.props(styles.footer)}>
+        <div {...stylex.props(styles.footer, compact && styles.footerCompact)}>
           <Button
             disabled={loading || isMessageCreating}
             icon={CircleStop}
             loading={stopping}
-            size={'middle'}
+            size={buttonSize}
             type={'text'}
             onClick={handleStop}
           >
@@ -494,7 +520,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               <Button
                 disabled={loading || isMessageCreating || approveDisabled}
                 icon={Zap}
-                size={'middle'}
+                size={buttonSize}
                 type={'default'}
                 onClick={handleSwitchToAutoRun}
               >
@@ -503,11 +529,13 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             </Tooltip>
           )}
           <Button
-            className={stylex.props(styles.submitButton).className}
             disabled={isMessageCreating || submitBlocked}
             loading={loading}
-            size={'middle'}
+            size={buttonSize}
             type={'primary'}
+            className={
+              stylex.props(styles.submitButton, compact && styles.submitButtonCompact).className
+            }
             onClick={handleSubmit}
           >
             {t('tool.intervention.submit')}

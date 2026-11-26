@@ -2,6 +2,7 @@ import type {
   ScmActorAssociation,
   ScmInstallationRepository,
   ScmInstallationSnapshot,
+  ScmRepositoryListItem,
 } from '@lobechat/types';
 import debug from 'debug';
 import { App, Octokit } from 'octokit';
@@ -189,6 +190,72 @@ export const listGitHubInstallationRepositories = async (
 
   log('installation %s has %d repositories', installationId, repositories.length);
   return repositories;
+};
+
+/**
+ * The repositories an installation can read, with what a picker shows. Bounded
+ * by `limit` because an all-repositories organization installation can reach
+ * thousands. GitHub returns them in its own order, not by push time, so a
+ * bounded list can miss recent work — `truncated` says so, and the picker
+ * points to pasting the URL instead.
+ */
+export const listGitHubInstallationRepositoryDetails = async (
+  installationId: string,
+  { limit = 500 }: { limit?: number } = {},
+): Promise<{ repositories: ScmRepositoryListItem[]; truncated: boolean }> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const octokit = await app.getInstallationOctokit(Number(installationId));
+  const repositories: ScmRepositoryListItem[] = [];
+  for await (const { data } of octokit.paginate.iterator('GET /installation/repositories', {
+    per_page: 100,
+  })) {
+    for (const repo of data) {
+      repositories.push({
+        defaultBranch: repo.default_branch,
+        description: repo.description ?? null,
+        fullName: repo.full_name,
+        htmlUrl: repo.html_url,
+        ownerAvatarUrl: repo.owner?.avatar_url ?? null,
+        private: repo.private,
+        pushedAt: repo.pushed_at ?? null,
+      });
+    }
+    if (repositories.length > limit) break;
+  }
+
+  return { repositories: repositories.slice(0, limit), truncated: repositories.length > limit };
+};
+
+/**
+ * Branch names of one repository, read with the installation's own token —
+ * the same grant a build from that repository clones with. Walked to `limit`
+ * rather than to the end: a repository with thousands of branches would
+ * otherwise be dozens of requests behind one picker, so a caller that gets
+ * exactly `limit` back should treat the list as partial.
+ */
+export const listGitHubInstallationRepositoryBranches = async (params: {
+  installationId: string;
+  limit: number;
+  repoFullName: string;
+}): Promise<string[]> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const { owner, repo } = parseRepo(params.repoFullName);
+  const octokit = await app.getInstallationOctokit(Number(params.installationId));
+  const names: string[] = [];
+  for await (const { data } of octokit.paginate.iterator('GET /repos/{owner}/{repo}/branches', {
+    owner,
+    per_page: 100,
+    repo,
+  })) {
+    for (const branch of data) if (branch.name) names.push(branch.name);
+    if (names.length >= params.limit) break;
+  }
+
+  return names.slice(0, params.limit);
 };
 
 /**

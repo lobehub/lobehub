@@ -66,7 +66,10 @@ export const dispatchToPlatformDevice = async (
       deps,
       run,
       {
-        detail: 'This sender is not allowed to run agents on a bound device.',
+        detail:
+          deviceAccessReason === 'bot-channel-restricted'
+            ? 'Running agents on a bound device is not allowed in this channel.'
+            : 'This sender is not allowed to run agents on a bound device.',
         message: 'Device access denied',
       },
       { error: 'Device access denied', message: 'Remote hetero agent requires device access' },

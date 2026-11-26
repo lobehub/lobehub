@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { MessageModel } from '@/database/models/message';
 import { agentOperations, agents, topics, users } from '@/database/schemas';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
 import {
@@ -508,7 +509,6 @@ it('loads the recorded client archive policy for a later continuation even witho
     owner: randomUUID(),
     toolResultMaxLength: 80000,
   });
-  const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
   // The renderer is gone and no live client AgentState remains.
   const runtime = AgentRuntimeService.prototype.getMcpElicitationRuntime.call({
     serverDB: db,
@@ -520,4 +520,4 @@ it('loads the recorded client archive policy for a later continuation even witho
     limit: 80000,
     canReadArchive: true,
   });
-}, 30000);
+});

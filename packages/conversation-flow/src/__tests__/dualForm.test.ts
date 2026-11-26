@@ -3,6 +3,36 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../parse';
 import type { Message } from '../types/shared';
 
+const createFirstToolResult = (): Message => ({
+  content: 'r',
+  createdAt: 2,
+  id: 'a1__tc1',
+  parentId: 'a1',
+  role: 'tool',
+  tool_call_id: 'tc1',
+  updatedAt: 0,
+});
+
+const createFirstAssistantWithTool = (): Message => ({
+  agentId: 'agent-a',
+  content: 'step1',
+  createdAt: 1,
+  id: 'a1',
+  parentId: 'u1',
+  role: 'assistant',
+  tools: [
+    {
+      apiName: 'x',
+      arguments: '{}',
+      id: 'tc1',
+      identifier: 'x',
+      result_msg_id: 'a1__tc1',
+      type: 'default',
+    },
+  ],
+  updatedAt: 0,
+});
+
 /**
  * Dual-form message-chain reader (phase 1)
  *
@@ -154,34 +184,8 @@ describe('dual-form message chain', () => {
     // a2 attaches old-style (under a1's tool); a3 attaches new-style (under a2)
     const msgs: Message[] = [
       { content: 'q', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
-      {
-        agentId: 'agent-a',
-        content: 'step1',
-        createdAt: 1,
-        id: 'a1',
-        parentId: 'u1',
-        role: 'assistant',
-        tools: [
-          {
-            apiName: 'x',
-            arguments: '{}',
-            id: 'tc1',
-            identifier: 'x',
-            result_msg_id: 'a1__tc1',
-            type: 'default',
-          },
-        ],
-        updatedAt: 0,
-      },
-      {
-        content: 'r',
-        createdAt: 2,
-        id: 'a1__tc1',
-        parentId: 'a1',
-        role: 'tool',
-        tool_call_id: 'tc1',
-        updatedAt: 0,
-      },
+      createFirstAssistantWithTool(),
+      createFirstToolResult(),
       {
         agentId: 'agent-a',
         content: 'step2',
@@ -326,15 +330,7 @@ describe('dual-form message chain', () => {
       ],
       updatedAt: 0,
     },
-    {
-      content: 'r',
-      createdAt: 2,
-      id: 'a1__tc1',
-      parentId: 'a1',
-      role: 'tool',
-      tool_call_id: 'tc1',
-      updatedAt: 0,
-    },
+    createFirstToolResult(),
     // two regenerated continuations, both children of a1 (siblings of the tool)
     {
       agentId: 'agent-a',
@@ -381,34 +377,8 @@ describe('dual-form message chain', () => {
   it('⑦ tool-anchored duplicate continuation omits the unselected sibling', () => {
     const messages: Message[] = [
       { content: 'q', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
-      {
-        agentId: 'agent-a',
-        content: 'step1',
-        createdAt: 1,
-        id: 'a1',
-        parentId: 'u1',
-        role: 'assistant',
-        tools: [
-          {
-            apiName: 'x',
-            arguments: '{}',
-            id: 'tc1',
-            identifier: 'x',
-            result_msg_id: 'a1__tc1',
-            type: 'default',
-          },
-        ],
-        updatedAt: 0,
-      },
-      {
-        content: 'r',
-        createdAt: 2,
-        id: 'a1__tc1',
-        parentId: 'a1',
-        role: 'tool',
-        tool_call_id: 'tc1',
-        updatedAt: 0,
-      },
+      createFirstAssistantWithTool(),
+      createFirstToolResult(),
       {
         agentId: 'agent-a',
         content: 'duplicate output',
@@ -489,15 +459,7 @@ describe('dual-form message chain', () => {
         ],
         updatedAt: 0,
       },
-      {
-        content: 'r',
-        createdAt: 2,
-        id: 'a1__tc1',
-        parentId: 'a1',
-        role: 'tool',
-        tool_call_id: 'tc1',
-        updatedAt: 0,
-      },
+      createFirstToolResult(),
       {
         agentId: 'agent-a',
         content: 'task 1',

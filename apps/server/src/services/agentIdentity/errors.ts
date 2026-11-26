@@ -2,8 +2,6 @@
  * Why an account write was refused, in terms a caller can show to a person.
  *
  * Conflicts — the request was valid, the deployment's state refuses it:
- * - `capacity_exhausted`: the provider hands out a finite operator inventory
- *   (Linq numbers) and every unit is already bound to a live account.
  * - `identifier_taken`: another live account already routes on this handle, so
  *   mounting it again would make inbound delivery ambiguous.
  *
@@ -13,19 +11,21 @@
  * - `provider_managed`: the provider is registered, so its accounts are opened
  *   through `provision`, never mounted from caller-supplied handles.
  * - `provider_owned_field`: the patch names a field the provider owns.
+ * - `invalid_settings`: the patch's settings are not a shape this build accepts.
  * - `reply_target_not_owned`: the message named as a reply target lives in
  *   another account's inbox, so answering it would send as that account.
  */
 export type AgentAccountErrorCode =
   | 'capabilities_required'
-  | 'capacity_exhausted'
   | 'identifier_taken'
+  | 'invalid_settings'
   | 'provider_managed'
   | 'provider_owned_field'
   | 'reply_target_not_owned';
 
 const INVALID_REQUEST_CODES = new Set<AgentAccountErrorCode>([
   'capabilities_required',
+  'invalid_settings',
   'provider_managed',
   'provider_owned_field',
   'reply_target_not_owned',

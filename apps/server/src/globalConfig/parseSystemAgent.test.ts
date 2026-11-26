@@ -111,6 +111,7 @@ describe('parseSystemAgent', () => {
       model: 'deepseek-v3',
     });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
+    expect(result.asr).toBeUndefined();
     expect(result.userMemoryEmbedding).toBeUndefined();
     expect(result.memoryAnalysisAgentConfig).toBeUndefined();
     expect(result.userMemoryPersonaWriter).toBeUndefined();
@@ -176,17 +177,19 @@ describe('parseSystemAgent', () => {
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
   });
 
-  it('does not fill the speech-to-text slot from the chat default', () => {
-    const result = parseSystemAgent('default=ollama/deepseek-v3');
-
-    expect(result.asr).toBeUndefined();
-  });
-
   it('parses an explicit speech-to-text model', () => {
     const result = parseSystemAgent(
       'default=ollama/deepseek-v3,asr=lobehub/gpt-4o-mini-transcribe',
     );
 
     expect(result.asr).toEqual({ provider: 'lobehub', model: 'gpt-4o-mini-transcribe' });
+  });
+
+  it('leaves the file embedding slot to DEFAULT_FILES_CONFIG', () => {
+    const result = parseSystemAgent('default=ollama/deepseek-v3,fileEmbedding=openai/text-embed');
+
+    // `default=` names a chat model, and an explicit entry would be a second
+    // knob next to `DEFAULT_FILES_CONFIG` that file indexing never reads.
+    expect(result.fileEmbedding).toBeUndefined();
   });
 });

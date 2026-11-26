@@ -53,6 +53,12 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
   message?: ReactNode;
   messageExtra?: ReactNode;
   /**
+   * Marker rendered beside the bubble, on the side facing the conversation
+   * (left of a user bubble), aligned with the message's first line. Used to
+   * label how the message was delivered, such as a steered instruction.
+   */
+  messageLeading?: ReactNode;
+  /**
    * Avatar click handler
    */
   onAvatarClick?: () => void;
@@ -66,6 +72,11 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
    * @default 'left'
    */
   placement?: 'left' | 'right';
+  /**
+   * Quiet header: name and time sit on one baseline, one colour step lighter than the message,
+   * like an IM author line. Off for the main chat, whose header stays as is.
+   */
+  quietHeader?: boolean;
   /**
    * @description Whether to hide the avatar
    * @default false

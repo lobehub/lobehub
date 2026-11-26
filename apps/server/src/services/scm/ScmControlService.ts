@@ -70,7 +70,8 @@ export type ScmControlOutcome =
  *   that opened the PR is woken in its conversation with the failing checks
  *   (plus job log tails) or the review feedback. Capped at
  *   {@link SCM_MAX_WAKES} per PR and debounced so a burst of check events
- *   becomes one wake; a draft PR never wakes anyone.
+ *   becomes one wake; a draft PR never wakes anyone, nor one whose
+ *   Auto-fix was turned off (`metadata.autoFix === false`).
  */
 export class ScmControlService {
   constructor(private db: LobeChatDatabase) {}
@@ -115,6 +116,15 @@ export class ScmControlService {
     }
     if (row.state === 'open') return this.syncComment(row);
     return { detail: `${row.state} needs no action`, outcome: 'skipped' };
+  };
+
+  /**
+   * Auto-fix was just switched on the pull request (from the conversation's
+   * PR row): rewrite the tracking comment so it says so. Never posts a new
+   * comment — a pull request without one has nothing to update.
+   */
+  onAutoFixChanged = async (rowId: string): Promise<void> => {
+    await this.refreshComment(rowId);
   };
 
   private route = async ({ event, kind, row }: ScmControlEvent): Promise<ScmControlOutcome> => {
@@ -379,6 +389,7 @@ export class ScmControlService {
         topicId: row.topicId ?? undefined,
         v: 1,
       },
+      autoFix: row.metadata?.autoFix !== false,
       notification:
         row.wakeCount > 0
           ? { count: row.wakeCount, max: SCM_MAX_WAKES, reason: row.metadata.lastWake?.reason }
@@ -479,6 +490,9 @@ export class ScmControlService {
     if (row.isDraft) return { detail: 'draft pull request', outcome: 'skipped' };
     if (row.state !== 'open') return { detail: `pull request is ${row.state}`, outcome: 'skipped' };
     if (!row.topicId) return { detail: 'no linked conversation', outcome: 'skipped' };
+    // The per pull request switch, on top of the account's switches the
+    // callers already asked. Absent is on.
+    if (row.metadata?.autoFix === false) return { detail: 'auto-fix off', outcome: 'skipped' };
     // An early out on the snapshot so a capped pull request does not pay for
     // job logs; the cap itself is enforced by the reservation further down.
     if (row.wakeCount >= SCM_MAX_WAKES) {
@@ -502,8 +516,14 @@ export class ScmControlService {
     // snapshot, and on a Redis-less deployment there is no debounce to stop
     // two deliveries from passing it together. Handed back below if the run
     // never starts.
+    // The reservation also re-reads Auto-fix: it may have been turned off
+    // while the prompt was being built from job logs or review feedback.
     const count = await ScmChangeRequestModel.reserveWake(this.db, row.id, SCM_MAX_WAKES, reason);
     if (count === null) {
+      const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
+      if (fresh?.metadata?.autoFix === false) {
+        return { detail: 'auto-fix off', outcome: 'skipped' };
+      }
       return { detail: `wake cap (${SCM_MAX_WAKES}) reached`, outcome: 'skipped' };
     }
 

@@ -88,6 +88,41 @@ const hasMinorVersionAtLeast = (parsed: ParsedClaudeModelId, minorVersion: numbe
 const isClaudeFamily = (parsed: ParsedClaudeModelId, families: readonly string[]): boolean =>
   families.includes(parsed.family);
 
+// By-value definitions require inline-tools-2026-09-15. Keep unverified model aliases on the normal path.
+// https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages
+const inlineToolModels = new Set([
+  'claude-opus-4-8',
+  'claude-opus-5',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+  'claude-fable-5',
+  'claude-fable-5-1',
+  'claude-fable-5-2',
+  'claude-mythos-5',
+  'claude-mythos-5-1',
+  'claude-mythos-5-2',
+]);
+
+/**
+ * Matches on the parsed family and version rather than the raw id, so a relay's own
+ * naming still resolves to the model it serves: a namespace the parser does not know
+ * (`<relay>/claude-opus-4-8`) or a trailing backend tag (`anthropic/claude-opus-4-8-aws`).
+ * The route still opts in explicitly through the inline-tools beta header, which is the
+ * operator's statement that this relay accepts the blocks. Bedrock ids stay excluded.
+ */
+export const supportsClaudeInlineToolChanges = (model: string): boolean => {
+  const parsed =
+    parseClaudeModelId(model) ?? parseClaudeModelId(model.trim().split('/').at(-1) ?? '');
+  if (!parsed || parsed.source === 'bedrock') return false;
+
+  const version =
+    parsed.minorVersion === undefined
+      ? `${parsed.majorVersion}`
+      : `${parsed.majorVersion}-${parsed.minorVersion}`;
+  return inlineToolModels.has(`claude-${parsed.family}-${version}`);
+};
+
 export const isContextCachingModel = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   if (!parsed) return false;

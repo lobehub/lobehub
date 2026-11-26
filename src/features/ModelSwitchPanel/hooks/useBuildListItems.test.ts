@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { buildListItems, MAX_PINNED_NEW_MODELS } from './useBuildListItems';
+import {
+  buildListItems,
+  MAX_PINNED_NEW_MODELS,
+  resolveListGuardOptions,
+} from './useBuildListItems';
 
 const model = (id: string, displayName = id, releasedAt?: string) =>
   ({ abilities: {}, displayName, id, releasedAt }) satisfies AiModelForSelect;
@@ -194,5 +198,69 @@ describe('buildListItems', () => {
       'grok-4.7',
       'deepseek-v4.1-flash',
     ]);
+  });
+});
+
+describe('buildListItems featured and hidden models', () => {
+  const featuredModels = [
+    {
+      badge: 'Own quota',
+      modelId: 'auto',
+      providerId: 'lobehub',
+    },
+  ];
+
+  it('lists a featured model first, out of its provider list', () => {
+    const items = buildListItems(
+      [provider('lobehub', [model('gpt'), model('auto')]), provider('openai', [model('gpt')])],
+      'byProvider',
+      '',
+      undefined,
+      { featuredModels },
+    );
+
+    expect(items[0]).toMatchObject({
+      badge: 'Own quota',
+      model: { id: 'auto' },
+      type: 'featured-model-item',
+    });
+    expect(getProviderModelIds(items)).toEqual(['gpt', 'gpt']);
+  });
+
+  it('drops the header of a provider whose only model is featured', () => {
+    const items = buildListItems(
+      [provider('lobehub', [model('auto')]), provider('openai', [model('gpt')])],
+      'byProvider',
+      '',
+      undefined,
+      { featuredModels },
+    );
+
+    expect(items.map((item) => item.type)).toEqual([
+      'featured-model-item',
+      'group-header',
+      'provider-model-item',
+    ]);
+    expect(items[1]).toMatchObject({ provider: { id: 'openai' } });
+  });
+
+  it('skips a featured model that is not enabled', () => {
+    const items = buildListItems([provider('lobehub', [model('gpt')])], 'byModel', '', undefined, {
+      featuredModels,
+    });
+
+    expect(items.some((item) => item.type === 'featured-model-item')).toBe(false);
+  });
+});
+
+describe('resolveListGuardOptions', () => {
+  const guard = { featuredModels: [{ modelId: 'auto', providerId: 'lobehub' }] };
+
+  it('applies the guard to chat lists, including a list the host narrowed', () => {
+    expect(resolveListGuardOptions(false, guard)).toEqual(guard);
+  });
+
+  it('keeps generation lists as given', () => {
+    expect(resolveListGuardOptions(true, guard)).toBeUndefined();
   });
 });

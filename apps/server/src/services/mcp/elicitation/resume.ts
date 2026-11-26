@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import type { LobeToolManifest } from '@lobechat/context-engine';
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
+import { connectorIdentifierCandidates } from '@lobechat/types';
 import type { ElicitResult } from '@modelcontextprotocol/client';
 
 import { canonicalJson } from '@/database/models/agentIntervention/utils';
@@ -8,7 +10,9 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { ConnectorToolPermission } from '@/database/schemas';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { resolveLinkedCall } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import type { ToolExecutionService } from '@/server/services/toolExecution';
@@ -82,11 +86,16 @@ export async function resumeMcpElicitation(
         service,
         identity.identifier,
         identity.apiName,
-        operation.agentId ?? undefined,
+        {
+          agentId: operation.agentId ?? undefined,
+          topicId: operation.topicId ?? undefined,
+          args: tool.arguments,
+        },
       );
       if (
         pending.connectionBinding &&
-        mcpConnectionBinding(manifest.mcpParams) !== pending.connectionBinding
+        mcpConnectionBinding(manifest.mcpParams, manifest.mcpConnectorAccount) !==
+          pending.connectionBinding
       )
         throw new Error('MCP connection changed while awaiting user input');
       if (
@@ -189,27 +198,56 @@ export async function resolveMcpInvocationManifest(
   service: McpElicitationService,
   identifier: string,
   apiName: string,
-  agentId?: string,
+  run: { agentId?: string; topicId?: string; args?: string },
 ) {
-  const connectorModel = new ConnectorModel(service.db, service.userId, service.workspaceId);
-  const [connector] = await connectorModel.resolveByIdentifiers([identifier], agentId ?? undefined);
-  let manifest: LobeToolManifest & { mcpParams: unknown };
+  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  const connectorModel = new ConnectorModel(
+    service.db,
+    service.userId,
+    service.workspaceId,
+    gateKeeper,
+  );
+  const connectors = (
+    await connectorModel.resolveToolSets(
+      { agentId: run.agentId, topicId: run.topicId },
+      connectorIdentifierCandidates(identifier),
+    )
+  ).filter((entry) => entry.toolIdentifier === identifier);
+  if (connectors.length > 1) throw new Error('MCP connector is ambiguous');
+  const [connector] = connectors;
+  let manifest: LobeToolManifest & {
+    mcpParams: unknown;
+    connector?: { id: string; identifier: string };
+    connectorLinks?: { connectorId: string; param: string };
+    mcpConnectorAccount?: { connectorId: string; linkId?: string };
+  };
   if (connector) {
     if (!connector.isEnabled) throw new Error('MCP connector is disabled');
-    const tools = await new ConnectorToolModel(
-      service.db,
-      service.userId,
-      service.workspaceId,
-    ).queryByConnector(connector.id);
+    const tools = await new ConnectorToolModel(service.db, service.userId, service.workspaceId, {
+      agentRun: true,
+    }).queryByConnector(connector.id);
     const allowedTool = tools.find((entry) => entry.toolName === apiName);
     if (!allowedTool || allowedTool.permission === ConnectorToolPermission.disabled)
       throw new Error('MCP tool is no longer available');
-    const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+    const schemas = tools.map((entry) => entry.inputSchema);
+    const param = resolveConnectorLinkParam(schemas);
+    const selected = await resolveLinkedCall(
+      { connector, argsStr: run.args, param },
+      { connectorModel },
+    );
+    const fresh = selected.linkId
+      ? selected.connector
+      : await ensureFreshConnectorToken(connector, connectorModel);
     manifest = {
       identifier,
       api: [],
       meta: {},
       mcpParams: buildConnectorMcpParams(fresh),
+      connector: { id: connector.id, identifier: connector.identifier },
+      ...(selected.linkId && { connectorLinks: { connectorId: connector.id, param } }),
+      ...(selected.linkId && {
+        mcpConnectorAccount: { connectorId: connector.id, linkId: selected.linkId },
+      }),
     };
   } else {
     const plugin = await new PluginModel(service.db, service.userId, service.workspaceId).findById(

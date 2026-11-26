@@ -2,7 +2,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { agents, knowledgeBases, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { projectRouter } from '../../project';
 import { taskRouter } from '../../task';
@@ -20,9 +20,13 @@ describe('Project Router Integration', () => {
   let userId: string;
   let caller: ReturnType<typeof projectRouter.createCaller>;
 
-  beforeEach(async () => {
+  // Initial database migrations can exceed the default hook timeout on CI.
+  beforeAll(async () => {
     serverDB = await getTestDB();
     testDB = serverDB;
+  }, 60_000);
+
+  beforeEach(async () => {
     userId = await createTestUser(serverDB);
     caller = projectRouter.createCaller(createTestContext(userId));
   });
@@ -119,6 +123,26 @@ describe('Project Router Integration', () => {
     await expect(caller.create({ identifier: 'not-valid!', name: 'Invalid' })).rejects.toThrow(
       'Invalid project identifier',
     );
+  });
+
+  it('answers a duplicate identifier as CONFLICT instead of a raw query failure', async () => {
+    await caller.create({ identifier: 'LOBE', name: 'LobeHub' });
+
+    await expect(
+      caller.create({ identifier: 'LOBE', name: 'LobeHub Mobile' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      // The code, not prose: the create forms key off it to mark the field.
+      message: 'DUPLICATE_PROJECT_IDENTIFIER',
+    });
+  });
+
+  it('answers a duplicate slug with its own code, not the identifier one', async () => {
+    await caller.create({ name: 'LobeHub', slug: 'taken-link-name' });
+
+    await expect(
+      caller.create({ name: 'LobeHub Mobile', slug: 'taken-link-name' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_PROJECT_SLUG' });
   });
 
   it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(

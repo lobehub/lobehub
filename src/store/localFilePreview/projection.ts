@@ -3,6 +3,11 @@ import type { LocalFilePreview } from '@/services/projectFile';
 
 /** One file the local-file portal previews: where it lives and how it was opened. */
 export interface LocalFilePreviewTarget {
+  /**
+   * Read the file only as an image (a chat input file tag's thumbnail): any
+   * other preview type is rejected instead of being read as text.
+   */
+  accept?: 'image';
   /** A user-picked file outside the approved workspace roots. */
   allowExternalFile?: boolean;
   /** Remote device the file lives on; absent = this machine. */
@@ -10,6 +15,8 @@ export interface LocalFilePreviewTarget {
   filePath: string;
   /** Read live from this topic's cloud sandbox instead of a filesystem. */
   sandboxTopicId?: string;
+  /** Authorize a remote checkout using this topic’s working directory. */
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -31,12 +38,18 @@ export const MAX_PERSISTED_PREVIEWS = 30;
  * The source kind and its id are separate fields: a device id is user-chosen
  * (`lh connect --device-id`), so a device named `local` or `sandbox:x` must
  * still decode as that device rather than this machine or a sandbox.
+ *
+ * An image-only read (`accept`) is a different request, so it is a trailing
+ * field appended only when set: the portal's keys (and their stored rows) stay
+ * as they were.
  */
 export const localFilePreviewKey = ({
+  accept,
   allowExternalFile,
   deviceId,
   filePath,
   sandboxTopicId,
+  topicId,
   workingDirectory,
 }: LocalFilePreviewTarget): string =>
   JSON.stringify([
@@ -48,22 +61,31 @@ export const localFilePreviewKey = ({
     workingDirectory,
     filePath,
     allowExternalFile ? 'external' : 'workspace',
+    ...(deviceId && topicId && !sandboxTopicId
+      ? [accept ?? null, topicId]
+      : accept
+        ? [accept]
+        : []),
   ]);
 
 /** The target a {@link localFilePreviewKey} was built from (fetcher side). */
 export const localFilePreviewTargetFromKey = (key: string): LocalFilePreviewTarget => {
-  const [kind, id, workingDirectory, filePath, access] = JSON.parse(key) as [
+  const [kind, id, workingDirectory, filePath, access, accept, topicId] = JSON.parse(key) as [
     'device' | 'local' | 'sandbox',
     string | null,
     string,
     string,
     string,
+    'image' | null | undefined,
+    (string | undefined)?,
   ];
   return {
+    accept: accept === 'image' ? accept : undefined,
     allowExternalFile: access === 'external' || undefined,
     deviceId: kind === 'device' ? (id ?? undefined) : undefined,
     filePath,
     sandboxTopicId: kind === 'sandbox' ? (id ?? undefined) : undefined,
+    ...(kind === 'device' && topicId && { topicId }),
     workingDirectory,
   };
 };

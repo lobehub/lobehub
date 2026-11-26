@@ -37,6 +37,8 @@
   "consent.scope.acceptance-review": "در مورد این پذیرش نظر دهید و آن را بپذیرید یا از صفحه پیش‌نمایش بازگردانید",
   "consent.scope.acceptance-review-site": "نظر دادن در مورد بررسی این سایت از خود سایت، به مدت ۸ ساعت",
   "consent.scope.email": "دسترسی به آدرس ایمیل شما",
+  "consent.scope.generation-read": "مشاهده تصاویر، ویدیوها و صداهای تولیدشده شما",
+  "consent.scope.generation-write": "تولید تصاویر، ویدیوها و صداها و حذف نتایج، با استفاده از سهمیه شما",
   "consent.scope.offline_access": "اجازه دسترسی برنامه به داده‌های شما",
   "consent.scope.openid": "احراز هویت با استفاده از حساب LobeHub شما",
   "consent.scope.profile": "دسترسی به اطلاعات پایه پروفایل شما (نام، تصویر، و غیره)",

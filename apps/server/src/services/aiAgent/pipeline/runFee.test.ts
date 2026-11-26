@@ -1,8 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfigWithId } from '@/server/services/agent';
-
 import type { InternalExecAgentParams } from '../types';
 import {
   bindRunFee,
@@ -20,7 +18,6 @@ const fees = vi.hoisted(() => ({
 
 vi.mock('@/business/server/agent-run/runFee', () => fees);
 
-const agentConfig = { id: 'agt_1', model: 'gpt-4o' } as AgentConfigWithId;
 const composerSend = {
   agentId: 'agt_1',
   interactiveStart: true,
@@ -28,10 +25,7 @@ const composerSend = {
 } as InternalExecAgentParams;
 
 const holds = (params: Partial<InternalExecAgentParams>, workspaceId?: string) =>
-  shouldHoldRunFee({ ...composerSend, ...params } as InternalExecAgentParams, {
-    agentConfig,
-    workspaceId,
-  });
+  shouldHoldRunFee({ ...composerSend, ...params } as InternalExecAgentParams, { workspaceId });
 
 describe('shouldHoldRunFee', () => {
   it('holds a fee for every run the user starts, foreground or background', () => {
@@ -56,17 +50,6 @@ describe('shouldHoldRunFee', () => {
     expect(holds({ appContext: { orchestrationRole: 'member' } as any })).toBe(false);
     expect(holds({}, 'ws_1')).toBe(false);
   });
-
-  it('holds no fee for external agents', () => {
-    expect(
-      shouldHoldRunFee(composerSend, {
-        agentConfig: {
-          ...agentConfig,
-          agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
-        } as AgentConfigWithId,
-      }),
-    ).toBe(false);
-  });
 });
 
 describe('run fee claim', () => {
@@ -90,6 +73,18 @@ describe('run fee claim', () => {
 
     expect(fees.holdAgentRunFee).not.toHaveBeenCalled();
     expect(claim.holderId).toBeUndefined();
+  });
+
+  it('passes the model the run starts on to the hold', async () => {
+    const claim: RunFeeClaim = {};
+    await claimRunFee(claim, { hold: true, model: 'm1', provider: 'p1', userId: 'u1' });
+
+    expect(fees.holdAgentRunFee).toHaveBeenCalledWith({
+      holderId: claim.holderId,
+      model: 'm1',
+      provider: 'p1',
+      userId: 'u1',
+    });
   });
 
   it('moves the fee to the operation and releases it when the run never started', async () => {

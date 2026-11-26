@@ -29,7 +29,7 @@ const styles = stylex.create({
 const ProviderItem = memo<DiscoverProviderItem>(
   ({ url, name, description, identifier, models }) => {
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/provider', identifier);
+    const link = urlJoin('/marketplace/provider', identifier);
     const { t } = useTranslation(['discover', 'providers']);
 
     return (
@@ -104,7 +104,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
               .slice(0, 6)
               .filter(Boolean)
               .map((tag: string) => (
-                <WorkspaceLink key={tag} to={urlJoin('/community/model', tag)}>
+                <WorkspaceLink key={tag} to={urlJoin('/marketplace/model', tag)}>
                   <ModelTag model={tag} style={{ margin: 0 }} />
                 </WorkspaceLink>
               ))}

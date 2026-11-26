@@ -1,7 +1,25 @@
 'use client';
 
+import {
+  getLegacyDisabledBuiltinToolIds,
+  isOnDemandBuiltinTool,
+  onDemandBuiltinToolIds,
+} from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
-import { getActivePluginIds, upsertPluginMode } from '@lobechat/types';
+import {
+  getImplicitBuiltinSkillIds,
+  legacyBuiltinSkillIds,
+} from '@lobechat/mecha/builtinSkillGate';
+import {
+  getBuiltinOverrides,
+  getDisabledPluginIds,
+  getOptedInPluginIds,
+  parsePluginEntry,
+  resolveToolMode,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
+  upsertPluginMode,
+} from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -10,6 +28,7 @@ import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import ComposioServerItem from '@/features/ChatInput/ActionBar/Tools/ComposioServerItem';
 import ComposioSkillIcon, {
@@ -18,12 +37,14 @@ import ComposioSkillIcon, {
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from '@/features/ChatInput/ActionBar/Tools/MarketAgentSkillPopoverContent';
-import MarketSkillIcon from '@/features/ChatInput/ActionBar/Tools/MarketSkillIcon';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
+import {
+  getConnectedConnectorIds,
+  getConnectorIdentifiers,
+} from '@/helpers/toolEngineering/connectorActivation';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -37,13 +58,19 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { agentSkillListResource } from '@/store/tool/slices/agentSkills/projection';
+import {
+  legacyDisabledBuiltinSkillsForRun,
+  runtimeUninstalledBuiltinTools,
+} from '@/store/tool/slices/builtin/projection';
 import type { LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { type ItemDetail } from './ItemDetailPanel';
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
 import { getVisibleProfileToolIds } from './profileToolVisibility';
 import { selectProfileToolCatalogsSynced, useStalePluginAutoResolve } from './staleProfilePlugins';
+import ToolListGroup, { type ToolGroupMeta } from './ToolListGroup';
 
 export interface AgentToolProps {
   /**
@@ -53,9 +80,9 @@ export interface AgentToolProps {
   agentId?: string;
   /**
    * Hide identifiers that are agent-owned/linked connectors from the rendered
-   * chips. ONLY the two-section agent profile sets this (it renders those
-   * connectors in a separate "Agent Tools" section above, so showing them here
-   * too would duplicate them — as an "uninstalled" chip lacking a base manifest).
+   * chips. ONLY the agent profile sets this (its Tools page lists those
+   * connectors itself, so showing them here too would duplicate them — as an
+   * "uninstalled" chip lacking a base manifest).
    * Consumers that render `AgentTool` as the SOLE tool list (e.g. the group
    * member profile) MUST leave this off, otherwise the enabled agent tool would
    * disappear entirely with no way to see or remove it.
@@ -67,9 +94,20 @@ export interface AgentToolProps {
    * @default false
    */
   filterAvailableInWeb?: boolean;
+  /** The heading, description and action of the list; only the `list` variant shows them. */
+  group?: ToolGroupMeta;
+  /**
+   * Which part of the library this list covers. Skills are agent skills (built-in, market and
+   * your own); tools are everything else — built-in tools, connectors, plugins. `all` keeps the
+   * single mixed list.
+   * @default 'all'
+   */
+  kind?: 'all' | 'skills' | 'tools';
+  /** Called with an item's details when its row is clicked; the page decides where to show them. */
+  onOpenDetail?: (detail: ItemDetail) => void;
   /**
    * Show an "authorized by X" avatar on each connector chip. Set by the
-   * two-section agent profile in a workspace so a teammate can see whose
+   * agent profile in a workspace so a teammate can see whose
    * credentials each shared tool runs under. Off elsewhere (personal mode has a
    * single authorizer — always the caller — so the tag would be noise).
    * @default false
@@ -80,6 +118,12 @@ export interface AgentToolProps {
    * @default false
    */
   useAllMetaList?: boolean;
+  /**
+   * `list` shows one row per tool with the add control below; `chip` keeps the compact
+   * wrapping tags.
+   * @default 'chip'
+   */
+  variant?: 'chip' | 'list';
 }
 
 const AgentTool = memo<AgentToolProps>(
@@ -89,13 +133,16 @@ const AgentTool = memo<AgentToolProps>(
     useAllMetaList = false,
     excludeAgentConnectors = false,
     showAuthor = false,
+    kind = 'all',
+    group,
+    onOpenDetail,
+    variant = 'chip',
   }) => {
     const { t } = useTranslation('setting');
     const { allowed: canEdit } = usePermission('edit_own_content');
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
     const effectiveAgentId = agentId || activeAgentId || '';
     const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
-    const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
     // Workspace General access on this agent. A private agent is creator-only and
     // has no shared access row, so skip the query for it (same shape as the
     // prompt editor's gate). Only the automatic stale-plugin cleanup below reads
@@ -108,11 +155,9 @@ const AgentTool = memo<AgentToolProps>(
       isPrivateAgent ? undefined : effectiveAgentId || undefined,
     );
 
-    // Plugin state management — pinned identifiers only (a disabled entry
-    // is a distinct, valid config state; this component has no tri-state UI
-    // and treats it as "not enabled", matching pre-tri-state semantics).
-    const plugins = getActivePluginIds(config?.plugins);
-
+    // A connector is two-state: this page turns it on (found on demand) or off, never pinned.
+    const connectorIdList = useToolStore(getConnectorIdentifiers, isEqual);
+    const connectorIds = useMemo(() => new Set(connectorIdList), [connectorIdList]);
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
@@ -124,16 +169,61 @@ const AgentTool = memo<AgentToolProps>(
     );
     const profileBuiltinList = useToolStore(
       useAllMetaList
-        ? builtinToolSelectors.installedProfileConfigurableMetaList({
-            isManualMode: isManualSkillMode,
-          })
+        ? builtinToolSelectors.installedProfileConfigurableMetaList
         : builtinToolSelectors.metaList,
       isEqual,
     );
+    const connectedIds = useToolStore(
+      (s) => getConnectedConnectorIds(s, effectiveAgentId),
+      isEqual,
+    );
+    const installedBuiltinSkills = useToolStore(
+      builtinToolSelectors.installedBuiltinSkills,
+      isEqual,
+    );
+    const legacyDisabledBuiltins = useToolStore(
+      (state) => [
+        ...legacyDisabledBuiltinSkillsForRun(state, config?.plugins),
+        ...getLegacyDisabledBuiltinToolIds(
+          runtimeUninstalledBuiltinTools(state),
+          getBuiltinOverrides(config?.plugins),
+        ),
+      ],
+      isEqual,
+    );
+    const createdAt = useAgentStore((s) => s.agentMap[effectiveAgentId]?.createdAt);
+    const implicitSkills = getImplicitBuiltinSkillIds(createdAt, config?.chatConfig);
+    const implicitToolIds = useMemo(
+      () =>
+        resolveToolMode(config?.chatConfig) === 'agent'
+          ? [
+              ...profileBuiltinList.map((tool) => tool.identifier).filter(isOnDemandBuiltinTool),
+              ...connectedIds,
+              ...installedBuiltinSkills
+                .map((skill) => skill.identifier)
+                .filter((id) => implicitSkills.includes(id)),
+            ]
+          : [],
+      [
+        config?.chatConfig,
+        profileBuiltinList,
+        connectedIds,
+        installedBuiltinSkills,
+        implicitSkills,
+      ],
+    );
+    const disabledToolIds = useMemo(
+      () => new Set([...getDisabledPluginIds(config?.plugins), ...legacyDisabledBuiltins]),
+      [config?.plugins, legacyDisabledBuiltins],
+    );
+    const enabledIds = useMemo(() => {
+      const ids = new Set([...implicitToolIds, ...getOptedInPluginIds(config?.plugins)]);
+      for (const id of disabledToolIds) ids.delete(id);
+      return ids;
+    }, [implicitToolIds, config?.plugins, disabledToolIds]);
+
     const nonProfileConfigurableBuiltinToolIds = useToolStore(
-      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
-        isManualMode: isManualSkillMode,
-      }),
+      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds,
       isEqual,
     );
     const nonProfileConfigurableBuiltinToolIdentifiers = useMemo(
@@ -149,10 +239,6 @@ const AgentTool = memo<AgentToolProps>(
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Agent Skills-related state
-    const installedBuiltinSkills = useToolStore(
-      builtinToolSelectors.installedBuiltinSkills,
-      isEqual,
-    );
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
@@ -174,7 +260,6 @@ const AgentTool = memo<AgentToolProps>(
     useFetchInstalledPlugins();
     useFetchUninstalledBuiltinTools(true);
     useFetchAgentSkills(true);
-    useCheckPluginsIsInstalled(plugins);
 
     // Load user's Composio integrations via SWR (from database)
     useFetchUserComposioConnections(isComposioEnabledInEnv);
@@ -182,11 +267,11 @@ const AgentTool = memo<AgentToolProps>(
     // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
-    // Custom connectors (user-added OAuth MCP servers) from the connector store
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // MCP connectors the user added: custom ones and marketplace installs
+    const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
     // Agent-owned / linked connectors: when `excludeAgentConnectors` is set (the
-    // two-section agent profile), these are rendered in the dedicated "Agent
-    // Tools" section above, so they must be dropped from THIS base/user list —
+    // agent profile), these are listed by the profile's Tools page, so they must
+    // be dropped from THIS base/user list —
     // otherwise the identifier, pinned into `config.plugins` for runtime gating,
     // would surface here too and, lacking a base-dimension manifest, render as an
     // "uninstalled" chip. When the prop is off (e.g. the group member profile,
@@ -211,29 +296,61 @@ const AgentTool = memo<AgentToolProps>(
       if (!isConnectorsInit) fetchConnectors();
     }, [isConnectorsInit, fetchConnectors]);
 
+    // Get all skill identifiers (used to filter the builtin list)
+    const allSkillIdentifiers = useMemo(() => {
+      const ids = new Set<string>();
+      for (const s of installedBuiltinSkills) ids.add(s.identifier);
+      for (const s of marketAgentSkills) ids.add(s.identifier);
+      for (const s of userAgentSkills) ids.add(s.identifier);
+      return ids;
+    }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
+
     // Toggle a plugin - use byId action
     const togglePlugin = useCallback(
       async (pluginId: string, state?: boolean) => {
         if (!canEdit) return;
         if (!effectiveAgentId) return;
-        const hasPlugin = plugins.includes(pluginId);
+        const hasPlugin = enabledIds.has(pluginId);
         const shouldEnable = state !== undefined ? state : !hasPlugin;
-        if (shouldEnable === hasPlugin) return;
+        // Taking an item out must also work on one that is switched off: it is not pinned, but
+        // it still has an entry to remove.
+        const hasEntry = (config?.plugins ?? []).some(
+          (entry) => parsePluginEntry(entry).identifier === pluginId,
+        );
+        if (shouldEnable ? hasPlugin : !hasEntry && !hasPlugin) return;
 
-        // upsertPluginMode operates on the raw (possibly mixed-shape) config
-        // — not the pinned-only `plugins` above — so an existing disabled
-        // entry is flipped in place instead of being dropped from the array.
+        // upsertPluginMode operates on the raw (possibly mixed-shape) config,
+        // so an existing disabled entry is flipped in place instead of being
+        // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
-          plugins: upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
+          plugins:
+            isOnDemandBuiltinTool(pluginId) ||
+            installedBuiltinSkills.some((skill) => skill.identifier === pluginId)
+              ? setBuiltinPluginMode(config?.plugins, pluginId, shouldEnable ? 'auto' : 'disabled')
+              : connectorIds.has(pluginId) || implicitSkills.includes(pluginId)
+                ? upsertConnectorEnabled(config?.plugins, pluginId, shouldEnable)
+                : shouldEnable && allSkillIdentifiers.has(pluginId)
+                  ? upsertConnectorEnabled(config?.plugins, pluginId, true)
+                  : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
       },
-      [canEdit, effectiveAgentId, plugins, config?.plugins, updateAgentConfigById],
+      [
+        canEdit,
+        effectiveAgentId,
+        enabledIds,
+        connectorIds,
+        implicitSkills,
+        installedBuiltinSkills,
+        allSkillIdentifiers,
+        config?.plugins,
+        updateAgentConfigById,
+      ],
     );
 
-    // Check if a profile-managed tool is pinned.
+    // Check if a profile-managed tool is on for this agent.
     const isToolEnabled = useCallback(
-      (identifier: string) => plugins.includes(identifier),
-      [plugins],
+      (identifier: string) => enabledIds.has(identifier),
+      [enabledIds],
     );
 
     // Toggle a profile-managed tool.
@@ -273,15 +390,6 @@ const AgentTool = memo<AgentToolProps>(
         connectorCatalog.filter((item) => item.type === 'lobehub').map(({ provider }) => provider),
       [connectorCatalog],
     );
-
-    // Get all skill identifiers (used to filter the builtin list)
-    const allSkillIdentifiers = useMemo(() => {
-      const ids = new Set<string>();
-      for (const s of installedBuiltinSkills) ids.add(s.identifier);
-      for (const s of marketAgentSkills) ids.add(s.identifier);
-      for (const s of userAgentSkills) ids.add(s.identifier);
-      return ids;
-    }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
     // Filter out Composio tools and skills from profileBuiltinList (they are displayed separately)
     // Optionally filter out tools with availableInWeb: false based on config (e.g., LocalSystem is desktop-only)
@@ -395,7 +503,17 @@ const AgentTool = memo<AgentToolProps>(
         if (!canEdit) return;
 
         const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
-        await togglePlugin(identifier, false);
+        if (
+          (connectorIds.has(identifier) ||
+            installedBuiltinSkills.some((s) => s.identifier === identifier)) &&
+          !implicitToolIds.includes(identifier)
+        ) {
+          await updateAgentConfigById(effectiveAgentId, {
+            plugins: upsertPluginMode(config?.plugins, identifier, 'auto'),
+          });
+        } else {
+          await togglePlugin(identifier, false);
+        }
       };
 
     // Builtin Agent Skills list items (grouped under LobeHub)
@@ -529,11 +647,16 @@ const AgentTool = memo<AgentToolProps>(
             />
           ),
           key: item.identifier,
+          searchText: t(`tools.builtins.${item.identifier}.title` as any, {
+            defaultValue: item.meta?.title || item.identifier,
+          }),
           label: (
             <ToolItem
               checked={isToolEnabled(item.identifier)}
               id={item.identifier}
-              label={item.meta?.title}
+              label={t(`tools.builtins.${item.identifier}.title` as any, {
+                defaultValue: item.meta?.title || item.identifier,
+              })}
               onUpdate={async () => {
                 setUpdating(true);
                 await handleToggleTool(item.identifier);
@@ -598,7 +721,7 @@ const AgentTool = memo<AgentToolProps>(
           key: item.identifier,
           label: (
             <ToolItem
-              checked={plugins.includes(item.identifier)}
+              checked={enabledIds.has(item.identifier)}
               id={item.identifier}
               label={item.title}
               onUpdate={async () => {
@@ -630,7 +753,7 @@ const AgentTool = memo<AgentToolProps>(
           ),
         };
       },
-      [plugins, togglePlugin, t],
+      [enabledIds, togglePlugin, t],
     );
 
     // Community plugin list items
@@ -651,7 +774,7 @@ const AgentTool = memo<AgentToolProps>(
       [marketAgentSkillItems, communityPluginItems],
     );
 
-    // Custom connector list items (user-added OAuth MCP servers)
+    // Connector MCP list items (custom ones and marketplace installs)
     const customConnectorItems = useMemo(
       () =>
         customConnectors.map((connector) => {
@@ -660,7 +783,7 @@ const AgentTool = memo<AgentToolProps>(
             key: connector.identifier,
             label: (
               <ToolItem
-                checked={plugins.includes(connector.identifier)}
+                checked={enabledIds.has(connector.identifier)}
                 id={connector.identifier}
                 label={connector.name || connector.identifier}
                 onUpdate={async () => {
@@ -681,7 +804,7 @@ const AgentTool = memo<AgentToolProps>(
             ),
           };
         }),
-      [customConnectors, plugins, togglePlugin, t],
+      [customConnectors, enabledIds, togglePlugin, t],
     );
 
     // Custom group children (User Agent Skills + custom plugins + custom connectors)
@@ -736,10 +859,12 @@ const AgentTool = memo<AgentToolProps>(
         icon={PlusIcon}
         loading={updating}
         size={'small'}
-        style={{ color: cssVar.colorTextSecondary }}
+        style={variant === 'list' ? undefined : { color: cssVar.colorTextSecondary }}
         type={'text'}
       >
-        {t('tools.add', { defaultValue: 'Add' })}
+        {kind === 'tools'
+          ? t('settingAgent.agentTools.add')
+          : t('tools.add', { defaultValue: 'Add' })}
       </Button>
     );
 
@@ -748,7 +873,8 @@ const AgentTool = memo<AgentToolProps>(
     // ──────────────────────────────────────────────
     // Build the set of all valid identifiers known to the system
     const validIdentifiers = useMemo(() => {
-      const all = new Set<string>();
+      // A desktop-only skill is still a valid saved preference when editing on the web.
+      const all = new Set([...onDemandBuiltinToolIds, ...legacyBuiltinSkillIds]);
 
       // 1. Builtin tools (includes Composio metas)
       for (const tool of knownBuiltinList) all.add(tool.identifier);
@@ -772,7 +898,7 @@ const AgentTool = memo<AgentToolProps>(
       // 7. User agent skills
       for (const skill of userAgentSkills) all.add(skill.identifier);
 
-      // 8. Custom connectors
+      // 8. Connector MCPs: custom ones and marketplace installs
       for (const connector of customConnectors) all.add(connector.identifier);
 
       return all;
@@ -813,76 +939,188 @@ const AgentTool = memo<AgentToolProps>(
     // managed entries remain untouched in config for compatibility with other
     // flows, but do not inflate this section's count or render misleading chips.
     const allEnabledTools = useMemo(() => {
-      return getVisibleProfileToolIds(plugins, {
+      const visible = getVisibleProfileToolIds([...enabledIds], {
         agentConnectorIdentifiers,
         nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
       });
-    }, [plugins, agentConnectorIdentifiers, nonProfileConfigurableBuiltinToolIdentifiers]);
+      if (kind === 'all') return visible;
+      return visible.filter((id) => allSkillIdentifiers.has(id) === (kind === 'skills'));
+    }, [
+      enabledIds,
+      agentConnectorIdentifiers,
+      nonProfileConfigurableBuiltinToolIdentifiers,
+      kind,
+      allSkillIdentifiers,
+    ]);
+
+    // A list shows what is turned off as well, so it can be turned back on; the chips show only
+    // what is on. Every entry is listed: one that is merely Auto has no entry at all, except a
+    // library skill, where an explicit Auto is what turns it on.
+    const listedTools = useMemo(() => {
+      const entries = (config?.plugins ?? []).map((entry) => parsePluginEntry(entry));
+      const visible = getVisibleProfileToolIds(
+        [...new Set([...implicitToolIds, ...entries.map((entry) => entry.identifier)])],
+        {
+          agentConnectorIdentifiers,
+          nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
+        },
+      );
+      return kind === 'all'
+        ? visible
+        : visible.filter((id) => allSkillIdentifiers.has(id) === (kind === 'skills'));
+    }, [
+      implicitToolIds,
+      config?.plugins,
+      agentConnectorIdentifiers,
+      nonProfileConfigurableBuiltinToolIdentifiers,
+      kind,
+      allSkillIdentifiers,
+    ]);
+    const setPluginEnabled = (pluginId: string, enabled: boolean) => {
+      if (!canEdit || !effectiveAgentId) return;
+      return updateAgentConfigById(effectiveAgentId, {
+        plugins:
+          isOnDemandBuiltinTool(pluginId) ||
+          installedBuiltinSkills.some((skill) => skill.identifier === pluginId)
+            ? setBuiltinPluginMode(config?.plugins, pluginId, enabled ? 'auto' : 'disabled')
+            : allSkillIdentifiers.has(pluginId) || connectorIds.has(pluginId)
+              ? upsertConnectorEnabled(config?.plugins, pluginId, enabled)
+              : upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
+      });
+    };
+
+    // Where a skill comes from, for the label on its row.
+    const skillSource = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const skill of installedBuiltinSkills)
+        map.set(skill.identifier, t('settingAgent.skills.source.builtin'));
+      for (const skill of marketAgentSkills)
+        map.set(skill.identifier, t('settingAgent.skills.source.community'));
+      for (const skill of userAgentSkills)
+        map.set(skill.identifier, t('settingAgent.skills.source.custom'));
+      return map;
+    }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills, t]);
+
+    // The picker lists only what this page is about, so the Skills page never offers a tool.
+    const pickerItems = useMemo(() => {
+      if (kind === 'all') return allTabItems;
+      return allTabItems.flatMap((item) => {
+        if (!item || !('children' in item) || !item.children) return [item];
+        const children = item.children.filter(
+          (child) =>
+            !!child &&
+            'key' in child &&
+            allSkillIdentifiers.has(String(child.key)) === (kind === 'skills'),
+        );
+        return children.length > 0 ? [{ ...item, children }] : [];
+      });
+    }, [allTabItems, allSkillIdentifiers, kind]);
+
+    const addControl = (
+      <Suspense fallback={button}>
+        {/* Plugin Selector Dropdown - Using Action component pattern */}
+        <ActionDropdown
+          maxWidth={400}
+          minWidth={400}
+          open={dropdownOpen}
+          placement={'bottomLeft'}
+          trigger={'click'}
+          menu={{
+            items: [],
+            style: {
+              // let only the custom scroller scroll
+              maxHeight: 'unset',
+              overflowY: 'visible',
+            },
+          }}
+          popupProps={{
+            style: {
+              padding: 0,
+            },
+          }}
+          popupRender={() => (
+            <PopoverContent
+              items={pickerItems}
+              toolsOnly={kind === 'tools'}
+              onClose={() => setDropdownOpen(false)}
+              onOpenStore={() => {
+                setDropdownOpen(false);
+                createSkillStoreModal();
+              }}
+            />
+          )}
+          positionerProps={{
+            collisionAvoidance: { align: 'flip', fallbackAxisSide: 'end', side: 'flip' },
+            collisionBoundary:
+              typeof document === 'undefined' ? undefined : document.documentElement,
+            positionMethod: 'fixed',
+          }}
+          onOpenChange={(next) => {
+            if (!canEdit) return;
+
+            setDropdownOpen(next);
+          }}
+        >
+          {button}
+        </ActionDropdown>
+      </Suspense>
+    );
+
+    if (variant === 'list' && group) {
+      return (
+        <ToolListGroup
+          {...group}
+          activeCount={listedTools.filter((id) => !disabledToolIds.has(id)).length}
+          addControl={addControl}
+          emptyText={t(
+            kind === 'skills'
+              ? 'settingAgent.tools.level.skillsEmpty'
+              : 'settingAgent.tools.level.libraryEmpty',
+          )}
+          rows={listedTools.map((pluginId) => (
+            <PluginTag
+              disabled={!canEdit}
+              enabled={!disabledToolIds.has(pluginId)}
+              isSkill={kind === 'skills'}
+              key={pluginId}
+              pluginId={pluginId}
+              removable={!implicitToolIds.includes(pluginId)}
+              showAuthor={showAuthor}
+              showDesktopOnlyLabel={filterAvailableInWeb}
+              tagLabel={kind === 'skills' ? skillSource.get(pluginId) : undefined}
+              useAllMetaList={useAllMetaList}
+              variant={'row'}
+              onOpen={onOpenDetail}
+              onRemove={handleRemovePlugin(pluginId)}
+              onToggle={(next) => void setPluginEnabled(pluginId, next)}
+            />
+          ))}
+          total={pickerItems.reduce(
+            (sum, item) =>
+              sum + (item && 'children' in item && item.children ? item.children.length : 0),
+            0,
+          )}
+        />
+      );
+    }
 
     return (
       <>
         {/* Plugin Selector and Tags */}
-        <Flexbox horizontal align="center" gap={8} wrap={'wrap'}>
-          <Suspense fallback={button}>
-            {/* Plugin Selector Dropdown - Using Action component pattern */}
-            <ActionDropdown
-              maxWidth={400}
-              minWidth={400}
-              open={dropdownOpen}
-              placement={'bottomLeft'}
-              trigger={'click'}
-              menu={{
-                items: [],
-                style: {
-                  // let only the custom scroller scroll
-                  maxHeight: 'unset',
-                  overflowY: 'visible',
-                },
-              }}
-              popupProps={{
-                style: {
-                  padding: 0,
-                },
-              }}
-              popupRender={() => (
-                <PopoverContent
-                  items={allTabItems}
-                  onClose={() => setDropdownOpen(false)}
-                  onOpenStore={() => {
-                    setDropdownOpen(false);
-                    createSkillStoreModal();
-                  }}
-                />
-              )}
-              positionerProps={{
-                collisionAvoidance: { align: 'flip', fallbackAxisSide: 'end', side: 'flip' },
-                collisionBoundary:
-                  typeof document === 'undefined' ? undefined : document.documentElement,
-                positionMethod: 'fixed',
-              }}
-              onOpenChange={(next) => {
-                if (!canEdit) return;
-
-                setDropdownOpen(next);
-              }}
-            >
-              {button}
-            </ActionDropdown>
-          </Suspense>
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          {addControl}
           {/* Selected Plugins as Tags */}
-          {allEnabledTools.map((pluginId) => {
-            return (
-              <PluginTag
-                disabled={!canEdit}
-                key={pluginId}
-                pluginId={pluginId}
-                showAuthor={showAuthor}
-                showDesktopOnlyLabel={filterAvailableInWeb}
-                useAllMetaList={useAllMetaList}
-                onRemove={handleRemovePlugin(pluginId)}
-              />
-            );
-          })}
+          {allEnabledTools.map((pluginId) => (
+            <PluginTag
+              disabled={!canEdit}
+              key={pluginId}
+              pluginId={pluginId}
+              showAuthor={showAuthor}
+              showDesktopOnlyLabel={filterAvailableInWeb}
+              useAllMetaList={useAllMetaList}
+              onRemove={handleRemovePlugin(pluginId)}
+            />
+          ))}
         </Flexbox>
       </>
     );

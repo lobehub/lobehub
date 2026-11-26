@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DSH_ACP_PROFILE_ARGS, spawnDshAcpSession } from './dshAcpSession';
+import { DSH_ACP_PROFILE_ARGS, listDshAcpModels, spawnDshAcpSession } from './dshAcpSession';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '__fixtures__/dshAcp');
 
@@ -60,6 +60,8 @@ process.stdin.on('data', (chunk) => {
       send({ id, result: { configOptions: config } });
     } else if (method === 'session/set_config_option') {
       send({ id, result: { configOptions: config } });
+    } else if (method === 'session/close') {
+      send({ id, result: {} });
     } else if (method === 'session/prompt') {
       if (process.env.FAKE_HANG) { pendingPrompt = id; continue; }
       const recorded = fs.readFileSync(process.env.FAKE_FIXTURE, 'utf8').trim().split('\\n');
@@ -210,6 +212,87 @@ describe('spawnDshAcpSession', () => {
 
     await expect(collect(handle)).rejects.toThrow(/cannot resume.*npm i -g @deepseek-ai\/dsh/);
     expect(await methodsOf(logPath)).toEqual(['initialize']);
+  });
+
+  it('selects the exact persisted tuple when providers offer the same model name', async () => {
+    const value = '["gateway","deepseek-v4-pro"]';
+    const config = structuredClone(MODEL_CONFIG);
+    config[0].options.push({
+      group: 'gateway',
+      name: 'Gateway',
+      options: [{ name: 'DeepSeek-V4-Pro', value }],
+    });
+    const { handle, logPath } = await start({
+      env: { FAKE_CONFIG: JSON.stringify(config) },
+      model: value,
+    });
+
+    await collect(handle);
+
+    const setConfig = (await requestsOf(logPath)).find(
+      ({ frame }) => frame.method === 'session/set_config_option',
+    );
+    expect(setConfig?.frame.params.value).toBe(value);
+  });
+
+  it('discovers grouped models over ACP without prompting, preserving tuple IDs', async () => {
+    const { dir, logPath } = await start({});
+
+    const models = await listDshAcpModels({
+      commandPath: path.join(dir, 'dsh'),
+      cwd: dir,
+      env: { ...process.env, FAKE_CONFIG: JSON.stringify(MODEL_CONFIG), FAKE_LOG: logPath },
+    });
+
+    expect(models).toEqual([
+      {
+        id: '["deepseek-official","deepseek-v4-flash"]',
+        label: 'deepseek-v4-flash',
+        modelId: 'deepseek-v4-flash',
+        providerId: 'deepseek-official',
+      },
+      {
+        id: '["deepseek-official","deepseek-v4-pro"]',
+        label: 'DeepSeek-V4-Pro',
+        modelId: 'deepseek-v4-pro',
+        providerId: 'deepseek-official',
+      },
+    ]);
+    expect(await methodsOf(logPath)).toEqual(['initialize', 'session/new', 'session/close']);
+  });
+
+  it('dedupes repeated choice values from the runtime catalog', async () => {
+    const { dir, logPath } = await start({});
+    const duplicateConfig = [
+      {
+        ...MODEL_CONFIG[0],
+        options: [
+          {
+            group: 'deepseek-official',
+            name: 'DeepSeek',
+            options: [
+              { name: 'deepseek-v4-flash', value: '["deepseek-official","deepseek-v4-flash"]' },
+              {
+                name: 'deepseek-v4-flash (dup)',
+                value: '["deepseek-official","deepseek-v4-flash"]',
+              },
+              { name: 'DeepSeek-V4-Pro', value: '["deepseek-official","deepseek-v4-pro"]' },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const models = await listDshAcpModels({
+      commandPath: path.join(dir, 'dsh'),
+      cwd: dir,
+      env: { ...process.env, FAKE_CONFIG: JSON.stringify(duplicateConfig), FAKE_LOG: logPath },
+    });
+
+    expect(models.map(({ id }) => id)).toEqual([
+      '["deepseek-official","deepseek-v4-flash"]',
+      '["deepseek-official","deepseek-v4-pro"]',
+    ]);
   });
 
   it('switches to a requested model the runtime offers', async () => {

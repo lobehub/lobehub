@@ -1,4 +1,4 @@
-import { normalizeVerifySurface } from '@lobechat/const/verify';
+import { isCheckWaivedByDispute, normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceCheckGroup,
   VerifyAgentPlanConfig,
@@ -16,6 +16,8 @@ export interface CheckUnionResult {
   checkItemId: string;
   checkItemTitle: string | null;
   id: string;
+  /** Result metadata — read only for the dispute waiver marker. */
+  metadata?: unknown;
   required: boolean;
   status: string;
   verdict: string | null;
@@ -109,6 +111,13 @@ export interface AcceptanceCheckRow<R extends CheckUnionResult = CheckUnionResul
   title: string;
   /** The wording evolved across the timeline (a real iteration, not a re-run). */
   titleChanged: boolean;
+  /**
+   * The final verdict was waived by an upheld `invalid_criterion` dispute: the
+   * row keeps its historical verdict for the timeline, but it no longer gates
+   * the delivery, so summaries must not count it. Mirrors the run-level
+   * rollups, which already skip waived result rows.
+   */
+  waived: boolean;
 }
 
 interface RoundInput<R extends CheckUnionResult> {
@@ -162,6 +171,7 @@ export const buildAcceptanceCheckUnion = <R extends CheckUnionResult>(
       timeline: [],
       title: id,
       titleChanged: false,
+      waived: false,
     };
     rows.set(id, row);
     return row;
@@ -249,6 +259,7 @@ export const buildAcceptanceCheckUnion = <R extends CheckUnionResult>(
 
   for (const row of rows.values()) {
     row.state = row.result ? resultState(row.result) : 'not_executed';
+    row.waived = row.result ? isCheckWaivedByDispute(row.result.metadata) : false;
     row.fixed = row.state === 'passed' && row.history.some((entry) => entry.state === 'failed');
     row.revisions = row.timeline.length;
     row.titleChanged = row.timeline.some((entry) => entry.title !== row.title);
@@ -287,11 +298,17 @@ export const tallyCheckUnion = (checks: AcceptanceCheckRow[]): VerifyCheckTally 
   let passed = 0;
   let unjudged = 0;
   for (const check of checks) {
+    // A waived check keeps its verdict on the row, but it no longer gates the
+    // delivery — counting it here would print a failure beside a status that
+    // already ignores the same row.
+    if (check.waived) continue;
     if (check.state === 'passed') passed++;
     else if (check.state === 'failed') failed++;
     // `uncertain` and `not_executed` are both "planned, never judged" — the same
     // split the acceptance's criteria list draws.
     else unjudged++;
   }
-  return { failed, passed, total: checks.length, unjudged };
+  // `total` counts the rows that still gate the delivery, not every row: a
+  // waived check keeps its place in the list but is not part of the split.
+  return { failed, passed, total: failed + passed + unjudged, unjudged };
 };

@@ -25,7 +25,8 @@ const {
 
 vi.mock('@/services/mcp', () => ({ mcpService: { invokeMcpToolCall } }));
 
-vi.mock('@/store/tool', () => ({ getToolStoreState: () => ({}) }));
+const toolState = vi.hoisted(() => ({ value: {} as any }));
+vi.mock('@/store/tool', () => ({ getToolStoreState: () => toolState.value }));
 
 vi.mock('./appName', () => ({ mcpAppNameSelector: () => () => 'Weather Demo' }));
 
@@ -38,7 +39,11 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const disposers: (() => void)[] = [];
 
 /** Connect a view in a fresh frame, as McpAppView does once the frame has loaded. */
-const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => {
+const setup = ({
+  canSendMessage = true,
+  args = '{"city":"Paris"}',
+  linkId,
+}: { canSendMessage?: boolean; args?: string; linkId?: string } = {}) => {
   const iframe = document.createElement('iframe');
   document.body.append(iframe);
   const target = iframe.contentWindow!;
@@ -51,7 +56,8 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
   const { dispose, teardown } = connectAppView({
     getContext: () => ({
       agentId: 'agt_1',
-      args: '{"city":"Paris"}',
+      args,
+      linkId,
       canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
@@ -60,6 +66,7 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
       sendMessage,
       server: 'weather-server',
       t: (key: string) => key,
+      topicId: 'tpc_1',
     }),
     onHeight,
     onNavigated,
@@ -152,6 +159,7 @@ describe('getAppViewPhase', () => {
 
 describe('connectAppView', () => {
   beforeEach(() => {
+    toolState.value = {};
     vi.clearAllMocks();
     getAppToolCallPolicy.mockResolvedValue('confirm');
     sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
@@ -322,18 +330,6 @@ describe('connectAppView', () => {
     expect(confirmAppToolCall).toHaveBeenCalledTimes(4);
   });
 
-  it('withdraws its pending approvals when the view goes away', async () => {
-    confirmAppToolCall.mockReturnValue(new Promise(() => {}));
-    const { call, dispose } = setup();
-
-    await call(1, 'Rome');
-    const { signal } = confirmAppToolCall.mock.calls[0][0] as { signal: AbortSignal };
-    expect(signal.aborted).toBe(false);
-
-    dispose();
-    expect(signal.aborted).toBe(true);
-  });
-
   it('drops an approval once the view stops waiting for that request', async () => {
     // Like the real confirm: an aborted approval resolves `false`, whatever the user clicks later
     const settle = ({ signal }: { signal: AbortSignal }) =>
@@ -410,6 +406,12 @@ describe('connectAppView', () => {
 
     await call(1, 'Rome');
 
+    // Approved and run in the view's conversation, so both resolve the same connector
+    expect(getAppToolCallPolicy).toHaveBeenCalledWith('weather-demo', 'get_forecast', {
+      agentId: 'agt_1',
+      toolArgs: { city: 'Rome' },
+      topicId: 'tpc_1',
+    });
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
       // On the server, and where, the view came from
@@ -419,6 +421,7 @@ describe('connectAppView', () => {
         onThisDevice: true,
         server: 'weather-server',
         signal: expect.any(AbortSignal),
+        topicId: 'tpc_1',
       },
     );
   });
@@ -577,5 +580,89 @@ describe('connectAppView', () => {
 
     dispose();
     expect(signal.aborted).toBe(true);
+  });
+  it('keeps view tools/call bound to the initiating account including collision fallback', async () => {
+    toolState.value = {
+      connectors: [
+        { identifier: 'weather-demo', tools: [{ inputSchema: { properties: { link_id: {} } } }] },
+      ],
+    };
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'ok', success: true });
+    const { call } = setup({ args: '{"connector_link_id":"lnk_bob","link_id":"business"}' });
+    await call(401);
+    expect(invokeMcpToolCall).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fromMcpApp: true, linkId: 'lnk_bob' }),
+    );
+  });
+  // An entrypoint opens with `{}`: its account comes with the view instead
+  it("keeps an entrypoint view's tools/call on the account it opened as", async () => {
+    toolState.value = {
+      connectors: [{ identifier: 'weather-demo', tools: [{ inputSchema: { properties: {} } }] }],
+    };
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'ok', success: true });
+    const { call } = setup({ args: '{}', linkId: 'lnk_bob' });
+    await call(402);
+    expect(invokeMcpToolCall).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fromMcpApp: true, linkId: 'lnk_bob' }),
+    );
+  });
+});
+
+describe('a view that is leaving', () => {
+  it('drops model context updates once it retires, though its frame still runs', async () => {
+    const iframe = document.createElement('iframe');
+    document.body.append(iframe);
+    const target = iframe.contentWindow!;
+    const onUpdateModelContext = vi.fn();
+    const session = connectAppView({
+      getContext: () => ({
+        canSendMessage: true,
+        identifier: 'weather-demo',
+        isDark: false,
+        lifecycle: {
+          getDisplayContext: () => ({}),
+          onRequestDisplayMode: (mode) => mode,
+          onTeardown: vi.fn(),
+          onUpdateModelContext,
+        },
+        onThisDevice: false,
+        result: { content: 'sunny' },
+        sendMessage,
+        t: (key: string) => key,
+      }),
+      onHeight: vi.fn(),
+      onNavigated: vi.fn(),
+      onWaitingApprovalsChange: vi.fn(),
+      resourceUri: 'ui://weather/view',
+      target,
+      toolCallId: 'call_1',
+    });
+    disposers.push(session.dispose);
+    const update = async (id: number, text: string) => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            id,
+            jsonrpc: '2.0',
+            method: 'ui/update-model-context',
+            params: { content: [{ text, type: 'text' }] },
+          },
+          source: target,
+        }),
+      );
+      await flush();
+    };
+
+    await update(1, 'before');
+    expect(onUpdateModelContext).toHaveBeenCalledTimes(1);
+
+    session.retire();
+    await update(2, 'while saving');
+
+    expect(onUpdateModelContext).toHaveBeenCalledTimes(1);
   });
 });

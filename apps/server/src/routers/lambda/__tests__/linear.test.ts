@@ -29,6 +29,30 @@ import {
 
 import { linearRouter } from '../linear';
 
+const syncRuleInput = (
+  connectionId: string,
+  projectId: string,
+  stateType: NonNullable<
+    Parameters<ReturnType<typeof linearRouter.createCaller>['createSyncRule']>[0]['stateTypes']
+  >[number],
+): Parameters<ReturnType<typeof linearRouter.createCaller>['createSyncRule']>[0] => ({
+  connectionId,
+  projectId,
+  stateTypes: [stateType],
+  teamId: 'team-1',
+  teamName: 'Engineering',
+});
+
+const unauthorizedResponse = () => ({
+  result: {
+    error: {
+      code: -32_001,
+      data: { code: 'UNAUTHORIZED', httpStatus: 401 },
+      message: 'Invalid JWT token',
+    },
+  },
+});
+
 const serverDB = await getTestDB();
 const userId = 'linear-router-user';
 const otherUserId = 'linear-router-user-2';
@@ -351,13 +375,9 @@ describe('linearRouter', () => {
         const connection = await connect({ userId });
         mocks.getToken.mockResolvedValue('token');
         mocks.runSync.mockResolvedValue({ ok: true });
-        const rule = await caller({ userId }).createSyncRule({
-          connectionId: connection.id,
-          projectId,
-          stateTypes: ['unstarted'],
-          teamId: 'team-1',
-          teamName: 'Engineering',
-        });
+        const rule = await caller({ userId }).createSyncRule(
+          syncRuleInput(connection.id, projectId, 'unstarted'),
+        );
         const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
         return { id, rule };
       };
@@ -665,15 +685,7 @@ describe('linearRouter', () => {
         mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
         const { id } = await startRule();
         mocks.runSync.mockRejectedValue(
-          new TRPCClientError('Invalid JWT token', {
-            result: {
-              error: {
-                code: -32_001,
-                data: { code: 'UNAUTHORIZED', httpStatus: 401 },
-                message: 'Invalid JWT token',
-              },
-            },
-          } as any),
+          new TRPCClientError('Invalid JWT token', unauthorizedResponse() as any),
         );
 
         await routerService().run(id);
@@ -763,13 +775,9 @@ describe('linearRouter', () => {
       const connection = await connect({ userId });
       mocks.getToken.mockResolvedValue('token');
       mocks.runSync.mockResolvedValue({ ok: true });
-      const rule = await caller({ userId }).createSyncRule({
-        connectionId: connection.id,
-        projectId,
-        stateTypes: ['unstarted'],
-        teamId: 'team-1',
-        teamName: 'Engineering',
-      });
+      const rule = await caller({ userId }).createSyncRule(
+        syncRuleInput(connection.id, projectId, 'unstarted'),
+      );
 
       const [first, second] = await Promise.all([
         caller({ userId }).startRuleSync({ ruleId: rule.id }),
@@ -783,26 +791,14 @@ describe('linearRouter', () => {
     describe('when the async router rejects the hand-off', () => {
       // What the async router answers when it turns down the internal token.
       const rejected = () =>
-        new TRPCClientError('Invalid JWT token', {
-          result: {
-            error: {
-              code: -32_001,
-              data: { code: 'UNAUTHORIZED', httpStatus: 401 },
-              message: 'Invalid JWT token',
-            },
-          },
-        } as any);
+        new TRPCClientError('Invalid JWT token', unauthorizedResponse() as any);
 
       const startRule = async () => {
         const connection = await connect({ userId });
         mocks.getToken.mockResolvedValue('token');
-        const rule = await caller({ userId }).createSyncRule({
-          connectionId: connection.id,
-          projectId,
-          stateTypes: ['unstarted'],
-          teamId: 'team-1',
-          teamName: 'Engineering',
-        });
+        const rule = await caller({ userId }).createSyncRule(
+          syncRuleInput(connection.id, projectId, 'unstarted'),
+        );
         return caller({ userId }).startRuleSync({ ruleId: rule.id });
       };
 
@@ -907,13 +903,9 @@ describe('linearRouter', () => {
         mocks.runSync.mockResolvedValue({ ok: true });
         let finish: ((result: typeof syncResult) => void) | undefined;
         mocks.syncByFilter.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
-        const rule = await caller({ userId }).createSyncRule({
-          connectionId: connection.id,
-          projectId,
-          stateTypes: ['unstarted'],
-          teamId: 'team-1',
-          teamName: 'Engineering',
-        });
+        const rule = await caller({ userId }).createSyncRule(
+          syncRuleInput(connection.id, projectId, 'unstarted'),
+        );
         const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
         const running = new LinearSyncJobService(serverDB, userId).run(id);
         const settle = async (done: () => Promise<boolean> | boolean) => {
@@ -947,13 +939,9 @@ describe('linearRouter', () => {
 
     it("hides another user's personal rules", async () => {
       const connection = await connect({ userId: otherUserId });
-      const rule = await caller({ userId: otherUserId }).createSyncRule({
-        connectionId: connection.id,
-        projectId: otherProjectId,
-        stateTypes: ['backlog'],
-        teamId: 'team-1',
-        teamName: 'Engineering',
-      });
+      const rule = await caller({ userId: otherUserId }).createSyncRule(
+        syncRuleInput(connection.id, otherProjectId, 'backlog'),
+      );
 
       await expect(
         caller({ userId }).listSyncRules({ projectId: otherProjectId }),
@@ -970,13 +958,7 @@ describe('linearRouter', () => {
       const connection = await connect({ userId });
 
       await expect(
-        caller({ userId }).createSyncRule({
-          connectionId: connection.id,
-          projectId: otherProjectId,
-          stateTypes: ['backlog'],
-          teamId: 'team-1',
-          teamName: 'Engineering',
-        }),
+        caller({ userId }).createSyncRule(syncRuleInput(connection.id, otherProjectId, 'backlog')),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       await expect(
         caller({ userId }).startImport({
@@ -1041,19 +1023,48 @@ describe('linearRouter', () => {
         targetProjectId: projectId,
       });
 
-      const rule = await caller({ userId }).createSyncRule({
-        connectionId: connection.id,
-        projectId,
-        stateTypes: ['backlog'],
-        teamId: 'team-1',
-        teamName: 'Engineering',
-      });
+      const rule = await caller({ userId }).createSyncRule(
+        syncRuleInput(connection.id, projectId, 'backlog'),
+      );
       const run = await caller({ userId }).startRuleSync({ ruleId: rule.id, syncComments: true });
       await new LinearSyncJobService(serverDB, userId).run(run.id);
       expect(mocks.syncByFilter).toHaveBeenCalledWith(
         'token',
         expect.objectContaining({ teamId: 'team-1' }),
         expect.objectContaining({ syncComments: true }),
+      );
+    });
+
+    it('brings labels along on a rule run only when that run asks for them', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        projectId,
+        stateTypes: ['completed'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+
+      const plain = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+      await new LinearSyncJobService(serverDB, userId).run(plain.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.anything(),
+        expect.objectContaining({ syncLabels: undefined }),
+      );
+
+      const labelled = await caller({ userId }).startRuleSync({
+        ruleId: rule.id,
+        syncLabels: true,
+      });
+      await new LinearSyncJobService(serverDB, userId).run(labelled.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.anything(),
+        expect.objectContaining({ syncLabels: true }),
       );
     });
 
@@ -1097,13 +1108,9 @@ describe('linearRouter', () => {
       await serverDB
         .insert(projects)
         .values({ id: 'linear-router-project-3', identifier: 'LRR', name: 'Other', userId });
-      const rule = await caller({ userId }).createSyncRule({
-        connectionId: connection.id,
-        projectId,
-        stateTypes: ['backlog'],
-        teamId: 'team-1',
-        teamName: 'Engineering',
-      });
+      const rule = await caller({ userId }).createSyncRule(
+        syncRuleInput(connection.id, projectId, 'backlog'),
+      );
 
       expect(
         await caller({ userId }).listSyncRules({ projectId: 'linear-router-project-3' }),
@@ -1118,13 +1125,9 @@ describe('linearRouter', () => {
 
     it('keeps a rule removable after its connection is disconnected, and asks to reconnect on run', async () => {
       const connection = await connect({ userId });
-      const rule = await caller({ userId }).createSyncRule({
-        connectionId: connection.id,
-        projectId,
-        stateTypes: ['backlog'],
-        teamId: 'team-1',
-        teamName: 'Engineering',
-      });
+      const rule = await caller({ userId }).createSyncRule(
+        syncRuleInput(connection.id, projectId, 'backlog'),
+      );
       await LinearConnectionModel.revoke(serverDB, connection.id);
       const { LinearReconnectRequiredError } = await import('@/server/services/linear/token');
       mocks.getToken.mockRejectedValue(new LinearReconnectRequiredError());

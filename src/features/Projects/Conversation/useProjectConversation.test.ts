@@ -1,6 +1,6 @@
-import { render, renderHook, screen } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { createElement, Fragment, type ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
@@ -148,5 +148,35 @@ describe('useProjectConversation', () => {
       agentId: 'agt_coord',
       projectId: 'prj_launch',
     });
+  });
+
+  // Review: Auto lived only in memory, so a reloaded draft pinned its last runner.
+  it('restores Auto from the route when a draft is reloaded', () => {
+    renderHook(() => useProjectConversation(), {
+      wrapper: wrapper('/project/launch/topic?agent=agt_coord&auto=1'),
+    });
+
+    expect(useChatStore.getState().pendingNewTopicDirectory).toEqual({
+      agentId: 'agt_coord',
+      auto: true,
+      projectId: 'prj_launch',
+    });
+  });
+
+  // Review: a hand pick only changed the staged draft, so a reload re-read
+  // auto=1 from the route and moved the draft off the runner picked by hand.
+  it('drops Auto from the route when a runner is picked by hand', () => {
+    const { result } = renderHook(
+      () => ({ conversation: useProjectConversation(), location: useLocation() }),
+      { wrapper: wrapper('/project/launch/topic?agent=agt_coord&auto=1') },
+    );
+
+    act(() =>
+      useChatStore
+        .getState()
+        .setPendingNewTopicDirectory({ agentId: 'agt_coord', projectId: 'prj_launch' }),
+    );
+
+    expect(result.current.location.search).toBe('?agent=agt_coord');
   });
 });

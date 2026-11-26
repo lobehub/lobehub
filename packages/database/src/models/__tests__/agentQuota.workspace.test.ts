@@ -3,10 +3,11 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentProviderAccounts, agents, users, workspaces } from '../../schemas';
+import { agentProviderAccounts, agents, devices, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   AgentAccountBindingModel,
+  AgentProviderAccountLoginModel,
   AgentProviderAccountModel,
   AgentQuotaCalibrationModel,
   AgentQuotaSnapshotModel,
@@ -175,10 +176,77 @@ describe('Agent quota workspace scope', () => {
     expect(await teammate.findById(hidden.id)).toBeNull();
 
     // a teammate cannot change it either; the owner can publish it
-    await teammate.update(hidden.id, { visibility: 'public' });
+    expect(await teammate.setVisibility(hidden.id, 'public')).toBe(false);
     expect(await teammate.findById(hidden.id)).toBeNull();
-    await mine.update(hidden.id, { visibility: 'public' });
+    expect(await mine.setVisibility(hidden.id, 'public')).toBe(true);
     expect(await teammate.findById(hidden.id)).not.toBeNull();
+  });
+
+  it('creates a reported workspace login as private, and personal ones without a say', async () => {
+    const identity = { externalAccountId: 'ext-private', email: 'me@b.com' };
+    const workspaceAccounts = new AgentProviderAccountModel(serverDB, userId, workspaceId);
+    const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
+
+    const reported = await workspaceAccounts.upsertByIdentity('claude-code', identity);
+    expect(reported?.visibility).toBe('private');
+    expect(await teammate.list()).toEqual([]);
+
+    // Re-reporting does not undo a publish.
+    await workspaceAccounts.setVisibility(reported!.id, 'public');
+    const again = await workspaceAccounts.upsertByIdentity('claude-code', identity);
+    expect(again?.visibility).toBe('public');
+
+    // Personal rows have no team to hide from.
+    const personal = new AgentProviderAccountModel(serverDB, userId);
+    const own = await personal.upsertByIdentity('claude-code', identity);
+    expect(await personal.setVisibility(own!.id, 'public')).toBe(false);
+  });
+
+  it('keeps a private account from a teammate who reports its identity, even with a login', async () => {
+    const identity = { externalAccountId: 'ext-shared-login', email: 'pair@b.com' };
+    await serverDB.insert(devices).values({
+      deviceId: 'teammate-mac',
+      identitySource: 'machine-id',
+      userId: teammateId,
+      visibility: 'private',
+      workspaceId,
+    });
+    const [device] = await serverDB
+      .select({ id: devices.id })
+      .from(devices)
+      .where(eq(devices.deviceId, 'teammate-mac'));
+
+    const mine = new AgentProviderAccountModel(serverDB, userId, workspaceId);
+    const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
+    const account = (await mine.upsertByIdentity('claude-code', identity))!;
+
+    // Knowing the external id is not holding the login: the report neither
+    // inserts a colliding row nor reads or overwrites the private one.
+    const blind = await teammate.upsertByIdentity('claude-code', {
+      ...identity,
+      email: 'overwritten@b.com',
+    });
+    expect(blind).toBeUndefined();
+    expect((await mine.findById(account.id))?.email).toBe('pair@b.com');
+    expect(
+      await serverDB
+        .select({ id: agentProviderAccounts.id })
+        .from(agentProviderAccounts)
+        .where(eq(agentProviderAccounts.externalAccountId, identity.externalAccountId)),
+    ).toHaveLength(1);
+
+    // A login reported from the teammate's own device is unverifiable, so it
+    // grants nothing either: only the creator publishing it shares it.
+    await new AgentProviderAccountLoginModel(serverDB, teammateId, workspaceId).record(
+      account.id,
+      device.id,
+    );
+    expect(await teammate.upsertByIdentity('claude-code', identity)).toBeUndefined();
+    expect(await teammate.list()).toEqual([]);
+    expect(await teammate.setVisibility(account.id, 'public')).toBe(false);
+
+    await mine.setVisibility(account.id, 'public');
+    expect((await teammate.list()).map((a) => a.id)).toEqual([account.id]);
   });
 
   it('lets the same external identity exist once per scope', async () => {
@@ -188,20 +256,20 @@ describe('Agent quota workspace scope', () => {
 
     const personal = await personalAccounts.upsertByIdentity('claude-code', identity);
     const shared = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(shared.id).not.toBe(personal.id);
+    expect(shared?.id).not.toBe(personal?.id);
 
     // re-observing the same identity in the same scope dedupes instead of inserting
     const again = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(again.id).toBe(shared.id);
+    expect(again?.id).toBe(shared?.id);
     expect(await workspaceAccounts.list()).toHaveLength(1);
     expect(await personalAccounts.list()).toHaveLength(1);
 
-    // …and so does a teammate observing it from their own device: one real
-    // account must stay ONE row per workspace, or the load balancer would count
-    // its capacity twice.
+    // …and so does a teammate observing it: one real account must stay ONE row
+    // per workspace, or the load balancer would count its capacity twice. The
+    // row is private, so without a login the teammate gets nothing back.
     const teammateAccounts = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
     const fromTeammate = await teammateAccounts.upsertByIdentity('claude-code', identity);
-    expect(fromTeammate.id).toBe(shared.id);
+    expect(fromTeammate).toBeUndefined();
     expect(await workspaceAccounts.list()).toHaveLength(1);
   });
 });

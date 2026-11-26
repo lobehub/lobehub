@@ -17,7 +17,18 @@ describe('getPrivateDeviceBlock', () => {
     ).toBe('publicAgent');
   });
 
-  it('blocks a private device once a private agent is fixed', () => {
+  it('blocks a private device on a public fixed agent, which the server rejects', () => {
+    expect(
+      getPrivateDeviceBlock({
+        canManageAgent: true,
+        isWorkspaceAgent: true,
+        selectionPolicy: 'fixed',
+        visibility: 'public',
+      }),
+    ).toBe('fixed');
+  });
+
+  it("allows the owner's private device on a private fixed agent until it is published", () => {
     expect(
       getPrivateDeviceBlock({
         canManageAgent: true,
@@ -25,7 +36,7 @@ describe('getPrivateDeviceBlock', () => {
         selectionPolicy: 'fixed',
         visibility: 'private',
       }),
-    ).toBe('fixed');
+    ).toBeUndefined();
   });
 
   it("allows the owner's private device on a private agent", () => {
@@ -70,6 +81,12 @@ describe('getTargetSelectValue', () => {
     expect(getTargetSelectValue('device', undefined)).toBeUndefined();
     expect(getTargetSelectValue('none', undefined)).toBeUndefined();
     expect(getTargetSelectValue('auto', undefined)).toBeUndefined();
+  });
+
+  it('selects "No device" and "Auto" for a LobeHub agent, which lists them as choices', () => {
+    expect(getTargetSelectValue('none', undefined, { builtin: true })).toBe('target:none');
+    expect(getTargetSelectValue('auto', undefined, { builtin: true })).toBe('target:auto');
+    expect(getTargetSelectValue('device', undefined, { builtin: true })).toBeUndefined();
   });
 });
 

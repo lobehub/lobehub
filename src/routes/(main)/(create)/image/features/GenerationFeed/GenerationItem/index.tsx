@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openGenerationShareModal, useCanShareGeneration } from '@/features/GenerationShareModal';
 import { useDownloadImage } from '@/hooks/useDownloadImage';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
@@ -86,6 +87,12 @@ export const GenerationItem = memo<GenerationItemProps>(
       }
     }, [generation.seed, isSupportSeed, t, reuseSeed]);
 
+    const canShare = useCanShareGeneration(generation.fileId, generationBatch.creator?.id);
+    const handleShare = useCallback(() => {
+      if (!generation.fileId) return;
+      openGenerationShareModal({ fileId: generation.fileId, prompt, type: 'image' });
+    }, [generation.fileId, prompt]);
+
     const handleCopyError = useCallback(async () => {
       if (!generation.task.error) return;
 
@@ -119,6 +126,7 @@ export const GenerationItem = memo<GenerationItemProps>(
           onCopySeed={handleCopySeed}
           onDelete={handleDeleteGeneration}
           onDownload={handleDownloadImage}
+          onShare={canShare ? handleShare : undefined}
         />
       );
     }

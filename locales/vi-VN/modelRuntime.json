@@ -1,5 +1,6 @@
 {
   "AccountDeactivated": "Tài khoản của bạn đã bị vô hiệu hóa hoặc tạm ngưng. Điều này có thể do chính sách, lý do bảo mật hoặc xem xét tài khoản. Vui lòng liên hệ với bộ phận hỗ trợ của nhà cung cấp để được trợ giúp.",
+  "AgentRuntimeError": "Đã xảy ra lỗi khi tạo phản hồi. Mở rộng chi tiết bên dưới để xem nguyên nhân, hoặc thử lại.",
   "CapabilityNotSupported": "Rất tiếc, mô hình này không hỗ trợ khả năng được yêu cầu (chẳng hạn như đầu vào hình ảnh hoặc gọi công cụ). Vui lòng chuyển sang một mô hình hỗ trợ tính năng này.",
   "ClientLlmExecutorLost": "Thiết bị chạy {{provider}} cho cuộc trò chuyện này đã ngừng phản hồi trước khi hoàn thành trả lời — có thể nó đã bị đóng, làm mới hoặc ngắt kết nối. Hãy giữ cửa sổ LobeHub mở và thử lại.",
   "ClientLlmExecutorUnavailable": "{{provider}} chỉ có thể được truy cập từ thiết bị của bạn, nhưng không có cửa sổ LobeHub nào đang mở nhận yêu cầu. Mở LobeHub trên thiết bị nơi {{provider}} đang chạy, sau đó thử lại.",
@@ -31,6 +32,7 @@
   "LobeHubModelDeprecated": "Mô hình đã chọn không còn khả dụng. Yêu cầu bot hoặc chủ sở hữu agent chọn một mô hình khả dụng, sau đó thử lại.",
   "LocationNotSupportError": "Rất tiếc, vị trí hiện tại của bạn không hỗ trợ dịch vụ mô hình này. Điều này có thể do hạn chế khu vực hoặc dịch vụ không khả dụng. Vui lòng xác nhận xem vị trí hiện tại có hỗ trợ sử dụng dịch vụ này hay không, hoặc thử sử dụng một vị trí khác.",
   "ModelEmptyCompletion": "Nhà cung cấp mô hình đã trả về một phản hồi trống. Ngay cả khi không có nội dung hiển thị, yêu cầu này vẫn có thể phát sinh chi phí. Bạn có thể thử lại hoặc chuyển đổi mô hình và thử lại.",
+  "ModelEmptyCompletionWithCost": "Nhà cung cấp mô hình đã trả về phản hồi rỗng. Yêu cầu này tốn ${{credits}}. Thử lại có thể phát sinh chi phí tương tự, hoặc bạn có thể chuyển sang mô hình khác.",
   "ModelNotFound": "Rất tiếc, không thể tìm thấy mô hình được yêu cầu. Có thể mô hình không tồn tại hoặc bạn không có quyền truy cập cần thiết. Vui lòng thử lại sau khi thay đổi khóa API hoặc điều chỉnh quyền truy cập của bạn.",
   "ModelRefusal": "Mô hình đã từ chối trả lời yêu cầu này. Hãy thử diễn đạt lại hoặc chọn một mô hình khác.",
   "NoAvailableChannel": "Rất tiếc, proxy hoặc bộ định tuyến không có kênh khả dụng cho mô hình được yêu cầu. Vui lòng chuyển đổi cấu hình kênh/khóa hoặc thử lại sau.",
@@ -38,11 +40,13 @@
   "OllamaServiceUnavailable": "Dịch vụ Ollama không khả dụng. Vui lòng kiểm tra xem Ollama có đang hoạt động đúng cách hay không hoặc cấu hình cross-origin của Ollama đã được thiết lập chính xác chưa.",
   "OperationInactivityTimeout": "Hoạt động của tác nhân đã không hoạt động quá lâu và bị chấm dứt. Vui lòng thử lại yêu cầu.",
   "PermissionDenied": "Rất tiếc, bạn không có quyền truy cập dịch vụ này. Vui lòng kiểm tra xem khóa của bạn có quyền truy cập cần thiết hay không.",
+  "ProviderBaseURLBlocked": "Điểm cuối {{provider}} trỏ đến địa chỉ mạng riêng tư hoặc cục bộ, mà máy chủ không được phép truy cập vì lý do bảo mật. Địa chỉ này chỉ hoạt động từ thiết bị của bạn — hãy sử dụng một điểm cuối có thể truy cập công khai thay thế.",
   "ProviderBizError": "Lỗi khi yêu cầu dịch vụ {{provider}}, vui lòng khắc phục sự cố hoặc thử lại dựa trên thông tin sau.",
   "ProviderContentPolicyViolation": "Nhà cung cấp đã chặn yêu cầu này hoặc kết quả của nó do vi phạm chính sách nội dung. Vui lòng chỉnh sửa lời nhắc của bạn và thử lại.",
   "ProviderNetworkError": "Kết nối với nhà cung cấp đã hết thời gian hoặc bị ngắt. Vui lòng kiểm tra mạng của bạn và thử lại.",
   "ProviderNoImageGenerated": "Nhà cung cấp không trả về hình ảnh nào cho yêu cầu này. Hãy thử diễn đạt lại yêu cầu hoặc chọn một mô hình hỗ trợ tạo hình ảnh.",
   "ProviderServiceUnavailable": "Nhà cung cấp tạm thời quá tải hoặc không khả dụng. Vui lòng thử lại sau.",
+  "ProviderStreamInterrupted": "Nhà cung cấp đã đóng kết nối trước khi hoàn tất phản hồi. Điều này thường chỉ là tạm thời, vui lòng thử lại.",
   "QuotaLimitReached": "Rất tiếc, việc sử dụng token hoặc số lượng yêu cầu đã đạt đến giới hạn hạn mức cho khóa này. Vui lòng tăng hạn mức của khóa hoặc thử lại sau.",
   "RateLimitExceeded": "Rất tiếc, việc sử dụng token hoặc số lượng yêu cầu đã đạt đến giới hạn tốc độ cho khóa này. Vui lòng thử lại sau hoặc tăng hạn mức của khóa.",
   "RemoteMediaDownloadTimeout": "Nhà cung cấp đã hết thời gian khi tải xuống hình ảnh hoặc tệp đính kèm. Vui lòng thử lại.",
@@ -53,5 +57,6 @@
   "UpstreamGatewayError": "Cổng hoặc proxy đầu nguồn trả về lỗi. Vui lòng thử lại sau; nếu vấn đề vẫn tiếp diễn, hãy kiểm tra cấu hình proxy/endpoint của bạn.",
   "UpstreamHttpError": "Nhà cung cấp trả về lỗi HTTP mà không có chi tiết thêm. Vui lòng thử lại, hoặc kiểm tra yêu cầu và cấu hình mô hình của bạn.",
   "UpstreamMalformedResponse": "Nhà cung cấp trả về phản hồi không hợp lệ và không thể phân tích. Vui lòng thử lại; nếu vấn đề vẫn tiếp diễn, hãy thử một mô hình hoặc nhà cung cấp khác.",
-  "UserConfigError": "Cấu hình nhà cung cấp không hợp lệ (URL cơ sở không chính xác, thiếu biến môi trường, hạn chế khóa ảo, v.v.). Vui lòng xem lại cài đặt của nhà cung cấp."
+  "UserConfigError": "Cấu hình nhà cung cấp không hợp lệ (URL cơ sở không chính xác, thiếu biến môi trường, hạn chế khóa ảo, v.v.). Vui lòng xem lại cài đặt của nhà cung cấp.",
+  "WorkspaceModelRestricted": "Mô hình này vượt quá hạng cao nhất mà quản trị viên không gian làm việc của bạn cho phép. Hãy chọn một mô hình hạng thấp hơn, hoặc yêu cầu quản trị viên không gian làm việc nâng hạng của bạn."
 }

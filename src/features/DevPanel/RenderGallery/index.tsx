@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   DEVTOOLS_AGENT_ID,
@@ -22,7 +23,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextTertiary};
   `,
   main: css`

@@ -80,11 +80,11 @@ export async function seedTestUser(): Promise<void> {
     await client.query(
       `INSERT INTO accounts (id, user_id, account_id, provider_id, password, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $6)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (id) DO UPDATE SET account_id = EXCLUDED.account_id, password = EXCLUDED.password`,
       [
         accountId,
         TEST_USER.id,
-        TEST_USER.email, // account_id is email for credential provider
+        TEST_USER.id, // Better Auth credentials belong to the local user ID, not the email
         'credential', // provider_id
         passwordHash,
         now,

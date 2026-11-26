@@ -13,6 +13,7 @@ import {
   createReplicaSlice as createCoreReplicaSlice,
   type CreateReplicaSliceOptions,
   createSWRDriver,
+  type SWRLikeMutate,
 } from 'local-replica/zustand';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -157,7 +158,8 @@ export const definePagedReplica = <
 // still be able to import it.
 export const replicaSWRDriver = createSWRDriver({
   // Arguments pass through as given: SWR tells a revalidation from a write by their count.
-  mutate: (...args) => (mutate as (...args: unknown[]) => Promise<unknown>)(...args),
+  mutate: ((...args: unknown[]) =>
+    (mutate as (...args: unknown[]) => Promise<unknown>)(...args)) as SWRLikeMutate,
   useSWR: (key, fetcher, config) => useClientDataSWR(key, fetcher, config),
 });
 

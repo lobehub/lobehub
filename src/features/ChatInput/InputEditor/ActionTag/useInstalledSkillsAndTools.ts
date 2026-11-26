@@ -17,7 +17,7 @@ import type { ActionTagData } from './types';
 interface InstalledSources {
   builtinSkills: ReturnType<typeof builtinToolSelectors.installedBuiltinSkills>;
   composioServers: ReturnType<typeof composioStoreSelectors.getServers>;
-  customConnectors: ReturnType<typeof connectorSelectors.customConnectors>;
+  customConnectors: ReturnType<typeof connectorSelectors.userMcpConnectors>;
   installedPlugins: ReturnType<typeof pluginSelectors.installedPluginMetaList>;
   lobehubSkillServers: ReturnType<typeof lobehubSkillStoreSelectors.getServers>;
   marketAgentSkills: ReturnType<typeof agentSkillsSelectors.getMarketAgentSkills>;
@@ -27,7 +27,8 @@ interface InstalledSources {
 const selectInstalledSources = (s: ToolStore): InstalledSources => ({
   builtinSkills: builtinToolSelectors.installedBuiltinSkills(s),
   composioServers: composioStoreSelectors.getServers(s),
-  customConnectors: connectorSelectors.customConnectors(s),
+  // Custom connectors and marketplace MCPs installed as connectors
+  customConnectors: connectorSelectors.userMcpConnectors(s),
   installedPlugins: pluginSelectors.installedPluginMetaList(s),
   lobehubSkillServers: lobehubSkillStoreSelectors.getServers(s),
   marketAgentSkills: agentSkillsSelectors.getMarketAgentSkills(s),

@@ -305,6 +305,7 @@ export class GoalGraphModel {
         // metadata rather than the `url` column.
         metadata: workVersions.metadata,
         resourceId: works.resourceId,
+        resourceType: works.resourceType,
         status: workVersions.status,
         title: workVersions.title,
         type: works.type,
@@ -326,6 +327,7 @@ export class GoalGraphModel {
       display.set(row.versionId, {
         identifier: row.identifier,
         resourceId: row.resourceId,
+        resourceType: row.resourceType,
         status: row.status,
         title: row.title,
         type: row.type,
@@ -553,14 +555,13 @@ export class GoalGraphModel {
         ),
       );
 
+    // A task outside the ancestor chain (or no task at all) never ranks.
+    const depthOfTask = (taskId: string | null) =>
+      (taskId ? depthOf.get(taskId) : undefined) ?? Infinity;
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
-        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
-        row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
-        /* v8 ignore stop */
-        row.subjectType === 'task' && row.carrierTaskId
-          ? (depthOf.get(row.carrierTaskId) ?? Infinity)
-          : Infinity,
+        depthOfTask(row.nodeTaskId),
+        row.subjectType === 'task' ? depthOfTask(row.carrierTaskId) : Infinity,
       );
     const [nearest] = rows.sort(
       (a, b) =>

@@ -1,4 +1,4 @@
-import { Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ImagePlusIcon, LoaderCircleIcon } from 'lucide-react';
@@ -52,7 +52,9 @@ interface ProjectAvatarFieldProps {
   /** The rest of the row; an image dropped on it lands here as well. */
   children: ReactNode;
   disabled?: boolean;
-  /** Seeds the generated avatar shown until the user picks one. */
+  /** The project's reserved id: seeds the generated avatar shown until one is picked. */
+  id: string;
+  /** Labels the avatar. */
   name: string;
   onChange: (avatar?: string) => void;
   /** An upload is in flight; the avatar it brings arrives through `onChange` later. */
@@ -64,63 +66,81 @@ interface ProjectAvatarFieldProps {
  * image, or drop an image anywhere on the row.
  */
 const ProjectAvatarField = memo<ProjectAvatarFieldProps>(
-  ({ avatar, children, disabled, name, onChange, onUploadingChange }) => {
+  ({ avatar, children, disabled, id, name, onChange, onUploadingChange }) => {
     const { t } = useTranslation('project');
-    const { upload, uploading } = useProjectAvatarUpload({ onChange, onUploadingChange });
+    const { error, setError, upload, uploading } = useProjectAvatarUpload({
+      onChange,
+      onUploadingChange,
+    });
 
     const { dragging, dropProps } = useAvatarFileDrop({
       disabled: disabled || uploading,
       onFile: (file) => void upload(file, { crop: true }),
-      onReject: () => toast.error(t('create.avatarInvalidType')),
+      onReject: () => setError(t('create.avatarInvalidType')),
     });
 
     return (
-      <Flexbox horizontal align={'center'} gap={8} {...dropProps}>
-        <EmojiPicker
-          allowDelete={!!avatar}
-          allowUpload={{ enableEmoji: true }}
-          loading={uploading}
-          open={disabled ? false : undefined}
-          popupProps={{ placement: 'bottomLeft' }}
-          size={TILE_SIZE}
-          value={avatar}
-          customRender={(value) => (
-            <Tooltip title={t('create.avatarHint')}>
-              <div
-                aria-label={t('create.avatarHint')}
-                {...stylex.props(styles.tile, dragging && styles.dragging)}
-                role={'button'}
-              >
-                {/* Until one is picked, the project's own generated avatar: the one
-                    it keeps after creation, seeded by the name as it is typed. */}
-                <ProjectAvatar
-                  avatar={value}
-                  name={name.trim() || t('create.title')}
-                  size={TILE_SIZE}
-                />
+      <Flexbox gap={4}>
+        <Flexbox horizontal align={'center'} gap={8} {...dropProps}>
+          <EmojiPicker
+            allowDelete={!!avatar}
+            allowUpload={{ enableEmoji: true }}
+            loading={uploading}
+            open={disabled ? false : undefined}
+            popupProps={{ placement: 'bottomLeft' }}
+            size={TILE_SIZE}
+            value={avatar}
+            customRender={(value) => (
+              <Tooltip title={t('create.avatarHint')}>
                 <div
-                  {...stylex.props(styles.overlay, (dragging || uploading) && styles.overlayShown)}
+                  aria-label={t('create.avatarHint')}
+                  {...stylex.props(styles.tile, dragging && styles.dragging)}
+                  role={'button'}
                 >
-                  <Icon
-                    icon={uploading ? LoaderCircleIcon : ImagePlusIcon}
-                    size={16}
-                    spin={uploading}
+                  {/* Until one is picked, the project's own generated avatar: the one
+                    it keeps after creation, seeded by its reserved id so typing the
+                    name does not reshuffle it. */}
+                  <ProjectAvatar
+                    avatar={value}
+                    id={id}
+                    name={name.trim() || t('create.title')}
+                    size={TILE_SIZE}
                   />
+                  <div
+                    {...stylex.props(
+                      styles.overlay,
+                      (dragging || uploading) && styles.overlayShown,
+                    )}
+                  >
+                    <Icon
+                      icon={uploading ? LoaderCircleIcon : ImagePlusIcon}
+                      size={16}
+                      spin={uploading}
+                    />
+                  </div>
                 </div>
-              </div>
-            </Tooltip>
-          )}
-          onDelete={() => onChange(undefined)}
-          onUpload={(file) => void upload(file, { crop: false })}
-          // Typed as a string, but delete reports `null`.
-          onChange={(next: string | null) => {
-            // The uploader reports a local preview first; keep only the stored URL.
-            if (!isLocalAvatarPreview(next)) onChange(next || undefined);
-          }}
-        />
-        <Flexbox flex={1} style={{ minWidth: 0 }}>
-          {children}
+              </Tooltip>
+            )}
+            onDelete={() => onChange(undefined)}
+            onUpload={(file) => void upload(file, { crop: false })}
+            // Typed as a string, but delete reports `null`.
+            onChange={(next: string | null) => {
+              // The uploader reports a local preview first; keep only the stored URL.
+              if (!isLocalAvatarPreview(next)) {
+                setError('');
+                onChange(next || undefined);
+              }
+            }}
+          />
+          <Flexbox flex={1} style={{ minWidth: 0 }}>
+            {children}
+          </Flexbox>
         </Flexbox>
+        {error && (
+          <Text fontSize={12} role={'alert'} type={'danger'}>
+            {error}
+          </Text>
+        )}
       </Flexbox>
     );
   },

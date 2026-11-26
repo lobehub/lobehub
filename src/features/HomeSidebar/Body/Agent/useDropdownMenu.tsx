@@ -4,6 +4,7 @@ import { Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -24,9 +25,14 @@ export const useAgentActionsDropdownMenu = ({
 
   // Create menu items
   const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
+  // The workspace sidebar is personal: it only renders the member's private
+  // folders, so a category added from here is private too.
+  const isWorkspace = !!useActiveWorkspaceId();
 
   return useMemo(() => {
-    const createSessionGroupItem = createSessionGroupMenuItem();
+    const createSessionGroupItem = createSessionGroupMenuItem(
+      isWorkspace ? { visibility: 'private' } : undefined,
+    );
     const configItem = configMenuItem(openConfigGroupModal);
 
     const pageSizeOptions = [5, 10, 15, 20];
@@ -64,6 +70,7 @@ export const useAgentActionsDropdownMenu = ({
     createSessionGroupMenuItem,
     configMenuItem,
     openConfigGroupModal,
+    isWorkspace,
     t,
   ]);
 };

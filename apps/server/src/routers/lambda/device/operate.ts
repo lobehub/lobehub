@@ -24,6 +24,9 @@ const assertTunnelDeviceWritable = (
  */
 const MAX_TERMINAL_WRITE_CHARS = 65_536;
 
+/** The client a terminal session lives on, as `createTerminalSession` answered. */
+const terminalClientSchema = z.enum(['cli', 'desktop']).optional();
+
 /**
  * Relay a terminal call, surfacing the device's own reason. A device that is
  * offline — or a client without PTY support — answers with a message the user
@@ -169,6 +172,7 @@ export const operateRouter = router({
   writeTerminal: deviceProcedure
     .input(
       z.object({
+        client: terminalClientSchema,
         /** Base64 keystrokes. */
         data: z.string().max(MAX_TERMINAL_WRITE_CHARS),
         deviceId: z.string(),
@@ -179,6 +183,7 @@ export const operateRouter = router({
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.writeTerminal({
+          client: input.client,
           data: input.data,
           deviceId: input.deviceId,
           id: input.id,
@@ -188,11 +193,19 @@ export const operateRouter = router({
       );
     }),
   readTerminal: deviceProcedure
-    .input(z.object({ cursor: z.number().int().min(0), deviceId: z.string(), id: z.string() }))
+    .input(
+      z.object({
+        client: terminalClientSchema,
+        cursor: z.number().int().min(0),
+        deviceId: z.string(),
+        id: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.readTerminal({
+          client: input.client,
           cursor: input.cursor,
           deviceId: input.deviceId,
           id: input.id,
@@ -204,6 +217,7 @@ export const operateRouter = router({
   resizeTerminal: deviceProcedure
     .input(
       z.object({
+        client: terminalClientSchema,
         cols: z.number().int().min(1).max(1000),
         deviceId: z.string(),
         id: z.string(),
@@ -214,6 +228,7 @@ export const operateRouter = router({
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.resizeTerminal({
+          client: input.client,
           cols: input.cols,
           deviceId: input.deviceId,
           id: input.id,
@@ -224,11 +239,12 @@ export const operateRouter = router({
       );
     }),
   closeTerminal: deviceProcedure
-    .input(z.object({ deviceId: z.string(), id: z.string() }))
+    .input(z.object({ client: terminalClientSchema, deviceId: z.string(), id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.closeTerminal({
+          client: input.client,
           deviceId: input.deviceId,
           id: input.id,
           userId: ctx.userId,

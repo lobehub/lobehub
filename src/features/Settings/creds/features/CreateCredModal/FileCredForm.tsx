@@ -2,37 +2,42 @@
 
 import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { credErrorKey } from '../credError';
-import { createExtras, type CredsApi } from '../useCredsApi';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 
-const styles = stylex.create({
-  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
-});
+import { credErrorKey } from '../credError';
+import CredFormFooter from '../CredFormFooter';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
 interface FileCredFormProps {
   credsApi: CredsApi;
   disabled?: boolean;
-  onBack: () => void;
+  onCancel: () => void;
   onSuccess: () => void;
 }
 
 interface FormValues {
   description?: string;
-  key: string;
   name: string;
 }
 
-const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
+const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onSuccess }) => {
   const { t } = useTranslation(['setting', 'common']);
   const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  /**
+   * Upload failures render under the upload control, create failures (including Market's 409
+   * slot conflicts) above the submit row: the modal stays open, so the user fixes things
+   * here rather than reading a corner toast.
+   */
+  const [uploadError, setUploadError] = useState<InlineErrorState | null>(null);
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -46,13 +51,13 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         description: values.description,
         fileHashId,
         fileName,
-        key: values.key,
         name: values.name,
         ...createExtras(credsApi),
       });
     },
     onError: (error) => {
-      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
+      console.error('[FileCredForm] Create failed:', error);
+      setSubmitError(toInlineError(t(credErrorKey(error, 'creds.errors.createFailed')), error));
     },
     onSuccess: () => {
       onSuccess();
@@ -63,6 +68,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
     if (disabled) return;
 
     setIsUploading(true);
+    setUploadError(null);
 
     try {
       // Convert file to base64
@@ -86,7 +92,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
       toast.success(t('creds.file.uploadSuccess'));
     } catch (error) {
       console.error('[FileCredForm] Upload failed:', error);
-      toast.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
+      // The server message is untranslated; it is folded behind the details toggle
+      setUploadError(toInlineError(t('creds.file.uploadFailedRetry'), error));
     } finally {
       setIsUploading(false);
     }
@@ -96,9 +103,10 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
     if (disabled) return;
 
     if (!fileHashId) {
-      toast.error(t('creds.form.fileRequired'));
+      setUploadError(toInlineError(t('creds.form.fileRequired')));
       return;
     }
+    setSubmitError(null);
     createMutation.mutate(values);
   };
 
@@ -113,6 +121,11 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
           title={isUploading ? t('creds.file.uploading') : t('creds.form.uploadHint')}
           onFiles={([file]) => handleUpload(file)}
         />
+        {uploadError && (
+          <InlineErrorText detail={uploadError.detail} style={{ marginTop: 8 }}>
+            {uploadError.summary}
+          </InlineErrorText>
+        )}
         {fileName && (
           <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 8 }}>
             <span>
@@ -120,7 +133,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
             </span>
             <Button
               size="small"
-              type="text"
+              type="fill"
               onClick={() => {
                 setFileHashId(null);
                 setFileName('');
@@ -130,17 +143,6 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
             </Button>
           </div>
         )}
-      </Form.Field>
-
-      <Form.Field
-        label={t('creds.form.key')}
-        name="key"
-        required={t('creds.form.keyRequired')}
-        validate={(value?: string) =>
-          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
-        }
-      >
-        <Input disabled={disabled} placeholder="e.g., gcp-service-account" />
       </Form.Field>
 
       <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
@@ -155,8 +157,14 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         />
       </Form.Field>
 
-      <div {...stylex.props(styles.footer)}>
-        <Button onClick={onBack}>{t('creds.form.back')}</Button>
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
+
+      <CredFormFooter>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={!fileHashId || disabled}
           htmlType="submit"
@@ -165,7 +173,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         >
           {t('creds.form.submit')}
         </Button>
-      </div>
+      </CredFormFooter>
     </Form>
   );
 };

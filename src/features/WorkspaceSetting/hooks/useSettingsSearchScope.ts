@@ -15,20 +15,24 @@ import type { WorkspaceSettingCategoryGroup } from './useCategory';
 const ITEM_TABS: ReadonlySet<SettingsSearchTab> = new Set<SettingsSearchTab>([
   SettingsTabs.Advanced,
   SettingsTabs.Appearance,
-  SettingsTabs.Connector,
+  SettingsTabs.Conversation,
   SettingsTabs.Hotkey,
   SettingsTabs.Labs,
   SettingsTabs.Profile,
   SettingsTabs.Provider,
   SettingsTabs.ServiceModel,
-  WorkspaceSettingsTabs.ChatPreference,
+  // Personal-only account tabs: their items link into the personal page.
+  SettingsTabs.Memory,
+  SettingsTabs.Proxy,
+  SettingsTabs.Referral,
+  SettingsTabs.SystemTools,
 ]);
 
 /**
- * Follow-up / input completion live on Chat Preferences here; the workspace
- * Service Model page hides them, so its keywords must not match them either.
+ * Follow-up / input completion live on Conversation; the Service Model page
+ * hides them, so its keywords must not match them either.
  */
-const KEYWORD_OWNER_TABS: readonly SettingsSearchTab[] = [WorkspaceSettingsTabs.ChatPreference];
+const KEYWORD_OWNER_TABS: readonly SettingsSearchTab[] = [SettingsTabs.Conversation];
 
 /** Workspace tab keys whose value differs from the matching personal tab */
 const SEARCH_TAB_ALIASES: Partial<Record<WorkspaceSettingsTabs, SettingsSearchTab>> = {
@@ -51,9 +55,13 @@ export const useWorkspaceSettingsSearchScope = (
     () => ({
       categoryGroups: groups.map((group) => ({
         items: group.items.map((item) => ({
-          href: slug ? getWorkspaceSettingsTabUrl(slug, item.key) : undefined,
+          href:
+            item.href ??
+            (slug
+              ? getWorkspaceSettingsTabUrl(slug, item.key as WorkspaceSettingsTabs)
+              : undefined),
           icon: item.icon,
-          key: SEARCH_TAB_ALIASES[item.key] ?? item.key,
+          key: SEARCH_TAB_ALIASES[item.key as WorkspaceSettingsTabs] ?? item.key,
           label: item.label,
         })),
         key: group.key,

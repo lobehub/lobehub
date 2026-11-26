@@ -1387,6 +1387,28 @@ describe('UserModel', () => {
         expect(result.map((u) => u.id)).toEqual(['u1', 'u5']);
       });
 
+      it('should exclude banned users', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values([
+          { id: 'active', createdAt: new Date('2024-01-01T00:00:00Z') },
+          { banned: true, id: 'banned', createdAt: new Date('2024-01-02T00:00:00Z') },
+        ]);
+        await serverDB.insert(topics).values([
+          { id: 'topic-active', userId: 'active' },
+          { id: 'topic-banned', userId: 'banned' },
+        ]);
+        await serverDB.insert(messages).values([
+          { id: 'msg-active', role: 'user', topicId: 'topic-active', userId: 'active' },
+          { id: 'msg-banned', role: 'user', topicId: 'topic-banned', userId: 'banned' },
+        ]);
+
+        const result = await UserModel.listUsersForHourlyMemoryExtractor(serverDB);
+
+        expect(result.map((u) => u.id)).toEqual(['active']);
+        expect(await UserModel.isBanned(serverDB, 'banned')).toBe(true);
+        expect(await UserModel.isBanned(serverDB, 'active')).toBe(false);
+      });
+
       it('should support whitelist and cursor pagination', async () => {
         await serverDB.delete(users);
         await serverDB.insert(users).values([
@@ -1426,13 +1448,13 @@ describe('UserModel', () => {
         const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
 
         expect(result.userName).toBe('Test User');
-        expect(result.responseLanguage).toBe('zh-CN');
+        expect(result.preferredReplyLanguage).toBe('zh-CN');
       });
 
-      it('should default to en-US when no language preference set', async () => {
+      it('should omit the language for a user without a preference', async () => {
         const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
 
-        expect(result.responseLanguage).toBe('en-US');
+        expect(result.preferredReplyLanguage).toBeUndefined();
       });
 
       it('should use firstName when fullName is not available', async () => {

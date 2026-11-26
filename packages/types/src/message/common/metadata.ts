@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
 import type { WorkRegistrationIntent } from '../../work';
+import type { MessageContextAccounting } from './contextAccounting';
+import { MessageContextAccountingSchema } from './contextAccounting';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
@@ -452,6 +454,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
+  // Server-computed estimate of the request behind an assistant message. Listed
+  // so client-runtime writes through UpdateMessageParamsSchema keep it.
+  contextAccounting: MessageContextAccountingSchema.optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
@@ -482,6 +487,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   selectedSkillIds: z.array(z.string()).optional(),
+  selectedToolIds: z.array(z.string()).optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
@@ -592,6 +598,13 @@ export interface MessageMetadata {
   collapsed?: boolean;
   compare?: boolean;
   /**
+   * Estimated token accounting of the request that produced this assistant
+   * message (system messages, `tools` array and every message part), written
+   * by the agent runtime. The chat input's context breakdown reads the latest
+   * one; see {@link MessageContextAccounting}.
+   */
+  contextAccounting?: MessageContextAccounting;
+  /**
    * Generic context selections attached to user messages.
    * Page selections remain mirrored in `pageSelections` for compatibility.
    */
@@ -686,6 +699,11 @@ export interface MessageMetadata {
    */
   instruction?: string;
   /**
+   * The run was stopped while generating this assistant turn. Set by the server
+   * runtime, including on a placeholder stopped before its first output.
+   */
+  interruptedMidStream?: boolean;
+  /**
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
@@ -761,6 +779,12 @@ export interface MessageMetadata {
    * on this and every later turn of the topic by the server runtime.
    */
   selectedSkillIds?: string[];
+  /**
+   * Tools the user selected (or triggered via @agent mention) for this user
+   * turn, kept enabled on this and every later turn of the topic by the server
+   * runtime so the prompt-cache prefix and tool availability stay stable.
+   */
+  selectedToolIds?: string[];
   /**
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,

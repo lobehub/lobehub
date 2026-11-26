@@ -1,5 +1,10 @@
-import { isDesktop } from '@lobechat/const';
-import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
+import type {
+  ChannelListItem,
+  ChannelPublicThread,
+  ChannelStatus,
+  ChannelThreadStatus,
+  ChannelVisibility,
+} from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -8,8 +13,8 @@ import {
   type ChannelAgentSelection,
   channelService,
   type ChannelViewParams,
+  type ChannelWakeConfig,
 } from '@/services/channel';
-import { getElectronStoreState } from '@/store/electron';
 
 import {
   addOutgoing,
@@ -28,10 +33,28 @@ import { initialState, useChannelStore } from './store';
 
 /**
  * Gateway push is not delivered yet, so polling is the only refresh: views with work in
- * progress refresh every few seconds, idle views and the list once a minute.
+ * progress (and the list while a listed reply is) refresh every few seconds, idle ones once a
+ * minute.
  */
 export const CHANNEL_ACTIVE_REFRESH_MS = 3000;
 export const CHANNEL_IDLE_REFRESH_MS = 60_000;
+
+/**
+ * Several mounted views poll the same list or detail (sidebar + agent manager, page header +
+ * conversation), each on its own timer. `useClientDataSWR` dedupes nothing by default, so every
+ * extra mount multiplied the fast poll; one read per window serves all of them.
+ *
+ * The window stays the same in both states: SWR keeps the dedupe window a key had when it was
+ * first mounted, so views that mounted idle with no window kept separate fast polls once the
+ * channel turned active. A window shorter than one fast interval delays at most the first fast
+ * poll after an idle read, by under one interval.
+ */
+const CHANNEL_POLL_DEDUPE_MS = CHANNEL_ACTIVE_REFRESH_MS - 500;
+
+const pollDedupe = (pending: boolean) => ({
+  dedupingInterval: CHANNEL_POLL_DEDUPE_MS,
+  refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS,
+});
 
 type ChannelSendInput = Parameters<typeof channelService.send>[0];
 
@@ -47,14 +70,16 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
-  useFetchList = () => this.#private.list.useSync({}, { refreshInterval: CHANNEL_IDLE_REFRESH_MS });
+  /** Pass `false` where the list is only needed behind a user choice, so nothing polls before. */
+  useFetchList = (enabled = true) => {
+    const pending = useChannelStore(channelSelectors.listHasPendingWork);
+    return this.#private.list.useSync({}, { enabled, ...pollDedupe(pending) });
+  };
   useFetchDetail = (params: ChannelViewParams | null) => {
     // Subscribe to the replica, not just SWR's last response: sending a message
     // updates this view imperatively and must shorten an already scheduled idle poll.
     const pending = useChannelStore(channelSelectors.hasPendingWork(params));
-    return this.#private.detail.useSync(params, {
-      refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS,
-    });
+    return this.#private.detail.useSync(params, pollDedupe(pending));
   };
   refreshList = () => this.#private.list.fetch({}, { fresh: true });
   refreshDetail = (params: ChannelViewParams) =>
@@ -84,14 +109,24 @@ class ChannelActionImpl {
     return result.data.channel.id;
   };
   /**
-   * Marks the main channel read up to `sequence`. The listed unread count drops at once, so a
-   * conversation row does not keep its badge until the next list poll; a failed write restores it.
+   * Marks the main channel read up to `sequence`. The listed unread and mention counts drop at
+   * once, so a conversation row does not keep its badges until the next list poll; a failed write
+   * restores them.
+   *
+   * Mentions are counted from the same read position as `unreadCount`, so a read that reaches the
+   * known `sequence` consumes all of them. A partial read cannot be split client-side without the
+   * per-message mention data, so the cached count stays until the next list poll recomputes it.
    */
   markRead = (channelId: string, sequence: number) =>
     this.#private.entity.optimistic(
       channelId,
       (channel) => ({
         ...channel,
+        lastReadSequence: Math.max(
+          channel.lastReadSequence ?? 0,
+          Math.min(sequence, channel.sequence),
+        ),
+        mentionCount: channel.sequence <= sequence ? 0 : channel.mentionCount,
         unreadCount: Math.min(channel.unreadCount ?? 0, Math.max(0, channel.sequence - sequence)),
       }),
       () => channelService.markRead(channelId, sequence),
@@ -103,11 +138,17 @@ class ChannelActionImpl {
   openDirect = async (agentId: string) => {
     const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
     if (existing) return existing.id;
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    const channelId = await channelService.openDirect({ agentId });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
+  };
+  /**
+   * The caller's direct Channel with a shared Agent, opened on first use from its share id or
+   * handle. The server resolves the share every time, so a paused or revoked share fails here
+   * even when a Channel already exists.
+   */
+  openShared = async (share: string) => {
+    const channelId = await channelService.openShared({ share });
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
@@ -121,6 +162,32 @@ class ChannelActionImpl {
       () => channelService.remove(channelId),
     );
     this.#private.entity.remove(channelId, { scope });
+  };
+  /**
+   * Leaves a group Channel. An active open project Channel stays readable through its project, so
+   * it only refreshes; any other Channel is gone for the caller, like a removed one. Resolves to
+   * whether the caller can still read it.
+   */
+  leave = async (channel: Pick<ChannelListItem, 'id'>) => {
+    const scope = cacheScope.get();
+    const { readable } = await channelService.leave(channel.id);
+    if (readable) {
+      await this.#refreshAfterWrite(() =>
+        Promise.all([this.refreshList(), this.refreshDetail({ channelId: channel.id })]),
+      );
+      return true;
+    }
+    await this.#refreshAfterWrite(this.refreshList);
+    this.#private.entity.remove(channel.id, { scope });
+    return false;
+  };
+  /** Removes a person or an Agent; an Agent's unfinished replies stop. */
+  removeMember = async (channelId: string, memberId: string) => {
+    try {
+      await channelService.removeMember(channelId, memberId);
+    } finally {
+      await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
+    }
   };
   removeThread = async (channelId: string, threadId: string) => {
     const scope = cacheScope.get();
@@ -179,10 +246,34 @@ class ChannelActionImpl {
       () => channelService.rename(channelId, title),
     );
   };
+  /** The settings switch shows the new visibility before the server confirms. */
+  setVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    await this.#private.entity.optimistic(
+      channelId,
+      (channel) => ({ ...channel, visibility }),
+      () => channelService.updateVisibility(channelId, visibility),
+    );
+  };
+  useFetchJoinable = (search: string) => this.#private.joinable.useSync({ search });
+  /** Joins a public Channel; it enters the sidebar once the list refreshes. */
+  join = async (channelId: string, search = '') => {
+    await channelService.join(channelId);
+    await this.#refreshAfterWrite(() =>
+      Promise.all([this.refreshList(), this.#private.joinable.fetch({ search }, { fresh: true })]),
+    );
+  };
   useFetchAgentEnvironment = (channelId: string, memberId: string) =>
     useClientDataSWR(channelKeys.agentEnvironment(channelId, memberId), () =>
       channelService.agentEnvironment(channelId, memberId),
     );
+  useFetchWakeConfig = (channelId: string | null) =>
+    useClientDataSWR(channelId ? channelKeys.wakeConfig(channelId) : null, () =>
+      channelService.wakeConfig(channelId!),
+    );
+  updateWakeConfig = async (channelId: string, wake: ChannelWakeConfig) => {
+    await channelService.updateWakeConfig(channelId, wake);
+    await this.#refreshAfterWrite(() => mutate(channelKeys.wakeConfig(channelId)));
+  };
   updateAgentEnvironment = async (
     channelId: string,
     memberId: string,
@@ -207,7 +298,8 @@ class ChannelActionImpl {
   ) => {
     try {
       for (const userId of userIds) await channelService.addUser(channelId, userId);
-      for (const agent of agents) await channelService.addAgent(channelId, agent);
+      // The dialog shows which Agents also join the project, so choosing them is the consent.
+      for (const agent of agents) await channelService.addAgent(channelId, agent, true);
     } finally {
       // A partial failure still shows the members that did join.
       await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
@@ -224,7 +316,7 @@ class ChannelActionImpl {
     const { data } =
       'userId' in member
         ? await channelService.addUser(channelId, member.userId)
-        : await channelService.addAgent(channelId, member.agent);
+        : await channelService.addAgent(channelId, member.agent, true);
     await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
     return data.id;
   };
@@ -257,7 +349,10 @@ class ChannelActionImpl {
   retrySend = (message: ChannelOutgoingMessage) => {
     if (findOutgoing(useChannelStore.getState().outbox, message)?.status !== 'failed')
       return Promise.resolve(undefined);
-    this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'sending' }), 'retry');
+    this.#setOutbox(
+      (outbox) => patchOutgoing(outbox, message, { errorType: undefined, status: 'sending' }),
+      'retry',
+    );
     return this.#deliver(message);
   };
   discardSend = (message: ChannelOutgoingMessage) => {
@@ -332,7 +427,12 @@ class ChannelActionImpl {
       return data;
     } catch (error) {
       console.error('Failed to send Channel message', error);
-      this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'failed' }), 'failed');
+      // A refusal names its category as the message (`ChannelError`); anything else stays generic.
+      const errorType = error instanceof Error ? error.message : undefined;
+      this.#setOutbox(
+        (outbox) => patchOutgoing(outbox, message, { errorType, status: 'failed' }),
+        'failed',
+      );
     }
   };
   #refreshAfterSend = (input: ChannelSendInput, threadId: string | null) =>
@@ -345,6 +445,22 @@ class ChannelActionImpl {
         this.refreshList(),
       ]),
     );
+  /** Answers an Agent's question card; the answer posts as the person's reply to it. */
+  answerAsk = async (
+    input: Parameters<typeof channelService.answerAsk>[0] & { threadId: string | null },
+  ) => {
+    const { threadId, ...answer } = input;
+    await channelService.answerAsk(answer);
+    // The answer is committed once the write returns. A refresh that fails afterwards must not
+    // read back as a failed answer: the card would stay actionable and the question could be
+    // answered twice. Same policy as every other write path: log the refresh, keep the write.
+    await this.#refreshAfterWrite(() =>
+      Promise.all([
+        this.refreshDetail({ channelId: input.channelId, threadId }),
+        this.refreshList(),
+      ]),
+    );
+  };
   stop = async (channelId: string, scope: Parameters<typeof channelService.stop>[1]) => {
     await channelService.stop(channelId, scope);
     await this.refreshDetail({ channelId, threadId: 'threadId' in scope ? scope.threadId : null });

@@ -2,6 +2,8 @@ import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   OnboardingUnderstandingPollingResult,
   PersonalSystemAgentKey,
   RetryOnboardingUnderstandingProviderInput,
@@ -124,9 +126,30 @@ export class UserService {
     return lambdaClient.user.updateUsername.mutate(username);
   };
 
+  /** Wave goal asks off the approval island for every client of this account. */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> => {
+    return lambdaClient.user.addIslandDismissals.mutate({ keys });
+  };
+
   updatePreference = async (preference: Partial<UserPreference>) => {
     return lambdaClient.user.updatePreference.mutate(preference);
   };
+
+  /** Personal-mode "New worktree" switch for one directory; resolves to the stored list. */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> => {
+    return lambdaClient.user.setWorktreeModeDir.mutate({ enabled, key });
+  };
+
+  /** Personal-mode Codex Plan switch for one directory; resolves to the stored list. */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    lambdaClient.user.setHeteroPlanModeDir.mutate({ enabled, key });
+
+  /** Personal-mode Claude Code permission mode for one directory; resolves to the stored list. */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    lambdaClient.user.setHeteroPermissionModeDir.mutate({ key, mode });
 
   updateGuide = async (guide: Partial<UserGuide>) => {
     return lambdaClient.user.updateGuide.mutate(guide);

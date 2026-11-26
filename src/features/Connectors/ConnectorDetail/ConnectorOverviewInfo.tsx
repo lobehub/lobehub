@@ -7,32 +7,22 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
-import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+import { densityTokens } from '@/styles/density.stylex';
 
+// A quiet key–value list: labels in a fixed column, no boxes or row rules.
 const styles = stylex.create({
   label: {
     color: cssVar.colorTextTertiary,
     flexShrink: 0,
-    fontSize: 13,
-    width: 96,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    width: 160,
   },
   list: {
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    paddingBlock: 4,
-    paddingInline: 12,
+    display: 'flex',
+    flexDirection: 'column',
   },
   row: {
-    borderBlockEndColor: {
-      ':last-child': 'transparent',
-      'default': cssVar.colorBorderSecondary,
-    },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
     minHeight: 40,
   },
 });
@@ -67,27 +57,21 @@ interface ConnectorOverviewInfoProps {
 }
 
 /**
- * Overview facts of a connector: whether it is authorized and who authorized
- * it. The kind of object sits under the page title; tool permissions live in
- * the Tools tab.
+ * Overview facts of a connector: whether it is authorized and, for a single
+ * credential, who authorized it. The kind of object sits under the page title;
+ * tool permissions live in the Tools tab.
  */
 const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) => {
   const { t } = useTranslation('tool');
 
   const kind = getConnectorKind(connector);
   const isBuiltin = kind === 'builtin';
-  // Uninstalling a built-in only records it in a user preference; the connector
-  // row stays, so read the same installation state the list shows.
-  const isBuiltinInstalled = useToolStore(
-    builtinToolSelectors.isBuiltinToolInstalled(connector.identifier),
-  );
-  const status = isBuiltin
-    ? isBuiltinInstalled
-      ? { color: 'success' as const, label: t('connector.enabled') }
-      : { label: t('tools.builtins.uninstalled', { ns: 'setting' }) }
-    : // Disconnect only clears `isEnabled` and leaves the stored status (connected
-      // or error) behind, so a disabled connector reads not connected first.
-      !connector.isEnabled
+  // Bundled tools have no library authorization or installation status.
+  if (isBuiltin) return null;
+
+  const status = // Disconnect only clears `isEnabled` and leaves the stored status (connected
+    // or error) behind, so a disabled connector reads not connected first.
+    !connector.isEnabled
       ? { label: t('connector.notConnected') }
       : connector.status === ConnectorStatus.connected
         ? { color: 'success' as const, label: t('connector.connected') }
@@ -95,12 +79,18 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
           ? { color: 'error' as const, label: t('connector.authError') }
           : { label: t('connector.notConnected') };
 
+  // An OAuth connector is authorized per account, and each account names its
+  // own authorizer under Accounts. A connector-wide "Authorized by" would name
+  // only the creator — even before anyone has authorized an account.
+  const showAuthorizer =
+    !!connector.authorizedByName && connector.authKind !== 'oauth2' && !connector.links?.length;
+
   return (
     <div {...stylex.props(styles.list)}>
       <Row label={t('connector.overview.status')}>
         <Tag color={status.color}>{status.label}</Tag>
       </Row>
-      {connector.authorizedByName && (
+      {showAuthorizer && (
         <Row label={t('connector.overview.authorizedBy')}>
           {connector.authorizedByAvatar && (
             <Avatar avatar={connector.authorizedByAvatar} shape={'circle'} size={20} />

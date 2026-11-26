@@ -6,6 +6,36 @@ import { toolsEnv } from '@/envs/tools';
 import { createSearchServiceImpl, SearchImplType } from './impls';
 import { DEFAULT_CRAWLER_IMPLS, resolveOrderedChannels, SearchService } from './index';
 
+const searchResultRows = () => [
+  {
+    category: 'general',
+    content: 'Result 1',
+    engines: ['google'],
+    parsedUrl: 'https://example.com',
+    score: 1,
+    title: 'Test 1',
+    url: 'https://example.com',
+  },
+];
+
+const emptySearchResponse = () => ({
+  costTime: 100,
+  query: 'test',
+  resultNumbers: 0,
+  results: [],
+});
+
+const engineSearchInput = () => ({
+  query: 'test',
+  searchEngines: ['google'],
+});
+
+const crawlResult = (crawler: string, content: string) => ({
+  crawler,
+  data: { content, contentType: 'text' },
+  originalUrl: 'https://example.com',
+});
+
 // Mock dependencies
 vi.mock('@lobechat/web-crawler');
 vi.mock('./impls');
@@ -135,17 +165,7 @@ describe('SearchService', () => {
         costTime: 100,
         query: 'test',
         resultNumbers: 2,
-        results: [
-          {
-            category: 'general',
-            content: 'Result 1',
-            engines: ['google'],
-            parsedUrl: 'https://example.com',
-            score: 1,
-            title: 'Test 1',
-            url: 'https://example.com',
-          },
-        ],
+        results: searchResultRows(),
       };
       mockSearchImpl.query.mockResolvedValue(mockResponse);
 
@@ -160,27 +180,12 @@ describe('SearchService', () => {
     });
 
     it('should retry without searchEngines when no results found', async () => {
-      const emptyResponse = {
-        costTime: 100,
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+      const emptyResponse = emptySearchResponse();
       const successResponse = {
         costTime: 100,
         query: 'test',
         resultNumbers: 1,
-        results: [
-          {
-            category: 'general',
-            content: 'Result 1',
-            engines: ['google'],
-            parsedUrl: 'https://example.com',
-            score: 1,
-            title: 'Test 1',
-            url: 'https://example.com',
-          },
-        ],
+        results: searchResultRows(),
       };
 
       mockSearchImpl.query
@@ -208,27 +213,12 @@ describe('SearchService', () => {
     });
 
     it('should retry without any params when still no results found', async () => {
-      const emptyResponse = {
-        costTime: 100,
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+      const emptyResponse = emptySearchResponse();
       const successResponse = {
         costTime: 100,
         query: 'test',
         resultNumbers: 1,
-        results: [
-          {
-            category: 'general',
-            content: 'Result 1',
-            engines: ['google'],
-            parsedUrl: 'https://example.com',
-            score: 1,
-            title: 'Test 1',
-            url: 'https://example.com',
-          },
-        ],
+        results: searchResultRows(),
       };
 
       mockSearchImpl.query
@@ -249,27 +239,12 @@ describe('SearchService', () => {
     });
 
     it('should skip second retry if searchEngines not provided', async () => {
-      const emptyResponse = {
-        costTime: 100,
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+      const emptyResponse = emptySearchResponse();
       const successResponse = {
         costTime: 100,
         query: 'test',
         resultNumbers: 1,
-        results: [
-          {
-            category: 'general',
-            content: 'Result 1',
-            engines: ['google'],
-            parsedUrl: 'https://example.com',
-            score: 1,
-            title: 'Test 1',
-            url: 'https://example.com',
-          },
-        ],
+        results: searchResultRows(),
       };
 
       mockSearchImpl.query
@@ -290,12 +265,7 @@ describe('SearchService', () => {
     });
 
     it('should not retry the same unrestricted query', async () => {
-      const emptyResponse = {
-        costTime: 100,
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+      const emptyResponse = emptySearchResponse();
 
       vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
       searchService = new SearchService();
@@ -338,19 +308,11 @@ describe('SearchService', () => {
     });
 
     it('should return the successful empty response after all retries find no results', async () => {
-      const emptyResponse = {
-        costTime: 100,
-        query: 'test',
-        resultNumbers: 0,
-        results: [],
-      };
+      const emptyResponse = emptySearchResponse();
 
       mockSearchImpl.query.mockResolvedValue(emptyResponse);
 
-      const result = await searchService.webSearch({
-        query: 'test',
-        searchEngines: ['google'],
-      });
+      const result = await searchService.webSearch(engineSearchInput());
 
       expect(mockSearchImpl.query).toHaveBeenCalledTimes(2);
       expect(result).toBe(emptyResponse);
@@ -359,12 +321,7 @@ describe('SearchService', () => {
   });
 
   describe('webSearch - provider fallback (turn mode)', () => {
-    const emptyResponse = {
-      costTime: 100,
-      query: 'test',
-      resultNumbers: 0,
-      results: [],
-    };
+    const emptyResponse = emptySearchResponse();
     const successResponse = {
       costTime: 200,
       query: 'test',
@@ -452,10 +409,7 @@ describe('SearchService', () => {
       vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
       searchService = new SearchService();
 
-      const result = await searchService.webSearch({
-        query: 'test',
-        searchEngines: ['google'],
-      });
+      const result = await searchService.webSearch(engineSearchInput());
 
       // First provider: full params -> without engines = 2 calls
       expect(mockImpl1.query).toHaveBeenCalledTimes(2);
@@ -474,10 +428,7 @@ describe('SearchService', () => {
       vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
       searchService = new SearchService();
 
-      const result = await searchService.webSearch({
-        query: 'test',
-        searchEngines: ['google'],
-      });
+      const result = await searchService.webSearch(engineSearchInput());
 
       expect(mockImpl1.query).toHaveBeenCalledTimes(1);
       expect(mockImpl2.query).toHaveBeenCalledTimes(1);
@@ -518,10 +469,7 @@ describe('SearchService', () => {
       vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
       searchService = new SearchService();
 
-      const result = await searchService.webSearch({
-        query: 'test',
-        searchEngines: ['google'],
-      });
+      const result = await searchService.webSearch(engineSearchInput());
 
       expect(mockImpl1.query).toHaveBeenCalledTimes(1);
       expect(mockImpl2.query).toHaveBeenCalledTimes(1);
@@ -539,11 +487,7 @@ describe('SearchService', () => {
 
   describe('crawlPages', () => {
     it('should crawl multiple pages concurrently', async () => {
-      const mockCrawlResult = {
-        crawler: 'naive',
-        data: { content: 'Page content', contentType: 'text' },
-        originalUrl: 'https://example.com',
-      };
+      const mockCrawlResult = crawlResult('naive', 'Page content');
 
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockCrawlResult),
@@ -566,11 +510,7 @@ describe('SearchService', () => {
     it('should use crawler implementations from env', async () => {
       vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,reader';
 
-      const mockSuccessResult = {
-        crawler: 'jina',
-        data: { content: 'ok', contentType: 'text' },
-        originalUrl: 'https://example.com',
-      };
+      const mockSuccessResult = crawlResult('jina', 'ok');
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
@@ -586,11 +526,7 @@ describe('SearchService', () => {
     });
 
     it('should pass impls parameter to crawler.crawl', async () => {
-      const mockSuccessResult = {
-        crawler: 'jina',
-        data: { content: 'ok', contentType: 'text' },
-        originalUrl: 'https://example.com',
-      };
+      const mockSuccessResult = crawlResult('jina', 'ok');
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
@@ -641,11 +577,7 @@ describe('SearchService', () => {
         data: { content: 'Fail', errorType: 'NetworkError', errorMessage: 'timeout' },
         originalUrl: 'https://example.com',
       };
-      const successResult = {
-        crawler: 'naive',
-        data: { content: 'Page content', contentType: 'text' },
-        originalUrl: 'https://example.com',
-      };
+      const successResult = crawlResult('naive', 'Page content');
 
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValueOnce(failedResult).mockResolvedValueOnce(successResult),
@@ -758,11 +690,7 @@ describe('SearchService', () => {
     it('should detect successful results by contentType presence', async () => {
       vi.mocked(toolsEnv).CRAWLER_RETRY = 1;
 
-      const successResult = {
-        crawler: 'naive',
-        data: { content: 'Page content', contentType: 'text' },
-        originalUrl: 'https://example.com',
-      };
+      const successResult = crawlResult('naive', 'Page content');
 
       const mockCrawler = {
         crawl: vi.fn().mockResolvedValue(successResult),
@@ -875,11 +803,7 @@ describe('SearchService', () => {
   describe('user channel preferences - crawler impls', () => {
     const mockCrawler = () => {
       const crawler = {
-        crawl: vi.fn().mockResolvedValue({
-          crawler: 'jina',
-          data: { content: 'ok', contentType: 'text' },
-          originalUrl: 'https://example.com',
-        }),
+        crawl: vi.fn().mockResolvedValue(crawlResult('jina', 'ok')),
       };
       vi.mocked(Crawler).mockImplementation(function () {
         return crawler as any;

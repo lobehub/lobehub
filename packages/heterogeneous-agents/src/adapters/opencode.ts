@@ -12,6 +12,11 @@ import type {
 
 const OPENCODE_IDENTIFIER = 'opencode';
 const OPENCODE_TODO_WRITE_API = 'todowrite';
+const WEB_SEARCH_INPUT_CANCELLED =
+  'Cancelled a request for input this run cannot answer: Web Search';
+// OpenCode 2.x renamed `bash` to `shell` (same `command` input). Keep the 1.x
+// name so command renders and git-effect recording apply to both majors.
+const OPENCODE_TOOL_ALIASES: Record<string, string> = { shell: 'bash' };
 const OPENCODE_CLI_INSTALL_DOCS_URL =
   getHeterogeneousAgentConfigOrThrow(OPENCODE_IDENTIFIER).auth.docsUrl;
 const AUTH_REQUIRED_PATTERNS = [
@@ -91,6 +96,10 @@ export class OpenCodeAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   private streamOpen = false;
   private terminalErrorEmitted = false;
+  private cancelledWebSearchStep?: number;
+  private textStep?: number;
+  private completedReplyStep?: number;
+  private recoveredWebSearchStep?: number;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -125,6 +134,14 @@ export class OpenCodeAdapter implements AgentEventAdapter {
     return [this.makeEvent('stream_end', {})];
   }
 
+  resolveExitCode(code: number | null): number | null {
+    return code === 1 &&
+      this.recoveredWebSearchStep === this.stepIndex &&
+      !this.terminalErrorEmitted
+      ? 0
+      : code;
+  }
+
   private handleStepStart(part: any): HeterogeneousAgentEvent[] {
     if (!part || part.type !== 'step-start' || !part.id || this.completedPartIds.has(part.id)) {
       return [];
@@ -152,6 +169,7 @@ export class OpenCodeAdapter implements AgentEventAdapter {
     if (!part || part.type !== type || !part.id || this.completedPartIds.has(part.id)) return [];
     this.completedPartIds.add(part.id);
     if (typeof part.text !== 'string' || !part.text) return [];
+    if (type === 'text' && part.text.trim()) this.textStep = this.stepIndex;
 
     return [
       this.makeEvent(
@@ -168,6 +186,14 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       return [];
     }
     this.completedPartIds.add(part.id);
+    if (
+      part.reason === 'stop' &&
+      this.textStep === this.stepIndex &&
+      this.cancelledWebSearchStep !== undefined &&
+      this.cancelledWebSearchStep < this.stepIndex
+    ) {
+      this.completedReplyStep = this.stepIndex;
+    }
     const data: StepCompleteData = {
       costUsd: finiteNumber(part.cost),
       phase: 'turn_metadata',
@@ -179,7 +205,10 @@ export class OpenCodeAdapter implements AgentEventAdapter {
 
   private handleTool(part: any): HeterogeneousAgentEvent[] {
     const state = part?.state;
-    const callId = part?.callID;
+    // 1.x: `id` is the part id and `callID` the tool call id. 2.x drops
+    // `callID`, moving the call id into `id` and the part id into `partID`.
+    const callId = part?.callID ?? part?.id;
+    const partId = part?.partID ?? (part?.callID ? part.id : undefined);
     if (
       part?.type !== 'tool' ||
       typeof callId !== 'string' ||
@@ -189,16 +218,20 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       return [];
     }
     this.completedToolCallIds.add(callId);
-    if (part.id) this.completedPartIds.add(part.id);
+    if (partId) this.completedPartIds.add(partId);
 
+    const apiName = typeof part.tool === 'string' ? part.tool : 'unknown';
     const tool: ToolCallPayload = {
-      apiName: typeof part.tool === 'string' ? part.tool : 'unknown',
+      apiName: OPENCODE_TOOL_ALIASES[apiName] ?? apiName,
       arguments: JSON.stringify(state.input ?? {}),
       id: callId,
       identifier: OPENCODE_IDENTIFIER,
       type: 'default',
     };
     const isError = state.status === 'error';
+    if (part.tool === 'websearch' && isError && state.error === 'Web search cancelled') {
+      this.cancelledWebSearchStep = this.stepIndex;
+    }
     const pluginState =
       !isError && part.tool === OPENCODE_TODO_WRITE_API
         ? synthesizeTodoWritePluginState(state.metadata?.todos ?? state.input?.todos)
@@ -219,8 +252,18 @@ export class OpenCodeAdapter implements AgentEventAdapter {
 
   private handleError(error: any): HeterogeneousAgentEvent[] {
     if (this.terminalErrorEmitted) return [];
-    this.terminalErrorEmitted = true;
     const message = errorMessage(error);
+    // OpenCode 2 reports its headless form cancellation even after the model
+    // finishes a reply. The cancelled search already has its own tool error.
+    if (
+      error?.type === 'unknown' &&
+      message === WEB_SEARCH_INPUT_CANCELLED &&
+      this.completedReplyStep === this.stepIndex
+    ) {
+      this.recoveredWebSearchStep = this.stepIndex;
+      return [];
+    }
+    this.terminalErrorEmitted = true;
     const authRequired = isAuthError(error, message);
     const data: HeterogeneousTerminalErrorData = {
       agentType: OPENCODE_IDENTIFIER,

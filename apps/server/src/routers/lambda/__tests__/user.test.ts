@@ -100,6 +100,23 @@ vi.mock('@/server/workflows/onboardingUnderstanding', () => {
   };
 });
 
+const completedUnderstandingSource = () => ({
+  errors: [],
+  failedCount: 0,
+  revision: 1,
+  status: 'completed',
+  succeededCount: 2,
+});
+
+const understandingRetryInput = (): Parameters<
+  ReturnType<typeof userRouter.createCaller>['retryOnboardingUnderstandingSource']
+>[0] => ({
+  sessionId: 'session-1',
+  providerId: 'github',
+  responseLanguage: 'en-US',
+  topicId: 'topic-1',
+});
+
 describe('userRouter', () => {
   const mockUserId = 'test-user-id';
   const mockCtx = {
@@ -190,12 +207,9 @@ describe('userRouter', () => {
       );
 
       await expect(
-        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-          sessionId: 'session-1',
-          providerId: 'github',
-          responseLanguage: 'en-US',
-          topicId: 'topic-1',
-        }),
+        userRouter
+          .createCaller(scopedCtx)
+          .retryOnboardingUnderstandingSource(understandingRetryInput()),
       ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     });
 
@@ -252,13 +266,7 @@ describe('userRouter', () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {
-          github: {
-            errors: [],
-            failedCount: 0,
-            revision: 1,
-            status: 'completed',
-            succeededCount: 2,
-          },
+          github: completedUnderstandingSource(),
         },
         status: 'completed',
         writing: {
@@ -294,8 +302,11 @@ describe('userRouter', () => {
       await expect(iterator.next()).resolves.toMatchObject({ done: true });
     });
 
-    /** @example An initialized session without a connected provider is still collecting sources. */
-    it('keeps an empty pending session in the collecting-sources phase', async () => {
+    /**
+     * @example An initialized session without a connected provider reports collecting-sources once
+     * and ends, because no workflow can publish progress until the client revises its sources.
+     */
+    it('ends the stream for an empty pending session after its collecting-sources event', async () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {},
@@ -323,7 +334,7 @@ describe('userRouter', () => {
           understanding: 'pending',
         },
       });
-      await iterator.return?.();
+      await expect(iterator.next()).resolves.toMatchObject({ done: true });
     });
 
     /** @example A completed source waits for the downstream writer instead of ending the stream. */
@@ -331,13 +342,7 @@ describe('userRouter', () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {
-          github: {
-            errors: [],
-            failedCount: 0,
-            revision: 1,
-            status: 'completed',
-            succeededCount: 2,
-          },
+          github: completedUnderstandingSource(),
         },
         status: 'processing',
       });
@@ -388,13 +393,7 @@ describe('userRouter', () => {
         mockUnderstandingService.get.mockResolvedValueOnce({
           id: 'session-1',
           sources: {
-            github: {
-              errors: [],
-              failedCount: 0,
-              revision: 1,
-              status: 'completed',
-              succeededCount: 2,
-            },
+            github: completedUnderstandingSource(),
           },
           status: 'processing',
           writing,
@@ -460,12 +459,9 @@ describe('userRouter', () => {
     it('delegates retry for only the requested provider', async () => {
       mockUnderstandingService.retry.mockResolvedValueOnce(pollingResult);
 
-      const result = await userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-        sessionId: 'session-1',
-        providerId: 'github',
-        responseLanguage: 'en-US',
-        topicId: 'topic-1',
-      });
+      const result = await userRouter
+        .createCaller(scopedCtx)
+        .retryOnboardingUnderstandingSource(understandingRetryInput());
 
       expect(mockUnderstandingService.retry).toHaveBeenCalledWith({
         providerId: 'github',
@@ -590,12 +586,9 @@ describe('userRouter', () => {
       );
 
       await expect(
-        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-          sessionId: 'session-1',
-          providerId: 'github',
-          responseLanguage: 'en-US',
-          topicId: 'topic-1',
-        }),
+        userRouter
+          .createCaller(scopedCtx)
+          .retryOnboardingUnderstandingSource(understandingRetryInput()),
       ).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
         message: 'Onboarding understanding action is not currently available',

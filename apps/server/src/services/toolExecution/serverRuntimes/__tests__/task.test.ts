@@ -35,6 +35,7 @@ vi.mock('@/database/models/user', () => ({
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn().mockImplementation(function () {
     return {
+      getNicknames: async () => new Map<string, string>(),
       searchAssignableMembers: memberMocks.searchAssignableMembers,
     };
   }),
@@ -75,6 +76,23 @@ vi.mock('@/server/services/verify/planGenerator', () => ({
     return verifyMocks;
   }),
 }));
+
+const scheduledTaskInput = (taskCaller: unknown, taskModel: unknown) => ({
+  agentModel: { existsById: vi.fn() } as any,
+  taskCaller: taskCaller as any,
+  taskModel: taskModel as any,
+  taskService: {} as any,
+  toolCallId: 'tool-call-schedule',
+});
+
+const resolvedTaskInput = (taskCaller: unknown) => ({
+  agentModel: { existsById: vi.fn() } as any,
+  taskCaller: taskCaller as any,
+  taskModel: {
+    resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+  } as any,
+  taskService: {} as any,
+});
 
 describe('taskRuntime.factory', () => {
   beforeEach(() => {
@@ -234,14 +252,7 @@ describe('createTaskRuntime', () => {
         deleteComment: vi.fn().mockResolvedValue({ success: true }),
         updateComment: vi.fn().mockResolvedValue({ success: true }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {
-          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
-        } as any,
-        taskService: {} as any,
-      });
+      const runtime = createTaskRuntime(resolvedTaskInput(taskCaller));
 
       await runtime.updateTaskComment({ commentId: 'comment-1', content: 'Updated' });
       await runtime.deleteTaskComment({ commentId: 'comment-1' });
@@ -330,16 +341,18 @@ describe('createTaskRuntime', () => {
       return { agentModel, taskCaller, taskModel, taskService };
     };
 
+    const agentTaskInput = (deps: ReturnType<typeof makeDeps>) => ({
+      agentModel: deps.agentModel as any,
+      agentId: 'agt-xyz',
+      taskCaller: deps.taskCaller,
+      taskModel: deps.taskModel as any,
+      taskService: deps.taskService as any,
+    });
+
     it('passes createdByAgentId when invoked by an agent (activity should attribute the agent)', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-xyz',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.createTask({
         instruction: 'Do something',
@@ -427,13 +440,7 @@ describe('createTaskRuntime', () => {
     it('treats empty-string assignees as omitted so they never reach the FK columns', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-xyz',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.createTask({
         assigneeAgentId: '',
@@ -471,13 +478,7 @@ describe('createTaskRuntime', () => {
         }),
       );
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-xyz',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.createTask({
         assigneeUserId: 'usr_missing',
@@ -600,13 +601,7 @@ describe('createTaskRuntime', () => {
       const deps = makeDeps();
       deps.taskModel.resolve = vi.fn().mockResolvedValue({ id: 'parent-id', identifier: 'T-99' });
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-xyz',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       await runtime.createTask({
         instruction: 'Sub',
@@ -626,13 +621,7 @@ describe('createTaskRuntime', () => {
       const deps = makeDeps();
       deps.taskModel.resolve = vi.fn().mockResolvedValue(null);
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-xyz',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.createTask({
         instruction: 'Sub',
@@ -659,17 +648,19 @@ describe('createTaskRuntime', () => {
       return { agentModel, taskCaller, taskModel, taskService };
     };
 
+    const agentTaskInput = (deps: ReturnType<typeof makeDeps>) => ({
+      agentModel: deps.agentModel as any,
+      agentId: 'agt-manager',
+      taskCaller: deps.taskCaller,
+      taskModel: deps.taskModel as any,
+      taskService: deps.taskService as any,
+    });
+
     it('rejects explicit assigneeAgentId that is not owned by the current user', async () => {
       const deps = makeDeps();
       deps.agentModel.existsById.mockResolvedValue(false);
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-manager',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.editTask({
         assigneeAgentId: 'agt-other-user',
@@ -685,13 +676,7 @@ describe('createTaskRuntime', () => {
     it('allows clearing assigneeAgentId without ownership lookup', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-manager',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.editTask({
         assigneeAgentId: null,
@@ -710,13 +695,7 @@ describe('createTaskRuntime', () => {
     it('resolves parentIdentifier before the router update and safety validation', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-manager',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       deps.taskModel.resolve.mockImplementation(async (ref) => ({
         id: ref === 'T-43' ? 'task-43' : 'task-1',
@@ -739,13 +718,7 @@ describe('createTaskRuntime', () => {
     it('passes null parentIdentifier through to move a task to the top level', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-manager',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.editTask({
         identifier: 'T-1',
@@ -785,13 +758,7 @@ describe('createTaskRuntime', () => {
     it('returns failure when no fields are provided', async () => {
       const deps = makeDeps();
 
-      const runtime = createTaskRuntime({
-        agentModel: deps.agentModel as any,
-        agentId: 'agt-manager',
-        taskCaller: deps.taskCaller,
-        taskModel: deps.taskModel as any,
-        taskService: deps.taskService as any,
-      });
+      const runtime = createTaskRuntime(agentTaskInput(deps));
 
       const result = await runtime.editTask({ identifier: 'T-1' });
 
@@ -943,13 +910,7 @@ describe('createTaskRuntime', () => {
       const taskModel = {
         resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: taskModel as any,
-        taskService: {} as any,
-        toolCallId: 'tool-call-schedule',
-      });
+      const runtime = createTaskRuntime(scheduledTaskInput(taskCaller, taskModel));
 
       const result = await runtime.setTaskSchedule({
         automationMode: 'schedule',
@@ -972,13 +933,7 @@ describe('createTaskRuntime', () => {
       const taskModel = {
         resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-13' }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: taskModel as any,
-        taskService: {} as any,
-        toolCallId: 'tool-call-schedule',
-      });
+      const runtime = createTaskRuntime(scheduledTaskInput(taskCaller, taskModel));
 
       const result = await runtime.setTaskSchedule({
         automationMode: 'schedule',
@@ -1007,13 +962,7 @@ describe('createTaskRuntime', () => {
       const taskModel = {
         resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: taskModel as any,
-        taskService: {} as any,
-        toolCallId: 'tool-call-schedule',
-      });
+      const runtime = createTaskRuntime(scheduledTaskInput(taskCaller, taskModel));
 
       const result = await runtime.setTaskSchedule({
         automationMode: 'schedule',
@@ -1040,13 +989,7 @@ describe('createTaskRuntime', () => {
           scheduleTimezone: 'UTC',
         }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: taskModel as any,
-        taskService: {} as any,
-        toolCallId: 'tool-call-schedule',
-      });
+      const runtime = createTaskRuntime(scheduledTaskInput(taskCaller, taskModel));
 
       const result = await runtime.setTaskSchedule({
         identifier: 'T-1',
@@ -1090,14 +1033,7 @@ describe('createTaskRuntime', () => {
 
     it('accepts verify booleans and numbers a model sent as strings', async () => {
       const taskCaller = { updateVerifyConfig: vi.fn().mockResolvedValue({}) };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {
-          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
-        } as any,
-        taskService: {} as any,
-      });
+      const runtime = createTaskRuntime(resolvedTaskInput(taskCaller));
 
       const result = await runtime.setTaskVerify({
         enabled: 'true' as any,
@@ -1116,14 +1052,7 @@ describe('createTaskRuntime', () => {
       const taskCaller = {
         updateStatus: vi.fn().mockResolvedValue({ data: { id: 'task-1', identifier: 'T-1' } }),
       };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {
-          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
-        } as any,
-        taskService: {} as any,
-      });
+      const runtime = createTaskRuntime(resolvedTaskInput(taskCaller));
 
       const result = await runtime.updateTaskStatus({ identifier: 'T-1', status: 'completed' });
 
@@ -1370,12 +1299,11 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
     };
 
     it('lists the assignable page the directory query returns, with a self marker', async () => {
-      // Role gating, narrowing and the cap all happen in the model's SQL; the
-      // runtime only decorates the page it gets back.
+      // Gating, narrowing and the cap run in SQL; the runtime only decorates the page.
       memberMocks.searchAssignableMembers.mockResolvedValue({
         rows: [
           { role: 'owner', userId: 'usr_1' },
-          { role: 'member', userId: 'usr_2' },
+          { nickname: 'Aaron', role: 'member', userId: 'usr_2' },
         ],
         total: 2,
       });
@@ -1399,7 +1327,7 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
       });
       expect(result.state).toEqual({ count: 2, success: true, total: 2 });
       expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
-      expect(result.content).toContain('- Alice  @alice  role=member  id=usr_2');
+      expect(result.content).toContain('- Aaron  @alice  role=member  id=usr_2');
     });
 
     it('surfaces email and linked IM identities so platform handles resolve exactly', async () => {

@@ -12,7 +12,7 @@ import type {
 } from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
-import { isBreakoutTool, isImageBearingTool } from '../toolRenderRules';
+import { getBreakoutPredicate } from '../toolRenderRules';
 import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 
@@ -237,7 +237,14 @@ const toRenderSegments = (
   markTaskCompletionNotices(
     segments.map((segment) =>
       segment.kind === 'answer'
-        ? { block: toRenderableBlock(segment.block, () => false), kind: 'answer' }
+        ? {
+            block: {
+              ...toRenderableBlock(segment.block, () => false),
+              // Prose keeps its identity when tools arrive or its projection ends.
+              renderKey: segment.block.id,
+            },
+            kind: 'answer',
+          }
         : {
             ...segment,
             blocks: segment.blocks.map((block) => toRenderableBlock(block, isBreakout)),
@@ -294,10 +301,16 @@ export const buildChainView = (
     enableMcpApps?: boolean;
     hasActiveOperation: boolean;
     isGenerating: boolean;
+    /**
+     * User setting `showImageReadPreview`: off folds tools that only read an
+     * image into the run instead of breaking them out on their own row.
+     * @default true
+     */
+    showImageReads?: boolean;
   },
 ): GroupChainView => {
   const { isGenerating } = state;
-  const isBreakout = state.enableMcpApps ? isBreakoutTool : isImageBearingTool;
+  const isBreakout = getBreakoutPredicate(state);
   const partitioned = partitionAssistantGroupBlocks(chain.blocks, {
     isBreakoutTool: isBreakout,
     isGenerating,

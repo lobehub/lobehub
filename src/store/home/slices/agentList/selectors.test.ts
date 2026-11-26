@@ -43,3 +43,19 @@ describe('homeAgentListSelectors - private pinned', () => {
     expect(homeAgentListSelectors.allAgents(state).map((a) => a.id)).toContain('a1');
   });
 });
+
+describe('homeAgentListSelectors.hasInboxAgent', () => {
+  it('finds Lobe AI in any bucket', () => {
+    const inbox = { ...agent('inbox-agent'), slug: 'inbox' };
+
+    expect(
+      homeAgentListSelectors.hasInboxAgent(createState({ ungroupedAgents: [agent('a')] })),
+    ).toBe(false);
+    expect(homeAgentListSelectors.hasInboxAgent(createState({ pinnedAgents: [inbox] }))).toBe(true);
+    expect(
+      homeAgentListSelectors.hasInboxAgent(
+        createState({ agentGroups: [{ id: 'g', items: [inbox], name: 'g' } as any] }),
+      ),
+    ).toBe(true);
+  });
+});

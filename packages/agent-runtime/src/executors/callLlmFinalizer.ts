@@ -1,13 +1,12 @@
 import type {
   ChatToolPayload,
+  MessageContextAccounting,
   MessageMetadata,
   MessageToolCall,
   ModelPerformance,
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '../utils/multimodalContent';
-import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 import { UsageCounter } from '../core/UsageCounter';
 import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
@@ -17,9 +16,15 @@ import type {
   GeneralAgentCallLLMResultPayload,
   InstructionExecutionResult,
 } from '../types';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 import {
+  hasIgnoredToolCallBudget,
   hasRepeatedToolCall,
+  hasToolCallBurst,
+  TOOL_CALL_BURST_LIMIT,
   TOOL_CALL_REPEAT_LIMIT,
+  updateToolCallBudget,
   updateToolCallRepeatGuard,
 } from '../utils/toolCallRepeatGuard';
 
@@ -46,6 +51,8 @@ interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
   /** Provider attempts spent on this call, including retries. */
   attempts?: number;
+  /** Estimated accounting of the request this turn sent; persisted on the message. */
+  contextAccounting?: MessageContextAccounting;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -59,12 +66,14 @@ interface FinalizeCallLlmTurnInput {
 
 interface PersistInterruptedCallLlmResultInput {
   assistantMessageId: string;
+  contextAccounting?: MessageContextAccounting;
   host: AgentRuntimeHost;
   output: LLMAttemptOutput;
 }
 
 const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
+  contextAccounting,
   currentStepSpeed,
   currentStepUsage,
   executionSite,
@@ -74,6 +83,7 @@ const buildMessageMetadata = ({
   usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
+  contextAccounting?: MessageContextAccounting;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
   executionSite?: LLMAttemptOutput['executionSite'];
@@ -85,6 +95,7 @@ const buildMessageMetadata = ({
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
     ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
+    ...(contextAccounting && { contextAccounting }),
     ...(finishType && { finishType }),
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
@@ -163,10 +174,23 @@ const buildWorkAnchor = ({
       : -1;
   const currentOperationMessages =
     sourceMessageIndex >= 0 ? state.messages.slice(sourceMessageIndex + 1) : [];
+  // Tool interaction also hides inside the conversation-flow `assistantGroup`
+  // virtual message: the server runtime hydrates `state.messages` from
+  // `parse(...).flatList`, where a turn's tool calls and results are nested
+  // under `children[].tools` rather than a `role: 'tool'` row or a top-level
+  // `tool_calls` array. Missing that shape dropped the Work display anchor —
+  // and so the card under the reply — for every server-side run.
+  const hasToolInteraction = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    if ('tool_calls' in value && Array.isArray(value.tool_calls) && value.tool_calls.length > 0)
+      return true;
+    if ('tools' in value && Array.isArray(value.tools) && value.tools.length > 0) return true;
+    if ('children' in value && Array.isArray(value.children))
+      return value.children.some((child) => hasToolInteraction(child));
+    return false;
+  };
   const hasPriorToolInteraction = currentOperationMessages.some(
-    (message) =>
-      message.role === 'tool' ||
-      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0),
+    (message) => message?.role === 'tool' || hasToolInteraction(message),
   );
   if (!hasPriorToolInteraction) return undefined;
 
@@ -178,21 +202,30 @@ const buildWorkAnchor = ({
 
 const persistFinalMessage = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
   state,
-}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output' | 'state'>) => {
+}: Pick<
+  FinalizeCallLlmTurnInput,
+  'assistantMessageId' | 'contextAccounting' | 'host' | 'output' | 'state'
+>) => {
   const finalContent = output.hasContentImages
     ? serializePartsForStorage(output.contentParts)
     : output.content;
   const finalReasoning = buildFinalReasoning(output);
+  // A Stop ends the stream gracefully with `finishReason: 'abort'`, so this is
+  // the write a mid-stream Stop lands on: mark it like the error-path partial.
+  const aborted = output.finishReason === 'abort';
   const metadata = buildMessageMetadata({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
+    contextAccounting,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
     executionSite: output.executionSite,
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
+    interruptedMidStream: aborted,
     usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
@@ -203,9 +236,17 @@ const persistFinalMessage = async ({
 
   try {
     await host.transports.messages.update(assistantMessageId, {
-      content: finalContent,
+      // Stopped before any text: keep the placeholder, which renders as stopped
+      // (an empty string renders as still loading).
+      content: aborted && !finalContent ? undefined : finalContent,
       imageList: output.imageList.length > 0 ? output.imageList : undefined,
-      metadata: workAnchor ? { ...metadata, work: workAnchor } : metadata,
+      metadata: {
+        ...metadata,
+        ...(workAnchor && { work: workAnchor }),
+        // A row stopped earlier and now written to completion is no longer stopped;
+        // the model merges metadata, so the stale marker is cleared explicitly.
+        ...(!aborted && { interruptedMidStream: false }),
+      },
       observationId: output.observationId,
       reasoning: finalReasoning,
       search: output.grounding,
@@ -286,6 +327,7 @@ const buildFinalState = ({
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
   attempts,
+  contextAccounting,
   events,
   host,
   model,
@@ -298,13 +340,27 @@ export const finalizeCallLlmTurn = async ({
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
   const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
-  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  const repeated = hasRepeatedToolCall(repeatCounts);
+  // Same stop for a turn that asks for more calls than the burst limit: the
+  // calls differ, but nothing legitimate fans out that wide, and dispatching
+  // them would hit a real service once per call.
+  const burst = hasToolCallBurst(output.toolsCalling);
+  // Calls past an API's `maxCallsPerOperation` are normally answered with a
+  // rejected tool result by the agent (see `overBudgetToolCalls` below), so
+  // the model can still answer. A model that keeps asking after that feedback
+  // gets the same stop as a repeated call.
+  const budget = updateToolCallBudget(state, output.toolsCalling);
+  const budgetIgnored = hasIgnoredToolCallBudget(budget.overBudgetRounds);
+  const stoppedByRepeatLimit =
+    output.finishReason !== 'abort' && (repeated || burst || budgetIgnored);
   // Carried on the state so the terminal reason can name this stop. Sticky once
   // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
   // its counts on those, which would otherwise erase the only trace of why the
   // run ended.
   const toolCallRepeatGuard = {
     ...repeatCounts,
+    ...(Object.keys(budget.apiCalls).length > 0 && { apiCalls: budget.apiCalls }),
+    ...(budget.overBudgetRounds > 0 && { overBudgetRounds: budget.overBudgetRounds }),
     ...((stoppedByRepeatLimit || state.toolCallRepeatGuard?.stoppedByRepeatLimit) && {
       stoppedByRepeatLimit: true,
     }),
@@ -312,7 +368,11 @@ export const finalizeCallLlmTurn = async ({
   const finalizedOutput = stoppedByRepeatLimit
     ? {
         ...output,
-        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        content: repeated
+          ? `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`
+          : burst
+            ? `Stopped after ${output.toolsCalling.length} tool calls were requested in one turn (limit ${TOOL_CALL_BURST_LIMIT}).`
+            : `Stopped after ${budget.overBudgetCalls[0].toolCalling.apiName} kept being called past its limit of ${budget.overBudgetCalls[0].limit} calls.`,
         finishReason: 'tool_call_repeat_limit',
         toolCalls: [],
         toolsCalling: [],
@@ -367,6 +427,7 @@ export const finalizeCallLlmTurn = async ({
 
   const finalReasoning = await persistFinalMessage({
     assistantMessageId,
+    contextAccounting,
     host,
     output: finalizedOutput,
     state,
@@ -419,6 +480,15 @@ export const finalizeCallLlmTurn = async ({
       payload: {
         hasToolsCalling: finalizedOutput.toolsCalling.length > 0,
         parentMessageId: assistantMessageId,
+        // Only meaningful while the calls are still on the turn: a stop above
+        // already dropped them.
+        ...(!stoppedByRepeatLimit &&
+          budget.overBudgetCalls.length > 0 && {
+            overBudgetToolCalls: budget.overBudgetCalls.map(({ limit, toolCalling }) => ({
+              id: toolCalling.id,
+              limit,
+            })),
+          }),
         result: { content: finalizedOutput.content, tool_calls: finalizedOutput.toolCalls },
         toolsCalling: finalizedOutput.toolsCalling,
       } as GeneralAgentCallLLMResultPayload,
@@ -437,6 +507,7 @@ export const finalizeCallLlmTurn = async ({
 
 export const persistInterruptedCallLlmResult = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
 }: PersistInterruptedCallLlmResultInput): Promise<void> => {
@@ -446,6 +517,7 @@ export const persistInterruptedCallLlmResult = async ({
     await host.transports.messages.update(assistantMessageId, {
       content: output.content,
       metadata: buildMessageMetadata({
+        contextAccounting,
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
         executionSite: output.executionSite,

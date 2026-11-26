@@ -10,6 +10,7 @@ import {
   DeviceMetricsSampler,
   pushMetrics,
 } from '@lobechat/device-control';
+import { createTerminalDeps, TerminalSessionManager } from '@lobechat/device-control/terminal';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
@@ -41,6 +42,7 @@ import {
 } from '../../daemon/manager';
 import { listTasks } from '../../daemon/taskRegistry';
 import { ActivityReporter } from '../../device/activityHook';
+import { createAgentCredentialDeps } from '../../device/agentCredentials';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
@@ -48,6 +50,8 @@ import {
   resolveCliDeviceGateway,
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
+import { disposeDeviceMcp, listDeviceMcpTools } from '../../device/mcp';
+import { resolveDevicePlatform } from '../../device/platform';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -56,7 +60,6 @@ import {
   resolveWorkspaceDeviceIdentity,
 } from '../../device/register';
 import { probeNativeRuntimes } from '../../device/systemInfo';
-import { TerminalSessionManager } from '../../device/terminal';
 import { redactUrlCredentials } from '../../doctor/redact';
 import { cliVersion } from '../../pkg';
 import {
@@ -153,6 +156,7 @@ export function registerConnectCommand(program: Command) {
       }
 
       const isServiceChild = options.serviceChild || process.env.LOBEHUB_CONNECT_SERVICE === '1';
+      if (isServiceChild) process.env.LOBEHUB_CONNECT_SERVICE = '1';
       const isDaemonChild =
         options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 
@@ -484,6 +488,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Freeform channel label (`cli` by default); `LOBEHUB_CLI_CHANNEL` lets a
   // dev build tag itself `cli-dev` so the gateway can prioritise / display it.
   const channel = process.env.LOBEHUB_CLI_CHANNEL || 'cli';
+  // Android hosts report `linux` from the kernel; hand the gateway the resolved
+  // platform so presence (and ghost rows) don't show the device as a Linux desktop.
+  const { platform: devicePlatform } = resolveDevicePlatform();
 
   const client = new GatewayClient({
     channel,
@@ -491,6 +498,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
+    platform: devicePlatform,
     serverUrl: auth.serverUrl,
     token: connectToken,
     tokenType: connectTokenType,
@@ -514,7 +522,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`─── ${CLI_DISPLAY_NAME} ───`);
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
-  info(`  Platform  : ${process.platform}`);
+  info(`  Platform  : ${devicePlatform}`);
   info(`  Gateway   : ${gatewayDescription}`);
   info(`  Auth      : ${managed ? 'managed device token' : auth.tokenType}`);
   if (managed) {
@@ -574,7 +582,14 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Constructing it is cheap — the native PTY binding is only loaded when a
   // session is actually created, so a daemon that never opens a terminal never
   // touches it.
-  const terminals = new TerminalSessionManager({ logger: { warn: (message) => info(message) } });
+  const terminals = new TerminalSessionManager({
+    client: 'cli',
+    // Lazy: the CLI bundle is embedded in contexts that have no `node_modules`
+    // at all (the desktop app runs it from `Resources/bin`), so a static import
+    // would fail every one of them at startup.
+    loadPty: () => import('@lydell/node-pty'),
+    logger: { warn: (message) => info(message) },
+  });
 
   const countActiveTasks = () =>
     getActiveShellCount() + listTasks().filter((task) => isProcessAlive(task.pid)).length;
@@ -588,9 +603,11 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   });
 
   const deviceControlDeps: DeviceControlDeps = {
+    // Provider credentials the server installs for this device's agent runs;
+    // `spawnHeteroAgentRun` applies them.
+    ...createAgentCredentialDeps(),
     checkCliUpdate: maintenance.check,
-    closeTerminal: (params) => Promise.resolve(terminals.close(params)),
-    createTerminalSession: (params) => terminals.create(params),
+    ...createTerminalDeps(terminals),
     getCliUpdateState: maintenance.getState,
     getLocalFilePreview: defaultGetLocalFilePreview,
     getProjectFileIndex: defaultGetProjectFileIndex,
@@ -599,11 +616,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         ...params,
         env: { ...process.env, ...params.env },
       }),
-    readTerminal: (params) => Promise.resolve(terminals.read(params)),
-    resizeTerminal: (params) => Promise.resolve(terminals.resize(params)),
+    // A server that can't reach an MCP server itself lists its tools here
+    listMcpTools: listDeviceMcpTools,
     restartCli: maintenance.restart,
     searchProjectFiles: defaultSearchProjectFiles,
-    writeTerminal: (params) => Promise.resolve(terminals.write(params)),
   };
 
   // One native runtime probe per connection: system info is queried by tool runs and
@@ -682,6 +698,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managedAuthRetried = false;
     updateStatus('connected');
     void metricsSampler?.flush();
+    // Back online: the server runs the worktree cleanups that waited for this
+    // device (topics archived or trashed while it was offline) over the gateway.
+    const connectedDeviceId = client.currentDeviceId;
+    if (connectedDeviceId)
+      void createLambdaClient(auth, managed ? managedWorkspaceId : workspaceId)
+        .device.drainWorktreeCleanups.mutate({ deviceId: connectedDeviceId })
+        .catch((err) => info(`Worktree cleanup drain failed: ${(err as Error).message}`));
     // A (re)connection reprobes so an upgraded or downgraded Codex is reported, and
     // warms the cache before the gateway's first system_info_request.
     nativeRuntimes.invalidate();
@@ -734,6 +757,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       deviceId: wsIdentity.deviceId,
       gatewayUrl: resolvedGatewayUrl,
       logger: isDaemonChild ? createDaemonLogger() : log,
+      platform: devicePlatform,
       serverUrl: auth.serverUrl,
       token: initialToken,
       tokenType: 'jwt',
@@ -742,6 +766,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     });
 
     bindGatewayClientHandlers(wsClient, handlerContext, wsId);
+    // The share has its own device id: drain what waited for it, in its workspace.
+    wsClient.on('connected', () => {
+      const shareDeviceId = wsClient.currentDeviceId;
+      if (shareDeviceId)
+        void createLambdaClient(auth, wsId)
+          .device.drainWorktreeCleanups.mutate({ deviceId: shareDeviceId })
+          .catch((err) =>
+            info(`Worktree cleanup drain failed (${wsId}): ${(err as Error).message}`),
+          );
+    });
 
     const entry: WorkspaceShareConnection = { cancelRefresh: null, client: wsClient };
 
@@ -881,6 +915,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
           removeWorkspaceEnrollment(wsId);
           continue;
         }
+        // The workspace row copied platform / metadata from the personal row at
+        // share time and nothing else refreshes it (e.g. an Android device shared
+        // while it still registered as `linux`). Best-effort: never block restore.
+        await registerWorkspaceDevice(auth, wsIdentity, wsId).catch((err) =>
+          error(`Failed to refresh workspace device info for ${wsId}: ${(err as Error).message}`),
+        );
         const minted = await mintWorkspaceConnectToken(auth, wsId);
         await openWorkspaceConnection(wsId, minted.token);
         info(`Restored workspace share connection: ${wsId}`);
@@ -1021,6 +1061,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managed?.session.stop();
     activity?.stop();
     cleanupAllProcesses();
+    void disposeDeviceMcp();
     // Kill every remote-terminal shell this daemon started, so a stopping
     // `lh connect` does not leave orphaned PTYs behind on the machine.
     terminals.dispose();
@@ -1042,6 +1083,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     await Promise.all([
       metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
       closeBrowserSessions(browser),
+      disposeDeviceMcp(),
     ]);
     cleanup();
     process.exit(exitCode);

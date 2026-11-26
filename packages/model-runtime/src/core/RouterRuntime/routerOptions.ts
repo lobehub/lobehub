@@ -1,6 +1,6 @@
 import type { ChatModelCard, RouterRuntimeRequestContext } from '@lobechat/types';
-import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
+import type { ClientOptions } from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import type {
@@ -19,8 +19,9 @@ import type {
   CreateImageOptions,
   CreateVideoOptions,
   CustomClientOptions,
-} from '../openaiCompatibleFactory';
+} from '../openaiCompatible';
 import type { ApiType, RuntimeClass } from './apiTypes';
+import type { ChatStreamRetryContext } from './chatStreamFallback';
 import type { RouteAttemptFinished, RouteAttemptResult } from './routeAttempt';
 
 export interface ProviderIniOptions extends Record<string, any> {
@@ -98,6 +99,7 @@ export interface RouteSuccessParams {
 export type RouterRuntimeMethod =
   | 'chat'
   | 'createImage'
+  | 'createMusic'
   | 'createVideo'
   | 'decide'
   | 'embeddings'
@@ -178,6 +180,16 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   /** Register once while the request context is available. */
   scheduleRouteRequestSettled?: (settled: Promise<void>) => void | Promise<void>;
   shouldFallbackChatAttempt?: (result: RouteAttemptFinished) => boolean | Promise<boolean>;
+  /**
+   * Replay an uncommitted empty or interrupted chat attempt on the same option before
+   * considering fallback, e.g. a transient provider glitch where switching channels would
+   * lose the prompt cache. The replaced attempt is reported through
+   * `callback.onAttemptDiscarded` so its owner can account for any upstream cost.
+   */
+  shouldRetryChatAttempt?: (
+    result: RouteAttemptFinished,
+    context: ChatStreamRetryContext,
+  ) => boolean | Promise<boolean>;
   shouldStopFallback?: (params: {
     error: unknown;
     metadata?: Record<string, unknown>;

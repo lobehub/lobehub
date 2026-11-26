@@ -11,7 +11,7 @@ const messengerServiceMocks = vi.hoisted(() => ({
   pollWechatQrSession: vi.fn(),
   sendMessengerPush: vi.fn(),
 }));
-const useSWRMock = vi.hoisted(() => vi.fn());
+const pushWindowMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -101,7 +101,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('swr', () => ({ default: useSWRMock }));
+vi.mock('@/store/messenger', () => ({
+  messengerActions: {
+    sendPush: (params: unknown) => messengerServiceMocks.sendMessengerPush(params),
+    useFetchPushWindow: () => ({ error: undefined, revalidate: vi.fn() }),
+  },
+  messengerSelectors: { pushWindow: () => () => pushWindowMock() },
+  useMessengerStore: (selector: (state: object) => unknown) => selector({}),
+}));
 
 vi.mock('@/components/AsyncError', () => ({ default: () => null }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -152,17 +159,14 @@ describe('MessengerPushSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     messengerServiceMocks.sendMessengerPush.mockResolvedValue({ status: 'sent' });
-    useSWRMock.mockReturnValue({
-      data: {
-        deliverability: 'windowed',
-        expiresInSeconds: 3600,
-        linked: true,
-        maxSends: 10,
-        queued: 0,
-        remaining: 9,
-        windowOpen: true,
-      },
-      mutate: vi.fn(),
+    pushWindowMock.mockReturnValue({
+      deliverability: 'windowed',
+      expiresInSeconds: 3600,
+      linked: true,
+      maxSends: 10,
+      queued: 0,
+      remaining: 9,
+      windowOpen: true,
     });
   });
 
@@ -177,17 +181,14 @@ describe('MessengerPushSection', () => {
   });
 
   it('renders the send-window description while the window is closed', () => {
-    useSWRMock.mockReturnValue({
-      data: {
-        deliverability: 'windowed',
-        expiresInSeconds: null,
-        linked: true,
-        maxSends: 10,
-        queued: 0,
-        remaining: 0,
-        windowOpen: false,
-      },
-      mutate: vi.fn(),
+    pushWindowMock.mockReturnValue({
+      deliverability: 'windowed',
+      expiresInSeconds: null,
+      linked: true,
+      maxSends: 10,
+      queued: 0,
+      remaining: 0,
+      windowOpen: false,
     });
 
     render(<MessengerPushSection name="WeChat" platform="wechat" />);
@@ -197,17 +198,14 @@ describe('MessengerPushSection', () => {
   });
 
   it('renders an always-available state for non-windowed platforms', () => {
-    useSWRMock.mockReturnValue({
-      data: {
-        deliverability: 'always',
-        expiresInSeconds: null,
-        linked: true,
-        maxSends: 0,
-        queued: 0,
-        remaining: 0,
-        windowOpen: true,
-      },
-      mutate: vi.fn(),
+    pushWindowMock.mockReturnValue({
+      deliverability: 'always',
+      expiresInSeconds: null,
+      linked: true,
+      maxSends: 0,
+      queued: 0,
+      remaining: 0,
+      windowOpen: true,
     });
 
     render(<MessengerPushSection name="Telegram" platform="telegram" />);
@@ -217,17 +215,14 @@ describe('MessengerPushSection', () => {
   });
 
   it('sends to the selected Slack workspace tenant', async () => {
-    useSWRMock.mockReturnValue({
-      data: {
-        deliverability: 'always',
-        expiresInSeconds: null,
-        linked: true,
-        maxSends: 0,
-        queued: 0,
-        remaining: 0,
-        windowOpen: true,
-      },
-      mutate: vi.fn(),
+    pushWindowMock.mockReturnValue({
+      deliverability: 'always',
+      expiresInSeconds: null,
+      linked: true,
+      maxSends: 0,
+      queued: 0,
+      remaining: 0,
+      windowOpen: true,
     });
 
     render(

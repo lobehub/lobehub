@@ -6,15 +6,31 @@ import type { TaskStatus } from './task';
  * version per acceptance result. It is read through the goal graph, not the
  * generic Work lists.
  */
-export type WorkType = 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+export type WorkType =
+  'artboard' | 'canvas' | 'document' | 'external' | 'file' | 'collection' | 'goal_report' | 'task';
 /** Work types the generic Work lists return; a `goal_report` is read through its goal. */
 export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
 export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
+/**
+ * A plain http(s) link an agent registered itself (`lh work create --url`), such
+ * as a deployed site or a design file. Its resource identity is the normalized
+ * URL. GitHub and Linear links are registered automatically under their own
+ * resource types and are never stored as `link`.
+ */
+export type LinkWorkResourceType = 'link';
 /** Every resource type backed by the unified `external` Work type. */
-export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
+export type ExternalWorkResourceType =
+  GithubWorkResourceType | LinearWorkResourceType | LinkWorkResourceType;
 export type WorkResourceType =
-  'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
+  | 'artboard'
+  | 'canvas'
+  | 'document'
+  | ExternalWorkResourceType
+  | 'file'
+  | 'collection'
+  | 'goal_report'
+  | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -50,8 +66,24 @@ export interface CanvasWorkPublishMetadata {
   publishedVersion: number;
 }
 
+export interface ArtboardWorkPublishMetadata {
+  deploymentId: string;
+  publishedRevision: number;
+  publisherUserId: string;
+  snapshotHash: string;
+}
+
 export interface WorkMetadata {
+  /**
+   * The agent may change this Work later through `lh work update`. Stamped once
+   * when the Work identity is first registered and never changed afterwards:
+   * Works collected automatically (completion scans, skill results, manifest
+   * `work` configs without `agentEditable`) leave it unset and stay read-only
+   * to the agent.
+   */
+  agentEditable?: boolean;
   agentShare?: AgentShareWorkProvenance;
+  artboardPublish?: ArtboardWorkPublishMetadata;
   canvasPublish?: CanvasWorkPublishMetadata;
 }
 
@@ -112,11 +144,32 @@ export interface CanvasStorageItem {
   workId: string | null;
 }
 
+/** One image of a `collection` Work, in display order. */
+export interface CollectionWorkItem {
+  caption?: string;
+  /** The image's file-store id; the server checks the run owns it. */
+  fileId: string;
+  mimeType?: string;
+  /** Durable URL of the image (`/f/<fileId>`), resolved by the server. */
+  url: string;
+}
+
+/**
+ * `collection` Work — the complete image list of this version. Every version
+ * carries the full list: an update replaces it, never patches it.
+ */
+export interface CollectionWorkVersionMetadata {
+  /** File id of the cover image; the first image when unset. */
+  coverFileId?: string;
+  items: CollectionWorkItem[];
+}
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
   /** `external` GitHub PR Work — the branch the pull request merges into. */
   baseBranch?: string;
   canvas?: CanvasWorkVersionMetadata;
+  collection?: CollectionWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
    * file was persisted. `filePath` is always present for a file Work; the
@@ -145,6 +198,12 @@ export interface WorkVersionMetadata {
   linesDeleted?: number;
   /** `file` Work — MIME type of the edited file. */
   mimeType?: string;
+  /**
+   * `external` GitHub PR Work — how this version linked the PR: `command` when
+   * a command named it, `push` for a `git push` to a branch that already had
+   * it. Set on every version, since metadata merges over the previous one.
+   */
+  pullRequestLink?: 'command' | 'push';
 }
 
 export interface WorkVersionCumulativeUsage {
@@ -305,11 +364,29 @@ export interface CanvasWorkListItem extends WorkListBaseItem {
   type: 'canvas';
 }
 
+export interface ArtboardWorkListItem extends WorkListBaseItem {
+  resourceType: 'artboard';
+  type: 'artboard';
+}
+
+/**
+ * A set of images an agent collected into one Work (the `lobe-work` tool). Its
+ * resource id is a generated `col_` id, so every create is a new collection. The
+ * `works.url` column holds the cover image URL for list rows; the image list
+ * lives in {@link CollectionWorkVersionMetadata}.
+ */
+export interface CollectionWorkListItem extends WorkListBaseItem {
+  resourceType: 'collection';
+  type: 'collection';
+}
+
 export type WorkListItem =
+  | ArtboardWorkListItem
   | CanvasWorkListItem
   | DocumentWorkListItem
   | ExternalWorkListItem
   | FileWorkListItem
+  | CollectionWorkListItem
   | TaskWorkListItem;
 
 export interface TaskWorkVersionEventItem extends TaskWorkListItem {
@@ -332,11 +409,21 @@ export interface CanvasWorkVersionEventItem extends CanvasWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface ArtboardWorkVersionEventItem extends ArtboardWorkListItem {
+  version: WorkVersionPreview;
+}
+
+export interface CollectionWorkVersionEventItem extends CollectionWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
+  | ArtboardWorkVersionEventItem
   | CanvasWorkVersionEventItem
   | DocumentWorkVersionEventItem
   | ExternalWorkVersionEventItem
   | FileWorkVersionEventItem
+  | CollectionWorkVersionEventItem
   | TaskWorkVersionEventItem;
 export type WorkVersionEventMap = Record<string, WorkVersionEventItem[]>;
 
@@ -373,16 +460,37 @@ export interface CanvasWorkSummaryItem extends CanvasWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface ArtboardWorkSummaryItem extends ArtboardWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
+export interface CollectionWorkSummaryItem extends CollectionWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
+  | ArtboardWorkSummaryItem
   | CanvasWorkSummaryItem
   | DocumentWorkSummaryItem
   | ExternalWorkSummaryItem
   | FileWorkSummaryItem
+  | CollectionWorkSummaryItem
   | TaskWorkSummaryItem;
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
   agentDocumentId?: string | null;
+  /**
+   * Stamp the Work as agent-editable when this registration creates it. Ignored
+   * when the Work already exists: editability is fixed at creation. See
+   * {@link WorkMetadata.agentEditable}.
+   */
+  agentEditable?: boolean | null;
+
   /** Agent that produced this version; also validates the agent-document binding when present. */
   agentId?: string | null;
   changeType: WorkVersionChangeType;
@@ -413,9 +521,17 @@ export interface RegisterDocumentWorkParams {
  * `updated`).
  */
 export interface RegisterFileWorkParams {
+  /**
+   * Stamp the Work as agent-editable when this registration creates it. Ignored
+   * when the Work already exists: editability is fixed at creation. See
+   * {@link WorkMetadata.agentEditable}.
+   */
+  agentEditable?: boolean | null;
   agentId?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  /** Card description; defaults to `filePath`. */
+  description?: string | null;
   /** The edited file's path within the operation — half of the resource identity. */
   filePath: string;
   messageId?: string | null;
@@ -457,6 +573,24 @@ export interface RegisterCanvasWorkParams {
   visibility?: WorkVisibility;
 }
 
+export interface RegisterArtboardWorkParams {
+  agentId?: string | null;
+  artboardId: string;
+  changeType: WorkVersionChangeType;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  description?: string | null;
+  messageId?: string | null;
+  projectId?: string | null;
+  rootOperationId?: string | null;
+  threadId?: string | null;
+  title: string;
+  toolCallId?: string | null;
+  toolIdentifier: string;
+  toolName: string;
+  topicId?: string | null;
+}
+
 export interface DeleteDocumentWorkParams {
   agentDocumentId?: string | null;
   agentId?: string | null;
@@ -480,6 +614,12 @@ export interface DeleteWorkParams {
 }
 
 export interface RegisterExternalWorkParams {
+  /**
+   * Stamp the Work as agent-editable when this registration creates it. Ignored
+   * when the Work already exists: editability is fixed at creation. See
+   * {@link WorkMetadata.agentEditable}.
+   */
+  agentEditable?: boolean | null;
   agentId?: string | null;
   changeType: WorkVersionChangeType;
   /** Full body captured in the next version when named in `patchFields`. */
@@ -577,6 +717,12 @@ export interface RegisterSkillToolResultWorkParams {
 export type SkillToolResultWorkInput = Omit<RegisterSkillToolResultWorkParams, 'provider'>;
 
 export interface RegisterTaskWorkParams {
+  /**
+   * Stamp the Work as agent-editable when this registration creates it. Ignored
+   * when the Work already exists: editability is fixed at creation. See
+   * {@link WorkMetadata.agentEditable}.
+   */
+  agentEditable?: boolean | null;
   agentId?: string | null;
   changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
@@ -616,6 +762,8 @@ export interface WorkTaskTarget {
 export type WorkRegistrationIntent =
   | {
       action: 'create' | 'update' | 'delete';
+      /** From the API's `work.agentEditable`; see {@link WorkMetadata.agentEditable}. */
+      agentEditable?: boolean;
       changeType?: WorkVersionChangeType;
       targets: WorkTaskTarget[];
       type: 'task';
@@ -631,6 +779,8 @@ export type WorkRegistrationIntent =
       action: 'register';
       document: {
         agentDocumentId?: string | null;
+        /** From the API's `work.agentEditable`; see {@link WorkMetadata.agentEditable}. */
+        agentEditable?: boolean;
         agentId?: string | null;
         description?: string | null;
         documentId: string;
@@ -654,4 +804,194 @@ export type WorkRegistrationIntent =
         toolName: string;
       };
       type: 'canvas';
+    }
+  | {
+      action: 'register';
+      artboard: {
+        artboardId: string;
+        changeType: WorkVersionChangeType;
+        description?: string | null;
+        projectId?: string | null;
+        title: string;
+        toolName: string;
+      };
+      type: 'artboard';
     };
+
+/**
+ * How a pull request came to be linked to a topic, strongest first:
+ *
+ * - `created` — the topic's agent opened it (`gh pr create`).
+ * - `command` — the agent ran a command naming it (`gh pr edit|ready|merge <n>`).
+ * - `push` — the agent pushed to a branch that already had it.
+ * - `branch` — found on a branch the topic created (run-end lookup).
+ * - `manual` — the person linked it by URL.
+ *
+ * The first three are Work rows the server parsed from the run's own tool
+ * messages; `branch` and `manual` are topic links that only drive the UI.
+ */
+export type TopicPullRequestLinkSource = 'branch' | 'command' | 'created' | 'manual' | 'push';
+
+/**
+ * A link kept on the topic itself (`metadata.pullRequests.links`) rather than
+ * as a Work row: a PR found on the topic's own branch, or linked by hand.
+ * Written only by the server's link endpoints.
+ */
+export interface TopicPullRequestLinkMeta {
+  headRefName?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** ISO time it was linked. */
+  linkedAt: string;
+  source: 'branch' | 'manual';
+  title?: string;
+  url: string;
+  /** See {@link TopicPullRequestItem.vouched}. */
+  vouched: boolean;
+}
+
+/** Topic-level PR links and the PRs a person removed from the topic's lists. */
+export interface TopicPullRequestsMeta {
+  /** `owner/repo#number` hidden from the topic; the Work rows stay. */
+  dismissed?: string[];
+  links?: TopicPullRequestLinkMeta[];
+}
+
+/**
+ * One GitHub pull request linked to a topic: by any
+ * `work_versions` row of a `github_pull_request` Work with that `topicId`, or by
+ * a topic link (branch match / by hand). A topic can carry several.
+ */
+export interface TopicPullRequestWork {
+  baseBranch?: string;
+  headBranch?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** Newest version of this Work registered in the topic. */
+  linkedAt: Date;
+  number: number;
+  repoFullName: string;
+  /** See {@link TopicPullRequestLinkSource}. */
+  source: TopicPullRequestLinkSource;
+  /** Status the agent's own commands left it in (`open`, `draft`, `merged`). */
+  status: string | null;
+  title: string | null;
+  url: string | null;
+  /** Null for a topic link with no Work row. */
+  workId: string | null;
+}
+
+/**
+ * What the GitHub App last reported about a linked pull request. Present only
+ * when an installation the viewer can see tracks the repository — that is the
+ * confirmed source; without it the client probes the execution device.
+ */
+/**
+ * The pull request's Auto-fix: whether its failing CI and review feedback
+ * wake the agent of {@link ownerTopicId}. Only that conversation may switch it.
+ */
+export interface TopicPullRequestAutoFix {
+  changeRequestId: string;
+  enabled: boolean;
+  /** Wakes allowed before Auto-fix stops on its own; turning it back on starts over. */
+  maxWakes: number;
+  /** The conversation it wakes, when it is not this one and the viewer can open it. */
+  ownerTopic: { agentId: string | null; id: string; title: string | null } | null;
+  /** The conversation it wakes; `null` when none is linked. */
+  ownerTopicId: string | null;
+  wakeCount: number;
+}
+
+export interface TopicPullRequestScmState {
+  autoFix: TopicPullRequestAutoFix;
+  ciStatus: 'failure' | 'pending' | 'success' | 'unknown' | null;
+  isDraft: boolean;
+  mergedAt: Date | null;
+  reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
+  state: 'closed' | 'merged' | 'open';
+  title: string | null;
+  updatedAt: Date;
+}
+
+export interface TopicPullRequestItem extends TopicPullRequestWork {
+  scm: TopicPullRequestScmState | null;
+  /**
+   * Whether the app can vouch this PR belongs to the topic: the run's own
+   * commands named it, the person linked it, or the branch match found its head
+   * in the repository the topic pushes to. An unvouched PR is listed but its
+   * merge / close stay locked.
+   */
+  vouched: boolean;
+}
+
+/** Tool identity stamped on Work versions written by `lh work create|update`. */
+export const AGENT_WORK_CLI_TOOL_IDENTIFIER = 'lobehub-cli';
+
+/**
+ * What an agent registers itself as a Work: a file it produced (already
+ * uploaded to the file store), a plain http(s) link, or a collection of images it
+ * collected.
+ */
+export type CreateAgentWorkInput =
+  | {
+      description?: string;
+      file: {
+        fileId: string;
+        /** Absolute path of the produced file; with the topic it forms the Work identity. */
+        filePath: string;
+        fileSize?: number;
+        fileUrl?: string;
+        mimeType?: string;
+      };
+      title?: string;
+      type: 'file';
+    }
+  | {
+      description?: string;
+      title: string;
+      type: 'link';
+      url: string;
+    }
+  | ({
+      description?: string;
+      title: string;
+      type: 'collection';
+    } & CollectionWorkVersionMetadata);
+
+/**
+ * A new version of an agent-created Work. Fields left out keep the current
+ * version's values. `file` applies to file Works and `collection` to collection
+ * Works, where it replaces the whole image list. A link Work's URL is its
+ * identity and does not change; a new link is a new Work.
+ */
+export interface UpdateAgentWorkInput {
+  collection?: CollectionWorkVersionMetadata;
+  description?: string;
+  file?: Omit<Extract<CreateAgentWorkInput, { type: 'file' }>['file'], 'filePath'>;
+  title?: string;
+  workId: string;
+}
+
+/** The run an agent Work is registered from, resolved server-side from its operation. */
+export interface AgentWorkRunContext {
+  agentId?: string | null;
+  /** The assistant message of the tool call, when a builtin tool (not the CLI) writes. */
+  messageId?: string | null;
+  operationId: string;
+  /**
+   * Top of the operation tree `operationId` runs in, stamped on versions as
+   * `rootOperationId` so run completion can fill their cost. Defaults to
+   * `operationId`.
+   */
+  rootOperationId?: string;
+  threadId?: string | null;
+  /** Tool call id of a builtin-tool write; a retried call does not add a second version. */
+  toolCallId?: string | null;
+  /** Defaults to {@link AGENT_WORK_CLI_TOOL_IDENTIFIER}. */
+  toolIdentifier?: string;
+  topicId: string;
+  userId: string;
+}
+
+/** Most images one collection Work holds. */
+export const COLLECTION_WORK_MAX_ITEMS = 50;

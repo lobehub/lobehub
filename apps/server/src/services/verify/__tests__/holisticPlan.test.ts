@@ -1,6 +1,8 @@
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiGenerationService } from '@/server/services/aiGeneration';
+
 import { VERIFY_PLAN_MODEL_CONFIG } from '../modelConfig';
 import { VerifyPlanGeneratorService } from '../planGenerator';
 
@@ -250,5 +252,40 @@ describe('verify plan generation model', () => {
 
       expect(systemPrompt()).toContain('Ignore the English system wording');
     });
+  });
+});
+
+/**
+ * Regression: plan generation in a workspace billed the caller's personal budget because the
+ * model call was built without the workspace id, so the cost never reached workspace spend.
+ */
+describe('verify plan generation billing scope', () => {
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+    vi.mocked(AiGenerationService).mockClear();
+  });
+
+  it('bills criteria generation to the workspace it runs in', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1', 'ws-1').generateCriteria({
+      goal: 'Ship the feature',
+    });
+
+    expect(AiGenerationService).toHaveBeenCalledWith(db, 'user-1', 'ws-1');
+  });
+
+  it('bills the requirement split to the workspace it runs in', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1', 'ws-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(generateObjectMock).toHaveBeenCalledTimes(1);
+    expect(AiGenerationService).toHaveBeenCalledWith(db, 'user-1', 'ws-1');
   });
 });

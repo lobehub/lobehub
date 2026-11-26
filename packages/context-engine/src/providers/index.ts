@@ -1,9 +1,14 @@
 // Context Provider exports
 export { ActiveTopicDocumentContextInjector } from './ActiveTopicDocumentContextInjector';
+export {
+  AgentAccountContextInjector,
+  type AgentAccountContextInjectorConfig,
+} from './AgentAccountContextInjector';
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -47,6 +52,7 @@ export {
   formatSelectedToolsContext,
   SelectedToolInjector,
 } from './SelectedToolInjector';
+export { SkillChangesInjector } from './SkillChangesInjector';
 export { selectActivatedSkills, SkillContextProvider } from './SkillContextProvider';
 export {
   extractSkillImportRoutes,
@@ -54,12 +60,26 @@ export {
   SKILL_STORE_TOOL_ID,
   SkillImportRouteInjector,
 } from './SkillImportRouteInjector';
+export {
+  diffSkillIndex,
+  formatSkillChanges,
+  noteSkillChanges,
+  resolveSkillIndex,
+  reusablePinnedSkillIndex,
+  skillChangesByMessage,
+  skillsFromSnapshot,
+  takeSkillIndexSnapshot,
+} from './SkillIndexSnapshot';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
 export { TodoInjector } from './TodoInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
-export { selectToolPromptManifests, ToolSystemRoleProvider } from './ToolSystemRole';
+export {
+  renderToolInstructions,
+  selectToolPromptManifests,
+  ToolSystemRoleProvider,
+} from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
 export { UserMemoryInjector } from './UserMemoryInjector';
 export { WorkspaceContextInjector } from './WorkspaceContextInjector';
@@ -74,7 +94,10 @@ export type {
 export type {
   AgentContextDocument,
   AgentDocumentBeforeSystemInjectorConfig,
+  AgentDocumentChange,
+  AgentDocumentChangesByMessage,
   AgentDocumentContextInjectorConfig,
+  AgentDocumentIndexSnapshot,
   AgentDocumentInjectionPosition,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
@@ -135,8 +158,19 @@ export type {
 export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditionalContextProvider';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
+export type { SkillChangesInjectorConfig } from './SkillChangesInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
 export type { SkillImportRoute, SkillImportRouteInjectorConfig } from './SkillImportRouteInjector';
+export type {
+  ResolvedSkillIndex,
+  ResolveSkillIndexInput,
+  SkillChangesByMessage,
+  SkillIndexChange,
+  SkillIndexChangeKind,
+  SkillIndexNote,
+  SkillIndexRow,
+  SkillIndexSnapshot,
+} from './SkillIndexSnapshot';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';

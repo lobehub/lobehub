@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { notifyDocumentMention } from '@/business/server/document-mention/notifyActivity';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -11,7 +10,6 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
-import { RbacModel } from '@/database/models/rbac';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { WorkModel } from '@/database/models/work';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
@@ -19,20 +17,21 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { resolveDocumentWrite } from '@/server/services/document/editorData';
-import { canViewDocumentContent, getDocumentForViewer } from '@/server/services/documentAccess';
+import {
+  assertCanCreateUnderParent,
+  createDocumentFromInput,
+  updateDocumentFromInput,
+} from '@/server/services/document/writeFlow';
+import { getDocumentForViewer } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
 import { resolvePageAccess } from '@/server/services/pageCollab';
-import {
-  snapshotPageThroughRoom,
-  updateDocumentThroughRoom,
-} from '@/server/services/pageCollab/bodyWriter';
+import { snapshotPageThroughRoom } from '@/server/services/pageCollab/bodyWriter';
+import { dropPageRooms } from '@/server/services/pageCollab/notify';
 import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
-  getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
-import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -51,94 +50,10 @@ import {
   updateDocumentInputSchema,
 } from './_schema/documentHistory';
 
-/**
- * Creating a child or moving a row requires the parent to be visible in the
- * caller's workspace. Resource writes are role-gated at the procedure layer;
- * creator ownership and General Access do not further narrow ordinary Member
- * operations.
- */
-const assertCanCreateUnderParent = async (
-  ctx: {
-    serverDB: Parameters<typeof getResourceMeta>[0];
-    userId: string;
-    workspaceId?: string | null;
-  },
-  parentId: string | undefined,
-) => {
-  if (!ctx.workspaceId || !parentId) return;
-  const meta = await getResourceMeta(ctx.serverDB, 'document', parentId);
-  if (
-    !meta ||
-    meta.workspaceId !== ctx.workspaceId ||
-    (meta.visibility === 'private' && meta.userId !== ctx.userId)
-  ) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Parent document not found' });
-  }
-  await assertContentsNotInRestrictedKnowledgeBase(ctx, [parentId]);
-};
-
 const getFreeDocumentHistorySince = () => {
   const now = Date.now();
 
   return new Date(now - FREE_DOCUMENT_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-};
-
-/**
- * Ping members newly @-mentioned in the document body. Runs after the response
- * and re-checks each recipient against the document's General access, so a
- * chip for someone outside a private page never leaks its existence. The
- * business slot is a no-op outside Cloud.
- */
-const notifyDocumentMentionsBestEffort = (
-  ctx: { serverDB: Parameters<typeof getResourceMeta>[0]; userId: string; workspaceId: string },
-  params: { documentId: string; mentionedUserIds: string[]; savedAt: Date },
-) => {
-  const recipientUserIds = [...new Set(params.mentionedUserIds)].filter(
-    (userId) => userId !== ctx.userId,
-  );
-  if (recipientUserIds.length === 0) return;
-
-  after(async () => {
-    try {
-      const [meta, permissionsByUserId] = await Promise.all([
-        getResourceMeta(ctx.serverDB, 'document', params.documentId),
-        RbacModel.getWorkspaceUsersPermissions({
-          db: ctx.serverDB,
-          requireMembership: true,
-          userIds: recipientUserIds,
-          workspaceId: ctx.workspaceId,
-        }),
-      ]);
-      if (!meta) return;
-
-      await Promise.all(
-        recipientUserIds.map(async (recipientUserId) => {
-          const grantedPermissions = permissionsByUserId.get(recipientUserId);
-          if (!grantedPermissions) return;
-
-          const canView = await canViewDocumentContent({
-            db: ctx.serverDB,
-            grantedPermissions,
-            meta,
-            resourceId: params.documentId,
-            userId: recipientUserId,
-            workspaceId: ctx.workspaceId,
-          });
-          if (!canView) return;
-
-          await notifyDocumentMention({
-            actorUserId: ctx.userId,
-            documentId: params.documentId,
-            recipientUserId,
-            savedAt: params.savedAt,
-            workspaceId: ctx.workspaceId,
-          });
-        }),
-      );
-    } catch (error) {
-      console.error('[document] Failed to send mention notification', error);
-    }
-  });
 };
 
 /**
@@ -222,37 +137,7 @@ export const documentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { operationId, ...documentInput } = input;
-      // Resolve parentId if it's a slug
-      let resolvedParentId = documentInput.parentId;
-      if (documentInput.parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(documentInput.parentId);
-        if (docBySlug) {
-          resolvedParentId = docBySlug.id;
-        }
-      }
-
-      await assertCanCreateUnderParent(ctx, resolvedParentId);
-
-      const { content, editorData } = await resolveDocumentWrite({
-        content: documentInput.content,
-        editorData: documentInput.editorData ? JSON.parse(documentInput.editorData) : undefined,
-        fileType: documentInput.fileType,
-        title: documentInput.title,
-      });
-      const document = await ctx.documentService.createDocument({
-        ...documentInput,
-        content,
-        editorData,
-        parentId: resolvedParentId,
-      });
-      if (ctx.workspaceId && document.visibility !== 'private') {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
-          'document',
-          document.id,
-          DEFAULT_RESOURCE_ACCESS_LEVELS.document,
-          ctx.userId,
-        );
-      }
+      const document = await createDocumentFromInput(ctx, documentInput);
       await registerRunDocumentWork(ctx, {
         changeType: 'created',
         documentId: document.id,
@@ -595,71 +480,18 @@ export const documentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
-
-      const { id, editorData: editorDataString, operationId, ...params } = input;
-      // A content-only write (the CLI) sends no editorData and often no fileType
-      // or title; the stored fileType decides whether to build editorData from
-      // Markdown, and the stored title names the heading to drop from it.
-      // An HTML page never gets any (the service drops editorData sent for one).
-      const needsStoredDocument =
-        params.content !== undefined &&
-        !editorDataString &&
-        (params.fileType === undefined || params.title === undefined);
-      const currentDocument =
-        input.parentId !== undefined || needsStoredDocument
-          ? await ctx.documentModel.findById(input.id)
-          : undefined;
-
-      // A move mutates both the source and destination trees as well as the
-      // document. Only check when the parent really changes: several editor
-      // paths include the current parentId in ordinary metadata/autosave
-      // updates. `null` is an explicit detach and still leaves the source.
-      if (input.parentId !== undefined) {
-        const currentParentId = currentDocument?.parentId ?? null;
-        const nextParentId = input.parentId ?? null;
-        if (currentParentId !== nextParentId) {
-          if (currentParentId) await assertCanCreateUnderParent(ctx, currentParentId);
-          if (nextParentId) await assertCanCreateUnderParent(ctx, nextParentId);
-        }
-      }
-
-      const { content, editorData } = await resolveDocumentWrite({
-        content: params.content,
-        editorData: editorDataString ? JSON.parse(editorDataString) : undefined,
-        fileType: params.fileType ?? currentDocument?.fileType,
-        title: params.title ?? currentDocument?.title ?? undefined,
-      });
-      // A page with a live room projects the room over its row, so the body
-      // (from the CLI or a client that predates rooms) goes into the room.
-      const result = await updateDocumentThroughRoom(
-        ctx.serverDB,
-        ctx.documentService,
-        id,
-        { ...params, content, editorData },
-        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
-      );
+      const { operationId, ...updateInput } = input;
+      const result = await updateDocumentFromInput(ctx, updateInput);
 
       // Only a change to what the document says is a new deliverable version;
       // a move or a file-type change is not.
-      if (result && (params.content !== undefined || params.title !== undefined)) {
+      if (result && (input.content !== undefined || input.title !== undefined)) {
         await registerRunDocumentWork(ctx, {
           changeType: 'updated',
-          documentId: id,
+          documentId: input.id,
           operationId,
           toolName: 'updateDocument',
         });
-      }
-
-      if (ctx.workspaceId && result?.addedMentionUserIds && result.savedAt) {
-        notifyDocumentMentionsBestEffort(
-          { serverDB: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
-          {
-            documentId: id,
-            mentionedUserIds: result.addedMentionUserIds,
-            savedAt: result.savedAt,
-          },
-        );
       }
 
       return result;
@@ -758,6 +590,7 @@ export const documentRouter = router({
           result.documentIds.map((id) => sourcePermissionModel.removeAll('document', id)),
         );
       }
+      if (ctx.workspaceId && !input.targetWorkspaceId) dropPageRooms(result.documentIds);
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         const targetPermissionModel = new ResourcePermissionModel(
           ctx.serverDB,

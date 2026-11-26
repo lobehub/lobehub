@@ -41,6 +41,7 @@ const {
   findWakeableManagedDevices,
   isDeviceUnreachableResult,
   requestManagedDeviceWake,
+  startManagedDeviceForActivation,
   waitForManagedDeviceOnline,
   wakeManagedDevice,
 } = await import('./managedDeviceWake');
@@ -242,12 +243,19 @@ describe('isDeviceUnreachableResult', () => {
 });
 
 describe('awaitManagedDeviceForToolCall', () => {
-  it('wakes a starting managed device and returns DEVICE_WAKING with a retry hint', async () => {
+  it('waits after an accepted wake and returns DEVICE_WAKING with a retry hint', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
 
+    const settled = vi.fn();
     const pending = awaitManagedDeviceForToolCall(caller, 'managed-a');
+    void pending.then(settled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(settled).not.toHaveBeenCalled();
+    expect(mocks.queryDeviceList.mock.calls.length).toBeGreaterThan(1);
+
     await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_TOOL_CALL_WAIT_MS);
     const result = await pending;
 
@@ -261,6 +269,11 @@ describe('awaitManagedDeviceForToolCall', () => {
       success: false,
     });
     expect(typeof result === 'object' && result.content).toContain('Retry');
+    expect(settled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: DEVICE_WAKING_ERROR_CODE }),
+      }),
+    );
     warn.mockRestore();
   });
 
@@ -296,32 +309,44 @@ describe('awaitManagedDeviceForToolCall', () => {
     warn.mockRestore();
   });
 
-  it('still waits for the device after an accepted wake', async () => {
-    vi.useFakeTimers();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
-
-    const settled = vi.fn();
-    const pending = awaitManagedDeviceForToolCall(caller, 'managed-a').then(settled);
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(settled).not.toHaveBeenCalled();
-    expect(mocks.queryDeviceList.mock.calls.length).toBeGreaterThan(1);
-
-    await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_TOOL_CALL_WAIT_MS);
-    await pending;
-    expect(settled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.objectContaining({ code: DEVICE_WAKING_ERROR_CODE }),
-      }),
-    );
-    warn.mockRestore();
-  });
-
   it('leaves ordinary devices alone', async () => {
     mocks.findPersonalByDeviceId.mockResolvedValueOnce(connectedRow('device-x'));
 
     await expect(awaitManagedDeviceForToolCall(caller, 'device-x')).resolves.toBeUndefined();
+    expect(mocks.wake).not.toHaveBeenCalled();
+  });
+});
+
+describe('startManagedDeviceForActivation', () => {
+  it('starts a sleeping managed device without waiting for it to connect', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBe('starting');
+    expect(mocks.wake).toHaveBeenCalledWith({ userId: 'user-1' }, 'managed-a');
+    // One presence read before the wake; no polling for it to come online.
+    expect(mocks.queryDeviceList).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers online without waking a managed device that is connected', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.queryDeviceList.mockResolvedValue([live('managed-a')]);
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBe('online');
+    expect(mocks.wake).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing when the provider refuses the wake', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.wake.mockRejectedValue(new Error('device is being deleted'));
+
+    await expect(startManagedDeviceForActivation(caller, 'managed-a')).resolves.toBeUndefined();
+  });
+
+  it('leaves ordinary devices alone', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(connectedRow('desktop-a'));
+
+    await expect(startManagedDeviceForActivation(caller, 'desktop-a')).resolves.toBeUndefined();
     expect(mocks.wake).not.toHaveBeenCalled();
   });
 });

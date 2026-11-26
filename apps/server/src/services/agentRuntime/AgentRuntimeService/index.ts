@@ -73,6 +73,7 @@ import {
   usesGatewayMessagePatch,
 } from './messages';
 import {
+  acceptsArtboardWorks,
   acceptsFileWorks,
   acceptsMemberRuntimeEnd,
   controlCompletedToolResult,
@@ -121,7 +122,7 @@ if (process.env.VERCEL) {
   debug.log = console.info.bind(console);
 }
 
-export { createEvalToolForwardingHook } from './evalToolForwardingHook';
+export { createEvalToolGateHook, EVAL_TOOL_BLOCKED_ERROR } from './evalToolGateHook';
 export type { AgentRuntimeDelegate, AgentRuntimeServiceOptions } from './types';
 
 /**
@@ -346,6 +347,7 @@ export class AgentRuntimeService {
       get messageService() {
         return self.messageService;
       },
+      acceptsArtboardWorks: (...args) => self.acceptsArtboardWorks(...args),
       acceptsFileWorks: (...args) => self.acceptsFileWorks(...args),
       acceptsMemberRuntimeEnd: (...args) => self.acceptsMemberRuntimeEnd(...args),
       allPendingToolsFulfilled: (...args) => self.allPendingToolsFulfilled(...args),
@@ -430,6 +432,10 @@ export class AgentRuntimeService {
 
   interruptOperation(...args: MethodArgs<typeof interruptOperation>) {
     return interruptOperation(this.context, ...args);
+  }
+
+  acceptsArtboardWorks(...args: MethodArgs<typeof acceptsArtboardWorks>) {
+    return acceptsArtboardWorks(this.context, ...args);
   }
 
   acceptsFileWorks(...args: MethodArgs<typeof acceptsFileWorks>) {

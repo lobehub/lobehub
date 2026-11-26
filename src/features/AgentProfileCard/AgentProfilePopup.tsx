@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, getOptedInPluginIds } from '@lobechat/types';
 import {
   ActionIcon,
   createStaticStyles,
@@ -11,12 +11,16 @@ import {
   Text,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
+import { BookOpen, FileText, Settings, SquareTerminal, UserRound, X } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ArticleSkeleton } from '@/components/Skeleton';
+import UserAvatar from '@/components/UserAvatar';
+import { stopCardClick } from '@/features/MemberProfileCard/stopCardClick';
+import { useWorkspaceMemberProfile } from '@/features/MemberProfileCard/useWorkspaceMemberProfile';
 import ModelSelect from '@/features/ModelSelect';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -24,6 +28,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentProfileCard from '.';
 import { resolveAgentRuntimeLabel } from './runtime';
@@ -31,16 +36,50 @@ import {
   type AgentProfilePreview as AgentPreview,
   useAgentProfileDetail,
 } from './useAgentProfileDetail';
+import { useAutoClosePopup } from './useAutoClosePopup';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  closeButton: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    color: ${cssVar.colorText};
+    opacity: 0;
+    filter: drop-shadow(0 0 2px ${cssVar.colorBgElevated});
+
+    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseOut};
+
+    @media (hover: none) {
+      opacity: 1;
+    }
+  `,
+  content: css`
+    position: relative;
+
+    &:hover [data-profile-card-close],
+    &:focus-within [data-profile-card-close] {
+      opacity: 1;
+    }
+  `,
+  // A replaced card (another card opened, its trigger was pressed, the route changed)
+  // leaves at once instead of fading out over whatever replaced it.
+  instantClose: css`
+    &[data-ending-style],
+    &[data-closed] {
+      visibility: hidden;
+      transition: none;
+    }
+  `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
   `,
   sectionTitle: css`
     margin-block-end: 8px;
@@ -66,14 +105,21 @@ interface AgentProfilePopupProps extends PropsWithChildren {
   agentId: string;
   /** When set, enables group-specific actions (settings nav + model change). */
   groupId?: string;
+  /** Where the card opens; defaults to above a hover trigger and beside a click one. */
+  placement?: 'top' | 'right' | 'bottom' | 'left';
   trigger?: 'click' | 'hover';
 }
 
 const AgentProfilePopup = memo<AgentProfilePopupProps>(
-  ({ agent, agentId, groupId, children, trigger = 'click' }) => {
+  ({ agent, agentId, groupId, children, placement, trigger = 'click' }) => {
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
+    const { detached, instant, onOpenChange, triggerProps } = useAutoClosePopup({
+      open,
+      setOpen,
+      trigger,
+    });
     const [loading, setLoading] = useState(false);
     const { allowed: canEditContent } = usePermission('edit_own_content');
     const { canEditResource: canEditAgent, isAccessResolved: isAgentAccessResolved } =
@@ -88,6 +134,10 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
     const listEntry = useHomeStore(homeAgentListSelectors.getAgentById(agentId));
+    // In a workspace, the member who created the Agent is the one to ask about it.
+    // Load the member directory only once the card opens, whatever page hosts it.
+    useFetchWorkspaceMembers({ enabled: open && !!listEntry?.userId });
+    const creator = useWorkspaceMemberProfile(listEntry?.userId);
 
     const { detail: fetched, isLoading } = useAgentProfileDetail(agentId, open && !!canConfigure);
 
@@ -135,7 +185,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const hasDisplay = Boolean(agentDisplayName(merged) || merged.avatar || merged.description);
     const showSkeleton = !hasDisplay && isLoading;
 
-    const pluginCount = fetched?.plugins?.length ?? 0;
+    const pluginCount = getOptedInPluginIds(fetched?.plugins).length;
     const knowledgeCount = fetched?.knowledgeBases?.length ?? 0;
     const fileCount = fetched?.files?.length ?? 0;
     const hasStats = pluginCount > 0 || knowledgeCount > 0 || fileCount > 0;
@@ -208,6 +258,21 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         </Flexbox>
       ) : null;
 
+    const creatorSection = creator ? (
+      <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+        <Icon className={styles.statItem} icon={UserRound} size={14} />
+        <Text fontSize={12} type={'secondary'}>
+          {t('agentProfile.creator')}
+        </Text>
+        <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+          <UserAvatar avatar={creator.avatar} name={creator.name} shape={'circle'} size={18} />
+          <Text ellipsis fontSize={12}>
+            {creator.name}
+          </Text>
+        </Flexbox>
+      </Flexbox>
+    ) : null;
+
     const content = showSkeleton ? (
       <div style={{ padding: 16, width: 280 }}>
         <ArticleSkeleton avatar rows={2} />
@@ -234,22 +299,41 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         }
         onHeaderClick={canConfigure ? handleHeaderClick : undefined}
       >
+        {creatorSection}
         {modelSection}
       </AgentProfileCard>
     );
 
     return (
       <Popover
+        className={instant ? styles.instantClose : undefined}
         classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
-        content={content}
         nativeButton={false}
         open={open}
-        placement={trigger === 'hover' ? 'top' : 'right'}
+        placement={placement ?? (trigger === 'hover' ? 'top' : 'right')}
         trigger={trigger}
+        triggerProps={triggerProps}
+        content={
+          // A hidden or unmounted trigger takes the whole popover with it (see useAutoClosePopup).
+          detached ? null : (
+            <div className={styles.content} role="presentation" onClick={stopCardClick}>
+              {content}
+              <ActionIcon
+                data-profile-card-close
+                aria-label={t('close', { ns: 'common' })}
+                className={styles.closeButton}
+                icon={X}
+                size={'small'}
+                title={t('close', { ns: 'common' })}
+                onClick={() => setOpen(false)}
+              />
+            </div>
+          )
+        }
         styles={{
           content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
         }}
-        onOpenChange={setOpen}
+        onOpenChange={onOpenChange}
       >
         {children}
       </Popover>

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { ChatToolPayload } from '@lobechat/types';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import { toRecord } from '@lobechat/utils/object';
 
 import { appEnv } from '@/envs/app';
@@ -97,12 +98,11 @@ export async function registerClientMcpStep(
     )
       throw new Error('Client MCP tool identity mismatch');
     if (tool.type !== 'mcp' || plugin.type !== 'mcp') continue;
-    const manifest = await resolveMcpInvocationManifest(
-      service,
-      tool.identifier,
-      tool.apiName,
-      assistant.agentId ?? undefined,
-    );
+    const manifest = await resolveMcpInvocationManifest(service, tool.identifier, tool.apiName, {
+      agentId: assistant.agentId ?? undefined,
+      topicId: assistant.topicId,
+      args: tool.arguments,
+    });
     const args = toRecord(JSON.parse(tool.arguments || '{}')) ?? {};
     const configured = manifest.api?.find((api) => api.name === tool.apiName)?.defaultTimeoutMs;
     const explicitTimeout = [args.timeout, configured].some(
@@ -110,7 +110,8 @@ export async function registerClientMcpStep(
     );
     const params = toRecord(manifest.mcpParams);
     const nativeTimeout =
-      params?.type === 'stdio' &&
+      params &&
+      (params.type === 'stdio' || (params.type === 'http' && isDeviceOnlyMcpEndpoint(params))) &&
       Number.isFinite(input.localHostTimeoutMs) &&
       Number(input.localHostTimeoutMs) > 0
         ? input.localHostTimeoutMs
@@ -223,7 +224,11 @@ export async function executeClientMcpTool(
       service,
       identity.identifier,
       identity.apiName,
-      operation.agentId ?? undefined,
+      {
+        agentId: operation.agentId ?? undefined,
+        topicId: operation.topicId ?? undefined,
+        args: tool.arguments,
+      },
     );
     result = await service.runtime.executeTool(
       { ...tool, type: 'mcp' },

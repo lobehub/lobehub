@@ -2,13 +2,17 @@ import { Hono } from 'hono';
 
 import { getScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { PermissionController } from '../controllers/permission.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   CreatePermissionRequestSchema,
   PermissionIdParamSchema,
+  PermissionListSchema,
+  PermissionSchema,
   PermissionsListQuerySchema,
   UpdatePermissionRequestSchema,
 } from '../types/permission.type';
@@ -21,6 +25,7 @@ const PermissionsRoutes = new Hono();
  */
 PermissionsRoutes.get(
   '/',
+  routeDoc({ data: PermissionListSchema, summary: 'List permissions', tags: ['permissions'] }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
@@ -40,6 +45,12 @@ PermissionsRoutes.get(
  */
 PermissionsRoutes.get(
   '/:id',
+  routeDoc({
+    data: PermissionSchema,
+    errors: [404],
+    summary: 'Get a permission',
+    tags: ['permissions'],
+  }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
@@ -59,6 +70,7 @@ PermissionsRoutes.get(
  */
 PermissionsRoutes.post(
   '/',
+  routeDoc({ data: PermissionSchema, summary: 'Create a permission', tags: ['permissions'] }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_CREATE', ['ALL']),
@@ -78,6 +90,12 @@ PermissionsRoutes.post(
  */
 PermissionsRoutes.patch(
   '/:id',
+  routeDoc({
+    data: PermissionSchema,
+    errors: [404],
+    summary: 'Update a permission',
+    tags: ['permissions'],
+  }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_UPDATE', ['ALL']),
@@ -98,6 +116,12 @@ PermissionsRoutes.patch(
  */
 PermissionsRoutes.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    errors: [404],
+    summary: 'Delete a permission',
+    tags: ['permissions'],
+  }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_DELETE', ['ALL']),

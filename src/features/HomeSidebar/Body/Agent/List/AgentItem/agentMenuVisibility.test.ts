@@ -2,22 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { getAgentPublishErrorKey, shouldShowAgentDeleteMenuItem } from './agentMenuVisibility';
-
-describe('getAgentPublishErrorKey', () => {
-  it('maps the fixed private-device precondition to actionable publish copy', () => {
-    expect(
-      getAgentPublishErrorKey({
-        data: { errorData: { code: 'FixedAgentRequiresPublicWorkspaceDevice' } },
-      }),
-    ).toBe('agent.publishToWorkspaceErrorFixedPrivateDevice');
-  });
-
-  it('keeps unrelated publish failures on the generic fallback', () => {
-    expect(getAgentPublishErrorKey({ data: { code: 'FORBIDDEN' } })).toBeUndefined();
-    expect(getAgentPublishErrorKey(new Error('network failure'))).toBeUndefined();
-  });
-});
+import { shouldShowAgentDeleteMenuItem } from './agentMenuVisibility';
 
 describe('shouldShowAgentDeleteMenuItem', () => {
   it('shows Delete only when the agent can be edited and managed', () => {

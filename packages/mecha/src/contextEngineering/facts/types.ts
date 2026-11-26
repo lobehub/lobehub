@@ -1,12 +1,15 @@
 import type { CredSummary } from '@lobechat/builtin-tool-creds';
 import type {
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentManagementContext,
   AvailablePluginInfo,
   AvailableProviderInfo,
   OnboardingContext,
+  RevokedDocumentReads,
 } from '@lobechat/context-engine';
 import type {
+  AgentAccountContext,
   AgentShareVisitorContext,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
@@ -90,6 +93,8 @@ export interface ContextFactRequest {
   agentId?: string;
   /** Plugin identifiers the agent explicitly disabled (tri-state entries). */
   disabledPluginIds?: string[];
+  /** Tools offered for activation in the current step. */
+  discoverableTools?: ReadonlyArray<{ identifier: string }>;
   /** Agent being edited in the Profile panel, when the agent builder is active. */
   editingAgentId?: string;
   /** Group being edited in the group Profile panel, when the group builder is active. */
@@ -134,6 +139,19 @@ export interface ContextFactProviders {
     agentId: string,
     documentId: string,
   ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
+  /**
+   * Of the given document ids (`documents.id` or `agent_documents.id`) that
+   * `agentId` read in earlier turns, those whose content must no longer reach
+   * the model: `documentIds` for every read route, `agentDocumentReadIds` for
+   * `readDocument` only (still a knowledge-base page). Ids never bound to the
+   * agent (knowledge-base documents, uploads) are not revoked.
+   */
+  findRevokedDocumentReads?: (
+    agentId: string,
+    documentIds: string[],
+  ) => Promise<
+    { agentDocumentReadIds?: Iterable<string>; documentIds?: Iterable<string> } | undefined
+  >;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -152,6 +170,18 @@ export interface ContextFactProviders {
   getWorkspaceContext?: (
     workspaceId?: string,
   ) => Promise<{ appUrl?: string; slug?: string } | undefined>;
+  /**
+   * The agent's own accounts and inbox, as first-class identity state. Absent
+   * on a host with no identity store.
+   */
+  listAgentAccountContext?: (agentId?: string) => Promise<AgentAccountContext | undefined>;
+  /**
+   * Change notes for an index rendered from a snapshot, keyed by user message.
+   * Only a host whose `listAgentDocuments` returns snapshot rows provides it.
+   */
+  listAgentDocumentChanges?: (
+    agentId: string,
+  ) => Promise<AgentDocumentChangesByMessage | undefined>;
   /** Context documents attached to an agent. */
   listAgentDocuments?: (agentId: string) => Promise<AgentContextDocument[] | undefined>;
   /** Connector identifiers (Composio services, LobeHub skill providers) connected for the agent. */
@@ -185,12 +215,22 @@ export interface ContextFactProviders {
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    | {
+        cwd?: string;
+        mode: 'drive' | 'ephemeral' | 'persistent';
+        /** The repositories the topic's environment checks out, in order. */
+        repositories?: { folder?: string; ref?: string; repository: string }[];
+        workingDir?: string;
+      }
+    | undefined
   >;
 }
 
 export interface GatheredContextFacts {
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
+  /** Documents whose earlier reads must no longer reach the model, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;
 }

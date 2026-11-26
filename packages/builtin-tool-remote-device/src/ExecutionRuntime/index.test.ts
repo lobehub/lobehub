@@ -21,6 +21,19 @@ describe('RemoteDeviceExecutionRuntime', () => {
       expect(JSON.parse(result.content)).toEqual([expect.objectContaining({ deviceId: 'd1' })]);
     });
 
+    it('lists a sleeping managed cloud device as online', async () => {
+      const runtime = makeRuntime([
+        { deviceId: 'c1', hostname: 'cloud', managed: true, online: false, platform: 'linux' },
+        { deviceId: 'd2', hostname: 'offline-host', online: false, platform: 'win32' },
+      ]);
+
+      const result = await runtime.listOnlineDevices();
+
+      expect(result.state).toEqual({
+        devices: [expect.objectContaining({ deviceId: 'c1', managed: true, online: true })],
+      });
+    });
+
     it('returns an actionable hint when no devices are online', async () => {
       const runtime = makeRuntime([
         { deviceId: 'd2', hostname: 'offline-host', online: false, platform: 'win32' },
@@ -88,6 +101,32 @@ describe('RemoteDeviceExecutionRuntime', () => {
 
       expect(resolveOfflineDevice).toHaveBeenCalledWith('managed-a');
       expect(result).toEqual(waking);
+    });
+
+    it('activates a sleeping cloud device at once when the host starts it', async () => {
+      const resolveOfflineDevice = vi.fn().mockResolvedValue('starting');
+      const runtime = new RemoteDeviceExecutionRuntime({
+        queryDeviceList: async () => [
+          {
+            deviceId: 'c1',
+            hostname: 'cloud',
+            managed: true,
+            online: false,
+            platform: 'linux',
+          } as any,
+        ],
+        resolveOfflineDevice,
+      });
+
+      const result = await runtime.activateDevice({ deviceId: 'c1' });
+
+      expect(resolveOfflineDevice).toHaveBeenCalledWith('c1');
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('starting now');
+      expect(result.state).toMatchObject({
+        activatedDevice: { deviceId: 'c1', online: true },
+        metadata: { activeDeviceId: 'c1' },
+      });
     });
 
     it('keeps the default answer when the host cannot start the device', async () => {

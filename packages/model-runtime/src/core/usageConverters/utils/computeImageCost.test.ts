@@ -4,6 +4,22 @@ import { describe, expect, it } from 'vitest';
 import type { ImageGenerationParams } from './computeImageCost';
 import { computeImageCost } from './computeImageCost';
 
+const createLookupPricing = (): Pricing => ({
+  units: [
+    {
+      name: 'imageGeneration',
+      strategy: 'lookup',
+      unit: 'image',
+      lookup: {
+        pricingParams: ['quality', 'size'],
+        prices: {
+          standard_1024x1024: 0.04,
+        },
+      },
+    },
+  ],
+});
+
 describe('computeImageCost', () => {
   describe('lookup pricing strategy', () => {
     it('should compute dall-e-3 lookup pricing correctly', () => {
@@ -79,21 +95,7 @@ describe('computeImageCost', () => {
     });
 
     it('should return undefined if required lookup param is missing', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'imageGeneration',
-            strategy: 'lookup',
-            unit: 'image',
-            lookup: {
-              pricingParams: ['quality', 'size'],
-              prices: {
-                standard_1024x1024: 0.04,
-              },
-            },
-          },
-        ],
-      };
+      const pricing: Pricing = createLookupPricing();
 
       const params: ImageGenerationParams = {
         quality: 'standard',
@@ -106,21 +108,7 @@ describe('computeImageCost', () => {
     });
 
     it('should return undefined if lookup key has no matching price', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'imageGeneration',
-            strategy: 'lookup',
-            unit: 'image',
-            lookup: {
-              pricingParams: ['quality', 'size'],
-              prices: {
-                standard_1024x1024: 0.04,
-              },
-            },
-          },
-        ],
-      };
+      const pricing: Pricing = createLookupPricing();
 
       const params: ImageGenerationParams = {
         quality: 'hd',
@@ -295,21 +283,7 @@ describe('computeImageCost', () => {
     });
 
     it('should handle null lookup param value', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'imageGeneration',
-            strategy: 'lookup',
-            unit: 'image',
-            lookup: {
-              pricingParams: ['quality', 'size'],
-              prices: {
-                standard_1024x1024: 0.04,
-              },
-            },
-          },
-        ],
-      };
+      const pricing: Pricing = createLookupPricing();
 
       const params: ImageGenerationParams = {
         quality: null as any, // null value for testing

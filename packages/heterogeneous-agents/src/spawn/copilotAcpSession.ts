@@ -79,9 +79,17 @@ const extractCopilotSessionFlags = (extraArgs: string[] = []): ExtractedCopilotS
   return { args, model, reasoningEffort };
 };
 
+const COPILOT_FULL_ACCESS_FLAGS = new Set(['--allow-all', '--yolo']);
+
+/**
+ * LobeHub runs local coding agents with full access (see `heteroAgent.fullAccess`), matching
+ * Claude Code's `bypassPermissions` and Codex's `danger-full-access`. Copilot ignores its own
+ * `defaultPermissionMode` under `--acp`, so the flag has to be passed explicitly.
+ */
 export const buildCopilotAcpArgs = (extraArgs: string[] = []): string[] => {
   const { args } = extractCopilotSessionFlags(extraArgs);
-  return ['--acp', '--stdio', ...args];
+  const fullAccess = args.some((arg) => COPILOT_FULL_ACCESS_FLAGS.has(arg)) ? [] : ['--allow-all'];
+  return ['--acp', '--stdio', ...args, ...fullAccess];
 };
 
 export const buildCopilotAcpPrompt = (
@@ -285,7 +293,7 @@ export class CopilotAcpSession extends AcpAgentSession<
   constructor(options: CopilotAcpSessionOptions) {
     const extracted = extractCopilotSessionFlags(options.args);
     super(options, {
-      args: ['--acp', '--stdio', ...extracted.args],
+      args: buildCopilotAcpArgs(options.args),
       pipeline: { agentType: 'copilot', cwd: options.cwd },
       processLabel: 'GitHub Copilot ACP',
       transport: TRANSPORT,

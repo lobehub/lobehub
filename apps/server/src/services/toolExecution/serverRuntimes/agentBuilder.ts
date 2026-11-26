@@ -7,10 +7,11 @@ import {
   type UpdateAgentConfigParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-builder';
-import { builtinTools } from '@lobechat/builtin-tools';
+import { builtinTools, isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import { modelsResultsPrompt } from '@lobechat/prompts';
-import { getPluginMode, upsertPluginMode } from '@lobechat/types';
+import { parsePluginEntry, setBuiltinPluginMode, upsertConnectorEnabled } from '@lobechat/types';
 
 import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
@@ -18,6 +19,11 @@ import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+  type MarketplaceInstallOptions,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
@@ -74,6 +80,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId, workspaceId: context.workspaceId },
     });
+    const installScope = { serverDB: context.serverDB, userId, workspaceId: context.workspaceId };
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       getAvailableModels: async (
@@ -166,7 +178,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
       },
 
       searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
-        searchMarketTools({ discoverService, pluginModel }, params),
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateConfig: async (
         params: UpdateAgentConfigParams,
@@ -188,13 +200,16 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           if (params.togglePlugin) {
             const { pluginId, enabled } = params.togglePlugin;
-            const isEnabled = getPluginMode(agent.plugins ?? undefined, pluginId) === 'pinned';
+            const existing = agent.plugins?.find(
+              (entry) => parsePluginEntry(entry).identifier === pluginId,
+            );
+            const isEnabled = existing ? parsePluginEntry(existing).mode !== 'disabled' : false;
             const shouldEnable = enabled !== undefined ? enabled : !isEnabled;
 
-            // Enabling pins the id into the agent's config; an id that resolves
-            // to no loadable tool would be reported as enabled yet never load.
+            // Enabling writes an opt-in entry; an id that resolves to no
+            // loadable tool would be reported as enabled yet never load.
             // Checked before any write so a rejected call changes nothing.
-            // Disabling stays unvalidated so stale entries can always be removed.
+            // Disabling stays unvalidated so stale entries can always be turned off.
             if (shouldEnable) {
               const resolution = await resolvePluginIdentifier(
                 pluginId,
@@ -205,14 +220,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
                 return unresolvablePluginResult(pluginId, resolution);
             }
 
-            // upsertPluginMode preserves an already-matching entry as-is and
-            // flips a disabled entry back to pinned in place, instead of
-            // blindly pushing a duplicate bare-string identifier.
-            const newPlugins = upsertPluginMode(
-              agent.plugins ?? undefined,
-              pluginId,
-              shouldEnable ? 'pinned' : 'auto',
-            );
+            const newPlugins =
+              isOnDemandBuiltinTool(pluginId) || legacyBuiltinSkillIds.includes(pluginId)
+                ? setBuiltinPluginMode(
+                    agent.plugins ?? undefined,
+                    pluginId,
+                    shouldEnable ? 'auto' : 'disabled',
+                  )
+                : upsertConnectorEnabled(agent.plugins ?? undefined, pluginId, shouldEnable);
 
             finalConfig = { ...finalConfig, plugins: newPlugins };
             updatedParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
@@ -304,13 +319,25 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               const agent = await agentModel.getAgentConfigById(agentId);
               if (!agent) return { content: `Agent "${agentId}" not found.`, success: false };
 
-              if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+              const existing = agent.plugins?.find(
+                (entry) => parsePluginEntry(entry).identifier === identifier,
+              );
+              const needsBuiltinOverride =
+                isOnDemandBuiltinTool(identifier) &&
+                (!existing || typeof existing === 'string' || !existing.builtinOverride);
+              if (
+                !existing ||
+                parsePluginEntry(existing).mode === 'disabled' ||
+                needsBuiltinOverride
+              ) {
                 await agentModel.updateConfig(agentId, {
-                  plugins: upsertPluginMode(
-                    agent.plugins ?? undefined,
-                    identifier,
-                    'pinned',
-                  ) as unknown as string[],
+                  plugins: (isOnDemandBuiltinTool(identifier)
+                    ? setBuiltinPluginMode(agent.plugins ?? undefined, identifier, 'auto')
+                    : upsertConnectorEnabled(
+                        agent.plugins ?? undefined,
+                        identifier,
+                        true,
+                      )) as unknown as string[],
                 });
               }
               return {
@@ -340,18 +367,21 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source: 'market' },
           );
           if (resolution.status !== 'loadable')
             return unresolvablePluginResult(identifier, resolution);
 
-          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+          const existing = agent.plugins?.find(
+            (entry) => parsePluginEntry(entry).identifier === identifier,
+          );
+          if (!existing || parsePluginEntry(existing).mode === 'disabled') {
             await agentModel.updateConfig(agentId, {
-              plugins: upsertPluginMode(
+              plugins: upsertConnectorEnabled(
                 agent.plugins ?? undefined,
                 identifier,
-                'pinned',
+                true,
               ) as unknown as string[],
             });
           }

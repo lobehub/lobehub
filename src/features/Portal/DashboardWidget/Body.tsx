@@ -12,6 +12,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import { useOpenDashboard } from './useOpenDashboard';
 
@@ -22,7 +23,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   preview: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,

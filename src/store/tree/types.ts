@@ -1,5 +1,7 @@
 import type { ReplicaState } from '@/libs/replica';
 import type { StoreHandle } from '@/store/utils/optimisticEngine';
+import type { SortType } from '@/types/files';
+import type { ResourceSorter } from '@/types/resource';
 
 import type { LibraryTreeSnapshot } from './projection';
 
@@ -63,12 +65,13 @@ export interface TreeState extends TreeDataState {
   /** Drop the open library's persisted tree (a server-side bulk delete, see `forgetSnapshot`). */
   forgetLibrary: (knowledgeBaseId: string) => void;
   forgetSnapshot: () => void;
-
   // actions
   init: (knowledgeBaseId: string) => void;
   knowledgeBaseId: string | null;
+
   loadChildren: (folderId: string) => Promise<void>;
   moveItem: (itemId: string, fromParent: string, toParent: string) => Promise<void>;
+
   moveItems: (itemIds: string[], fromParent: string, toParent: string) => Promise<void>;
   /**
    * Read the library's persisted tree into `snapshotMap` so the next `init`
@@ -79,11 +82,20 @@ export interface TreeState extends TreeDataState {
   reconcile: (folderId: string, items: TreeItem[], options?: { confirmed?: boolean }) => void;
   removeItems: (itemIds: string[], parentId: string) => Promise<void>;
   renameItem: (itemId: string, parentId: string, newName: string) => Promise<void>;
+  reorderItems: (
+    parentKey: string,
+    dragIds: string[],
+    targetId: string,
+    position: 'before' | 'after',
+  ) => Promise<void>;
   reset: () => void;
   revalidate: (folderId: string) => Promise<void>;
   /** Refetch every loaded folder — for a bulk mutation whose scope only the server knows. */
   revalidateLoaded: (fallbackKey?: string) => Promise<void>;
+  setTreeSort: (sorter: ResourceSorter, sortType: SortType) => void;
   snapshotMap: Record<string, LibraryTreeSnapshot>;
   snapshotReplica: ReplicaState<LibraryTreeSnapshot>;
+  sorter: ResourceSorter;
+  sortType: SortType;
   toggle: (folderId: string) => void;
 }

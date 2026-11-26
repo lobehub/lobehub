@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
 import ClientIdDisplay from '../ClientIdDisplay';
@@ -15,7 +16,7 @@ const styles = stylex.create({
   label: { flex: 'none', fontSize: '12px', color: cssVar.colorTextSecondary },
   row: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     minWidth: '0',

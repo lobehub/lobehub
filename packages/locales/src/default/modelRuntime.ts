@@ -57,12 +57,16 @@ export default {
     'Sorry, the upstream provider rejected the request as malformed. Please check the input or try a different model.',
   InvalidVertexCredentials:
     'Vertex authentication failed. Please check your credentials and try again.',
+  LlmStepTimeout:
+    'The model took too long on this step and was stopped before it finished. Try a lower reasoning effort, or split the work into smaller requests.',
   LobeHubModelDeprecated:
     'The selected model is no longer available. Ask the bot or agent owner to select an available model, then try again.',
   LocationNotSupportError:
     "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
   ModelEmptyCompletion:
     'The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.',
+  ModelEmptyCompletionNotCharged:
+    'The model returned no usable response, even after automatic retries. You were not charged for this request. You can retry or switch models.',
   ModelEmptyCompletionWithCost:
     'The model provider returned an empty response. This request cost ${{credits}}. Retrying may incur a similar cost, or you can switch models.',
   ModelRefusal:
@@ -79,6 +83,8 @@ export default {
     'The agent operation was idle for too long and was terminated. Please retry the request.',
   PermissionDenied:
     'Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.',
+  ProviderBaseURLBlocked:
+    'The {{provider}} endpoint points to a private or local network address, which the server is not allowed to reach for security reasons. This address only works from your own device — use a publicly reachable endpoint instead.',
   ProviderBizError:
     'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
   ProviderContentPolicyViolation:
@@ -91,6 +97,8 @@ export default {
     'The provider timed out while downloading an attached image or file. Please try again.',
   ProviderServiceUnavailable:
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
+  ProviderStreamInterrupted:
+    'The provider closed the connection before finishing the response. This is usually temporary, please try again.',
   QuotaLimitReached:
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   RateLimitExceeded:
@@ -111,4 +119,6 @@ export default {
     'The provider returned a malformed response that could not be parsed. Please retry; if it persists, try a different model or provider.',
   UserConfigError:
     'Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.',
+  WorkspaceModelRestricted:
+    'This model is above the highest tier your workspace admin allows you. Pick a lower-tier model, or ask a workspace admin to raise your tier.',
 };

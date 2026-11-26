@@ -43,6 +43,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     const initMeta = usePageEditorStore((s) => s.initMeta);
     const setDocumentId = usePageEditorStore((s) => s.setDocumentId);
+    const flushMetaSave = usePageEditorStore((s) => s.flushMetaSave);
     const syncMeta = usePageEditorStore((s) => s.syncMeta);
     // Workspace pages are view-first; resolve once here so the lock + gating read
     // a single source of truth. Private-visibility pages are creator-only —
@@ -77,8 +78,14 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // action instead, so a panel left open on the previous document doesn't
     // carry over to this one (see setDocumentId).
     useEffect(() => {
-      if (typeof pageId !== 'undefined') setDocumentId(pageId);
-    }, [pageId, setDocumentId]);
+      if (typeof pageId === 'undefined') return;
+      // A title typed on the previous page may still sit in the meta debounce.
+      // Flush it while the store still points at that page: once `documentId`
+      // and `initMeta` move to this one, the pending save would find a clean
+      // store for the wrong document and the rename would be dropped.
+      if (storeApi.getState().documentId !== pageId) flushMetaSave();
+      setDocumentId(pageId);
+    }, [pageId, setDocumentId, flushMetaSave, storeApi]);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('isWorkspaceScopedPage', isWorkspaceScopedPage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);

@@ -4,7 +4,10 @@ import { getServerDBConfig } from '@/config/db';
 import { canonicalJson } from '@/database/models/agentIntervention/utils';
 
 /** Keep manual credentials private and pinned. Only a configured OAuth refresh may rotate tokens. */
-export function mcpConnectionBinding(params: unknown): string {
+export function mcpConnectionBinding(
+  params: unknown,
+  account?: { connectorId: string; linkId?: string },
+): string {
   const secret = getServerDBConfig().KEY_VAULTS_SECRET;
   if (!secret) throw new Error('KEY_VAULTS_SECRET is required for MCP connection binding');
   const { name: _name, auth, headers, ...connection } = params as Record<string, unknown>;
@@ -39,6 +42,7 @@ export function mcpConnectionBinding(params: unknown): string {
       canonicalJson(
         {
           ...connection,
+          ...(account && { account }),
           auth: boundAuth,
           headers: headers && Object.fromEntries(boundHeaders),
         },

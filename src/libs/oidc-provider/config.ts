@@ -1,10 +1,13 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, BUSINESS_OIDC_CLIENTS } from '@lobechat/business-const';
 import {
   ACCEPTANCE_CLIENT_ID,
   ACCEPTANCE_EXTENSION_CLIENT_ID,
   ACCEPTANCE_EXTENSION_IDS,
   ACCEPTANCE_EXTENSION_SCOPE,
   ACCEPTANCE_REVIEW_SCOPE,
+  LOBEHUB_DESKTOP_CLIENT_ID,
+  LOBOT_DESKTOP_CLIENT_ID,
+  LOBOT_MOBILE_CLIENT_ID,
 } from '@lobechat/const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
@@ -19,36 +22,53 @@ const desktopAppOrigins = cloudAppOrigins.includes(new URL(appUrl).origin)
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
 /**
- * Default OIDC client configuration
+ * A desktop app signs in through the shared `/oidc/callback/desktop` handoff:
+ * the callback stores the code under the request's `state`, and the app polls
+ * it back with its PKCE verifier. Each app still has its own client, so its
+ * grants and tokens are told apart from the other desktop apps'.
  */
-export const defaultClients: ClientMetadata[] = [
-  {
-    application_type: 'web',
-    client_id: 'lobehub-desktop',
+const desktopClient = (
+  client: Pick<ClientMetadata, 'client_id' | 'client_name' | 'logo_uri'>,
+): ClientMetadata => ({
+  application_type: 'web',
+  // Only supports authorization code flow
+  grant_types: ['authorization_code', 'refresh_token'],
+
+  post_logout_redirect_uris: [
+    // Keep the legacy subdomain working while Cloud moves to the apex domain.
+    ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oauth/logout')),
+    'http://localhost:3210/oauth/logout',
+  ],
+
+  // Desktop authorization callback - changed to web page path
+  redirect_uris: [
+    ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/desktop')),
+    'http://localhost:3210/oidc/callback/desktop',
+  ],
+
+  // Supports authorization code for obtaining tokens and refresh tokens
+  response_types: ['code'],
+
+  // Marked as public client with no secret
+  token_endpoint_auth_method: 'none',
+
+  ...client,
+});
+
+/**
+ * Clients the open-source distribution registers itself.
+ */
+const builtinClients: ClientMetadata[] = [
+  desktopClient({
+    client_id: LOBEHUB_DESKTOP_CLIENT_ID,
     client_name: `${BRANDING_NAME} Desktop`,
-    // Only supports authorization code flow
-    grant_types: ['authorization_code', 'refresh_token'],
-
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
-
-    post_logout_redirect_uris: [
-      // Keep the legacy subdomain working while Cloud moves to the apex domain.
-      ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oauth/logout')),
-      'http://localhost:3210/oauth/logout',
-    ],
-
-    // Desktop authorization callback - changed to web page path
-    redirect_uris: [
-      ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/desktop')),
-      'http://localhost:3210/oidc/callback/desktop',
-    ],
-
-    // Supports authorization code for obtaining tokens and refresh tokens
-    response_types: ['code'],
-
-    // Marked as public client with no secret
-    token_endpoint_auth_method: 'none',
-  },
+  }),
+  desktopClient({
+    client_id: LOBOT_DESKTOP_CLIENT_ID,
+    client_name: 'Lobot',
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
+  }),
 
   {
     application_type: 'native', // Mobile uses native type
@@ -67,13 +87,16 @@ export const defaultClients: ClientMetadata[] = [
   },
   {
     application_type: 'native',
-    client_id: 'toby',
-    client_name: 'toby',
+    client_id: LOBOT_MOBILE_CLIENT_ID,
+    client_name: 'Lobot',
     grant_types: ['authorization_code', 'refresh_token'],
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
     post_logout_redirect_uris: [],
     // Universal-link callback: iOS only hands it to the app listed in the AASA webcredentials,
-    // so another app cannot impersonate toby the way it could with a custom scheme.
-    redirect_uris: desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/toby')),
+    // so another app cannot impersonate Lobot the way it could with a custom scheme.
+    redirect_uris: desktopAppOrigins.map((origin) =>
+      urlJoin(origin, `/oidc/callback/${LOBOT_MOBILE_CLIENT_ID}`),
+    ),
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },
@@ -127,6 +150,37 @@ export const defaultClients: ClientMetadata[] = [
     token_endpoint_auth_method: 'none',
   },
 ];
+
+/**
+ * Appends a distribution's statically registered clients to the built-in ones.
+ *
+ * A distribution client may not reuse a built-in `client_id`: oidc-provider
+ * would silently keep one of the two, and a slot that replaced the desktop
+ * client's redirect URIs or grant types would change who can sign in as it.
+ */
+export const mergeBusinessClients = (
+  builtin: ClientMetadata[],
+  business: readonly ClientMetadata[],
+): ClientMetadata[] => {
+  const seen = new Set(builtin.map((client) => client.client_id));
+
+  for (const client of business) {
+    if (seen.has(client.client_id)) {
+      throw new Error(`OIDC client "${client.client_id}" is registered more than once`);
+    }
+    seen.add(client.client_id);
+  }
+
+  return [...builtin, ...business];
+};
+
+/**
+ * Default OIDC client configuration
+ */
+export const defaultClients: ClientMetadata[] = mergeBusinessClients(
+  builtinClients,
+  BUSINESS_OIDC_CLIENTS as ClientMetadata[],
+);
 
 /**
  * OIDC Scopes definition

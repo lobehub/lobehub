@@ -5,6 +5,7 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
 import { didToolMutateWorkView, workService } from '@/services/work';
@@ -126,7 +127,12 @@ export class ClientToolTransport implements ToolTransport {
         rawResult = await store.internal_invokeDifferentTypePlugin(
           toolMessageId,
           call,
-          context.stepContext,
+          call.identifier === LobeActivatorIdentifier
+            ? {
+                ...context.stepContext,
+                discoverableToolIds: Object.keys(context.effectiveManifestMap),
+              }
+            : context.stepContext,
         );
       } finally {
         // Drain the Work-registration intent stashed during tool execution in a

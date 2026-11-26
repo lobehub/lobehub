@@ -4,11 +4,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelService } from './ChannelService';
 import { notifyChannel } from './notify';
 
-const { create, getAgent } = vi.hoisted(() => ({ create: vi.fn(), getAgent: vi.fn() }));
+const { create, findAccess, getAgent, moveToSection, setPinned } = vi.hoisted(() => ({
+  create: vi.fn(),
+  findAccess: vi.fn(),
+  getAgent: vi.fn(),
+  moveToSection: vi.fn(),
+  setPinned: vi.fn(),
+}));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
     create = create;
+    findAccess = findAccess;
+    moveToSection = moveToSection;
+    setPinned = setPinned;
   },
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
@@ -48,6 +57,47 @@ describe('creating a Channel with people', () => {
   it('starts a group with only its creator, without notifying the creator as an invitee', async () => {
     await service().create({ agents: [], title: 'Me', userIds: ['owner'] });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ agents: [], userIds: [] }));
+    expect(notifyChannel).not.toHaveBeenCalled();
+  });
+});
+
+describe('pinning or filing an open project Channel', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+  const service = () => new ChannelService({} as never, 'mia', 'workspace');
+
+  it('tells its members about a teammate who joins it by pinning', async () => {
+    const pinnedAt = new Date();
+    setPinned.mockResolvedValue(pinnedAt);
+
+    expect(await service().setPinned('chn_1', true)).toBe(pinnedAt);
+    expect(setPinned).toHaveBeenCalledWith('chn_1', true);
+    expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
+  });
+
+  it('tells its members about a teammate who joins it by filing it under a section', async () => {
+    moveToSection.mockResolvedValue('sec_1');
+
+    expect(await service().moveToSection('chn_1', 'sec_1')).toBe('sec_1');
+    expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
+  });
+
+  it("keeps a member's own pin, section and unpin quiet", async () => {
+    findAccess.mockResolvedValue({ channel: { id: 'chn_1' }, member: { id: 'mem_1' } });
+
+    await service().setPinned('chn_1', true);
+    await service().moveToSection('chn_1', 'sec_1');
+    await service().setPinned('chn_1', false);
+    await service().moveToSection('chn_1', null);
+
+    expect(notifyChannel).not.toHaveBeenCalled();
+  });
+
+  it('notifies nobody when the write is refused', async () => {
+    setPinned.mockRejectedValue(new Error('NOT_FOUND'));
+
+    await expect(service().setPinned('chn_1', true)).rejects.toThrow('NOT_FOUND');
     expect(notifyChannel).not.toHaveBeenCalled();
   });
 });

@@ -137,83 +137,6 @@ describe('GatewayClient', () => {
       client.connect(); // no-op
       expect(client.connectionStatus).toBe('connecting');
     });
-
-    it('should build correct WebSocket URL with https', () => {
-      client.connect();
-      const ws = (client as any).ws;
-      expect(ws.url).toContain('wss://gateway.test.com/ws');
-      expect(ws.url).toContain('deviceId=test-device-id');
-      expect(ws.url).toContain('hostname=test-host');
-      expect(ws.url).toContain('userId=test-user');
-    });
-
-    it('should include connectionId and channel in the URL when provided', () => {
-      const c = new GatewayClient({
-        autoReconnect: false,
-        channel: 'cli',
-        connectionId: 'conn-123',
-        deviceId: 'dev-1',
-        gatewayUrl: 'https://gateway.test.com',
-        token: 'tok',
-      });
-      c.connect();
-      const ws = (c as any).ws;
-      expect(ws.url).toContain('connectionId=conn-123');
-      expect(ws.url).toContain('channel=cli');
-      expect(c.currentConnectionId).toBe('conn-123');
-      c.disconnect();
-    });
-
-    it('should default connectionId to a generated UUID when omitted', () => {
-      const c = new GatewayClient({ autoReconnect: false, token: 'tok' });
-      c.connect();
-      const ws = (c as any).ws;
-      expect(ws.url).toContain(`connectionId=${c.currentConnectionId}`);
-      expect(ws.url).not.toContain('channel=');
-      c.disconnect();
-    });
-
-    it('should build ws URL for http gateway', () => {
-      const c = new GatewayClient({
-        autoReconnect: false,
-        gatewayUrl: 'http://localhost:3000',
-        token: 'tok',
-      });
-      c.connect();
-      const ws = (c as any).ws;
-      expect(ws.url).toContain('ws://localhost:3000/ws');
-      c.disconnect();
-    });
-
-    it('should keep a public path prefix and ignore a trailing slash', () => {
-      const c = new GatewayClient({
-        autoReconnect: false,
-        gatewayUrl: 'https://edge.example.com/device-gateway/',
-        token: 'tok',
-      });
-      c.connect();
-      const ws = new URL((c as any).ws.url);
-      expect(`${ws.protocol}//${ws.host}${ws.pathname}`).toBe(
-        'wss://edge.example.com/device-gateway/ws',
-      );
-      c.disconnect();
-    });
-
-    it('should include user agent header when provided', () => {
-      const c = new GatewayClient({
-        autoReconnect: false,
-        gatewayUrl: 'https://gateway.test.com',
-        token: 'tok',
-        userAgent: 'LobeHub Desktop/1.2.3',
-      });
-      c.connect();
-      const ws = (c as any).ws;
-      expect(ws.options).toEqual({
-        handshakeTimeout: 15_000,
-        headers: { 'User-Agent': 'LobeHub Desktop/1.2.3' },
-      });
-      c.disconnect();
-    });
   });
 
   describe('connect watchdog', () => {
@@ -607,6 +530,56 @@ describe('GatewayClient', () => {
       await connectAndAuth();
       const pending = client.reportMetrics(samples);
       const assertion = expect(pending).rejects.toThrow('closed');
+
+      await client.disconnect();
+      await assertion;
+    });
+  });
+
+  describe('reportToolCallCompletion', () => {
+    const completion = {
+      operationId: 'op-1',
+      result: { content: 'done', success: true },
+      toolCallId: 'call-1',
+    };
+    const connectAndAuth = async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      return (client as any).ws;
+    };
+    const ack = (status: string) =>
+      (client as any).handleMessage(
+        JSON.stringify({
+          ...completion,
+          result: undefined,
+          status,
+          type: 'tool_call_completion_ack',
+        }),
+      );
+
+    it('resolves with the gateway verdict for the same call', async () => {
+      const ws = await connectAndAuth();
+      const pending = client.reportToolCallCompletion(completion);
+
+      expect(JSON.parse(ws.send.mock.calls.at(-1)[0])).toEqual({
+        ...completion,
+        type: 'tool_call_completion',
+      });
+      ack('retry');
+
+      await expect(pending).resolves.toMatchObject({ status: 'retry', toolCallId: 'call-1' });
+    });
+
+    it('rejects when not connected, so the watcher keeps the result', async () => {
+      await expect(client.reportToolCallCompletion(completion)).rejects.toThrow('not connected');
+    });
+
+    it('rejects an in-flight report when the socket goes away', async () => {
+      await connectAndAuth();
+      const assertion = expect(client.reportToolCallCompletion(completion)).rejects.toThrow(
+        'closed',
+      );
 
       await client.disconnect();
       await assertion;

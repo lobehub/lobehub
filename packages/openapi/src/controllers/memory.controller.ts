@@ -50,8 +50,7 @@ export class MemoryController extends BaseController {
     try {
       const { category, id } = this.getParams<MemoryEntryIdParam & { category: MemoryCategory }>(c);
       const service = await this.service(c);
-      await service.deleteEntry(category, id);
-      return this.success(c, undefined, 'Memory entry deleted');
+      return this.success(c, await service.deleteEntry(category, id), 'Memory entry deleted');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -61,8 +60,7 @@ export class MemoryController extends BaseController {
   async deleteAll(c: Context): Promise<Response> {
     try {
       const service = await this.service(c);
-      await service.deleteAll();
-      return this.success(c, undefined, 'All memories deleted');
+      return this.success(c, await service.deleteAll(), 'All memories deleted');
     } catch (error) {
       return this.handleError(c, error);
     }

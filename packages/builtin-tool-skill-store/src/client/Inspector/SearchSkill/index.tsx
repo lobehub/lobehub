@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { cssVar, cx } from '@lobehub/ui';
+import { cssVar, cx, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +14,7 @@ export const SearchSkillInspector = memo<
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const query = args?.q || partialArgs?.q || '';
+  const query = args?.query || args?.q || partialArgs?.query || partialArgs?.q || '';
   const resultCount = pluginState?.items?.length ?? 0;
   const total = pluginState?.total ?? resultCount;
   const hasResults = resultCount > 0;

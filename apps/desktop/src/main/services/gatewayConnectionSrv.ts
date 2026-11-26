@@ -12,12 +12,10 @@ import type { DeviceMetricsSampler } from '@lobechat/device-control/metrics';
 import type {
   AgentRunRequestMessage,
   GatewayClient,
-  GatewayMcpParams,
   MessageApiRequestMessage,
   RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
-  ToolCallResponseMessage,
 } from '@lobechat/device-gateway-client';
 import {
   type DeviceGatewayEndpoint,
@@ -35,17 +33,32 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
-import { app, powerSaveBlocker } from 'electron';
+import { powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
+import { getDesktopDeviceMetadata } from '@/utils/deviceMetadata';
 import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
 import { safeGetPath } from '@/utils/user-path';
 
+import type {
+  AgentRunHandler,
+  ConnectedHandler,
+  DeviceRegistrar,
+  McpCallHandler,
+  MessageApiHandler,
+  RpcHandler,
+  ToolCallHandler,
+  WorkspaceDeviceChecker,
+  WorkspaceTokenProvider,
+} from './gatewayConnectionHandlers';
 import { discoverDeviceGateway } from './gatewayDiscovery';
 import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from './gatewaySystemInfo';
+import { prepareToolCallReply, serializeWireError, toWireResult } from './gatewayToolCallReply';
 import { ServiceModule } from './index';
+
+export type { WorkspaceDeviceRegistration } from './gatewayConnectionHandlers';
 
 const logger = createLogger('services:GatewayConnectionSrv');
 
@@ -55,127 +68,6 @@ const logger = createLogger('services:GatewayConnectionSrv');
  * window is not surfaced to the UI, so the device indicator doesn't flicker.
  */
 const RECONNECT_UI_GRACE_MS = 5000;
-
-/**
- * Result envelope a tool-call handler must return. Mirrors
- * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
- * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
- * structured payload that downstream persists into `pluginState`.
- */
-interface ToolCallResult {
-  content: string;
-  error?: unknown;
-  state?: unknown;
-  success: boolean;
-}
-
-interface MessageApiHandler {
-  (platform: string, apiName: string, payload: Record<string, unknown>): Promise<unknown>;
-}
-
-interface ToolCallHandler {
-  (identifier: string | undefined, apiName: string, args: unknown): Promise<ToolCallResult>;
-}
-
-/**
- * Handler for tunneled stdio MCP calls. Unlike {@link ToolCallHandler} (which
- * keys on `apiName` for builtin local-system tools), this carries the MCP
- * server identity + connection params so the device can spawn the local stdio
- * server and invoke the tool on it.
- */
-interface McpCallHandler {
-  (mcpCall: {
-    apiName: string;
-    arguments: string;
-    identifier: string;
-    params: GatewayMcpParams;
-  }): Promise<ToolCallResult>;
-}
-
-/**
- * Coerce a runtime error (which may be an Error, string, or `{ message }`
- * object) into the string shape the wire protocol expects. Returns undefined
- * when there's no error to transmit.
- */
-const serializeWireError = (err: unknown): string | undefined => {
-  if (err === undefined || err === null) return undefined;
-  if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
-    return err.message;
-  }
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
-};
-
-interface AgentRunHandler {
-  (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
-}
-
-/**
- * Handler for generic server-internal device RPCs (e.g. workspace-init scans).
- * Dispatches by `method` name and returns the JSON-serializable result. Distinct
- * from {@link ToolCallHandler} — RPCs are never exposed to the agent.
- */
-interface RpcHandler {
-  (method: string, params: unknown): Promise<unknown>;
-}
-
-/** The server + credential one connection attempt was resolved against. */
-interface GatewayAuthContext {
-  serverUrl: string;
-  token: string;
-}
-
-interface DeviceRegistrar {
-  (
-    info: {
-      architecture: string;
-      deviceId: string;
-      hostname: string;
-      identitySource: IdentitySource;
-      metadata: Record<string, string>;
-      platform: string;
-    },
-    auth: GatewayAuthContext,
-  ): Promise<void>;
-}
-
-/**
- * Mint a fresh workspace-device connect token for a share connection. Injected
- * by the controller (which owns the authed server calls) — used when restoring
- * persisted enrollments on startup and when a workspace connection's token
- * expires. `serverUrl` is the server the personal connection belongs to: the
- * provider returns null instead of minting on another server (signed out or
- * switched meanwhile).
- */
-interface WorkspaceTokenProvider {
-  (workspaceId: string, serverUrl: string): Promise<string | null>;
-}
-
-/** What the server says about this machine's row in a workspace. */
-export interface WorkspaceDeviceRegistration {
-  /** The member who enrolled the row, when the server reports one. */
-  enrollerUserId?: string;
-  registered: boolean;
-}
-
-/**
- * Check whether the workspace-scoped deviceId still has a registered row on
- * `serverUrl`. `registered: false` is a definitive "row gone" answer (share
- * revoked while offline); `undefined` means the check could not be performed —
- * callers must NOT clear local state on `undefined`.
- */
-interface WorkspaceDeviceChecker {
-  (
-    workspaceId: string,
-    deviceId: string,
-    serverUrl: string,
-  ): Promise<WorkspaceDeviceRegistration | undefined>;
-}
 
 /**
  * The context a personal connection was opened in. Workspace share connections
@@ -258,6 +150,9 @@ export default class GatewayConnectionService extends ServiceModule {
   private agentRunHandler: AgentRunHandler | null = null;
   private rpcHandler: RpcHandler | null = null;
   private deviceRegistrar: DeviceRegistrar | null = null;
+  private connectedHandler: ConnectedHandler | null = null;
+  /** The device id the current personal connection registered as. */
+  private connectedDeviceId: string | null = null;
   /** Samples CPU / memory / load for the personal device while the connection is on. */
   private metricsSampler: { deviceId: string; sampler: DeviceMetricsSampler } | null = null;
   private workspaceTokenProvider: WorkspaceTokenProvider | null = null;
@@ -367,6 +262,14 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   setDeviceRegistrar(registrar: DeviceRegistrar) {
     this.deviceRegistrar = registrar;
+  }
+
+  /**
+   * Called each time the personal connection is (re)established — e.g. to run
+   * the work that waited for this device while it was offline.
+   */
+  setConnectedHandler(handler: ConnectedHandler) {
+    this.connectedHandler = handler;
   }
 
   /**
@@ -673,18 +576,14 @@ export default class GatewayConnectionService extends ServiceModule {
     if (userId) {
       const identity = await this.resolveDeviceIdentity(userId);
       if (this.isStale(generation)) return CANCELLED;
+      this.connectedDeviceId = identity.deviceId;
       await this.deviceRegistrar?.(
         {
           architecture: os.arch(),
           deviceId: identity.deviceId,
           hostname: os.hostname(),
           identitySource: identity.identitySource,
-          metadata: {
-            appVersion: app.getVersion(),
-            electron: process.versions.electron,
-            node: process.versions.node,
-            osRelease: os.release(),
-          },
+          metadata: getDesktopDeviceMetadata(),
           platform: process.platform,
         },
         { serverUrl, token },
@@ -803,6 +702,12 @@ export default class GatewayConnectionService extends ServiceModule {
       // client's late success says nothing about the current one.
       if (scope) {
         this.workspaceAuthRetried.delete(client);
+        // A share connection has its own device id: drain what waited for it.
+        const deviceId = client.currentDeviceId;
+        if (deviceId)
+          void this.connectedHandler?.({ deviceId, workspaceId: scope.workspaceId }).catch(
+            (error) => logger.warn(`Connected handler failed: ${(error as Error).message}`),
+          );
       } else if (this.client === client) {
         this.authRecoveryAttempted = false;
       }
@@ -1312,6 +1217,14 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Tool Call Routing ───
 
+  /** The live connection on `client`'s principal, after any reconnect or re-enroll. */
+  private currentClientFor(client: GatewayClient): () => GatewayClient | null {
+    for (const [workspaceId, current] of this.workspaceClients) {
+      if (current === client) return () => this.workspaceClients.get(workspaceId) ?? null;
+    }
+    return () => this.client;
+  }
+
   private handleToolCallRequest = async (
     request: ToolCallRequestMessage,
     client: GatewayClient,
@@ -1349,22 +1262,16 @@ export default class GatewayConnectionService extends ServiceModule {
         }
       });
 
-      // Forward the typed envelope unchanged. Critically, do NOT stringify the
-      // whole result into `content` — that would bury the structured payload
-      // inside a JSON blob and lose `state`. The wire protocol carries each
-      // field separately so downstream (`DeviceGateway` → `RuntimeExecutors`)
-      // can persist `state` to `pluginState`. Optional fields are only set
-      // when present so payloads stay minimal.
-      const wireResult: ToolCallResponseMessage['result'] = {
-        content: result.content,
-        executionTimeMs: Math.round(performance.now() - startedAt),
-        success: result.success,
-      };
-      const wireError = serializeWireError(result.error);
-      if (wireError !== undefined) wireResult.error = wireError;
-      if (result.state !== undefined) wireResult.state = result.state;
+      const wireResult = toWireResult(result, Math.round(performance.now() - startedAt));
+      const reply = await prepareToolCallReply({
+        getReporter: this.currentClientFor(client),
+        logger,
+        request,
+        result: wireResult,
+        runTool: (id, name, args) => this.toolCallHandler!(id, name, args),
+      });
 
-      client.sendToolCallResponse({ requestId, result: wireResult });
+      client.sendToolCallResponse({ requestId, result: reply });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Tool call failed: apiName=${apiName}, error=${errorMsg}`);
@@ -1526,6 +1433,11 @@ export default class GatewayConnectionService extends ServiceModule {
       // A (re)connection reprobes the bundled CLI and warms the cache for the first request.
       this.agentRuntimes.invalidate();
       void this.agentRuntimes.get();
+      const deviceId = this.connectedDeviceId;
+      if (deviceId)
+        void this.connectedHandler?.({ deviceId }).catch((error) => {
+          logger.warn(`Connected handler failed (non-fatal): ${(error as Error).message}`);
+        });
     }
     this.syncPowerSaveBlocker();
     this.scheduleStatusBroadcast(status);

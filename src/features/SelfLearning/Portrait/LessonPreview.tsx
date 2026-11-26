@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityVars } from '@/styles/densityVars';
 
 import { previewSections } from '../helpers';
 import { useExpertiseLesson } from '../hooks';
@@ -32,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
   section: css`
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: baseline;
   `,
   separator: css`
@@ -78,13 +79,13 @@ interface LessonPreviewProps {
  * 悬停一条经验时展开的预览卡。
  *
  * 清单一行只放得下「标题 + 靠不靠谱」，但要判断一条经验是否可信，看的是它的理由和用法 ——
- * 那些原来得逐条点进详情页。这里按需拉同一份详情（SWR 缓存，真点进去时不会再请求一次），
+ * 那些原来得逐条点进详情页。这里按需拉同一份详情（本地副本，真点进去时直接画出、后台再刷新），
  * 只截取判断需要的部分：为什么、怎么用、最近在哪几次实践里验证过。
  */
 const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonPath, title }) => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
-  const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
+  const { data, error, isLoading, revalidate } = useExpertiseLesson(lessonId);
 
   const sections = previewSections(data?.lesson.sections);
   const evidence = data?.hits.slice(0, MAX_EVIDENCE) ?? [];
@@ -128,14 +129,14 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
 
       {isLoading && !data && <SkeletonText rows={3} />}
 
-      {/* Without this the card sits on "loading…" forever: SWR clears isLoading on failure. */}
+      {/* Without this the card sits on "loading…" forever after a failed read. */}
       {!!error && !data && (
         <Text
           as={'button'}
           className={styles.retry}
           fontSize={12}
           type={'info'}
-          onClick={() => void mutate()}
+          onClick={() => void revalidate()}
         >
           {t('rules.detail.retry')}
         </Text>

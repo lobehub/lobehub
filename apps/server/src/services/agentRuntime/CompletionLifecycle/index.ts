@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
@@ -10,16 +11,21 @@ import { MessageModel } from '@/database/models/message';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { recordShareRunResult } from '@/server/services/aiAgent/shareGate/runMetrics';
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
-  runVerifyOnCompletion,
+  scheduleVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
-import { recoverLastAssistantContent, resolveErrorMessageId } from './assistantMessage';
+import {
+  markInterruptedTurn,
+  recoverLastAssistantContent,
+  resolveErrorMessageId,
+} from './assistantMessage';
 import { registerFileWorks } from './fileWorks';
 import {
   CriticalAgentInterventionPersistenceError,
@@ -27,7 +33,7 @@ import {
 } from './intervention';
 import { buildLifecycleEvent, extractErrorMessage } from './lifecycleEvent';
 import { extractOutboundAttachments, extractTextFromMessageContent } from './messageContent';
-import { persistCompletion } from './persistence';
+import { type CompletionTransition, persistCompletion, settleRunThread } from './persistence';
 import { recallUserOnCompletion } from './recall';
 import { emitSignalEvents, isAgentShareRun } from './signals';
 import type {
@@ -73,6 +79,60 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'tool_call_repeat_limit';
 
 /**
+ * Count a shared Agent run's terminal result, once: only the write that moved the row out of an
+ * in-flight status counts, so a replayed completion (a retried hook delivery, a repeated device
+ * finish) does not count the run again. The row's `trigger` identifies a share run on synthetic
+ * terminals (a device dispatch failure, an abandonment) whose state carries no share visitor.
+ *
+ * Only the visitor's own top-level run counts: a sub-agent or group member it spawns is part of
+ * that run, and counting it too would inflate both the total and the failure rate. A capped run
+ * (`max_steps` and the like) that stopped without a reply is a failure the visitor saw, typed
+ * by its cap.
+ */
+const recordShareRunCompletion = (
+  state: any,
+  reason: string,
+  event: {
+    attachments?: unknown[];
+    errorAttribution?: string;
+    errorType?: string;
+    lastAssistantContent?: string;
+  },
+  runOrigin: ReturnType<typeof buildLifecycleEvent>['origin'],
+  transition: CompletionTransition | undefined,
+) => {
+  if (!transition) return;
+  if (!isAgentShareRun(state) && transition.trigger !== RequestTrigger.AgentShare) return;
+  if (
+    transition.parentOperationId ||
+    runOrigin.lineage?.parentOperationId ||
+    runOrigin.lineage?.isSubAgent === true ||
+    runOrigin.lineage?.orchestrationRole === 'member'
+  )
+    return;
+  if (reason === 'done' || reason === 'interrupted') {
+    recordShareRunResult({ outcome: reason === 'done' ? 'success' : 'interrupted', stage: 'run' });
+    return;
+  }
+  if (isSuccessLikeCompletionReason(reason)) {
+    const replied = !!event.lastAssistantContent?.trim() || !!event.attachments?.length;
+    recordShareRunResult(
+      replied
+        ? { outcome: 'success', stage: 'run' }
+        : { errorType: reason, outcome: 'error', stage: 'run' },
+    );
+    return;
+  }
+  if (reason === 'error')
+    recordShareRunResult({
+      attribution: event.errorAttribution,
+      errorType: event.errorType,
+      outcome: 'error',
+      stage: 'run',
+    });
+};
+
+/**
  * Owns everything that happens once an operation reaches a terminal state:
  * building the lifecycle event payload, emitting completion AgentSignal source
  * events, dispatching `onComplete`/`onError` hooks, and writing the final
@@ -82,6 +142,9 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
  * no-fallback webhook failures are rethrown after terminal persistence so a
  * queue execution can retry the control-flow handoff.
  */
+/** Above the p99 of planning a task run (41 s in production). */
+const VERIFY_PLAN_DISPATCH_WAIT_MS = 45_000;
+
 export class CompletionLifecycle {
   private readonly messageModel: MessageModel;
   private readonly agentOperationModel: AgentOperationModel;
@@ -179,6 +242,32 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Wait, within a bound, for the verify plan {@link recordStart} began. A
+   * dispatched run keeps working on another machine while this request ends, so
+   * work left in flight here can be dropped with the function. Waiting also
+   * means the builder can read its criteria from its first command.
+   *
+   * The bound only keeps a slow plan call from holding the dispatch: past it the
+   * run starts anyway and the finish path still creates the plan.
+   */
+  async waitForVerifyPlan(
+    operationId: string,
+    timeoutMs = VERIFY_PLAN_DISPATCH_WAIT_MS,
+  ): Promise<void> {
+    const instantiation = this.verifyPlanInstantiations.get(operationId);
+    if (!instantiation) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      instantiation,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+
+  /**
    * Persist terminal state to `agent_operations`. Fire-and-forget: a DB
    * outage must never block hook dispatch or the executor's terminal
    * cleanup path.
@@ -188,8 +277,16 @@ export class CompletionLifecycle {
     state: any,
     reason: string,
     settledAsAbandoned?: boolean,
-  ): Promise<boolean> {
-    return persistCompletion(this.deps(), operationId, state, reason, settledAsAbandoned);
+    terminalClaimed?: boolean,
+  ) {
+    return persistCompletion(
+      this.deps(),
+      operationId,
+      state,
+      reason,
+      settledAsAbandoned,
+      terminalClaimed,
+    );
   }
 
   /**
@@ -233,6 +330,11 @@ export class CompletionLifecycle {
       const messageModel = new MessageModel(this.serverDB, userId, undefined, undefined, {
         includeShareVisitor: this.includeShareVisitor,
       });
+      // One card per run. A producer that retries its terminal call (a
+      // heterogeneous `heteroFinish` the edge timed out) re-enters here for
+      // the same operation, and each pass used to stack another card.
+      if (await messageModel.findVerifyMessageByOperationId(operationId, op.topicId)) return;
+
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
@@ -266,7 +368,11 @@ export class CompletionLifecycle {
         { content: input.deliverable ?? '', role: 'assistant' },
       ],
       host: { hooks: input.serializedHooks },
-      metadata: { assistantMessageId: input.assistantMessageId },
+      metadata: {
+        assistantMessageId: input.assistantMessageId,
+        ...(input.worksRegistered && { _fileWorksRegistered: true }),
+      },
+      ...(input.shareVisitor && { principal: { actor: { shareVisitor: input.shareVisitor } } }),
       origin: {
         agentId: input.agentId,
         lineage: { orchestrationRole: input.orchestrationRole },
@@ -288,6 +394,13 @@ export class CompletionLifecycle {
    */
   async registerFileWorks(operationId: string, state: any): Promise<void> {
     return registerFileWorks(this.deps(), operationId, state);
+  }
+
+  // Feed the result back as `worksRegistered` so completeOperation's backstop skips a second scan.
+  async registerOperationWorks(input: OperationCompletionInput): Promise<boolean> {
+    const state = this.buildStateFromInput(input);
+    await this.registerFileWorks(input.operationId, state);
+    return (state.metadata as { _fileWorksRegistered?: boolean })._fileWorksRegistered === true;
   }
 
   /**
@@ -350,6 +463,7 @@ export class CompletionLifecycle {
         state,
         reason,
         options?.settledAsAbandoned,
+        options?.terminalClaimed,
       );
       if (completionAccepted === false) {
         log('[%s] Skipping hooks for an operation with a conflicting terminal owner', operationId);
@@ -364,6 +478,15 @@ export class CompletionLifecycle {
       }
 
       if (isAsyncToolPark) return;
+
+      // Before the hooks, so a parent resumed by the bridge reads a closed thread.
+      await settleRunThread(this.deps(), operationId, state, reason);
+
+      // Every stop (before step 0, during a deferred init, mid-stream, during a
+      // tool call) marks the turn it interrupted; a run that finished is untouched.
+      if (reason === 'interrupted') {
+        await markInterruptedTurn(this.deps(), operationId, state, runOrigin);
+      }
 
       // The run tree no longer works, so its concurrency slot frees now rather
       // than when the lease lapses. A run parked on a human decision frees it
@@ -409,6 +532,9 @@ export class CompletionLifecycle {
           event.attachments = attachments.length > 0 ? attachments : undefined;
         }
       }
+
+      // After content recovery: a capped run counts as a success only when it left a reply.
+      recordShareRunCompletion(state, reason, event, runOrigin, completionAccepted.transition);
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, state?.host?.hooks);
 
@@ -481,24 +607,20 @@ export class CompletionLifecycle {
           metadata?.assistantMessageId,
           runOrigin.userId || this.userId,
         );
-        // `after`, not a bare `void`: judging is minutes of LLM calls and the
-        // step handler must not wait for it, but a detached promise has nobody
-        // keeping it scheduled — on the serverless path the instance is free to
-        // stop running it the moment this response returns. That is not merely a
-        // lost verification: entering `verifying` is a durable write, so a run
-        // cut off mid-judge stays `verifying` forever. `after` hands the work to
-        // the host as post-response work instead (no-op fallback off Next).
-        after(() =>
-          runVerifyOnCompletion(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            {
-              deliverable: event.lastAssistantContent ?? '',
-              goal,
-              operationId,
-            },
-            this.workspaceId,
-          ),
+        // Judging is minutes of LLM calls and must not ride this request:
+        // entering `verifying` is a durable write, so a gate cut off with the
+        // request (proxy timeout, function limit) leaves the round claimed and
+        // never judged. The gate runs in its own QStash delivery instead, which
+        // also collapses a producer's retried completions into one gate.
+        await scheduleVerifyOnCompletion(
+          this.serverDB,
+          runOrigin.userId || this.userId,
+          {
+            deliverable: event.lastAssistantContent ?? '',
+            goal,
+            operationId,
+          },
+          this.workspaceId,
         );
       }
 

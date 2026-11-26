@@ -6,6 +6,7 @@ import { TaskModel } from '@/database/models/task';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentDocumentEditRejectedError } from '@/server/services/agentDocuments/editRejectedError';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { agentDocumentRouter } from '../agentDocument';
@@ -70,6 +71,7 @@ interface MockAgentDocumentsService {
   createDocument: ReturnType<typeof vi.fn>;
   createForTopic: ReturnType<typeof vi.fn>;
   getDocumentById: ReturnType<typeof vi.fn>;
+  modifyDocumentNodesById: ReturnType<typeof vi.fn>;
   removeDocumentById: ReturnType<typeof vi.fn>;
   renameDocumentById: ReturnType<typeof vi.fn>;
 }
@@ -100,6 +102,7 @@ describe('agentDocumentRouter tool outcomes', () => {
       createDocument: vi.fn().mockResolvedValue(createdDocument),
       createForTopic: vi.fn().mockResolvedValue(createdDocument),
       getDocumentById: vi.fn().mockResolvedValue(createdDocument),
+      modifyDocumentNodesById: vi.fn().mockResolvedValue(createdDocument),
       removeDocumentById: vi.fn().mockResolvedValue(true),
       renameDocumentById: vi.fn().mockResolvedValue({ ...createdDocument, title: 'Renamed' }),
     };
@@ -228,6 +231,23 @@ describe('agentDocumentRouter tool outcomes', () => {
     );
     // See the createDocument case: registration is client-side now.
     expect(agentDocumentMocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('answers a bad request when a node edit is rejected', async () => {
+    const message =
+      'Operation 1 of 1 (remove) failed: node "stale-node" not found in the document.';
+    serviceImpl.modifyDocumentNodesById.mockRejectedValue(
+      new AgentDocumentEditRejectedError(message),
+    );
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.modifyNodes({
+        agentId: 'agent-1',
+        id: 'agent-document-1',
+        operations: [{ action: 'remove', id: 'stale-node' }],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message });
   });
 
   it('does not register document work on the lambda for attributed renameDocument', async () => {

@@ -51,6 +51,28 @@ describe('spawnAgent preset env', () => {
     vi.unstubAllEnvs();
   });
 
+  it.each(['antigravity', 'claude-code', 'codex', 'opencode'] as const)(
+    'only filters inherited SSH session data for Antigravity service runs (%s)',
+    async (agentType) => {
+      vi.stubEnv('LOBEHUB_CONNECT_SERVICE', '1');
+      vi.stubEnv('SSH_CONNECTION', 'test-connection');
+      vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus');
+
+      const handle = await spawnAgent({
+        agentType,
+        command: '/custom/agent-cli',
+        operationId: 'op',
+        prompt: 'ping',
+      });
+      handle.kill();
+
+      const { env } = spawnCalls.at(-1)!;
+      expect(env.SSH_CONNECTION).toBe(agentType === 'antigravity' ? undefined : 'test-connection');
+      expect(env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/run/user/1000/bus');
+      expect(process.env.SSH_CONNECTION).toBe('test-connection');
+    },
+  );
+
   // claude.ai connectors finish connecting after the first model call.
   it('makes Claude Code wait for MCP servers before its first turn', async () => {
     vi.stubEnv('MCP_CONNECTION_NONBLOCKING', undefined);
@@ -64,6 +86,46 @@ describe('spawnAgent preset env', () => {
     const env = await spawnClaudeCode({ MCP_CONNECTION_NONBLOCKING: 'true' });
 
     expect(env.MCP_CONNECTION_NONBLOCKING).toBe('true');
+  });
+
+  it('leaves the entrypoint and terminal title to Claude Code by default', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined);
+    vi.stubEnv('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', undefined);
+
+    const env = await spawnClaudeCode();
+
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
+    expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBeUndefined();
+  });
+
+  // A non-default entrypoint makes Claude Code spend a request on a terminal title.
+  it('turns off terminal titles for an agent that sets its own entrypoint', async () => {
+    vi.stubEnv('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', undefined);
+
+    const env = await spawnClaudeCode({ CLAUDE_CODE_ENTRYPOINT: 'lobehub' });
+
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('lobehub');
+    expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe('1');
+  });
+
+  // Turned off means no custom entrypoint, even one the launcher inherited.
+  it('does not pass on an entrypoint the agent cleared', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
+    vi.stubEnv('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', undefined);
+
+    const env = await spawnClaudeCode({ CLAUDE_CODE_ENTRYPOINT: '' });
+
+    expect('CLAUDE_CODE_ENTRYPOINT' in env).toBe(false);
+    expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBeUndefined();
+  });
+
+  it('keeps an agent-configured terminal title setting', async () => {
+    const env = await spawnClaudeCode({
+      CLAUDE_CODE_DISABLE_TERMINAL_TITLE: '0',
+      CLAUDE_CODE_ENTRYPOINT: 'lobehub',
+    });
+
+    expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe('0');
   });
 
   it('does not apply the Claude Code preset to other agents', async () => {

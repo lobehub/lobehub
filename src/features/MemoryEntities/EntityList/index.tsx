@@ -5,6 +5,8 @@ import { useDebounce } from 'ahooks';
 import { SearchXIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useEntityDataContext } from '../context';
 import { lastTouchedOf, searchMatches } from '../derive';
 import { useEntityFormat } from '../format';
@@ -27,10 +29,10 @@ const styles = stylex.create({
   head: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlockEnd: '8px',
     paddingBlockStart: '20px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   heading: { alignItems: 'baseline', display: 'flex', gap: '8px' },
   title: { fontSize: '17px', fontWeight: 600, margin: 0 },

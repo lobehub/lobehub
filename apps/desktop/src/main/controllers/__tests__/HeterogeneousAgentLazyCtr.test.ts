@@ -12,6 +12,7 @@ const implementationMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../HeterogeneousAgentImpl', () => ({
+  buildInheritedSpawnEnv: () => ({ PATH: '/base/bin' }),
   default: class MockHeterogeneousAgentImplementation {
     constructor(app: App, remoteServerAuth?: RemoteServerAuth) {
       implementationMocks.constructor(app, remoteServerAuth);

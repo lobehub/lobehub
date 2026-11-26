@@ -1,6 +1,6 @@
-import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from '../client';
 import { startNegotiationServers } from './fixtures/negotiationServers';
@@ -8,18 +8,24 @@ import { startNegotiationServers } from './fixtures/negotiationServers';
 describe('HTTP protocol negotiation against SDK v2 servers', () => {
   let servers: Awaited<ReturnType<typeof startNegotiationServers>>;
   const clients: MCPClient[] = [];
-  const clientAt = (path: string) => {
-    const client = new MCPClient({
-      name: 'negotiation-test',
-      type: 'http',
-      url: servers.url + path,
-      auth: { type: 'oauth2', accessToken: 'fixture-connector-token' },
-    });
+  const clientAt = (path: string, elicitationEnabled = false) => {
+    const client = new MCPClient(
+      {
+        name: 'negotiation-test',
+        type: 'http',
+        url: servers.url + path,
+        auth: { type: 'oauth2', accessToken: 'fixture-connector-token' },
+      },
+      { elicitationEnabled },
+    );
     clients.push(client);
     return client;
   };
   beforeEach(async () => {
     servers = await startNegotiationServers();
+    // The fixtures listen on loopback, which the server's SSRF-safe MCP fetch
+    // refuses by default; allow exactly it, so these runs go through that fetch.
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '127.0.0.1');
   });
 
   it('keeps separate legacy sessions for fresh clients', async () => {
@@ -41,6 +47,7 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
   afterEach(async () => {
     await Promise.all(clients.splice(0).map((client) => client.disconnect()));
     await servers.close();
+    vi.unstubAllEnvs();
   });
 
   it.each([
@@ -94,9 +101,11 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
   });
 
   it('preserves an input_required checkpoint instead of swallowing user interaction', async () => {
-    const client = clientAt('/modern');
+    const client = clientAt('/modern', true);
     await client.initialize();
-    await expect(client.callTool('needs_input', {})).rejects.toBeInstanceOf(McpInputRequiredError);
+    await expect(
+      client.callTool('needs_input', {}, { host: { request: vi.fn() } }),
+    ).rejects.toBeInstanceOf(McpInputRequiredError);
     expect(servers.requests.filter((r) => r.method === 'tools/call')).toHaveLength(1);
   });
 });

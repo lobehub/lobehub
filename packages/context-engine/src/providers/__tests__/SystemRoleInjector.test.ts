@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createContext } from '../../testUtils';
 import { SystemRoleInjector } from '../SystemRoleInjector';
 
 describe('SystemRoleInjector', () => {
@@ -8,29 +9,15 @@ describe('SystemRoleInjector', () => {
       systemRole: 'You are a helpful assistant.',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Hello',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await provider.process(context);
 
@@ -55,29 +42,15 @@ describe('SystemRoleInjector', () => {
       systemRole: '',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Hello',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await provider.process(context);
 
@@ -91,36 +64,22 @@ describe('SystemRoleInjector', () => {
       systemRole: 'You are a helpful assistant.',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: 'system-1',
+        role: 'system',
+        content: 'Existing system role',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: 'system-1',
-          role: 'system',
-          content: 'Existing system role',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        {
-          id: '1',
-          role: 'user',
-          content: 'Hello',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      isAborted: false,
-    };
+    ]);
 
     const result = await provider.process(context);
 
@@ -139,37 +98,23 @@ describe('SystemRoleInjector', () => {
     const beforeSystemDocContent =
       '<agent_documents>\n<document title="rules">always reply in Chinese</document>\n</agent_documents>';
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      // Simulates the message that AgentDocumentBeforeSystemInjector unshifts
+      {
+        id: 'agent-doc-before-system-1700000000000',
+        role: 'system',
+        content: beforeSystemDocContent,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        // Simulates the message that AgentDocumentBeforeSystemInjector unshifts
-        {
-          id: 'agent-doc-before-system-1700000000000',
-          role: 'system',
-          content: beforeSystemDocContent,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        {
-          id: '1',
-          role: 'user',
-          content: 'Hello',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      isAborted: false,
-    };
+    ]);
 
     const result = await provider.process(context);
 
@@ -188,29 +133,15 @@ describe('SystemRoleInjector', () => {
       systemRole: '   \n  \t  ',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Hello',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await provider.process(context);
 
@@ -224,14 +155,9 @@ describe('SystemRoleInjector', () => {
       systemRole: { nested: 'object' } as any,
     });
 
-    const context = {
-      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
-      messages: [
-        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
-      ],
-      metadata: { model: 'gpt-4', maxTokens: 4096 },
-      isAborted: false,
-    };
+    const context = createContext([
+      { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+    ]);
 
     const result = await provider.process(context);
 
@@ -245,14 +171,9 @@ describe('SystemRoleInjector', () => {
       systemRole: ['system', 'role'] as any,
     });
 
-    const context = {
-      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
-      messages: [
-        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
-      ],
-      metadata: { model: 'gpt-4', maxTokens: 4096 },
-      isAborted: false,
-    };
+    const context = createContext([
+      { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+    ]);
 
     const result = await provider.process(context);
 
@@ -265,14 +186,9 @@ describe('SystemRoleInjector', () => {
       systemRole: 42 as any,
     });
 
-    const context = {
-      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
-      messages: [
-        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
-      ],
-      metadata: { model: 'gpt-4', maxTokens: 4096 },
-      isAborted: false,
-    };
+    const context = createContext([
+      { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+    ]);
 
     const result = await provider.process(context);
 
@@ -285,21 +201,7 @@ describe('SystemRoleInjector', () => {
       systemRole: 'You are a helpful assistant.',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
-      },
-      messages: [],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    const context = createContext([]);
 
     const result = await provider.process(context);
 

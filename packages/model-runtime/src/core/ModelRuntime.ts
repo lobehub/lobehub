@@ -15,6 +15,7 @@ import type {
   DecisionPayload,
   DecisionQuestions,
   DecisionResponse,
+  DiscardedChatAttempt,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
@@ -33,6 +34,13 @@ import type {
   CreateImageMethodOptions,
   CreateImagePayload,
 } from '../types/image';
+import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+} from '../types/music';
 import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
@@ -130,6 +138,16 @@ export interface ModelRuntimeHooks {
     options?: TextToSpeechOptions,
   ) => Promise<void>;
   beforeTranscribe?: (payload: ASRPayload, options?: ASROptions) => Promise<void>;
+  /**
+   * Called for each routed attempt RouterRuntime replaced with a retry or fallback. Its
+   * `onChatFinal` never runs, so this is where any usage the upstream still billed is recorded.
+   * Must not release request-level holds: a later attempt still serves the request.
+   */
+  onChatAttemptDiscarded?: (
+    attempt: DiscardedChatAttempt,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
   /**
    * Called when chat() throws. Handle side effects (sanitize, log, DB record).
    * The error is re-thrown after the hook completes — callers still handle response formatting.
@@ -315,6 +333,22 @@ export class ModelRuntime {
 
     try {
       const hooksStartedAt = Date.now();
+      // Messages carry the plan between the context engine and server. Keep it off
+      // vendor payloads, including when a hosted route retries another provider.
+      const plan = payload.messages?.find(
+        (message) => message.toolActivationPlan,
+      )?.toolActivationPlan;
+      if (plan) {
+        payload = {
+          ...payload,
+          messages: payload.messages.map((message) => {
+            if (!message.toolActivationPlan) return message;
+            const { toolActivationPlan: _plan, ...rest } = message;
+            return rest;
+          }),
+        };
+        options = { ...options, toolActivationPlan: plan };
+      }
       const finalOptions = await this.applyHooks(payload, options);
       if (metadata) {
         timing(
@@ -416,14 +450,33 @@ export class ModelRuntime {
       );
     }
 
-    if (!this._hooks?.onChatFinal) return hookOptions;
+    const discardedHook = this._hooks?.onChatAttemptDiscarded;
+    const optionsWithDiscardHook: ChatMethodOptions | undefined = discardedHook
+      ? {
+          ...hookOptions,
+          callback: {
+            ...hookOptions?.callback,
+            async onAttemptDiscarded(attempt) {
+              await hookOptions?.callback?.onAttemptDiscarded?.(attempt);
+              try {
+                await discardedHook(attempt, { options, payload });
+              } catch (e) {
+                // Accounting for a replaced attempt must not break the attempt that replaces it
+                console.error('[ModelRuntime] onChatAttemptDiscarded hook error:', e);
+              }
+            },
+          },
+        }
+      : hookOptions;
+
+    if (!this._hooks?.onChatFinal) return optionsWithDiscardHook;
 
     const hookFn = this._hooks.onChatFinal;
-    const existingOnFinal = hookOptions?.callback?.onFinal;
+    const existingOnFinal = optionsWithDiscardHook?.callback?.onFinal;
     return {
-      ...hookOptions,
+      ...optionsWithDiscardHook,
       callback: {
-        ...hookOptions?.callback,
+        ...optionsWithDiscardHook?.callback,
         async onFinal(data) {
           const finalStartedAt = Date.now();
           if (metadata) {
@@ -560,12 +613,41 @@ export class ModelRuntime {
     return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
   }
 
+  /**
+   * Generate music with the provider runtime. Returns `undefined` when the provider has no
+   * music support. Asynchronous providers return a `pending` result with a task id unless
+   * `options.waitForCompletion` is set; poll it with {@link handlePollMusicStatus}.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult | undefined> {
+    return this._runtime.createMusic?.(payload, options);
+  }
+
+  async handlePollMusicStatus(
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route, options);
+  }
+
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
   async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
     return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
+  }
+
+  /**
+   * Verify the provider key without a chat model. `undefined` when the runtime has no
+   * credential check, so callers can fall back to a chat check.
+   */
+  async checkCredentials() {
+    return this._runtime.checkCredentials?.();
   }
 
   async models() {
@@ -579,25 +661,33 @@ export class ModelRuntime {
 
       const startTime = Date.now();
 
+      let usage: ModelUsage | undefined;
+      let routeAttempt: UsageReportContext['routeAttempt'];
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
-              await hookOptions?.onUsage?.(usage, context);
-              try {
-                const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!(
-                  { latencyMs, routeAttempt: context?.routeAttempt, usage },
-                  { options, payload },
-                );
-              } catch (e) {
-                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-              }
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const result = await this._runtime.embeddings?.(payload, finalOptions);
+
+      if (this._hooks?.onEmbeddingsFinal) {
+        try {
+          await this._hooks.onEmbeddingsFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+        }
+      }
+
+      return result;
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {
@@ -827,13 +917,23 @@ export class ModelRuntime {
     >,
     hooks?: ModelRuntimeHooks,
   ) {
+    return new ModelRuntime(ModelRuntime.createProviderRuntime(provider, params), hooks);
+  }
+
+  /**
+   * Construct the bare provider implementation without wrapping it in a
+   * ModelRuntime, so callers can decorate it (e.g. the server's SSRF guard)
+   * before attaching hooks.
+   */
+  static createProviderRuntime(
+    provider: string,
+    params: Parameters<typeof ModelRuntime.initializeWithProvider>[1],
+  ): LobeRuntimeAI {
     // runtime map does not include every provider id (e.g. vertex), so index loosely
     const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
       providerRuntimeMap;
     const providerAI = runtimeMap[provider] ?? LobeOpenAI;
 
-    const runtimeModel: LobeRuntimeAI = new providerAI(params);
-
-    return new ModelRuntime(runtimeModel, hooks);
+    return new providerAI(params);
   }
 }

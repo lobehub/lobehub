@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { mcpElicitationKeys } from '@/libs/swr/keys';
-import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -10,6 +9,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useConversationStore } from '../store';
+import { savedMcpSteps } from '../store/mcpProjection';
 
 /** Reopening a client conversation resumes from saved tool results, never from tools/call. */
 export function useRecoverClientMcpSteps() {
@@ -21,18 +21,13 @@ export function useRecoverClientMcpSteps() {
     s.dbMessages.map((row) => `${row.id}:${row.content ? 1 : 0}`).join('|'),
   );
   const userId = useUserStore(userProfileSelectors.userId);
-  const result = useClientDataSWR(
+  const scope = useCacheScope();
+  const result = savedMcpSteps.useReplica(
     hasMcp && context.topicId && userId
-      ? mcpElicitationKeys.clientSteps(userId, context.topicId, context.threadId, revision)
+      ? { scope, topicId: context.topicId, threadId: context.threadId, revision }
       : null,
-    () =>
-      lambdaClient.mcpElicitation.clientSteps.query({
-        topicId: context.topicId!,
-        threadId: context.threadId,
-      }),
     {
       refreshInterval: (steps) => (steps?.length ? 15_000 : 0),
-      errorRetryCount: 3,
       refreshWhenHidden: false,
     },
   );
@@ -102,5 +97,5 @@ export function useRecoverClientMcpSteps() {
     return () => {
       stopped = true;
     };
-  }, [result.data, context, result.mutate]);
+  }, [result.data, context]);
 }

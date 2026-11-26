@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import SegmentBar from '../../../../features/SegmentBar';
 import StatusBadge from '../../../../features/StatusBadge';
@@ -105,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Tonal hero band carrying the headline outcome — the first thing the eye lands on.
   hero: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -181,12 +182,14 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface RunCardProps {
   benchmarkId: string;
+  /** A note shown beside the status, e.g. how many of the set's cases the run picked. */
+  note?: string;
   onEdit?: (run: AgentEvalRunListItem) => void;
   onRefresh?: () => Promise<void>;
   run: AgentEvalRunListItem;
 }
 
-const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => {
+const RunCard = memo<RunCardProps>(({ benchmarkId, run, note, onRefresh, onEdit }) => {
   const { t } = useTranslation('eval');
 
   const deleteRun = useEvalStore((s) => s.deleteRun);
@@ -332,6 +335,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
             <Flexbox horizontal align="center" gap={8}>
               <span className={styles.name}>{run.name}</span>
               <StatusBadge status={run.status} />
+              {note && <span className={styles.metaHighlight}>{note}</span>}
             </Flexbox>
             {metaParts.length > 0 && (
               <Flexbox horizontal align="center" className={styles.meta} gap={4} wrap="wrap">

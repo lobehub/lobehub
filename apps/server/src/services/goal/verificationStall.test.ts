@@ -22,6 +22,13 @@ const round = (
 });
 const passed = (checkItemId: string) => ({ checkItemId, status: 'passed', verdict: 'passed' });
 const failed = (checkItemId: string) => ({ checkItemId, status: 'failed', verdict: 'failed' });
+/** A failed result whose `invalid_criterion` dispute a panel upheld. */
+const waived = (checkItemId: string) => ({
+  checkItemId,
+  metadata: { dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' } },
+  status: 'failed',
+  verdict: 'failed',
+});
 
 const rejectedByReview = (feedback: string) =>
   round('passed', {
@@ -32,6 +39,15 @@ const rejectedByReview = (feedback: string) =>
 describe('failureSignature', () => {
   it('names the required checks a failed round left open', () => {
     expect(failureSignature(round('failed'), [passed('c1'), failed('c3')])).toBe('checks:c2');
+  });
+
+  /**
+   * An upheld dispute waives the check, so it stops gating the attempt and has
+   * to leave the signature: a retry that only shrank the blocking set would
+   * otherwise read like the attempt before it.
+   */
+  it('leaves out a check an upheld dispute waived', () => {
+    expect(failureSignature(round('failed'), [waived('c1'), failed('c2')])).toBe('checks:c2');
   });
 
   it('reads a review rejection by its feedback', () => {
@@ -87,6 +103,15 @@ describe('isVerificationStalled', () => {
         { results: [passed('c1'), failed('c2')], round: retry },
       ]),
     ).toBe(true);
+  });
+
+  it('keeps retrying when a dispute shrank the blocking set', () => {
+    expect(
+      isVerificationStalled([
+        { results: [failed('c1'), failed('c2')], round: round('failed') },
+        { results: [waived('c1'), failed('c2')], round: round('failed') },
+      ]),
+    ).toBe(false);
   });
 
   it('keeps retrying while each attempt fails on something else', () => {

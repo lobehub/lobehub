@@ -47,14 +47,30 @@ export class ToolResolver {
       }
     }
 
+    const deferredManifestMap = operationToolSet.deferredManifestMap ?? {};
+
     // Apply accumulated step-level activations from previous steps
     for (const activation of accumulatedActivations) {
-      this.applyActivation(activation, tools, manifestMap, sourceMap, enabledToolIds);
+      this.applyActivation(
+        activation,
+        tools,
+        manifestMap,
+        sourceMap,
+        enabledToolIds,
+        deferredManifestMap,
+      );
     }
 
     // Apply current step delta activations
     for (const activation of stepDelta.activatedTools) {
-      this.applyActivation(activation, tools, manifestMap, sourceMap, enabledToolIds);
+      this.applyActivation(
+        activation,
+        tools,
+        manifestMap,
+        sourceMap,
+        enabledToolIds,
+        deferredManifestMap,
+      );
     }
 
     const shouldFilterByToolNames = allowedToolNames !== undefined;
@@ -125,13 +141,19 @@ export class ToolResolver {
     manifestMap: Record<string, LobeToolManifest>,
     sourceMap: Record<string, ToolSource>,
     enabledToolIds: string[],
+    deferredManifestMap: Record<string, LobeToolManifest>,
   ): void {
-    // Skip if already present
-    if (manifestMap[activation.id]) return;
+    // A tool the operation deferred is promoted to its full manifest, even when
+    // a narrowed one is already enabled. The schemas both manifests share are
+    // deduplicated by function name afterwards.
+    const deferredManifest = deferredManifestMap[activation.id];
+    const presentManifest = manifestMap[activation.id];
+    if (presentManifest && (!deferredManifest || presentManifest === deferredManifest)) return;
 
-    if (activation.manifest) {
-      manifestMap[activation.id] = activation.manifest;
-      const newTools = generateToolsFromManifest(activation.manifest);
+    const manifest = deferredManifest ?? activation.manifest;
+    if (manifest) {
+      manifestMap[activation.id] = manifest;
+      const newTools = generateToolsFromManifest(manifest);
       tools.push(...newTools);
       enabledToolIds.push(activation.id);
 

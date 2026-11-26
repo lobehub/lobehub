@@ -130,7 +130,8 @@ const open = (overrides: Partial<Parameters<typeof service.open>[1]> = {}) =>
   });
 
 beforeEach(async () => {
-  vi.stubEnv('KEY_VAULTS_SECRET', 'fixture-private-binding-key');
+  vi.stubEnv('KEY_VAULTS_SECRET', Buffer.alloc(32, 1).toString('base64'));
+  vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '127.0.0.1');
   vi.clearAllMocks();
   probes.queueImpl = undefined;
   probes.execute.mockResolvedValue({ content: 'remote receipt', success: true, executionTime: 1 });
@@ -807,7 +808,8 @@ it.each(['before-enqueue', 'lost-ack'])(
     };
     const initial = await connect();
     try {
-      const error = await initial.callTool('form', {}).catch((e) => e);
+      const host = { request: vi.fn() };
+      const error = await initial.callTool('form', {}, { host }).catch((e) => e);
       await db
         .update(userInstalledPlugins)
         .set({ customParams: { mcp: { type: 'http', url: server.url + '/modern' } } })
@@ -832,7 +834,11 @@ it.each(['before-enqueue', 'lost-ack'])(
       probes.execute.mockImplementation(async (_tool, ctx) => {
         const client = await connect();
         try {
-          const result = await client.callTool('form', {}, { continuation: ctx.mcpContinuation });
+          const result = await client.callTool(
+            'form',
+            {},
+            { host, continuation: ctx.mcpContinuation },
+          );
           return { content: JSON.stringify(result.content), success: true, executionTime: 1 };
         } finally {
           await client.disconnect();

@@ -79,6 +79,7 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphLegend from './GraphLegend';
 import GraphNodeView, { GhostNodeView, type GraphNodeData, type StateChip } from './GraphNode';
+import GraphTitle from './GraphTitle';
 import { type GraphBridge, hideKinds, type LayoutBox, layoutGraph, NODE_WIDTH } from './layout';
 import {
   edgeMarkerColor,
@@ -1214,9 +1215,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   );
   const titleAndViews = (
     <>
-      <Text fontSize={16} weight={600}>
-        {t('goalProcess.graph.title')}
-      </Text>
+      <GraphTitle />
       {containers.length === 0 && !stageIsWholeMap && (
         <Segmented
           size={'small'}

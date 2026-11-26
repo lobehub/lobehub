@@ -16,6 +16,7 @@ import { ArrowRight } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
@@ -28,6 +29,7 @@ interface TaskListProps {
 }
 
 const TaskList = memo<TaskListProps>(({ itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const agentId = useAgentStore((s) => s.activeAgentId);
@@ -50,9 +52,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const titleNode = (
     <Flexbox horizontal align="center" gap={4}>
-      <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-        {t('tab.tasks')}
-      </Text>
+      <SectionTitle>{t('tab.tasks')}</SectionTitle>
       {totalTasks > 0 && (
         <Text fontSize={11} type="secondary">
           {totalTasks}
@@ -72,9 +72,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const header = (
     <AccordionHeader>
-      <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-        {titleNode}
-      </AccordionTrigger>
+      <AccordionTrigger style={sectionTriggerStyle}>{titleNode}</AccordionTrigger>
       <div
         className={cx('accordion-action', accordionStyles.action, accordionStyles.actionBorderless)}
       >

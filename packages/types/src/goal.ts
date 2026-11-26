@@ -2,7 +2,7 @@ import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { GoalRolloutPolicy, GoalRolloutState } from './goalRollout';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus, VerifyCheckTally } from './verify';
-import type { WorkType } from './work';
+import type { WorkResourceType, WorkType } from './work';
 
 // ============================================
 // Goal — independent target entity (`goals` table)
@@ -306,6 +306,13 @@ export interface GoalManagerState {
    */
   dispatchNeverStarted?: boolean;
   /**
+   * Set when this turn's `execAgent` call failed and returned without an
+   * operation id. Unlike `dispatchNeverStarted` it does not prove no run exists,
+   * but the call is over, so no late operation id can still be recorded; an
+   * owner closing the Goal may settle the turn once it is past the turn timeout.
+   */
+  dispatchReturnedWithoutRun?: boolean;
+  /**
    * Consecutive turns that ended in an error without committing a plan. Reset by
    * a turn that commits a plan or ends without an error. Reaching the limit
    * pauses the Goal on the last error instead of re-dispatching an Agent that
@@ -461,6 +468,31 @@ export interface GoalUnderstanding {
   updatedAt: string;
 }
 
+/**
+ * The score an optimisation goal pushes, and the command that measures it.
+ *
+ * A Task run grades its working directory with `lh goal evaluate`, which runs
+ * `evaluator` there and records the score as one point of the goal's metric
+ * series `key`, tagged with the lane (the run's experiment container, or its
+ * Task node). The leaderboard is that series grouped by lane.
+ */
+export interface GoalObjective {
+  /** Higher or lower is better. */
+  direction: 'max' | 'min';
+  /**
+   * Shell command run in the Task's working directory. Its output must carry
+   * the score: a JSON object with `score` (and optional `valid`, `summary`,
+   * `metrics`), a `TOTAL_SCORE <n>` / `score: <n>` line, or a bare number.
+   */
+  evaluator: string;
+  /** Metric series key on this goal. Defaults to `objective`. */
+  key?: string;
+  /** Seconds before an evaluation is abandoned. Defaults to 1800. */
+  timeoutSeconds?: number;
+  /** Human-facing name of the score. */
+  title?: string;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -485,6 +517,8 @@ export interface GoalConfig {
    * together with `provider`, and dropped when the goal changes agent.
    */
   model?: string;
+  /** The score this goal optimises, when it has one; see {@link GoalObjective}. */
+  objective?: GoalObjective;
   /** Who the current pause belongs to; cleared when the goal runs again. */
   pausedBy?: GoalPauseReason;
   /** Coordinator-owned lease for initial decomposition; not a user policy. */
@@ -581,7 +615,31 @@ export interface GoalItem {
  * `experiment`: an experiment is a candidate answer under test, a batch is one
  * reusable transformation applied many times.
  */
-export type GoalNodeKind = 'problem' | 'experiment' | 'task' | 'finding' | 'decision' | 'batch';
+export type GoalNodeKind =
+  | 'problem'
+  | 'experiment'
+  | 'task'
+  | 'finding'
+  | 'decision'
+  | 'batch'
+  | GoalMarkKind
+  /**
+   * A batch's recipe revision. Batches before this kind stored it as a `finding`
+   * titled `GOAL_BATCH_TEMPLATE_TITLE`; those rows are left as they are and
+   * readers accept both.
+   */
+  | 'template';
+
+/**
+ * A mark (trace) one Task leaves for every other Task in the same Goal: what works
+ * (`pattern`), a tool it built (`tool`), what not to touch (`hazard`) and what
+ * not to try again (`dead_end`). Unlike a `finding` — the outcome a Task
+ * delivered, scoped to its experiment — a mark is Goal-wide, written while the
+ * work happens (failures included), and handed to every later run. Runs that
+ * use one record `confirms` / `refutes` edges, and the node's `confidence` is
+ * derived from them.
+ */
+export type GoalMarkKind = 'pattern' | 'tool' | 'hazard' | 'dead_end';
 
 /** Semantic lifecycle of a node; independent from the execution status of its Task. */
 export type GoalNodeStatus =
@@ -605,7 +663,11 @@ export type GoalEdgeKind =
   | 'produces'
   | 'supports'
   | 'contradicts'
-  | 'leads_to';
+  | 'leads_to'
+  /** A run used this mark and it held (`task confirms mark`). */
+  | 'confirms'
+  /** A run used this mark and it was wrong (`task refutes mark`). */
+  | 'refutes';
 
 /** The role an immutable Work version plays for a Goal Graph node. */
 export type GoalNodeWorkVersionRelation = 'input' | 'produced' | 'supports' | 'contradicts';
@@ -619,8 +681,10 @@ export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
  * Coordinator options carry it implicitly through their fixed ids
  * (`retry` / `retire` / `fail`); options the main Agent writes for its own
  * question name it, so its wording never has to match a reserved id.
+ * `retry_after_reset` leaves a Task stopped by a usage limit held until the
+ * limit resets; `retry` sends it back now.
  */
-export type GoalDecisionOptionEffect = 'retry' | 'retire';
+export type GoalDecisionOptionEffect = 'retry' | 'retire' | 'retry_after_reset';
 
 export interface GoalDecisionOption {
   /**
@@ -750,6 +814,8 @@ export interface GoalGraphWorkVersionDisplay {
   mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
+  /** What the Work is beyond its type, e.g. `github_pull_request`; draws its state glyph. */
+  resourceType?: WorkResourceType;
   status: string | null;
   title: string | null;
   type: WorkType;

@@ -6,6 +6,8 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 import { oneLineEllipsis } from '@/styles';
 
+import { useForeignTaskDetail } from './useForeignTaskDetail';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   identifier: css`
     flex-shrink: 0;
@@ -24,9 +26,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Title = memo(() => {
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const detail = useTaskStore((s) =>
-    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : undefined,
+  const isForeign = useChatStore((s) => !!chatPortalSelectors.taskDetailWorkspace(s));
+  const activeDetail = useTaskStore((s) =>
+    taskId && !isForeign ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : undefined,
   );
+  const { data: foreignDetail } = useForeignTaskDetail();
+  const detail = isForeign ? foreignDetail : activeDetail;
   const identifier = detail?.identifier ?? taskId;
   const name = detail?.name;
 

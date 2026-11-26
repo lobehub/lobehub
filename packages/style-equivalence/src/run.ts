@@ -18,11 +18,14 @@ import { planMutations } from './mutation/plan';
 import { type MutationReport, runMutations } from './mutation/run';
 import { synthesize, writeHost } from './pipeline/synthesize';
 import type { FilePlan, PlanCase } from './plan/planFile';
+import type { ShapeBook } from './plan/shapes';
+import { learnShapes } from './shape/learn';
+import { shapeRequests } from './shape/requests';
 import { resolveScope } from './source/scope';
 import { prepareRevisions } from './source/worktrees';
 import type { Verdict } from './verdict';
 import { assembleVerdict } from './verdict/assemble';
-import { type CaseCategory, categorizeCase } from './verdict/categorize';
+import { type CaseCategory, categorizeCase, differsOnlyUnmasked } from './verdict/categorize';
 
 const run = promisify(execFile);
 
@@ -97,8 +100,23 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       repo: options.repo,
       restrictTo: options.restrictTo,
     });
-    const synthesis = await synthesize(scope, roots, config);
     const configDir = path.dirname(options.configFile);
+    let synthesis = await synthesize(scope, roots, config);
+    const requests = shapeRequests(synthesis, config.aliases);
+    let shapes: ShapeBook = {};
+    if (requests.length) {
+      browser ??= await launchBrowser();
+      shapes = await learnShapes({
+        browser,
+        config,
+        configDir,
+        configFile: options.configFile,
+        requests,
+        roots,
+        runDir,
+      });
+      if (Object.keys(shapes).length) synthesis = await synthesize(scope, roots, config, shapes);
+    }
     const hosts = {
       base: await writeHost('base', roots.base, synthesis, scope, config, configDir),
       head: await writeHost('head', roots.head, synthesis, scope, config, configDir),
@@ -188,7 +206,13 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
               status: 'error',
               unstableConditions: [],
             } satisfies CaseResult);
-          return { category: categorizeCase(entry, result), key: entry.key, plan: entry, result };
+          const masked = differsOnlyUnmasked(entry, result);
+          return {
+            category: categorizeCase(entry, result),
+            key: entry.key,
+            plan: entry,
+            result: masked ? { ...result, gaps: [...result.gaps, 'INLINE_STYLE_MASKED'] } : result,
+          };
         }),
       );
       const count = options.mutations ?? DEFAULT_MUTATIONS;
@@ -275,6 +299,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       widths: capture.widths,
     });
     await writeEvidence(runDir, 'plan.json', synthesis.plans);
+    await writeEvidence(runDir, 'shapes.json', { requests, shapes });
     await writeEvidence(runDir, 'extractions.json', synthesis.extractions);
     await writeEvidence(runDir, 'mutation.json', mutation);
     await writeEvidence(runDir, 'calibration.json', calibration);

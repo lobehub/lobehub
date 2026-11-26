@@ -5,8 +5,8 @@ import { CalendarDaysIcon, LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { type ViewMode } from '@/features/Memory';
+import { useHeaderActionSize } from '@/styles/density';
 
 export type { ViewMode } from '@/features/Memory';
 
@@ -17,20 +17,21 @@ interface ViewModeSwitcherProps {
 
 const ViewModeSwitcher = memo<ViewModeSwitcherProps>(({ value, onChange }) => {
   const { t } = useTranslation('memory');
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   return (
     <>
       <ActionIcon
         active={value === 'timeline'}
         icon={CalendarDaysIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('viewMode.timeline')}
         onClick={() => onChange('timeline')}
       />
       <ActionIcon
         active={value === 'grid'}
         icon={LayoutDashboardIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('viewMode.masonry')}
         onClick={() => onChange('grid')}
       />

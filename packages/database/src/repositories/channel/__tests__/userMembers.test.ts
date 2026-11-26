@@ -1,14 +1,15 @@
 // @vitest-environment node
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { channelMembers, channels, workspaceMembers } from '../../../schemas';
+import { channelMembers, channels, userContacts, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-user-members');
+const fixture = createChannelFixture(db, 'channel-user-members', tableContacts);
 beforeEach(async () => {
   await fixture.setup();
   await db.insert(workspaceMembers).values([
@@ -16,10 +17,20 @@ beforeEach(async () => {
     { workspaceId: fixture.workspaceId, userId: fixture.memberId },
   ]);
 });
-afterEach(fixture.cleanup);
+afterEach(async () => {
+  await db.delete(userContacts);
+  await fixture.cleanup();
+});
+
+/** Makes two people personal contacts, in both directions as an accepted request does. */
+const befriend = (a: string, b: string) =>
+  db.insert(userContacts).values([
+    { contactUserId: b, type: 'user', userId: a },
+    { contactUserId: a, type: 'user', userId: b },
+  ]);
 
 const create = async () => {
-  const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+  const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId, tableContacts);
   const { channel } = await owner.create({ title: 'People' });
   return { channel, owner };
 };
@@ -34,7 +45,7 @@ describe('Channel human membership', () => {
     expect(added).toMatchObject({ role: 'member', status: 'active', userId: fixture.memberId });
     expect((await owner.addUser(channel.id, fixture.memberId)).id).toBe(added.id);
     expect(await owner.userCandidates(channel.id)).toEqual([]);
-    const member = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const member = new ChannelRepository(db, fixture.memberId, fixture.workspaceId, tableContacts);
     expect(await member.list()).toEqual([
       expect.objectContaining({ id: channel.id, canDelete: false }),
     ]);
@@ -75,15 +86,11 @@ describe('Channel human membership', () => {
     expect((await owner.detail(channel.id)).members).toHaveLength(1);
   });
 
-  it('rejects personal, wrong-scope, direct and trashed channels', async () => {
+  it('rejects wrong-scope, direct and trashed channels', async () => {
     const { owner, channel } = await create();
-    const personal = new ChannelRepository(db, fixture.ownerId);
+    const personal = new ChannelRepository(db, fixture.ownerId, undefined, tableContacts);
     await expect(personal.addUser(channel.id, fixture.memberId)).rejects.toMatchObject({
       code: 'NOT_FOUND',
-    });
-    const { channel: own } = await personal.create({ title: 'Personal' });
-    await expect(personal.addUser(own.id, fixture.memberId)).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
     });
     const agent = await fixture.addAgent(channel.id, 'Direct');
     const direct = await owner.create({ agentId: agent.agentId!, title: 'Direct' });
@@ -124,7 +131,7 @@ describe('Channel human membership', () => {
 
   describe('starting a Channel with people', () => {
     it('lists everyone in the workspace except the creator, and adds the chosen people', async () => {
-      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId, tableContacts);
       expect(await owner.newChannelUserCandidates()).toEqual([
         expect.objectContaining({ userId: fixture.memberId, username: 'mia' }),
       ]);
@@ -146,7 +153,12 @@ describe('Channel human membership', () => {
         ]),
       );
       expect(members).toHaveLength(2);
-      const member = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+      const member = new ChannelRepository(
+        db,
+        fixture.memberId,
+        fixture.workspaceId,
+        tableContacts,
+      );
       expect(await member.list()).toEqual([expect.objectContaining({ id: channel.id })]);
     });
 
@@ -162,7 +174,7 @@ describe('Channel human membership', () => {
     });
 
     it('creates nothing when a chosen person is outside the workspace', async () => {
-      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId, tableContacts);
       await expect(
         owner.create({ title: 'People', userIds: [fixture.memberId, 'outside-user'] }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -171,15 +183,7 @@ describe('Channel human membership', () => {
       ).toEqual([]);
     });
 
-    it('keeps people out of personal Channels and direct conversations', async () => {
-      const personal = new ChannelRepository(db, fixture.ownerId);
-      await expect(personal.newChannelUserCandidates()).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-      });
-      await expect(
-        personal.create({ title: 'Personal', userIds: [fixture.memberId] }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-
+    it('keeps people out of direct conversations', async () => {
       const { owner, channel } = await create();
       const agent = await fixture.addAgent(channel.id, 'Direct');
       await expect(
@@ -192,8 +196,86 @@ describe('Channel human membership', () => {
         .update(workspaceMembers)
         .set({ deletedAt: new Date() })
         .where(eq(workspaceMembers.userId, fixture.ownerId));
-      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId, tableContacts);
       await expect(owner.newChannelUserCandidates()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  describe('personal groups', () => {
+    it('starts a group with mutual contacts, who then talk in it', async () => {
+      await befriend(fixture.ownerId, fixture.memberId);
+      const owner = new ChannelRepository(db, fixture.ownerId, undefined, tableContacts);
+      expect(await owner.newChannelUserCandidates('mia')).toEqual([
+        expect.objectContaining({ userId: fixture.memberId, username: 'mia' }),
+      ]);
+      const { channel } = await owner.create({ title: 'Friends', userIds: [fixture.memberId] });
+      expect(channel.workspaceId).toBeNull();
+
+      const member = new ChannelRepository(db, fixture.memberId, undefined, tableContacts);
+      expect(await member.list()).toEqual([
+        expect.objectContaining({ id: channel.id, canDelete: false }),
+      ]);
+      await member.send(channel.id, { content: 'Hi', requestKey: 'hi', routing: 'fallback' });
+      expect((await owner.detail(channel.id)).messages[0]).toMatchObject({
+        content: 'Hi',
+        userId: fixture.memberId,
+      });
+      // Workspace people are no one's contacts until they connect personally.
+      expect(
+        await new ChannelRepository(db, fixture.ownerId, fixture.workspaceId, tableContacts).list(),
+      ).toEqual([]);
+    });
+
+    it('invites mutual contacts into an existing group, and only them', async () => {
+      const owner = new ChannelRepository(db, fixture.ownerId, undefined, tableContacts);
+      const { channel } = await owner.create({ title: 'Friends' });
+      expect(await owner.userCandidates(channel.id)).toEqual([]);
+      await expect(owner.addUser(channel.id, fixture.memberId)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+
+      // One direction alone is a pending friendship, not a contact.
+      await db
+        .insert(userContacts)
+        .values({ contactUserId: fixture.memberId, type: 'user', userId: fixture.ownerId });
+      expect(await owner.userCandidates(channel.id)).toEqual([]);
+      await db.delete(userContacts);
+
+      await befriend(fixture.ownerId, fixture.memberId);
+      expect(await owner.userCandidates(channel.id)).toEqual([
+        expect.objectContaining({ userId: fixture.memberId }),
+      ]);
+      await owner.addUser(channel.id, fixture.memberId);
+      expect(await owner.userCandidates(channel.id)).toEqual([]);
+      expect((await owner.detail(channel.id)).members).toHaveLength(2);
+    });
+
+    it('does not count workspace contacts as personal ones', async () => {
+      await db.insert(userContacts).values([
+        {
+          contactUserId: fixture.memberId,
+          type: 'user',
+          userId: fixture.ownerId,
+          workspaceId: fixture.workspaceId,
+        },
+        {
+          contactUserId: fixture.ownerId,
+          type: 'user',
+          userId: fixture.memberId,
+          workspaceId: fixture.workspaceId,
+        },
+      ]);
+      const owner = new ChannelRepository(db, fixture.ownerId, undefined, tableContacts);
+      expect(await owner.newChannelUserCandidates()).toEqual([]);
+      await expect(
+        owner.create({ title: 'Friends', userIds: [fixture.memberId] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(
+        await db
+          .select()
+          .from(channels)
+          .where(and(eq(channels.userId, fixture.ownerId), isNull(channels.workspaceId))),
+      ).toEqual([]);
     });
   });
 });

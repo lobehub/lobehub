@@ -97,22 +97,47 @@ describe('IdentityExtractor', () => {
     });
   });
 
-  it('throws when building user prompt without template', () => {
-    const extractor = new IdentityExtractor(extractorConfig);
-
-    expect(() => (extractor as any).buildUserPrompt(templateOptions)).toThrowError(
-      'Prompt template not loaded',
-    );
-  });
-
-  it('renders user prompt with provided template props', async () => {
+  it('does not duplicate the system prompt as the user prompt', async () => {
     const extractor = new IdentityExtractor(extractorConfig);
 
     await extractor.ensurePromptTemplate();
     const result = (extractor as any).buildUserPrompt(templateOptions);
-    const expectedProps = (extractor as any).getTemplateProps(templateOptions);
+    const systemPrompt = renderPlaceholderTemplate(
+      identityPrompt,
+      (extractor as any).getTemplateProps(templateOptions),
+    );
 
     expect(result).not.toBe('');
-    expect(result).toBe(renderPlaceholderTemplate(identityPrompt, expectedProps));
+    expect(result).not.toBe(systemPrompt);
+  });
+
+  it('keeps an identity whose role the model left as null', async () => {
+    const extractor = new IdentityExtractor(extractorConfig);
+    const identity = {
+      details: null,
+      memoryCategory: 'personal',
+      memoryType: 'fact',
+      summary: 'Summary',
+      tags: [],
+      title: 'Identity',
+      withIdentity: {
+        description: 'Description',
+        episodicDate: null,
+        extractedLabels: [],
+        relationship: 'self',
+        role: null,
+        scoreConfidence: 0.8,
+        sourceIds: [],
+        sourceEvidence: null,
+        type: 'personal',
+      },
+    };
+    (runtimeMock.generateObject as any) = vi
+      .fn()
+      .mockResolvedValue({ add: [identity], remove: null, update: null });
+
+    const result = await extractor.structuredCall(templateOptions);
+
+    expect(result.add?.[0]?.withIdentity.role).toBeNull();
   });
 });

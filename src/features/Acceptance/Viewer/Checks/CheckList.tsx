@@ -1,27 +1,20 @@
 'use client';
 
 import type { AcceptanceGroupFeedback } from '@lobechat/types';
-import { ActionIcon, Button, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import {
-  BadgeCheck,
-  ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  CircleDashed,
-  MessageSquareText,
-  PartyPopper,
-} from 'lucide-react';
+import { Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { hasVisualEvidence } from '../Evidence/evidence';
 import { openGroupFeedbackModal } from '../Review/modals';
+import { decisionSections } from './checkDecision';
+import CheckGroupHeader from './CheckGroupHeader';
 import { AcceptanceCheckRow } from './CheckRow';
 import type { CheckFilter } from './checkState';
 import {
   checkFilterState,
   groupChecks,
-  isException,
   isGroupFullyAccepted,
   SEVERITY,
   shouldGroupChecks,
@@ -56,6 +49,7 @@ interface CheckListProps {
   /** Record the user's verdict; resolves true when the write landed. */
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound?: (round: number) => void;
+  onShowAll?: () => void;
   onToggleGroup: (key: string) => void;
   onToggleGroupItems: (ids: string[], open: boolean) => void;
   onToggleItem: (id: string) => void;
@@ -78,6 +72,7 @@ const CheckList = memo<CheckListProps>(
     onReview,
     onOpenTrace,
     onRound,
+    onShowAll,
     onToggleGroup,
     onToggleGroupItems,
     onToggleItem,
@@ -111,252 +106,117 @@ const CheckList = memo<CheckListProps>(
       }))
       .filter((group) => group.rows.length > 0);
 
-    // A filter that matches nothing must read as "this bucket is empty", not as
-    // a blank bordered card — each filter gets its own reassuring line. But an
-    // EMPTY pending bucket where every check is signed off isn't "nothing here"
-    // — it's the finish line, so it earns a celebration instead of a flat line.
     if (visibleRows.length === 0) {
+      // An empty pending bucket where every check is signed off is the finish
+      // line, not "nothing here".
       const allAccepted = filter === 'pending' && isGroupFullyAccepted(checks);
+      const emptyKey =
+        filter === 'all'
+          ? ('acceptance.checks.empty' as const)
+          : (`acceptance.checks.emptyFilter.${filter}` as const);
       return (
-        <Flexbox align={'center'} className={styles.emptyCard} gap={12} justify={'center'}>
-          {allAccepted ? (
-            <>
-              <Icon
-                className={styles.celebrateIcon}
-                color={cssVar.colorSuccess}
-                icon={PartyPopper}
-                size={40}
-              />
-              <Flexbox align={'center'} gap={4}>
-                <Text strong style={{ color: cssVar.colorSuccess, fontSize: 15 }}>
-                  {t('acceptance.checks.allAccepted.title')}
-                </Text>
-                <Text fontSize={13} type={'secondary'}>
-                  {t('acceptance.checks.allAccepted.desc')}
-                </Text>
-              </Flexbox>
-            </>
-          ) : (
-            <Empty
-              icon={CircleDashed}
-              description={t(
-                filter === 'all'
-                  ? 'acceptance.checks.empty'
-                  : `acceptance.checks.emptyFilter.${filter}`,
-              )}
-            />
+        <div {...stylex.props(styles.emptyState)}>
+          <span {...stylex.props(styles.emptyTitle)}>
+            {allAccepted ? t('acceptance.checks.allAccepted.title') : t(emptyKey)}
+          </span>
+          {allAccepted && (
+            <span {...stylex.props(styles.emptyDesc)}>
+              {t('acceptance.checks.allAccepted.desc')}
+            </span>
           )}
-        </Flexbox>
+          {filter !== 'all' && checks.length > 0 && onShowAll && (
+            <Button onClick={onShowAll}>
+              {t('acceptance.checks.showAll', { count: checks.length })}
+            </Button>
+          )}
+        </div>
       );
     }
 
     if (!shouldGroupChecks(checks.length)) {
+      const sections = filter === 'all' ? decisionSections(visibleRows) : [];
+      const renderRow = (check: AcceptanceCheck) => (
+        <AcceptanceCheckRow
+          canReview={canReview}
+          check={check}
+          expanded={expanded.has(check.id)}
+          key={check.id}
+          reviewPending={reviewPending}
+          onDismissProposal={onDismissProposal}
+          onOpenDetail={onOpenCheck ? () => onOpenCheck(check.id) : undefined}
+          onOpenTrace={onOpenTrace}
+          onReview={onReview}
+          onRound={onRound}
+          onToggle={() => onToggleItem(check.id)}
+        />
+      );
       return (
-        <Flexbox className={styles.groupCard}>
-          {visibleRows.map((check) => (
-            <AcceptanceCheckRow
-              canReview={canReview}
-              check={check}
-              expanded={expanded.has(check.id)}
-              key={check.id}
-              reviewPending={reviewPending}
-              onDismissProposal={onDismissProposal}
-              onOpenDetail={onOpenCheck ? () => onOpenCheck(check.id) : undefined}
-              onOpenTrace={onOpenTrace}
-              onReview={onReview}
-              onRound={onRound}
-              onToggle={() => onToggleItem(check.id)}
-            />
-          ))}
+        <Flexbox {...stylex.props(styles.groupCard)}>
+          {sections.length > 1
+            ? sections.map((section) => (
+                <Fragment key={section.key}>
+                  <div {...stylex.props(styles.sectionHeader)}>
+                    {t(`acceptance.focus.state.${section.key}`)}
+                    <span {...stylex.props(styles.sectionCount)}>{section.checks.length}</span>
+                  </div>
+                  <div>{section.checks.map(renderRow)}</div>
+                </Fragment>
+              ))
+            : visibleRows.map(renderRow)}
         </Flexbox>
       );
     }
 
     return (
-      <Flexbox className={styles.groupCard}>
-        {groups.map(({ checks: groupChecks_, key, label, rows }, groupIndex) => {
-          const passed = groupChecks_.filter((check) => check.state === 'passed').length;
+      <Flexbox {...stylex.props(styles.groupCard)}>
+        {groups.map(({ checks: groupChecks_, key, label, rows }) => {
           const collapsed = collapsedGroups.has(key);
           const anyItemOpen = rows.some((check) => expanded.has(check.id));
-          // Only executed checks can be stamped — see the row-level gating.
-          const reviewableChecks = groupChecks_.filter((check) => check.result);
-          const unaccepted = reviewableChecks.filter(
-            (check) => !['accepted', 'ignored'].includes(userReviewState(check)),
-          );
-          // The header counts what the REVIEWER cares about: how many they
-          // signed off, how many the verifier flagged, how many they sent
-          // back — not the verifier's pass tally alone.
-          const acceptedCount = reviewableChecks.filter(
-            (check) => userReviewState(check) === 'accepted',
-          ).length;
-          const rejectedCount = reviewableChecks.filter(
-            (check) => userReviewState(check) === 'rejected',
-          ).length;
-          const ignoredCount = reviewableChecks.filter(
-            (check) => userReviewState(check) === 'ignored',
-          ).length;
-          const exceptionCount = groupChecks_.filter((check) => isException(check)).length;
-          // Everything passed AND the user signed all of it off — the ratio
-          // itself turns into the green receipt, no separate right-side note.
-          const allVerified = passed === groupChecks_.length && isGroupFullyAccepted(groupChecks_);
           // Group-scoped feedback targets the raw category ('' = uncategorized).
           const rawCategory = key === 'uncategorized' ? '' : label;
           const feedbackEntries = groupFeedback.filter((entry) => entry.category === rawCategory);
 
           return (
             <Fragment key={key}>
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.groupHeader}
-                gap={8}
-                style={{
-                  borderBlockStart:
-                    groupIndex > 0 ? `1px solid ${cssVar.colorBorderSecondary}` : 'none',
+              <CheckGroupHeader
+                accepting={acceptingGroup === key}
+                anyItemOpen={anyItemOpen}
+                canReview={canReview}
+                checks={groupChecks_}
+                collapsed={collapsed}
+                label={label}
+                reviewPending={reviewPending}
+                onToggle={() => onToggleGroup(key)}
+                onAcceptAll={async (checkItemIds) => {
+                  setAcceptingGroup(key);
+                  const ok = await onReview({ action: 'accept', checkItemIds });
+                  setAcceptingGroup(null);
+                  // A fully signed-off group is settled business — fold it.
+                  if (ok && !collapsed) onToggleGroup(key);
                 }}
-                onClick={() => onToggleGroup(key)}
-              >
-                <Text strong style={{ fontSize: 13 }}>
-                  {label}
-                </Text>
-                {allVerified ? (
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    gap={4}
-                    style={{ color: cssVar.colorSuccess, fontSize: 12 }}
-                  >
-                    <Icon icon={BadgeCheck} size={13} />
-                    {t('acceptance.group.allVerified', { passed, total: groupChecks_.length })}
-                  </Flexbox>
-                ) : (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('acceptance.group.acceptedRatio', {
-                        accepted: acceptedCount,
-                        total: groupChecks_.length,
-                      })}
-                    </Text>
-                    {exceptionCount > 0 && (
-                      <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
-                        {t('acceptance.group.failedCount', { count: exceptionCount })}
-                      </Text>
-                    )}
-                    {rejectedCount > 0 && (
-                      <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
-                        {t('acceptance.group.rejectedCount', { count: rejectedCount })}
-                      </Text>
-                    )}
-                    {ignoredCount > 0 && (
-                      <Text fontSize={12} type={'secondary'}>
-                        {t('acceptance.group.ignoredCount', { count: ignoredCount })}
-                      </Text>
-                    )}
-                  </Flexbox>
-                )}
-                {/* Bulk accept sits by the ratio it settles, hover-revealed —
-                    a full-width column of always-on buttons begs misclicks. */}
-                {canReview &&
-                  reviewableChecks.length > 0 &&
-                  (unaccepted.length > 0 ? (
-                    <Button
-                      className={'acceptance-group-actions'}
-                      disabled={reviewPending && acceptingGroup !== key}
-                      icon={<Icon icon={BadgeCheck} />}
-                      loading={acceptingGroup === key}
-                      size={'small'}
-                      // The spinner must stay visible after the pointer leaves.
-                      style={acceptingGroup === key ? { opacity: 1 } : undefined}
-                      type={'text'}
-                      onClick={async (event) => {
-                        event.stopPropagation();
-                        setAcceptingGroup(key);
-                        const ok = await onReview({
-                          action: 'accept',
-                          checkItemIds: unaccepted.map((check) => check.id),
-                        });
-                        setAcceptingGroup(null);
-                        // A fully signed-off group is settled business — fold it.
-                        if (ok && !collapsed) onToggleGroup(key);
-                      }}
-                    >
-                      {t('acceptance.review.acceptAll')}
-                    </Button>
-                  ) : allVerified || ignoredCount > 0 ? null : (
-                    // Fully signed off but not all green — the mixed-verdict
-                    // receipt that can't fold into the ratio text.
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      gap={4}
-                      style={{ color: cssVar.colorSuccess, fontSize: 12 }}
-                    >
-                      <Icon icon={BadgeCheck} size={13} />
-                      {t('acceptance.review.acceptAllDone')}
-                    </Flexbox>
-                  ))}
-                <Flexbox flex={1} />
-                {/* Group-scoped feedback — the channel for concerns that
-                    belong to no single check yet must reach the next round.
-                    Lives with the other group-level controls by the chevron. */}
-                {canReview && (
-                  <span className={'acceptance-group-actions'}>
-                    <ActionIcon
-                      icon={MessageSquareText}
-                      size={'small'}
-                      title={t('acceptance.group.feedbackAction')}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openGroupFeedbackModal({
-                          groupLabel: label,
-                          onConfirm: (comment, fileIds) =>
-                            onGroupFeedback(rawCategory, comment, fileIds),
-                        });
-                      }}
-                    />
-                  </span>
-                )}
-                {collapsed || onOpenCheck ? (
-                  // Fixed-size placeholder keeps the header height stable across
-                  // toggles — and stands in for the bulk expander on rows that
-                  // navigate away instead of unfolding.
-                  <div style={{ height: 24, width: 24 }} />
-                ) : (
-                  <ActionIcon
-                    icon={anyItemOpen ? ChevronsDownUp : ChevronsUpDown}
-                    size={'small'}
-                    title={
-                      anyItemOpen
-                        ? t('acceptance.group.collapseItems')
-                        : t('acceptance.group.expandItems')
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      // Expanding a group is "show me what still needs judgment"
-                      // — rows the user already accepted are settled business
-                      // and stay folded (they open individually on demand).
-                      // Collapsing folds everything, accepted or not.
-                      onToggleGroupItems(
-                        anyItemOpen
-                          ? rows.map((check) => check.id)
-                          : rows
-                              .filter((check) => userReviewState(check) !== 'accepted')
-                              .map((check) => check.id),
-                        !anyItemOpen,
-                      );
-                    }}
-                  />
-                )}
-                <Icon
-                  color={cssVar.colorTextQuaternary}
-                  icon={ChevronRight}
-                  size={14}
-                  style={{
-                    transform: collapsed ? 'none' : 'rotate(90deg)',
-                    transition: 'transform 0.2s',
-                  }}
-                />
-              </Flexbox>
+                onFeedback={() =>
+                  openGroupFeedbackModal({
+                    groupLabel: label,
+                    onConfirm: (comment, fileIds) => onGroupFeedback(rawCategory, comment, fileIds),
+                  })
+                }
+                // Expanding a group is "show me what still needs judgment" —
+                // rows the user already accepted stay folded. Collapsing folds
+                // everything, accepted or not.
+                onToggleItems={
+                  onOpenCheck
+                    ? undefined
+                    : () =>
+                        onToggleGroupItems(
+                          anyItemOpen
+                            ? rows.map((check) => check.id)
+                            : rows
+                                .filter((check) => userReviewState(check) !== 'accepted')
+                                .map((check) => check.id),
+                          !anyItemOpen,
+                        )
+                }
+              />
               {/* Group feedback trail — newest first; entries consumed by a
                   later round stay readable but visually recede. */}
               {!collapsed && (

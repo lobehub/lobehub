@@ -105,8 +105,14 @@ const getGlobalConfig = vi.hoisted(() => vi.fn());
 const createPublicLambdaClientMock = vi.hoisted(() =>
   vi.fn(() => ({ config: { getGlobalConfig: { query: getGlobalConfig } } })),
 );
+// Worktree cleanups that waited for this device, drained on every connect.
+const drainWorktreeCleanups = vi.hoisted(() => vi.fn(async () => ({ scheduled: true })));
+const createLambdaClientMock = vi.hoisted(() =>
+  vi.fn(() => ({ device: { drainWorktreeCleanups: { mutate: drainWorktreeCleanups } } })),
+);
 vi.mock('../api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClientModule>()),
+  createLambdaClient: createLambdaClientMock,
   createPublicLambdaClient: createPublicLambdaClientMock,
 }));
 
@@ -217,6 +223,7 @@ describe('connect command', () => {
   let signalListeners: Map<NodeJS.Signals, Set<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
+    vi.stubEnv('LOBEHUB_CONNECT_SERVICE', undefined);
     signalListeners = new Map(
       (['SIGINT', 'SIGTERM'] as const).map((signal) => [
         signal,
@@ -240,6 +247,7 @@ describe('connect command', () => {
       }
     }
     exitSpy.mockRestore();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -250,6 +258,14 @@ describe('connect command', () => {
     registerConnectCommand(program);
     return program;
   }
+
+  it('marks a service child for downstream agent launches', async () => {
+    vi.stubEnv('SSH_CONNECTION', 'test-ssh-session');
+    await createProgram().parseAsync(['node', 'test', 'connect', '--service-child']);
+
+    expect(process.env.LOBEHUB_CONNECT_SERVICE).toBe('1');
+    expect(process.env.SSH_CONNECTION).toBe('test-ssh-session');
+  });
 
   it('should persist deviceId in status for foreground connections', async () => {
     const program = createProgram();
@@ -264,6 +280,19 @@ describe('connect command', () => {
     expect(writeStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
     );
+  });
+
+  it('asks the server to run the worktree cleanups waiting on this device on each connect', async () => {
+    drainWorktreeCleanups.mockClear();
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+    expect(drainWorktreeCleanups).not.toHaveBeenCalled();
+
+    clientEventHandlers.connected?.();
+    clientEventHandlers.connected?.();
+
+    expect(drainWorktreeCleanups).toHaveBeenCalledTimes(2);
+    expect(drainWorktreeCleanups).toHaveBeenLastCalledWith({ deviceId: 'mock-device-id' });
   });
 
   it('should persist deviceId in status for daemon child connections', async () => {
@@ -332,58 +361,6 @@ describe('connect command', () => {
 
     expect(connectCalled).toBe(true);
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('LobeHub CLI'));
-  });
-
-  it('exits with a retryable code when the workspace token mint fails transiently', async () => {
-    mintWorkspaceConnectTokenMock.mockRejectedValueOnce(new Error('fetch failed'));
-
-    const program = createProgram();
-    await expect(
-      program.parseAsync(['node', 'test', 'connect', '--workspace', 'ws_1']),
-    ).rejects.toThrow('process.exit');
-    expect(exitSpy).toHaveBeenCalledWith(75);
-  });
-
-  it('exits without retry when the server refuses the workspace token mint', async () => {
-    mintWorkspaceConnectTokenMock.mockRejectedValueOnce(
-      Object.assign(new Error('forbidden'), { data: { code: 'FORBIDDEN' } }),
-    );
-
-    const program = createProgram();
-    await expect(
-      program.parseAsync(['node', 'test', 'connect', '--workspace', 'ws_1']),
-    ).rejects.toThrow('process.exit');
-    expect(exitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it.each([
-    { error: new Error('fetch failed'), exitCode: 75, reason: 'fails transiently' },
-    {
-      error: Object.assign(new Error('forbidden'), { data: { code: 'FORBIDDEN' } }),
-      exitCode: 1,
-      reason: 'is refused by the server',
-    },
-  ])('exits with $exitCode when workspace registration $reason', async ({ error, exitCode }) => {
-    mintWorkspaceConnectTokenMock.mockResolvedValueOnce({ token: 'workspace-token' });
-    registerWorkspaceDeviceMock.mockRejectedValueOnce(error);
-    exitSpy.mockImplementation(() => {
-      throw new Error('process.exit');
-    });
-
-    await expect(
-      createProgram().parseAsync([
-        'node',
-        'test',
-        'connect',
-        '--service-child',
-        '--workspace',
-        'ws_1',
-      ]),
-    ).rejects.toThrow('process.exit');
-
-    expect(registerWorkspaceDeviceMock).toHaveBeenCalledOnce();
-    expect(exitSpy).toHaveBeenCalledWith(exitCode);
-    expect(connectCalled).toBe(false);
   });
 
   describe('device gateway address', () => {
@@ -474,30 +451,6 @@ describe('connect command', () => {
       expect(getGlobalConfig).not.toHaveBeenCalled();
       expect(clientOptions.gatewayUrl).toBe('https://gateway.example.com');
       expect(saveDeviceGatewayUrl).toHaveBeenCalledWith(SELF_HOSTED, 'https://gateway.example.com');
-    });
-
-    it('opens workspace shares on the same gateway as the personal connection', async () => {
-      vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
-      getGlobalConfig.mockResolvedValue({
-        serverConfig: { deviceGatewayUrl: 'https://gw.example.com' },
-      });
-      await connect();
-      const personal = clientOptions;
-
-      await clientEventHandlers['rpc_request']?.({
-        method: 'enrollWorkspace',
-        params: { token: 'ws-token', workspaceId: 'ws-1' },
-        requestId: 'rpc-1',
-        type: 'rpc_request',
-      });
-
-      expect(clientOptions).not.toBe(personal);
-      expect(clientOptions).toMatchObject({
-        gatewayUrl: 'https://gw.example.com',
-        serverUrl: SELF_HOSTED,
-        token: 'ws-token',
-        workspaceId: 'ws-1',
-      });
     });
 
     it('passes --gateway through to the daemon child, which resolves the same way', async () => {

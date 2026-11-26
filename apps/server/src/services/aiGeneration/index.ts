@@ -1,12 +1,14 @@
 import type {
   ChatCompletionTool,
+  ChatStreamPayload,
   DecisionPayload,
   DecisionQuestions,
   DecisionResponse,
   GenerateObjectPayload,
   GenerateObjectSchema,
+  OnFinishData,
 } from '@lobechat/model-runtime';
-import type { OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
+import type { ModelUsage, OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
@@ -19,6 +21,22 @@ export interface AiGenerationObjectInput {
   schema?: GenerateObjectSchema;
   thinking?: GenerateObjectPayload['thinking'];
   tools?: ChatCompletionTool[];
+}
+
+export interface AiGenerationTextInput {
+  maxTokens?: number;
+  messages: OpenAIChatMessage[];
+  model: string;
+  provider: string;
+  temperature?: number;
+}
+
+export interface AiGenerationTextResult {
+  finishReason?: string;
+  /** The model's reasoning, kept apart from `text` (reasoning models only). */
+  reasoning?: string;
+  text: string;
+  usage?: ModelUsage;
 }
 
 export interface AiGenerationDecisionInput<
@@ -92,6 +110,60 @@ export class AiGenerationService {
       },
       { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
     )) as T;
+  }
+
+  /**
+   * One plain-text completion: the answer text, with any reasoning, usage and
+   * finish reason reported separately (nothing is spliced into `text`).
+   *
+   * Runs on the server only, like {@link decide}: the stream is consumed here
+   * and `onFinal` carries the assembled result, so providers that only stream
+   * behave the same as those that do not.
+   */
+  async generateText(
+    input: AiGenerationTextInput,
+    options: AiGenerationObjectOptions,
+  ): Promise<AiGenerationTextResult> {
+    const runtime = await initModelRuntimeFromDB(
+      this.db,
+      this.userId,
+      input.provider,
+      this.workspaceId,
+    );
+    const payload: ChatStreamPayload = {
+      max_tokens: input.maxTokens,
+      messages: input.messages as ChatStreamPayload['messages'],
+      model: input.model,
+      stream: true,
+      temperature: input.temperature ?? 1,
+    };
+
+    let final: OnFinishData | undefined;
+    let streamError: unknown;
+    const response = await runtime.chat(payload, {
+      callback: {
+        onError: (error) => {
+          streamError = error;
+        },
+        onFinal: (data) => {
+          final = data;
+        },
+      },
+      metadata: options.metadata,
+      signal: options.signal,
+    });
+    // Drain the stream so the callbacks (and billing / tracing hooks) run.
+    await response.body?.pipeTo(new WritableStream());
+
+    if (streamError ?? final?.error) throw streamError ?? final!.error;
+    if (!final) throw new Error('The model stream ended without a final result');
+
+    return {
+      finishReason: final.finishReason,
+      reasoning: final.thinking || final.reasoning?.content || undefined,
+      text: final.text,
+      usage: final.usage,
+    };
   }
 
   /**

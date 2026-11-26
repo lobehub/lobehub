@@ -34,6 +34,8 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -47,6 +49,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
 import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
@@ -64,7 +67,7 @@ const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
     display: grid;
     grid-template-columns: 96px 144px minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -80,7 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
     max-height: min(70vh, 680px);
     padding-block: 8px 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   close: css`
     position: absolute;
@@ -94,7 +97,7 @@ const styles = createStaticStyles(({ css }) => ({
   footer: css`
     flex-shrink: 0;
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   generatingStatus: css`
@@ -108,7 +111,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 22px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 22px;
     white-space: nowrap;
@@ -153,8 +156,8 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     position: relative;
     min-height: 0;
-    padding-block: 16px 8px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 8px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   inputShell: css`
     overflow: hidden;
@@ -171,7 +174,7 @@ const styles = createStaticStyles(({ css }) => ({
   instructionEditor: css`
     min-height: 36px;
     padding-block: 0 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     /* EditorCanvas reserves space for its document footer by default. The
        compact review summary has no footer, so keeping that space turns a
@@ -181,7 +184,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   reviewSection: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
 
     &:first-child {
       padding-block: 0 4px;
@@ -253,6 +256,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
+  /** Create failure, shown above the footer buttons: the modal stays on the review step with the user's plan. */
+  const [createError, setCreateError] = useState<InlineErrorState | null>(null);
   // Drafting failed, so the review step offers to draft again.
   const [generateFailed, setGenerateFailed] = useState(false);
   // The stopgap title a failed draft leaves behind; still unedited at submit,
@@ -288,7 +293,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const handleContentChange = useCallback(() => {
     if (!canCreate || !editor) return;
-    instructionRef.current = String(editor.getDocument('markdown') ?? '');
+    instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     setPlan((current) => ({ ...current, instruction: instructionRef.current }));
   }, [canCreate, editor]);
 
@@ -419,6 +424,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       instruction,
     });
 
+    setCreateError(null);
     setIsCreating(true);
     try {
       const { agentId: goalAgentId, taskAgentId } = buildGoalAgents(plannerId, executorId);
@@ -462,7 +468,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      toast.error(t('createGoal.createFailed'));
+      setCreateError(toInlineError(t('createGoal.createFailedRetry'), error));
     } finally {
       setIsCreating(false);
     }
@@ -795,6 +801,14 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           </Flexbox>
         </Flexbox>
+      )}
+
+      {createError && (
+        <div
+          style={{ flexShrink: 0, paddingBlock: '8px 0', paddingInline: densityVars.cardPadding }}
+        >
+          <InlineErrorText detail={createError.detail}>{createError.summary}</InlineErrorText>
+        </div>
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>

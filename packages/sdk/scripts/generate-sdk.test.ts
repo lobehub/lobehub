@@ -7,11 +7,12 @@ const PKG_ROOT = path.join(__dirname, '..');
 
 describe('generate-sdk', () => {
   it('src/generated stays in sync with openapi.yml', () => {
-    // Runs the generator in --check mode as a subprocess (the same command the
-    // release workflow uses), so committed output failing to match the spec
-    // fails this test with the generator's own diagnostics. This package is
-    // deliberately NOT in the CI package whitelist — the test runs locally and
-    // in the manual release workflow only, never gating regular PRs.
+    // Drift check: runs the generator in --check mode as a subprocess (the
+    // same command the release workflow uses), so committed output failing to
+    // match the spec fails this test with the generator's own diagnostics.
+    // `@lobehub/sdk` is in the PACKAGES list of `.github/workflows/test.yml`,
+    // so this gates every PR: a route or schema change that regenerates
+    // `openapi.yml` must commit the regenerated SDK in the same PR.
     try {
       execSync('bun scripts/generate-sdk.ts --check', {
         cwd: PKG_ROOT,

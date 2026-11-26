@@ -25,8 +25,12 @@ const topicState = vi.hoisted(() => ({
       }
     | undefined,
 }));
+const chatSelectors = vi.hoisted(() => [] as ((s: { activeTopicId: string }) => unknown)[]);
 vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (s: typeof topicState) => unknown) => selector(topicState),
+  useChatStore: (selector: (s: typeof topicState) => unknown) => {
+    chatSelectors.push(selector);
+    return selector(topicState);
+  },
 }));
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
@@ -47,6 +51,8 @@ vi.mock('@/store/agent/selectors', () => ({
         agentMap: Record<string, { visibility?: 'private' | 'public'; workspaceId?: string }>;
       }) =>
         s.agentMap[id],
+    getAgentModelById: (id: string) => (s: { agentMap: Record<string, { model?: string }> }) =>
+      s.agentMap[id]?.model ?? 'gpt-4o',
   },
 }));
 vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));
@@ -92,6 +98,7 @@ const setupStores = ({
 describe('useEffectiveAgencyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    chatSelectors.length = 0;
     topicState.topic = undefined;
     managementAccess.canManageAgent = false;
     managementAccess.isAccessLoading = false;
@@ -357,6 +364,21 @@ describe('useEffectiveAgencyConfig', () => {
     expect(renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current).toMatchObject({
       topicDeviceUnknown: false,
     });
+  });
+
+  // Regression: agent-level callers (sidebar project groups) re-rendered on
+  // every topic switch because the active topic was selected unconditionally.
+  it('does not depend on the active topic when the caller passes an explicit topic', () => {
+    setupStores();
+
+    renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
+
+    expect(chatSelectors.length).toBeGreaterThan(0);
+    for (const selector of chatSelectors) {
+      expect(selector({ ...topicState, activeTopicId: 'topic-a' })).toBe(
+        selector({ ...topicState, activeTopicId: 'topic-b' }),
+      );
+    }
   });
 
   it('returns undefined config when agentId is missing', () => {

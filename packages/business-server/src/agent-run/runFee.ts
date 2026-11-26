@@ -1,6 +1,13 @@
 export interface HoldAgentRunFeeParams {
   /** The run's operation id, or a provisional id later moved with {@link rebindAgentRunFee}. */
   holderId: string;
+  /**
+   * The model the run starts on. An external agent passes the model it runs (for example
+   * `claude-code` / `anthropic`); absent only when the caller knows no model.
+   */
+  model?: string;
+  /** Provider of {@link model}. */
+  provider?: string;
   userId: string;
 }
 
@@ -18,8 +25,12 @@ export interface SettleAgentRunFeeParams {
  * settled when it ends. The default never charges; a deployment that bills
  * runs overrides these four functions.
  *
- * Hold runs before the turn writes any row. It should not refuse the run: a
- * deployment that does throws, and the message then stays in the composer.
+ * Hold runs before the turn writes any row, and before Desktop spawns an
+ * external agent it runs locally. A deployment that refuses a run the user
+ * cannot pay for throws a `TRPCError` whose message is
+ * `ChatErrorType.InsufficientBudgetForAgentRunFee`, holding nothing: a server
+ * turn then writes nothing and the message stays in the composer under a
+ * notice that says why, and Desktop does not start the CLI.
  */
 export const holdAgentRunFee = async (_params: HoldAgentRunFeeParams): Promise<void> => {};
 

@@ -1,4 +1,5 @@
 import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
+import { useMemo } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -11,6 +12,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import { useTopicId } from '../../hooks/useTopicId';
+import { groupAntigravityModels } from './antigravityModels';
 import { useModelCatalog } from './useModelCatalog';
 
 /** Both the model and speed menus read the catalog of the actual execution host. */
@@ -55,5 +57,12 @@ export const useTargetModelCatalog = ({
     targetReady,
     type,
   });
-  return { ...catalog, targetReady };
+  const data = useMemo(
+    () =>
+      type === 'antigravity' && catalog.data
+        ? { ...catalog.data, models: groupAntigravityModels(catalog.data.models) }
+        : catalog.data,
+    [catalog.data, type],
+  );
+  return { ...catalog, data, targetReady };
 };

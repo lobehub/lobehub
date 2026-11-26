@@ -145,17 +145,11 @@ describe('BaseFileSearch', () => {
       expect(results[0].engine).toBe('mdfind');
     });
 
-    it('should handle undefined engine', async () => {
+    it('should infer content type without an engine', async () => {
       const options: SearchOptions = { keywords: 'test' };
       const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
 
       expect(results[0].engine).toBeUndefined();
-    });
-
-    it('should determine content type from extension', async () => {
-      const options: SearchOptions = { keywords: 'test' };
-      const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
-
       expect(results[0].contentType).toBe('code');
     });
   });

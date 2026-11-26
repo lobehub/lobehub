@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useTreeStore } from '@/store/tree';
 
+import { getRelativeY, resolveDropPosition } from './dragDropPosition';
 import { useResourceManagerStore } from './store';
 
 const FileIcon = lazy(() => import('@/components/FileIcon'));
@@ -117,6 +118,9 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
 
       let dropTarget = event.target as HTMLElement;
       let targetId: string | undefined;
+      let targetParentKey: string | undefined;
+      let allowReorder = true;
+      let isDropItem = false;
       let isFolder = false;
       let isRootDrop = false;
 
@@ -124,11 +128,53 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         const dataset = dropTarget.dataset;
         if (dataset.dropTargetId) {
           targetId = dataset.dropTargetId;
+          targetParentKey = dataset.parentKey;
+          allowReorder = dataset.allowReorder !== 'false';
+          isDropItem = dataset.dropItem === 'true';
           isFolder = dataset.isFolder === 'true';
           isRootDrop = dataset.rootDrop === 'true';
           break;
         }
         dropTarget = dropTarget.parentElement as HTMLElement;
+      }
+
+      const currentSelectedIds = selectedFileIdsRef.current;
+      const isDraggingSelection = currentSelectedIds.includes(drag.id);
+      const itemsToMove = isDraggingSelection ? currentSelectedIds : [drag.id];
+
+      const dropPosition =
+        isDropItem && targetId && dropTarget
+          ? resolveDropPosition({
+              allowReorder,
+              drag,
+              libraryId: useResourceManagerStore.getState().libraryId,
+              relY: getRelativeY(event.clientY, dropTarget.getBoundingClientRect()),
+              target: {
+                id: targetId,
+                isFolder,
+                parentKey: targetParentKey,
+              },
+            })
+          : null;
+
+      // Sibling insertion: the row keeps its parent and only its sortOrder moves.
+      if (targetId && (dropPosition === 'before' || dropPosition === 'after')) {
+        setCurrentDrag(null);
+
+        // Dropping a selection onto one of its own members is a no-op.
+        if (itemsToMove.includes(targetId)) return;
+
+        void useTreeStore
+          .getState()
+          .reorderItems(targetParentKey ?? '', itemsToMove, targetId, dropPosition)
+          .catch(() => {
+            toast.error(t('FileManager.actions.reorderError'));
+          });
+
+        if (isDraggingSelection) {
+          setSelectedFileIds([]);
+        }
+        return;
       }
 
       if (!isFolder && !isRootDrop) {
@@ -138,9 +184,6 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
 
       const toParent = isRootDrop ? '' : (targetId ?? '');
       const fromParent = drag.parentKey;
-      const currentSelectedIds = selectedFileIdsRef.current;
-      const isDraggingSelection = currentSelectedIds.includes(drag.id);
-      const itemsToMove = isDraggingSelection ? currentSelectedIds : [drag.id];
 
       if (!isRootDrop && targetId && itemsToMove.includes(targetId)) {
         setCurrentDrag(null);

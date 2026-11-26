@@ -47,6 +47,7 @@ import {
 } from './utils';
 
 export type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
+export { TaskTreeProjectMoveError } from './tree';
 export { isTaskIdentifierUniqueViolation, taskActivityActor } from './utils';
 
 export class TaskModel {
@@ -260,7 +261,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority' | 'project';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -279,6 +280,7 @@ export class TaskModel {
       limit: number;
       offset: number;
       priority?: number;
+      projectId?: string | null;
       tasks: TaskItem[];
       total: number;
     }>
@@ -300,6 +302,18 @@ export class TaskModel {
 
   async findAllDescendants(rootTaskId: string): Promise<TaskItem[]> {
     return tree.findAllDescendants(this.ctx, rootTaskId);
+  }
+
+  async hasSubtaskOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
+    return tree.hasSubtaskOutsideProject(this.ctx, taskId, projectId);
+  }
+
+  /**
+   * File an unfiled root task and all its descendants under `projectId` at once.
+   * Throws `TaskTreeProjectMoveError` when the tree cannot move as a whole.
+   */
+  async moveUnfiledTreeToProject(rootId: string, projectId: string): Promise<TaskItem | null> {
+    return tree.moveUnfiledTreeToProject(this.ctx, rootId, projectId);
   }
 
   async getTaskTree(rootTaskId: string): Promise<TaskItem[]> {
@@ -547,6 +561,10 @@ export class TaskModel {
 
   async removeDependency(taskId: string, dependsOnId: string): Promise<void> {
     return dependencies.removeDependency(this.ctx, taskId, dependsOnId);
+  }
+
+  async hasDependencyOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
+    return dependencies.hasDependencyOutsideProject(this.ctx, taskId, projectId);
   }
 
   async getDependencies(taskId: string) {

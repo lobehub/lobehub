@@ -1,11 +1,9 @@
-import { isDesktop } from '@lobechat/const';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect } from 'react';
 
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import type { DeviceListResult } from '@/store/device/useDeviceList';
-import { useElectronStore } from '@/store/electron';
 
 import type {
   ChannelAgentDraft,
@@ -16,6 +14,7 @@ import type {
 import {
   changeChannelAgentDevice,
   getChannelAgentIssue,
+  isRemoteChannelAgent,
   reconcileChannelAgentDraft,
 } from './agentEnvironment';
 
@@ -32,19 +31,15 @@ export const useChannelAgentDraft = (
     (s) => s.agentConfigReplica.entries[agentId]?.source === 'server',
   );
   const notFound = useAgentStore((s) => s.agentNotFoundMap[agentId]);
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId, {
+  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId, {
     topicId: null,
   });
   const environment: ChannelAgentEnvironment = {
     agencyConfig,
-    currentDeviceId,
     devices: devices.data,
     devicesConfirmed: devices.isConfirmed,
     devicesError: devices.error,
-    isDesktop,
     model: agent?.model ?? undefined,
-    workspaceScoped,
   };
   const sourceIssue: ChannelAgentIssue | undefined = sync.error
     ? 'configurationFailed'
@@ -86,7 +81,7 @@ export const useChannelAgentDraft = (
     change,
     changeDevice,
     draft: resolved,
-    requiresDevice: getChannelAgentIssue({ agentId }, environment) === 'deviceRequired',
+    remote: isRemoteChannelAgent(environment),
     retry: sync.mutate,
     sync,
   };

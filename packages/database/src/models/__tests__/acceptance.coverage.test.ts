@@ -1,12 +1,12 @@
 // @vitest-environment node
-import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
+import { ProjectRepository } from '../../repositories/project';
 import { topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AcceptanceModel } from '../acceptance';
-import { ProjectModel } from '../project';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -20,12 +20,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   // Acceptances, projects and topics all cascade with their owner.
-  await serverDB.delete(users).where(inArray(users.id, [userId]));
+  await deleteTestUsers(serverDB, [userId]);
 });
 
 describe('AcceptanceModel coverage', () => {
   it('keeps the recorded project while a later ensure fills a missing requirement', async () => {
-    const project = await new ProjectModel(serverDB, userId).create({
+    const project = await new ProjectRepository(serverDB, userId).create({
       identifier: 'ACOV',
       name: 'Coverage project',
     });
@@ -33,7 +33,7 @@ describe('AcceptanceModel coverage', () => {
     const created = await model.ensureForSubject('topic', topicIds[0], { projectId: project.id });
     expect(created.requirement).toBeNull();
 
-    const other = await new ProjectModel(serverDB, userId).create({
+    const other = await new ProjectRepository(serverDB, userId).create({
       identifier: 'ACOT',
       name: 'Other project',
     });

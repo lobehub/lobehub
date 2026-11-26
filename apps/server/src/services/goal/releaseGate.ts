@@ -10,9 +10,11 @@ import debug from 'debug';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyReportModel } from '@/database/models/verifyReport';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService } from '../verify/acceptanceService';
+import { carriedUnitBrief } from './rolloutBatch';
 import type { RolloutGateResult } from './rolloutGate';
 
 const log = debug('lobe-server:goal-release-gate');
@@ -63,6 +65,7 @@ export const buildReleaseGateDossier = (
     if (!node) return [];
     const spend = node.taskId ? spendByTask.get(node.taskId) : undefined;
     const acceptance = graph.acceptances?.[nodeId];
+    const brief = carriedUnitBrief(node);
     return [
       {
         ...(acceptance && {
@@ -82,11 +85,17 @@ export const buildReleaseGateDossier = (
           .map((link) => ({
             ...(link.work!.type === 'document' &&
               link.work!.resourceId && { documentId: link.work!.resourceId }),
+            ...(link.work!.identifier && { identifier: link.work!.identifier }),
+            ...(link.work!.resourceType && { resourceType: link.work!.resourceType }),
+            ...(link.work!.status && { status: link.work!.status }),
             title: link.work!.title ?? link.work!.identifier ?? '',
             type: link.work!.type,
             ...(link.work!.url && { url: link.work!.url }),
+            workId: link.work!.workId,
           })),
-        ...(node.description && { brief: node.description }),
+        // The unit's own note, not the plan-skill instruction every unit
+        // carries: the plan itself is the dossier's first section.
+        ...(brief && { brief }),
         nodeId,
         runs: spend?.runs ?? 0,
         status: node.status,
@@ -151,6 +160,42 @@ const gatePlan = (dossier: GoalReleaseGateDossier): VerifyCheckItem[] => {
 };
 
 /**
+ * Freezes each unit's outputs the way the conversation's Work cards show them,
+ * so the review lists them with the same cards. Best-effort: a failed read
+ * leaves the dossier with its plain artifact list.
+ */
+export const withUnitWorks = async (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string },
+  dossier: GoalReleaseGateDossier,
+): Promise<GoalReleaseGateDossier> => {
+  const ids = dossier.units.flatMap((unit) =>
+    unit.artifacts.flatMap((artifact) => (artifact.workId ? [artifact.workId] : [])),
+  );
+  if (ids.length === 0) return dossier;
+  try {
+    const summaries = await new WorkModel(db, scope.userId, scope.workspaceId).listSummariesByIds(
+      ids,
+    );
+    const byId = new Map(summaries.map((summary) => [summary.id, summary]));
+    return {
+      ...dossier,
+      units: dossier.units.map((unit) => {
+        const workIds = new Set(unit.artifacts.map((artifact) => artifact.workId));
+        const works = [...workIds].flatMap((id) => {
+          const work = id && byId.get(id);
+          return work ? [work] : [];
+        });
+        return works.length ? { ...unit, works } : unit;
+      }),
+    };
+  } catch (error) {
+    log('release gate: unit works not read: %O', error);
+    return dossier;
+  }
+};
+
+/**
  * Open the acceptance a held release is reviewed on: one aggregate per gate
  * node, one round carrying the frozen dossier, settled at once so the owner
  * can decide on it. Best-effort for the caller — a gate that could not get its
@@ -180,7 +225,7 @@ export const openReleaseGateAcceptance = async (
   const plan = gatePlan(dossier);
   const run = await new VerifyRunModel(db, scope.userId, scope.workspaceId).create({
     goal: requirement,
-    metadata: { releaseGate: dossier },
+    metadata: { releaseGate: await withUnitWorks(db, scope, dossier) },
     plan,
     scenario: 'generic',
     source: 'agent',

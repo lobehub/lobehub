@@ -28,6 +28,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import { useLocalFilePreview, useLocalFilePreviewStore } from '@/store/localFilePreview';
+import { densityVars } from '@/styles/densityVars';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownMetadata,
@@ -101,7 +102,7 @@ const frontmatterStyles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -153,6 +154,7 @@ interface TextPreviewPaneProps {
   reloading?: boolean;
   resourceBaseUrl?: string;
   sandboxTopicId?: string;
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -170,6 +172,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     reloading = false,
     resourceBaseUrl,
     sandboxTopicId,
+    topicId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -246,11 +249,12 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               {...props}
               deviceId={deviceId}
               markdownFilePath={filePath}
+              topicId={topicId}
               workingDirectory={workingDirectory}
             />
           ),
         }) satisfies MarkdownProps['components'],
-      [deviceId, filePath, workingDirectory],
+      [deviceId, filePath, topicId, workingDirectory],
     );
 
     const [modeByScope, setModeByScope] = useState<Record<string, TextPreviewMode>>({});
@@ -399,6 +403,7 @@ interface ActiveFileViewProps {
   filePath: string;
   /** Read the file live from the topic's cloud sandbox instead of a filesystem. */
   sandboxTopicId?: string;
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -409,6 +414,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     deviceId,
     filePath,
     sandboxTopicId,
+    topicId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -421,9 +427,10 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         deviceId,
         filePath,
         sandboxTopicId,
+        topicId,
         workingDirectory,
       }),
-      [allowExternalFilePreview, deviceId, filePath, sandboxTopicId, workingDirectory],
+      [allowExternalFilePreview, deviceId, filePath, sandboxTopicId, topicId, workingDirectory],
     );
     const [useFetchPreview, beginSave, refreshPreview] = useLocalFilePreviewStore((s) => [
       s.useFetchPreview,
@@ -521,6 +528,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         reloading={isValidating}
         resourceBaseUrl={preview.resourceBaseUrl}
         sandboxTopicId={sandboxTopicId}
+        topicId={topicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaveStart={handleSaveStart}
@@ -556,6 +564,7 @@ const Body = memo(() => {
         deviceId={activeFile.deviceId}
         filePath={activeFile.filePath}
         sandboxTopicId={activeFile.sandboxTopicId}
+        topicId={activeFile.topicId}
         workingDirectory={activeFile.workingDirectory}
       />
     </Flexbox>

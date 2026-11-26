@@ -36,6 +36,18 @@ export class UnsupportedContentError extends Error {
 }
 
 /**
+ * The site answered with an anti-bot challenge / block page (Cloudflare "Just a
+ * moment...", Akamai "Access Denied", ...) instead of the document. Asking the same
+ * providers again meets the same wall; only a real browser may get through.
+ */
+export class BlockedPageError extends Error {
+  constructor(message: string = 'The site served an anti-bot verification page') {
+    super(message);
+    this.name = 'BlockedPageError';
+  }
+}
+
+/**
  * A crawl provider answered with a non-2xx status that is not a dead link.
  * `status` lets callers decide whether the failure is transient (5xx / 429 / 408)
  * or a rejected request (other 4xx) that will fail the same way on retry.
@@ -70,6 +82,7 @@ const RETRYABLE_HTTP_STATUS = new Set([408, 429]);
  * Whether re-issuing the exact same crawl could plausibly succeed.
  *
  * - dead link (404/410), invalid URL, resource file: authoritative → never retry
+ * - anti-bot challenge page: the same providers meet the same wall → never retry
  * - provider 4xx other than 408/429: request was rejected → never retry
  * - network / timeout / 5xx / 429 / 408 / empty body: transient → retry is fine
  */
@@ -77,7 +90,8 @@ export const isRetryableCrawlError = (error: unknown): boolean => {
   if (
     error instanceof PageNotFoundError ||
     error instanceof InvalidUrlError ||
-    error instanceof UnsupportedContentError
+    error instanceof UnsupportedContentError ||
+    error instanceof BlockedPageError
   ) {
     return false;
   }

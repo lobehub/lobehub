@@ -1,15 +1,15 @@
-import type * as McpSdk from '@modelcontextprotocol/client';
+import type * as McpElicitation from '@lobechat/mcp-elicitation';
 import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
 
 const connect = vi.hoisted(() => vi.fn());
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => {
-  const original = await importOriginal<typeof McpSdk>();
+vi.mock('@lobechat/mcp-elicitation', async (importOriginal) => {
+  const original = await importOriginal<typeof McpElicitation>();
   return {
     ...original,
-    Client: class extends original.Client {
+    McpProtocolClient: class extends original.McpProtocolClient {
       connect = connect;
     },
   };

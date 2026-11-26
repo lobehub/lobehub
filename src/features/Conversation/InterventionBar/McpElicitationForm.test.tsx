@@ -11,7 +11,6 @@ const probes = vi.hoisted(() => ({ resolve: vi.fn(), refresh: vi.fn(), mutate: v
 vi.mock('@/services/mcpElicitation', () => ({
   mcpElicitationService: { resolve: probes.resolve },
 }));
-vi.mock('@/libs/swr', () => ({ mutate: probes.mutate }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (select: any) => select({ refreshMessages: probes.refresh }),
 }));
@@ -25,7 +24,9 @@ vi.mock('../store', () => ({
 vi.mock('../hooks/useConversationResourceAccess', () => ({
   useConversationResourceAccess: () => ({ canUseResource: true }),
 }));
+vi.mock('@/libs/swr/useCacheScope', () => ({ useCacheScope: () => 'owner:personal' }));
 vi.mock('../hooks/useFetchMcpElicitations', () => ({ useFetchMcpElicitations: () => ({}) }));
+vi.mock('../store/mcpProjection', () => ({ revalidatePendingMcpInputs: probes.mutate }));
 vi.mock('@/services/electron/system', () => ({ electronSystemService: {} }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

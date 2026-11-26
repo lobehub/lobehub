@@ -11,10 +11,11 @@ const { clientOptions, listTools, notificationHandlers } = vi.hoisted(() => ({
   notificationHandlers: new Map<string, () => void>(),
 }));
 
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
+vi.mock('@lobechat/mcp-elicitation', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Client: class {
+  McpProtocolClient: class {
     getProtocolEra = () => 'legacy';
+    getServerVersion = () => ({ icons: [{ src: 'https://example.com/server.png' }] });
     listTools = listTools;
     setNotificationHandler = (method: string, handler: () => void) =>
       notificationHandlers.set(method, handler);
@@ -213,4 +214,25 @@ describe('web MCPClient.isToolCallableByApp for names the listing did not name',
     await expect(client.isToolCallableByApp('search')).resolves.toBe(true);
     await expect(client.isToolCallableByApp('not_listed')).resolves.toBe(false);
   });
+});
+
+describe('MCPClient legacy UI feature gate', () => {
+  it.each([false, true])(
+    'only interprets OpenAI compatibility with mcpApps=%s',
+    async (mcpApps) => {
+      listTools.mockResolvedValue({
+        tools: [
+          {
+            _meta: { 'openai/outputTemplate': 'ui://legacy', 'openai/visibility': 'private' },
+            name: 'legacy',
+          },
+        ],
+      });
+      const client = new MCPClient(params, { mcpApps });
+      await expect(client.getToolUiResourceUri('legacy')).resolves.toBe(
+        mcpApps ? 'ui://legacy' : undefined,
+      );
+      await expect(client.isToolHiddenFromModel('legacy')).resolves.toBe(mcpApps);
+    },
+  );
 });

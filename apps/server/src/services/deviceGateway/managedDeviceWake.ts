@@ -321,3 +321,25 @@ export const awaitManagedDeviceForToolCall = async (
   });
   return online ? 'online' : buildDeviceWakingResult(deviceId);
 };
+
+/**
+ * Start a managed cloud device the model activated with `activateDevice`.
+ * A cloud device is always online for the model, so activation does not wait
+ * for it to connect: its tool calls wait for it instead
+ * ({@link awaitManagedDeviceForToolCall}).
+ *
+ * - `undefined`: not a managed device, none is available, or the provider
+ *   refused the wake. Report the device as offline.
+ * - `'online'`: it is online already.
+ * - `'starting'`: the provider accepted the wake.
+ */
+export const startManagedDeviceForActivation = async (
+  caller: CallerScope,
+  deviceId: string,
+): Promise<'online' | 'starting' | undefined> => {
+  const target = await findManagedDevice(caller, deviceId);
+  if (!target) return;
+  if (await isManagedDeviceOnline(caller.userId, target)) return 'online';
+
+  return (await wakeManagedDevice(caller.userId, target)) ? 'starting' : undefined;
+};

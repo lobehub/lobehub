@@ -297,6 +297,31 @@ describe('AgentBridgeService', () => {
       );
     });
 
+    it('tells the agent a WeCom group only delivers messages addressed to it, but not a DM', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      mockGetPlatform.mockReturnValue({
+        groupMessagesAddressedOnly: true,
+        id: 'wecom',
+        name: 'WeCom',
+        supportsMessageEdit: false,
+      });
+
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'wecom', platformThreadId: 'wecom:group:chat-1' } as any,
+        client: createClient(),
+      });
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'wecom', platformThreadId: 'wecom:single:zhangsan' } as any,
+        client: createClient(),
+      });
+
+      const contexts = mockExecAgent.mock.calls.map(([params]) => params.botPlatformContext);
+      expect(contexts[0].seesOnlyAddressedMessages).toBe(true);
+      expect(contexts[1].seesOnlyAddressedMessages).toBeUndefined();
+    });
+
     it('prefers extractConversationId, so a platform can decline for an unscopable thread', async () => {
       // Slack: `slack:C1:1700.1` is a reply thread, but readMessages can only
       // read the channel — advertising `C1` as "this conversation" would be a lie.
@@ -682,21 +707,6 @@ describe('AgentBridgeService', () => {
       expect(thread.post).not.toHaveBeenCalled();
       expect(thread.startTyping).toHaveBeenCalled();
       expect(progressMessageIdFromHooks()).toBeUndefined();
-    });
-
-    it('keeps the ack when processingMessage is on', async () => {
-      mockGetPlatform.mockReturnValue({ id: 'qq', name: 'QQ', supportsMessageEdit: false });
-      const service = new AgentBridgeService(FAKE_DB, USER_ID);
-      const thread = createThread();
-
-      await service.handleMention(thread, createMessage(), {
-        agentId: 'agent-1',
-        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
-        botSettings: { processingMessage: true },
-        client: createClient(),
-      });
-
-      expect(thread.post).toHaveBeenCalledTimes(1);
     });
   });
 

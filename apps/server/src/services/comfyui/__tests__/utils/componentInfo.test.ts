@@ -283,18 +283,6 @@ describe('componentInfo.ts', () => {
       expect(() => isSystemComponent('any-file.safetensors')).not.toThrow();
     });
 
-    it('should handle corrupted COMPONENT_NODE_MAPPINGS gracefully', () => {
-      // Test with a component that exists in SYSTEM_COMPONENTS but has invalid type
-      const result = getComponentInfo('invalid-component.bin');
-      expect(result).toBeUndefined();
-    });
-
-    it('should handle missing properties in config', () => {
-      // Test with a component that has invalid type in our mock
-      const result = getComponentInfo('invalid-component.bin');
-      expect(result).toBeUndefined();
-    });
-
     it('should handle very long filenames', () => {
       const longFilename = 'a'.repeat(1000) + '.safetensors';
       expect(() => {

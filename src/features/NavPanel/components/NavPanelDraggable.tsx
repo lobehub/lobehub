@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, DraggablePanel } from '@lobehub/ui';
+import { createStaticStyles, cssVar, DraggablePanel } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { Activity, memo, Suspense, useMemo, useRef } from 'react';
 
@@ -10,25 +10,21 @@ import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFul
 import Footer from '@/features/HomeSidebar/Footer';
 import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
-import { LIST_COLUMN_BACKGROUND } from '@/features/NavRail/const';
-import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useGlobalStore } from '@/store/global';
 import {
   NAV_PANEL_MAX_WIDTH,
   NAV_PANEL_MIN_WIDTH,
   systemStatusSelectors,
 } from '@/store/global/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { isMacOS } from '@/utils/platform';
 
+import { NavPanelDensityContext } from '../density';
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
 import { BACK_BUTTON_ID } from './BackButton';
 
 const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
-  // `im_layout`: the list column inside the rail wrap, divided from the content.
-  imPanel: css`
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${LIST_COLUMN_BACKGROUND};
-  `,
   content: css`
     position: relative;
 
@@ -89,12 +85,12 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         width 0.2s ${cssVar.motionEaseOut};
     }
     #${BACK_BUTTON_ID} {
-      width: 24px !important;
+      width: ${densityVars.iconBox} !important;
     }
 
     &:hover {
       #${TOGGLE_BUTTON_ID} {
-        width: 32px !important;
+        width: ${densityVars.iconBox} !important;
         opacity: 1;
       }
 
@@ -127,6 +123,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     systemStatusSelectors.isStatusInit(s),
   ]);
   const handleSizeChange = useNavPanelSizeChangeHandler();
+  const interfaceDensity = useInterfaceDensity();
 
   // Defer DraggablePanel mount until system status hydrates; otherwise defaultSize
   // captures the pre-hydration default and the DOM drifts off NavigationBar's live width.
@@ -135,17 +132,12 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
-  const imLayout = useImLayout();
   const styles = useMemo(
     () => ({
-      background: imLayout
-        ? LIST_COLUMN_BACKGROUND
-        : isDesktop && isMacOS()
-          ? MAC_VIBRANCY_BACKGROUND
-          : cssVar.colorBgLayout,
+      background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
       zIndex: 11,
     }),
-    [imLayout],
+    [],
   );
 
   if (defaultWidthRef.current === 0) {
@@ -158,7 +150,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
 
   return (
     <DraggablePanel
-      className={cx(draggableStyles.panel, imLayout && draggableStyles.imPanel)}
+      className={draggableStyles.panel}
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -171,35 +163,34 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >
-      <div className={draggableStyles.inner}>
-        {/* Home stays mounted while a route-owned panel is active so its list
+      <NavPanelDensityContext value={interfaceDensity}>
+        <div className={draggableStyles.inner}>
+          {/* Home stays mounted while a route-owned panel is active so its list
             state survives the round trip. Activity keeps the fibers but not the
             visibility, so the layer is force-hidden like HomeLayout does. */}
-        {homeContent && (
-          <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
-            <div
-              className={draggableStyles.layer}
-              style={isHomeActive ? undefined : hiddenLayerStyle}
-            >
-              {homeContent}
+          {homeContent && (
+            <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
+              <div
+                className={draggableStyles.layer}
+                style={isHomeActive ? undefined : hiddenLayerStyle}
+              >
+                {homeContent}
+              </div>
+            </Activity>
+          )}
+          {!isHomeActive && (
+            <div className={draggableStyles.layer} key={activeContent.key}>
+              {activeContent.node}
             </div>
-          </Activity>
-        )}
-        {!isHomeActive && (
-          <div className={draggableStyles.layer} key={activeContent.key}>
-            {activeContent.node}
-          </div>
-        )}
-      </div>
-      <Suspense fallback={null}>
-        <NavPanelUpgradeEntry />
-      </Suspense>
-      {/* The rail owns settings and help under `im_layout`. */}
-      {!imLayout && (
+          )}
+        </div>
+        <Suspense fallback={null}>
+          <NavPanelUpgradeEntry />
+        </Suspense>
         <Suspense>
           <Footer />
         </Suspense>
-      )}
+      </NavPanelDensityContext>
     </DraggablePanel>
   );
 });

@@ -194,11 +194,17 @@ export interface ReviewView {
         before: string[];
         differs: boolean;
         label: string;
+        movedTo?: string[];
         oneSided: boolean;
       }>;
       slot: string;
       standIn?: string;
     }>;
+    counterpart?: 'base' | 'head';
+    moved: Record<
+      string,
+      Array<{ selectors: string[]; slot: string; tags: string[]; text: string }>
+    >;
     source: Partial<Record<'base' | 'head', Record<string, string>>>;
     usage: Partial<Record<'base' | 'head', string[]>>;
   };

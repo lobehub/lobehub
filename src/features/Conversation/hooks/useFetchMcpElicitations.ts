@@ -1,28 +1,26 @@
 import { useEffect } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { mcpElicitationKeys } from '@/libs/swr/keys';
-import { mcpElicitationService } from '@/services/mcpElicitation';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { mcpElicitationService, type PendingMcpElicitation } from '@/services/mcpElicitation';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useConversationStore } from '../store';
+import { pendingMcpInputs } from '../store/mcpProjection';
 import { mcpActivityDeadline } from './mcpActivity';
 
 export function useFetchMcpElicitations() {
   const userId = useUserStore(userProfileSelectors.userId);
+  const scope = useCacheScope();
   const topicId = useConversationStore((s) => s.context.topicId);
   const threadId = useConversationStore((s) => s.context.threadId);
   const deadline = useConversationStore((s) => mcpActivityDeadline(s.dbMessages));
-  const response = useClientDataSWR(
-    topicId && userId && deadline ? mcpElicitationKeys.pending(userId, topicId, threadId) : null,
-    () => mcpElicitationService.pending(topicId!, threadId),
+  const response = pendingMcpInputs.useReplica(
+    topicId && userId && deadline ? { scope, topicId, threadId } : null,
     {
       dedupingInterval: 2_000,
-      refreshInterval: (data) =>
+      refreshInterval: (data?: PendingMcpElicitation[]) =>
         Date.now() >= deadline ? 0 : data?.some((item) => item.resolving) ? 10_000 : 3_000,
-      errorRetryCount: 3,
-      errorRetryInterval: 5_000,
       refreshWhenHidden: false,
       refreshWhenOffline: false,
     },

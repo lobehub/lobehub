@@ -4,7 +4,6 @@ import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
 import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
 import {
   ActionIcon,
-  Avatar,
   createStaticStyles,
   cssVar,
   cx,
@@ -16,10 +15,12 @@ import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { densityVars } from '@/styles/densityVars';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -58,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   cardInfo: css`
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   clickable: css`
     cursor: pointer;
@@ -144,6 +145,9 @@ const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'artboard': {
+      return 'work.type.artboard';
+    }
     case 'canvas': {
       return 'work.type.canvas';
     }
@@ -152,6 +156,9 @@ const workTypeKey = (item: WorkSummaryItem) => {
     }
     case 'file': {
       return 'work.type.file';
+    }
+    case 'collection': {
+      return 'work.type.collection';
     }
     case 'github_issue': {
       return 'work.type.githubIssue';
@@ -164,6 +171,9 @@ const workTypeKey = (item: WorkSummaryItem) => {
     }
     case 'linear_issue': {
       return 'work.type.linearIssue';
+    }
+    case 'link': {
+      return 'work.type.link';
     }
     case 'task': {
       return 'work.type.task';
@@ -246,12 +256,12 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
         <Flexbox horizontal align={'baseline'} className={styles.footer} gap={7}>
           {agent && (
             <>
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={item.originAgentId}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
                 className={styles.agentAvatar}
-                shape={'square'}
+                name={agent.title}
                 size={24}
               />
               <Flexbox className={styles.identityMeta} gap={1}>

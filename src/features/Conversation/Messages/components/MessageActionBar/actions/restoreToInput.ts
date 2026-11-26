@@ -4,13 +4,11 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
-import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 import { useFileStore } from '@/store/file';
-import { type UploadFileItem } from '@/types/files/upload';
 
 import { useConversationStore } from '../../../../store';
 import { defineAction } from '../defineAction';
+import { buildRestoredInput } from './buildRestoredInput';
 
 /**
  * Restore a previously sent user message — its text plus every image/file
@@ -37,15 +35,11 @@ export const restoreToInputAction = defineAction({
         handleClick: () => {
           if (!editor) return;
 
-          const { content, imageList, fileList, videoList, audioList, editorData } = ctx.data;
+          const { editorData, files, markdown } = buildRestoredInput(ctx.data);
 
           // 1. Restore text. Prefer the persisted editor JSON (round-trips rich
           //    formatting) and fall back to the markdown content otherwise.
-          const markdown = unescapeMarkdown(cleanBotPromptTags(content ?? ''));
-          const hasEditorData =
-            editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
-
-          if (hasEditorData) {
+          if (editorData) {
             editor.setJSONState(editorData);
           } else {
             editor.setDocument('markdown', markdown);
@@ -54,50 +48,11 @@ export const restoreToInputAction = defineAction({
           // fire onMarkdownContentChange, and the send-button gating reads it.
           updateInputMessage(markdown);
 
-          // 2. Rebuild the pending attachments. These files are already uploaded,
-          //    so we only need their db id (send reads `f.id`) plus a url for the
-          //    thumbnail; the `file` stand-in just feeds the preview UI.
-          //    `skipRemoveFile` marks them as references to already-persisted
-          //    files — removing one from the composer must NOT delete the file
-          //    still backing the original message.
-          // `alt`-only items (image/video/audio) carry no size or mime, so the
-          // `file` stand-in gets a generic `type` prefix good enough for the
-          // preview's `startsWith('image'|'video')` branch.
-          const fromMedia = (
-            list: { alt: string; id: string; url: string }[] | undefined,
-            typePrefix: string,
-          ): UploadFileItem[] =>
-            (list ?? []).map((item) => ({
-              file: { name: item.alt || item.id, size: 0, type: `${typePrefix}/*` } as File,
-              fileUrl: item.url,
-              id: item.id,
-              previewUrl: item.url,
-              skipRemoveFile: true,
-              status: 'success' as const,
-            }));
-
-          const restored: UploadFileItem[] = [
-            ...fromMedia(imageList, 'image'),
-            ...fromMedia(videoList, 'video'),
-            ...fromMedia(audioList, 'audio'),
-            // Tombstoned attachments (viewer lost access to the file) carry no
-            // name/url — nothing usable to reattach, so drop them.
-            ...(fileList ?? [])
-              .filter((f) => !f.inaccessible)
-              .map((f) => ({
-                file: { name: f.name, size: f.size, type: f.fileType } as File,
-                fileUrl: f.url,
-                id: f.id,
-                previewUrl: f.url,
-                skipRemoveFile: true,
-                status: 'success' as const,
-              })),
-          ];
-
+          // 2. Rebuild the pending attachments.
           const fileStore = useFileStore.getState();
           fileStore.clearChatUploadFileList(contextKey);
-          if (restored.length > 0) {
-            fileStore.dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
+          if (files.length > 0) {
+            fileStore.dispatchChatUploadFileList(contextKey, { files, type: 'addFiles' });
           }
 
           editor.focus();

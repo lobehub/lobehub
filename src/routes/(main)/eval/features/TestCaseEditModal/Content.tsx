@@ -13,9 +13,11 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -43,7 +45,11 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
+  /** Save failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | undefined>();
+
   const handleFinish = async (values: any) => {
+    setError(undefined);
     onLoadingChange?.(true);
     try {
       const tags = values.tags
@@ -60,7 +66,8 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
           input: values.input,
         },
         evalConfig:
-          values.evalMode === 'llm-rubric' && values.evalConfig?.judgePrompt
+          (values.evalMode === 'llm-rubric' || values.evalMode === 'rule-checklist') &&
+          values.evalConfig?.judgePrompt
             ? values.evalConfig
             : null,
         evalMode: values.evalMode || null,
@@ -74,8 +81,9 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       await onSuccess?.(testCase.datasetId);
       toast.success(t('testCase.edit.success'));
       close();
-    } catch {
-      toast.error(t('testCase.edit.error'));
+    } catch (cause) {
+      console.error('Failed to update eval test case:', cause);
+      setError(toInlineError(t('testCase.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -92,6 +100,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       tags: testCase.metadata?.tags?.join(', '),
     },
     onSubmit: handleFinish,
+    onValuesChange: () => setError(undefined),
   });
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -133,10 +142,11 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
             { label: t('evalMode.equals'), value: 'equals' },
             { label: t('evalMode.contains'), value: 'contains' },
             { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
+            { label: t('evalMode.rule-checklist'), value: 'rule-checklist' },
           ]}
         />
       </Form.Field>
-      {evalModeValue === 'llm-rubric' && (
+      {(evalModeValue === 'llm-rubric' || evalModeValue === 'rule-checklist') && (
         <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
           <TextArea
             autoSize={{ maxRows: 8, minRows: 3 }}
@@ -188,6 +198,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
           },
         ]}
       />
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

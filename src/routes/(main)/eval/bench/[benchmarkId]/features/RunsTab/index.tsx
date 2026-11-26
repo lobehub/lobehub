@@ -6,8 +6,9 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
-import { createRunCreateModal } from '../RunCreateModal';
+import { useCreateRun } from '../RunCreateModal/useCreateRun';
 import { createRunEditModal } from '../RunEditModal';
 import EmptyState from './EmptyState';
 import RunCard from './RunCard';
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 640px) {
       grid-template-columns: 1fr;
@@ -48,6 +49,8 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const runList = useEvalStore(runSelectors.runList(benchmarkId));
   const refreshRuns = useEvalStore((s) => s.refreshRuns);
   useFetchRuns(benchmarkId);
+  const { createRun, lobeBench } = useCreateRun(benchmarkId);
+  const createLabel = lobeBench ? t('lobeBench.benchmark.newExperiment') : t('run.actions.create');
 
   const sortedRuns = useMemo(
     () =>
@@ -90,19 +93,14 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
               onChange={setStatusFilter}
             />
           </Flexbox>
-          <Button
-            icon={Plus}
-            size="small"
-            type="primary"
-            onClick={() => createRunCreateModal({ benchmarkId })}
-          >
-            {t('run.actions.create')}
+          <Button icon={Plus} size="small" type="primary" onClick={() => createRun()}>
+            {createLabel}
           </Button>
         </Flexbox>
       )}
 
       {sortedRuns.length === 0 ? (
-        <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
+        <EmptyState createLabel={createLabel} onCreate={() => createRun()} />
       ) : filteredRuns.length === 0 ? (
         <Flexbox className={styles.filterEmpty}>
           <Text color={cssVar.colorTextTertiary}>{t('run.filter.empty')}</Text>

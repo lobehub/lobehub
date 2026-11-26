@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "이전 버전 활성화됨",
   "artifacts.deploy.publish": "게시",
   "artifacts.deploy.publishNewVersion": "이 버전 게시",
+  "artifacts.deploy.quotaUnavailable": "배포 한도 확인을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
   "artifacts.deploy.serviceOverloaded": "아티팩트 호스팅이 일시적으로 과부하 상태입니다. 잠시 후 다시 게시를 시도하십시오.",
   "artifacts.deploy.success": "게시 완료",
   "artifacts.deploy.writeInProgress": "다른 배포 변경 작업이 진행 중입니다. 잠시 후 다시 시도하세요.",

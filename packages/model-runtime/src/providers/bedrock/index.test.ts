@@ -7,6 +7,7 @@ import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReadableStream } from '../../core/streams/utils';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
@@ -207,12 +208,7 @@ describe('LobeBedrockAI', () => {
 
       it('should handle text messages correctly', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -252,12 +248,7 @@ describe('LobeBedrockAI', () => {
       });
 
       it('should drop assistant prefill for Claude Opus 4.7', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
         await instance.chat({
@@ -281,12 +272,7 @@ describe('LobeBedrockAI', () => {
       });
 
       it('should drop ALL stacked trailing assistant messages', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
         // Failed-run placeholder rows can stack several assistant turns at the
@@ -320,12 +306,7 @@ describe('LobeBedrockAI', () => {
           modelIdMapping: { 'claude-sonnet-5': 'global.anthropic.claude-sonnet-5-5' },
           region: 'us-west-2',
         });
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
           Promise.resolve(mockStream) as any,
         );
@@ -351,12 +332,7 @@ describe('LobeBedrockAI', () => {
           modelIdMapping: { 'my-router-model': 'global.anthropic.claude-opus-5' },
           region: 'us-west-2',
         });
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
           Promise.resolve(mockStream) as any,
         );
@@ -378,12 +354,7 @@ describe('LobeBedrockAI', () => {
       });
 
       it('should convert Claude assistant reasoning signatures to thinking content', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
         await instance.chat({
@@ -421,12 +392,7 @@ describe('LobeBedrockAI', () => {
       });
 
       it('should not convert non-Claude reasoning signatures to thinking content', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
         await instance.chat({
@@ -459,12 +425,7 @@ describe('LobeBedrockAI', () => {
 
       it('should handle system prompt correctly', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -515,12 +476,7 @@ describe('LobeBedrockAI', () => {
 
       it('should call Anthropic model with supported opions', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -562,12 +518,7 @@ describe('LobeBedrockAI', () => {
 
       it('should handle tools parameter', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -607,12 +558,7 @@ describe('LobeBedrockAI', () => {
 
       it('should use default max_tokens when not provided', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -650,12 +596,7 @@ describe('LobeBedrockAI', () => {
 
       it('should call Anthropic model without unsupported opions', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -718,12 +659,7 @@ describe('LobeBedrockAI', () => {
 
       describe('Parameter conflict handling for Claude 4+ models', () => {
         it('should forward effort and visible thinking when Claude Opus 5 uses default adaptive thinking', async () => {
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
-            },
-          });
+          const mockStream = createReadableStream(['Hello, world!']);
           (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
           await instance.chat({
@@ -761,12 +697,7 @@ describe('LobeBedrockAI', () => {
         });
 
         it('should forward disabled thinking without effort for Claude Opus 5', async () => {
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
-            },
-          });
+          const mockStream = createReadableStream(['Hello, world!']);
           (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
 
           await instance.chat({
@@ -801,223 +732,92 @@ describe('LobeBedrockAI', () => {
           });
         });
 
-        it('should send only temperature for Claude 4+ models when both temperature and top_p are provided', async () => {
-          // Arrange
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
+        [
+          {
+            caseName:
+              'should send only temperature for Claude 4+ models when both temperature and top_p are provided',
+            input: {
+              model: 'anthropic.claude-opus-4-1-20250805-v1:0',
+              temperature: 0.8,
+              top_p: 0.9,
             },
-          });
-          const mockResponse = Promise.resolve(mockStream);
-          (instance['client'].send as Mock).mockResolvedValue(mockResponse);
-
-          // Act
-          await instance.chat({
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'anthropic.claude-opus-4-1-20250805-v1:0',
-            temperature: 0.8,
-            top_p: 0.9,
-          });
-
-          // Assert
-          expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
-            accept: 'application/json',
-            body: JSON.stringify({
-              anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 64_000,
-              messages: [
-                {
-                  content: [
-                    {
-                      cache_control: { type: 'ephemeral' },
-                      text: 'Hello',
-                      type: 'text',
-                    },
-                  ],
-                  role: 'user',
-                },
-              ],
-              temperature: 0.4, // temperature / 2, top_p omitted due to conflict
-            }),
-            contentType: 'application/json',
-            modelId: 'anthropic.claude-opus-4-1-20250805-v1:0',
-          });
-        });
-
-        it('should send only top_p for Claude 4+ models when temperature is not provided', async () => {
-          // Arrange
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
+            expectedMaxTokens: 64_000,
+            expectedModel: 'anthropic.claude-opus-4-1-20250805-v1:0',
+            expectedSampling: { temperature: 0.4 },
+          },
+          {
+            caseName:
+              'should send only top_p for Claude 4+ models when temperature is not provided',
+            input: { model: 'anthropic.claude-sonnet-4-20250514-v1:0', top_p: 0.9 },
+            expectedMaxTokens: 64_000,
+            expectedModel: 'anthropic.claude-sonnet-4-20250514-v1:0',
+            expectedSampling: { top_p: 0.9 },
+          },
+          {
+            caseName: 'should send both temperature and top_p for non-Claude-4+ models',
+            input: {
+              model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+              temperature: 0.8,
+              top_p: 0.9,
             },
-          });
-          const mockResponse = Promise.resolve(mockStream);
-          (instance['client'].send as Mock).mockResolvedValue(mockResponse);
-
-          // Act
-          await instance.chat({
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'anthropic.claude-sonnet-4-20250514-v1:0',
-            top_p: 0.9,
-          });
-
-          // Assert
-          expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
-            accept: 'application/json',
-            body: JSON.stringify({
-              anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 64_000,
-              messages: [
-                {
-                  content: [
-                    {
-                      cache_control: { type: 'ephemeral' },
-                      text: 'Hello',
-                      type: 'text',
-                    },
-                  ],
-                  role: 'user',
-                },
-              ],
-              top_p: 0.9, // temperature omitted since not provided
-            }),
-            contentType: 'application/json',
-            modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
-          });
-        });
-
-        it('should send both temperature and top_p for non-Claude-4+ models', async () => {
-          // Arrange
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
+            expectedMaxTokens: 8192,
+            expectedModel: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            expectedSampling: { temperature: 0.4, top_p: 0.9 },
+          },
+          {
+            caseName: 'should handle US region Claude 4+ model IDs correctly',
+            input: {
+              model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+              temperature: 0.6,
+              top_p: 0.8,
             },
-          });
-          const mockResponse = Promise.resolve(mockStream);
-          (instance['client'].send as Mock).mockResolvedValue(mockResponse);
+            expectedMaxTokens: 64_000,
+            expectedModel: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            expectedSampling: { temperature: 0.3 },
+          },
+          {
+            caseName: 'should handle standard Claude 4+ model IDs (non-Bedrock format)',
+            input: { model: 'claude-opus-4-1', temperature: 0.7, top_p: 0.95 },
+            expectedMaxTokens: 64_000,
+            expectedModel: 'claude-opus-4-1',
+            expectedSampling: { temperature: 0.35 },
+          },
+        ].forEach(({ caseName, input, expectedMaxTokens, expectedModel, expectedSampling }) => {
+          it(caseName, async () => {
+            // Arrange
+            const mockStream = createReadableStream(['Hello, world!']);
+            const mockResponse = Promise.resolve(mockStream);
+            (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
-          // Act
-          await instance.chat({
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-            temperature: 0.8,
-            top_p: 0.9,
-          });
+            // Act
+            await instance.chat({
+              messages: [{ content: 'Hello', role: 'user' }],
+              ...input,
+            });
 
-          // Assert
-          expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
-            accept: 'application/json',
-            body: JSON.stringify({
-              anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 8192,
-              messages: [
-                {
-                  content: [
-                    {
-                      cache_control: { type: 'ephemeral' },
-                      text: 'Hello',
-                      type: 'text',
-                    },
-                  ],
-                  role: 'user',
-                },
-              ],
-              temperature: 0.4, // temperature / 2
-              top_p: 0.9, // both parameters allowed for older models
-            }),
-            contentType: 'application/json',
-            modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-          });
-        });
-
-        it('should handle US region Claude 4+ model IDs correctly', async () => {
-          // Arrange
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
-            },
-          });
-          const mockResponse = Promise.resolve(mockStream);
-          (instance['client'].send as Mock).mockResolvedValue(mockResponse);
-
-          // Act
-          await instance.chat({
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-            temperature: 0.6,
-            top_p: 0.8,
-          });
-
-          // Assert
-          expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
-            accept: 'application/json',
-            body: JSON.stringify({
-              anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 64_000,
-              messages: [
-                {
-                  content: [
-                    {
-                      cache_control: { type: 'ephemeral' },
-                      text: 'Hello',
-                      type: 'text',
-                    },
-                  ],
-                  role: 'user',
-                },
-              ],
-              temperature: 0.3, // temperature / 2, top_p omitted due to conflict
-            }),
-            contentType: 'application/json',
-            modelId: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-          });
-        });
-
-        it('should handle standard Claude 4+ model IDs (non-Bedrock format)', async () => {
-          // Arrange
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
-            },
-          });
-          const mockResponse = Promise.resolve(mockStream);
-          (instance['client'].send as Mock).mockResolvedValue(mockResponse);
-
-          // Act
-          await instance.chat({
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-opus-4-1',
-            temperature: 0.7,
-            top_p: 0.95,
-          });
-
-          // Assert
-          expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
-            accept: 'application/json',
-            body: JSON.stringify({
-              anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 64_000,
-              messages: [
-                {
-                  content: [
-                    {
-                      cache_control: { type: 'ephemeral' },
-                      text: 'Hello',
-                      type: 'text',
-                    },
-                  ],
-                  role: 'user',
-                },
-              ],
-              temperature: 0.35, // temperature / 2, top_p omitted due to conflict
-            }),
-            contentType: 'application/json',
-            modelId: 'claude-opus-4-1',
+            // Assert
+            expect(InvokeModelWithResponseStreamCommand).toHaveBeenCalledWith({
+              accept: 'application/json',
+              body: JSON.stringify({
+                anthropic_version: 'bedrock-2023-05-31',
+                max_tokens: expectedMaxTokens,
+                messages: [
+                  {
+                    content: [
+                      {
+                        cache_control: { type: 'ephemeral' },
+                        text: 'Hello',
+                        type: 'text',
+                      },
+                    ],
+                    role: 'user',
+                  },
+                ],
+                ...expectedSampling,
+              }),
+              contentType: 'application/json',
+              modelId: expectedModel,
+            });
           });
         });
 
@@ -1031,12 +831,7 @@ describe('LobeBedrockAI', () => {
               'claude-opus-4-8': 'us.anthropic.claude-opus-4-8',
             },
           });
-          const mockStream = new ReadableStream({
-            start(controller) {
-              controller.enqueue('Hello, world!');
-              controller.close();
-            },
-          });
+          const mockStream = createReadableStream(['Hello, world!']);
           const mockResponse = Promise.resolve(mockStream);
           vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(mockResponse as any);
 
@@ -1124,12 +919,7 @@ describe('LobeBedrockAI', () => {
 
       it('should call Llama model with valid payload', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -1206,12 +996,7 @@ describe('LobeBedrockAI', () => {
 
       it('should use default max_tokens (400) when not provided', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 
@@ -1236,12 +1021,7 @@ describe('LobeBedrockAI', () => {
 
       it('should handle system message in Llama prompt', async () => {
         // Arrange
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue('Hello, world!');
-            controller.close();
-          },
-        });
+        const mockStream = createReadableStream(['Hello, world!']);
         const mockResponse = Promise.resolve(mockStream);
         (instance['client'].send as Mock).mockResolvedValue(mockResponse);
 

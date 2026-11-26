@@ -1,6 +1,11 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.76",
+  "version": "0.0.78",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobehub",
+    "directory": "apps/cli"
+  },
   "type": "module",
   "bin": {
     "lh": "dist/index.js",
@@ -39,6 +44,7 @@
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/device-mcp": "workspace:*",
     "@lobechat/eval-rubric": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/html-artifact": "workspace:*",

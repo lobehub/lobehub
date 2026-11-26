@@ -218,7 +218,7 @@ The executor only cuts a new assistant message when it receives a step-boundary 
 
 Relevant files:
 
-- `packages/heterogeneous-agents/src/adapters/codex.ts`
+- `packages/heterogeneous-agents/src/adapters/codex/index.ts`
 - `src/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor.ts`
 
 ## 5. Check Tool Persistence Invariants

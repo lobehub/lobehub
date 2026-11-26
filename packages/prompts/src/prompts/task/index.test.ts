@@ -130,6 +130,7 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).toContain('Automation: heartbeat, every 4h');
+    expect(result).not.toContain('When all deliverables are ready, request completion');
     expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
     // A tick may retire the loop only when the instruction's own end condition is met.
     expect(result).toContain('when the Instruction defines an end condition');
@@ -170,6 +171,7 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).not.toContain('Automation:');
+    expect(result).toContain('When all deliverables are ready, request completion');
   });
 
   it('should prioritize user feedback at the top', () => {
@@ -460,6 +462,7 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('console is clean');
     expect(result).toContain('include artifact paths, commands, and observed results');
     expect(result).toContain('an independent verifier decides whether this Task is complete');
+    expect(result).not.toContain('When all deliverables are ready, request completion');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
     expect(result).toMatch(/`lh acceptance install`.*plan path.*chapters on every recording/);
     expect(result).not.toContain('lh acceptance run result submit'); // the skill owns publishing
@@ -781,6 +784,27 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('Do not ask the owner again');
   });
 
+  it('offers a missed-evidence dispute next to rejection feedback and lists prior rulings', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          automaticReviewFeedback: 'The export button is not visible.',
+          disputeRulings: [
+            { outcome: 'upheld', title: 'Exports a PDF' },
+            { outcome: 'overruled', title: 'Shows totals' },
+          ],
+          round: 2,
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: 'Finish.', name: 'Report' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('dispute the criterion with kind `missed_evidence`');
+    expect(result).toContain('Exports a PDF — upheld. File the same `invalid_criterion` dispute');
+    expect(result).toContain('Shows totals — overruled. It stands; satisfy it.');
+  });
+
   it('omits the round budget suffix for uncapped goals', () => {
     const result = buildTaskRunPrompt(
       {
@@ -851,6 +875,29 @@ describe('human assignee formatting', () => {
     });
     expect(out).toContain('Assignee (member): usr_2');
     expect(out).not.toContain('Agent:');
+  });
+
+  it('formatTaskDetail shows where results post, and why the latest post was refused', () => {
+    const base = { identifier: 'T-1', instruction: 'do it', status: 'scheduled' };
+    expect(
+      formatTaskDetail({ ...base, channelDelivery: { channelId: 'chn_1', threadId: null } }),
+    ).toContain('Channel delivery: chn_1 (main timeline)');
+    const refused = formatTaskDetail({
+      ...base,
+      channelDelivery: {
+        channelId: 'chn_1',
+        lastError: {
+          at: '2026-11-25T08:00:00.000Z',
+          code: 'channel_unavailable',
+          message: 'The Agent is muted in this Channel',
+        },
+        threadId: 'cht_1',
+      },
+    });
+    expect(refused).toContain('Channel delivery: chn_1 (Thread cht_1)');
+    expect(refused).toContain(
+      'the latest post was refused (channel_unavailable: The Agent is muted in this Channel',
+    );
   });
 
   it('formatWorkspaceMembers renders one line per member with the id to pass back', () => {

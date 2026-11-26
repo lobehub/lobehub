@@ -44,6 +44,13 @@ export interface ThreadMetadata {
   /** Error details when task failed */
   error?: any;
   /**
+   * Native session of the external agent (Claude Code, Codex, …) that runs in
+   * this isolation thread. Kept per thread rather than on the topic, so a
+   * follow-up to that sub-agent resumes its own session and two external
+   * sub-agents in one conversation never share one.
+   */
+  heteroSessionId?: string;
+  /**
    * Model the subagent ran on (e.g. CC's per-turn `message.model`). Pinned
    * once for the run and rolled up here on finalize so historical / cold-load
    * viewers can surface it (e.g. the subagent inspector chip tooltip) without
@@ -54,6 +61,15 @@ export interface ThreadMetadata {
   onboardingUnderstanding?: OnboardingUnderstandingThreadMarker;
   /** Operation ID for tracking */
   operationId?: string;
+  /**
+   * Usage of the runs before the current one, fixed when the run claims the
+   * thread. The `total*` fields can't serve as this baseline: status polling
+   * rewrites them while the run is live.
+   */
+  runUsageBaseline?: Pick<
+    ThreadMetadata,
+    'totalCost' | 'totalLlmCalls' | 'totalTokens' | 'totalToolCalls'
+  >;
   /**
    * The specific tool_use id within `sourceMessageId` that spawned this thread.
    * Used to position the thread inline as a `task` block within the parent

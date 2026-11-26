@@ -523,6 +523,19 @@ describe('ModelRuntime', () => {
       schema: { name: 'test', schema: { type: 'object' as const, properties: {} } },
     };
 
+    it('keeps internal tool activation metadata outside the provider payload', async () => {
+      const { runtime, mockRuntimeAI } = createMockRuntime();
+      const plan = { results: [{ callId: 'call', content: 'Docs', toolNames: ['lookup'] }] };
+      const message = { role: 'tool' as const, tool_call_id: 'call', content: 'Activated' };
+      const payload = { ...chatPayload, messages: [{ ...message, toolActivationPlan: plan }] };
+      await runtime.chat(payload);
+      expect(mockRuntimeAI.chat).toHaveBeenCalledWith(
+        { ...payload, messages: [message] },
+        expect.objectContaining({ toolActivationPlan: plan }),
+      );
+      expect(payload.messages[0].toolActivationPlan).toBe(plan);
+    });
+
     describe('chat hooks', () => {
       it('beforeChat is called before runtime.chat', async () => {
         const beforeChat = vi.fn();
@@ -821,7 +834,7 @@ describe('ModelRuntime', () => {
       it('onGenerateObjectComplete prefers errorType from ChatCompletionErrorPayload over name/code', async () => {
         const onGenerateObjectComplete = vi.fn();
         const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
-        // Shape that openaiCompatibleFactory.handleError throws on real provider errors.
+        // Shape that openaiCompatible's handleError throws on real provider errors.
         const cause = {
           endpoint: 'https://api.example.com',
           error: { status: 401 },
@@ -923,6 +936,33 @@ describe('ModelRuntime', () => {
           { latencyMs: expect.any(Number), routeAttempt, usage },
           expect.anything(),
         );
+      });
+
+      it('fires onEmbeddingsFinal when the provider reports no usage', async () => {
+        const onEmbeddingsFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onEmbeddingsFinal });
+        mockRuntimeAI.embeddings.mockResolvedValue([[0.1]]);
+
+        await runtime.embeddings({ input: 'hi', model: 'emb' });
+
+        expect(onEmbeddingsFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), routeAttempt: undefined, usage: undefined },
+          expect.anything(),
+        );
+      });
+
+      it('returns embeddings when onEmbeddingsFinal throws', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onEmbeddingsFinal = vi.fn().mockRejectedValue(new Error('billing down'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onEmbeddingsFinal });
+        mockRuntimeAI.embeddings.mockResolvedValue([[0.1]]);
+
+        await expect(runtime.embeddings({ input: 'hi', model: 'emb' })).resolves.toEqual([[0.1]]);
+        expect(consoleError).toHaveBeenCalledWith(
+          '[ModelRuntime] onEmbeddingsFinal hook error:',
+          expect.any(Error),
+        );
+        consoleError.mockRestore();
       });
 
       it('passes the route attempt to onTranscribeFinal', async () => {

@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow: auto;
@@ -146,7 +148,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     height: 28px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11.5px;
@@ -169,7 +171,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
     flex: none;
     height: 44px;
-    padding-inline: 16px 12px;
+    padding-inline: ${densityVars.cardPadding} 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Agregar la entrada actual como un mensaje de usuario sin activar la generación",
-  "addUserMessage.title": "Agregar un mensaje de usuario",
   "commandPalette.desc": "Abrir el panel de comandos global para acceder rápidamente a las funciones",
   "commandPalette.title": "Panel de comandos",
   "deleteAndRegenerateMessage.desc": "Eliminar el último mensaje y regenerarlo",
@@ -27,6 +25,8 @@
   "openChatSettings.title": "Abrir configuración del chat",
   "openHotkeyHelper.desc": "Ver instrucciones para todos los atajos de teclado",
   "openHotkeyHelper.title": "Ayuda de atajos de teclado",
+  "openTaskFilter.desc": "Abrir el menú de filtros en la página de Tareas",
+  "openTaskFilter.title": "Filtrar tareas",
   "prevTab.desc": "Cambiar a la pestaña anterior en la aplicación de escritorio; vuelve a la última pestaña al llegar al principio",
   "prevTab.title": "Pestaña Anterior",
   "regenerateMessage.desc": "Regenerar el último mensaje",

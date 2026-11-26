@@ -64,6 +64,7 @@ describe('workbench stub surface', () => {
       'createWorkspaceLambdaClient',
       'lambdaClient',
       'lambdaQuery',
+      'scopedLambdaClient',
       'toolsClient',
       'withLlmRelay',
     ]);

@@ -8,6 +8,7 @@ import {
   resumeParkedClientTools,
 } from '../client-tool-resume.responses';
 
+const { assertAgentUseMock } = vi.hoisted(() => ({ assertAgentUseMock: vi.fn() }));
 const db = vi.hoisted(() => ({
   createMessage: vi.fn(),
   findOperation: vi.fn(),
@@ -16,6 +17,10 @@ const db = vi.hoisted(() => ({
   releaseClaim: vi.fn(),
   tryResume: vi.fn(),
   updateToolMessage: vi.fn(),
+}));
+
+vi.mock('@/server/routers/lambda/_helpers/workspaceAgentGuard', () => ({
+  assertCanUseWorkspaceAgent: assertAgentUseMock,
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -96,6 +101,25 @@ describe('resumeParkedClientTools', () => {
     });
     db.findToolMessageId.mockResolvedValue(null);
     db.tryResume.mockResolvedValue(true);
+    assertAgentUseMock.mockResolvedValue(undefined);
+  });
+
+  // Regression (security review): resuming runs the parked operation's agent,
+  // which can differ from the request's declared model — refusing `use` on it
+  // must stop the claim before any tool result is written.
+  it('refuses to resume a run whose agent the caller may not use', async () => {
+    assertAgentUseMock.mockRejectedValue(
+      Object.assign(new Error('no use'), { code: 'FORBIDDEN', name: 'TRPCError' }),
+    );
+
+    await expect(resume(runtime())).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(assertAgentUseMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt_1', userId: 'user_1' }),
+    );
+    expect(db.tryResume).not.toHaveBeenCalled();
+    expect(db.createMessage).not.toHaveBeenCalled();
+    expect(db.updateToolMessage).not.toHaveBeenCalled();
   });
 
   it('answers the parked call with its output and claims the run', async () => {
