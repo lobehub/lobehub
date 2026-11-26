@@ -13,8 +13,8 @@ interface MenuHostProps extends TopicItemDropdownMenuProps {
   builderRef: RefObject<BuildMenuItems | undefined>;
 }
 
-const MenuHost = memo<MenuHostProps>(({ builderRef, fav, id, status, title }) => {
-  const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, status, title });
+const MenuHost = memo<MenuHostProps>(({ builderRef, fav, id, onRename, status, title }) => {
+  const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, onRename, status, title });
   usePublishMenuItems(builderRef, dropdownMenu);
   return null;
 });
@@ -28,13 +28,20 @@ MenuHost.displayName = 'TopicItemContextMenuHost';
  * user has reached (see `useLazyMenuItems`).
  */
 const TopicItemContextMenu = memo<PropsWithChildren<TopicItemDropdownMenuProps>>(
-  ({ children, fav, id, status, title }) => {
+  ({ children, fav, id, onRename, status, title }) => {
     const { arm, armed, builderRef, items } = useLazyMenuItems();
 
     return (
       <>
         {armed && (
-          <MenuHost builderRef={builderRef} fav={fav} id={id} status={status} title={title} />
+          <MenuHost
+            builderRef={builderRef}
+            fav={fav}
+            id={id}
+            status={status}
+            title={title}
+            onRename={onRename}
+          />
         )}
         <ContextMenuTrigger items={items} onFocus={arm} onPointerEnter={arm}>
           {children}
