@@ -43,11 +43,19 @@ const isFieldLine = (line: string): boolean => {
   return /^[A-Z][A-Za-z]*:\s/.test(line);
 };
 
+// `<mention name="Name" id="user_xxx" />` → `@Name`; the card renders plain text.
+const formatMentions = (text: string): string =>
+  text.replaceAll(/<mention\b([^>]*?)\s*\/>/gi, (_, attrs: string) => {
+    const name = attrs.match(/\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+    const id = attrs.match(/\bid\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+    return `@${name?.[1] || name?.[2] || id?.[1] || id?.[2] || ''}`;
+  });
+
 export const parseTaskContent = (raw: string): ParsedTaskContent => {
   if (!raw) return {};
 
   // Strip the <hint>...</hint> block if present.
-  const cleaned = raw.replaceAll(/<hint>[\S\s]*?<\/hint>/g, '').trim();
+  const cleaned = formatMentions(raw.replaceAll(/<hint>[\S\s]*?<\/hint>/g, '')).trim();
   const lines = cleaned.split('\n');
 
   const result: ParsedTaskContent = {};

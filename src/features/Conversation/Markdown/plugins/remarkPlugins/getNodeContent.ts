@@ -1,6 +1,15 @@
 import { toMarkdown } from 'mdast-util-to-markdown';
 import { type Parent } from 'unist';
 
+const serializeAttributes = (properties?: Record<string, string | boolean>) =>
+  Object.entries(properties ?? {})
+    .map(([key, value]) => {
+      if (value === true) return ` ${key}`;
+      const quote = String(value).includes('"') ? "'" : '"';
+      return ` ${key}=${quote}${value}${quote}`;
+    })
+    .join('');
+
 const processNode = (node: any): string => {
   // Handle math formula nodes
   if (node.type === 'inlineMath') {
@@ -11,6 +20,12 @@ const processNode = (node: any): string => {
     const text = node.children?.[0] ? processNode(node.children?.[0]) : '';
 
     return `[${text}](${node.url})`;
+  }
+
+  // Self-closing tag nodes (e.g. `<mention />`) created by an earlier plugin are
+  // unknown to mdast-util-to-markdown, so restore their original tag source
+  if (node.data?.hName === node.type && !node.children && node.value === undefined) {
+    return `<${node.type}${serializeAttributes(node.data.hProperties)} />`;
   }
 
   // Handle containers with child nodes
