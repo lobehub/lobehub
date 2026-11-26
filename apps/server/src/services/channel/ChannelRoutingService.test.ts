@@ -7,6 +7,10 @@ import {
   selectChannelResponders,
 } from './ChannelRoutingService';
 
+/** The member questions of a decide call, without the Channel-level one. */
+const memberQuestions = (questions: Record<string, unknown>) =>
+  Object.keys(questions).filter((name) => name !== 'needs_agent_reply');
+
 const mocks = vi.hoisted(() => ({
   record: vi.fn(),
   classify: vi.fn(),
@@ -210,6 +214,75 @@ describe('Channel responder decisions', () => {
     ).toMatchObject({ memberIds: ['pi'] });
   });
 
+  describe('a message that needs a reply but fits no member in particular', () => {
+    const withNeedsReply = (a: number, b: number, needsReply: unknown) => {
+      const base = response(a, b);
+      return {
+        ...base,
+        answers: { ...base.answers, needs_agent_reply: needsReply },
+      } as ReturnType<typeof response>;
+    };
+    const needs = (probability: number) => ({ probability, type: 'boolean' as const });
+
+    it('lets the likeliest member answer instead of skipping a check-in to everyone', () => {
+      // "各位都还好吗" in a group of similar Agents: every member alone is a confident no.
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.1, 0.2, needs(0.9))),
+      ).toEqual({
+        memberIds: ['reviewer'],
+        reason: 'The message needs an Agent reply; the likeliest member answers',
+        status: 'assigned',
+      });
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.1, 0.2, needs(0.7))),
+      ).toMatchObject({ memberIds: ['reviewer'], status: 'assigned' });
+    });
+
+    it('turns an unsure pick into one that owes the answer', () => {
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.05, 0.5, needs(0.9))),
+      ).toEqual(expect.not.objectContaining({ wakes: expect.anything() }));
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.05, 0.5, needs(0.9))),
+      ).toMatchObject({ memberIds: ['reviewer'], status: 'assigned' });
+    });
+
+    it('passes over quiet members unless every member is quiet', () => {
+      expect(
+        selectChannelResponders(
+          input.candidates,
+          withNeedsReply(0.1, 0.2, needs(0.9)),
+          new Set(['reviewer']),
+        ),
+      ).toMatchObject({ memberIds: ['coder'] });
+      expect(
+        selectChannelResponders(
+          input.candidates,
+          withNeedsReply(0.1, 0.2, needs(0.9)),
+          new Set(['coder', 'reviewer']),
+        ),
+      ).toMatchObject({ memberIds: ['reviewer'] });
+    });
+
+    it('keeps confident member picks as they were', () => {
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.95, 0.1, needs(0.9))),
+      ).toMatchObject({ memberIds: ['coder'], reason: 'Selected by the Channel decision model' });
+    });
+
+    it.each([
+      ['unsure', needs(0.6)],
+      ['a confident no', needs(0.1)],
+      ['missing', undefined],
+      ['refused', { type: 'refusal' }],
+      ['out of range', needs(1.5)],
+    ])('still skips when the Channel-level answer is %s', (_, needsReply) => {
+      expect(
+        selectChannelResponders(input.candidates, withNeedsReply(0.1, 0.2, needsReply)),
+      ).toMatchObject({ status: 'skipped' });
+    });
+  });
+
   it('lets the likeliest of several confident members lead and defers the rest', () => {
     expect(selectChannelResponders(input.candidates, response(0.8, 0.95))).toEqual({
       details: { deferredMemberIds: ['coder'], primaryMemberId: 'reviewer' },
@@ -273,6 +346,7 @@ describe('routing worker', () => {
         model: 'jev-1.14.0',
         questions: {
           coder: expect.objectContaining({ type: 'boolean' }),
+          needs_agent_reply: expect.objectContaining({ type: 'boolean' }),
           reviewer: expect.objectContaining({ type: 'boolean' }),
         },
       }),
@@ -283,7 +357,7 @@ describe('routing worker', () => {
           routingAttempt: 2,
           trigger: 'channel',
           scenario: 'channel_routing',
-          promptVersion: 'v1',
+          promptVersion: 'v2',
         }),
         user: 'sender',
       }),
@@ -566,7 +640,7 @@ describe('members’ own wake rules', () => {
     await run();
 
     const [request] = mocks.decide.mock.calls[0];
-    expect(Object.keys(request.questions)).toEqual(['reviewer']);
+    expect(memberQuestions(request.questions)).toEqual(['reviewer']);
     expect(mocks.resolve).toHaveBeenCalledWith(
       'channel',
       'message',
@@ -591,7 +665,7 @@ describe('members’ own wake rules', () => {
     await run();
 
     const [request] = mocks.decide.mock.calls[0];
-    expect(Object.keys(request.questions)).toEqual(['coder']);
+    expect(memberQuestions(request.questions)).toEqual(['coder']);
   });
 
   it('keeps every claim when the arbitration answer is unusable, one leading', async () => {
@@ -661,7 +735,7 @@ describe('members’ own wake rules', () => {
         threadId,
       });
       await run();
-      return Object.keys(mocks.decide.mock.calls[0][0].questions);
+      return memberQuestions(mocks.decide.mock.calls[0][0].questions);
     };
 
     expect(await questions('thread')).toEqual(['coder', 'reviewer']);

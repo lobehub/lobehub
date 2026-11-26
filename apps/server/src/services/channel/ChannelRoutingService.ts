@@ -1,6 +1,10 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { DecisionResponse } from '@lobechat/model-runtime';
-import { buildChannelRoutingDecision, CHANNEL_ROUTING_PROMPT_VERSION } from '@lobechat/prompts';
+import {
+  buildChannelRoutingDecision,
+  CHANNEL_ROUTING_NEEDS_REPLY,
+  CHANNEL_ROUTING_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type { ChannelJobWake } from '@lobechat/types';
 import { withTimeout } from 'es-toolkit';
 import pMap from 'p-map';
@@ -97,6 +101,23 @@ const readProbabilities = (
   return probabilities;
 };
 
+/**
+ * The Channel-level answer to "does any Agent owe a reply". Optional: a missing or invalid answer
+ * is no verdict and leaves the member answers to decide alone.
+ */
+const readNeedsReply = (response: DecisionResponse): number | undefined => {
+  const answer = response.answers[CHANNEL_ROUTING_NEEDS_REPLY];
+  if (
+    !answer ||
+    answer.type !== 'boolean' ||
+    !Number.isFinite(answer.probability) ||
+    answer.probability < 0 ||
+    answer.probability > 1
+  )
+    return;
+  return answer.probability;
+};
+
 /** Most likely first; ties keep candidate order. */
 const byProbability = (ids: string[], probabilities: ReadonlyMap<string, number>) =>
   ids.toSorted((a, b) => probabilities.get(b)! - probabilities.get(a)!);
@@ -113,8 +134,12 @@ const isUncertain = (probability: number) => probability > 0.3 && probability < 
  *   follow it as deferred `followup`s (see {@link assignWithPrimary}).
  * - Nobody at 0.7: only the most likely member between 0.3 and 0.7 that is not `quiet` is woken,
  *   as a `followup` free to stay silent. Uncertainty is not a provider failure.
- * - At most 0.3: left out. Every answer confidently negative: `skipped`.
- * - Any answer missing or invalid: `unassigned`, whatever the others said.
+ * - At most 0.3: left out. Every answer confidently negative: `skipped`, unless the Channel-level
+ *   question is sure (at least 0.7) that some Agent owes a reply.
+ * - Nobody at 0.7 but some Agent owes a reply: the likeliest member that is not `quiet` (any
+ *   member when all are) leads and owes an answer. A broad message that fits nobody in
+ *   particular, like a check-in to everyone, is not left unanswered.
+ * - Any member answer missing or invalid: `unassigned`, whatever the others said.
  */
 export const selectChannelResponders = (
   candidates: Pick<RoutingInput['candidates'][number], 'memberId'>[],
@@ -144,6 +169,16 @@ export const selectChannelResponders = (
       memberIds,
       Object.fromEntries(uncertain.map((memberId) => [memberId, UNCERTAIN_WAKE])),
     );
+  }
+  const needsReply = readNeedsReply(response);
+  if (needsReply !== undefined && isConfident(needsReply)) {
+    const primary = ranked.find((memberId) => !quiet.has(memberId)) ?? ranked[0];
+    if (primary)
+      return {
+        memberIds: [primary],
+        reason: 'The message needs an Agent reply; the likeliest member answers',
+        status: 'assigned',
+      };
   }
   if (uncertain.length)
     return {
