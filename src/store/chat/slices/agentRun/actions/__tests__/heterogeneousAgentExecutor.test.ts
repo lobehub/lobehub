@@ -570,11 +570,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           { params: { heterogeneousProvider: serverDefaultApiProvider } },
         );
 
-        expect(
-          mockUpdateMessage.mock.calls.some(
-            ([id, val]: any) => id === 'ast-initial' && val.model === 'claude-server',
-          ),
-        ).toBe(true);
+        expect(mockUpdateMessage).toHaveBeenCalledWith(
+          'ast-initial',
+          expect.objectContaining({ model: 'claude-server', provider: 'lobehub' }),
+          expect.anything(),
+        );
         expect(
           mockUpdateMessage.mock.calls.every(
             ([, val]: any) =>
