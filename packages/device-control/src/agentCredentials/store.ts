@@ -225,6 +225,11 @@ const fileExists = (file: string) =>
 interface StoredMetadata {
   expiresAt?: string;
   installedAt: string;
+  /**
+   * Codex only: which install wrote the current login, so an install that
+   * finishes after a later one never restores its own login over it.
+   */
+  installId?: string;
   provider: DeviceAgentCredentialProvider;
   /** Claude Code only: the OAuth token. Codex keeps its secret in `auth.json`. */
   token?: string;
@@ -267,9 +272,20 @@ export const installAgentCredential = async (
     // No previous login counts as replaced: a run may outlive a removal.
     const replacesLogin =
       nextIdentity === undefined || codexLoginIdentity(previousAuthJson) !== nextIdentity;
+    const installId = randomUUID();
+    // Whether no later install has replaced this one since (desktop and
+    // `lh connect` may both answer install RPCs on the same store).
+    const isCurrentInstall = async () =>
+      ((await readJson(paths.metadataFile)) as Partial<StoredMetadata> | null)?.installId ===
+      installId;
     try {
       await writePrivateFile(paths.codexAuthFile, secret.authJson);
-      const metadata: StoredMetadata = { installedAt, provider, version: STORE_VERSION };
+      const metadata: StoredMetadata = {
+        installId,
+        installedAt,
+        provider,
+        version: STORE_VERSION,
+      };
       await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
       if (replacesLogin) {
         // A run still on the previous login renews it in place and would
@@ -288,14 +304,21 @@ export const installAgentCredential = async (
         const keepsNewLogin =
           current === secret.authJson ||
           (nextIdentity !== undefined && codexLoginIdentity(current) === nextIdentity);
-        if (!keepsNewLogin) await writePrivateFile(paths.codexAuthFile, secret.authJson);
+        if (!keepsNewLogin && (await isCurrentInstall())) {
+          await writePrivateFile(paths.codexAuthFile, secret.authJson);
+        }
       }
     } catch (error) {
-      await (
-        previousAuthJson === undefined
-          ? rm(paths.codexAuthFile, { force: true })
-          : writePrivateFile(paths.codexAuthFile, previousAuthJson)
-      ).catch(() => {});
+      // Undo only this install's own login: a later install may already have
+      // replaced it, and restoring the previous one would undo that.
+      const current = await readFile(paths.codexAuthFile, 'utf8').catch(() => undefined);
+      if (current === secret.authJson) {
+        await (
+          previousAuthJson === undefined
+            ? rm(paths.codexAuthFile, { force: true })
+            : writePrivateFile(paths.codexAuthFile, previousAuthJson)
+        ).catch(() => {});
+      }
       throw error;
     }
   }

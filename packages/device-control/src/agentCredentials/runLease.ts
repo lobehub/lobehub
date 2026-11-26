@@ -163,7 +163,12 @@ interface LiveLease {
 
 /** Leases of runs that are still alive; stale ones are deleted on the way. */
 const listLiveLeases = async (runDir: string, now: number, staleMs: number) => {
-  const names = await readdir(runDir).catch(() => [] as string[]);
+  // Only a missing directory means no runs: any other failure must stop the
+  // replacement, or a run it cannot see would write the old login back.
+  const names = await readdir(runDir).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return [] as string[];
+    throw error;
+  });
   const live: LiveLease[] = [];
   for (const name of names) {
     if (!name.endsWith(LEASE_SUFFIX)) continue;
