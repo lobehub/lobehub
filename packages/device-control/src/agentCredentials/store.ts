@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,12 @@ import {
   type RemoveAgentCredentialParams,
   type RemoveAgentCredentialResult,
 } from '@lobechat/types';
+
+import {
+  agentCredentialRunDir,
+  stopAgentCredentialRuns,
+  type StopAgentCredentialRunsOptions,
+} from './runLease';
 
 /** Owner-only access: the store holds bearer secrets. */
 const DIR_MODE = 0o700;
@@ -28,6 +34,8 @@ export interface AgentCredentialStoreOptions {
    * client that installs a credential may not be the one that runs the agent.
    */
   rootDir: string;
+  /** Timing of stopping runs on a replaced login; tests shorten it. */
+  runStop?: StopAgentCredentialRunsOptions;
 }
 
 /**
@@ -52,8 +60,16 @@ const agentCredentialPaths = (rootDir: string, provider: DeviceAgentCredentialPr
     codexAuthFile: path.join(dir, 'home', 'auth.json'),
     dir,
     metadataFile: path.join(dir, CREDENTIAL_FILE),
+    /** Leases of the runs using this credential (see `runLease.ts`). */
+    runDir: agentCredentialRunDir(dir),
   };
 };
+
+/** Lease directory for runs on `provider`'s installed credential. */
+export const agentCredentialRunDirFor = (
+  rootDir: string,
+  provider: DeviceAgentCredentialProvider,
+) => agentCredentialPaths(rootDir, provider).runDir;
 
 const isAgentCredentialProvider = (value: unknown): value is DeviceAgentCredentialProvider =>
   typeof value === 'string' &&
@@ -85,6 +101,46 @@ const parseCodexAuthJson = (authJson: string): Record<string, unknown> => {
   }
   return parsed as Record<string, unknown>;
 };
+
+const decodeJwtPayload = (token: unknown): Record<string, unknown> | undefined => {
+  if (typeof token !== 'string') return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString());
+    return payload && typeof payload === 'object' ? payload : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Who a Codex `auth.json` logs in as: the ChatGPT account plus the user in
+ * it (one Team account holds many users), or the API key. `undefined` when
+ * it cannot be told, which callers must treat as a different login.
+ */
+const codexLoginIdentity = (authJson: string | undefined): string | undefined => {
+  if (authJson === undefined) return undefined;
+  let auth: { OPENAI_API_KEY?: unknown; tokens?: Record<string, unknown> };
+  try {
+    auth = JSON.parse(authJson);
+  } catch {
+    return undefined;
+  }
+  const tokens = auth?.tokens;
+  if (tokens && typeof tokens === 'object') {
+    const accountId = typeof tokens.account_id === 'string' ? tokens.account_id : undefined;
+    const user = decodeJwtPayload(tokens.id_token)?.sub;
+    if (!accountId || typeof user !== 'string' || !user) return undefined;
+    return `chatgpt:${accountId}:${user}`;
+  }
+  if (typeof auth?.OPENAI_API_KEY === 'string' && auth.OPENAI_API_KEY) {
+    return `api-key:${createHash('sha256').update(auth.OPENAI_API_KEY).digest('hex')}`;
+  }
+  return undefined;
+};
+
+/** Reported by a Codex run stopped because its login was replaced. */
+export const CODEX_CREDENTIAL_REPLACED_REASON =
+  'The Codex account on this device was replaced, so this run was stopped before it could keep using the previous account. Send the message again to continue on the new account.';
 
 /**
  * Validate untrusted RPC params. Error messages name the bad field only, never
@@ -185,6 +241,7 @@ export const installAgentCredential = async (
 
   await ensurePrivateDir(options.rootDir);
   await ensurePrivateDir(paths.dir);
+  let stoppedRuns = 0;
 
   if (secret.type === 'claude-oauth-token') {
     // Isolated config dir: a stale login in `~/.claude` (or an `apiKeyHelper`
@@ -205,10 +262,34 @@ export const installAgentCredential = async (
     const previousAuthJson = (await fileExists(paths.codexAuthFile))
       ? await readFile(paths.codexAuthFile, 'utf8')
       : undefined;
+    const nextIdentity = codexLoginIdentity(secret.authJson);
+    // Same login reinstalled: a run renewing it writes back the same account.
+    // No previous login counts as replaced: a run may outlive a removal.
+    const replacesLogin =
+      nextIdentity === undefined || codexLoginIdentity(previousAuthJson) !== nextIdentity;
     try {
       await writePrivateFile(paths.codexAuthFile, secret.authJson);
       const metadata: StoredMetadata = { installedAt, provider, version: STORE_VERSION };
       await writePrivateFile(paths.metadataFile, JSON.stringify(metadata));
+      if (replacesLogin) {
+        // A run still on the previous login renews it in place and would
+        // write it back over this one, so every later run bills the previous
+        // account. Runs leased from here on read the new login; stop the
+        // earlier ones (some may already be on it), then undo anything they
+        // wrote back.
+        stoppedRuns = await stopAgentCredentialRuns(
+          paths.runDir,
+          CODEX_CREDENTIAL_REPLACED_REASON,
+          options.runStop,
+        );
+        const current = await readFile(paths.codexAuthFile, 'utf8').catch(() => undefined);
+        // Keep a renewal of the new login (a run started after the first
+        // write may have rotated its refresh token); restore anything else.
+        const keepsNewLogin =
+          current === secret.authJson ||
+          (nextIdentity !== undefined && codexLoginIdentity(current) === nextIdentity);
+        if (!keepsNewLogin) await writePrivateFile(paths.codexAuthFile, secret.authJson);
+      }
     } catch (error) {
       await (
         previousAuthJson === undefined
@@ -219,7 +300,7 @@ export const installAgentCredential = async (
     }
   }
 
-  return { installed: true, provider };
+  return { installed: true, provider, ...(stoppedRuns > 0 ? { stoppedRuns } : {}) };
 };
 
 /**
