@@ -199,52 +199,6 @@ export const socialRouter = router({
     }),
 
   /**
-   * Get followers of a user
-   * GET /market/social/followers/[userId]
-   */
-  getFollowers: socialPublicProcedure
-    .input(z.object({ userId: z.number() }).merge(paginationSchema))
-    .query(async ({ input, ctx }) => {
-      log('getFollowers input: %O', input);
-
-      try {
-        const { userId, ...params } = input;
-        const result = await ctx.marketSDK.follows.getFollowers(userId, params);
-        return result;
-      } catch (error) {
-        log('Error getting followers: %O', error);
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to get followers',
-        });
-      }
-    }),
-
-  /**
-   * Get users that a user is following
-   * GET /market/social/following/[userId]
-   */
-  getFollowing: socialPublicProcedure
-    .input(z.object({ userId: z.number() }).merge(paginationSchema))
-    .query(async ({ input, ctx }) => {
-      log('getFollowing input: %O', input);
-
-      try {
-        const { userId, ...params } = input;
-        const result = await ctx.marketSDK.follows.getFollowing(userId, params);
-        return result;
-      } catch (error) {
-        log('Error getting following: %O', error);
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to get following',
-        });
-      }
-    }),
-
-  /**
    * Get current user's favorites
    * GET /market/social/favorites
    */

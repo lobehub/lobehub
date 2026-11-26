@@ -97,8 +97,6 @@ export const POST = async (req: NextRequest, context: RouteContext) => {
 
 /**
  * GET /market/social/follow-status/[userId]
- * GET /market/social/following/[userId]
- * GET /market/social/followers/[userId]
  * GET /market/social/favorite-status/[targetType]/[targetId]
  * GET /market/social/favorites/[userId]
  * GET /market/social/favorite-agents/[userId]
@@ -128,18 +126,6 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       case 'follow-status': {
         const targetUserId = Number(segments[1]);
         const result = await market.follows.checkFollowStatus(targetUserId);
-        return NextResponse.json(result);
-      }
-
-      case 'following': {
-        const userId = Number(segments[1]);
-        const result = await market.follows.getFollowing(userId, paginationParams);
-        return NextResponse.json(result);
-      }
-
-      case 'followers': {
-        const userId = Number(segments[1]);
-        const result = await market.follows.getFollowers(userId, paginationParams);
         return NextResponse.json(result);
       }
 
