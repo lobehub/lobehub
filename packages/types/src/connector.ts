@@ -61,6 +61,11 @@ export type ConnectorCredentials =
       type: 'oauth2';
       accessToken: string;
       refreshToken?: string;
+      /** Persisted before submitting a refresh. An abandoned attempt requires reauthorization. */
+      refreshState?:
+        | { id: string; status: 'complete' }
+        | { deadline: number; id: string; status: 'pending' }
+        | { status: 'reconnect_required' };
       clientSecret?: string;
       /** DCR — token for managing the dynamic registration */
       registrationAccessToken?: string;
@@ -73,6 +78,9 @@ export type ConnectorCredentials =
   | { type: 'header'; headers: Record<string, string> };
 
 export type ConnectorOAuthCredentials = Extract<ConnectorCredentials, { type: 'oauth2' }>;
+
+export const needsConnectorReauthorization = (credentials: ConnectorCredentials | null) =>
+  credentials?.type === 'oauth2' && credentials.refreshState?.status === 'reconnect_required';
 
 /** One OAuth account connected to a connector, stored in {@link ConnectorOAuthAccounts}. */
 export interface ConnectorLinkRecord {
@@ -101,4 +109,15 @@ export interface ConnectorLinkRecord {
 export interface ConnectorOAuthAccounts {
   accounts: ConnectorLinkRecord[];
   type: 'oauth2';
+}
+
+/**
+ * The `user_connectors` row a call resolved to: its id plus the owner and the
+ * workspace it lives in (`null` for a personal row). Writes that follow the call,
+ * such as connection health, go through this row's own scope.
+ */
+export interface ResolvedConnectorRef {
+  id: string;
+  userId: string;
+  workspaceId: string | null;
 }

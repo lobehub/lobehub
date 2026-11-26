@@ -7,7 +7,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
-  paginateListParts,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -33,6 +33,8 @@ const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
 // S3 DeleteObjects rejects more than 1000 keys per request.
 const DELETE_OBJECTS_MAX_KEYS = 1000;
+// A multipart upload has at most 10,000 parts, so the part-number marker advances at most that often.
+const MAX_LIST_PARTS_PAGES = 10_000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -136,6 +138,28 @@ export class S3 {
     );
 
     return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
+  }
+
+  /** Like listFileKeys, with each object's ETag (unquoted) and size. */
+  public async listFileObjects(
+    prefix: string,
+    limit = 1000,
+  ): Promise<{ etag: string; key: string; size: number }[]> {
+    const response = await this.client.send(
+      new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: limit, Prefix: prefix }),
+    );
+
+    return (response.Contents ?? []).flatMap((object) =>
+      object.Key
+        ? [
+            {
+              etag: (object.ETag ?? '').replaceAll('"', ''),
+              key: object.Key,
+              size: object.Size ?? 0,
+            },
+          ]
+        : [],
+    );
   }
 
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
@@ -253,6 +277,51 @@ export class S3 {
     return getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
   }
 
+  /**
+   * Lists every uploaded part of a multipart upload.
+   *
+   * Pages by `IsTruncated` instead of the SDK's `paginateListParts`, which only
+   * checks that `NextPartNumberMarker` is present. Cloudflare R2 returns that
+   * marker on the last page too (`IsTruncated: false, NextPartNumberMarker: '2'`)
+   * and `'0'` on the empty page after it, so the SDK paginator re-lists the parts
+   * forever and the request hangs until the gateway times out.
+   */
+  private async listMultipartParts(key: string, uploadId: string) {
+    const parts = new Map<number, { ETag: string; PartNumber: number; Size?: number }>();
+    let marker: string | undefined;
+
+    for (let page = 0; page < MAX_LIST_PARTS_PAGES; page++) {
+      const result = await this.client.send(
+        new ListPartsCommand({
+          Bucket: this.bucket,
+          Key: key,
+          PartNumberMarker: marker,
+          UploadId: uploadId,
+        }),
+      );
+
+      for (const part of result.Parts ?? []) {
+        if (!part.ETag || !part.PartNumber) continue;
+        parts.set(part.PartNumber, {
+          ETag: part.ETag,
+          PartNumber: part.PartNumber,
+          Size: part.Size,
+        });
+      }
+
+      const next = result.NextPartNumberMarker;
+      // Stop on the last page, and on any marker that does not move forward.
+      if (!result.IsTruncated || !next || Number(next) <= Number(marker ?? 0)) {
+        return [...parts.values()];
+      }
+      marker = next;
+    }
+
+    throw new Error(
+      `S3 multipart upload ${uploadId} lists more than ${MAX_LIST_PARTS_PAGES} pages`,
+    );
+  }
+
   public async completeMultipartUpload(
     key: string,
     uploadId: string,
@@ -263,17 +332,8 @@ export class S3 {
     const parts: Array<{ ETag: string; PartNumber: number; Size?: number }> =
       uploadedParts && !expectedFile ? [...uploadedParts] : [];
 
-    if (!uploadedParts || expectedFile) {
-      for await (const page of paginateListParts(
-        { client: this.client },
-        { Bucket: this.bucket, Key: key, UploadId: uploadId },
-      )) {
-        for (const part of page.Parts ?? []) {
-          if (!part.ETag || !part.PartNumber) continue;
-          parts.push({ ETag: part.ETag, PartNumber: part.PartNumber, Size: part.Size });
-        }
-      }
-    }
+    if (!uploadedParts || expectedFile)
+      parts.push(...(await this.listMultipartParts(key, uploadId)));
 
     parts.sort((a, b) => a.PartNumber - b.PartNumber);
     const hasAllParts =

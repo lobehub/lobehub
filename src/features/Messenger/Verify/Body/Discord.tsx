@@ -3,6 +3,8 @@
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
+
 import { buildDiscordOpenBotUrl } from '../../constants';
 import {
   ConfirmCard,
@@ -66,9 +68,9 @@ const DiscordBody = memo<DiscordBodyProps>(
         blockingNotice={
           rebindBlocked
             ? {
-                ctaHref: '/settings/messenger/discord',
-                ctaLabel: t('verify.confirm.relink.manage'),
-                description: t('verify.confirm.relink.description', {
+                ctaHref: marketplaceAppPath('discord'),
+                ctaLabel: t('verify.confirm.relink.openApp'),
+                description: t('verify.confirm.relink.disconnectInMarketplace', {
                   account:
                     existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
                   platform: platformLabel,

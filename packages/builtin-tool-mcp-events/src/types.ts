@@ -3,8 +3,10 @@ import type { InboundWebhookError } from '@lobechat/types';
 export const McpEventsIdentifier = 'lobe-mcp-events';
 
 export const McpEventsApiName = {
+  checkSubscription: 'checkSubscription',
   listEventTypes: 'listEventTypes',
   listSubscriptions: 'listSubscriptions',
+  renameSubscription: 'renameSubscription',
   subscribeEvent: 'subscribeEvent',
   unsubscribeEvent: 'unsubscribeEvent',
 } as const;
@@ -32,36 +34,75 @@ export interface SubscribeEventArgs {
   arguments?: Record<string, unknown>;
   /** 连接器 identifier */
   connector: string;
+  /**
+   * Subscribing from a Channel Thread: `thread` (default) posts each event's result to that
+   * Thread, `channel` to the Channel's main timeline. Ignored outside a Thread.
+   */
+  deliverTo?: 'channel' | 'thread';
   /** 事件到达时 agent 应该做什么 */
   instructions: string;
   /** 事件类型名 */
   name: string;
+  /** How lists show this subscription; defaults to the event type name. */
+  title?: string;
 }
 export interface McpEventSubscriptionSummary {
   arguments: Record<string, unknown>;
   connector: { identifier: string; name: string };
+  /** Where each event's result is posted, for a subscription made in a Channel. */
+  deliversTo?: 'channel' | 'thread';
+  /**
+   * The event it follows: fixed for its life, and what every wake message carries as
+   * `<mcpEvent event=…>`. Renaming the subscription never changes it.
+   */
   eventName: string;
   /** null = 永不过期 */
   expiresAt: string | null;
   id: string;
   instructions: string | null;
   lastError: InboundWebhookError | null;
+  /** What people call it: the title given when subscribing, or the event name; free to rename. */
+  name: string | null;
   status: 'active' | 'error' | 'terminated';
+  /** The topic its events run in; listed only when listing the whole agent. */
+  topic?: { id: string; title: string | null } | null;
 }
 export interface SubscribeEventState {
   subscription: McpEventSubscriptionSummary;
 }
 
-// ── listSubscriptions（never）：当前 topic 的订阅
+// ── listSubscriptions（never）：当前 topic 的订阅，或 scope: 'agent' 时当前 agent 下本人创建的全部订阅
+export type ListSubscriptionsScope = 'agent' | 'topic';
+export interface ListSubscriptionsArgs {
+  /** `topic` (default): this topic's subscriptions. `agent`: every one of this agent made by this user. */
+  scope?: ListSubscriptionsScope;
+}
 export interface ListSubscriptionsState {
+  scope?: ListSubscriptionsScope;
   subscriptions: McpEventSubscriptionSummary[];
 }
 
-// ── unsubscribeEvent（never）
-export interface UnsubscribeEventArgs {
+/** Any subscription of this agent made by this user, in any topic. */
+export interface SubscriptionIdArgs {
   subscriptionId: string;
 }
+
+// ── renameSubscription（never）：只改显示名，eventName 不变
+export interface RenameSubscriptionArgs extends SubscriptionIdArgs {
+  /** The new display name; empty shows the event name again. */
+  name: string;
+}
+
+// ── renameSubscription / checkSubscription
+export interface SubscriptionState {
+  subscription: McpEventSubscriptionSummary;
+}
+
+// ── unsubscribeEvent（never）
+export type UnsubscribeEventArgs = SubscriptionIdArgs;
 export interface UnsubscribeEventState {
+  eventName: string;
+  name: string | null;
   removed: true;
   subscriptionId: string;
 }
@@ -76,10 +117,27 @@ export type McpEventsToolErrorCode =
   | 'forbidden' // 无权限或连接器未认证
   | 'invalid_arguments' // 参数不符合 inputSchema
   | 'callback_unreachable' // server 连不上回调地址
-  | 'channel_unsupported' // Channel 里的运行不能订阅：事件会落在 Channel 看不到的话题里
+  | 'channel_unsupported' // Channel 里不是由消息发起的运行不能订阅：不知道结果该发到哪个 Channel / Thread
   | 'limit_reached' // 订阅数达到上限
-  | 'not_found' // unsubscribe 的目标不存在或不属于当前 topic
+  | 'not_found' // 目标不存在，或不是当前 agent 下本人创建的订阅
+  | 'rate_limited' // 检查过于频繁
   | 'unknown';
 export interface McpEventsToolErrorState {
   error: { code: McpEventsToolErrorCode; message: string };
 }
+
+export const MCP_EVENTS_TOOL_ERROR_CODES: readonly McpEventsToolErrorCode[] = [
+  'callback_unreachable',
+  'channel_unsupported',
+  'connector_not_found',
+  'delivery_unsupported',
+  'events_unsupported',
+  'feature_disabled',
+  'forbidden',
+  'invalid_arguments',
+  'limit_reached',
+  'not_found',
+  'public_url_required',
+  'rate_limited',
+  'unknown',
+];

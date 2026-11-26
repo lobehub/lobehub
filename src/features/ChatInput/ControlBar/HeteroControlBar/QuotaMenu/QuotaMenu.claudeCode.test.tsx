@@ -46,6 +46,10 @@ vi.mock('@/features/AgentQuotaCalendar', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+const selectedModel = vi.hoisted(() => ({ current: 'fable' as string | undefined }));
+vi.mock('../../HeteroModel/useEffectiveHeteroProvider', () => ({
+  useSelectedHeteroModel: () => selectedModel.current,
+}));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   confirmModalMock: vi.fn(),
@@ -292,6 +296,54 @@ describe('ClaudeCodeQuotaMenu', () => {
         item.getAttribute('data-quota-level'),
       ),
     ).toEqual(['normal', 'low']);
+  });
+
+  it('leaves a model-scoped window out of the compact values when another model is selected', async () => {
+    selectedModel.current = 'opus';
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        scopedWeekly: {
+          modelName: 'Fable',
+          window: { resetsAt: null, usedPercent: 0, windowMinutes: 10_080 },
+        },
+        session: { resetsAt: null, usedPercent: 53, windowMinutes: 300 },
+        weekly: { resetsAt: null, usedPercent: 6, windowMinutes: 10_080 },
+      }),
+    );
+
+    try {
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
+      const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+      expect(trigger.textContent).toContain('heteroAgent.quota.compactLeft:47');
+      expect(trigger.textContent).not.toContain('Fable heteroAgent.quota.compactLeft');
+    } finally {
+      selectedModel.current = 'fable';
+    }
+  });
+
+  it('keeps a model-scoped window out of the compact values even when it is the only window', async () => {
+    selectedModel.current = 'opus';
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        scopedWeekly: {
+          modelName: 'Fable',
+          window: { resetsAt: null, usedPercent: 0, windowMinutes: 10_080 },
+        },
+      }),
+    );
+
+    try {
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
+      const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+      expect(trigger.textContent).not.toContain('Fable');
+      expect(trigger.textContent).not.toContain('heteroAgent.quota.compactLeft');
+    } finally {
+      selectedModel.current = 'fable';
+    }
   });
 
   it('warns below 15 percent and keeps compact zero quota numeric', async () => {
@@ -656,15 +708,19 @@ describe('ClaudeCodeQuotaMenu', () => {
     // The regression: after five idle hours the session window rolls over and
     // the panel used to drop the row entirely, leaving the weekly limit alone
     // as if the plan had no session limit. A reset window is free, not absent.
-    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(Date.now() - 60_000)]);
+    // Both readings come from one sample, so they share its capture time: a
+    // weekly reading even 1 ms newer would make the panel retire the reset
+    // session as a limit the plan stopped reporting.
+    const sampledAt = Date.now() - 60_000;
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(sampledAt)]);
     mockQuotaService.getLatestReadings.mockResolvedValue([
       {
-        ...persistedSessionReading(Date.now() - 60_000),
+        ...persistedSessionReading(sampledAt),
         resetsAt: Date.now() - 30 * 60_000,
         utilization: 83,
       },
       {
-        capturedAt: Date.now() - 60_000,
+        capturedAt: sampledAt,
         limitType: 'weekly_all',
         resetsAt: Date.now() + 4 * 24 * 60 * 60_000,
         scopeKey: '',

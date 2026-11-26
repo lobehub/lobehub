@@ -165,3 +165,54 @@ describe('TopicModel.countInFlightInDirectory', () => {
     ).toBe(1);
   });
 });
+
+describe('countInFlightInDirectory scope edges', () => {
+  it('answers zero for a path that names no directory', async () => {
+    const model = new TopicModel(serverDB, userId);
+
+    expect(await model.countInFlightInDirectory({ deviceId: 'dev-1', path: '   ' })).toBe(0);
+  });
+
+  it('skips a run marker whose task reservation already expired', async () => {
+    await insert(
+      'expired-reservation',
+      {
+        ...inRepo('/repo/expired'),
+        taskCallbackReservation: { at: '2026-01-01T00:00:00.000Z', expiresAt: 1 },
+      },
+      { status: 'active' },
+    );
+
+    expect(
+      await new TopicModel(serverDB, userId).countInFlightInDirectory({
+        deviceId: 'dev-1',
+        path: '/repo/expired',
+      }),
+    ).toBe(0);
+  });
+
+  it('skips a row whose run marker names another device', async () => {
+    await insert(
+      'other-device',
+      {
+        ...inRepo('/repo/other'),
+        runningOperation: { deviceId: 'dev-2', operationId: 'op', startedAt: 'x' },
+      },
+      { status: 'active' },
+    );
+
+    expect(
+      await new TopicModel(serverDB, userId).countInFlightInDirectory({
+        deviceId: 'dev-1',
+        path: '/repo/other',
+      }),
+    ).toBe(0);
+  });
+
+  it('counts through the workspace scope', async () => {
+    await insert('ws-run', inRepo('/repo/ws'), { workspaceId });
+    const model = new TopicModel(serverDB, userId, workspaceId);
+
+    expect(await model.countInFlightInDirectory({ deviceId: 'dev-1', path: '/repo/ws' })).toBe(1);
+  });
+});

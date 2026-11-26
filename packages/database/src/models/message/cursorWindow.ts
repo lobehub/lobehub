@@ -24,7 +24,7 @@ interface WindowRow {
  * between adjacent pages. Carry the lossless value in the cursor and compare it
  * back with a ::timestamptz cast.
  */
-const createdAtIso = sql<string>`to_char(${messages.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+export const createdAtIso = sql<string>`to_char(${messages.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 // A steered user message continues the running turn instead of opening a new one.
 const isSteer = sql<boolean>`coalesce((${messages.metadata}->>'steer')::boolean, false)`;

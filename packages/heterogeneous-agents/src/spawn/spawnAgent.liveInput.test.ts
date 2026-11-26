@@ -146,6 +146,77 @@ describe('spawnAgent live input (Claude Code)', () => {
     expect(events.at(-1)?.type).toBe('agent_runtime_end');
   });
 
+  // ROOT CAUSE:
+  // The live handle never declared that it takes uploaded images, so the CLI polled
+  // without `acceptsImageAttachments` and the server held every follow-up with an
+  // uploaded image until the Claude Code run ended.
+  /** @example A follow-up with an uploaded image joins the running Claude Code session. */
+  it('takes an uploaded image with a mid-run message', async () => {
+    const fake = createLiveProc();
+    nextFakeProc = fake.proc;
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      liveInput: true,
+      operationId: 'op-live',
+      prompt: 'review the layout',
+    });
+    const drained = (async () => {
+      for await (const _event of handle.events) {
+        /* Drain the event contract. */
+      }
+    })();
+    await tick();
+
+    /** @example The CLI asks the server for follow-ups with uploaded images too. */
+    expect(handle.supportsSteerImageAttachments).toBe(true);
+    await expect(
+      handle.sendUserMessage!(
+        [
+          { text: 'this screen is broken', type: 'text' },
+          {
+            source: { data: 'iVBORw0KGgo=', mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { uuid: 'u-image' },
+      ),
+    ).resolves.toBe(true);
+    await tick();
+    /** @example The image reaches Claude Code as an image block of the same message. */
+    expect(fake.stdinLines[1]).toMatchObject({
+      message: {
+        content: [
+          { text: 'this screen is broken', type: 'text' },
+          {
+            source: { data: 'iVBORw0KGgo=', media_type: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+      },
+      uuid: 'u-image',
+    });
+
+    fake.exit(0);
+    await drained;
+  });
+
+  /** @example A one-shot Claude Code run has no way in, so it claims no image follow-ups. */
+  it('does not take image follow-ups without live input', async () => {
+    const fake = createLiveProc();
+    nextFakeProc = fake.proc;
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      operationId: 'op-oneshot',
+      prompt: 'task',
+    });
+
+    expect(handle.supportsSteerImageAttachments).toBeUndefined();
+    fake.exit(0);
+    for await (const _event of handle.events) {
+      /* Drain the event contract. */
+    }
+  });
+
   const runToExit = async (results: Record<string, unknown>[], exitCode: number) => {
     const fake = createLiveProc();
     nextFakeProc = fake.proc;

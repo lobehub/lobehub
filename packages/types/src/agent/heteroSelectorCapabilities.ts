@@ -1,3 +1,4 @@
+import type { HeterogeneousAgentModel } from './agencyConfig';
 import {
   getAnyCliFlagValue,
   getCliConfigValue,
@@ -36,6 +37,15 @@ export type HeterogeneousAgentMode = AmpAgentMode | HeterogeneousAgentDefaultSel
  * `--effort <level>` flag.
  */
 const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+/** Antigravity CLI accepts the same five values on its native --effort flag. */
+export const ANTIGRAVITY_REASONING_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
@@ -358,7 +368,10 @@ export interface HeteroSelectorModelCapability {
 
 export interface HeteroSelectorEffortCapability {
   encodings: readonly HeteroCliEncoding[];
-  levels: (model: string) => readonly HeterogeneousReasoningEffortLevel[];
+  levels: (
+    model: string,
+    models?: readonly HeterogeneousAgentModel[],
+  ) => readonly HeterogeneousReasoningEffortLevel[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousReasoningEffort;
 }
 
@@ -393,9 +406,17 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
   'antigravity': {
+    effort: {
+      encodings: [{ flags: ['--effort'], kind: 'flag' }],
+      levels: (model, models) =>
+        models
+          ? (models.find((entry) => entry.id === model)?.effortLevels ?? [])
+          : ANTIGRAVITY_REASONING_EFFORT_LEVELS,
+      resolve: resolveClaudeCodeReasoningEffort,
+    },
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
-      resolve: resolvePersistedModel,
+      resolve: resolveClaudeCodeModel,
       source: 'catalog',
     },
   },
@@ -719,7 +740,11 @@ export const buildHeteroSpawnArgs = (
     if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -788,7 +813,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -863,7 +888,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
     const effort = getExplicitClaudeCodeReasoningEffort(provider);
@@ -946,7 +975,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&

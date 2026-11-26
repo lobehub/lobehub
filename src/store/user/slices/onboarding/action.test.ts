@@ -131,7 +131,7 @@ describe('onboarding actions', () => {
       });
     });
 
-    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+    it('flips an existing disabled object entry back to auto, without duplicating it', async () => {
       act(() => {
         useAgentStore.setState({
           agentMap: {
@@ -149,18 +149,35 @@ describe('onboarding actions', () => {
       });
 
       expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
-        plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+        plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'auto' }],
       });
     });
 
-    it('setting open=false reverts the entry to auto, removing it from the array', async () => {
+    it('records a builtin override when enabling a legacy builtin skill', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.toggleInboxAgentDefaultPlugin('lobe-artifacts', true);
+      });
+
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
+        plugins: [
+          'plugin-1',
+          { builtinOverride: true, identifier: 'lobe-artifacts', mode: 'auto' },
+        ],
+      });
+    });
+
+    it('setting open=false writes an explicit disabled entry', async () => {
       const { result } = renderHook(() => useUserStore());
 
       await act(async () => {
         await result.current.toggleInboxAgentDefaultPlugin('plugin-1', false);
       });
 
-      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', { plugins: [] });
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
+        plugins: [{ identifier: 'plugin-1', mode: 'disabled' }],
+      });
     });
   });
 });

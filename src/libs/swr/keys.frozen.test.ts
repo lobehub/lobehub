@@ -29,7 +29,6 @@ const LEGACY_SWR_KEYS = [
   'deviceKeys.appUpdateState',
   'deviceKeys.browseDirectory',
   'deviceKeys.cliUpdateState',
-  'deviceKeys.gitLinkedPR',
   'deviceKeys.gitPullRequestActivity',
   'deviceKeys.gitPullRequestDetail',
   'deviceKeys.gitPullRequestMergeContext',

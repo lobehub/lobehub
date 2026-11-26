@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BlockedPageError,
   HTTPStatusError,
   InvalidUrlError,
   isFetchNetworkError,
@@ -269,6 +270,7 @@ describe('isRetryableCrawlError', () => {
     expect(isRetryableCrawlError(new PageNotFoundError('Gone', 410))).toBe(false);
     expect(isRetryableCrawlError(new InvalidUrlError('bad'))).toBe(false);
     expect(isRetryableCrawlError(new UnsupportedContentError('svg'))).toBe(false);
+    expect(isRetryableCrawlError(new BlockedPageError())).toBe(false);
   });
 
   it('should not retry provider 4xx rejections except 408/429', () => {

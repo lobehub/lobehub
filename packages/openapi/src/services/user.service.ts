@@ -12,6 +12,7 @@ import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicRole, projectPublicUser } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
+import type { DeletedResource, DeletedResources } from '../types/common.type';
 import type {
   CreateUserRequest,
   UpdateUserRequest,
@@ -322,7 +323,7 @@ export class UserService extends BaseService {
    * @param userId User ID
    * @returns Delete operation result
    */
-  async deleteUser(userId: string): ServiceResult<{ id: string }> {
+  async deleteUser(userId: string): ServiceResult<DeletedResource> {
     this.log('info', '删除用户', { userId });
 
     try {
@@ -354,7 +355,7 @@ export class UserService extends BaseService {
 
       this.log('info', '用户删除成功', { userId });
 
-      return { id: userId };
+      return { deleted: true, id: userId };
     } catch (error) {
       return this.handleServiceError(error, '删除用户');
     }
@@ -557,7 +558,7 @@ export class UserService extends BaseService {
   /**
    * Clear all roles for a user
    */
-  async clearUserRoles(userId: string): ServiceResult<{ removed: number; userId: string }> {
+  async clearUserRoles(userId: string): ServiceResult<DeletedResources> {
     this.log('info', '清空用户角色', { userId });
 
     try {
@@ -576,17 +577,13 @@ export class UserService extends BaseService {
         throw this.createNotFoundError(`用户 ${userId} 不存在`);
       }
 
-      // Count and delete
-      const beforeCount = await this.db
-        .select({ count: count() })
-        .from(userRoles)
-        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
-
-      await this.db
+      // `count` is the number of assignments this call actually removed.
+      const removed = await this.db
         .delete(userRoles)
-        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })))
+        .returning({ id: userRoles.id });
 
-      return { removed: beforeCount[0]?.count || 0, userId };
+      return { count: removed.length, deleted: true };
     } catch (error) {
       return this.handleServiceError(error, '清空用户角色');
     }

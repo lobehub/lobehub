@@ -3,6 +3,7 @@ import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MARKETPLACE_MCP_PATH } from '@/features/Marketplace/paths';
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
 
 import McpList from '../../../../../(list)/mcp/features/List';
@@ -19,7 +20,7 @@ const Related = memo(() => {
           query: {
             category,
           },
-          url: '/community/mcp',
+          url: MARKETPLACE_MCP_PATH,
         })}
       >
         {t('mcp.details.related.listTitle')}

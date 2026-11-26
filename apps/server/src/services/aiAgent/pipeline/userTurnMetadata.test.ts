@@ -29,4 +29,23 @@ describe('buildUserTurnMetadata', () => {
   it('omits an empty skill selection', () => {
     expect(buildUserTurnMetadata({ selectedSkillIds: [] })).not.toHaveProperty('selectedSkillIds');
   });
+
+  it('persists the selected tools and agent-mention tool once each for later turns', () => {
+    expect(
+      buildUserTurnMetadata({
+        hasMentionedAgents: true,
+        selectedToolIds: ['lobe-web-browsing', 'xmind', 'lobe-web-browsing'],
+        trigger: RequestTrigger.Chat,
+      }),
+    ).toEqual({
+      selectedToolIds: ['lobe-web-browsing', 'xmind', 'lobe-agent-management'],
+      trigger: RequestTrigger.Chat,
+    });
+  });
+
+  it('omits an empty tool selection when no agents are mentioned', () => {
+    expect(
+      buildUserTurnMetadata({ hasMentionedAgents: false, selectedToolIds: [] }),
+    ).not.toHaveProperty('selectedToolIds');
+  });
 });

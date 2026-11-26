@@ -72,11 +72,13 @@ describe('recordLegacyPluginWrite', () => {
 
   it('counts one call labelled by procedure, plugin type and client', () => {
     recordLegacyPluginWrite('createOrInstallPlugin', 'plugin', {
+      app: 'lobehub',
       type: 'desktop',
       version: '2.1.4',
     });
 
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'lobehub',
       client_type: 'desktop',
       client_version: '2.1',
       plugin_type: 'plugin',
@@ -88,6 +90,7 @@ describe('recordLegacyPluginWrite', () => {
     recordLegacyPluginWrite('createPlugin', 'customPlugin', undefined);
 
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'none',
       client_type: 'unknown',
       client_version: 'none',
       plugin_type: 'customPlugin',

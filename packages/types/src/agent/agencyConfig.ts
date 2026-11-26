@@ -13,6 +13,7 @@ import type {
   HeterogeneousAgentMode,
   HeterogeneousCatalogAgentType,
   HeterogeneousReasoningEffort,
+  HeterogeneousReasoningEffortLevel,
   HeterogeneousSpeedMode,
 } from './heteroSelectorCapabilities';
 import {
@@ -26,6 +27,7 @@ import {
 export { buildHeteroExecArgs, buildHeteroSpawnArgs };
 
 export type HeterogeneousAgentModelCatalogErrorCode =
+  | 'auth_required'
   | 'cli_not_found'
   | 'command_failed'
   | 'device_unavailable'
@@ -35,6 +37,8 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
+  /** Reasoning levels reported for a base model. */
+  effortLevels?: readonly HeterogeneousReasoningEffortLevel[];
   /** Exact value accepted by the provider's native model selector. Treat as opaque. */
   id: string;
   /** Whether the CLI resolves its default model to this entry. */

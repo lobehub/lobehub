@@ -3,6 +3,7 @@ import {
   type TokenSourceType,
   ToolNameResolver,
 } from '@lobechat/context-engine';
+import { initialToolSelection } from '@lobechat/mecha';
 import { pluginPrompts } from '@lobechat/prompts';
 import type { UIChatMessage } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
@@ -28,7 +29,7 @@ import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useTopicId } from '../../hooks/useTopicId';
 import { useStoreApi } from '../../store';
 import type { ContextWindow } from '../../store/initialState';
-import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
+import { getToolContextRefreshKey } from './utils';
 
 const toolNameResolver = new ToolNameResolver();
 
@@ -198,9 +199,9 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     activeAgentId,
     systemRole,
     enableAgentMode,
+    toolMode,
     searchMode,
     useModelBuiltinSearch,
-    skillActivateMode,
     agentMemoryEnabled,
     runtimeMode,
     hasEnabledKnowledgeBases,
@@ -211,9 +212,9 @@ export const useTokenBreakdown = (): TokenBreakdown => {
       s.activeAgentId,
       agentByIdSelectors.getAgentSystemRoleById(agentId)(s),
       chatConfig.enableAgentMode,
+      chatConfig.toolMode,
       chatConfig.searchMode,
       chatConfig.useModelBuiltinSearch,
-      chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
       chatConfig.memory?.enabled,
       chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
       agentByIdSelectors
@@ -239,7 +240,6 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     memoryEnabled: effectiveMemoryEnabled,
     runtimeMode,
     searchMode,
-    skillActivateMode,
     useModelBuiltinSearch,
   });
 
@@ -247,6 +247,9 @@ export const useTokenBreakdown = (): TokenBreakdown => {
 
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
+  const rawPlugins = useAgentStore(
+    (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
+  );
   const installedPlugins = useToolStore((s) => s.installedPlugins);
 
   // The fallback for a conversation with no recorded request yet. Once the
@@ -257,10 +260,9 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     const toolsEngine = createAgentToolsEngine({ model, provider });
 
     const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: getToolExcludeDefaultToolIds(skillActivateMode),
       model,
       provider,
-      toolIds: pluginIds,
+      ...initialToolSelection(pluginIds, { enableAgentMode, toolMode }),
     });
 
     return {
@@ -286,13 +288,15 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     // agent/user/aiInfra config), so the engine only re-runs when they change
     // instead of on every render.
   }, [
+    enableAgentMode,
     hasRequest,
     installedPlugins,
     model,
     pluginIds,
     provider,
-    skillActivateMode,
+    rawPlugins,
     toolContextRefreshKey,
+    toolMode,
   ]);
 
   const toolsSchemaToken = useTokenCount(canUseTool ? toolsSchema : '');

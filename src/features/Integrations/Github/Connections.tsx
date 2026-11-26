@@ -16,10 +16,12 @@ import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 2px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -103,9 +105,14 @@ const Connections = memo<ConnectionsProps>(
     return (
       <Flexbox gap={10}>
         <Flexbox horizontal align="center" gap={16} justify="space-between">
-          <Text strong style={{ fontSize: 16 }}>
-            {t('github.connections.title')}
-          </Text>
+          <Flexbox gap={2} style={{ minWidth: 0 }}>
+            <Text strong style={{ fontSize: 16 }}>
+              {t('github.repositoryAccess.title')}
+            </Text>
+            <Text style={{ fontSize: 13 }} type="secondary">
+              {t('github.repositoryAccess.description')}
+            </Text>
+          </Flexbox>
           <Tooltip title={blockedReason}>
             <span>
               <Button

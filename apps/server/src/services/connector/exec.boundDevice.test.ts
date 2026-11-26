@@ -50,6 +50,10 @@ const makeCtx = (connector: any, links: any[] = []) =>
   ({
     agentModel: { existsById: vi.fn().mockResolvedValue(true) },
     connectorModel: {
+      // A personal row of a personal-scope call is in the run's own scope
+      forRow() {
+        return this;
+      },
       getLinkModel: () => ({ listByConnectorIds: vi.fn().mockResolvedValue(links) }),
       queryByIdentifiers: vi.fn().mockResolvedValue([connector]),
     },

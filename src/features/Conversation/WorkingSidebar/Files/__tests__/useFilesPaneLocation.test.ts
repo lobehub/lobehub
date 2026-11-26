@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const captured = vi.hoisted(() => ({ calls: [] as unknown[][] }));
 const device = vi.hoisted(() => ({ confirmed: false, loaded: false }));
+const staged = vi.hoisted(() => ({
+  value: undefined as { deviceId?: string; directory: string } | undefined,
+}));
+
+vi.mock('../useStagedFilesDirectory', () => ({
+  useStagedFilesDirectory: () => staged.value,
+}));
 
 vi.mock('@/store/device', () => ({
   deviceSelectors: {
@@ -35,6 +42,7 @@ beforeEach(() => {
   captured.calls.length = 0;
   device.confirmed = false;
   device.loaded = false;
+  staged.value = undefined;
 });
 
 describe('useFilesPaneLocation', () => {
@@ -84,6 +92,41 @@ describe('useFilesPaneLocation', () => {
       }),
     );
     expect(captured.calls[1][2]).toBe(true);
+  });
+
+  it('opens a draft staged in a project directory there without waiting for devices', () => {
+    staged.value = { directory: '/repo' };
+
+    renderHook(() =>
+      useFilesPaneLocation({
+        ...base,
+        filesystemEnvironmentAvailable: true,
+        isSandboxExecution: false,
+        topicId: undefined,
+        workingDirectory: '/agent-default',
+      }),
+    );
+
+    expect(captured.calls[0]).toEqual([
+      undefined,
+      { deviceId: undefined, directory: '/repo' },
+      true,
+    ]);
+  });
+
+  it('reads a staged directory on its own device even when the agent runs elsewhere', () => {
+    staged.value = { deviceId: 'device-2', directory: '/repo' };
+
+    renderHook(() =>
+      useFilesPaneLocation({
+        ...base,
+        filesystemEnvironmentAvailable: false,
+        isSandboxExecution: false,
+        topicId: undefined,
+      }),
+    );
+
+    expect(captured.calls[0][1]).toEqual({ deviceId: 'device-2', directory: '/repo' });
   });
 
   it('keeps the known remote host while its directory is still unresolved', () => {

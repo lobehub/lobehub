@@ -42,6 +42,13 @@ export async function queryUiMessages(
      * rendered works when applying a skipped snapshot (`preserveWorks`).
      */
     skipWorks?: boolean;
+    /** See `QueryMessageParams.skipCompressedMembers`. */
+    skipCompressedMembers?: boolean;
+    /**
+     * See `QueryMessageParams.viewModelPluginState`. Only for reads that end in
+     * a projected message patch; a pushed snapshot must stay whole.
+     */
+    viewModelPluginState?: boolean;
   },
 ): Promise<UIChatMessage[] | undefined> {
   const agentId: string | undefined = agentState?.origin?.agentId;
@@ -70,6 +77,7 @@ export async function queryUiMessages(
   const isShareVisitorRun = !!workAccessScope;
   // `file` Works stay out of the push unless the receiving client declared
   // it renders them: released desktop builds crash on the unknown type.
+  const includeArtboardWorks = agentState?.host?.acceptsArtboardWorks === true;
   const includeFileWorks = isShareVisitorRun || agentState?.host?.acceptsFileWorks === true;
 
   try {
@@ -77,7 +85,10 @@ export async function queryUiMessages(
       {
         agentId,
         groupId,
+        ...(includeArtboardWorks && { includeArtboardWorks: true }),
         ...(includeFileWorks && { includeFileWorks: true }),
+        ...(options?.skipCompressedMembers && { skipCompressedMembers: true }),
+        ...(options?.viewModelPluginState && { viewModelPluginState: true }),
         skipWorks: options?.skipWorks,
         threadId,
         topicId,
@@ -139,6 +150,8 @@ export async function queryMessagesFromDB(deps: MessagesDeps, state: AgentState)
       // and returns no group messages — the next LLM step then gets an empty
       // context and the provider rejects it ("at least one message is required").
       groupId: state.origin?.groupId,
+      // The model sees a compression group only as its summary.
+      skipCompressedMembers: true,
       threadId: state.origin?.threadId,
       topicId: state.origin?.topicId,
     },
@@ -244,13 +257,29 @@ export async function queryStepEntryMessages(
   try {
     // Keep full tool payloads and raw attachment paths. Each consumer derives
     // its own view; mid-stream Work summaries are not used by the runtime.
+    //
+    // A protocol-2 run leaves compression-group members out: the model sees a
+    // group only as its summary, and this read never reaches the client whole —
+    // only the message patch diffed against it does, which fills in the members
+    // of a group the step changed (`publishStepMessagePatch`). A protocol-1 run
+    // pushes this read as the `step_start` snapshot, so it keeps them.
+    //
+    // For the same reason a protocol-2 run also leaves out the tool payload
+    // keys the UI projection drops (`viewModelPluginState`): the patch is
+    // diffed after projection, so it comes out identical, and the model and
+    // device discovery read none of them. Command output, document text and
+    // crawled pages were most of this read's bytes on long tool-heavy topics.
+    // A protocol-1 snapshot is rendered unprojected, so it keeps them too.
+    const messagePatch = usesGatewayMessagePatch(state);
     messages = await deps.messageModel.query(
       {
         agentId: state.origin.agentId,
         groupId: state.origin.groupId,
+        skipCompressedMembers: messagePatch,
         skipWorks: true,
         threadId: state.origin.threadId,
         topicId: state.origin.topicId,
+        viewModelPluginState: messagePatch,
       },
       { allowShareVisitor: true },
     );

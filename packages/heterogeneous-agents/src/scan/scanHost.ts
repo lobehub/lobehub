@@ -9,6 +9,7 @@ import type { CliCommandStatus } from '../spawn/resolveCliCommand';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommandCandidates,
+  invalidateLoginShellPathCache,
 } from '../spawn/resolveCliCommand';
 import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './types';
 
@@ -161,10 +162,10 @@ export const resolveRemotePlatformRuntime = async (
 
   const validatedPath = status.path;
   const env = buildRemotePlatformEnvironment(status, baseEnv);
-  const prepareSpawn = async (args: string[]): Promise<RemotePlatformSpawnPlan> => ({
-    ...(await resolveCliSpawnPlan(validatedPath, args, env)),
-    env,
-  });
+  const prepareSpawn = async (args: string[]): Promise<RemotePlatformSpawnPlan> => {
+    const plan = await resolveCliSpawnPlan(validatedPath, args, env);
+    return { ...plan, env: plan.env ?? env };
+  };
 
   return {
     available: true,
@@ -183,7 +184,18 @@ export const probeRemotePlatform = async (
     : { available: false, reason: status.error };
 };
 
+/**
+ * Probe every known agent type on this machine.
+ *
+ * Each scan re-reads the login-shell PATH first. The scanner lives in a
+ * long-running host (`lh connect`, Electron main) that otherwise keeps the PATH
+ * it read at startup for the whole process, so a CLI installed afterwards —
+ * the reason someone presses "Rescan device" — stayed invisible until the host
+ * was restarted. All probes of one scan still share a single shell read.
+ */
 export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgentScanMap> => {
+  invalidateLoginShellPathCache();
+
   const entries = await Promise.all([
     ...HETEROGENEOUS_AGENT_CONFIGS.map(async (config) => {
       const status = await detectHeterogeneousCliCommand(config.type, config.defaultCommand);

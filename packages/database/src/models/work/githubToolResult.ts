@@ -213,6 +213,16 @@ const branchMetadata = (
 };
 
 /**
+ * A PR version registered from a command that named the PR. Version metadata
+ * merges over the previous version's, so without its own marker it would
+ * inherit `pullRequestLink: 'push'` from an earlier push link.
+ */
+const pullRequestCommandMetadata = (
+  head: string | null,
+  base: string | null,
+): WorkVersionMetadata => ({ ...branchMetadata(head, base), pullRequestLink: 'command' });
+
+/**
  * A REST pull request carries `head` / `base` as `{ ref }` objects; the
  * `create_pull_request` arguments name them as plain strings.
  */
@@ -258,7 +268,10 @@ const buildParams = (
     messageId: params.messageId ?? null,
     metadata:
       tool.entityType === 'pull_request'
-        ? branchMetadata(resolveBranch(record, args, 'head'), resolveBranch(record, args, 'base'))
+        ? pullRequestCommandMetadata(
+            resolveBranch(record, args, 'head'),
+            resolveBranch(record, args, 'base'),
+          )
         : undefined,
     rootOperationId: params.rootOperationId ?? null,
     status: patch('status', hasStatusSignal(record), resolveStatus(record)),
@@ -521,8 +534,7 @@ const parseGhSegment = (segment: string[], lifecycle: boolean): ParsedGhCommand 
 /** Options for the shell-surface gh normalizer; both are off for the github skill. */
 export interface GithubShellNormalizeOptions {
   /**
-   * Also register `gh pr ready <n>` / `gh pr merge <n>` (Better Coding
-   * Experience): touching a pull request by number ties it to the conversation.
+   * Also register `gh pr ready <n>` / `gh pr merge <n>`: touching a pull request by number ties it to the conversation.
    */
   pullRequestLifecycle?: boolean;
   /**
@@ -643,7 +655,10 @@ const normalizeGithubCliResult = (
       resourceId: identifier,
       resourceType: githubResourceType(ref.entityType),
       messageId: params.messageId ?? null,
-      metadata: branchMetadata(parsed.head, parsed.base),
+      metadata:
+        ref.entityType === 'pull_request'
+          ? pullRequestCommandMetadata(parsed.head, parsed.base)
+          : undefined,
       rootOperationId: params.rootOperationId ?? null,
       // gh only exposes --draft on create; an edit carries no status signal,
       // while merge / ready say what they left the pull request in.

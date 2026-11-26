@@ -5,8 +5,8 @@ import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { useIsDark } from '@/hooks/useIsDark';
-import { useChatStore } from '@/store/chat';
 
+import { useOpenConversationFilePreview } from '../../../hooks/useOpenConversationFilePreview';
 import { styles } from './style';
 
 export interface ChunkItemProps extends ChatFileChunk {
@@ -15,8 +15,7 @@ export interface ChunkItemProps extends ChatFileChunk {
 
 const ChunkItem = memo<ChunkItemProps>(({ id, fileId, similarity, text, filename, fileType }) => {
   const isDarkMode = useIsDark();
-  // Note: openFilePreview is a portal action, kept in ChatStore as it's a global UI state
-  const openFilePreview = useChatStore((s) => s.openFilePreview);
+  const openFilePreview = useOpenConversationFilePreview();
 
   return (
     <Flexbox

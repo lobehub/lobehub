@@ -23,6 +23,7 @@ import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { type InboxTopic } from './useHomeInboxTopics';
@@ -58,7 +59,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   // Line the reply up under the agent that wrote it, not under the unread dot.
   body: css`
-    padding-block-end: 12px;
+    padding-block-end: ${densityVars.contentGap};
     padding-inline: ${ROW_PADDING_INLINE + DOT_WIDTH + ROW_GAP}px ${ROW_PADDING_INLINE}px;
   `,
   // Keeps the title from shifting left once the dot is gone.
@@ -77,6 +78,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 11px;
     padding-inline: ${ROW_PADDING_INLINE}px;
     transition: background ${cssVar.motionDurationFast};
+
+    html[data-density='compact'] & {
+      padding-block: 8px;
+    }
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};

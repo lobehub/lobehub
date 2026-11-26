@@ -3,7 +3,11 @@ import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { $getSelection, $isRangeSelection } from 'lexical';
 
+import { getWorkspaceMemberName } from '@/utils/workspaceMemberName';
+
 export interface MentionableWorkspaceMember {
+  /** Membership config; its `nickname` is the name they go by in this workspace. */
+  config?: { nickname?: string | null } | null;
   user?: {
     avatar?: string | null;
     email?: string | null;
@@ -26,7 +30,7 @@ export const createTopicCommentMentionItems = (members: MentionableWorkspaceMemb
     seen.add(member.userId);
 
     const profile = member.user;
-    const label = profile?.fullName || profile?.username || profile?.email || member.userId;
+    const label = getWorkspaceMemberName(member);
     const description = profile?.email && profile.email !== label ? profile.email : undefined;
 
     return [

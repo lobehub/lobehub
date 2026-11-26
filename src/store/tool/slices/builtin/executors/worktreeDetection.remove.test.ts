@@ -263,7 +263,7 @@ describe('recordGitCommandEffects — git worktree remove', () => {
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
-        git: { activeWorktree: '/tmp/b', branch: 'b', isWorktree: true },
+        git: { activeWorktree: '/tmp/b', branch: 'b', isWorktree: true, ownBranch: 'b' },
         path: '/repo',
       },
     });
@@ -295,7 +295,7 @@ describe('recordGitCommandEffects — git worktree remove', () => {
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
       workingDirectoryConfig: {
-        git: { activeWorktree: '/tmp/wt', branch: 'fresh', isWorktree: true },
+        git: { activeWorktree: '/tmp/wt', branch: 'fresh', isWorktree: true, ownBranch: 'fresh' },
         path: '/repo',
       },
     });

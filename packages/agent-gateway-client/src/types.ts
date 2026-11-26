@@ -13,7 +13,7 @@ import type { UIChatMessage } from '@lobechat/types';
  *   summaries. Released desktop builds predate that Work type and crash on it,
  *   so the server keeps it out of the push unless the client declares this.
  */
-export type AgentStreamClientFeature = 'file_works' | 'member_runtime_end';
+export type AgentStreamClientFeature = 'artboard_works' | 'file_works' | 'member_runtime_end';
 
 export type AgentStreamEventType =
   | 'agent_runtime_init'
@@ -211,6 +211,7 @@ export interface StreamStartParentMessage {
   /** Server creation time (epoch ms). Absent from older servers. */
   createdAt?: number;
   id: string;
+  imageList?: UIChatMessage['imageList'];
   metadata?: Record<string, unknown> | null;
   parentId?: string | null;
   role: 'user';
@@ -296,7 +297,15 @@ export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question
 
 /** Producer that owns the blocked interaction. */
 export type AgentInterventionProvider =
-  'claude-code' | 'codex' | 'copilot' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
+  | 'antigravity'
+  | 'claude-code'
+  | 'codex'
+  | 'copilot'
+  | 'cursor'
+  | 'devin'
+  | 'droid'
+  | 'opencode'
+  | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

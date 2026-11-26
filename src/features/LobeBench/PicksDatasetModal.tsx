@@ -5,6 +5,8 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { createDataset, renameDataset } from '@/features/LobeBench/datasetCases';
 import { type LobeBenchCase } from '@/features/LobeBench/useLobeBench';
 
@@ -42,8 +44,11 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
     const { close } = useModalContext();
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
+    /** Create failure shown above the buttons; the modal stays open with the user's input. */
+    const [error, setError] = useState<InlineErrorState | null>(null);
 
     const submit = async () => {
+      setError(null);
       setSaving(true);
       try {
         const datasetName = name.trim() || t('lobeBench.picks.defaultName');
@@ -51,8 +56,9 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
         toast.success(t('lobeBench.picks.created', { count: cases.length, dataset: datasetName }));
         close();
         onDone?.({ id: created.id, name: datasetName });
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : t('lobeBench.picks.failed'));
+      } catch (cause) {
+        console.error('Failed to create Lobe Bench dataset:', cause);
+        setError(toInlineError(t('lobeBench.picks.createFailedRetry'), cause));
       } finally {
         setSaving(false);
       }
@@ -67,13 +73,17 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
             id={'lobe-bench-picks-name'}
             placeholder={t('lobeBench.picks.name.placeholder')}
             value={name}
-            onChange={(e) => setName(e.target.value)}
             onPressEnter={submit}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(null);
+            }}
           />
           <Text fontSize={12} type={'secondary'}>
             {t('lobeBench.picks.fixed')}
           </Text>
         </Flexbox>
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={close}>{t('common.cancel')}</Button>
           <Button loading={saving} type={'primary'} onClick={submit}>
@@ -106,17 +116,21 @@ const RenameDatasetForm = memo<RenameDatasetFormProps>(({ dataset, onSaved }) =>
   const { close } = useModalContext();
   const [name, setName] = useState(dataset.name);
   const [saving, setSaving] = useState(false);
+  /** Rename failure shown above the buttons; the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    setError(null);
     setSaving(true);
     try {
       await renameDataset(dataset, trimmed);
       await onSaved?.();
       close();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('lobeBench.picks.failed'));
+    } catch (cause) {
+      console.error('Failed to rename Lobe Bench dataset:', cause);
+      setError(toInlineError(t('lobeBench.picks.renameFailedRetry'), cause));
     } finally {
       setSaving(false);
     }
@@ -128,9 +142,13 @@ const RenameDatasetForm = memo<RenameDatasetFormProps>(({ dataset, onSaved }) =>
         autoFocus
         id={'lobe-bench-dataset-name'}
         value={name}
-        onChange={(e) => setName(e.target.value)}
         onPressEnter={submit}
+        onChange={(e) => {
+          setName(e.target.value);
+          setError(null);
+        }}
       />
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button disabled={!name.trim()} loading={saving} type={'primary'} onClick={submit}>

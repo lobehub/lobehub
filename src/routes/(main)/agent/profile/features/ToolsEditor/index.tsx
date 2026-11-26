@@ -8,8 +8,7 @@ import AgentUserTools from '@/features/ProfileEditor/AgentUserTools';
 import { useItemDetailStore } from '@/features/ProfileEditor/itemDetailStore';
 
 /**
- * The Tools page: the tools and connectors the agent can act with, as two lists — the ones that
- * belong to this agent alone, and the ones it borrows from the library every agent shares. A row
+ * The Tools page: the tools and connectors the agent can act with, as one plain list. A row
  * opens its details in the page's right-hand panel.
  */
 const ToolsEditor = memo(() => {
@@ -20,7 +19,8 @@ const ToolsEditor = memo(() => {
   useEffect(() => useItemDetailStore.getState().close, []);
 
   return (
-    <Flexbox gap={32} paddingBlock={'8px 48px'}>
+    // ProfileArea's WideScreenContainer owns the centered column and wide-screen preference.
+    <Flexbox gap={24} paddingBlock={'8px 48px'}>
       <Flexbox gap={4}>
         <Text fontSize={24} weight={600}>
           {t('settingAgent.toolsPage.title')}

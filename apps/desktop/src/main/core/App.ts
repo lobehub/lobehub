@@ -323,9 +323,10 @@ export class App {
 
     app.on('activate', this.onActivate);
 
-    // Deep links should be actionable as soon as the main window exists.
-    void this.protocolManager.processPendingUrls().catch((error) => {
-      logger.error('Failed to process pending protocol URLs:', error);
+    // Deep links and launch directories should be actionable as soon as the
+    // main window exists.
+    void this.protocolManager.processPendingTargets().catch((error) => {
+      logger.error('Failed to process pending launch targets:', error);
     });
 
     // Work that can trigger disk, network, native permission, or UI setup is

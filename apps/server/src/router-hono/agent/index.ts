@@ -6,7 +6,7 @@ import { agentInboxReport } from './handlers/agentInboxReport';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
-import { channelAdvance, channelCallback } from './handlers/channel';
+import { channelAdvance, channelCallback, channelWatchReport } from './handlers/channel';
 import { deviceToolCompletion } from './handlers/deviceToolCompletion';
 import {
   documentAccess,
@@ -21,6 +21,7 @@ import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections';
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
+import { inboundWebhookReport } from './handlers/inboundWebhookReport';
 import { llmRelayChunks, llmRelayPayload } from './handlers/llmRelay';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
@@ -55,11 +56,16 @@ app.post('/run', qstashAuth(), runStep);
 app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);
+app.post('/channel/watch-report', qstashAuth(), channelWatchReport);
 app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 
 // POST /api/agent/webhooks/inbox-report — a mail-woken run finished: post its answer to the
 // owner's direct Channel (QStash)
 app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
+
+// POST /api/agent/webhooks/inbound-webhook-report — a webhook-woken run finished: post its answer
+// to the Channel or Thread the webhook delivers to (QStash)
+app.post('/webhooks/inbound-webhook-report', qstashAuth(), inboundWebhookReport);
 
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);

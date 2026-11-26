@@ -7,7 +7,7 @@ export const PUSH_LINK_RETRY_DELAYS = [1500, 4000, 10_000];
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * After an agent's `git push` (Better Coding Experience), link the pull
+ * After an agent's `git push`, link the pull
  * request the pushed branch already has to the topic.
  *
  * The execution device answers which PR heads the branch (`gh pr list --head`
@@ -40,6 +40,7 @@ export const linkPushedPullRequests = async (params: {
         ? [
             {
               headRefName,
+              ...(pr.headRepoFullName ? { headRepoFullName: pr.headRepoFullName } : {}),
               isDraft: pr.isDraft,
               number: pr.number,
               state: pr.state,

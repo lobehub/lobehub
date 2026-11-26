@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Материал длинный; прочитано только его начало.",
   "rules.distill.untitled": "Без названия",
   "rules.distill.upload": "Загрузить файл",
-  "rules.distill.uploadFailed": "Не удалось загрузить файл.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint или обычный текст",
   "rules.enforcement.block": "Блокировать",
   "rules.enforcement.blockDesc": "Будет удерживать доставку, пока вы не разрешите. Пока не активно: сейчас только напоминает",

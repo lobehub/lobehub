@@ -4,8 +4,9 @@ import { channelMembers, channels } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ilikeContains } from '../../utils/like';
 import { notTrashed } from '../../utils/softDelete';
+import { withDisplayTitles } from './displayTitle';
 import { ChannelError } from './error';
-import { requireWorkspaceMember } from './people';
+import { memberInviterMetadata, requireWorkspaceMember } from './people';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess } from './types';
 
@@ -18,7 +19,7 @@ export const listJoinableChannels = async (
 ) => {
   if (!workspaceId) return [];
   const query = search?.trim();
-  return db.transaction(async (tx) => {
+  const rows = await db.transaction(async (tx) => {
     await requireWorkspaceMember(tx, workspaceId, userId);
     return tx
       .select({
@@ -29,6 +30,7 @@ export const listJoinableChannels = async (
           SELECT count(*)::int FROM channel_members m
           WHERE m.channel_id = "channels"."id" AND m.actor_type = 'user' AND m.status = 'active'
         )`,
+        metadata: channels.metadata,
         projectId: channels.projectId,
         title: channels.title,
       })
@@ -59,6 +61,8 @@ export const listJoinableChannels = async (
       .orderBy(desc(channels.createdAt))
       .limit(100);
   });
+  // The metadata only marks a project's default Channel; it is not part of the browse item.
+  return (await withDisplayTitles(db, rows)).map(({ metadata: _metadata, ...item }) => item);
 };
 
 /**
@@ -102,7 +106,12 @@ export const joinPublicChannel = async (
     const [member] = existing
       ? await tx
           .update(channelMembers)
-          .set({ lastReadSequence: channel.sequence, role: 'member', status: 'active' })
+          .set({
+            lastReadSequence: channel.sequence,
+            metadata: memberInviterMetadata(null),
+            role: 'member',
+            status: 'active',
+          })
           .where(eq(channelMembers.id, existing.id))
           .returning()
       : await tx

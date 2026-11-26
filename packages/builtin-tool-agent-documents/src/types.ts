@@ -67,9 +67,11 @@ export interface ReadDocumentArgs {
 }
 
 export interface ReadDocumentState {
+  /** @deprecated Written by older versions only; the document lives in the message body. */
   content?: string;
   id: string;
   title?: string;
+  /** @deprecated Written by older versions only; the document lives in the message body. */
   xml?: string;
 }
 

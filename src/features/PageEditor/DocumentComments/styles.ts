@@ -1,6 +1,8 @@
 import { DEFAULT_BLOCK_ANCHOR_PADDING } from '@lobehub/editor/react';
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { GUTTER_INSET_END, GUTTER_INSET_START } from './Gutter/constants';
 
 /** Max rendered height of an image inside the comment composer / edit box. */
@@ -113,13 +115,13 @@ export const styles = createStaticStyles(({ css }) => ({
   bodyCompact: css`
     margin-inline-start: 0;
     padding-block-start: 6px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
   `,
   card: css`
     margin-inline: -12px;
     padding-block: 20px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     transition: background-color 600ms ${cssVar.motionEaseOut};
@@ -184,7 +186,7 @@ export const styles = createStaticStyles(({ css }) => ({
        12px. Kept out of the editor's style prop: the editor forwards that prop
        to its absolutely positioned placeholder too, so any inline padding
        there would push the placeholder past the caret. */
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     /* The placeholder carries a 4px top margin meant to mirror a paragraph's
        default margin; the first block below has that margin removed, so drop
@@ -296,7 +298,7 @@ export const styles = createStaticStyles(({ css }) => ({
     inset-inline: ${GUTTER_INSET_START}px ${GUTTER_INSET_END}px;
 
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -370,7 +372,7 @@ export const styles = createStaticStyles(({ css }) => ({
     margin-inline-start: 36px;
   `,
   replyCard: css`
-    padding-block: 12px 8px;
+    padding-block: ${densityVars.contentGap} 8px;
   `,
   replyCardActions: css`
     margin-inline-start: 36px;
@@ -378,7 +380,7 @@ export const styles = createStaticStyles(({ css }) => ({
   replyList: css`
     margin-inline-start: 40px;
     padding-block: 4px;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
   `,
   /** Replies in a panel card list flat under the root, separated by rhythm alone. */
   replyListCompact: css`

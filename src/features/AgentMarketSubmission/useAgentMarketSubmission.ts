@@ -1,4 +1,4 @@
-import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import { confirmModal, toast } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -86,7 +86,9 @@ export const useAgentMarketSubmission = ({ agentId, canSubmit, getPrompt }: Opti
                   parameters: snapshot.params,
                   provider: snapshot.provider,
                 },
-                plugins: getActivePluginIds(snapshot.plugins),
+                // Everything turned on, not only what is pinned: a connector is
+                // on through an `auto` entry and has no pinned state.
+                plugins: getOptedInPluginIds(snapshot.plugins),
                 systemRole: snapshot.systemRole,
               },
               description: meta.description || '',

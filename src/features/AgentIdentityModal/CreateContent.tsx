@@ -1,11 +1,13 @@
 'use client';
 
-import { Button, Center, Flexbox, toast, useModalContext } from '@lobehub/ui';
-import { memo } from 'react';
+import { Button, Flexbox, Text, useModalContext } from '@lobehub/ui';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { createAgentCharacterTab } from '@/components/AgentAvatar/pickerTab';
 import EmojiPicker from '@/components/EmojiPicker';
+import CreateVisibilityField, { useCreateVisibility } from '@/features/CreateVisibilityField';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
@@ -28,21 +30,27 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
     const { t } = useTranslation(['setting', 'common']);
     const { close } = useModalContext();
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+    // `visibility` is only the starting point; in a workspace the user sees and
+    // can change who the agent is for before it exists.
+    const visibilityState = useCreateVisibility({ groupId, visibility });
+    /** Shown under the avatar picker: the modal stays open, so the refusal belongs next to the control. */
+    const [avatarError, setAvatarError] = useState('');
     const form = useCreateAgentIdentityForm({
       groupId,
       onCreated: (agentId) => {
         close();
         onCreated(agentId);
       },
-      visibility,
+      visibility: visibilityState.value,
     });
 
     return (
       <Flexbox gap={20} padding={20}>
-        <Center>
+        <Flexbox align={'center'} gap={8}>
           <EmojiPicker
             allowUpload
             allowDelete={!!form.avatar}
+            customTabs={[createAgentCharacterTab()]}
             loading={form.uploading}
             locale={locale}
             popupProps={{ placement: 'bottom' }}
@@ -65,18 +73,31 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
                 <BlindBoxAvatar className={'lobe-emoji-picker-avatar'} name={form.name} size={72} />
               )
             }
-            onChange={(avatar) => form.setAvatar(avatar)}
             onDelete={() => form.setAvatar(undefined)}
+            onChange={(avatar) => {
+              setAvatarError('');
+              form.setAvatar(avatar);
+            }}
             onUpload={async (file) => {
-              if ((await form.uploadAvatar(file)) === 'tooLarge')
-                toast.error(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
+              setAvatarError('');
+              const outcome = await form.uploadAvatar(file);
+              if (outcome === 'tooLarge')
+                setAvatarError(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
+              if (outcome === 'failed')
+                setAvatarError(t('settingAgent.avatar.uploadFailed', { ns: 'setting' }));
             }}
           />
-        </Center>
+          {avatarError && (
+            <Text fontSize={12} role={'alert'} type={'danger'}>
+              {avatarError}
+            </Text>
+          )}
+        </Flexbox>
         <IdentityFields
           form={form}
           slugPlaceholder={t('settingAgent.slug.autoPlaceholder', { ns: 'setting' })}
         />
+        <CreateVisibilityField state={visibilityState} />
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={form.saving} onClick={() => close()}>
             {t('cancel', { ns: 'common' })}

@@ -4,7 +4,7 @@ import { mountImperative } from '@/components/ImperativeMount';
 
 import CustomConnectorModal from '.';
 
-export const openConnectorEditDrawer = (connectorId: string) =>
+export const openConnectorEditModal = (connectorId: string) =>
   mountImperative(({ close, open }) => (
     <CustomConnectorModal
       connectorId={connectorId}

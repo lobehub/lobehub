@@ -4,6 +4,9 @@ import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projec
 
 type ProjectEnvironment = ReturnType<typeof useProjectEnvironments>[number];
 
+/** The pick that starts a conversation without the project's environment. */
+export const NO_ENVIRONMENT = 'none';
+
 /** A linked environment a conversation can work in: one that names a repository. */
 export const isRepositoryEnvironment = (environment: ProjectEnvironment) =>
   (environment.configuration?.sources ?? []).some((source) => source.kind === 'git');
@@ -25,8 +28,11 @@ export const useProjectRepository = (
       isRepositoryEnvironment(environment) && (!sharedAgent || environment.visibility === 'public'),
   );
   const [pickedId, setPickedId] = useState<string>();
-  const repository =
-    repositories.find((environment) => environment.id === pickedId) ?? repositories[0];
+  // "No environment": the conversation starts in an empty working directory.
+  const withoutEnvironment = pickedId === NO_ENVIRONMENT;
+  const repository = withoutEnvironment
+    ? undefined
+    : (repositories.find((environment) => environment.id === pickedId) ?? repositories[0]);
 
-  return { loaded: hasData, repositories, repository, setPickedId };
+  return { loaded: hasData, repositories, repository, setPickedId, withoutEnvironment };
 };

@@ -81,13 +81,9 @@ const SubmenuScrollStyle = createGlobalStyle`
     padding-block-end: 4px;
   }
 
-  /* The skill submenu (the one with the search header) has collapsible groups,
-     so shrink-to-fit makes it resize every time a group opens or closes —
-     measured 243px collapsed vs 400px expanded, the jump driven by whichever
-     title happens to be longest. Pin the width so the container stays put and
-     the rows ellipsize into it. */
-  [data-submenu] > [role='menu']:has(.lobe-skill-submenu-search) {
-    width: min(90vw, 400px);
+  /* A stable width keeps switching filters and searching from moving the menu. */
+  [data-submenu] > [role='menu']:has(.lobe-tool-picker-header) {
+    width: min(90vw, 320px);
   }
 
   /* base-ui menu-item internal containers are flex by default but don't set
@@ -104,24 +100,8 @@ const SubmenuScrollStyle = createGlobalStyle`
     background: ${cssVarValue.colorBorderSecondary};
   }
 
-  /* base-ui group label is rendered inside a [role='presentation'] with its
-     own default vertical padding, which stacks with our activationGroupHeader
-     padding and inflates the gap above/below group headers. Reset only the
-     vertical padding for skill activation groups; other groups (e.g. the
-     Knowledge submenu's Libraries/Files headers) keep their default padding. */
-  [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
-    padding-block: 0;
-  }
-
-  /* The skill submenu is the only submenu that uses a header slot (the search
-     bar). renderDropdownMenuItems wraps it in DropdownMenuHeader's default
-     8px/12px padding — which can't be reached via props — leaving the borderless
-     search floating in a tall gap and indented past the rows below. Trim the
-     padding so the search sits snug against the divider and its icon lines up
-     with the 16px icon column shared by the menu rows. */
-  [data-submenu] > [role='menu'] > *:has(.lobe-skill-submenu-search) {
-    padding-block: 4px;
-    padding-inline: 4px;
+  [data-submenu] > [role='menu'] > *:has(> .lobe-tool-picker-header) {
+    padding: 8px;
   }
 
   /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
@@ -375,7 +355,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
         minHeight,
         minWidth: isMobile ? undefined : minWidth,
         overflowX: 'hidden',
-        overflowY: 'scroll',
+        overflowY: 'auto',
         width: isMobile ? '100vw' : undefined,
       };
       const popupStyle = popupProps?.style;

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  BlockedPageError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import { firecrawl } from '../firecrawl';
 
 const pageMetadata = () => ({
@@ -82,6 +87,25 @@ describe('firecrawl crawler', () => {
     await firecrawl('https://example.com', { filterOptions: {} });
 
     expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    process.env.FIRECRAWL_API_KEY = 'test-api-key';
+
+    const mockResponse = createMockResponse({
+      success: true,
+      data: {
+        markdown: 'Enable JavaScript and cookies to continue',
+        metadata: { ...pageMetadata(), title: 'Just a moment...' },
+      },
+    });
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
+
+    await expect(firecrawl('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should return undefined for short content', async () => {

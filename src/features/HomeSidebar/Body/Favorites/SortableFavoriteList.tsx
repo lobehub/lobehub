@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FavoriteItem as FavoriteItemType } from '@lobechat/types';
-import { toast } from '@lobehub/ui';
+import { Flexbox, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
@@ -129,16 +129,17 @@ const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => 
       onDragStart={handleDragStart}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {items.map((item) => (
-          <SortableFavoriteItem active={item.path === currentPath} item={item} key={item.id} />
-        ))}
+        <Flexbox gap={1}>
+          {items.map((item) => (
+            <SortableFavoriteItem active={item.path === currentPath} item={item} key={item.id} />
+          ))}
+        </Flexbox>
       </SortableContext>
       {createPortal(
         <DragOverlay dropAnimation={sortableRowDropAnimation}>
           {activeItem ? (
             <div {...stylex.props(styles.overlay)}>
               <NavItem
-                compact
                 icon={<FavoriteItemIcon item={activeItem} />}
                 // The card itself is the surface: no hover tint on top of the white.
                 style={{ backgroundColor: 'transparent' }}

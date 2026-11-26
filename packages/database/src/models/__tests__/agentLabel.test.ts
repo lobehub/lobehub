@@ -149,6 +149,20 @@ describe('AgentLabelModel', () => {
       expect(await personalModel.getAgentLabelIds('agt-set')).toEqual([]);
     });
 
+    it('should label the inbox agent but still reject other virtual agents', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'agt-inbox', slug: 'inbox', userId, virtual: true },
+        { id: 'agt-virtual', userId, virtual: true },
+      ]);
+      const label = await personalModel.create({ name: 'Daily' });
+
+      await personalModel.setAgentLabels('agt-inbox', [label.id]);
+      expect(await personalModel.getAgentLabelIds('agt-inbox')).toEqual([label.id]);
+      expect((await personalModel.query())[0].usageCount).toBe(1);
+
+      await expect(personalModel.setAgentLabels('agt-virtual', [label.id])).rejects.toThrow();
+    });
+
     it('should reject agents outside the scope', async () => {
       await createAgent('agt-scope');
       const label = await workspaceModel.create({ name: 'WS' });

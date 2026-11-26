@@ -92,4 +92,58 @@ describe('HomeRepository pinned order', () => {
     // The workspace team order is untouched.
     expect(await new HomeRepository(clientDB, owner, ws).getPinnedOrder()).toEqual([]);
   });
+
+  it('lists the workspace default pins in the team order, public rows only', async () => {
+    const model = new AgentModel(clientDB, owner, ws);
+    const a = await createPinned(model, 'A');
+    const b = await createPinned(model, 'B');
+    const privateAgent = await model.create({
+      systemRole: '',
+      title: 'P',
+      visibility: 'private',
+    } as any);
+    await model.update(privateAgent.id, { pinned: true });
+    await model.create({ systemRole: '', title: 'Unpinned', visibility: 'public' } as any);
+    const repo = new HomeRepository(clientDB, owner, ws);
+
+    // Without a saved order, newest first.
+    expect(await repo.getTeamPinnedIds()).toEqual([b, a]);
+
+    await repo.updatePinnedOrder([a, b]);
+    expect(await repo.getTeamPinnedIds()).toEqual([a, b]);
+    // Personal mode has no default pins.
+    expect(await new HomeRepository(clientDB, owner).getTeamPinnedIds()).toEqual([]);
+  });
+
+  it('recommends the team pins until a list is saved, then the saved list', async () => {
+    const model = new AgentModel(clientDB, owner, ws);
+    const a = await createPinned(model, 'A');
+    const b = await createPinned(model, 'B');
+    const repo = new HomeRepository(clientDB, owner, ws);
+    await repo.updatePinnedOrder([a, b]);
+
+    expect(await repo.getRecommendedIds()).toEqual([a, b]);
+    expect((await repo.getSidebarAgentList()).recommendedIds).toEqual([a, b]);
+
+    await repo.updateRecommendedIds(['x', b, 'x']);
+    expect(await repo.getRecommendedIds()).toEqual(['x', b]);
+    expect((await repo.getSidebarAgentList()).recommendedIds).toEqual(['x', b]);
+    // An emptied list stays empty instead of falling back to the team pins.
+    await repo.updateRecommendedIds([]);
+    expect(await repo.getRecommendedIds()).toEqual([]);
+
+    const [row] = await clientDB
+      .select({ settings: Schema.workspaces.settings })
+      .from(Schema.workspaces)
+      .where(eq(Schema.workspaces.id, ws));
+    expect(row.settings).toEqual({
+      apiKey: { memberCreation: 'admins_only' },
+      sidebar: { other: true, recommendedAgentIds: [], teamPinnedOrder: [a, b] },
+    });
+    // Personal mode has no recommended list.
+    expect(await new HomeRepository(clientDB, owner).getRecommendedIds()).toEqual([]);
+    expect((await new HomeRepository(clientDB, owner).getSidebarAgentList()).recommendedIds).toBe(
+      undefined,
+    );
+  });
 });

@@ -2,22 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 
+import { ResponseObjectSchema } from '../../types/responses.type';
 import type * as ResumeModule from '../client-tool-resume.responses';
 import { ResponsesService } from '../responses.service';
 
 const {
+  assertAgentMock,
+  assertConversationMock,
   createStreamEventManagerMock,
   drainPushesMock,
   executeResponseRunMock,
   executeSyncMock,
   execAgentMock,
+  findTopicMock,
   resumeParkedClientToolsMock,
 } = vi.hoisted(() => ({
+  assertAgentMock: vi.fn(),
+  assertConversationMock: vi.fn(),
   createStreamEventManagerMock: vi.fn(),
   drainPushesMock: vi.fn(),
   executeResponseRunMock: vi.fn(),
   executeSyncMock: vi.fn(),
   execAgentMock: vi.fn(),
+  findTopicMock: vi.fn(),
   resumeParkedClientToolsMock: vi.fn(),
 }));
 
@@ -33,6 +40,17 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {
     execAgent = execAgentMock;
   },
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = findTopicMock;
+  },
+}));
+vi.mock('@/server/routers/lambda/_helpers/workspaceAgentGuard', () => ({
+  assertCanUseWorkspaceAgent: assertAgentMock,
+}));
+vi.mock('@/server/routers/lambda/aiAgent/guards', () => ({
+  assertCanUseAgentRunConversation: assertConversationMock,
 }));
 vi.mock('../client-tool-resume.responses', async (importOriginal) => {
   const actual = await importOriginal<typeof ResumeModule>();
@@ -50,8 +68,24 @@ vi.mock('../../common/base.service', () => ({
     workspaceId = 'ws_1';
     constructor() {}
     log() {}
+    resolveOperationPermission = vi.fn().mockResolvedValue({ isPermitted: true });
+    createAuthorizationError(message: string) {
+      return Object.assign(new Error(message), { name: 'AuthorizationError' });
+    }
+    createNotFoundError(message: string) {
+      return Object.assign(new Error(message), { name: 'NotFoundError' });
+    }
   },
 }));
+
+// Authorization happy path for every test here: these files exercise the run
+// and streaming machinery, with `responses.authorization.test.ts` owning the
+// denial matrix.
+beforeEach(() => {
+  assertAgentMock.mockResolvedValue(undefined);
+  assertConversationMock.mockResolvedValue(undefined);
+  findTopicMock.mockResolvedValue({ id: 'tpc_1' });
+});
 
 const buildService = () => new (ResponsesService as any)(null, 'user_1', { workspaceId: 'ws_1' });
 
@@ -178,6 +212,7 @@ describe('ResponsesService function call outputs', () => {
       topicId: 'tpc_1',
     });
     expect(response).toMatchObject({ id: 'tpc_1', status: 'completed' });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('streams the resumed run on the same response id', async () => {
@@ -216,6 +251,7 @@ describe('ResponsesService function call outputs', () => {
       output: [{ call_id: 'call_9', name: 'get_weather', type: 'function_call' }],
       status: 'incomplete',
     });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('falls back to a new turn when nothing is parked on the topic', async () => {
@@ -251,6 +287,7 @@ describe('ResponsesService function call outputs', () => {
         status: 'failed',
         error: { code: 'invalid_request_error' },
       });
+      expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
       expect(execAgentMock).not.toHaveBeenCalled();
       expect(executeResponseRunMock).not.toHaveBeenCalled();
     },
@@ -281,11 +318,51 @@ describe('ResponsesService function call outputs', () => {
       tools_mode: 'exclusive',
     });
     expect(response.status).toBe('completed');
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
     expect(execAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({
         exclusivePluginIds: ['lobe-agent-documents'],
         functionTools: [{ name: 'read_page', parameters: { type: 'object' } }],
       }),
     );
+  });
+});
+
+describe('ResponsesService non-streaming response object', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    execAgentMock.mockResolvedValue({ operationId: 'op_1', success: true, topicId: 'tpc_9' });
+  });
+
+  it('matches the documented OpenResponses object for every output item kind', async () => {
+    executeResponseRunMock.mockResolvedValue({
+      messages: [
+        {
+          content: 'Checking.',
+          role: 'assistant',
+          tool_calls: [{ function: { arguments: '{}', name: 'search____query' }, id: 'call_1' }],
+        },
+        { content: 'result', role: 'tool', tool_call_id: 'call_1' },
+        { content: 'Done.', role: 'assistant' },
+      ],
+      status: 'done',
+      usage: { llm: { tokens: { input: 5, output: 7, total: 12 } } },
+    });
+
+    const response = await buildService().createResponse({
+      input: 'hi',
+      metadata: { source: 'test' },
+      model: 'agt_1',
+      tool_choice: { name: 'lookup', type: 'function' },
+    });
+
+    expect(response.output.map((item: { type: string }) => item.type)).toEqual([
+      'message',
+      'function_call',
+      'function_call_output',
+      'message',
+    ]);
+    expect(response.usage).toMatchObject({ input_tokens: 5, output_tokens: 7, total_tokens: 12 });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 });

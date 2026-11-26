@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { useDeviceSelectOptions } from '@/features/DeviceManager/useDeviceSelectOptions';
 import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
@@ -49,6 +50,7 @@ function EditDirectoryContent({
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const [deviceId, setDevice] = useState(directory.deviceId);
   const [path, setPath] = useState(directory.path);
+  const deviceOptions = useDeviceSelectOptions(devices, deviceId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const relocate = useProjectDirectoryStore((s) => s.relocateDirectory);
@@ -76,7 +78,7 @@ function EditDirectoryContent({
       <Select
         aria-label={t('directories.device')}
         disabled={pending}
-        options={devices.map((d) => ({ value: d.deviceId, label: d.friendlyName || d.deviceId }))}
+        options={deviceOptions}
         placeholder={t('directories.device')}
         value={deviceId}
         onChange={(id) => {

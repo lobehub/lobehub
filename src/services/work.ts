@@ -21,6 +21,7 @@ import { mutate } from '@/libs/swr';
 import { matchDomain, workKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateConversationMessages } from '@/services/message/replica';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
 import { topicPullRequestsResource } from '@/store/work/projection';
 
 /** One cursor page of the workspace-wide Work list (resource page 产物 gallery). */
@@ -72,7 +73,7 @@ class WorkService {
     threadId?: string | null;
     topicId?: string | null;
   }): Promise<WorkListItem[]> =>
-    lambdaClient.work.listByConversation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByConversation.query({ ...params, ...workTypeOptIn() });
 
   listByWorkspace = async (params: {
     cursor?: string | null;
@@ -82,19 +83,19 @@ class WorkService {
     type?: ListedWorkType | null;
     visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
-    lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByWorkspace.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperation = async (params: {
     limit?: number;
     rootOperationId?: string | null;
   }): Promise<WorkVersionEventItem[]> =>
-    lambdaClient.work.listByRootOperation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperation.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperations = async (params: {
     limit?: number;
     rootOperationIds?: string[] | null;
   }): Promise<WorkVersionEventMap> =>
-    lambdaClient.work.listByRootOperations.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperations.query({ ...params, ...workTypeOptIn() });
 
   listVersions = async (workId: string): Promise<WorkVersionItem[]> =>
     lambdaClient.work.listVersions.query({ workId });
@@ -131,18 +132,25 @@ class WorkService {
   }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
     lambdaClient.work.registerShellWorksForRun.mutate(params);
 
-  /** Better Coding Experience: the pull requests a topic's Work rows link, with App state. */
+  /** The pull requests a topic's Work rows link, with App state. */
   listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
     lambdaClient.work.listTopicPullRequests.query({ topicId });
 
+  /** {@link listTopicPullRequests} for up to 100 topics, keyed by topic id. */
+  listTopicsPullRequests = async (
+    topicIds: string[],
+  ): Promise<Record<string, TopicPullRequestItem[]>> =>
+    lambdaClient.work.listTopicsPullRequests.query({ topicIds });
+
   /**
-   * Better Coding Experience: link the pull requests a `git push` tool call
+   * Link the pull requests a `git push` tool call
    * updated. `pullRequests` is the execution device's `gh pr list --head`
    * answer; the server re-reads the push itself and prefers the GitHub App.
    */
   linkPushedPullRequests = async (params: {
     pullRequests: {
       headRefName: string;
+      headRepoFullName?: string;
       isDraft?: boolean;
       number: number;
       state?: string;
@@ -152,6 +160,29 @@ class WorkService {
     toolCallId: string;
     topicId: string;
   }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
+
+  /**
+   * Keep a PR on the topic itself — found on its own
+   * branch (`branch`) or linked by hand (`manual`). Display-only links: they
+   * never feed the SCM links that accept deliveries or wake agents.
+   */
+  linkTopicPullRequest = async (params: {
+    headRefName?: string;
+    source: 'branch' | 'manual';
+    title?: string;
+    topicId: string;
+    url: string;
+    vouched?: boolean;
+  }): Promise<{ identifier: string; linked: boolean }> =>
+    lambdaClient.work.linkTopicPullRequest.mutate(params);
+
+  /** Remove a PR from the topic's lists, or bring it back. */
+  setTopicPullRequestDismissed = async (params: {
+    dismissed: boolean;
+    identifier: string;
+    topicId: string;
+  }): Promise<{ updated: boolean }> =>
+    lambdaClient.work.setTopicPullRequestDismissed.mutate(params);
 
   /** Revalidate a topic's linked pull requests (mounted reads only). */
   refreshTopicPullRequests = async (topicId?: string | null) => {

@@ -519,8 +519,12 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ ...params, type: PortalViewType.MemoryDetail });
   };
 
-  openFilePreview = (file: PortalFile): void => {
-    this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
+  openFilePreview = (file: PortalFile, options?: { sourceTopicId?: string }): void => {
+    this.#get().pushPortalView({
+      file,
+      ...(options?.sourceTopicId ? { sourceTopicId: options.sourceTopicId } : {}),
+      type: PortalViewType.FilePreview,
+    });
   };
 
   openLocalFile = ({
@@ -530,7 +534,7 @@ export class ChatPortalActionImpl {
     sandboxTopicId,
     workingDirectory,
   }: OpenLocalFileParams): void => {
-    const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
+    const { activeLocalFileIdsByScope, activeTopicId, openLocalFiles } = this.#get();
     const id = createLocalFileTabId({ deviceId, filePath, sandboxTopicId, workingDirectory });
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
     const nextFile = {
@@ -539,6 +543,7 @@ export class ChatPortalActionImpl {
       ...(sandboxTopicId ? { sandboxTopicId } : {}),
       filePath,
       id,
+      ...(deviceId && activeTopicId && { topicId: activeTopicId }),
       workingDirectory,
     };
     const scopeKey = getLocalFileActivationScopeKey(this.#get(), nextFile);
@@ -660,7 +665,7 @@ export class ChatPortalActionImpl {
     filePath,
     workingDirectory,
   }: OpenLocalFileParams): Promise<string | undefined> => {
-    const { dirtyLocalFileContents } = this.#get();
+    const { dirtyLocalFileContents, openLocalFiles } = this.#get();
     // Edit buffers are scoped by tab identity (device + working directory +
     // path), so the same absolute path opened on two devices/workspaces keeps
     // independent unsaved content.
@@ -669,10 +674,12 @@ export class ChatPortalActionImpl {
     if (buffer === undefined) return undefined;
     // deviceId routes the write to the remote device over RPC; local desktop
     // (no deviceId) goes straight to Electron IPC. The chokepoint hides the split.
+    const topicId = findLocalFileById(openLocalFiles, tabId)?.topicId;
     const result = await projectFileService.writeProjectFile({
       content: buffer,
       deviceId,
       path: filePath,
+      ...(topicId && { topicId }),
       workingDirectory,
     });
     // The remote RPC / local IPC report fs failures (permission denied, etc.) as

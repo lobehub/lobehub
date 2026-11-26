@@ -163,6 +163,11 @@ export const isClaudeCodeTaskOutputDir = (
   return approvedRoots.some((root) => projectKeysOf(root).includes(projectKey));
 };
 
+const findWorkspaceDevice = (deviceModel: DeviceModel, deviceId: string, workspaceId?: string) =>
+  workspaceId
+    ? deviceModel.findWorkspaceDeviceById(deviceId)
+    : deviceModel.findByDeviceId(deviceId);
+
 /**
  * Validate that a client-supplied workspace root is actually one the user has
  * bound to this device.
@@ -199,9 +204,7 @@ export const assertWorkspaceRootApproved = async (
     });
   }
 
-  const device = workspaceId
-    ? await deviceModel.findWorkspaceDeviceById(deviceId)
-    : await deviceModel.findByDeviceId(deviceId);
+  const device = await findWorkspaceDevice(deviceModel, deviceId, workspaceId);
 
   const approvedRoots = (device?.workingDirs ?? [])
     .flatMap((dir) => [dir.path, dir.git?.activeWorktree])
@@ -222,6 +225,21 @@ export const assertWorkspaceRootApproved = async (
       message: 'Working directory is not an approved workspace for this device',
     });
   }
+};
+
+/** A topic worktree inherits access only from a registered source directory. */
+export const findRegisteredWorkspaceRoot = async (
+  deviceModel: DeviceModel,
+  deviceId: string,
+  sourcePath: string,
+  workspaceId?: string,
+): Promise<string | undefined> => {
+  const device = await findWorkspaceDevice(deviceModel, deviceId, workspaceId);
+  const roots = [...(device?.workingDirs ?? []).map(({ path }) => path), device?.defaultCwd];
+  return roots.reduce<string | undefined>((approved, root) => {
+    if (!root || !isPathWithinRoot(root, sourcePath)) return approved;
+    return !approved || isPathWithinRoot(root, approved) ? root : approved;
+  }, undefined);
 };
 
 /**

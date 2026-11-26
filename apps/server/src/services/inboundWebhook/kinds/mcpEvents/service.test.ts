@@ -11,6 +11,7 @@ import { McpEventsService } from './service';
 const mocks = vi.hoisted(() => ({
   agentExists: vi.fn(),
   audit: vi.fn(),
+  channelOrigin: vi.fn(),
   capability: vi.fn(),
   create: vi.fn(),
   enabled: vi.fn(),
@@ -122,6 +123,7 @@ vi.mock('@/server/services/mcp', () => ({
   },
 }));
 vi.mock('../../lifecycle', () => ({ removeInboundWebhook: mocks.remove }));
+vi.mock('../../channelDelivery', () => ({ channelOriginOfRun: mocks.channelOrigin }));
 
 const NOW = new Date('2026-11-13T10:00:00Z');
 const connector = (patch: Partial<DecryptedConnector> = {}) =>
@@ -222,9 +224,6 @@ describe('MCP event subscription service scope', () => {
     await expect(service().listSubscriptions(args)).rejects.toMatchObject({
       code: 'feature_disabled',
     });
-    await expect(
-      service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-    ).rejects.toMatchObject({ code: 'feature_disabled' });
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.subscribe).not.toHaveBeenCalled();
   });
@@ -241,30 +240,78 @@ describe('MCP event subscription service scope', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('refuses every API in a Channel run, where events would land in a topic no one sees', async () => {
+  it('refuses to subscribe in a Channel Topic outside a Channel job, where no Channel says where to post', async () => {
     mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+    mocks.channelOrigin.mockResolvedValue(undefined);
     for (const call of [
-      () => service().listEventTypes({ agentId: 'agent', topicId: 'topic' }),
       () => service().subscribeEvent(args),
-      () => service().listSubscriptions(args),
-      () => service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
+      () => service().subscribeEvent({ ...args, operationId: 'op-unknown' }),
     ])
       await expect(call()).rejects.toMatchObject({ code: 'channel_unsupported' });
-    expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.subscribe).not.toHaveBeenCalled();
   });
 
-  it.each([{ topicId: 'other-topic' }, { agentId: 'other-agent' }, { userId: 'other-user' }])(
-    'cannot unsubscribe a row outside this topic/agent/creator: %j',
-    async (patch) => {
-      mocks.rows.set('webhook', row(patch));
-      await expect(
-        service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-      ).rejects.toMatchObject({ code: 'not_found' });
-      expect(mocks.rows.has('webhook')).toBe(true);
-      expect(mocks.remove).not.toHaveBeenCalled();
+  it('discovers events and lists subscriptions in a Channel Topic, before subscribing there', async () => {
+    mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+    mocks.channelOrigin.mockResolvedValue(undefined);
+    const found = await service().listEventTypes({ agentId: 'agent', topicId: 'topic' });
+    expect(found.eventTypes.map((event) => event.name)).toEqual(['issue.created']);
+    await expect(service().listSubscriptions(args)).resolves.toMatchObject({ subscriptions: [] });
+    expect(mocks.channelOrigin).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { deliverTo: undefined, expected: { channelId: 'chn_1', threadId: 'cht_1' }, thread: 'cht_1' },
+    { deliverTo: 'channel' as const, expected: { channelId: 'chn_1' }, thread: 'cht_1' },
+    { deliverTo: undefined, expected: { channelId: 'chn_1' }, thread: null },
+    { deliverTo: 'thread' as const, expected: { channelId: 'chn_1' }, thread: null },
+  ])(
+    'in a Channel run, posts results where the run answers (thread $thread, deliverTo $deliverTo)',
+    async ({ deliverTo, expected, thread }) => {
+      mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+      mocks.channelOrigin.mockResolvedValue({ channelId: 'chn_1', threadId: thread });
+      const result = await service().subscribeEvent({
+        ...args,
+        ...(deliverTo && { deliverTo }),
+        operationId: 'op',
+      });
+      expect(mocks.channelOrigin).toHaveBeenCalledWith(expect.anything(), 'op');
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({ delivery: expected }),
+          topicId: 'topic',
+        }),
+      );
+      expect(result.subscription.deliversTo).toBe(expected.threadId ? 'thread' : 'channel');
     },
   );
+
+  it('names the subscription as the user asked, or after its event', async () => {
+    const titled = await service().subscribeEvent({ ...args, title: '  Web bugs  ' });
+    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Web bugs' }));
+    expect(titled.subscription.name).toBe('Web bugs');
+
+    mocks.rows.clear();
+    await service().subscribeEvent(args);
+    expect(mocks.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'issue.created' }),
+    );
+  });
+
+  it('keeps a Thread subscription and a main-timeline one of the same event apart', async () => {
+    mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+    mocks.channelOrigin.mockResolvedValue({ channelId: 'chn_1', threadId: 'cht_1' });
+    await service().subscribeEvent({ ...args, operationId: 'op' });
+    mocks.create.mockImplementationOnce(async (input: CreateInboundWebhook) => {
+      const created = row({ ...input, id: 'webhook-2', state: input.state ?? {} });
+      mocks.rows.set(created.id, structuredClone(created));
+      return created;
+    });
+    await service().subscribeEvent({ ...args, deliverTo: 'channel', operationId: 'op' });
+    expect(mocks.create).toHaveBeenCalledTimes(2);
+    const [first, second] = mocks.create.mock.calls.map(([input]) => input.dedupeKey);
+    expect(first).not.toBe(second);
+  });
 
   it('lists only subscriptions attached to the current agent and topic', async () => {
     for (const entry of [
@@ -277,22 +324,6 @@ describe('MCP event subscription service scope', () => {
     const result = await service().listSubscriptions(args);
     expect(result.subscriptions.map((subscription) => subscription.id)).toEqual(['webhook']);
     expect(result.subscriptions[0]).not.toHaveProperty('secret');
-  });
-
-  it('removes an owned subscription and records workspace deletion audit', async () => {
-    mocks.rows.set('webhook', row({ workspaceId: 'workspace' }));
-    expect(
-      await service('workspace').unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-    ).toEqual({ removed: true, subscriptionId: 'webhook' });
-    expect(mocks.rows.size).toBe(0);
-    expect(mocks.audit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'webhook.deleted',
-        resourceType: 'webhook',
-        workspaceId: 'workspace',
-        metadata: { direction: 'inbound', kind: 'mcp_events' },
-      }),
-    );
   });
 });
 

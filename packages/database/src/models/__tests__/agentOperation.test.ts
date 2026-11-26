@@ -541,7 +541,7 @@ describe('AgentOperationModel', () => {
           completionReason: 'done',
           status: 'done',
         }),
-      ).toBe(false);
+      ).toBeUndefined();
       expect(await model.findById(operationId)).toMatchObject({
         completionReason: 'lease_expired',
         status: 'abandoned',
@@ -566,14 +566,14 @@ describe('AgentOperationModel', () => {
           completionReason: 'error',
           status: 'error',
         }),
-      ).toBe(false);
+      ).toBeUndefined();
       expect(
         await model.recordCompletion(operationId, {
           completionReason: 'lease_expired',
           status: 'abandoned',
           stepCount: 4,
         }),
-      ).toBe(true);
+      ).toBeDefined();
       expect(await model.findById(operationId)).toMatchObject({
         completionReason: 'lease_expired',
         status: 'abandoned',
@@ -708,7 +708,12 @@ describe('AgentOperationModel', () => {
       await park(model, 'op-claim-async', 'waiting_for_async_tool');
       await park(model, 'op-claim-client', 'waiting_for_client');
 
-      for (const id of ['op-claim-running', 'op-claim-human', 'op-claim-async', 'op-claim-client']) {
+      for (const id of [
+        'op-claim-running',
+        'op-claim-human',
+        'op-claim-async',
+        'op-claim-client',
+      ]) {
         expect(await model.claimForAbandonment(id, 'inactivity_watchdog')).toBe(true);
         expect(await model.findById(id)).toMatchObject({
           completionReason: 'error',

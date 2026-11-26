@@ -62,7 +62,7 @@ export const createTopicModelContext = ({
      * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store for
      * both {@link ownership} and {@link mine}, and the escape hatch for methods
      * that must see visitor rows independent of the instance flag
-     * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors}).
+     * ({@link queryBySender} / {@link countMessagesBySender} / {@link countShareVisitors}).
      */
     workspaceScope: () =>
       buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, topics),
@@ -90,7 +90,7 @@ export const createTopicModelContext = ({
      *
      * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
      * per-user variant of {@link workspaceScope} and the share-scoped methods
-     * ({@link queryBySender} / {@link countBySender} / {@link countShareVisitors})
+     * ({@link queryBySender} / {@link countMessagesBySender} / {@link countShareVisitors})
      * layer their own `senderId` predicate on top of it. Creator-facing
      * destructive sweeps that reach for `mine()` still get the visitor
      * exclusion by AND-ing {@link notShareVisitor} themselves.
@@ -108,7 +108,7 @@ export const createTopicModelContext = ({
      * true`, so the share runtime opts in explicitly and every other caller
      * gets the visitor guard for free.
      *
-     * The visitor-scoped counterparts ({@link queryBySender}, {@link countBySender})
+     * The visitor-scoped counterparts ({@link queryBySender}, {@link countMessagesBySender})
      * intentionally do the opposite — they match on `senderId`, not exclude
      * it — and use {@link mine} (which skips this helper).
      */

@@ -9,6 +9,7 @@ const item = (number: number, overrides: Record<string, unknown> = {}) =>
     number,
     repoFullName: 'lobehub/lobehub',
     scm: null,
+    source: 'created',
     status: 'open',
     title: `PR ${number}`,
     url: `https://github.com/lobehub/lobehub/pull/${number}`,
@@ -29,13 +30,29 @@ const detail = (overrides: Record<string, unknown> = {}) =>
 
 describe('resolvePullRequestView', () => {
   it('prefers the GitHub App state and marks it confirmed', () => {
+    const autoFix = {
+      changeRequestId: 'scr-1',
+      enabled: false,
+      maxWakes: 3,
+      ownerTopic: null,
+      ownerTopicId: 't1',
+      wakeCount: 2,
+    };
     const view = resolvePullRequestView(
       item(1, {
-        scm: { ciStatus: 'failure', isDraft: false, mergedAt: null, state: 'open', title: 'App' },
+        scm: {
+          autoFix,
+          ciStatus: 'failure',
+          isDraft: false,
+          mergedAt: null,
+          state: 'open',
+          title: 'App',
+        },
       }),
       { confirmed: false, detail: detail() },
     );
     expect(view).toMatchObject({
+      autoFix,
       ciStatus: 'failure',
       confirmed: true,
       state: 'open',
@@ -55,6 +72,8 @@ describe('resolvePullRequestView', () => {
       detail: detail({ repo: { name: 'other', owner: 'x' } }),
     });
     expect(other).toMatchObject({ confirmed: false, state: 'open', title: 'PR 1' });
+    // Auto-fix rides on the GitHub App's webhooks; without its row there is none.
+    expect(other.autoFix).toBeUndefined();
   });
 
   it('falls back to the status the agent commands recorded', () => {
@@ -99,5 +118,25 @@ describe('resolvePullRequestView · localDetail', () => {
       }).localDetail,
     ).toBe(false);
     expect(resolvePullRequestView(item(1, { scm })).localDetail).toBe(false);
+  });
+});
+
+describe('resolvePullRequestView · trust', () => {
+  it('carries how the PR was linked and whether it is vouched', () => {
+    expect(resolvePullRequestView(item(4, { source: 'branch', vouched: false }))).toMatchObject({
+      source: 'branch',
+      vouched: false,
+    });
+    // A list persisted before these fields existed.
+    expect(resolvePullRequestView(item(5, { source: undefined }))).toMatchObject({
+      source: 'created',
+      vouched: true,
+    });
+  });
+});
+
+describe('resolvePullRequestView · untitled', () => {
+  it('names the repository when no title is known yet, not the number again', () => {
+    expect(resolvePullRequestView(item(12, { title: null })).title).toBe('lobehub/lobehub');
   });
 });

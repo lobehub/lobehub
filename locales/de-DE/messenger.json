@@ -220,7 +220,6 @@
   "verify.error.generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
   "verify.error.missingToken": "Ungültiger Link. Öffnen Sie diese Seite über den Bot.",
   "verify.error.title": "Verknüpfung konnte nicht bestätigt werden",
-  "verify.error.unlinkBeforeRelink": "Dieses LobeHub-Konto ist bereits mit einem anderen Telegram-Konto verknüpft. Trennen Sie es in Einstellungen → Messenger, bevor Sie ein neues verknüpfen.",
   "verify.signInCta": "Anmelden, um fortzufahren",
   "verify.signInRequired": "Bitte melden Sie sich bei LobeHub an, um die Verknüpfung zu bestätigen.",
   "verify.success.backToLobeHub": "Zurück zu LobeHub",

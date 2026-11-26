@@ -12,6 +12,7 @@ const {
   openChannelReply,
   resolveChannelRoutedDevice,
   routedPresence,
+  wakePickedDevices,
 } = vi.hoisted(() => ({
   createChannelWorktree: vi.fn(),
   executions: {
@@ -22,6 +23,7 @@ const {
     claim: vi.fn(),
     finishDispatch: vi.fn(),
     input: vi.fn(),
+    coAddressed: vi.fn(),
     openingReply: vi.fn(),
     primaryReply: vi.fn(),
     recentContext: vi.fn(),
@@ -34,6 +36,7 @@ const {
   openChannelReply: vi.fn(),
   resolveChannelRoutedDevice: vi.fn(),
   routedPresence: { isOnline: vi.fn(), prefetch: vi.fn() },
+  wakePickedDevices: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -59,6 +62,7 @@ vi.mock('./ChannelRoutingService', () => ({
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+vi.mock('./pickedDeviceWake', () => ({ wakePickedDevices }));
 vi.mock('./replyOpening', () => ({ openChannelReply }));
 vi.mock('./routedDevice', () => ({
   createRoutedDevicePresence: () => routedPresence,
@@ -101,6 +105,7 @@ describe('Channel concurrent startup', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
     executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
@@ -147,6 +152,11 @@ describe('Channel concurrent startup', () => {
     await coordinator(1).advance('channel');
 
     const [params] = execAgent.mock.calls[0];
+    // An ordinary Channel run keeps its own label and runs unattended.
+    expect(params).toMatchObject({
+      trigger: 'channel',
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
     if ('deviceId' in environment) {
       expect(params).toMatchObject({ deviceId: 'dev-2', snapshotFollowsCallerDevice: false });
       expect(params.agentConfigSnapshot.agencyConfig).toEqual({
@@ -163,6 +173,37 @@ describe('Channel concurrent startup', () => {
         executionTarget: 'device',
       });
     }
+  });
+
+  // A reply waiting for a sleeping cloud device picked in the Channel would wait forever.
+  it('wakes the offline devices picked in the Channel that claims wait for', async () => {
+    getScopedOnlineDevices.mockResolvedValue([{ deviceId: 'mac', online: true }]);
+    executions.claim.mockImplementation(async (_channelId, id: string, options) => {
+      options.onPickedDeviceOffline?.({ deviceId: 'cloud-1', ownerId: 'owner' });
+      return null;
+    });
+
+    await coordinator(2, false, [
+      { config: { deviceId: 'cloud-1', deviceOwnerId: 'owner' }, id: 'job-0' },
+    ]).advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(wakePickedDevices).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      channelId: 'channel',
+      devices: [
+        { deviceId: 'cloud-1', ownerId: 'owner' },
+        { deviceId: 'cloud-1', ownerId: 'owner' },
+      ],
+      onlineDeviceIds: ['mac'],
+      workspaceId: null,
+    });
+  });
+
+  it('wakes nothing when no claim waits for a picked device', async () => {
+    await coordinator(1).advance('channel');
+
+    expect(execAgent).toHaveBeenCalled();
+    expect(wakePickedDevices).not.toHaveBeenCalled();
   });
 
   it('notifies the claimed reply state before runtime startup resolves', async () => {
@@ -269,7 +310,7 @@ describe('Channel concurrent startup', () => {
     await new ChannelCoordinator({ select } as never).advance('channel');
 
     // Outside the channel lock, before the claim resolves the routed device.
-    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester');
+    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester', 'workspace');
     expect(routedPresence.prefetch.mock.invocationCallOrder[0]).toBeLessThan(
       executions.claim.mock.invocationCallOrder[0],
     );
@@ -324,11 +365,27 @@ describe('Channel concurrent startup', () => {
     executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
     await coordinator(1).advance('channel');
 
-    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0', {
+      admitShare: expect.any(Function),
+    });
     expect(order).toEqual(['open', 'claim']);
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_opening');
     expect(prompt).toContain('收到，我先翻一下昨天的报错日志。');
+  });
+
+  it('tells the run which other Agents the request asked, by name and role', async () => {
+    executions.coAddressed.mockResolvedValue([
+      { name: 'Alien', title: 'Growth engineer' },
+      { name: null, title: '数据分析师' },
+    ]);
+    await coordinator(1).advance('channel');
+
+    expect(executions.coAddressed).toHaveBeenCalledWith('channel', 'job-0');
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain(
+      'This request also asked Alien (Growth engineer), 数据分析师 to answer.',
+    );
   });
 
   describe('a job waiting on its directory', () => {
@@ -364,7 +421,7 @@ describe('Channel concurrent startup', () => {
       expect(execAgent).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps waiting when the directory cannot host a worktree', async () => {
+    it('retries in the shared directory when it cannot host a worktree', async () => {
       executions.claim.mockResolvedValue(null);
       executions.worktreeCandidate.mockResolvedValue(candidate);
       createChannelWorktree.mockResolvedValue({ error: 'not a git repository' });
@@ -376,7 +433,7 @@ describe('Channel concurrent startup', () => {
         candidate,
         'not a git repository',
       );
-      expect(executions.claim).toHaveBeenCalledTimes(1);
+      expect(executions.claim).toHaveBeenCalledTimes(2);
       expect(execAgent).not.toHaveBeenCalled();
     });
 

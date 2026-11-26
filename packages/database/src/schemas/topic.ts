@@ -14,7 +14,7 @@ import {
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-import { createNanoId, idGenerator } from '../utils/idGenerator';
+import { generateShareToken, idGenerator } from '../utils/idGenerator';
 import { amountNumeric, createdAt, softDeleteColumns, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
@@ -248,9 +248,7 @@ export type TopicDocumentItem = typeof topicDocuments.$inferSelect;
 export const topicShares = pgTable(
   'topic_shares',
   {
-    id: text('id')
-      .$defaultFn(() => createNanoId(8)())
-      .primaryKey(),
+    id: text('id').$defaultFn(generateShareToken).primaryKey(),
 
     topicId: text('topic_id')
       .notNull()

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError } from '../../utils/errorType';
+import { BlockedPageError, NetworkConnectionError, PageNotFoundError } from '../../utils/errorType';
 import { withTimeout } from '../../utils/withTimeout';
 import { deepseek } from '../deepseek';
 
@@ -85,6 +85,19 @@ describe('deepseek crawler', () => {
     fetchMock.mockResolvedValue(createMockResponse({ content: 'too short', title: '' }));
 
     await expect(deepseek('https://example.com', { filterOptions: {} })).resolves.toBeUndefined();
+  });
+
+  it('should throw BlockedPageError for a challenge page shorter than the minimum length', async () => {
+    fetchMock.mockResolvedValue(
+      createMockResponse({
+        content: 'Verifying you are human\\.',
+        title: 'Just a moment\\.\\.\\.',
+      }),
+    );
+
+    await expect(deepseek('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      BlockedPageError,
+    );
   });
 
   it('should throw PageNotFoundError when DeepSeek cannot fetch usable content', async () => {

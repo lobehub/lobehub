@@ -85,8 +85,11 @@ const connectorFetch: FetchLike = mcpSsrfSafeFetch;
 /** RFC 8414 / OIDC discovery for a connector's authorization server. */
 export const discoverConnectorAuthorizationServerMetadata = (
   authorizationServerUrl: string,
+  signal?: AbortSignal,
 ): Promise<AuthorizationServerMetadata | undefined> =>
-  discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: connectorFetch });
+  discoverAuthorizationServerMetadata(authorizationServerUrl, {
+    fetchFn: signal ? (url, init) => connectorFetch(url, { ...init, signal }) : connectorFetch,
+  });
 
 export interface DiscoveredOAuth {
   authorizationServerUrl: string;
@@ -458,11 +461,14 @@ export const refreshConnectorToken = async (params: {
   metadata: AuthorizationServerMetadata;
   refreshToken: string;
   resource?: string;
+  signal?: AbortSignal;
 }): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
   withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
     refreshAuthorization(params.authorizationServerUrl, {
       clientInformation,
-      fetchFn: connectorFetch,
+      fetchFn: params.signal
+        ? (url, init) => connectorFetch(url, { ...init, signal: params.signal })
+        : connectorFetch,
       metadata: params.metadata,
       refreshToken: params.refreshToken,
       resource: params.resource ? new URL(params.resource) : undefined,

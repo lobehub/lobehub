@@ -8,6 +8,7 @@ import * as find from './find';
 import * as inFlight from './inFlight';
 import * as list from './list';
 import * as memoryExtractor from './memoryExtractor';
+import * as ownedWorktree from './ownedWorktree';
 import * as runningOperation from './runningOperation';
 import * as scheduledRun from './scheduledRun';
 import * as shareVisitor from './shareVisitor';
@@ -15,6 +16,7 @@ import * as taskCallback from './taskCallback';
 import * as trash from './trash';
 import * as update from './update';
 
+export type { OwnedWorktreeTopicRow } from './ownedWorktree';
 export { getTopicDeviceId } from './runningOperation';
 export { hasLiveTaskCallbackReservation } from './taskCallback';
 export type {
@@ -119,6 +121,7 @@ export class TopicModel {
 
   query = this.withContext(list.query);
   queryTopics = this.withContext(list.queryTopics);
+  listChildTopicAgentIds = this.withContext(list.listChildTopicAgentIds);
 
   // **************** Read *************** //
 
@@ -138,11 +141,18 @@ export class TopicModel {
   queryRecent = this.withContext(find.queryRecent);
   getCronTopicsGroupedByCronJob = this.withContext(find.getCronTopicsGroupedByCronJob);
   countInFlightInDirectory = this.withContext(inFlight.countInFlightInDirectory);
+  findOwnedWorktreeTopics = this.withContext(ownedWorktree.findOwnedWorktreeTopics);
+  findPendingOwnedWorktreeTopics = this.withContext(ownedWorktree.findPendingOwnedWorktreeTopics);
+  findOwnersOfWorktree = this.withContext(ownedWorktree.findOwnersOfWorktree);
+  findWaitingCleanupTopicsUnder = this.withContext(ownedWorktree.findWaitingCleanupTopicsUnder);
+  countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
+  updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
+  recordFirstSendWorktreeCheckout = this.withContext(ownedWorktree.recordFirstSendWorktreeCheckout);
 
   // **************** Agent Share (visitor-scoped) *************** //
 
   queryBySender = this.withContext(shareVisitor.queryBySender);
-  countBySender = this.withContext(shareVisitor.countBySender);
+  countMessagesBySender = this.withContext(shareVisitor.countMessagesBySender);
   countShareVisitors = this.withContext(shareVisitor.countShareVisitors);
 
   // **************** Create *************** //
@@ -205,6 +215,7 @@ export class TopicModel {
 
   cancelRateLimitContinuation = this.withContext(scheduledRun.cancelRateLimitContinuation);
   armScheduledRun = this.withContext(scheduledRun.armScheduledRun);
+  retryWorktreeStart = this.withContext(scheduledRun.retryWorktreeStart);
 
   // **************** Memory extraction *************** //
 
@@ -215,6 +226,8 @@ export class TopicModel {
   // **************** Scheduled run (backend cron) *************** //
 
   static getDueScheduledTopics = scheduledRun.getDueScheduledTopics;
+
+  static finishWorktreeStart = scheduledRun.finishWorktreeStart;
 
   static claimScheduledTopic = scheduledRun.claimScheduledTopic;
 

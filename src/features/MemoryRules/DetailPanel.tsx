@@ -46,6 +46,7 @@ import RightPanel from '@/features/RightPanel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise';
 import { expertiseActions } from '@/store/expertise';
+import { densityVars } from '@/styles/densityVars';
 
 import { DIRECTION_ICON } from './DirectionToggle';
 import Field from './Field';
@@ -68,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   foot: css`
     flex: none;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 28px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -120,7 +121,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 2px;
 
     margin-block-start: 16px;
-    padding-block-end: 16px;
+    padding-block-end: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   property: css`
@@ -144,7 +145,7 @@ const styles = createStaticStyles(({ css }) => ({
   quote: css`
     margin-block: 6px 0;
     padding-block: 6px;
-    padding-inline: 12px 0;
+    padding-inline: ${densityVars.contentGap} 0;
     border-inline-start: 2px solid ${cssVar.colorBorder};
 
     font-size: 13px;

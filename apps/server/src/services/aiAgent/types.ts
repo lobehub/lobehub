@@ -99,6 +99,7 @@ export interface ExecRunContext {
  * This extends the public ExecAgentParams with server-side only options
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The calling client renders `file` Works in pushed snapshots, derived from
    * the `streamFeatures` it declared on `aiAgent.execAgent`. See
@@ -247,6 +248,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
+  /** User turn already saved and verified by a trusted server dispatcher. */
+  persistedUserMessageId?: string;
   /**
    * A server-started turn that takes over where a finished run left off (the
    * server-side drain of queued follow-ups). Non-interactive thread starts
@@ -263,6 +266,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * device is a preference the target policy may override.
    */
   requireDevice?: boolean;
+  /** Stable assistant row for a worker dispatching a pre-persisted worktree turn. */
+  reservedAssistantMessageId?: string;
   /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
   reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */

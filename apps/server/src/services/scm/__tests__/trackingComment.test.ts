@@ -71,6 +71,30 @@ describe('tracking comment', () => {
     expect(body).toContain('| — | — | — | — | Jan 5, 2026 12:07am |');
   });
 
+  it('says Auto-fix is off in the headline and the Notifications cell', () => {
+    const on = buildTrackingComment({ marker, updatedAt: new Date('2026-01-05T00:07:00Z') });
+    expect(on).toContain('failing checks and review feedback reach the agent that opened it');
+    expect(on).not.toContain('Auto-fix off');
+
+    const off = buildTrackingComment({
+      autoFix: false,
+      marker,
+      notification: { count: 2, max: 3, reason: 'ci_failed' },
+      updatedAt: new Date('2026-01-05T00:07:00Z'),
+    });
+    expect(off).toContain(
+      'Auto-fix is off, so failing checks and review feedback do not wake the agent',
+    );
+    expect(off).toContain('| — | — | — | ⏸ Auto-fix off · 2/3 · CI failed | Jan 5, 2026 12:07am |');
+
+    const offNeverWoken = buildTrackingComment({
+      autoFix: false,
+      marker,
+      updatedAt: new Date('2026-01-05T00:07:00Z'),
+    });
+    expect(offNeverWoken).toContain('| — | — | — | ⏸ Auto-fix off | Jan 5, 2026 12:07am |');
+  });
+
   it('formats UTC the way the Updated column expects', () => {
     expect(formatUtc(new Date('2026-09-20T00:00:00Z'))).toBe('Sep 20, 2026 12:00am');
     expect(formatUtc(new Date('2026-09-20T12:30:00Z'))).toBe('Sep 20, 2026 12:30pm');

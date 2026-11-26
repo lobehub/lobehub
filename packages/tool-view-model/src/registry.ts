@@ -27,10 +27,10 @@ import type { ToolProjector } from './types';
  */
 const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   // Every tool below renders through the SAME shared card,
-  // `shared-tool-ui/Render/RunCommand` — it reads `stdout || output || content`
-  // for the body and `success` / `exitCode` for the collapsed row. One shape,
-  // so one projector; see `register.ts` for the render registrations that make
-  // this true.
+  // `shared-tool-ui/Render/RunCommand` — it reads `getRunCommandStdout`
+  // (stdout, then legacy output, then content) for the body and `success` /
+  // `exitCode` for the collapsed row. One shape, so one projector; see
+  // `register.ts` for the render registrations that make this true.
   'claude-code': {
     Bash: runCommandProjector,
   },

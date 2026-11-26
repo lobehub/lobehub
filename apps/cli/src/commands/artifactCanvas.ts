@@ -150,3 +150,68 @@ export const publishCanvasArtifact = async (
     subdomainLabel: published.subdomainLabel,
   };
 };
+
+const saveFingerprint = (html: string, title: string, createNew: boolean) =>
+  createHash('sha256')
+    .update(JSON.stringify(['save', html, title, createNew]))
+    .digest('hex');
+
+export const saveCanvasArtifact = async (
+  client: TrpcClient,
+  params: {
+    binding: ArtifactBinding;
+    html: string;
+    manifest: ResolvedManifest;
+    new?: boolean;
+    title: string;
+  },
+) => {
+  const { binding, html, manifest, title } = params;
+  if (binding.pendingCanvas) {
+    throw new Error(
+      'A Canvas publication is pending; retry lh artifact publish with the original input first',
+    );
+  }
+  if (binding.pendingCreateKey && binding.pendingType !== 'canvas') {
+    throw new Error('Complete the pending HTML publication before saving a Canvas');
+  }
+  const context = await client.canvas.getPublishContext.query();
+  const scope = JSON.stringify([resolveServerUrl(), context.userId, context.workspaceId]);
+  if (binding.scope && binding.scope !== scope) {
+    throw new Error('This artifact is bound to a different server, account or workspace');
+  }
+
+  const createNew = !!params.new;
+  const canvasId = createNew ? undefined : binding.canvasId;
+  const current = canvasId ? await client.canvas.getVersion.query({ canvasId }) : null;
+  if (canvasId && !current) {
+    throw new Error('The bound Canvas is unavailable to this account; save it with --new');
+  }
+
+  const fingerprint = saveFingerprint(html, title, createNew);
+  const requestId =
+    binding.pendingCanvasSave?.fingerprint === fingerprint
+      ? binding.pendingCanvasSave.requestId
+      : createIdempotencyKey();
+  writeBinding(manifest, { ...binding, pendingCanvasSave: { fingerprint, requestId } });
+
+  const saved = await client.canvas.save.mutate({
+    canvasId,
+    expectedVersion: current?.version ?? 0,
+    html,
+    requestId,
+    title,
+  });
+
+  const { pendingCanvasSave: _pending, ...settled } = binding;
+  writeBinding(manifest, {
+    ...settled,
+    ...(createNew && { deploymentId: undefined }),
+    canvasId: saved.canvasId,
+    scope,
+    type: 'canvas',
+    version: saved.version,
+    workId: saved.workId,
+  });
+  return saved;
+};

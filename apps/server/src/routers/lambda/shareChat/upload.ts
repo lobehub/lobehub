@@ -16,6 +16,10 @@ import { FileUploadModel } from '@/database/models/fileUpload';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { FileS3 } from '@/server/modules/S3';
+import {
+  sanitizeShareUploadName as sanitizeUploadName,
+  shareUploadPrefix,
+} from '@/server/services/agentShare/uploadPath';
 import { FileService } from '@/server/services/file';
 import { FileUploadService } from '@/server/services/fileUpload';
 import { reserveUpload } from '@/server/services/fileUploadReservation';
@@ -24,22 +28,6 @@ import { resolveLinkShareOrThrow } from './guards';
 import { shareChatProcedure } from './procedures';
 
 const log = debug('lobe-server:router:shareChat');
-
-/**
- * Storage key prefix for a share's visitor uploads, under the CREATOR's file
- * namespace. The prefix is what ties an upload session / file row back to a
- * specific share on the settle and abort paths: a visitor can only complete or
- * release reservations that live under their share's prefix, never one of the
- * creator's own uploads.
- */
-const shareUploadPrefix = (share: {
-  ownerId: string;
-  shareId: string;
-  workspaceId: string | null;
-}) =>
-  share.workspaceId
-    ? `files/workspaces/${share.workspaceId}/agent-share/${share.shareId}/`
-    : `files/${share.ownerId}/agent-share/${share.shareId}/`;
 
 /**
  * Visitor-facing storage refusal, one shape for two causes: the share's own
@@ -64,13 +52,6 @@ const toVisitorStorageBlock = (error: unknown) => {
   }
   return error;
 };
-
-/** Basename only — a visitor-supplied name must not steer the storage key. */
-const sanitizeUploadName = (name: string) =>
-  name
-    .replaceAll(/[/\\]/g, '_')
-    .replaceAll(/\p{Cc}/gu, '')
-    .trim() || 'file';
 
 /**
  * Metadata a visitor may attach to their upload — the same intrinsic

@@ -66,15 +66,6 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
 
   /**
-   * Keep the immutable per-operation tool set out of the agent state blob that
-   * is rewritten at every step; it is written once to its own Redis key and
-   * re-attached on load. Off: the blob keeps its inline copy. Server only;
-   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
-   * user ids (the operation's owner).
-   */
-  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
-
-  /**
    * Keep copies the per-operation tool set already holds out of the agent state
    * blob rewritten at every step (`initialContext.payload.tools`, the manifests
    * of `activatedStepTools`, the deprecated top-level `expertise` mirror); they
@@ -100,6 +91,14 @@ export const FeatureFlagsSchema = z.object({
    * tool results. Array values are user ids.
    */
   mcp_apps: FeatureFlagValue.optional(),
+
+  /**
+   * Artboard: the agent's builtin-artboard tool in project conversations, the
+   * board card and side panel, and the Artboard Works tab. Off: the tool is
+   * never offered and artboard Works are not requested. Array values are user
+   * ids.
+   */
+  artboard: FeatureFlagValue.optional(),
 
   /**
    * Inbound webhooks wake Agents: MCP Events subscriptions, generic webhooks (the Agent Profile
@@ -130,6 +129,17 @@ export const FeatureFlagsSchema = z.object({
    * wake, connect and can be removed. Array values are user ids, checked per member.
    */
   managed_cloud_device: FeatureFlagValue.optional(),
+
+  /**
+   * Optional business settings tab, read by the server for personal settings. Off: hidden.
+   * Array values are user ids.
+   */
+  cloud_device_bundle: FeatureFlagValue.optional(),
+  /**
+   * Workspace ids whose settings list the optional business settings tab. Membership is checked
+   * on the server. Empty or unset: no workspace lists it.
+   */
+  cloud_device_bundle_workspaces: z.array(z.string()).optional(),
 
   topic_preview: FeatureFlagValue.optional(),
 
@@ -229,11 +239,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_llm_relay: false,
   agent_deferred_init: false,
   agent_deferred_hetero_dispatch: false,
-  agent_runtime_strip_operation_toolset: false,
   agent_runtime_slim_state: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
+
+  // On in development only; production needs an explicit allowlist.
+  artboard: isDev,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
@@ -245,6 +257,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   managed_cloud_device: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
+  cloud_device_bundle: false,
 
   // Off until the backend replaces the preview read; allowlist first.
   topic_preview: false,
@@ -286,6 +301,7 @@ export const mapFeatureFlagsEnvToState = (
     // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
     enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableArtboard: evaluateFeatureFlag(config.artboard, userId, 'artboard'),
     enableDeferredInit: evaluateFeatureFlag(
       config.agent_deferred_init,
       userId,
@@ -295,11 +311,6 @@ export const mapFeatureFlagsEnvToState = (
       config.agent_deferred_hetero_dispatch,
       userId,
       'agent_deferred_hetero_dispatch',
-    ),
-    enableStripOperationToolset: evaluateFeatureFlag(
-      config.agent_runtime_strip_operation_toolset,
-      userId,
-      'agent_runtime_strip_operation_toolset',
     ),
     enableSlimAgentState: evaluateFeatureFlag(
       config.agent_runtime_slim_state,

@@ -21,7 +21,7 @@ const db = {} as any;
 const share = {
   agentId: 'agt_shared',
   ownerId: 'owner',
-  shareConfig: { deviceAccess: 'all', toolGrants: [] },
+  shareConfig: { deviceAccess: 'allowlist', deviceAllowUserIds: ['visitor'], toolGrants: [] },
   shareId: 'share-1',
   workspaceId: null,
 } as any;
@@ -36,7 +36,7 @@ describe('createShareRunScope', () => {
 
       const { dispatchContext, shareGate } = await createShareRunScope(db, share, 'visitor');
 
-      expect(resolveDeviceAccess).toHaveBeenCalledWith(db, share.shareConfig, 'visitor');
+      expect(resolveDeviceAccess).toHaveBeenCalledWith(db, share, 'visitor');
       expect(shareGate).toEqual({
         agentId: 'agt_shared',
         canUseDevice: granted,

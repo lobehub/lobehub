@@ -1,25 +1,35 @@
 // @vitest-environment node
+import { ChatErrorType } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { ContactModel } from '../../../models/contact';
-import { agents, userContacts, users, workspaceMembers } from '../../../schemas';
+import { agents, files, userContacts, users, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture, jobsOf } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-peer');
+const fixture = createChannelFixture(db, 'channel-peer', tableContacts);
 
 const alice = fixture.ownerId;
 const bob = fixture.memberId;
-const asAlice = new ChannelRepository(db, alice);
-const asBob = new ChannelRepository(db, bob);
+const asAlice = new ChannelRepository(db, alice, undefined, tableContacts);
+const asBob = new ChannelRepository(db, bob, undefined, tableContacts);
 
-const befriend = async () => {
-  const { requestId } = await new ContactModel(db, alice).sendRequest(bob);
-  await new ContactModel(db, bob).acceptRequest(requestId);
+/** One direction of a contact relation in a scope; both make two people contacts. */
+const addContact = (userId: string, contactUserId: string, workspaceId: string | null = null) =>
+  db.insert(userContacts).values({ contactUserId, type: 'user', userId, workspaceId });
+const pair = async (a: string, b: string, workspaceId: string | null = null) => {
+  await addContact(a, b, workspaceId);
+  await addContact(b, a, workspaceId);
 };
+const dropContact = (userId: string, contactUserId: string) =>
+  db
+    .delete(userContacts)
+    .where(and(eq(userContacts.userId, userId), eq(userContacts.contactUserId, contactUserId)));
+
+const befriend = () => pair(alice, bob);
 
 beforeEach(fixture.setup);
 afterEach(async () => {
@@ -30,7 +40,7 @@ afterEach(async () => {
 describe('a conversation between two contacts', () => {
   it('requires the mutual contact relation', async () => {
     await expect(asAlice.openPeer(bob, 'Mia')).rejects.toThrow('You are not contacts');
-    await new ContactModel(db, alice).sendRequest(bob);
+    await addContact(alice, bob);
     await expect(asAlice.openPeer(bob, 'Mia')).rejects.toThrow('You are not contacts');
   });
 
@@ -90,7 +100,7 @@ describe('a conversation between two contacts', () => {
   it('goes silent once either person removes the other', async () => {
     await befriend();
     const { channel } = await asAlice.openPeer(bob, 'Mia');
-    await new ContactModel(db, bob).removeUser(alice);
+    await dropContact(bob, alice);
     await expect(
       asAlice.send(channel.id, { content: 'Still there?', requestKey: 'x', routing: 'fallback' }),
     ).rejects.toThrow('You are not contacts');
@@ -100,7 +110,8 @@ describe('a conversation between two contacts', () => {
 });
 
 describe('a conversation between two workspace members', () => {
-  const inTeam = (userId: string) => new ChannelRepository(db, userId, fixture.workspaceId);
+  const inTeam = (userId: string) =>
+    new ChannelRepository(db, userId, fixture.workspaceId, tableContacts);
   const join = (...userIds: string[]) =>
     db
       .insert(workspaceMembers)
@@ -155,8 +166,8 @@ describe('a conversation between two workspace members', () => {
 
 describe('a conversation with an external contact of a workspace', () => {
   const carol = 'channel-peer-carol';
-  const inTeam = (userId: string) => new ChannelRepository(db, userId, fixture.workspaceId);
-  const contactsInTeam = (userId: string) => new ContactModel(db, userId, fixture.workspaceId);
+  const inTeam = (userId: string) =>
+    new ChannelRepository(db, userId, fixture.workspaceId, tableContacts);
 
   /** Alice and Carol are members; Alice invites Bob, who stays outside the workspace. */
   const inviteBob = async () => {
@@ -168,8 +179,7 @@ describe('a conversation with an external contact of a workspace', () => {
         workspaceId: fixture.workspaceId,
       })),
     );
-    const { requestId } = await contactsInTeam(alice).sendRequest(bob);
-    await new ContactModel(db, bob).acceptRequest(requestId);
+    await pair(alice, bob, fixture.workspaceId);
   };
 
   afterEach(async () => {
@@ -187,14 +197,48 @@ describe('a conversation with an external contact of a workspace', () => {
       'Workspace member not found',
     );
     await expect(inTeam(carol).openPeer(bob, 'Mia')).rejects.toThrow('Workspace member not found');
-    await contactsInTeam(carol).openTo(bob);
+    await pair(carol, bob, fixture.workspaceId);
     expect(await inTeam(carol).openPeer(bob, 'Mia')).toBeDefined();
+  });
+
+  it('lets them attach only files they uploaded, never one of the workspace’s', async () => {
+    await inviteBob();
+    const upload = async (userId: string, workspaceId: string | null) => {
+      const [file] = await db
+        .insert(files)
+        .values({
+          fileType: 'text/plain',
+          name: 'f.txt',
+          size: 1,
+          url: 'files/f',
+          userId,
+          workspaceId,
+        })
+        .returning();
+      return file.id;
+    };
+    // A public file of the workspace, which any member may attach.
+    const teamFile = await upload(carol, fixture.workspaceId);
+    const { channel } = await inTeam(bob).openPeer(alice, 'Olivia');
+    const send = (userId: string, fileId: string) =>
+      inTeam(userId).send(channel.id, {
+        content: 'See this',
+        fileIds: [fileId],
+        requestKey: `${userId}-${fileId}`,
+        routing: 'fallback',
+      });
+
+    await expect(send(bob, teamFile)).rejects.toThrow(ChatErrorType.ChannelAttachmentUnavailable);
+    // His own upload, which the file router stores in his personal space, goes through.
+    expect(await send(bob, await upload(bob, null))).toBeDefined();
+    // A member still attaches the workspace's file.
+    expect(await send(alice, teamFile)).toBeDefined();
   });
 
   it('goes silent once the member closes themselves to them', async () => {
     await inviteBob();
     const { channel } = await inTeam(alice).openPeer(bob, 'Mia');
-    await contactsInTeam(alice).removeUser(bob);
+    await dropContact(alice, bob);
     await expect(
       inTeam(bob).send(channel.id, { content: 'Hello?', requestKey: 'x', routing: 'fallback' }),
     ).rejects.toThrow('Workspace member not found');

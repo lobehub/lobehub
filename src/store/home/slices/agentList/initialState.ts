@@ -48,6 +48,12 @@ export interface AgentListState {
    */
   privateUngroupedAgents: SidebarAgentItem[];
   /**
+   * Workspace-only: ids of the Agents / chat groups owners and admins
+   * recommend to every member, in their order. Absent in personal mode (and
+   * kept absent, so the list round-trips unchanged through the replica).
+   */
+  recommendedAgentIds?: string[];
+  /**
    * Ungrouped agents and chat groups
    */
   ungroupedAgents: SidebarAgentItem[];
@@ -75,6 +81,7 @@ export const mapResponseToState = (
   | 'privateAgentGroups'
   | 'privatePinnedAgents'
   | 'privateUngroupedAgents'
+  | 'recommendedAgentIds'
   | 'ungroupedAgents'
 > => ({
   agentGroups: response.groups,
@@ -82,6 +89,7 @@ export const mapResponseToState = (
   privateAgentGroups: response.privateGroups ?? [],
   privatePinnedAgents: response.privatePinned ?? [],
   privateUngroupedAgents: response.privateUngrouped ?? [],
+  recommendedAgentIds: response.recommendedIds,
   ungroupedAgents: response.ungrouped,
 });
 
@@ -92,5 +100,6 @@ export const mapStateToResponse = (state: AgentListState): SidebarAgentListRespo
   privateGroups: state.privateAgentGroups,
   privatePinned: state.privatePinnedAgents,
   privateUngrouped: state.privateUngroupedAgents,
+  ...(state.recommendedAgentIds ? { recommendedIds: state.recommendedAgentIds } : {}),
   ungrouped: state.ungroupedAgents,
 });

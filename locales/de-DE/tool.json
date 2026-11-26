@@ -38,9 +38,6 @@
   "agentMarketplace.picker.empty": "Keine Vorlagen verfügbar.",
   "agentMarketplace.picker.failedToLoad": "Vorlagen konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
   "agentMarketplace.picker.summary": "{{filtered}} / {{total}} Vorlagen verfügbar.",
-  "agentMarketplace.render.alreadyInLibraryTag": "Bereits in der Bibliothek",
-  "agentMarketplace.render.alreadyInLibrary_one": "{{count}} bereits in der Bibliothek",
-  "agentMarketplace.render.alreadyInLibrary_other": "{{count}} bereits in der Bibliothek",
   "askUserQuestion.checkStatus": "Überprüfen Sie den Einreichungsstatus",
   "askUserQuestion.checking": "Einreichungsstatus wird überprüft…",
   "askUserQuestion.customOption.placeholder": "Oder schreiben Sie Ihre eigene…",
@@ -115,7 +112,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-Connectoren können nur in der Desktop-App synchronisiert werden. Öffnen Sie LobeHub Desktop, um diesen Connector zu synchronisieren.",
   "connector.kind.agent": "Agent-Connector",
   "connector.kind.builtin": "Eingebautes Werkzeug",
-  "connector.kind.community": "Community-Werkzeug",
+  "connector.kind.community": "Marktplatz-Tool",
   "connector.kind.custom": "Benutzerdefinierter Connector",
   "connector.kind.oauth": "OAuth-Connector",
   "connector.manageOnlyCreator": "Nur der Ersteller oder ein Arbeitsbereichsbesitzer kann diesen Connector verwalten",
@@ -311,7 +308,6 @@
   "updateArgs.form.add": "Eintrag hinzufügen",
   "updateArgs.form.key": "Feldschlüssel",
   "updateArgs.form.value": "Feldwert",
-  "updateArgs.formValidationFailed": "Formularvalidierung fehlgeschlagen. Bitte überprüfen Sie das Parameterformat.",
   "updateArgs.keyRequired": "Feldschlüssel darf nicht leer sein",
   "updateArgs.stringifyError": "Parameter konnten nicht serialisiert werden. Bitte überprüfen Sie das Format."
 }

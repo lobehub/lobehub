@@ -6,7 +6,6 @@ import {
 } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
-import { type DropdownItem } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -22,6 +21,17 @@ export type VoiceMessageSendHandler = (recording: VoiceMessageRecording) => bool
 export interface SendButtonProps {
   disabled?: boolean;
   generating: boolean;
+  /**
+   * The host already shows the run elsewhere (e.g. the conversation status tray),
+   * so the send area skips its own running spinner.
+   */
+  hideRunningIndicator?: boolean;
+  /**
+   * A send was committed but has not reached the agent yet (the message and its
+   * topic are still being created). Send shows as loading instead of Stop: there
+   * is no run to stop until the message is accepted.
+   */
+  loading?: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
   /**
@@ -104,6 +114,13 @@ export interface PublicState {
   onSend?: SendButtonHandler;
   onVoiceMessageSend?: VoiceMessageSendHandler;
   /**
+   * Accept a send while this composer's attachments are still uploading: the
+   * send is queued (Send shows loading) and commits once every upload settles,
+   * with whatever the composer holds by then. Only hosts whose `onSend` leaves
+   * failed uploads out of the message should enable this.
+   */
+  queueSendWhileUploading?: boolean;
+  /**
    * Live send gate consulted by `handleSendButton` instead of
    * `sendButtonProps.disabled`. The disabled flag mirrors editor content
    * through the editor's debounced onChange, so a fast type→Enter arrives
@@ -114,7 +131,6 @@ export interface PublicState {
   resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
-  sendMenu?: { items: DropdownItem[] };
   showTypoBar?: boolean;
   /**
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
@@ -149,6 +165,13 @@ export interface State extends PublicState {
   isContentEmpty: boolean;
   markdownContent: string;
   slashMenuRef: ChatInputProps['slashMenuRef'];
+  /**
+   * The send queued until the composer's uploads settle (see
+   * `queueSendWhileUploading`), tagged with the draft it was made from: the
+   * composer outlives a conversation switch, and the conversation it shows next
+   * has nothing queued.
+   */
+  uploadQueuedSend?: { draftKey?: string; unsubscribe: () => void };
 }
 
 export const initialState: State = {

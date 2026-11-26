@@ -2,7 +2,9 @@ import type {
   DeviceGitPullRequestCheck,
   DeviceGitPullRequestCiStatus,
   DeviceGitPullRequestDetail,
+  TopicPullRequestAutoFix,
   TopicPullRequestItem,
+  TopicPullRequestLinkSource,
 } from '@lobechat/types';
 
 import type { PullRequestState } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
@@ -14,6 +16,8 @@ import type { PullRequestState } from '@/features/AgentSidebar/Topic/List/Item/m
  * known), or the status the agent's own commands left on the Work row.
  */
 export interface TopicPullRequestView {
+  /** Present only when the GitHub App tracks the PR: Auto-fix needs its webhooks. */
+  autoFix?: TopicPullRequestAutoFix;
   ciStatus?: DeviceGitPullRequestCiStatus;
   /** Confirmed by the GitHub App or by the device in this session. */
   confirmed: boolean;
@@ -24,9 +28,13 @@ export interface TopicPullRequestView {
   mergedAt?: string | null;
   number: number;
   repoFullName: string;
+  /** How the topic came to it; see {@link TopicPullRequestLinkSource}. */
+  source: TopicPullRequestLinkSource;
   state: PullRequestState;
   title: string;
   url: string;
+  /** The app can vouch it belongs to the topic; merge / close stay locked otherwise. */
+  vouched: boolean;
 }
 
 /** Device detail for a number, with whether this session confirmed it. */
@@ -65,7 +73,10 @@ export const resolvePullRequestView = (
     identifier: item.identifier,
     number: item.number,
     repoFullName: item.repoFullName,
+    // Persisted lists from before these fields existed read as the strongest kind.
+    source: item.source ?? 'created',
     url: fallbackUrl(item),
+    vouched: item.vouched ?? true,
   };
 
   const sameRepo = !!device && isSameRepository(device.detail, item.repoFullName);
@@ -73,13 +84,14 @@ export const resolvePullRequestView = (
   if (item.scm) {
     return {
       ...base,
+      autoFix: item.scm.autoFix,
       ciStatus: item.scm.ciStatus ?? undefined,
       confirmed: true,
       isDraft: item.scm.isDraft,
       localDetail: sameRepo,
       mergedAt: item.scm.mergedAt ? new Date(item.scm.mergedAt).toISOString() : null,
       state: item.scm.state,
-      title: item.scm.title ?? item.title ?? `#${item.number}`,
+      title: item.scm.title ?? item.title ?? item.repoFullName,
     };
   }
 
@@ -105,7 +117,9 @@ export const resolvePullRequestView = (
     isDraft: status === 'draft',
     localDetail: false,
     state: status === 'merged' ? 'merged' : status === 'closed' ? 'closed' : 'open',
-    title: item.title ?? `#${item.number}`,
+    // No title known yet (a PR linked by hand before any read): name its repo
+    // rather than repeat the number the row already shows.
+    title: item.title ?? item.repoFullName,
   };
 };
 

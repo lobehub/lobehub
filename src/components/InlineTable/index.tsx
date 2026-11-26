@@ -21,6 +21,12 @@ const fallback = createStaticStyles(({ css, cssVar }) => ({
       font-size: 13px;
     }
 
+    /* Compact rows: 4px + 23px line + 4px, in line with rowHeight 32. */
+    html[data-density='compact'] & .lobe-table-small {
+      --lobe-table-padding-block: 4px;
+      --lobe-table-virtual-row-height: calc(4px * 2 + 23px);
+    }
+
     th {
       background: transparent;
       box-shadow: inset 0 999px 0 ${cssVar.colorFillQuaternary};

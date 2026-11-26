@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
 import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useDensityTokens } from '@/styles/density';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
@@ -31,6 +32,7 @@ const ProviderCard = memo<ProviderCardProps>(
   ({ id, description, name, enabled, source, logo, loading, onProviderSelect }) => {
     const { t } = useTranslation('providers');
     const isDarkMode = useIsDark();
+    const { pageTitleFontSize } = useDensityTokens();
 
     if (loading)
       return (
@@ -75,7 +77,9 @@ const ProviderCard = memo<ProviderCardProps>(
                           style={{ borderRadius: 6 }}
                           type={'avatar'}
                         />
-                        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{name || id}</Text>
+                        <Text style={{ fontSize: pageTitleFontSize, fontWeight: 'bold' }}>
+                          {name || id}
+                        </Text>
                       </Flexbox>
                     ) : (
                       <ProviderCombine
@@ -99,7 +103,9 @@ const ProviderCard = memo<ProviderCardProps>(
                         type={'avatar'}
                       />
                     )}
-                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{name || id}</Text>
+                    <Text style={{ fontSize: pageTitleFontSize, fontWeight: 'bold' }}>
+                      {name || id}
+                    </Text>
                   </Flexbox>
                 )}
               </Flexbox>

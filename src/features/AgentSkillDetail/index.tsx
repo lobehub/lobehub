@@ -7,13 +7,16 @@ import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PublishedTime from '@/components/PublishedTime';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
+import { densityVars } from '@/styles/densityVars';
 
 import ContentViewer from './ContentViewer';
+import { GitHubSkillSource, GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -49,11 +52,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   meta: css`
     flex-shrink: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -122,50 +125,64 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       {skillDetail && (
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
-            <SkillAvatar size={40} />
+            {skillDetail.source === 'market' ? (
+              <MarketSkillIcon
+                fallback={<SkillAvatar size={40} />}
+                identifier={skillDetail.identifier}
+                name={skillDetail.name}
+                size={40}
+              />
+            ) : (
+              <SkillAvatar size={40} />
+            )}
             <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
-              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
-                  <span className={styles.name}>{skillDetail.name}</span>
-                  {version && (
-                    <>
-                      <Icon icon={DotIcon} />
-                      <span>v{version}</span>
-                    </>
-                  )}
-                  <Icon icon={DotIcon} />
-                  {t('agentSkillDetail.updatedAt')}{' '}
-                  <PublishedTime
-                    date={new Date(skillDetail.updatedAt).toISOString()}
-                    template={'MMM DD, YYYY'}
-                  />
-                </Flexbox>
-                {(repository || sourceUrl) && (
-                  <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 0 }}>
-                    {repository && (
-                      <a href={repository} rel="noreferrer" target={'_blank'}>
-                        <ActionIcon
-                          fill={cssVar.colorTextDescription}
-                          icon={Github}
-                          size={'small'}
-                          title={t('agentSkillDetail.repository')}
-                        />
-                      </a>
-                    )}
-                    {sourceUrl && (
-                      <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
-                        <ActionIcon
-                          icon={ExternalLinkIcon}
-                          size={'small'}
-                          title={t('agentSkillDetail.sourceUrl')}
-                        />
-                      </a>
-                    )}
-                  </Flexbox>
+              <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
+                <span className={styles.name}>{skillDetail.name}</span>
+                {version && (
+                  <>
+                    <Icon icon={DotIcon} />
+                    <span>v{version}</span>
+                  </>
                 )}
+                <Icon icon={DotIcon} />
+                {t('agentSkillDetail.updatedAt')}{' '}
+                <PublishedTime
+                  date={new Date(skillDetail.updatedAt).toISOString()}
+                  template={'MMM DD, YYYY'}
+                />
               </Flexbox>
               {description && <p className={styles.description}>{description}</p>}
             </Flexbox>
+            {hasGitHubSource(skillDetail) ? (
+              <Flexbox horizontal align="center" flex="none" gap={4}>
+                <GitHubSkillUpdate skill={skillDetail} />
+                <GitHubSkillSource skill={skillDetail} />
+              </Flexbox>
+            ) : (
+              (repository || sourceUrl) && (
+                <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 0 }}>
+                  {repository && (
+                    <a href={repository} rel="noreferrer" target={'_blank'}>
+                      <ActionIcon
+                        fill={cssVar.colorTextDescription}
+                        icon={Github}
+                        size={'small'}
+                        title={t('agentSkillDetail.repository')}
+                      />
+                    </a>
+                  )}
+                  {sourceUrl && (
+                    <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
+                      <ActionIcon
+                        icon={ExternalLinkIcon}
+                        size={'small'}
+                        title={t('agentSkillDetail.sourceUrl')}
+                      />
+                    </a>
+                  )}
+                </Flexbox>
+              )
+            )}
           </Flexbox>
         </div>
       )}

@@ -25,6 +25,9 @@ export interface DeviceUnavailableErrorData {
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
+/** A composer selection by filesystem skill name, before the execution scope is known. */
+export const FILESYSTEM_SKILL_SELECTION_PREFIX = 'projectSkill:';
+
 /**
  * A filesystem skill discovered on the execution device by the client at
  * request time. Project skills live under the current working directory;
@@ -36,6 +39,8 @@ export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/s
 export interface ProjectSkillMeta {
   /** Skill description from SKILL.md frontmatter. */
   description?: string;
+  /** SKILL.md declares that the model must not invoke this skill automatically. */
+  disableModelInvocation?: boolean;
   /** Skill name from frontmatter (falls back to the directory name). */
   name: string;
   /** Absolute path to the skill's SKILL.md on the device filesystem. */
@@ -353,6 +358,12 @@ export interface DeviceGitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
+  /**
+   * `owner/repo` of the GitHub remote the branch publishes to. A PR whose head
+   * repository is this one was pushed from here; a same-named branch in
+   * another fork was not. Absent from devices that predate it.
+   */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
@@ -671,6 +682,8 @@ export interface DeviceGitRemoveWorktreeResult {
 /** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
   reason?: typeof DEVICE_GIT_OUTDATED;
   /** Echo of the start point; see {@link DeviceGitCheckoutResult.startPoint}. */
   startPoint?: string;
@@ -863,8 +876,6 @@ export interface DeviceTrashProjectFilesResult {
  */
 export interface DeviceProjectSkillItem {
   description?: string;
-  fileCount: number;
-  files: string[];
   name: string;
   /** Absolute path to the SKILL.md file on the device. */
   path: string;

@@ -4,12 +4,13 @@ import { TOPIC_MESSAGE_SEARCH_LIMIT } from '@lobechat/const';
 import type { TopicMessageSearchMatch } from '@lobechat/types';
 import {
   ActionIcon,
+  Button,
+  Center,
   cssVar as lobeCssVar,
+  Empty,
   Flexbox,
   Icon,
   Input,
-  Skeleton,
-  Text,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -20,9 +21,12 @@ import type { KeyboardEvent } from 'react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { TOPIC_SEARCH_HIGHLIGHT } from './conversationHighlights';
 import { splitHighlightSegments } from './highlightSegments';
@@ -43,17 +47,20 @@ const HIGHLIGHT_SHEET = `
 
 const styles = stylex.create({
   header: {
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
-    paddingBlock: 8,
-    paddingInline: 12,
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
   },
   item: {
-    borderRadius: 6,
     cursor: 'pointer',
-    paddingBlock: 6,
-    paddingInline: 8,
+    display: 'flex',
+    flexDirection: 'column',
+    paddingBlock: 5,
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
     backgroundColor: {
       ':hover': cssVar.colorFillTertiary,
       'default': 'transparent',
@@ -69,8 +76,16 @@ const styles = stylex.create({
     flex: '1',
     minHeight: 0,
     overflowY: 'auto',
-    paddingBlock: 6,
-    paddingInline: 6,
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
+  listNote: {
+    paddingBlock: 4,
+    paddingInline: sidebarRow.paddingInline,
+    color: cssVar.colorTextTertiary,
+    fontSize: sidebarRow.metaFontSize,
+    lineHeight: '18px',
   },
   mark: {
     backgroundColor: cssVar.colorWarningBgHover,
@@ -79,7 +94,9 @@ const styles = stylex.create({
   },
   meta: {
     color: cssVar.colorTextTertiary,
-    fontSize: 12,
+    fontSize: sidebarRow.metaFontSize,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '18px',
   },
   position: {
     color: cssVar.colorTextTertiary,
@@ -88,9 +105,13 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
   snippet: {
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+    display: '-webkit-box',
+    overflow: 'hidden',
     color: cssVar.colorText,
-    fontSize: 13,
-    lineHeight: 1.5,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
     overflowWrap: 'anywhere',
   },
 });
@@ -192,26 +213,36 @@ export const TopicSearchPane = memo<TopicSearchPaneProps>(({ active, topicId }) 
   const renderBody = () => {
     if (!keyword)
       return (
-        <Text fontSize={12} type={'secondary'}>
-          {t('workingPanel.search.hint')}
-        </Text>
+        <Center paddingBlock={24}>
+          <Empty description={t('workingPanel.search.hint')} icon={SearchIcon} />
+        </Center>
       );
     if (failed)
       return (
-        <Text fontSize={12} type={'secondary'}>
-          {t('workingPanel.search.error')} <a onClick={retry}>{t('workingPanel.search.retry')}</a>
-        </Text>
+        <AsyncError
+          align={'start'}
+          title={t('workingPanel.search.error')}
+          variant={'inline'}
+          action={
+            <Button size={'small'} type={'text'} onClick={retry}>
+              {t('workingPanel.search.retry')}
+            </Button>
+          }
+        />
       );
-    if (isSearching && matches.length === 0) return <Skeleton.Text rows={4} />;
+    if (isSearching && matches.length === 0) return <SkeletonList compact rows={4} />;
     if (matches.length === 0)
       return (
-        <Text fontSize={12} type={'secondary'}>
-          {t('workingPanel.search.empty', { keyword })}
-        </Text>
+        <Center paddingBlock={24}>
+          <Empty description={t('workingPanel.search.empty', { keyword })} icon={SearchIcon} />
+        </Center>
       );
 
     return (
-      <Flexbox gap={2} role={'listbox'}>
+      <Flexbox gap={1} role={'listbox'}>
+        <div {...stylex.props(styles.listNote)}>
+          {t('workingPanel.search.resultCount', { count: matches.length })}
+        </div>
         {matches.map((match) => (
           <MatchItem
             active={match.id === activeId}
@@ -223,9 +254,9 @@ export const TopicSearchPane = memo<TopicSearchPaneProps>(({ active, topicId }) 
           />
         ))}
         {matches.length >= TOPIC_MESSAGE_SEARCH_LIMIT && (
-          <Text fontSize={12} style={{ padding: 8 }} type={'secondary'}>
+          <div {...stylex.props(styles.listNote)}>
             {t('workingPanel.search.limitReached', { count: TOPIC_MESSAGE_SEARCH_LIMIT })}
-          </Text>
+          </div>
         )}
       </Flexbox>
     );
@@ -236,12 +267,13 @@ export const TopicSearchPane = memo<TopicSearchPaneProps>(({ active, topicId }) 
       <style href={'lobe-topic-search-highlight'} precedence={'default'}>
         {HIGHLIGHT_SHEET}
       </style>
-      <Flexbox gap={6} {...stylex.props(styles.header)}>
+      <div {...stylex.props(styles.header)}>
         <Input
           placeholder={t('workingPanel.search.placeholder')}
           prefix={<Icon icon={SearchIcon} size={13} />}
           ref={inputRef}
           size={'small'}
+          style={{ flex: 1, minWidth: 0 }}
           value={value}
           suffix={
             <Flexbox horizontal align={'center'} gap={2}>
@@ -269,12 +301,7 @@ export const TopicSearchPane = memo<TopicSearchPaneProps>(({ active, topicId }) 
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
         />
-        {matches.length > 0 && (
-          <Text fontSize={12} type={'secondary'}>
-            {t('workingPanel.search.resultCount', { count: matches.length })}
-          </Text>
-        )}
-      </Flexbox>
+      </div>
       <div {...stylex.props(styles.list)}>{renderBody()}</div>
     </Flexbox>
   );

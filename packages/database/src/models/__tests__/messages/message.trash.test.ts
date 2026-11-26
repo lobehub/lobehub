@@ -426,7 +426,7 @@ describe('MessageTrashMutations.softDeleteTopicless', () => {
     await expect(messageModel.softDeleteTopicless({}, { deletedAt })).resolves.toEqual([]);
   });
 
-  it('stamps topic-less rows of the given agents and sessions only', async () => {
+  it('stamps topic-less rows of the given agents only, not session-only rows', async () => {
     await serverDB.insert(agents).values([{ id: 'agent-a', title: 'Agent A', userId }]);
     await serverDB.insert(sessions).values([{ id: 'sess-a', userId }]);
     await serverDB.insert(messages).values([
@@ -455,37 +455,13 @@ describe('MessageTrashMutations.softDeleteTopicless', () => {
       },
     ]);
 
-    const result = await messageModel.softDeleteTopicless(
-      { agentIds: ['agent-a'], sessionIds: ['sess-a'] },
-      { deletedAt },
-    );
+    const result = await messageModel.softDeleteTopicless({ agentIds: ['agent-a'] }, { deletedAt });
 
-    expect(result.map((entry) => entry.id).sort()).toEqual(['tl-1', 'tl-2']);
+    expect(result.map((entry) => entry.id)).toEqual(['tl-1']);
     expect((await row('tl-1')).isDeleted).toBe(true);
-    expect((await row('tl-2')).isDeleted).toBe(true);
+    expect((await row('tl-2')).isDeleted).toBeNull();
     expect((await row('tl-3')).isDeleted).toBeNull();
     expect((await row('tl-4')).isDeleted).toBeNull();
-  });
-
-  it('supports filtering by a single parent kind', async () => {
-    await serverDB.insert(agents).values([{ id: 'agent-b', title: 'Agent B', userId }]);
-    await serverDB.insert(sessions).values([{ id: 'sess-b', userId }]);
-    await serverDB.insert(messages).values([
-      { agentId: 'agent-b', content: 'agentless', id: 'tl-5', role: 'user', userId },
-      { content: 'sessionless', id: 'tl-6', role: 'user', sessionId: 'sess-b', userId },
-    ]);
-
-    const byAgent = await messageModel.softDeleteTopicless(
-      { agentIds: ['agent-b'] },
-      { deletedAt },
-    );
-    expect(byAgent.map((entry) => entry.id)).toEqual(['tl-5']);
-
-    const bySession = await messageModel.softDeleteTopicless(
-      { sessionIds: ['sess-b'] },
-      { deletedAt },
-    );
-    expect(bySession.map((entry) => entry.id)).toEqual(['tl-6']);
   });
 });
 

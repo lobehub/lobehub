@@ -23,6 +23,8 @@ const obj = (
 ): Record<string, unknown> => ({ properties, required: [...required], type: 'object' });
 
 const selfReviewProposalActionsSchema = {
+  description:
+    'One complete object per action. Keep idempotencyKey, proposalKey and summary at the top level, beside actions.',
   items: {
     additionalProperties: true,
     properties: {

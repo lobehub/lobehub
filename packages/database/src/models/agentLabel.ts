@@ -1,8 +1,9 @@
-import { and, asc, count, eq, inArray, not } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 
 import type { AgentLabelItem } from '../schemas';
 import { agentLabelAssignments, agentLabels, agents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { listedAgentWhere } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface AgentLabelWithUsage extends AgentLabelItem {
@@ -72,7 +73,7 @@ export class AgentLabelModel {
         agents,
         and(
           eq(agents.id, agentLabelAssignments.agentId),
-          not(eq(agents.virtual, true)),
+          listedAgentWhere(),
           this.agentOwnership(),
         ),
       )
@@ -185,8 +186,9 @@ export class AgentLabelModel {
           eq(agents.id, agentId),
           // Virtual agents — chat-group supervisors and synthetic members — are
           // filtered out of the agents list entirely, so a label on one could
-          // never be seen while still inflating that label's usage count.
-          not(eq(agents.virtual, true)),
+          // never be seen while still inflating that label's usage count. The
+          // inbox is the one virtual row the list shows.
+          listedAgentWhere(),
           this.agentOwnership(),
         ),
       )

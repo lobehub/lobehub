@@ -43,6 +43,11 @@ exactly as an authored round does. Every recording gets its chapters while you
 drive it; each case's `observation` says what you saw. Leave `status` honest —
 it is your record, not the verdict.
 
+A frozen item's text stays unchanged, so before capturing each visual item
+write its fixture data — counts, title lengths and state mix, by the
+[authored-plan rule](report.md#workflow) — into the round's review notes, in
+every round, and seed to it.
+
 Only items with a non-empty `requiredEvidence` need an artifact; the rest are
 judged on the deliverable text — don't fabricate evidence for them. The `hint`
 usually implies the surface (SKILL.md, Pick the surface).

@@ -103,7 +103,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     const order: string[] = [];
     vi.spyOn(lifecycle as any, 'persistCompletion').mockImplementation(async () => {
       order.push('persist-operation');
-      return true;
+      return {};
     });
     mockBuildRuntimeInterventionNotification.mockResolvedValue(pendingNotification);
     mockNotifyAgentInterventionRequired.mockImplementation(async () => {
@@ -149,7 +149,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
 
   it('fails the parked lifecycle when one row is outside the sealed batch', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     mockBuildRuntimeInterventionNotification.mockResolvedValue(pendingNotification);
     (lifecycle as any).messageModel = {
       findById: vi.fn().mockResolvedValue({
@@ -185,7 +185,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
 
   it('propagates a durable Review create failure so the parked lifecycle can retry', async () => {
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     mockBuildRuntimeInterventionNotification.mockResolvedValue(pendingNotification);
     mockNotifyAgentInterventionRequired.mockRejectedValueOnce(new Error('database unavailable'));
     stubDurablePendingRows(lifecycle);
@@ -210,7 +210,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
   it('continues after post-create push fanout fails inside the business slot', async () => {
     const lifecycle = buildLifecycle();
     const pushFanout = vi.fn().mockRejectedValue(new Error('APNs unavailable'));
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(true);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     mockBuildRuntimeInterventionNotification.mockResolvedValue(pendingNotification);
     mockNotifyAgentInterventionRequired.mockImplementation(async () => {
       // Cloud owns this boundary: the generic row is already durable here, so
@@ -255,7 +255,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     mockRegister.mockClear();
     mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
@@ -274,7 +274,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     mockRegister.mockClear();
     mockRegister.mockResolvedValue({ attempted: 0, failed: 0 });
     const lifecycle = buildLifecycle();
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
 
     const parkedState = {
       host: { hooks: [] },

@@ -20,6 +20,8 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
  * the one that burns money (chat/completions, image, video, music, asr).
+ * On the public REST API, text / JSON / image / video generation, speech and
+ * transcription spend credits under `generation:write` instead.
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -49,6 +51,17 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Text, JSON (structured output), image and video generation, text-to-speech
+   * and transcription on the public REST API (`/api/v1/text`, `/api/v1/objects`,
+   * `/api/v1/images`, `/api/v1/videos`, `/api/v1/generations`, `/api/v1/audio`).
+   * `generation:write` starts paid generations and deletes generated assets;
+   * `generation:read` reads their status and results. Text / JSON generation and
+   * speech also accept keys issued with `model:invoke`. The tRPC generation
+   * namespaces keep requiring `model:invoke`.
+   */
+  'generation:read',
+  'generation:write',
   'mcp:read',
   'mcp:write',
   'usage:read',
@@ -58,7 +71,51 @@ export const API_KEY_SCOPES = [
   'user:write',
 ] as const;
 
-export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+/**
+ * Scopes the server grants on its own and an API key can never be issued with:
+ * `isValidApiKeyScope` rejects them, so a restricted key still cannot reach
+ * the namespaces they gate.
+ *
+ * - `acceptance:*` — the acceptance and verify surfaces
+ * - `bot:message` — sending and reading through the user's connected bots
+ * - `device:read` — listing the user's devices, to pick one for a run
+ * - `trace:read` — reading agent run traces
+ *
+ * All of them are for a device run's caller token (`HETERO_CALLER_SCOPES`).
+ */
+export const INTERNAL_API_KEY_SCOPES = [
+  'acceptance:read',
+  'acceptance:write',
+  'bot:message',
+  'device:read',
+  'trace:read',
+] as const;
+
+export type ApiKeyScope =
+  (typeof API_KEY_SCOPES)[number] | (typeof INTERNAL_API_KEY_SCOPES)[number];
+
+/**
+ * The scopes of a device run's `caller:act` token, which acts as the user who
+ * started the run (`oidcAuth`). Limited to the work an agent does through `lh`
+ * — tasks, documents, files, acceptance, bot messages, picking a device and
+ * reading traces — so the run cannot reach the account's
+ * high-risk surfaces: workspace ownership and lifecycle, billing, member and
+ * role management, API keys, OAuth apps and account deletion all stay closed,
+ * as for any restricted key. Widen it per namespace when an agent needs more.
+ */
+export const HETERO_CALLER_SCOPES: readonly ApiKeyScope[] = [
+  'acceptance:write',
+  'agent:write',
+  'bot:message',
+  'chat:write',
+  'device:read',
+  'file:write',
+  'knowledge:write',
+  'model:invoke',
+  'trace:read',
+  'user:read',
+  'workspace:read',
+];
 
 const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 
@@ -179,15 +236,19 @@ const rw = (read: ApiKeyScope | null, write: ApiKeyScope | null): TrpcNamespaceS
  */
 export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule> = {
   accountDeletion: 'blocked',
-  acceptance: 'blocked',
+  // `acceptance:*` is internal (`INTERNAL_API_KEY_SCOPES`), so restricted keys
+  // stay out; a device run's caller token holds it
+  acceptance: rw('acceptance:read', 'acceptance:write'),
   // the discussion on an acceptance follows the acceptance itself
-  acceptanceComment: 'blocked',
+  acceptanceComment: rw('acceptance:read', 'acceptance:write'),
   agent: rw('agent:read', 'agent:write'),
   // an agent's identity assets (mail / wallet / service). Reading and
   // managing accounts is ordinary agent read/write; installing a *credential*
   // is separated onto `agent:credential:write` via
   // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
   agentAccount: rw('agent:read', 'agent:write'),
+  // read-only status of the caller's agents: presence, queued replies, quota reset time
+  agentAvailability: rw('agent:read', null),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
   // a bot's wake records: channel message previews and the owner's marks, read through the same
@@ -211,7 +272,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // needs no further auth, so a restricted key holding one would read past its
   // own scope. Same call as `llmGenerationTracing`.
   agentRunBoard: 'blocked',
-  agentTrace: 'blocked',
+  // `trace:read` is internal, so restricted keys stay blocked as above; a
+  // device run's caller token reads its own user's traces
+  agentTrace: rw('trace:read', null),
   aiAgent: rw('agent:read', 'agent:write'),
   aiChat: { any: 'model:invoke' },
   aiModel: rw('model:read', 'model:write'),
@@ -222,9 +285,11 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // `auth.getScope` only reports which scope the presented credential runs
   // under, so any key — however narrow — can tell where its calls land
   auth: 'open',
+  artboard: 'blocked',
   artifactShare: rw('chat:read', null),
-  // decrypts stored bot/messenger credentials and calls external channel APIs
-  botMessage: 'blocked',
+  // decrypts stored bot/messenger credentials and calls external channel APIs.
+  // `bot:message` is internal, so restricted keys stay blocked
+  botMessage: { any: 'bot:message' },
   brief: rw('chat:read', 'chat:write'),
   // publish opens a public site from stored files; no key-based client drives canvases
   canvas: 'blocked',
@@ -242,7 +307,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // boards only lay out widgets; reads mirror `widget`, writes stay key-less
   // so a restricted key cannot reshape what a widget run is attached to
   dashboard: rw('agent:read', null),
-  device: 'blocked',
+  // device reads include other devices' files, git state and terminals, so
+  // the namespace stays closed; only `device.listDevices` is granted below
+  device: rw(null, null),
   deviceMetric: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
@@ -353,7 +420,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   userMemory: rw('user:read', 'user:write'),
   // the user's own skill library — same scope as the agent skills it sits beside
   userSkill: rw('agent:read', 'agent:write'),
-  verify: 'blocked',
+  // an acceptance's verification runs and evidence
+  verify: rw('acceptance:read', 'acceptance:write'),
   video: { any: 'model:invoke' },
   waitlist: 'blocked',
   webBrowsing: { any: 'model:invoke' },
@@ -401,6 +469,8 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.finishLocalHeteroRunFee': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
+  'aiAgent.submitWorktreeTurn': AGENT_RUN_SCOPES,
+  'aiAgent.retryWorktreeTurn': AGENT_RUN_SCOPES,
   // a queued follow-up is a deferred composer send: the run that drains it
   // starts a model turn and writes the user message
   'agentSteerQueue.append': AGENT_RUN_SCOPES,
@@ -408,6 +478,7 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // returns the queued prompts and attachments, i.e. conversation content
   'agentSteerQueue.list': ['chat:read'],
   // thread/message state writes without starting a run
+  'aiAgent.cancelWorktreeTurn': ['chat:write'],
   'aiAgent.createClientGroupAgentTaskThread': ['chat:write'],
   'aiAgent.createClientTaskThread': ['chat:write'],
   'aiAgent.interruptTask': ['chat:write'],
@@ -490,6 +561,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
  * narrow and only for procedures that enforce their own authorization.
  */
 export const TRPC_PROCEDURE_SCOPE_GRANTS: Record<string, ApiKeyScope> = {
+  // picking a device for `lh agent run --device`; `device:read` is internal,
+  // so restricted keys stay blocked
+  'device.listDevices': 'device:read',
   // a member's workspace title and responsibilities — the procedure still
   // requires self or Admin, while invite / remove / role changes stay closed
   'workspaceMember.updateProfile': 'workspace:write',

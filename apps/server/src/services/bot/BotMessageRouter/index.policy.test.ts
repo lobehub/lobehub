@@ -185,6 +185,120 @@ describe('BotMessageRouter', () => {
       expect(opts.botContext.isDeviceTrusted).toBe(true);
     });
 
+    describe('device channel scope', () => {
+      const channelScoped = {
+        deviceChannelAllowFrom: [{ id: 'dev-channel', name: '#dev' }],
+        deviceChannelPolicy: 'allowlist',
+        dmPolicy: 'open',
+        userId: 'owner-platform-id',
+      };
+      const ownerMessage = {
+        author: { isBot: false, userId: 'owner-platform-id', userName: 'owner' },
+        isMention: true,
+        text: '@bot run the build',
+      };
+      const mention = async (
+        settings: Record<string, unknown>,
+        thread: Record<string, unknown>,
+      ) => {
+        const handler = await loadMentionHandler(settings);
+        await handler({ post: vi.fn().mockResolvedValue(undefined), ...thread }, ownerMessage);
+        expect(mockHandleMention).toHaveBeenCalledTimes(1);
+        return mockHandleMention.mock.calls[0][2].botContext;
+      };
+
+      it('leaves a listed channel unrestricted', async () => {
+        const botContext = await mention(channelScoped, {
+          id: 'telegram:dev-channel',
+          isDM: false,
+        });
+        expect(botContext.isOwner).toBe(true);
+        expect(botContext.isDeviceChannelRestricted).toBeUndefined();
+      });
+
+      it('restricts any other channel, even for the owner', async () => {
+        const botContext = await mention(channelScoped, { id: 'telegram:random', isDM: false });
+        expect(botContext.isOwner).toBe(true);
+        expect(botContext.isDeviceChannelRestricted).toBe(true);
+      });
+
+      it('never restricts a DM', async () => {
+        const botContext = await mention(channelScoped, { id: 'telegram:owner-dm', isDM: true });
+        expect(botContext.isDeviceChannelRestricted).toBeUndefined();
+      });
+
+      it('keeps the previous behavior when no channel scope is configured', async () => {
+        const botContext = await mention(
+          { dmPolicy: 'open', userId: 'owner-platform-id' },
+          { id: 'telegram:random', isDM: false },
+        );
+        expect(botContext.isDeviceChannelRestricted).toBeUndefined();
+      });
+    });
+
+    describe('device channel grant', () => {
+      const channelGranted = {
+        // The "Where" choice does not apply under the grant: the list grants, it never restricts.
+        deviceChannelAllowFrom: [{ id: 'dev-channel', name: '#dev' }],
+        deviceChannelPolicy: 'allowlist',
+        devicePolicy: 'channel',
+        dmPolicy: 'open',
+        userId: 'owner-platform-id',
+      };
+      const mentionAs = async (
+        settings: Record<string, unknown>,
+        thread: Record<string, unknown>,
+        userId: string,
+      ) => {
+        const handler = await loadMentionHandler(settings);
+        await handler(
+          { post: vi.fn().mockResolvedValue(undefined), ...thread },
+          { author: { isBot: false, userId, userName: userId }, isMention: true, text: '@bot run' },
+        );
+        expect(mockHandleMention).toHaveBeenCalledTimes(1);
+        return mockHandleMention.mock.calls[0][2].botContext;
+      };
+
+      it('grants a channel member in a listed channel', async () => {
+        const botContext = await mentionAs(
+          channelGranted,
+          { id: 'telegram:dev-channel', isDM: false },
+          'team-mate',
+        );
+        expect(botContext.isOwner).toBe(false);
+        expect(botContext.isDeviceChannelGranted).toBe(true);
+        expect(botContext.isDeviceChannelRestricted).toBeUndefined();
+      });
+
+      it('does not grant a member in any other channel', async () => {
+        const botContext = await mentionAs(
+          channelGranted,
+          { id: 'telegram:random', isDM: false },
+          'team-mate',
+        );
+        expect(botContext.isDeviceChannelGranted).toBeUndefined();
+      });
+
+      it('leaves the owner unrestricted outside the listed channels', async () => {
+        const botContext = await mentionAs(
+          channelGranted,
+          { id: 'telegram:random', isDM: false },
+          'owner-platform-id',
+        );
+        expect(botContext.isOwner).toBe(true);
+        expect(botContext.isDeviceChannelRestricted).toBeUndefined();
+      });
+
+      it('never grants a DM', async () => {
+        const botContext = await mentionAs(
+          channelGranted,
+          { id: 'telegram:dev-channel', isDM: true },
+          'team-mate',
+        );
+        expect(botContext.isDeviceChannelGranted).toBeUndefined();
+      });
+    });
+
     it('should fall back to isOwner=false when settings.userId is missing (fail-closed)', async () => {
       // No `userId` configured on the bot — even a sender who happens to
       // share an ID with the operator can't claim owner status.
@@ -581,15 +695,12 @@ describe('BotMessageRouter', () => {
     });
   });
 
-  describe('regression: nested settings.dm.policy is ignored', () => {
+  describe('DM policy gating', () => {
     /**
-     * Original bug: the form persisted `settings.dmPolicy` (flat) but the
-     * router read `settings.dm.policy` (nested), so every saved policy
-     * silently fell back to `'open'` and DMs were never blocked. Lock that
-     * direction in: the *flat* key is authoritative; the legacy nested
-     * shape is dead.
+     * The real flat/nested-key parser is covered in platforms/__tests__/const.test.ts.
+     * This suite uses a parser double and verifies the router's policy gate.
      */
-    it('a saved dmPolicy=disabled at the flat key blocks DMs end-to-end', async () => {
+    it('blocks DMs when the resolved policy is disabled', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings: { dmPolicy: 'disabled' } }),
       ]);
@@ -618,7 +729,7 @@ describe('BotMessageRouter', () => {
       expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
     });
 
-    it('a legacy nested settings.dm.policy=disabled is IGNORED and DMs pass through', async () => {
+    it('allows DMs when the parser resolves the legacy input to open', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
