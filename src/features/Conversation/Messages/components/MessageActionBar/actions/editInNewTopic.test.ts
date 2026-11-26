@@ -157,6 +157,41 @@ describe('editInNewTopicAction', () => {
     });
   });
 
+  // Regression: a message without editor JSON appended to a rich draft made
+  // the receiver reparse the whole draft as Markdown, flattening its image
+  // references; it now joins as plain paragraphs merged into the JSON.
+  it('appends a message without editor JSON as plain paragraphs', async () => {
+    mocks.draftEntry = { json: { root: {} }, updatedAt: 1 };
+    const action = build({ content: 'line 1\n\n**line 2**' })!;
+
+    await act(async () => {
+      await action.handleClick!();
+    });
+
+    const draft = useComposerDraftBus.getState().draft!;
+    expect(draft.append).toBe(true);
+    const paragraphs = (draft.editorData!.root as { children: any[] }).children;
+    expect(paragraphs.map((p) => p.children.map((c: any) => c.text).join(''))).toEqual([
+      'line 1',
+      '',
+      '**line 2**',
+    ]);
+  });
+
+  it('keeps Markdown parsing for a message without editor JSON on a clean composer', async () => {
+    const action = build({ content: '**bold**' })!;
+
+    await act(async () => {
+      await action.handleClick!();
+    });
+
+    expect(useComposerDraftBus.getState().draft).toMatchObject({
+      append: false,
+      editorData: undefined,
+      text: '**bold**',
+    });
+  });
+
   it('does not switch again when already on the new topic', async () => {
     mocks.context = { agentId: 'agt_1', topicId: null };
     const action = build({ content: 'hi' })!;

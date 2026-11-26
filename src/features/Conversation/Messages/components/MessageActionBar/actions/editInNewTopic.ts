@@ -6,6 +6,7 @@ import { getDraftEntry } from '@/features/ChatInput/draftStorage';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
+import { plainTextToEditorDocument } from '@/utils/appendEditorDocument';
 
 import { queueDraftForMainComposer, useComposerDraftBus } from '../../../../composerDraftBus';
 import {
@@ -84,7 +85,18 @@ export const editInNewTopicAction = defineAction({
 
           // A targeted draft waits until the conversation settles on this
           // agent's new topic, so the switch cannot wipe the text.
-          queueDraftForMainComposer(markdown, { agentId }, { append: keepExisting, editorData });
+          // Appending merges editor JSON so the draft's rich nodes survive; a
+          // message saved without editor JSON joins as plain paragraphs instead
+          // of reparsing the whole composer as Markdown.
+          queueDraftForMainComposer(
+            markdown,
+            { agentId },
+            {
+              append: keepExisting,
+              editorData:
+                editorData ?? (keepExisting ? plainTextToEditorDocument(markdown) : undefined),
+            },
+          );
 
           if (topicId) {
             // Same as the "+" button: a plain topic, not one staged inside a
