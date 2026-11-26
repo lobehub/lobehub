@@ -10,9 +10,10 @@ import { useSettingsBreadcrumb } from '@/features/SettingsSwitch/useSettingsBrea
 import { useWorkspaceSettingsScope } from '../hooks/useWorkspaceSettingsScope';
 
 const Header = memo(() => {
-  const { groups, scope, slug, space, tabUrl } = useWorkspaceSettingsScope();
+  const { activeTab, groups, scope, slug, space, tabUrl } = useWorkspaceSettingsScope();
   // "<Workspace> Settings", then "› Account Settings" in the account set.
   const breadcrumb = useSettingsBreadcrumb({
+    activeTab,
     fallbackHref: `/${slug}/settings`,
     groups,
     scope,

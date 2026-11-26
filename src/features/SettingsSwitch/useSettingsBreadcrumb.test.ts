@@ -35,6 +35,7 @@ describe('useSettingsBreadcrumb', () => {
   it('names the space as the root in the space set', () => {
     const { result } = renderHook(() =>
       useSettingsBreadcrumb({
+        activeTab: 'general',
         fallbackHref: '/acme/settings',
         groups,
         scope: 'space',
@@ -53,6 +54,7 @@ describe('useSettingsBreadcrumb', () => {
 
     const { result } = renderHook(() =>
       useSettingsBreadcrumb({
+        activeTab: 'appearance',
         fallbackHref: '/acme/settings',
         groups,
         scope: 'account',
@@ -71,6 +73,7 @@ describe('useSettingsBreadcrumb', () => {
   it('names the personal space and falls back when its set lists no tab', () => {
     const { result } = renderHook(() =>
       useSettingsBreadcrumb({
+        activeTab: 'profile',
         fallbackHref: '/settings',
         groups: groups.filter((group) => group.scope === 'account'),
         scope: 'account',
@@ -83,6 +86,42 @@ describe('useSettingsBreadcrumb', () => {
     expect(result.current).toEqual([
       { href: '/settings', title: 'Personal Space Settings' },
       { href: '/settings/profile', title: 'Account Settings' },
+    ]);
+  });
+
+  // Moving General → Members only remembers Members in an effect after the
+  // render; the crumb must not keep pointing at General meanwhile.
+  it('points the visible set at the tab on screen, not the one remembered before it', () => {
+    rememberSettingsTab('acme', 'space', 'general');
+    rememberSettingsTab('acme', 'account', 'profile');
+
+    const { result: space } = renderHook(() =>
+      useSettingsBreadcrumb({
+        activeTab: 'members',
+        fallbackHref: '/acme/settings',
+        groups,
+        scope: 'space',
+        space: workspace,
+        spaceKey: 'acme',
+        tabUrl,
+      }),
+    );
+    const { result: account } = renderHook(() =>
+      useSettingsBreadcrumb({
+        activeTab: 'appearance',
+        fallbackHref: '/acme/settings',
+        groups,
+        scope: 'account',
+        space: workspace,
+        spaceKey: 'acme',
+        tabUrl,
+      }),
+    );
+
+    expect(space.current[0].href).toBe('/acme/settings/members');
+    expect(account.current.map((item) => item.href)).toEqual([
+      '/acme/settings/general',
+      '/acme/settings/appearance',
     ]);
   });
 });

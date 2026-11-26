@@ -13,9 +13,10 @@ import {
 const PERSONAL_SPACE = { kind: 'personal' } as const;
 
 const Header = memo(() => {
-  const { categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
+  const { activeTab, categoryGroups, scope, tabUrl } = usePersonalSettingsScope();
   // "Personal Space Settings", then "› Account Settings" in the account set.
   const breadcrumb = useSettingsBreadcrumb({
+    activeTab,
     fallbackHref: '/settings',
     groups: categoryGroups,
     scope,

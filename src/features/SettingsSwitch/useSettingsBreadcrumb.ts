@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import {
+  filterGroupsByScope,
   getSettingsScopeEntryTab,
   type ScopedSettingsGroup,
   type SettingsScope,
@@ -13,6 +14,7 @@ export interface SettingsBreadcrumbItem {
 }
 
 interface UseSettingsBreadcrumbOptions<Group extends ScopedSettingsGroup> {
+  activeTab: string | undefined;
   /** Used when a set lists no tab. */
   fallbackHref: string;
   groups: Group[];
@@ -30,6 +32,7 @@ interface UseSettingsBreadcrumbOptions<Group extends ScopedSettingsGroup> {
  * leads back from account settings to the space's own.
  */
 export const useSettingsBreadcrumb = <Group extends ScopedSettingsGroup>({
+  activeTab,
   fallbackHref,
   groups,
   scope,
@@ -39,8 +42,17 @@ export const useSettingsBreadcrumb = <Group extends ScopedSettingsGroup>({
 }: UseSettingsBreadcrumbOptions<Group>): SettingsBreadcrumbItem[] => {
   const { t } = useTranslation('setting');
 
+  // The visible set's crumb points at the tab on screen: the remembered tab
+  // is only written in an effect after this render, so it would lag one tab
+  // behind. The other set's crumb returns to the tab last visited there.
   const hrefOf = (target: SettingsScope) => {
-    const tab = getSettingsScopeEntryTab(spaceKey, target, groups);
+    const activeItem =
+      target === scope
+        ? filterGroupsByScope(groups, target)
+            .flatMap((group) => group.items)
+            .find((item) => !item.href && item.key === activeTab)
+        : undefined;
+    const tab = activeItem?.key ?? getSettingsScopeEntryTab(spaceKey, target, groups);
     return tab ? tabUrl(tab) : fallbackHref;
   };
 
