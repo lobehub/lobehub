@@ -703,10 +703,12 @@ jobs:
           path: .vitest-durations/durations.json
           key: vitest-durations-v1-${{ github.run_id }}
 
-  # The whole server-DB suite against Postgres whenever the database package or
-  # one of its dependencies changed (migrations and fixtures are read from disk,
-  # so this job does not narrow by import graph). Three workers, each with its
-  # own database (DATABASE_TEST_WORKERS, see getTestDB).
+  # The server-DB suite against Postgres. Full runs run all of it with coverage;
+  # a PR in affected mode runs the DB tests that import a changed file
+  # (`--changed`, which follows the package's `@/` and `@/server/*` aliases into
+  # src/ and apps/server/). Migrations and fixtures are read from disk, so
+  # changing them makes the whole run full (ci-scope.mjs). Three workers, each
+  # with its own database (DATABASE_TEST_WORKERS, see getTestDB).
   test-databsae:
     needs: scope
     if: needs.scope.outputs.database == 'true'
@@ -735,7 +737,7 @@ jobs:
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git fetch --no-tags --depth=2 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
 
       - name: Setup environment
@@ -745,8 +747,15 @@ jobs:
         run: pnpm i
 
       - name: Test
-        run: pnpm --filter @lobechat/database ${{ needs.scope.outputs.mode == 'full' && 'test:coverage' || 'test:server-db' }}
+        run: |
+          if [ "$MODE" = "full" ]; then
+            pnpm --filter @lobechat/database test:coverage
+          else
+            cd packages/database
+            bunx vitest run --config vitest.config.server.mts --silent='passed-only' --changed=HEAD^1 --passWithNoTests
+          fi
         env:
+          MODE: ${{ needs.scope.outputs.mode }}
           DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/postgres
           DATABASE_TEST_WORKERS: '3'
           DATABASE_DRIVER: node

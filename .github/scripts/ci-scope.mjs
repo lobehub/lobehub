@@ -113,22 +113,23 @@ export function computeScope({ eventName, headRef = '', labels = [], changes, wo
   const scope = Object.fromEntries(FLAGS.map((flag) => [flag, false]));
   const changedPackages = new Set();
   const ownerOf = packageOwner(workspace);
-  // Without the workspace map, any package change runs the database tests.
-  const databaseDeps = workspace
-    ? dependencyClosure(workspace, DATABASE_PACKAGE)
-    : { has: () => true };
 
   for (const { path: file } of changes) {
     const isTest = TEST_FILE.test(file);
     const isAsset = STATIC_ASSET.test(file);
 
+    // Test Database runs for any app, server or package source change: its
+    // config aliases `@/` to src/ and `@/server/*` to apps/server/src, so DB
+    // tests import code outside the package (KeyVaultsEncrypt, file service, …).
+    // In affected mode it narrows with `--changed` like the other shards.
     if (file.startsWith('src/')) {
       scope.app = true;
-      if (!isTest) Object.assign(scope, { server: true, e2e: true, renderBudget: true });
+      if (!isTest)
+        Object.assign(scope, { database: true, e2e: true, renderBudget: true, server: true });
     } else if (file.startsWith('apps/server/')) {
       scope.server = true;
       // a few app tests import server modules
-      if (!isTest) Object.assign(scope, { app: true, e2e: true });
+      if (!isTest) Object.assign(scope, { app: true, database: true, e2e: true });
     } else if (/^apps\/(share|workbench|auth)\//.test(file)) {
       scope.app = true;
       if (!isTest) scope.e2e = true;
@@ -141,9 +142,8 @@ export function computeScope({ eventName, headRef = '', labels = [], changes, wo
       if (isData) {
         scope.e2e = true;
       } else if (!isTest && !isAsset) {
-        // the app and the server import packages; the database layer only its dependencies
-        Object.assign(scope, { app: true, server: true, e2e: true });
-        if (owner && databaseDeps.has(owner)) scope.database = true;
+        // the app, the server and the database layer all import packages
+        Object.assign(scope, { app: true, database: true, e2e: true, server: true });
         if (file.endsWith('.tsx')) scope.renderBudget = true;
       } else if (isAsset) {
         Object.assign(scope, { e2e: true, renderBudget: true });
@@ -192,19 +192,6 @@ function packageOwner(workspace) {
     : [];
   dirs.sort((a, b) => b[0].length - a[0].length);
   return (file) => dirs.find(([dir]) => file.startsWith(dir))?.[1];
-}
-
-/** A package and everything it depends on inside the workspace. */
-export function dependencyClosure(workspace, name) {
-  const closure = new Set();
-  const queue = [name];
-  while (queue.length > 0) {
-    const next = queue.pop();
-    if (closure.has(next) || !workspace.has(next)) continue;
-    closure.add(next);
-    queue.push(...workspace.get(next).deps);
-  }
-  return closure;
 }
 
 /** Changed packages plus every package that depends on one, that have a `test` script. */

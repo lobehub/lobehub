@@ -113,15 +113,21 @@ test('docs, desktop and mobile changes need no unit-test or E2E job', () => {
   }
 });
 
-test('app source runs the app, server and E2E jobs; a test-only change runs just its project', () => {
+test('app source runs the app, server, database and E2E jobs; a test-only change runs just its project', () => {
   assert.deepEqual(ran(computeScope(pr('src/features/a.tsx'))), [
     'app',
     'server',
+    'database',
     'e2e',
     'renderBudget',
   ]);
   assert.deepEqual(ran(computeScope(pr('src/features/a.test.tsx'))), ['app']);
-  assert.deepEqual(ran(computeScope(pr('apps/server/src/a.ts'))), ['app', 'server', 'e2e']);
+  assert.deepEqual(ran(computeScope(pr('apps/server/src/a.ts'))), [
+    'app',
+    'server',
+    'database',
+    'e2e',
+  ]);
   assert.deepEqual(ran(computeScope(pr('apps/server/src/a.test.ts'))), ['server']);
   assert.deepEqual(ran(computeScope(pr('apps/workbench/src/a.ts'))), ['app', 'e2e']);
   assert.deepEqual(ran(computeScope(pr('e2e/src/steps/a.ts'))), ['e2e', 'renderBudget']);
@@ -131,13 +137,13 @@ test('app source runs the app, server and E2E jobs; a test-only change runs just
   assert.deepEqual(ran(computeScope(pr('public/favicon.ico'))), ['e2e', 'renderBudget']);
 });
 
-test('a package change selects it and its dependents, and the database only for its dependencies', () => {
+test('a package change selects it and its dependents, and runs the database tests', () => {
   const types = computeScope(pr('packages/types/src/index.ts'));
   assert.deepEqual(ran(types), ['app', 'server', 'packages', 'database', 'e2e']);
   assert.deepEqual(types.packageNames, ['@lobechat/types', '@lobechat/utils']);
 
   const editor = computeScope(pr('packages/editor/src/Editor.tsx'));
-  assert.deepEqual(ran(editor), ['app', 'server', 'packages', 'e2e', 'renderBudget']);
+  assert.deepEqual(ran(editor), ['app', 'server', 'packages', 'database', 'e2e', 'renderBudget']);
   assert.deepEqual(editor.packageNames, ['@lobechat/editor']);
 
   const dbTest = computeScope(pr('packages/database/src/models/a.test.ts'));
