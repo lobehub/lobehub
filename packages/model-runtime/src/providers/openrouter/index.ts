@@ -3,6 +3,7 @@ import { ModelProvider } from 'model-bank';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
 const formatPrice = (price?: string) => {
@@ -86,8 +87,13 @@ export const params = {
             }
           : undefined);
 
+      const messages = Array.isArray(rest.messages)
+        ? stripUnsupportedClaudeAssistantPrefill(model, rest.messages)
+        : rest.messages;
+
       return {
         ...rest,
+        messages,
         ...(image_config && { image_config }),
         ...(modalities && { modalities }),
         model: payload.enabledSearch ? `${payload.model}:online` : payload.model,
@@ -109,6 +115,15 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
   decide: { path: '/systemone', protocol: 'systemone' },
+  generateObject: {
+    handlePayload: (_payload, requestPayload) => ({
+      ...requestPayload,
+      messages: stripUnsupportedClaudeAssistantPrefill(
+        requestPayload.model,
+        requestPayload.messages,
+      ),
+    }),
+  },
   models: async () => {
     // The default listing omits decision models; they are only returned when filtering by
     // their output modality, so fetch both lists.

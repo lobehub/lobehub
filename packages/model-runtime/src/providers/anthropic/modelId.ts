@@ -311,7 +311,7 @@ export const shouldOmitSamplingParams = (model: string): boolean => {
  */
 export const shouldDropUnsupportedClaudeAssistantPrefill = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
-  if (!parsed || parsed.source === 'openRouter') return false;
+  if (!parsed) return false;
   if (parsed.majorVersion >= 5) return true;
 
   return parsed.majorVersion === 4 && hasMinorVersionAtLeast(parsed, 6);

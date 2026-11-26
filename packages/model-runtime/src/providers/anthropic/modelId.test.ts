@@ -396,8 +396,23 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
     );
   });
 
-  it('should preserve existing OpenRouter behavior', () => {
-    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-5-mythos')).toBe(false);
+  it('should return true for OpenRouter Claude 4.6+ and Claude 5 ids', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-4.6')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-sonnet-4.6')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-4.6:online')).toBe(
+      true,
+    );
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-4.7')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-4.8')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-5-mythos')).toBe(true);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-5')).toBe(true);
+  });
+
+  it('should return false for OpenRouter Claude models before 4.6 and non-Claude models', () => {
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-opus-4.5')).toBe(false);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-sonnet-4.5')).toBe(false);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic/claude-3.7-sonnet')).toBe(false);
+    expect(shouldDropUnsupportedClaudeAssistantPrefill('openai/gpt-4o')).toBe(false);
   });
 
   it('should cover every 4.6+ family and future 4.x minors (official cutoff is "4.6 and later")', () => {
