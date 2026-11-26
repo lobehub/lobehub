@@ -344,11 +344,13 @@ export class SearchService {
         }
       } catch {}
 
-      let currentParams = buildSearchParams({
-        searchCategories,
-        searchEngines: impl.useAutoSearchEngineSelection ? undefined : searchEngines,
-        searchTimeRange,
-      });
+      let currentParams = impl.ignoresSearchParams
+        ? undefined
+        : buildSearchParams({
+            searchCategories,
+            searchEngines: impl.useAutoSearchEngineSelection ? undefined : searchEngines,
+            searchTimeRange,
+          });
       while (true) {
         const data = await this.queryWithImpl(impl, query, currentParams);
 
