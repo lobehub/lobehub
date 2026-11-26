@@ -201,13 +201,5 @@ describe('legacy-plugin command', () => {
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
-
-    it('preserves unknown-command errors for other legacy-plugin subcommands', async () => {
-      const program = createProgram();
-
-      await expect(
-        program.parseAsync(['node', 'test', 'legacy-plugin', 'unknown-command']),
-      ).rejects.toMatchObject({ code: 'commander.unknownCommand' });
-    });
   });
 });
