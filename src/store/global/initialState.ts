@@ -518,12 +518,12 @@ export interface SystemStatus {
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
   /**
-   * Folded group / sub-group headers of the task list view, persisted so a
-   * folded group stays folded across navigation and reloads (like Linear).
-   * Bucketed by grouping (`status`, or `status>priority` for sub-groups); see
-   * `useTaskListGroupCollapse`.
+   * Folded group / sub-group headers of the task list view, one entry per view
+   * (`taskListCollapseScopeKey`), so a folded group stays folded across
+   * navigation and reloads, as Linear keeps them per view. An array for the
+   * same reason as `taskListFilters`; see `useTaskListGroupCollapse`.
    */
-  taskListCollapsedGroupKeysByGrouping?: Record<string, string[]>;
+  taskListCollapsedGroups?: { keys: string[]; scope: string }[];
   /**
    * Tasks page filters, one entry per list scope (workspace + global / agent /
    * project page). An array, not a map: status is deep-merged on write, which

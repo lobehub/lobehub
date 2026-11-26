@@ -69,6 +69,11 @@ export interface TaskListCreateScope {
 
 interface TaskListProps {
   /**
+   * The view this list renders (`taskListCollapseScopeKey`). Folded groups are
+   * remembered per view, so another tab or page does not inherit them.
+   */
+  collapseScope: string;
+  /**
    * Offers a create entry on group headers (like the board's column headers),
    * pinning the group's field on the new task. Omit where creating is not
    * allowed or the collection cannot guarantee where a new task lands.
@@ -239,6 +244,7 @@ const VIRTUAL_LIST_COMPONENTS: Components<TaskListVirtualItem, TaskListVirtualCo
 
 const TaskList = memo<TaskListProps>((props) => {
   const {
+    collapseScope,
     createScope,
     data,
     error,
@@ -327,9 +333,14 @@ const TaskList = memo<TaskListProps>((props) => {
 
   // Collapse state lives here (not in the Accordion) because headers and rows
   // are flattened into one virtual list; a collapsed key simply drops its rows
-  // from that list. It is persisted per grouping, so a folded group stays
-  // folded across navigation and reloads, and comes back when its grouping does.
-  const { collapsedKeys, toggleCollapsed } = useTaskListGroupCollapse(groupBy, effectiveSubGroupBy);
+  // from that list. It is persisted per view and grouping, so a folded group
+  // stays folded across navigation and reloads, and comes back when its
+  // grouping does.
+  const { collapsedKeys, toggleCollapsed } = useTaskListGroupCollapse(
+    collapseScope,
+    groupBy,
+    effectiveSubGroupBy,
+  );
 
   // Selectable rows in display order, collapsed groups included (⌘A selects
   // every task the current view shows, not only the expanded ones). Grey

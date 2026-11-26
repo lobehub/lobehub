@@ -169,10 +169,15 @@ const taskListFilters = (s: GlobalState) => s.status.taskListFilters ?? EMPTY_TA
 const taskListFilter = (scope: string) => (s: GlobalState) =>
   taskListFilters(s).find((entry) => entry.scope === scope)?.filter;
 
-const taskListCollapsedGroupKeys =
-  (bucket: string) =>
-  (s: GlobalState): string[] | undefined =>
-    s.status.taskListCollapsedGroupKeysByGrouping?.[bucket];
+const EMPTY_TASK_LIST_COLLAPSED_GROUPS: NonNullable<
+  GlobalState['status']['taskListCollapsedGroups']
+> = [];
+
+const taskListCollapsedGroups = (s: GlobalState) =>
+  s.status.taskListCollapsedGroups ?? EMPTY_TASK_LIST_COLLAPSED_GROUPS;
+
+const taskListCollapsedGroupKeys = (scope: string) => (s: GlobalState) =>
+  taskListCollapsedGroups(s).find((entry) => entry.scope === scope)?.keys;
 
 const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
 
@@ -707,6 +712,7 @@ export const systemStatusSelectors = {
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
   taskListCollapsedGroupKeys,
+  taskListCollapsedGroups,
   taskListViewMode,
   taskListFilter,
   taskListFilters,
