@@ -14,10 +14,6 @@ export class PluginService {
   uninstallPlugin = async (identifier: string): Promise<void> => {
     await lambdaClient.plugin.removePlugin.mutate({ id: identifier });
   };
-
-  updatePluginSettings = async (id: string, settings: any, signal?: AbortSignal): Promise<void> => {
-    await lambdaClient.plugin.updatePlugin.mutate({ id, settings }, { signal });
-  };
 }
 
 export const pluginService = new PluginService();

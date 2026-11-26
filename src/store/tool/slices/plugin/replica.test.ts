@@ -4,7 +4,7 @@
  * The installed-plugins list is a replica: the persisted display projection
  * paints on the first frame and the network confirms the full records. The
  * projection never carries settings or connection parameters, so everything
- * that runs or writes a plugin waits for the server-confirmed records.
+ * that runs or migrates a plugin waits for the server-confirmed records.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -31,7 +31,6 @@ vi.mock('@/services/plugin', () => ({
   pluginService: {
     getInstalledPlugins: vi.fn(),
     uninstallPlugin: vi.fn(),
-    updatePluginSettings: vi.fn(),
   },
 }));
 
@@ -508,109 +507,6 @@ describe('installed plugins replica', () => {
       await expect(useToolStore.getState().uninstallPlugin('p1')).rejects.toThrow('boom');
 
       expect(ids()).toEqual(['p1']);
-    });
-  });
-
-  describe('settings writes', () => {
-    it('shows new settings optimistically, then confirms from the server', async () => {
-      await loadFromServer([plugin('p1', { setting1: 'old', setting2: 'keep' })]);
-
-      const write = deferred<void>();
-      vi.mocked(pluginService.updatePluginSettings).mockReturnValue(write.promise as any);
-
-      const operation = useToolStore.getState().updatePluginSettings('p1', { setting1: 'new' });
-      // Visible before the server answers, merged over the other fields.
-      expect(pluginSelectors.getPluginSettingsById('p1')(useToolStore.getState())).toEqual({
-        setting1: 'new',
-        setting2: 'keep',
-      });
-
-      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
-        plugin('p1', { setting1: 'new', setting2: 'keep' }),
-      ]);
-      await act(async () => {
-        write.resolve();
-        await operation;
-      });
-
-      expect(pluginService.updatePluginSettings).toHaveBeenCalledWith(
-        'p1',
-        { setting1: 'new', setting2: 'keep' },
-        expect.any(AbortSignal),
-      );
-      expect(useToolStore.getState().installedPlugins[0].settings).toEqual({
-        setting1: 'new',
-        setting2: 'keep',
-      });
-    });
-
-    it('rolls the settings back when the server rejects the write', async () => {
-      await loadFromServer([plugin('p1', { setting1: 'old' })]);
-      vi.mocked(pluginService.updatePluginSettings).mockRejectedValue(new Error('boom'));
-
-      await expect(
-        useToolStore.getState().updatePluginSettings('p1', { setting1: 'new' }),
-      ).rejects.toThrow('boom');
-
-      expect(useToolStore.getState().installedPlugins[0].settings).toEqual({ setting1: 'old' });
-    });
-
-    it('merges a write from the cached list onto the server record, not the projection', async () => {
-      await paintFromCache([plugin('p1', { setting1: 'old', setting2: 'keep' })]);
-      // The cached row has no settings: they never reached IndexedDB.
-      expect(useToolStore.getState().installedPlugins[0].settings).toBeUndefined();
-
-      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
-        plugin('p1', { setting1: 'old', setting2: 'keep' }),
-      ]);
-      vi.mocked(pluginService.updatePluginSettings).mockResolvedValue(undefined as any);
-
-      await act(async () => {
-        await useToolStore.getState().updatePluginSettings('p1', { setting1: 'new' });
-      });
-
-      expect(pluginService.updatePluginSettings).toHaveBeenCalledWith(
-        'p1',
-        { setting1: 'new', setting2: 'keep' },
-        expect.any(AbortSignal),
-      );
-    });
-
-    it('writes nothing when the server record cannot be loaded', async () => {
-      await paintFromCache([plugin('p1')]);
-      vi.mocked(pluginService.getInstalledPlugins).mockRejectedValue(new Error('offline'));
-
-      await expect(
-        useToolStore.getState().updatePluginSettings('p1', { setting1: 'new' }),
-      ).rejects.toThrow('offline');
-
-      expect(pluginService.updatePluginSettings).not.toHaveBeenCalled();
-    });
-
-    it('lets a newer write abort one still waiting for the server record', async () => {
-      await paintFromCache([plugin('p1', { a: 1 })]);
-      const records = deferred<LobeTool[]>();
-      vi.mocked(pluginService.getInstalledPlugins).mockReturnValue(records.promise);
-      vi.mocked(pluginService.updatePluginSettings).mockResolvedValue(undefined as any);
-
-      const first = useToolStore.getState().updatePluginSettings('p1', { a: 2 });
-      const firstSignal = useToolStore.getState().updatePluginSettingsSignal!;
-      const second = useToolStore.getState().updatePluginSettings('p1', { a: 3 });
-
-      // The first controller was published before the await, so the second aborts it.
-      expect(firstSignal.signal.aborted).toBe(true);
-
-      await act(async () => {
-        records.resolve([plugin('p1', { a: 1, b: 'keep' })]);
-        await Promise.all([first, second]);
-      });
-
-      expect(pluginService.updatePluginSettings).toHaveBeenCalledTimes(1);
-      expect(pluginService.updatePluginSettings).toHaveBeenCalledWith(
-        'p1',
-        { a: 3, b: 'keep' },
-        expect.any(AbortSignal),
-      );
     });
   });
 });

@@ -1,70 +1,10 @@
 import { type LobeTool } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { pluginService } from '@/services/plugin';
-import { merge } from '@/utils/merge';
+import { describe, expect, it } from 'vitest';
 
 import { useToolStore } from '../../store';
 
-vi.mock('@/services/plugin', () => ({
-  pluginService: {
-    getInstalledPlugins: vi.fn().mockResolvedValue([]),
-    updatePluginSettings: vi.fn(),
-  },
-}));
-
-beforeEach(() => {
-  // Reset all mocks before each test
-  vi.resetAllMocks();
-});
-
 describe('useToolStore:plugin', () => {
-  describe('updatePluginSettings', () => {
-    it('should update settings for a given plugin', async () => {
-      const pluginId = 'test-plugin';
-      const newSettings = { setting1: 'new-value' };
-      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
-        { identifier: pluginId, type: 'plugin' } as LobeTool,
-      ]);
-
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.updatePluginSettings(pluginId, newSettings);
-      });
-
-      expect(pluginService.updatePluginSettings).toBeCalledWith(
-        pluginId,
-        newSettings,
-        expect.any(AbortSignal),
-      );
-    });
-
-    it('should merge settings for a plugin with existing settings', async () => {
-      const pluginId = 'test-plugin';
-      const existingSettings = { setting1: 'old-value', setting2: 'old-value' };
-      const newSettings = { setting1: 'new-value' };
-      const mergedSettings = merge(existingSettings, newSettings);
-      // The merge base is the server's record, loaded before the write.
-      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
-        { identifier: pluginId, settings: existingSettings, type: 'plugin' } as LobeTool,
-      ]);
-
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.updatePluginSettings(pluginId, newSettings);
-      });
-
-      expect(pluginService.updatePluginSettings).toBeCalledWith(
-        pluginId,
-        mergedSettings,
-        expect.any(AbortSignal),
-      );
-    });
-  });
-
   describe('validatePluginSettings', () => {
     // 模拟插件数据
     const testPluginId = 'test-plugin';
