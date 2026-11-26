@@ -588,6 +588,7 @@
   "modelSelection.confirm.inputPrice": "输入",
   "modelSelection.confirm.outputPrice": "输出",
   "modelSelection.confirm.title": "使用 {{model}}？",
+  "modelSwitch.auto.badge": "独立额度",
   "modelSwitch.auto.description": "兼顾质量与速度，独享充沛额度，推荐日常任务使用",
   "models.intro": "简介",
   "models.link": "查看",

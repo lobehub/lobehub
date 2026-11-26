@@ -1,6 +1,8 @@
 /** A model the business layer lists in its own section above the provider list. */
 export interface BusinessFeaturedModel {
-  /** One line under the model name saying what it is for. */
+  /** Short tag after the model name saying what sets it apart. */
+  badge?: string;
+  /** @deprecated Ignored by the model list; kept so hosts that still pass it type-check. */
   description?: string;
   modelId: string;
   providerId: string;

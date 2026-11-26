@@ -47,6 +47,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface ModelRowMetaProps {
   model: AiModelForSelect;
+  /** Shown in the price column when the model has no price to compare. */
+  pricePlaceholder?: string;
   provider: string;
 }
 
@@ -58,7 +60,7 @@ interface ModelRowMetaProps {
  * Values carry no labels to keep rows quiet; each one's tooltip says what it
  * measures and its exact score or price.
  */
-export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
+export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, pricePlaceholder, provider }) => {
   const { t } = useTranslation('components');
   const resolvePricing = useBusinessModelPricing();
   const resolveRating = useBusinessModelRating();
@@ -129,7 +131,7 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
         )}
       {columns.price &&
         (multiplier === undefined ? (
-          <div style={{ flex: 'none', width: PRICE_COLUMN_WIDTH }} />
+          <div className={styles.price}>{pricePlaceholder}</div>
         ) : (
           <Tooltip title={priceTooltip}>
             <div className={styles.price}>

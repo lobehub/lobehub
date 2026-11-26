@@ -83,15 +83,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
   `,
-  featuredDescription: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
   footer: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
