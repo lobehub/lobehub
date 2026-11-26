@@ -73,7 +73,7 @@ export const useProjectConversation = () => {
     return draftProjectId ? { agentId: draftAgentParam, projectId: draftProjectId } : undefined;
   }, [draftAgentParam, draftDirectoryParam, directoryIds, draftProjectId]);
   const draftAgentId = draft?.agentId;
-  const restageDraft = useProjectDraftStaging(draft, directoryIds);
+  const restageDraft = useProjectDraftStaging(draft, directoryIds, draftProjectId);
   const chatAgentId = useChatStore((s) => s.activeAgentId);
   // Keep the conversation on its agent instead of flashing "not found" while
   // the project list catches up with a topic the first send just created.

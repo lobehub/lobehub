@@ -49,12 +49,16 @@ const withdraw = (pane: object) => {
 export const useProjectDraftStaging = (
   draft: Draft | undefined,
   projectDirectoryIds: ReadonlySet<string>,
+  /** The draft's project, once confirmed: its sandbox draft is followed too. */
+  projectId?: string,
 ) => {
   const ownRef = useRef(draft);
   // This pane's identity in `heldDrafts`.
   const paneRef = useRef({});
   const directoryIdsRef = useRef(projectDirectoryIds);
   directoryIdsRef.current = projectDirectoryIds;
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
 
   const restage = useCallback(() => {
     const own = ownRef.current;
@@ -85,8 +89,12 @@ export const useProjectDraftStaging = (
             own &&
             pending &&
             pending.agentId === own.agentId &&
-            !!pending.projectWorkingDirectoryId &&
-            directoryIdsRef.current.has(pending.projectWorkingDirectoryId)
+            (pending.projectWorkingDirectoryId
+              ? directoryIdsRef.current.has(pending.projectWorkingDirectoryId)
+              : // The composer moved the draft to this project's sandbox (by
+                // hand, or the automatic choice): a later click must not
+                // restage it back on the folder the route named.
+                !!pending.projectId && pending.projectId === projectIdRef.current)
           ) {
             ownRef.current = pending;
             hold(paneRef.current, pending);

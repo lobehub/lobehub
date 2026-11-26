@@ -12,9 +12,17 @@ import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 export const useStartProjectTopic = (projectId: string | undefined) => {
   const navigate = useWorkspaceAwareNavigate();
 
-  return ({ agentId, directoryId }: { agentId: string; directoryId?: string }) => {
+  return ({
+    agentId,
+    auto,
+    directoryId,
+  }: {
+    agentId: string;
+    auto?: boolean;
+    directoryId?: string;
+  }) => {
     if (!projectId) return;
-    startProjectTopicDraft({ agentId, directoryId, navigate, projectId });
+    startProjectTopicDraft({ agentId, auto, directoryId, navigate, projectId });
   };
 };
 

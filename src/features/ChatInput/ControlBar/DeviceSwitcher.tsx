@@ -12,6 +12,7 @@ import { useTopicId } from '../hooks/useTopicId';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
 import ProjectDeviceSwitcher from './ProjectDeviceSwitcher';
 import { type ProjectDeviceTarget } from './projectDeviceTargets';
+import { useBlankProjectAuto } from './useBlankProjectAuto';
 import {
   useActiveProjectDirectoryTopicId,
   useProjectTopicDirectory,
@@ -99,13 +100,22 @@ const ProjectSandboxSwitcher = ({
 }) => {
   useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const directories = useProjectDirectories(projectId);
+  // Only a blank conversation can still let the project's order decide.
+  const auto = useBlankProjectAuto(agentId, started ? undefined : projectId);
 
   return (
     <ProjectDeviceSwitcher
       agentId={agentId}
+      auto={auto}
       directories={directories}
       projectId={projectId}
-      sandbox={{ active: true }}
+      sandbox={{
+        active: true,
+        // Leaving the automatic choice for the sandbox it already sits in.
+        onSelect: auto
+          ? () => useChatStore.getState().setPendingNewTopicDirectory({ agentId, projectId })
+          : undefined,
+      }}
       onSelect={
         started
           ? undefined
@@ -126,10 +136,12 @@ const StagedProjectDeviceSwitcher = ({ agentId }: { agentId: string }) => {
   const { directories, directoryId } = useStagedProjectDirectory(agentId);
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const projectId = directories.find((d) => d.id === directoryId)?.projectId;
+  const auto = useBlankProjectAuto(agentId, projectId);
 
   return (
     <ProjectDeviceSwitcher
       agentId={agentId}
+      auto={auto}
       directories={directories}
       directoryId={directoryId}
       projectId={projectId}

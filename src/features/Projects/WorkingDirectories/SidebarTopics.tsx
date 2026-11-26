@@ -146,6 +146,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
               );
               startTopic({
                 agentId: coordinatorAgentId,
+                auto: true,
                 directoryId: picked.kind === 'directory' ? picked.id : undefined,
               });
             }}
