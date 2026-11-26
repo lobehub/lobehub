@@ -30,15 +30,17 @@ export const focusTopicRow = (row: HTMLElement | null | undefined) => {
 };
 
 interface TopicRowKeyHandlers {
-  /** Opens the topic. Only called for rows that are not links: a link already opens on Enter. */
+  /** Opens the topic (Space, or Enter on a row that cannot be renamed). */
   onOpen: () => void;
   /** Enters inline rename; omit when the row cannot be renamed. */
   onRename?: () => void;
 }
 
 /**
- * Keyboard model of a focused topic row, following VS Code / Windows:
- * Enter opens, F2 renames, ArrowUp / ArrowDown move between rows.
+ * Keyboard model of a focused topic row, following the macOS Finder:
+ * Enter renames (F2 too, for Windows habits), Space opens,
+ * ArrowUp / ArrowDown move between rows. A row that cannot be renamed opens on
+ * Enter instead.
  */
 export const handleTopicRowKeyDown = (
   event: KeyboardEvent<HTMLElement>,
@@ -70,8 +72,28 @@ export const handleTopicRowKeyDown = (
       return;
     }
     case 'Enter': {
-      // A link row activates on Enter natively (and keeps Cmd/Ctrl+Enter for a new tab).
-      if (hasModifier || row instanceof HTMLAnchorElement) return;
+      // Cmd/Ctrl+Enter on a link row keeps the browser's new-tab activation.
+      if (hasModifier) return;
+      // Holding Enter to save the title would otherwise repeat into the row
+      // that regains focus and reopen the editor.
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
+      if (onRename) {
+        event.preventDefault();
+        onRename();
+        return;
+      }
+      // A link row activates on Enter natively.
+      if (row instanceof HTMLAnchorElement) return;
+      event.preventDefault();
+      onOpen();
+      return;
+    }
+    case ' ': {
+      if (hasModifier) return;
+      // Also keeps Space from scrolling the list.
       event.preventDefault();
       onOpen();
       return;

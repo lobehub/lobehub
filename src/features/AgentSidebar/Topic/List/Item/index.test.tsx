@@ -853,6 +853,22 @@ describe('TopicItem keyboard', () => {
     expect(screen.getByTestId('nav-item')).toHaveFocus();
   });
 
+  it('renames on Enter', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'Enter' });
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(navigateToTopic).not.toHaveBeenCalled();
+  });
+
+  it('opens the topic on Space', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: ' ' });
+
+    expect(navigateToTopic).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
   it('returns focus to the row after Escape', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
     fireEvent.keyDown(focusRow(), { key: 'F2' });

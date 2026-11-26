@@ -28,6 +28,7 @@ const press = (
   key: string,
   handlers: { onOpen?: () => void; onRename?: () => void } = {},
   target: EventTarget = row,
+  { repeat = false }: { repeat?: boolean } = {},
 ) => {
   const preventDefault = vi.fn();
   handleTopicRowKeyDown(
@@ -39,6 +40,7 @@ const press = (
       metaKey: false,
       nativeEvent: { isComposing: false },
       preventDefault,
+      repeat,
       shiftKey: false,
       target,
     } as unknown as KeyboardEvent<HTMLElement>,
@@ -100,7 +102,31 @@ describe('handleTopicRowKeyDown', () => {
     expect(onRename).toHaveBeenCalledTimes(1);
   });
 
-  it('opens a non-link row on Enter but leaves a link row to the browser', () => {
+  it('renames on Enter when renaming is allowed, even on a link row', () => {
+    const root = createRoot();
+    const onOpen = vi.fn();
+    const onRename = vi.fn();
+
+    const preventDefault = press(createRow(root, { href: '/agent/a/tpc_1' }), 'Enter', {
+      onOpen,
+      onRename,
+    });
+
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+    // Stops the link from also navigating.
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('does not reopen the editor from a held Enter', () => {
+    const onRename = vi.fn();
+
+    press(createRow(createRoot()), 'Enter', { onRename }, undefined, { repeat: true });
+
+    expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it('opens on Enter when renaming is not allowed, leaving a link row to the browser', () => {
     const root = createRoot();
     const onOpenDiv = vi.fn();
     const onOpenLink = vi.fn();
@@ -113,6 +139,17 @@ describe('handleTopicRowKeyDown', () => {
     expect(onOpenDiv).toHaveBeenCalledTimes(1);
     expect(onOpenLink).not.toHaveBeenCalled();
     expect(linkPreventDefault).not.toHaveBeenCalled();
+  });
+
+  it('opens on Space without scrolling the list', () => {
+    const onOpen = vi.fn();
+    const onRename = vi.fn();
+
+    const preventDefault = press(createRow(createRoot()), ' ', { onOpen, onRename });
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onRename).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalled();
   });
 
   it('ignores keys pressed on the row actions', () => {
