@@ -218,6 +218,8 @@ describe('GatewayActionImpl', () => {
         agentGatewayUrl: 'https://gateway.test.com',
         enableGatewayMode: true,
       });
+      // The user's default agent opt-out (the retired global switch) is ignored.
+      mockUserDefaultConfig.disableGatewayMode = true;
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
@@ -234,17 +236,6 @@ describe('GatewayActionImpl', () => {
       };
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
-    });
-
-    it("ignores the user's default agent opt-out (the retired global switch)", () => {
-      const { action } = createTestAction();
-      setServerConfig({
-        agentGatewayUrl: 'https://gateway.test.com',
-        enableGatewayMode: true,
-      });
-      mockUserDefaultConfig.disableGatewayMode = true;
-
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
 
     it('returns false when the backend does not enable Gateway mode', () => {
