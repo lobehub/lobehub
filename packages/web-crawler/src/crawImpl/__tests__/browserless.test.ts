@@ -45,17 +45,31 @@ describe('browserless', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should return undefined when title is "Just a moment..."', async () => {
+  it('should leave a Cloudflare challenge page for the Crawler to reject', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
+    const challengeBody =
+      'This website uses a security service to protect against malicious bots. This page is displayed while the website verifies you are not a bot.';
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
-      text: vi.fn().mockResolvedValue('<html><title>Just a moment...</title></html>'),
+      text: vi.fn().mockResolvedValue(`
+        <html>
+          <head>
+            <title>Just a moment...</title>
+          </head>
+          <body>
+            <p>${challengeBody}</p>
+          </body>
+        </html>
+      `),
     } as any);
 
     const result = await browserless('https://example.com', { filterOptions: {} });
-    expect(result).toBeUndefined();
+
+    // Challenge pages are rejected once, in Crawler.crawl, for every impl
+    expect(result).toMatchObject({ title: 'Just a moment...' });
+    expect(result?.content).toContain(challengeBody);
   });
 
   it('should return crawl result on successful fetch', async () => {

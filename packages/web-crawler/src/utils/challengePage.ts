@@ -36,11 +36,20 @@ const CHALLENGE_PHRASES = [
   'unusual traffic from your computer network',
 ];
 
-const normalizeTitle = (title: string) =>
-  title
-    .trim()
-    .toLowerCase()
-    .replace(/[\s.…]+$/, '');
+const TRAILING_TITLE_CHAR = /[\s.…]/;
+
+/**
+ * Titles come from untrusted pages, so the trailing dots are dropped by scanning
+ * from the end: a `[\s.…]+$` regex backtracks quadratically on a long run of them.
+ */
+const normalizeTitle = (title: string) => {
+  const lowered = title.toLowerCase();
+
+  let end = lowered.length;
+  while (end > 0 && TRAILING_TITLE_CHAR.test(lowered[end - 1])) end--;
+
+  return lowered.slice(0, end).trimStart();
+};
 
 /**
  * Whether a fetched page is an anti-bot challenge / block page rather than the

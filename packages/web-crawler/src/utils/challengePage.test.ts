@@ -53,4 +53,14 @@ describe('isChallengePage', () => {
     expect(content.length).toBeGreaterThan(CHALLENGE_PAGE_MAX_LENGTH);
     expect(isChallengePage({ content, title: 'Just a moment...' })).toBe(false);
   });
+
+  it('should handle a huge title in linear time', () => {
+    // A trailing-anchored regex backtracks quadratically on a long run that does not reach the end
+    const title = `${'.'.repeat(200_000)}x`;
+
+    expect(isChallengePage({ content: 'An ordinary page body.', title })).toBe(false);
+    expect(
+      isChallengePage({ content: 'A page body.', title: `Access Denied${'. '.repeat(1000)}` }),
+    ).toBe(true);
+  });
 });

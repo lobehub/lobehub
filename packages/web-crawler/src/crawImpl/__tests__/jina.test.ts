@@ -246,6 +246,22 @@ describe('jina crawler', () => {
       );
     });
 
+    it.each([
+      ['an empty body', ''],
+      ['a body under the minimum length', 'Verify to continue'],
+    ])(
+      'should throw BlockedPageError for %s flagged as requiring a CAPTCHA',
+      async (_, content) => {
+        mockFetch.mockResolvedValue(
+          createMockResponse({ code: 200, data: { content, title: '', warning } }, { ok: true }),
+        );
+
+        await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+          BlockedPageError,
+        );
+      },
+    );
+
     it('should keep a full page that only embeds a captcha widget', async () => {
       const content = 'A real article paragraph. '.repeat(200);
       mockFetch.mockResolvedValue(

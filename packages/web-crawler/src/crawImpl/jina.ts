@@ -36,7 +36,7 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   const json = await parseJSONResponse<{
     code: number;
     data: {
-      content: string;
+      content?: string;
       description?: string;
       siteName?: string;
       title?: string;
@@ -54,15 +54,21 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   }
 
   const result = json.data;
-  if (!result?.content || result.content.length < 100) {
-    return;
-  }
 
   // Jina still answers 200 for a page that asks for a CAPTCHA and only says so in
   // `warning`. The warning can also sit on a real page that embeds a captcha widget,
-  // so it counts as blocked only when the body is as short as a challenge page.
-  if (result.warning?.includes('CAPTCHA') && result.content.length <= CHALLENGE_PAGE_MAX_LENGTH) {
+  // so it counts as blocked only when the body is as short as a challenge page. That
+  // includes an empty body (the challenge often lives in an iframe), so this runs
+  // before the minimum-length check below.
+  if (
+    result?.warning?.includes('CAPTCHA') &&
+    (result.content?.length ?? 0) <= CHALLENGE_PAGE_MAX_LENGTH
+  ) {
     throw new BlockedPageError(result.warning);
+  }
+
+  if (!result?.content || result.content.length < 100) {
+    return;
   }
 
   return {
