@@ -8,6 +8,7 @@ import {
 import {
   createStaticStyles,
   cssVar,
+  cx,
   Flexbox,
   Icon,
   Popover,
@@ -78,11 +79,20 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  /* Only keyboard focus draws the ring; a click on the row does not. */
-  focusRing: css`
+  /* Keyboard focus marks the row with the hover fill instead of an outline ring,
+     so arrow-key navigation reads like moving the hover. Only inactive rows get
+     focusFill: the active row keeps its own fill. A mouse click shows nothing.
+     Rows also carry `data-lobe-focus-ring="self-off"`: lobe-ui draws a global
+     focus ring overlay on any :focus-visible element, which `outline: none`
+     does not reach. */
+  focusVisible: css`
     &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
+      outline: none;
+    }
+  `,
+  focusFill: css`
+    &:focus-visible {
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   markerIcon: css`
@@ -450,7 +460,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return (
         <NavItem
           active={defaultTopicActive}
-          className={styles.focusRing}
+          className={cx(styles.focusVisible, !defaultTopicActive && styles.focusFill)}
+          data-lobe-focus-ring="self-off"
           data-topic-row=""
           slots={{ titlePrefix: draftPrefix }}
           tabIndex={0}
@@ -606,7 +617,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
           draggable
           titleMarquee
           active={isTopicActive}
-          className={styles.focusRing}
+          className={cx(styles.focusVisible, !isTopicActive && styles.focusFill)}
+          data-lobe-focus-ring="self-off"
           data-topic-row=""
           description={workingDirectoryNode}
           href={href}
