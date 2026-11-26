@@ -44,9 +44,22 @@ const environmentSourceSchema = z.object({
           return false;
         }
 
-        return parsed.protocol === 'https:' && ALLOWED_SOURCE_HOSTS.has(parsed.hostname);
+        // Credentials, a query or a fragment would be stored and shown back
+        // as is (the CLI and the agent tool both print the URL), so a token
+        // pasted into a clone URL is refused rather than persisted.
+        return (
+          parsed.protocol === 'https:' &&
+          ALLOWED_SOURCE_HOSTS.has(parsed.hostname) &&
+          !parsed.username &&
+          !parsed.password &&
+          !parsed.search &&
+          !parsed.hash
+        );
       },
-      { message: 'Only https:// github.com git URLs are supported' },
+      {
+        message:
+          'Only https:// github.com git URLs without credentials, a query or a fragment are supported',
+      },
     ),
 });
 

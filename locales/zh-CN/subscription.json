@@ -1009,7 +1009,7 @@
   "usage.window.referral": "返利额度",
   "usage.window.resetsIn": "{{duration}}后重置",
   "usage.window.rule.agentRunMonth": "智能体任务每月额度",
-  "usage.window.rule.freeMonth": "免费额度",
+  "usage.window.rule.freeMonth": "体验额度",
   "usage.window.rule.plan5h": "5 小时额度",
   "usage.window.rule.plan7d": "每周额度",
   "usage.window.rule.planMonth": "每月额度",

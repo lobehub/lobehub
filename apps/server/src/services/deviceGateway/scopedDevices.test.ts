@@ -2,6 +2,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  markSeen: vi.fn(),
   queryDeviceList: vi.fn(),
   queryPersonal: vi.fn(),
   queryWorkspaceDevices: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/models/device', () => ({
   DeviceModel: vi.fn().mockImplementation(function () {
     return {
+      markSeen: mocks.markSeen,
       queryPersonal: mocks.queryPersonal,
       queryWorkspaceDevices: mocks.queryWorkspaceDevices,
     };
@@ -25,6 +27,7 @@ const { getScopedOnlineDevices } = await import('./scopedDevices');
 const serverDB = {} as unknown as LobeChatDatabase;
 const row = (deviceId: string) => ({
   deviceId,
+  id: `row-${deviceId}`,
   friendlyName: null,
   hostname: `${deviceId}-db`,
   lastSeenAt: new Date('2026-09-09T00:00:00.000Z'),
@@ -47,6 +50,18 @@ describe('getScopedOnlineDevices', () => {
     mocks.queryPersonal.mockResolvedValue([]);
     mocks.queryWorkspaceDevices.mockResolvedValue([]);
     mocks.queryDeviceList.mockResolvedValue([]);
+  });
+
+  it('records registered devices the gateway reports online as seen', async () => {
+    // Before: lastSeenAt kept the registration time while a session stayed open,
+    // so a device that dropped a minute ago read "last connected 2 months ago".
+    mocks.queryPersonal.mockResolvedValue([row('online'), row('offline')]);
+    mocks.queryDeviceList.mockResolvedValue([live('online')]);
+
+    await getScopedOnlineDevices(serverDB, 'user-1');
+
+    expect(mocks.markSeen).toHaveBeenCalledTimes(1);
+    expect(mocks.markSeen).toHaveBeenCalledWith(['row-online'], expect.any(Date), expect.any(Date));
   });
 
   /**

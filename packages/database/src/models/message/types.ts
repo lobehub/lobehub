@@ -84,6 +84,8 @@ export interface QueryMessagesOptions {
    * Topic ID for MessageGroup aggregation queries
    */
   topicId?: string;
+  /** See `QueryMessageParams.viewModelPluginState`. */
+  viewModelPluginState?: boolean;
   /**
    * Custom where condition for message filtering
    */
@@ -262,4 +264,12 @@ export interface SoftDeletedMessage {
   projectId: string | null;
   role: string;
   topicId: string | null;
+}
+
+/** One page of a compression group's older members, see `queryCompressedGroupMembers`. */
+export interface CompressedGroupMembersPage {
+  /** The page's members, parsed into display nodes (oldest first). */
+  messages: UIChatMessage[];
+  /** Newest member older than this page, the next page's `untilId`; absent at the group start. */
+  nextUntilId?: string;
 }

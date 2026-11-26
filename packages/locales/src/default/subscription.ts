@@ -1037,7 +1037,7 @@ export default {
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
   'usage.window.rule.agentRunMonth': 'Monthly agent task limit',
-  'usage.window.rule.freeMonth': 'Free credits',
+  'usage.window.rule.freeMonth': 'Trial credits',
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",
   'creditUsageReminder.window.exhausted': '{{rule}} reached',

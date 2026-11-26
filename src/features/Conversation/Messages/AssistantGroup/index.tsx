@@ -35,6 +35,7 @@ import {
 } from '../../store';
 import type { SteerContinuation } from '../../store/slices/data/steerChains';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
+import ActionRowSpacer from '../components/ActionRowSpacer';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import RefreshingIndicator from '../components/RefreshingIndicator';
@@ -307,7 +308,9 @@ const GroupMessage = memo<GroupMessageProps>(
         }
         actions={
           <>
-            {!disableEditing && (
+            {disableEditing ? (
+              <ActionRowSpacer />
+            ) : (
               <>
                 {branch && (
                   <MessageBranch

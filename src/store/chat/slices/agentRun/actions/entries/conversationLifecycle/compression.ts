@@ -75,6 +75,9 @@ export const executeContextCompression = async (
       agentId,
       groupId: context.groupId,
       id: tempId,
+      // Without `beforeMessageId` every message above is folded, so the group
+      // belongs at the end, not above the last question.
+      keepPosition: !options.beforeMessageId,
       threadId: context.threadId,
       topicId,
     }) as any,

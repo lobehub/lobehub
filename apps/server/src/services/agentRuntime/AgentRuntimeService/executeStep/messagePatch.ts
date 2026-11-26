@@ -91,7 +91,11 @@ export async function publishDeferredMessagePatch(
     const after =
       entry?.uiMessages && entry.scopeKey === patch.scopeKey
         ? entry.uiMessages
-        : await deps.queryUiMessages(patch.state, { skipCompressedMembers: true, skipWorks: true });
+        : await deps.queryUiMessages(patch.state, {
+            skipCompressedMembers: true,
+            skipWorks: true,
+            viewModelPluginState: true,
+          });
     if (!after) return;
 
     await publishStepMessagePatch(deps, {
