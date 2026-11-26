@@ -10,6 +10,9 @@ export const verifyEvidenceMessages = {
   'report.evidence.comparison.before': 'Before',
   'report.evidence.comparison.exitFullscreen': 'Exit full screen (Esc)',
   'report.evidence.comparison.fullscreen': 'Compare full screen',
+  'report.evidence.comparison.flipHint': 'Press Space to switch',
+  'report.evidence.comparison.modeFlip': 'Flip',
+  'report.evidence.comparison.modeSide': 'Side by side',
   'report.evidence.comparison.zoomHint':
     'Pinch or ⌘/Ctrl + scroll to zoom · double-click to zoom in',
   'report.evidence.comparison.zoomIn': 'Zoom in (+)',

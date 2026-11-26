@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Segmented, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Minus, Plus, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { sx } from '@/styles/sx';
 
 import {
@@ -36,6 +37,11 @@ const PAD = 12;
 /** Wheel delta → scale factor; small enough for trackpad pinch deltas (≈1–10 per event). */
 const WHEEL_ZOOM_SPEED = 0.01;
 const STEP = 1.25;
+const MODE_STORAGE_KEY = 'lobehub-acceptance-comparison-mode';
+
+/** `side` shows both halves at once; `flip` shows one at a time in the same place. */
+type ComparisonMode = 'flip' | 'side';
+type ComparisonRole = 'after' | 'before';
 
 const fadeIn = stylex.keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
 
@@ -115,6 +121,10 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgLayout,
     backgroundImage: 'none',
   },
+  stageSingle: {
+    gridTemplateColumns: 'minmax(0, 1fr)',
+    columnGap: 0,
+  },
   sideStackedAfter: {
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
@@ -140,6 +150,9 @@ const styles = stylex.create({
     transformOrigin: '0 0',
     willChange: 'transform',
   },
+  contentHidden: {
+    visibility: 'hidden',
+  },
   image: {
     pointerEvents: 'none',
     display: 'block',
@@ -163,7 +176,7 @@ export interface FullscreenComparisonSide {
  * wheel and drags to pan. Listeners are native because React's `onWheel` is
  * passive and cannot stop the page from zooming.
  */
-const useSyncedZoom = () => {
+const useSyncedZoom = (mode: ComparisonMode) => {
   const [view, setView] = useState<ZoomView>(FIT_VIEW);
   const panes = useRef<(HTMLDivElement | null)[]>([]);
   const images = useRef<(HTMLImageElement | null)[]>([]);
@@ -314,9 +327,23 @@ const useSyncedZoom = () => {
       controller.abort();
       observer.disconnect();
     };
-  }, []);
+    // Switching modes mounts different panes: bind to the new ones.
+  }, [mode]);
 
-  return { images, panes, reset, view, zoomCenter };
+  const bindPane = useCallback(
+    (index: number) => (el: HTMLDivElement | null) => {
+      panes.current[index] = el;
+    },
+    [],
+  );
+  const bindImage = useCallback(
+    (index: number) => (el: HTMLImageElement | null) => {
+      images.current[index] = el;
+    },
+    [],
+  );
+
+  return { bindImage, bindPane, reset, view, zoomCenter };
 };
 
 interface EvidenceComparisonFullscreenProps {
@@ -341,7 +368,31 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
     const { t } = useTranslation('verify');
     const closeRef = useRef<HTMLButtonElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
-    const { images, panes, reset, view, zoomCenter } = useSyncedZoom();
+    const [storedMode, setStoredMode] = useLocalStorageState<ComparisonMode>(
+      MODE_STORAGE_KEY,
+      'side',
+    );
+    const mode: ComparisonMode = storedMode === 'flip' ? 'flip' : 'side';
+    const flip = mode === 'flip';
+    // Read by the key handler: as an effect dependency, a mode change would
+    // re-run the focus lifecycle below and pull focus back to Close.
+    const flipRef = useRef(flip);
+    useEffect(() => {
+      flipRef.current = flip;
+    }, [flip]);
+    // Flipping keeps the zoom, so the same region of each capture shows in turn.
+    const [shown, setShown] = useState<ComparisonRole>('before');
+    const toggleShown = useCallback(
+      () => setShown((role) => (role === 'before' ? 'after' : 'before')),
+      [],
+    );
+    const { bindImage, bindPane, reset, view, zoomCenter } = useSyncedZoom(mode);
+    const changeMode = (next: ComparisonMode) => {
+      // A side-by-side pane is half the size of the flip pane, so the same
+      // offsets would point at a different region: start the new mode at fit.
+      reset();
+      setStoredMode(next);
+    };
 
     useEffect(() => {
       const opener = returnFocusRef?.current ?? (document.activeElement as HTMLElement | null);
@@ -351,7 +402,11 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
           // through the dialog's own controls instead of letting it reach the
           // covered report.
           const focusables = [
-            ...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? []),
+            // A Segmented moves between its items with the arrow keys and
+            // leaves the unselected ones at tabindex -1.
+            ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+              'button:not([disabled]):not([tabindex="-1"])',
+            ) ?? []),
           ];
           if (focusables.length === 0) return;
           const index = focusables.indexOf(document.activeElement as HTMLElement);
@@ -360,6 +415,7 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
             : focusables[index === -1 || index === focusables.length - 1 ? 0 : index + 1];
           next?.focus();
         } else if (event.key === 'Escape') onClose();
+        else if (event.key === ' ' && flipRef.current) toggleShown();
         else if (event.key === '=' || event.key === '+') zoomCenter(STEP);
         else if (event.key === '-') zoomCenter(1 / STEP);
         else if (event.key === '0') reset();
@@ -371,14 +427,21 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
       };
       const { overflow } = document.body.style;
       document.body.style.overflow = 'hidden';
+      // A focused button (the Before/After item just clicked) still fires its
+      // click on Space keyup in Firefox, which would undo the flip.
+      const onKeyUp = (event: KeyboardEvent) => {
+        if (event.key === ' ' && flipRef.current) event.preventDefault();
+      };
       window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('keyup', onKeyUp, true);
       closeRef.current?.focus();
       return () => {
         window.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('keyup', onKeyUp, true);
         document.body.style.overflow = overflow;
         opener?.focus?.();
       };
-    }, [onClose, reset, returnFocusRef, zoomCenter]);
+    }, [onClose, reset, returnFocusRef, toggleShown, zoomCenter]);
 
     const transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
 
@@ -397,6 +460,29 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
           justify={'flex-end'}
           {...stylex.props(styles.bar)}
         >
+          <Segmented
+            size={'small'}
+            value={mode}
+            options={[
+              { label: t('report.evidence.comparison.modeSide'), value: 'side' },
+              { label: t('report.evidence.comparison.modeFlip'), value: 'flip' },
+            ]}
+            onChange={(value) => changeMode(value as ComparisonMode)}
+          />
+          {flip && (
+            <Tooltip title={t('report.evidence.comparison.flipHint')}>
+              <Segmented
+                size={'small'}
+                value={shown}
+                options={[
+                  { label: t('report.evidence.comparison.before'), value: 'before' },
+                  { label: t('report.evidence.comparison.after'), value: 'after' },
+                ]}
+                onChange={(value) => setShown(value as ComparisonRole)}
+              />
+            </Tooltip>
+          )}
+          <Flexbox flex={1} />
           <Text fontSize={12} type={'secondary'}>
             {t('report.evidence.comparison.zoomHint')}
           </Text>
@@ -436,37 +522,67 @@ export const EvidenceComparisonFullscreen = memo<EvidenceComparisonFullscreenPro
             onClick={onClose}
           />
         </Flexbox>
-        <div {...stylex.props(styles.stage, layout === 'vertical' && styles.stageVertical)}>
-          {[before, after].map((side, index) => (
-            <div
-              key={index}
-              {...stylex.props(
-                styles.side,
-                layout === 'vertical' && index === 1 && styles.sideStackedAfter,
-              )}
-            >
-              {side.band}
+        {flip ? (
+          <div {...stylex.props(styles.stage, styles.stageSingle)}>
+            <div {...stylex.props(styles.side)}>
+              {shown === 'before' ? before.band : after.band}
               <div
-                ref={(el) => {
-                  panes.current[index] = el;
-                }}
+                ref={bindPane(0)}
                 {...stylex.props(styles.pane, view.scale > MIN_SCALE && styles.paneZoomed)}
               >
-                <div {...sx(styles.content, { transform })}>
-                  <img
-                    alt={side.alt}
-                    draggable={false}
-                    src={side.src}
-                    ref={(el) => {
-                      images.current[index] = el;
-                    }}
-                    {...stylex.props(styles.image)}
-                  />
-                </div>
+                {/* Both stay mounted and loaded, so a flip swaps pixels in place
+                    with no reload flash, and the shared bounds still see both. */}
+                {[before, after].map((side, index) => (
+                  <div
+                    aria-hidden={(index === 0 ? 'before' : 'after') !== shown}
+                    key={index}
+                    {...sx(
+                      styles.content,
+                      (index === 0 ? 'before' : 'after') !== shown && styles.contentHidden,
+                      { transform },
+                    )}
+                  >
+                    <img
+                      alt={side.alt}
+                      draggable={false}
+                      ref={bindImage(index)}
+                      src={side.src}
+                      {...stylex.props(styles.image)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div {...stylex.props(styles.stage, layout === 'vertical' && styles.stageVertical)}>
+            {[before, after].map((side, index) => (
+              <div
+                key={index}
+                {...stylex.props(
+                  styles.side,
+                  layout === 'vertical' && index === 1 && styles.sideStackedAfter,
+                )}
+              >
+                {side.band}
+                <div
+                  ref={bindPane(index)}
+                  {...stylex.props(styles.pane, view.scale > MIN_SCALE && styles.paneZoomed)}
+                >
+                  <div {...sx(styles.content, { transform })}>
+                    <img
+                      alt={side.alt}
+                      draggable={false}
+                      ref={bindImage(index)}
+                      src={side.src}
+                      {...stylex.props(styles.image)}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>,
       document.body,
     );
