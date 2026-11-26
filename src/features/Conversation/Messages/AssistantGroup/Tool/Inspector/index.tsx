@@ -12,6 +12,7 @@ import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 
+import ExecutionDeviceTag from './ExecutionDeviceTag';
 import ExecutionTime from './ExecutionTime';
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';
@@ -156,6 +157,11 @@ const Inspectors = memo<InspectorProps>(
             result={result}
           />
         )}
+        <ExecutionDeviceTag
+          args={args ?? partialJson}
+          identifier={identifier}
+          pluginState={result?.state}
+        />
         <ExecutionTime
           isExecuting={showExecutionTimer}
           startTime={toolCallStartTime}
