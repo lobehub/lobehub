@@ -195,7 +195,10 @@ jobs:
       # Each package runs its own vitest. Two at a time with two workers each
       # fills the 4 vCPUs instead of paying every small package's startup one
       # after another; three at a time with Vitest's default 3 workers
-      # oversubscribed the runner and timing-sensitive tests timed out.
+      # oversubscribed the runner and timing-sensitive tests timed out. A full
+      # runner still slows the heaviest tests (budget-error spreadsheets, large
+      # tRPC payloads, token counting: 3.5–4.8 s on canary) to the 5 s default,
+      # so per-test timeouts are 20 s here; a hung test still fails.
       - name: Test packages
         env:
           VITEST_MAX_WORKERS: '2'
@@ -205,7 +208,7 @@ jobs:
             [ "$#" -gt 0 ] || return 0
             local filters=()
             for package in "$@"; do filters+=(--filter "$package"); done
-            pnpm "${filters[@]}" --workspace-concurrency=2 --no-sort --no-bail run "$script"
+            pnpm "${filters[@]}" --workspace-concurrency=2 --no-sort --no-bail run "$script" --testTimeout=20000
           }
           status=0
           # shellcheck disable=SC2086
