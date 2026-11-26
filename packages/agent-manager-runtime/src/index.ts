@@ -1,3 +1,4 @@
+export { type AgentDetailContentInput, buildAgentDetailContent } from './agentDetail';
 export { AgentManagerRuntime } from './AgentManagerRuntime';
 export {
   describeHeterogeneousAgent,
