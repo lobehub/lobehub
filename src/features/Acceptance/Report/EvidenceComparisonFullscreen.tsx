@@ -18,6 +18,7 @@ import {
   touchMidpoint,
 } from '../Viewer/Evidence/pinchZoom';
 import {
+  boundView,
   containedFrame,
   DOUBLE_CLICK_SCALE,
   FIT_VIEW,
@@ -300,7 +301,19 @@ const useSyncedZoom = () => {
       for (const [type, listener] of listeners)
         pane.addEventListener(type, listener, { passive: false, signal: controller.signal });
     }
-    return () => controller.abort();
+
+    // Offsets are absolute pixels: when the pane resizes (window, rotation) or a
+    // picture finishes loading, re-bound the view so it cannot strand both
+    // captures outside the shrunken frame.
+    const rebound = () => setView((v) => boundView(v, paneFrame()));
+    const observer = new ResizeObserver(rebound);
+    if (panes.current[0]) observer.observe(panes.current[0]);
+    for (const image of images.current)
+      image?.addEventListener('load', rebound, { signal: controller.signal });
+    return () => {
+      controller.abort();
+      observer.disconnect();
+    };
   }, []);
 
   return { images, panes, reset, view, zoomCenter };

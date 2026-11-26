@@ -60,6 +60,13 @@ describe('syncedZoom', () => {
     expect(view.y).toBe((800 - 675) / 2 - 175 * 1.5);
   });
 
+  it('pulls a zoomed view back onto the picture when the pane shrinks', () => {
+    const zoomed = panView({ scale: 6, x: 0, y: 0 }, -2000, -1500, box);
+    expect(zoomed).toEqual({ scale: 6, x: -2000, y: -1500 });
+    // The pane halves: the old offsets would put the picture's far edge at -800.
+    expect(boundView(zoomed, fullFrame(200, 150))).toEqual({ scale: 6, x: -1000, y: -750 });
+  });
+
   it('keeps both pictures in view when their aspect ratios differ', () => {
     const wide = containedFrame(800, 800, 1600, 900);
     const tall = containedFrame(800, 800, 900, 1600);
