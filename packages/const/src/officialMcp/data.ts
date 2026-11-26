@@ -73,6 +73,16 @@ export const DATA_SERVERS: OfficialMcpServerType[] = [
   },
   {
     auth: 'oauth',
+    author: 'Databuddy',
+    category: 'data',
+    description: 'Query web and product analytics and see why a metric moved',
+    icon: favicon('databuddy.cc'),
+    identifier: 'databuddy',
+    label: 'Databuddy',
+    url: 'https://api.databuddy.cc/v1/mcp',
+  },
+  {
+    auth: 'oauth',
     author: 'Helium 10',
     category: 'data',
     description: 'Research Amazon products and keywords with Helium 10',
