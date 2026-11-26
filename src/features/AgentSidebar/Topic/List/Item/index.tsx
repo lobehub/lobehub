@@ -8,6 +8,7 @@ import {
 import {
   createStaticStyles,
   cssVar,
+  cx,
   Flexbox,
   Icon,
   Popover,
@@ -20,7 +21,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
-import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -61,6 +62,7 @@ import TopicItemContextMenu from './ContextMenu';
 import InlineTitleEditor from './InlineTitleEditor';
 import { getTopicMetaCard } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
+import { focusTopicRow, handleTopicRowKeyDown, TOPIC_ROW_ATTR } from './topicRowKeyboard';
 import { useRenameTopic } from './useRenameTopic';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
@@ -77,6 +79,22 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
+  /* Keyboard focus marks the row with the hover fill instead of an outline ring,
+     so arrow-key navigation reads like moving the hover. Only inactive rows get
+     focusFill: the active row keeps its own fill. A mouse click shows nothing.
+     Rows also carry `data-lobe-focus-ring="self-off"`: lobe-ui draws a global
+     focus ring overlay on any :focus-visible element, which `outline: none`
+     does not reach. */
+  focusVisible: css`
+    &:focus-visible {
+      outline: none;
+    }
+  `,
+  focusFill: css`
+    &:focus-visible {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   markerIcon: css`
     position: relative;
     display: inline-flex;
@@ -322,6 +340,35 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const { autoRename, canRename, saveTitle } = useRenameTopic(id, title, activeAgentId);
     const startEditing = useCallback(() => setEditing(true), []);
     const stopEditing = useCallback(() => setEditing(false), []);
+    const handleKeyDown = useCallback(
+      (event: KeyboardEvent<HTMLElement>) =>
+        handleTopicRowKeyDown(event, {
+          onOpen: handleClick,
+          onRename: id && canRename ? startEditing : undefined,
+        }),
+      [canRename, handleClick, id, startEditing],
+    );
+
+    // Leaving the editor (Enter, Escape, the auto-rename button) unmounts the
+    // focused input; hand focus back to the row so the keyboard user stays in
+    // the list. A blur that moved focus somewhere else keeps it there.
+    const containerRef = useRef<HTMLDivElement>(null);
+    const wasEditingRef = useRef(false);
+    useEffect(() => {
+      if (editing) {
+        wasEditingRef.current = true;
+        return;
+      }
+      if (!wasEditingRef.current) return;
+      wasEditingRef.current = false;
+
+      const container = containerRef.current;
+      const focused = container?.ownerDocument.activeElement;
+      if (focused && focused !== container?.ownerDocument.body && !container?.contains(focused))
+        return;
+      focusTopicRow(container?.querySelector<HTMLElement>(`[${TOPIC_ROW_ATTR}]`));
+    }, [editing]);
+
     const handleDoubleClick = useCallback((event: MouseEvent) => {
       // The trailing actions (complete, archive, more) stop click propagation
       // but not double clicks; a fast double click on them must not rename.
@@ -413,7 +460,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return (
         <NavItem
           active={defaultTopicActive}
+          className={cx(styles.focusVisible, !defaultTopicActive && styles.focusFill)}
+          data-lobe-focus-ring="self-off"
+          data-topic-row=""
           slots={{ titlePrefix: draftPrefix }}
+          tabIndex={0}
           titleColor={cssVar.colorText}
           icon={
             isLoading ? (
@@ -441,6 +492,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             </Flexbox>
           }
           onClick={handleClick}
+          onKeyDown={handleKeyDown}
         />
       );
     }
@@ -565,9 +617,13 @@ const TopicItemRow = memo<TopicItemRowProps>(
           draggable
           titleMarquee
           active={isTopicActive}
+          className={cx(styles.focusVisible, !isTopicActive && styles.focusFill)}
+          data-lobe-focus-ring="self-off"
+          data-topic-row=""
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
+          tabIndex={0}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           actions={() => (
@@ -607,6 +663,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
           onClick={handleClick}
           onDoubleClick={canRename ? handleDoubleClick : undefined}
           onDragStart={handleDragStart}
+          onKeyDown={handleKeyDown}
         />
       </TopicItemContextMenu>
     );
@@ -615,6 +672,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <Flexbox
         data-testid="topic-item"
         data-topic-id={id}
+        ref={containerRef}
         style={{ position: 'relative' }}
         {...hoverPrefetchHandlers}
       >

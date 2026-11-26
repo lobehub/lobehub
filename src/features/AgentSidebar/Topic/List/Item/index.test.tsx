@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { MouseEvent, ReactNode } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
@@ -77,9 +77,12 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon,
     onClick,
     onDoubleClick,
+    onKeyDown,
     onPointerEnter,
     slots,
+    tabIndex,
     title,
+    ...rest
   }: {
     actions?: ReactNode | (() => ReactNode);
     active?: boolean;
@@ -89,7 +92,10 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon?: ReactNode;
     onClick?: (event: MouseEvent) => void;
     onDoubleClick?: (event: MouseEvent) => void;
+    onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
     onPointerEnter?: () => void;
+    tabIndex?: number;
+    [key: `data-${string}`]: unknown;
     slots?: { iconBelow?: ReactNode; titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
@@ -97,8 +103,11 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       data-active={String(active)}
       data-href={href}
       data-testid="nav-item"
+      data-topic-row={(rest as Record<string, unknown>)['data-topic-row'] as string | undefined}
+      tabIndex={tabIndex}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onKeyDown={onKeyDown}
       onPointerEnter={onPointerEnter}
     >
       <div data-testid="nav-item-leading">
@@ -799,5 +808,106 @@ describe('TopicItem inline rename', () => {
     fireEvent.doubleClick(screen.getByTestId('nav-item-title'));
 
     expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+});
+
+describe('TopicItem keyboard', () => {
+  const navigateToTopic = vi.fn();
+
+  beforeEach(() => {
+    renameMock.canRename = true;
+    renameMock.saveTitle.mockClear();
+    navigateToTopic.mockClear();
+    useTopicNavigationMock.mockReturnValue({
+      focusTopicPopup: vi.fn().mockResolvedValue(false),
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic,
+      routeTopicId: undefined,
+      urlTopicId: undefined,
+    });
+  });
+
+  const focusRow = () => {
+    const row = screen.getByTestId('nav-item');
+    row.focus();
+    return row;
+  };
+
+  it('makes the row focusable', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(focusRow()).toHaveFocus();
+  });
+
+  it('renames on F2 and returns focus to the row on Enter', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(renameMock.saveTitle).toHaveBeenCalledWith('Renamed');
+    expect(screen.getByTestId('nav-item')).toHaveFocus();
+  });
+
+  it('renames on Enter', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'Enter' });
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(navigateToTopic).not.toHaveBeenCalled();
+  });
+
+  it('opens the topic on Space', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: ' ' });
+
+    expect(navigateToTopic).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the row after Escape', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.getByTestId('nav-item')).toHaveFocus();
+  });
+
+  it('leaves focus where a blur moved it', () => {
+    render(
+      <>
+        <TopicItem id="tpc_test" title="Topic" />
+        <input data-testid="elsewhere" />
+      </>,
+    );
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    // Moving focus blurs the editor, which saves and closes it.
+    act(() => screen.getByTestId('elsewhere').focus());
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+    expect(screen.getByTestId('elsewhere')).toHaveFocus();
+  });
+
+  it('does not rename on F2 without edit permission', () => {
+    renameMock.canRename = false;
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.keyDown(focusRow(), { key: 'F2' });
+
+    expect(screen.queryByTestId('topic-title-editor')).not.toBeInTheDocument();
+  });
+
+  it('opens the default topic row on Enter', () => {
+    render(<TopicItem title="Default" />);
+
+    fireEvent.keyDown(focusRow(), { key: 'Enter' });
+
+    expect(navigateToTopic).toHaveBeenCalledTimes(1);
   });
 });

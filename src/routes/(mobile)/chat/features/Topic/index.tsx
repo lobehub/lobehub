@@ -11,6 +11,7 @@ const Topic = () => {
       <Flexbox gap={8} height={'100%'} padding={'8px 8px 0'} style={{ overflow: 'hidden' }}>
         <TopicSearchBar />
         <Flexbox
+          data-topic-list-root=""
           height={'100%'}
           style={{ marginInline: -8, overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
           width={'calc(100% + 16px)'}
