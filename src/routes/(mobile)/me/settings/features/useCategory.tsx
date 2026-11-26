@@ -90,12 +90,6 @@ export const useCategory = (): CategoryGroup[] => {
             key: SettingsTabs.Usage,
             label: t('subscription:tab.usage'),
           }),
-          codingPlansTab &&
-            makeItem({
-              icon: CodeXmlIcon,
-              key: SettingsTabs.CodingPlans,
-              label: codingPlansTab.label,
-            }),
           makeItem({
             icon: CreditCard,
             key: SettingsTabs.Billing,
@@ -124,6 +118,19 @@ export const useCategory = (): CategoryGroup[] => {
       ENABLE_TOOL_CHANNEL_SETTINGS &&
         makeItem({ icon: Wrench, key: SettingsTabs.Tools, label: t('setting:tab.tools') }),
     ].filter((item): item is CategoryItem => Boolean(item));
+
+    // Runtime, as on desktop: the optional business tab, listed only where its
+    // slot supplies a label (the other Runtime pages have no mobile version).
+    const resource: CategoryItem[] =
+      enableBusinessFeatures && codingPlansTab
+        ? [
+            makeItem({
+              icon: CodeXmlIcon,
+              key: SettingsTabs.CodingPlans,
+              label: codingPlansTab.label,
+            }),
+          ]
+        : [];
 
     const connection: CategoryItem[] = [
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
@@ -156,6 +163,7 @@ export const useCategory = (): CategoryGroup[] => {
         title: t('setting:group.subscription'),
       },
       { items: agent, key: SettingsGroupKey.Agent, title: t('setting:group.aiConfig') },
+      { items: resource, key: SettingsGroupKey.Resource, title: t('setting:group.resource') },
       { items: connection, key: SettingsGroupKey.Connection, title: t('setting:group.connection') },
       { items: system, key: SettingsGroupKey.System, title: t('setting:group.systemDeveloper') },
     ].filter((group) => group.items.length > 0);
