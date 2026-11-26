@@ -195,6 +195,44 @@ describe('PluginModel', () => {
     });
   });
 
+  describe('owner-scoped lookup and delete', () => {
+    const workspaceId = 'plugin-owner-ws';
+
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: workspaceId });
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        identifier: 'shared-legacy',
+        settings: { token: 'mine' },
+        type: 'customPlugin',
+      });
+      await new PluginModel(serverDB, '456', workspaceId).create({
+        identifier: 'shared-legacy',
+        settings: { token: 'teammate' },
+        type: 'customPlugin',
+      });
+    });
+
+    it('finds only the caller’s row when teammates installed the same identifier', async () => {
+      const result = await new PluginModel(serverDB, userId, workspaceId).findOwnedById(
+        'shared-legacy',
+      );
+
+      expect(result?.userId).toBe(userId);
+      expect(result?.settings).toEqual({ token: 'mine' });
+    });
+
+    it('deletes only the caller’s row when teammates installed the same identifier', async () => {
+      await new PluginModel(serverDB, userId, workspaceId).deleteOwned('shared-legacy');
+
+      const rows = await serverDB.select().from(userInstalledPlugins);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].userId).toBe('456');
+      expect(rows[0].settings).toEqual({ token: 'teammate' });
+    });
+  });
+
   describe('Composio projection in a workspace', () => {
     const workspaceId = 'plugin-composio-ws';
     const composio = (connectedAccountId: string) => ({

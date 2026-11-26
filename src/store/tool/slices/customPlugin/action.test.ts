@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
@@ -12,16 +11,8 @@ beforeEach(() => {
 });
 vi.mock('@/services/plugin', () => ({
   pluginService: {
-    updatePlugin: vi.fn(),
     uninstallPlugin: vi.fn(),
-    updatePluginManifest: vi.fn(),
     getInstalledPlugins: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-vi.mock('@/services/mcp', () => ({
-  mcpService: {
-    getStreamableMcpServerManifest: vi.fn(),
   },
 }));
 
@@ -110,7 +101,6 @@ describe('useToolStore:customPlugin', () => {
       // A reinstall's tool list replaces the stored one
       expect(syncConnectorTools).toHaveBeenCalledWith('conn-1', { pruneMissingAutoTools: true });
       expect(deleteConnector).not.toHaveBeenCalled();
-      expect(pluginService.updatePlugin).not.toHaveBeenCalled();
       expect(pluginService.uninstallPlugin).not.toHaveBeenCalled();
     });
 
@@ -302,148 +292,6 @@ describe('useToolStore:customPlugin', () => {
           name: 'Old',
         }),
       );
-    });
-  });
-
-  describe('updateCustomPlugin', () => {
-    it('should update a specific plugin in the custom plugin list and reinstall the plugin', async () => {
-      const pluginId = 'test-plugin';
-      const old = {
-        type: 'customPlugin',
-        identifier: pluginId,
-        manifest: {
-          identifier: pluginId,
-          meta: { title: 'Old Plugin', avatar: '🍎' },
-        },
-      } as LobeToolCustomPlugin;
-
-      act(() => {
-        useToolStore.setState({
-          installedPlugins: [old],
-        });
-      });
-
-      const { result } = renderHook(() => useToolStore());
-
-      const updatedPlugin = {
-        type: 'customPlugin',
-        manifest: {
-          identifier: pluginId,
-          meta: { title: 'Updated Plugin', avatar: '🥒' },
-        },
-        identifier: pluginId,
-      } as LobeToolCustomPlugin;
-
-      await act(async () => {
-        await result.current.updateCustomPlugin(pluginId, updatedPlugin);
-      });
-
-      expect(pluginService.updatePlugin).toHaveBeenCalledWith(pluginId, updatedPlugin);
-    });
-
-    // The loaded row still points at the old server until the list refreshes
-    it('lists the tools of the server the edit saved, not the one the row had', async () => {
-      const pluginId = 'moved-mcp';
-      act(() => {
-        useToolStore.setState({
-          installedPlugins: [
-            {
-              customParams: {
-                mcp: { headers: { 'x-env': 'a' }, url: 'https://a.example.com/mcp' },
-              },
-              identifier: pluginId,
-              type: 'customPlugin',
-            } as LobeToolCustomPlugin,
-          ],
-        });
-      });
-      vi.mocked(mcpService.getStreamableMcpServerManifest).mockResolvedValueOnce({} as never);
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.updateCustomPlugin(pluginId, {
-          customParams: {
-            mcp: {
-              auth: { token: 'b-token', type: 'bearer' },
-              headers: { 'x-env': 'b' },
-              url: 'https://b.example.com/mcp',
-            },
-          },
-          identifier: pluginId,
-          type: 'customPlugin',
-        } as LobeToolCustomPlugin);
-      });
-
-      expect(mcpService.getStreamableMcpServerManifest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          auth: { token: 'b-token', type: 'bearer' },
-          headers: { 'x-env': 'b' },
-          url: 'https://b.example.com/mcp',
-        }),
-      );
-    });
-  });
-
-  describe('reinstallCustomPlugin', () => {
-    it('retains the connection failure on the plugin row', async () => {
-      const pluginId = 'broken-plugin';
-      vi.mocked(mcpService.getStreamableMcpServerManifest).mockRejectedValueOnce({
-        cause: 'Connection refused',
-        message: 'connectionError',
-      });
-
-      act(() => {
-        useToolStore.setState({
-          installedPlugins: [
-            {
-              customParams: { mcp: { url: 'https://mcp.example.com' } },
-              identifier: pluginId,
-              type: 'customPlugin',
-            } as LobeToolCustomPlugin,
-          ],
-          pluginInstallErrors: {},
-        });
-      });
-
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.reinstallCustomPlugin(pluginId);
-      });
-
-      expect(result.current.pluginInstallErrors[pluginId]).toEqual({
-        cause: 'Connection refused',
-        message: 'connectionError',
-      });
-      expect(result.current.pluginInstallLoading[pluginId]).toBe(false);
-    });
-  });
-
-  describe('updateNewCustomPlugin', () => {
-    it('should update the newCustomPlugin state with the provided values', () => {
-      const initialNewCustomPlugin = {
-        type: 'customPlugin',
-        manifest: {
-          identifier: 'plugin3',
-          meta: { title: 'Initial Plugin' },
-        },
-      } as LobeToolCustomPlugin;
-      const updates = { meta: { title: 'Updated Name' } } as Partial<LobeToolCustomPlugin>;
-      const expectedNewCustomPlugin = { ...initialNewCustomPlugin, ...updates };
-
-      act(() => {
-        useToolStore.setState({
-          newCustomPlugin: initialNewCustomPlugin,
-        });
-      });
-
-      const { result } = renderHook(() => useToolStore());
-
-      act(() => {
-        result.current.updateNewCustomPlugin(updates);
-      });
-
-      expect(useToolStore.getState().newCustomPlugin).toEqual(expectedNewCustomPlugin);
     });
   });
 });

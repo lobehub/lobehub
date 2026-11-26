@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
-import { connectorToolIdentifier } from '@lobechat/types';
+import { connectorToolIdentifier, type LobeTool } from '@lobechat/types';
 import {
   connectorMcpEndpoint,
   type McpEndpointShape,
@@ -78,6 +78,7 @@ export const selectMcpAppEntrypoints = (
    * private agent's own topic runs.
    */
   runRows?: RunConnectorRow[],
+  discoveredPluginManifests?: Record<string, LobeTool['manifest']>,
 ): AppEntrypoint[] => {
   if (!enabled) return [];
   // Each row under its tool prefix, as the server names it: a private row is
@@ -128,7 +129,9 @@ export const selectMcpAppEntrypoints = (
           const entry = tool.metadata?.threadEntry as McpAppThreadEntry | undefined;
           return entry ? [entry] : [];
         })
-      : (plugin?.manifest?.mcpAppEntrypoints ?? []);
+      : (plugin?.manifest?.mcpAppEntrypoints ??
+        discoveredPluginManifests?.[identifier]?.mcpAppEntrypoints ??
+        []);
     // One entry per account when the connector holds several: its call can't select one
     const accounts = isMcp && (connector.links?.length ?? 0) > 1 ? connector.links! : undefined;
     return entries

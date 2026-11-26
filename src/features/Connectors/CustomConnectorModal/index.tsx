@@ -18,6 +18,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
+import type { LegacyMigrationPlugin } from '../legacyMigrationPlugin';
 import { saveConnectorEdit } from './connectorEdit';
 import { saveOAuthConnectorEdit } from './oauthEdit';
 import {
@@ -40,7 +41,7 @@ interface CustomConnectorModalProps {
    * so a transient failure (MCP server unreachable, etc.) leaves the user with
    * their working legacy plugin and a "retry" path on the next save.
    */
-  legacyPlugin?: LobeToolCustomPlugin;
+  legacyPlugin?: LegacyMigrationPlugin;
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
@@ -93,6 +94,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     const { t } = useTranslation('tool');
     const createConnector = useToolStore((s) => s.createConnector);
     const migrateLegacyPlugin = useToolStore((s) => s.migrateLegacyPlugin);
+    const migrateLegacyPluginToConnector = useToolStore((s) => s.migrateLegacyPluginToConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -159,7 +161,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     // Migration mode skips the fetch — the legacy `customParams.mcp` blob is
     // already in the shape DevModal expects, so we hand it through unchanged.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
-      if (isMigrationMode) return legacyPlugin;
+      if (isMigrationMode)
+        return legacyPlugin ? { ...legacyPlugin, type: 'customPlugin' as const } : undefined;
       if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
@@ -274,8 +277,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       ctx?: { oauthPopup?: Window | null },
     ) => {
       // ── Migration mode ────────────────────────────────────────────────────
-      // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
-      // a `user_connectors` row. Server `connector.create` is idempotent on
+      // Promote a legacy `user_installed_plugins` row into a
+      // `user_connectors` row. Server `connector.create` is idempotent on
       // `(user_id, identifier)` — a same-name half-baked connector from the
       // old `syncPluginTools` path becomes an UPDATE here, no collision branch
       // needed.
@@ -288,19 +291,67 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       if (isMigrationMode && legacyPlugin) {
         // `value` is the full form state — DevModal seeded itself from
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
-        // alone) is already inside `value`. Hand it to the orchestrator.
-        const result = await migrateLegacyPlugin(legacyPlugin, value);
-        if (!result.ok) {
-          throw new Error(
-            result.reason === 'no-mcp'
-              ? 'This custom plugin has no MCP configuration to migrate.'
-              : result.reason === 'no-endpoint'
-                ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
-                : 'This custom plugin uses an unsupported transport.',
+        // alone) is already inside `value`.
+        if (legacyPlugin.type === 'plugin') {
+          const mcp = value.customParams?.mcp;
+          if (!mcp) throw new Error('This MCP plugin has no MCP configuration to migrate.');
+          // A market-hosted cloud MCP has no user-owned endpoint to repair; the
+          // server already knows its hosted endpoint and migrates it directly.
+          if (mcp.type === 'cloud') {
+            await migrateLegacyPluginToConnector(legacyPlugin.identifier);
+            onEditSuccess?.();
+            return;
+          }
+          if (mcp.type !== 'http' && mcp.type !== 'stdio')
+            throw new Error('This MCP plugin uses an unsupported transport.');
+          // A marketplace repair retry still runs the server-side migration:
+          // settings, credentials, marketplace provenance and tool policies
+          // stay server-owned, while the edited connection form is the repair.
+          await migrateLegacyPluginToConnector(
+            legacyPlugin.identifier,
+            {
+              args: mcp.args,
+              auth:
+                mcp.auth?.type === 'none' ||
+                mcp.auth?.type === 'bearer' ||
+                mcp.auth?.type === 'oauth2'
+                  ? {
+                      accessToken: mcp.auth.accessToken,
+                      clientId: mcp.auth.clientId,
+                      clientSecret: mcp.auth.clientSecret,
+                      token: mcp.auth.token,
+                      type: mcp.auth.type,
+                    }
+                  : undefined,
+              boundDeviceId: mcp.boundDeviceId,
+              command: mcp.command,
+              connectVia: mcp.connectVia,
+              env: cleanRecord(mcp.env),
+              headers: cleanRecord(mcp.headers),
+              type: mcp.type,
+              url: mcp.url,
+            },
+            ctx?.oauthPopup,
           );
+          onEditSuccess?.();
+          return;
         }
-        onEditSuccess?.();
-        return;
+
+        if (legacyPlugin.type === 'customPlugin') {
+          const result = await migrateLegacyPlugin(legacyPlugin, value);
+          if (!result.ok) {
+            throw new Error(
+              result.reason === 'no-mcp'
+                ? 'This custom plugin has no MCP configuration to migrate.'
+                : result.reason === 'no-endpoint'
+                  ? 'This custom plugin is missing a URL (for HTTP) or command (for stdio).'
+                  : 'This custom plugin uses an unsupported transport.',
+            );
+          }
+          onEditSuccess?.();
+          return;
+        }
+        throw new Error('This MCP plugin uses an unsupported transport.');
       }
 
       const mcp = (value.customParams?.mcp ?? {}) as {

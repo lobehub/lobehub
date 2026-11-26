@@ -16,7 +16,6 @@ import { mcpSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { McpNavKey } from '@/types/discover';
 
-import Settings from '../MCPSettings';
 import Loading from './Loading';
 
 interface DetailProps {
@@ -71,7 +70,6 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
           setActiveTab={setActiveTab}
         />
         <Flexbox gap={24}>
-          {activeTab === McpNavKey.Settings && <Settings identifier={identifier} />}
           {activeTab === McpNavKey.Overview && <Overview inModal />}
           {activeTab === McpNavKey.Deployment && <Deployment />}
           {activeTab === McpNavKey.Schema && <Schema />}
