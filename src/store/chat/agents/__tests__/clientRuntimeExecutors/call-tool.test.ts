@@ -40,7 +40,6 @@ vi.mock('@/store/chat/agents/registerClientWorkFromIntent', () => ({
 describe('call_tool executor', () => {
   describe('Basic Behavior', () => {
     it('should create tool message and execute tool successfully', async () => {
-      // Given
       const mockStore = createMockStore();
       const context = createTestContext({ agentId: 'test-session', topicId: 'test-topic' });
 
@@ -58,7 +57,6 @@ describe('call_tool executor', () => {
       const instruction = createCallToolInstruction(toolCall, { parentMessageId: 'msg_parent' });
       const state = createInitialState({ operationId: 'test-session' });
 
-      // When
       const result = await executeWithMockContext({
         executor: 'call_tool',
         instruction,
@@ -67,7 +65,6 @@ describe('call_tool executor', () => {
         context,
       });
 
-      // Then
       expect(result.events).toHaveLength(1);
       expect(result.events[0]).toMatchObject({
         type: 'tool_result',
@@ -277,7 +274,6 @@ describe('call_tool executor', () => {
     });
 
     it('should call internal_invokeDifferentTypePlugin with correct parameters', async () => {
-      // Given
       const mockStore = createMockStore();
       const context = createTestContext();
 
@@ -295,7 +291,6 @@ describe('call_tool executor', () => {
       const instruction = createCallToolInstruction(toolCall);
       const state = createInitialState();
 
-      // When
       await executeWithMockContext({
         executor: 'call_tool',
         instruction,
@@ -304,13 +299,13 @@ describe('call_tool executor', () => {
         context,
       });
 
-      // Then
       const createdMessage = await (mockStore.optimisticCreateMessage as Mock).mock.results[0]
         .value;
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledWith(
         createdMessage.id,
         toolCall,
         undefined, // stepContext is undefined when not provided
+        { assistantMessageId: instruction.payload.parentMessageId, expectedDeviceId: undefined },
       );
     });
 
@@ -516,6 +511,7 @@ describe('call_tool executor', () => {
       const assistantMessage = createAssistantMessage();
       const existingToolMessage = {
         id: 'msg_existing_tool',
+        parentId: assistantMessage.id,
         tool_call_id: 'approval-call',
         role: 'tool',
         content: '',
@@ -549,6 +545,7 @@ describe('call_tool executor', () => {
         'msg_existing_tool',
         expect.any(Object),
         undefined, // stepContext is undefined when not provided
+        { assistantMessageId: assistantMessage.id, expectedDeviceId: undefined },
       );
     });
 
@@ -564,6 +561,7 @@ describe('call_tool executor', () => {
       const assistantMessage = createAssistantMessage();
       const existingToolMessage = {
         id: 'msg_tool_reuse',
+        parentId: assistantMessage.id,
         tool_call_id: 'tool_resume',
         role: 'tool',
         content: '',
@@ -602,6 +600,7 @@ describe('call_tool executor', () => {
         'msg_tool_reuse',
         toolCall,
         undefined, // stepContext is undefined when not provided
+        { assistantMessageId: assistantMessage.id, expectedDeviceId: undefined },
       );
     });
   });
@@ -1870,6 +1869,7 @@ describe('call_tool executor', () => {
         expect.any(String),
         toolCall,
         undefined, // stepContext is undefined when not provided
+        { assistantMessageId: instruction.payload.parentMessageId, expectedDeviceId: undefined },
       );
     });
 

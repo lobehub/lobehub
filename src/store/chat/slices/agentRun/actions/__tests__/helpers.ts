@@ -89,7 +89,19 @@ export const spyOnMessageService = () => {
     }));
   const createMessageSpy = vi
     .spyOn(messageService, 'createMessage')
-    .mockResolvedValue({ id: TEST_IDS.NEW_MESSAGE_ID, messages: [] });
+    .mockImplementation(async (params) => ({
+      id: TEST_IDS.NEW_MESSAGE_ID,
+      messages: [{ ...params, id: TEST_IDS.NEW_MESSAGE_ID } as any],
+    }));
+  vi.spyOn(messageService, 'getContextReplays').mockResolvedValue({});
+  vi.spyOn(messageService, 'getExecutionBinding').mockResolvedValue({
+    agentDeviceId: null,
+    topicDeviceId: null,
+  });
+  vi.spyOn(messageService, 'revokedContextSources').mockResolvedValue([]);
+  vi.spyOn(messageService, 'commitContextReplay').mockImplementation(
+    async (_id, snapshot) => snapshot,
+  );
   const updateMessageSpy = vi
     .spyOn(messageService, 'updateMessage')
     .mockResolvedValue({ messages: [], success: true });

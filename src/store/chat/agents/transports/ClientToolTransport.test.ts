@@ -213,6 +213,9 @@ describe('ClientToolTransport', () => {
       } as unknown as ToolRunContext,
     );
 
-    expect(invoke).toHaveBeenCalledWith('tool-message', expect.anything(), stepContext);
+    expect(invoke).toHaveBeenCalledWith('tool-message', expect.anything(), stepContext, {
+      assistantMessageId: 'assistant-message',
+      expectedDeviceId: undefined,
+    });
   });
 });

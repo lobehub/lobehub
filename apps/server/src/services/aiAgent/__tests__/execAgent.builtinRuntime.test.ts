@@ -155,6 +155,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
@@ -583,7 +584,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(mockMessageCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'Hello',
-        metadata: { trigger: RequestTrigger.Onboarding },
+        metadata: { conversationMode: 'agent', trigger: RequestTrigger.Onboarding },
         role: 'user',
       }),
       undefined,

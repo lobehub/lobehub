@@ -67,6 +67,7 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(function () {
     return {
       getAgentConfig: vi.fn(),
+      getAgentToolPolicy: vi.fn().mockResolvedValue(undefined),
       queryAgents: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -113,6 +114,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
       create: mockTopicCreate,

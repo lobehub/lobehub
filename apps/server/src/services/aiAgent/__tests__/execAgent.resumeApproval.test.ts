@@ -121,11 +121,12 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       releaseTaskCallbackReservation: mockReleaseTaskCallbackReservation,
       repairAgentInterventionContinuation: mockRepairAgentInterventionContinuation,
       tryReserveTaskCallback: mockTryReserveTaskCallback,
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-      findById: vi.fn().mockResolvedValue(null),
+      findById: vi.fn(async (id: string) => ({ id, metadata: {} })),
       updateMetadata: mockUpdateTopicMetadata,
     };
   }),

@@ -120,6 +120,7 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(function () {
     return {
       getAgentConfig: vi.fn().mockResolvedValue(heteroAgentConfig),
+      getAgentToolPolicy: vi.fn().mockResolvedValue(undefined),
       queryAgents: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -151,6 +152,7 @@ vi.mock('@/database/models/plugin', () => ({
 }));
 
 const topicMock = {
+  resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
@@ -315,7 +317,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockDispatchAgentRun.mockResolvedValue({ success: true });
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
-    mockMessageQuery.mockResolvedValue([]);
     mockBuildRemoteDeviceHeteroContext.mockImplementation(function ({ conversationHistory }) {
       return conversationHistory ? 'device recovery context' : 'device context';
     });
@@ -329,7 +330,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     delete (heteroAgentConfig as any).userId;
     delete (heteroAgentConfig as any).visibility;
     delete (heteroAgentConfig as any).workspaceId;
-
     service = new AiAgentService(mockDb, userId);
   });
 

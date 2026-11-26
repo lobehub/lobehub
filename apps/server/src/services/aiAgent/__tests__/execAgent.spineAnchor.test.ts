@@ -89,8 +89,9 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      resolveConversationMode: vi.fn(async (_topicId: string, fallback: string) => fallback),
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-      findById: vi.fn().mockResolvedValue(undefined),
+      findById: vi.fn(async (id: string) => ({ id, metadata: {} })),
       releaseTaskCallbackReservation: mockReleaseReservation,
       tryReserveTaskCallback: mockTryReserve,
       updateMetadata: vi.fn().mockResolvedValue(undefined),
