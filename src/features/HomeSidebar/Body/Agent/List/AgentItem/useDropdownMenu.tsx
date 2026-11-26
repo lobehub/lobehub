@@ -43,7 +43,7 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
 import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 
-interface UseAgentDropdownMenuParams {
+export interface UseAgentDropdownMenuParams {
   group: string | undefined;
   id: string;
   /** Labels currently applied to the agent (from the sidebar list payload). */

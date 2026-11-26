@@ -621,7 +621,7 @@ export class ChannelRepository {
     const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
     const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
 
-    const lastMessageOf = await channelLastMessages(this.db, previewIds);
+    const lastMessageOf = await channelLastMessages(this.db, previewIds, this.userId);
 
     // Main-conversation replies the list row shows as in progress: ones that can still publish,
     // and stopped ones whose writer has not exited yet.
