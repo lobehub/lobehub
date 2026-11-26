@@ -3,7 +3,10 @@ import {
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import type { ModelPerformance, ModelUsage } from '@lobechat/types';
-import { unwrapServerDefaultHeterogeneousModel } from '@lobechat/types';
+import {
+  isServerDefaultHeterogeneousReportedModel,
+  unwrapServerDefaultHeterogeneousModel,
+} from '@lobechat/types';
 import { formatUsd } from '@lobechat/utils';
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -24,6 +27,7 @@ import { formatNumber } from '@/utils/format';
 
 import { contextSelectors, useConversationStore } from '../../../../store';
 import TokenDetail from './UsageDetail';
+import { canShowUsageCost } from './UsageDetail/cost';
 
 export const styles = stylex.create({
   container: {
@@ -71,6 +75,10 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
     );
   });
   const displayProvider = modelCard?.providerId ?? provider;
+  const hideCost = !canShowUsageCost({
+    provider: displayProvider,
+    serverDefault: isServerDefaultHeterogeneousReportedModel(model),
+  });
 
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
 
@@ -136,6 +144,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       <Center horizontal gap={8}>
         {!!usage?.totalTokens && (
           <TokenDetail
+            hideCost={hideCost}
             model={displayModel}
             performance={performance}
             provider={displayProvider}
@@ -156,7 +165,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
           </Tooltip>
         )}
         {/* The `$` already says what the number is, so no coin icon beside it */}
-        {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
+        {!isShowCredit && !hideCost && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <span>{formatUsd(usage.cost)}</span>
         )}
       </Center>

@@ -25,13 +25,19 @@ export const styles = stylex.create({
 });
 
 interface ModelCardProps extends LobeDefaultAiModelListItem {
+  /**
+   * Hide the Token / cost switch and the per-token pricing, leaving token counts only.
+   * See `canShowUsageCost`.
+   */
+  hideCost?: boolean;
   provider: string;
 }
 
-const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) => {
+const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName, hideCost }) => {
   const { t } = useTranslation('chat');
 
-  const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit) && !!pricing;
+  const canShowCost = !hideCost && !!pricing;
+  const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit) && canShowCost;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const prices = getPriceLabels(pricing);
@@ -55,7 +61,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             <span {...stylex.props(styles.desc)}>{provider}</span>
           </Flexbox>
         </Flexbox>
-        {!!pricing && (
+        {canShowCost && (
           <Flexbox>
             <Tabs
               activeKey={isShowCredit ? 'credit' : 'token'}
@@ -139,7 +145,8 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
           </Flexbox>
         </Flexbox>
       ) : (
-        <div style={{ height: 18 }} />
+        // Reserves the pricing row's height; a hidden-cost card never shows that row, so it skips the gap
+        !hideCost && <div style={{ height: 18 }} />
       )}
     </Flexbox>
   );

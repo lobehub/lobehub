@@ -22,13 +22,15 @@ import { createUsdFormatter } from './usd';
 const VALUE_STYLE = { fontVariantNumeric: 'tabular-nums', fontWeight: 500 } as const;
 
 interface TokenDetailProps {
+  /** Keep usage in tokens: no cost view, pricing or average price (see `canShowUsageCost`). */
+  hideCost?: boolean;
   model: string;
   performance?: ModelPerformance;
   provider: string;
   usage: ModelUsage;
 }
 
-const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider }) => {
+const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider, hideCost }) => {
   const { t } = useTranslation('chat');
 
   // Use systemStatus to manage short-format display state
@@ -36,7 +38,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const modelCard = useAiInfraStore(aiModelSelectors.getModelCard(model, provider));
-  const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit) && !!modelCard?.pricing;
+  const isShowCredit =
+    useGlobalStore(systemStatusSelectors.isShowCredit) && !hideCost && !!modelCard?.pricing;
 
   const detailTokens = getDetailsToken(usage, modelCard);
   const inputDetails = [
@@ -155,7 +158,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       trigger="hover"
       content={
         <Flexbox gap={8} style={{ minWidth: 200 }}>
-          {modelCard && <ModelCard {...modelCard} provider={provider} />}
+          {modelCard && <ModelCard {...modelCard} hideCost={hideCost} provider={provider} />}
 
           <Flexbox gap={20}>
             {inputDetails.length > 1 && (

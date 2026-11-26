@@ -3,6 +3,12 @@ export const SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS = 'lobehub-default';
 
 const SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE = 'lobehub/';
 
+/** Legacy ids a CLI reported for server-default runs, before the `lobehub/` namespace. */
+const LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS = new Set([
+  SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
+  'custom:LobeHub-Server-Default-0',
+]);
+
 export const formatServerDefaultHeterogeneousModel = (model: string): string =>
   `${SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE}${model}`;
 
@@ -51,6 +57,15 @@ export const isServerDefaultHeterogeneousRelayInvocation = (
 };
 
 /**
+ * Whether a CLI-reported model came from a server-default run. Reads the model stored on the
+ * message, so it stays right after the agent switches to or from server-default.
+ */
+export const isServerDefaultHeterogeneousReportedModel = (reportedModel: string | undefined) =>
+  !!reportedModel &&
+  (LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS.has(reportedModel) ||
+    reportedModel.startsWith(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE));
+
+/**
  * Map a CLI-reported server-default model back to the catalog id.
  *
  * Supported CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
@@ -65,10 +80,7 @@ export const unwrapServerDefaultHeterogeneousModel = (
 
   if (!reportedModel) return configured;
 
-  if (
-    reportedModel === SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS ||
-    reportedModel === 'custom:LobeHub-Server-Default-0'
-  ) {
+  if (LEGACY_SERVER_DEFAULT_HETEROGENEOUS_MODELS.has(reportedModel)) {
     return configured ?? reportedModel;
   }
 
