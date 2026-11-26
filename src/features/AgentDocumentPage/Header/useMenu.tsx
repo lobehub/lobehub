@@ -1,6 +1,4 @@
 import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
-import { isDesktop } from '@lobechat/const';
-import { useEditor } from '@lobehub/editor/react';
 import type { DropdownItem } from '@lobehub/ui';
 import { confirmModal, cssVar, Icon, toast, useResponsive } from '@lobehub/ui';
 import { Download, Link2, Maximize2, Trash2 } from 'lucide-react';
@@ -12,10 +10,11 @@ import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditor
 import { useIsHtmlPage } from '@/features/PageEditor/HtmlPageBody';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
+import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { exportHtmlDocument } from '@/utils/exportTextFile';
+import { exportHtmlDocument, exportMarkdownDocument } from '@/utils/exportTextFile';
 
 interface UseMenuParams {
   agentDocumentId?: string;
@@ -44,13 +43,16 @@ export const useMenu = ({
   const { i18n, t } = useTranslation(['file', 'common', 'chat']);
 
   const { lg = true } = useResponsive();
-  const editor = useEditor();
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
 
   // An HTML page has no Markdown to export: it downloads as the page itself.
   const isHtmlPage = useIsHtmlPage(documentId);
+  const isDocumentLoaded = useDocumentStore(
+    (s) =>
+      s.documents[documentId] !== undefined || Boolean(s.documentDetailMap[documentId]?.document),
+  );
   const htmlContent = useDocumentStore((s) =>
     isHtmlPage ? s.documentDetailMap[documentId]?.document?.content : undefined,
   );
@@ -71,25 +73,30 @@ export const useMenu = ({
     };
 
     const handleExportMarkdown = async () => {
-      if (!editor) return;
-      const markdown = (editor.getDocument('markdown') as unknown as string) || '';
-      const fileName = `${title || 'Untitled'}.md`;
       try {
-        if (isDesktop) {
-          const { desktopExportService } = await import('@/services/electron/desktopExportService');
-          await desktopExportService.exportMarkdown({ content: markdown, fileName });
+        // The editor canvas keeps the live buffer in `documents`; fall back to
+        // the persisted detail replica, or fetch the document when neither has
+        // hydrated yet so we never silently download a zero-byte file.
+        const { documentDetailMap, documents } = useDocumentStore.getState();
+        const liveDoc = documents[documentId];
+        const persistedDoc = documentDetailMap[documentId]?.document;
+
+        let markdown: string;
+        if (liveDoc !== undefined) {
+          markdown = liveDoc.content ?? persistedDoc?.content ?? '';
+        } else if (persistedDoc) {
+          markdown = persistedDoc.content ?? '';
         } else {
-          const blob = new Blob([markdown], { type: 'text/markdown' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          document.body.append(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
-          toast.success(t('pageEditor.exportSuccess'));
+          const fetched = await documentService.getDocumentById(documentId);
+          if (!fetched) {
+            toast.error(t('pageEditor.exportError'));
+            return;
+          }
+          markdown = fetched.content ?? '';
         }
+
+        const result = await exportMarkdownDocument(markdown, title);
+        if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
       } catch {
         toast.error(t('pageEditor.exportError'));
       }
@@ -158,6 +165,7 @@ export const useMenu = ({
         children: isHtmlPage
           ? [
               {
+                disabled: !isDocumentLoaded,
                 key: 'export-html',
                 label: t('pageEditor.menu.export.html'),
                 onClick: handleExportHtml,
@@ -165,11 +173,13 @@ export const useMenu = ({
             ]
           : [
               {
+                disabled: !isDocumentLoaded,
                 key: 'export-markdown',
                 label: t('pageEditor.menu.export.markdown'),
                 onClick: handleExportMarkdown,
               },
             ],
+        disabled: !isDocumentLoaded,
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -210,9 +220,9 @@ export const useMenu = ({
     agentId,
     appOrigin,
     documentId,
-    editor,
     fileBacked,
     htmlContent,
+    isDocumentLoaded,
     isHtmlPage,
     lg,
     dateLocale,

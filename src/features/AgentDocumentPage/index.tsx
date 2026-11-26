@@ -1,6 +1,5 @@
 'use client';
 
-import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
@@ -163,10 +162,10 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     >
       <Flexbox flex={1} style={{ minHeight: 0 }} width={'100%'}>
         {isFile ? (
-          <EditorProvider>
+          <>
             {header}
             <FileDocumentPreview fileId={item?.fileId} />
-          </EditorProvider>
+          </>
         ) : (
           <PageEditor
             fullWidthHeader
