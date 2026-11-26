@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -11,13 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand } from './index';
 
-const { mockHeteroFinishMutate, mockSpawnAgent } = vi.hoisted(() => ({
+const { mockCreateCodexAgentHandle, mockHeteroFinishMutate, mockSpawnAgent } = vi.hoisted(() => ({
+  mockCreateCodexAgentHandle: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
   mockSpawnAgent: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof HeteroSpawn>()),
+  createCodexAgentHandle: mockCreateCodexAgentHandle,
   spawnAgent: mockSpawnAgent,
 }));
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
@@ -64,6 +66,30 @@ const longRunningAgent = () => {
   return { handle, kill };
 };
 
+const runExec = (...extra: string[]) => {
+  const program = new Command();
+  program.exitOverride();
+  registerHeteroCommand(program);
+  return program
+    .parseAsync(
+      [
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--prompt',
+        'hi',
+        '--topic',
+        'topic-1',
+        '--operation-id',
+        'op-1',
+        ...extra,
+      ],
+      { from: 'user' },
+    )
+    .catch((error: Error) => error.message);
+};
+
 describe('hetero exec on an installed credential that gets replaced', () => {
   let runDir: string;
 
@@ -98,26 +124,7 @@ describe('hetero exec on an installed credential that gets replaced', () => {
       return agent.handle;
     });
 
-    const program = new Command();
-    program.exitOverride();
-    registerHeteroCommand(program);
-    const exit = await program
-      .parseAsync(
-        [
-          'hetero',
-          'exec',
-          '--type',
-          'codex',
-          '--prompt',
-          'hi',
-          '--topic',
-          'topic-1',
-          '--operation-id',
-          'op-1',
-        ],
-        { from: 'user' },
-      )
-      .catch((error: Error) => error.message);
+    const exit = await runExec();
 
     expect(agent.kill).toHaveBeenCalledWith('SIGTERM');
     // Not `cancelled`: nobody stopped this run from LobeHub, and the user must
@@ -136,26 +143,7 @@ describe('hetero exec on an installed credential that gets replaced', () => {
   it('refuses to start the agent when the run cannot be leased', async () => {
     // A file where the lease directory belongs.
     await writeFile(runDir, '');
-    const program = new Command();
-    program.exitOverride();
-    registerHeteroCommand(program);
-    const exit = await program
-      .parseAsync(
-        [
-          'hetero',
-          'exec',
-          '--type',
-          'codex',
-          '--prompt',
-          'hi',
-          '--topic',
-          't',
-          '--operation-id',
-          'op',
-        ],
-        { from: 'user' },
-      )
-      .catch((error: Error) => error.message);
+    const exit = await runExec();
 
     expect(exit).toBe('__exit__1');
     expect(mockSpawnAgent).not.toHaveBeenCalled();
@@ -166,4 +154,25 @@ describe('hetero exec on an installed credential that gets replaced', () => {
       }),
     );
   });
+
+  it('leases the detached Codex app-server group so a forced stop can kill it', async () => {
+    const agent = longRunningAgent();
+    const leasedGroups = async () =>
+      JSON.parse(await readFile(path.join(runDir, `${process.pid}.json`), 'utf8')).processGroups;
+    let groupsWhileRunning: unknown;
+    mockCreateCodexAgentHandle.mockImplementation(async (options) => {
+      options.onProcessGroupChange(54_321, true);
+      groupsWhileRunning = await leasedGroups();
+      await writeFile(path.join(runDir, `${process.pid}.stop`), 'Codex account replaced');
+      return agent.handle;
+    });
+
+    const exit = await runExec('--codex-app-server');
+
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(groupsWhileRunning).toEqual([54_321]);
+    expect(agent.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(exit).toBe('__exit__143');
+    expect(await readdir(runDir)).toEqual([]);
+  }, 10_000);
 });

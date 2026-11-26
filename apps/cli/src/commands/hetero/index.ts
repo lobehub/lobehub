@@ -127,15 +127,14 @@ const spawnRuntimeRegistry: Partial<
 };
 
 /**
- * Spawn via the registered runtime factory, or the generic one-shot spawn.
- * `onRawStdout` (raw-dump tee) reaches both generic and registered runtimes;
- * RPC runtimes must install it before their eager handshake.
+ * Spawn native Codex, a registered runtime factory, or the generic one-shot spawn.
+ * `onRawStdout` (raw-dump tee) reaches all; RPC runtimes install it pre-handshake.
  */
 const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
   onStartupControl?: (control: PiRpcStartupControl) => void,
-  nativeCodex?: boolean,
+  nativeCodex?: false | { onProcessGroupChange: (pgid: number, running: boolean) => void },
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   if (nativeCodex)
     return createCodexAgentHandle({
@@ -146,6 +145,7 @@ const spawnAgentOrRuntime = (
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       env: { ...process.env, ...spawnOpts.env },
+      onProcessGroupChange: nativeCodex.onProcessGroupChange,
       onRawStdout,
       onStartupControl,
       operationId: spawnOpts.operationId,
@@ -810,7 +810,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           // when the process group already delivered the signal itself.
           if (cancellationSignal) cancelStartup(control, cancellationSignal);
         },
-        options.codexAppServer,
+        options.codexAppServer && { onProcessGroupChange: credentialRun.setProcessGroup },
       );
       if (cancellationSignal && !startupControl) {
         // Same split as `applyCancellation`: when the wrapper does not own
@@ -1101,8 +1101,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
 
   // ─── Drain + finish ───────────────────────────────────────────────────────
-  // The agent has exited: it can no longer write the credential back.
-  credentialRun.release();
+  // The agent has exited; hold the lease until its app-server group has too.
+  await credentialRun.releaseAfterProcessGroups();
 
   const { code, signal, sessionId } = result;
 

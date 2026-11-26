@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -58,6 +58,88 @@ describe('trackAgentCredentialRun', () => {
     const lease = trackAgentCredentialRun({ env: env(), onStop: () => {}, pid: 4242 });
     await expect(lease.admitted).rejects.toThrow('Could not register');
   });
+
+  it('records the agent process groups it is told about', async () => {
+    const lease = trackAgentCredentialRun({
+      env: env(),
+      heartbeatMs: 10,
+      onStop: () => {},
+      pid: 4242,
+    });
+    const record = async () =>
+      JSON.parse(await readFile(path.join(runDir, '4242.json'), 'utf8')).processGroups;
+
+    lease.setProcessGroup(5001, true);
+    lease.setProcessGroup(5002, true);
+    lease.setProcessGroup(5001, false);
+    expect(await record()).toEqual([5002]);
+    // Only the lease itself is left: the replacement never lands half-written.
+    expect(await readdir(runDir)).toEqual(['4242.json']);
+
+    lease.release();
+    lease.setProcessGroup(5003, true);
+    expect(await readdir(runDir)).toEqual([]);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'holds the lease after the run until its app-server group exits',
+    async () => {
+      // An app-server that ignores the SIGTERM a normal close sends.
+      const appServer = spawn(
+        process.execPath,
+        ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"],
+        { detached: true, stdio: 'ignore' },
+      );
+      const exited = new Promise((resolve) => appServer.once('exit', resolve));
+      const onStop = vi.fn();
+      const lease = trackAgentCredentialRun({ env: env(), heartbeatMs: 10, onStop, pid: 4242 });
+      lease.setProcessGroup(appServer.pid!, true);
+
+      try {
+        const released = lease.releaseAfterProcessGroups(200);
+        // A replacement arriving now still sees the run, but the finished run
+        // is not reported as stopped.
+        await writeFile(path.join(runDir, '4242.stop'), 'replaced');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(await readdir(runDir)).toContain('4242.json');
+
+        await released;
+        expect(await exited).toBeDefined();
+        expect(await readdir(runDir)).toEqual([]);
+        expect(onStop).not.toHaveBeenCalled();
+      } finally {
+        lease.release();
+        appServer.kill('SIGKILL');
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'stops the run when an agent group cannot be recorded, and records it once it can',
+    async () => {
+      const onStop = vi.fn();
+      const lease = trackAgentCredentialRun({ env: env(), heartbeatMs: 10, onStop, pid: 4242 });
+      const record = async () =>
+        JSON.parse(await readFile(path.join(runDir, '4242.json'), 'utf8')).processGroups;
+
+      try {
+        // The lease file stays, but no replacement can be written next to it.
+        await chmod(runDir, 0o500);
+        lease.setProcessGroup(5001, true);
+        expect(onStop).toHaveBeenCalledWith(
+          'Could not record the agent process on the installed credential.',
+        );
+        expect(await record()).toEqual([]);
+
+        await chmod(runDir, 0o700);
+        await vi.waitFor(async () => expect(await record()).toEqual([5001]));
+        expect(onStop).toHaveBeenCalledTimes(1);
+      } finally {
+        await chmod(runDir, 0o700);
+        lease.release();
+      }
+    },
+  );
 
   it('ignores a stop request left for an earlier process with the same pid', async () => {
     await mkdir(runDir, { recursive: true });
@@ -206,4 +288,149 @@ describe('stopAgentCredentialRuns', () => {
       }
     },
   );
+
+  it.skipIf(process.platform === 'win32')(
+    'also kills the detached app-server group of a run killed outright',
+    async () => {
+      // Codex app-server runs detached, in a group of its own outside the
+      // wrapper's; killing the wrapper group alone leaves it running.
+      const spawnIdle = () =>
+        spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+      const wrapper = spawnIdle();
+      const appServer = spawnIdle();
+      const appServerExited = new Promise((resolve) => appServer.once('exit', resolve));
+      const lease = trackAgentCredentialRun({
+        env: env(),
+        heartbeatMs: 10,
+        onStop: () => {},
+        pid: wrapper.pid!,
+      });
+      lease.setProcessGroup(appServer.pid!, true);
+
+      try {
+        expect(
+          await stopAgentCredentialRuns(runDir, 'replaced', {
+            forceMs: 2000,
+            graceMs: 50,
+            pollMs: 10,
+          }),
+        ).toBe(1);
+        // Resolved only once the app-server group is gone too.
+        expect(() => process.kill(-appServer.pid!, 0)).toThrow();
+        expect(await appServerExited).toBeDefined();
+      } finally {
+        lease.release();
+        wrapper.kill('SIGKILL');
+        appServer.kill('SIGKILL');
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'waits for the app-server group of a run that drops its lease on request',
+    async () => {
+      const appServer = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      let appServerExited = false;
+      appServer.once('exit', () => {
+        appServerExited = true;
+      });
+      // The wrapper stops on request and drops its lease at once, while its
+      // app-server is still shutting down.
+      const lease = trackAgentCredentialRun({
+        env: env(),
+        heartbeatMs: 10,
+        onStop: () => {
+          lease.release();
+          setTimeout(() => appServer.kill('SIGKILL'), 150);
+        },
+        pid: process.pid,
+      });
+      lease.setProcessGroup(appServer.pid!, true);
+      const killRun = vi.fn(async () => {});
+
+      try {
+        expect(
+          await stopAgentCredentialRuns(runDir, 'replaced', { graceMs: 2000, killRun, pollMs: 10 }),
+        ).toBe(1);
+        expect(appServerExited).toBe(true);
+        expect(killRun).not.toHaveBeenCalled();
+      } finally {
+        lease.release();
+        appServer.kill('SIGKILL');
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'kills only the groups left by a wrapper that already exited',
+    async () => {
+      const appServer = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      // The wrapper drops its lease on request but its app-server hangs.
+      const lease = trackAgentCredentialRun({
+        env: env(),
+        heartbeatMs: 10,
+        onStop: () => lease.release(),
+        pid: process.pid,
+      });
+      lease.setProcessGroup(appServer.pid!, true);
+      const killRun = vi.fn(async (_pid: number | undefined, groups: number[]) => {
+        for (const pgid of groups) process.kill(-pgid, 'SIGKILL');
+      });
+
+      try {
+        expect(
+          await stopAgentCredentialRuns(runDir, 'replaced', {
+            forceMs: 2000,
+            graceMs: 50,
+            killRun,
+            pollMs: 10,
+          }),
+        ).toBe(1);
+        // The wrapper pid is no longer the run's, so it is never signalled.
+        expect(killRun).toHaveBeenCalledWith(undefined, [appServer.pid]);
+      } finally {
+        lease.release();
+        appServer.kill('SIGKILL');
+      }
+    },
+  );
+
+  it('hands the recorded groups to the killer and waits for them', async () => {
+    const lease = trackAgentCredentialRun({
+      env: env(),
+      heartbeatMs: 10,
+      onStop: () => {},
+      pid: process.pid,
+    });
+    lease.setProcessGroup(process.pid, true);
+    lease.setProcessGroup(4_000_000, true);
+    const killRun = vi.fn(async () => {
+      lease.release();
+    });
+
+    try {
+      await stopAgentCredentialRuns(runDir, 'replaced', {
+        forceMs: 50,
+        graceMs: 20,
+        killRun,
+        pollMs: 10,
+      });
+      // The wrapper's own pid is never treated as a second group.
+      expect(killRun).toHaveBeenCalledWith(
+        process.pid,
+        process.platform === 'win32' ? [] : [4_000_000],
+      );
+    } finally {
+      lease.release();
+    }
+  });
 });
