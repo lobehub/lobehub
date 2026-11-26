@@ -253,6 +253,10 @@ export const getLLMConfig = () => {
       ENABLED_ZENMUX: z.boolean(),
       ZENMUX_API_KEY: z.string().optional(),
 
+      ENABLED_PROXYSTACKS: z.boolean(),
+      PROXYSTACKS_API_KEY: z.string().optional(),
+      PROXYSTACKS_PROXY_URL: z.string().optional(),
+
       ENABLED_STRAICO: z.boolean(),
       STRAICO_API_KEY: z.string().optional(),
 
@@ -529,6 +533,10 @@ export const getLLMConfig = () => {
 
       ENABLED_ZENMUX: !!process.env.ZENMUX_API_KEY,
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
+
+      ENABLED_PROXYSTACKS: !!process.env.PROXYSTACKS_API_KEY,
+      PROXYSTACKS_API_KEY: process.env.PROXYSTACKS_API_KEY,
+      PROXYSTACKS_PROXY_URL: process.env.PROXYSTACKS_PROXY_URL,
 
       ENABLED_STRAICO: !!process.env.STRAICO_API_KEY,
       STRAICO_API_KEY: process.env.STRAICO_API_KEY,

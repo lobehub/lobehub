@@ -80,6 +80,7 @@ export { LobeOpenAI } from './providers/openai';
 export * from './providers/openai/modelId';
 export { LobeOpenRouterAI } from './providers/openrouter';
 export { LobePerplexityAI } from './providers/perplexity';
+export { LobeProxyStacksAI } from './providers/proxystacks';
 export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';
 export { LobeStraicoAI } from './providers/straico';

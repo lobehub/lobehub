@@ -1,0 +1,71 @@
+---
+title: ProxyStacks Provider Configuration
+description: Learn how to configure and use the ProxyStacks Relay provider in LobeHub
+tags:
+  - ProxyStacks
+  - Provider Configuration
+  - Setup Guide
+---
+
+# ProxyStacks Provider Configuration
+
+[ProxyStacks Relay](https://proxystacks.com) is a multi-protocol AI inference gateway that provides unified access to frontier models across OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages protocols with per-token USD billing and low-latency global and APAC edge routing.
+
+To configure this provider in LobeHub, open **App Settings → AI Providers**, select **ProxyStacks**, and turn on its switch.
+
+## Prerequisites
+
+Before using ProxyStacks in LobeHub, you need to:
+
+1. **Create a ProxyStacks Account**
+   - Visit [ProxyStacks](https://proxystacks.com) and sign up or sign in at the [ProxyStacks Console](https://proxystacks.com/login).
+
+2. **Obtain an API Key**
+   - Open your workspace dashboard, navigate to **API Keys**, and create an API key with inference access.
+   - Ensure your workspace has available balance (pay-as-you-go per-token USD billing; see current rates on [ProxyStacks Pricing](https://proxystacks.com/en/pricing)).
+
+## Configuration
+
+### UI Setup
+
+1. Open **App Settings → AI Providers → ProxyStacks**.
+2. Paste your API key into the **API Key** field.
+3. Keep the default API endpoint (`https://proxystacks.com/v1`), or set `https://hk.proxystacks.com/v1` for low-latency APAC / Greater China routing.
+4. Click **Check** (uses `deepseek-v4.1-flash` by default) or **Fetch models** to sync the live catalog from `/v1/models`.
+
+### Environment Variables
+
+For self-hosted LobeHub deployments, add the following variables to your `.env` file:
+
+```bash
+# ProxyStacks API Key (enables ProxyStacks on the server when set)
+PROXYSTACKS_API_KEY=your_proxystacks_api_key
+
+# Optional: override base URL (e.g. APAC Hong Kong edge)
+# PROXYSTACKS_PROXY_URL=https://hk.proxystacks.com/v1
+```
+
+### Available Models
+
+ProxyStacks serves frontier reasoning, coding, and multimodal models including `deepseek-v4.1-flash`, `glm-5.3`, `kimi-k3`, `qwen4-max`, `gpt-6.1-sol`, `gpt-6-luna`, `funsion-opus-5-5`, and `funsion-sonnet-5-5`. Browse the live catalog and token rates on [ProxyStacks Models](https://proxystacks.com/en/models).
+
+## Protocol Routing & Limitations
+
+- **Automatic Protocol Routing**: The LobeHub runtime routes Anthropic model IDs through the Anthropic Messages protocol, DeepSeek models through the DeepSeek OpenAI-compatible adapter, and OpenAI / general models through `/v1` (with Responses API support enabled).
+- **Custom Regional Endpoint**: Both `https://proxystacks.com/v1` and `https://hk.proxystacks.com/v1` (with or without trailing `/v1`) are normalized automatically so route suffixes are not duplicated.
+
+## Troubleshooting
+
+1. **401 Unauthorized**
+   - Verify that your API key is active and includes `inference` scope (or unrestricted scope).
+2. **402 Payment Required**
+   - Check your workspace balance or configured daily spend limit in the ProxyStacks console.
+3. **404 Model Not Found**
+   - Use **Fetch models** in provider settings or check [ProxyStacks Models](https://proxystacks.com/en/models) to confirm the exact servable model ID.
+
+## Resources
+
+- [ProxyStacks Official Website](https://proxystacks.com)
+- [ProxyStacks Documentation](https://proxystacks.com/en/docs)
+- [ProxyStacks Model Catalog](https://proxystacks.com/en/models)
+- [ProxyStacks Pricing](https://proxystacks.com/en/pricing)

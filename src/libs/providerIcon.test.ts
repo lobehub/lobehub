@@ -10,6 +10,8 @@ describe('provider artwork', () => {
     { provider: 'Unsloth', title: 'Unsloth' },
     { provider: 'typesafe', title: 'TypeSafe AI' },
     { provider: 'TypeSafe', title: 'TypeSafe AI' },
+    { provider: 'proxystacks', title: 'ProxyStacks' },
+    { provider: 'ProxyStacks', title: 'ProxyStacks' },
   ])('renders the official $provider avatar and wordmark', ({ provider, title }) => {
     const avatar = renderToStaticMarkup(createElement(ProviderIcon, { provider, type: 'avatar' }));
     const wordmark = renderToStaticMarkup(createElement(ProviderCombine, { provider }));
