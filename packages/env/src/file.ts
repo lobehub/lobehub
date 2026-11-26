@@ -26,6 +26,8 @@ export const getFileConfig = () => {
       CHUNKS_AUTO_GEN_METADATA: process.env.CHUNKS_AUTO_GEN_METADATA !== '0',
       EMBEDDING_BATCH_SIZE: process.env.EMBEDDING_BATCH_SIZE,
       EMBEDDING_CONCURRENCY: process.env.EMBEDDING_CONCURRENCY,
+      FILE_TASK_GLOBAL_CONCURRENCY: process.env.FILE_TASK_GLOBAL_CONCURRENCY || undefined,
+      FILE_TASK_WORKSPACE_CONCURRENCY: process.env.FILE_TASK_WORKSPACE_CONCURRENCY || undefined,
 
       NEXT_PUBLIC_S3_DOMAIN: process.env.NEXT_PUBLIC_S3_DOMAIN,
       NEXT_PUBLIC_S3_FILE_PATH: process.env.NEXT_PUBLIC_S3_FILE_PATH || DEFAULT_S3_FILE_PATH,
@@ -46,6 +48,10 @@ export const getFileConfig = () => {
       CHUNKS_AUTO_GEN_METADATA: z.boolean(),
       EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(50),
       EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(10),
+      /** File parse/embedding tasks running at once across the deployment. 0 turns admission off. */
+      FILE_TASK_GLOBAL_CONCURRENCY: z.coerce.number().int().nonnegative().default(80),
+      /** File parse/embedding tasks one workspace runs at once. 0 turns admission off. */
+      FILE_TASK_WORKSPACE_CONCURRENCY: z.coerce.number().int().nonnegative().default(20),
 
       // S3
       S3_ACCESS_KEY_ID: z.string().optional(),

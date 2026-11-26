@@ -4,12 +4,11 @@ import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
 import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
-import { createAsyncCallerFactory } from '@/libs/trpc/async';
 import { signInternalJWT } from '@/libs/trpc/utils/internalJwt';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
-import { type AsyncRouter } from './index';
-import { asyncRouter } from './index';
+// Type-only on purpose: services the async routes use can import this caller without a cycle.
+import type { AsyncRouter } from './index';
 
 export const createAsyncServerClient = async (userId: string) => {
   const token = await signInternalJWT();
@@ -37,15 +36,7 @@ export const createAsyncServerClient = async (userId: string) => {
   return client;
 };
 
-/**
- * Helper method for inferring caller type, but does not actually call createAsyncCallerFactory. Calling it will throw an error: asyncRouter is not initialized
- */
-const helperFunc = () => {
-  const dummyCreateCaller = createAsyncCallerFactory(asyncRouter);
-  return {} as unknown as ReturnType<typeof dummyCreateCaller>;
-};
-
-export type UnifiedAsyncCaller = ReturnType<typeof helperFunc>;
+export type UnifiedAsyncCaller = ReturnType<AsyncRouter['createCaller']>;
 
 interface CreateCallerOptions {
   userId: string;

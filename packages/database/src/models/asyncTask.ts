@@ -141,6 +141,67 @@ export class AsyncTaskModel {
     return Boolean(claimed);
   };
 
+  /** Marks a file task as waiting in the queue, so the status poll does not expire it. */
+  markFileTaskQueued = async (taskId: string, queuedUntil: Date) => {
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`COALESCE(${asyncTasks.metadata}, '{}'::jsonb) || jsonb_build_object('fileTaskQueuedUntil', ${queuedUntil.toISOString()}::text)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(asyncTasks.id, taskId), this.ownership()));
+  };
+
+  /**
+   * Moves a queued file task's marker to a new value, only if it still has the expected one, so
+   * one of several duplicate deliveries gets to requeue the task.
+   */
+  swapFileTaskQueueMarker = async (taskId: string, from: string, to: Date): Promise<boolean> => {
+    const [swapped] = await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`${asyncTasks.metadata} || jsonb_build_object('fileTaskQueuedUntil', ${to.toISOString()}::text)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          this.ownership(),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`${asyncTasks.metadata} ->> 'fileTaskQueuedUntil' = ${from}`,
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(swapped);
+  };
+
+  /**
+   * Takes a queued file task out of the queue and restarts its timeout clock. A single
+   * compare-and-set UPDATE, so one of several duplicate queue deliveries wins.
+   */
+  claimQueuedFileTask = async (taskId: string): Promise<boolean> => {
+    const now = new Date();
+    const [claimed] = await this.db
+      .update(asyncTasks)
+      .set({
+        createdAt: now,
+        metadata: sql`${asyncTasks.metadata} - 'fileTaskQueuedUntil'`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          this.ownership(),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`COALESCE(${asyncTasks.metadata}, '{}'::jsonb) ? 'fileTaskQueuedUntil'`,
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(claimed);
+  };
+
   /** All tasks of one type in the current scope, newest first. */
   findAllByType = async (type: AsyncTaskType): Promise<AsyncTaskSelectItem[]> => {
     return this.db
@@ -343,6 +404,8 @@ export class AsyncTaskModel {
             eq(asyncTasks.status, AsyncTaskStatus.Processing),
           ),
           lt(asyncTasks.createdAt, new Date(Date.now() - ASYNC_TASK_TIMEOUT)),
+          // A file task waiting its turn in the queue has not started, so it cannot be late yet.
+          sql`COALESCE(${asyncTasks.metadata} ->> 'fileTaskQueuedUntil', '') COLLATE "C" <= ${new Date().toISOString()}`,
         ),
       );
 

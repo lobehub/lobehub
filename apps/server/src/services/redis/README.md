@@ -78,6 +78,11 @@ This foundation does not migrate existing runtime, bot or OAuth stores.
   state is written under both the channel and a Discord thread key. Every read returns
   `undefined` without Redis; the caller waits for nothing and falls back to its existing wake.
 
+- `fileTaskSlots`: leases on running file parse/embedding tasks, per workspace (or personal
+  account) and across the deployment, three minutes unless renewed. `unavailable` without Redis;
+  the admission service then sends the task to the queue, whose flow control still paces how fast
+  a workspace's tasks start.
+
 - `inboundWebhook`: delivery replay claims (24 hours), wake debounce (10 seconds), manual checks
   (30 seconds), maintenance/sweep slots (one minute). Claims fall back to a process-local map;
   durable signal uniqueness remains the event deduplication boundary across instances.

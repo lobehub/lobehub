@@ -39,6 +39,10 @@ export const RedisKeyNamespace = {
    * shared by every instance that may receive a delivery.
    */
   AGENT_IDENTITY: 'agent-identity',
+  /**
+   * Leases on running file parse/embedding tasks, used to cap how many run at once.
+   */
+  FILE_TASK: 'file-task',
   INBOUND_WEBHOOK: 'inbound-webhook',
   /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
@@ -235,6 +239,16 @@ export const RedisKeys = {
      * Full key: agentRun:task_run_delivery:v1:{operationId}
      */
     taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
+  },
+  /**
+   * File task scope — see {@link RedisKeyNamespace.FILE_TASK}. The hash tag keeps both keys of
+   * the admission script in one Redis Cluster slot.
+   */
+  fileTask: {
+    /** Full key: file-task:{file-task}:slots:v1:global */
+    globalSlots: (): string => '{file-task}:slots:v1:global',
+    /** Full key: file-task:{file-task}:slots:v1:scope:{workspace:id | user:id} */
+    scopeSlots: (scope: string): string => `{file-task}:slots:v1:scope:${scope}`,
   },
   /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
@@ -450,6 +464,7 @@ export const RedisKeyScopeNamespace = {
   botDeferred: RedisKeyNamespace.BOT_DEFERRED,
   botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
+  fileTask: RedisKeyNamespace.FILE_TASK,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
   openapi: RedisKeyNamespace.OPENAPI,
