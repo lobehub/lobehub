@@ -13,6 +13,7 @@ import {
   shouldDropUnsupportedClaudeAssistantPrefill,
   shouldOmitSamplingParams,
   supportsClaudeEffortLevel,
+  supportsClaudeInlineToolChanges,
 } from './modelId';
 
 describe('parseClaudeModelId', () => {
@@ -409,5 +410,21 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-haiku-4-5')).toBe(false);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-4-5')).toBe(false);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-3-7-sonnet-20250219')).toBe(false);
+  });
+});
+
+describe('supportsClaudeInlineToolChanges', () => {
+  it('accepts verified Novita routing tiers of supported models', () => {
+    expect(supportsClaudeInlineToolChanges('pa/claude-opus-4-8')).toBe(true);
+    expect(supportsClaudeInlineToolChanges('pa/claude-fable-5')).toBe(true);
+    expect(supportsClaudeInlineToolChanges('anthropic/claude-opus-4-8-aws')).toBe(true);
+    expect(supportsClaudeInlineToolChanges('anthropic/claude-opus-5-5')).toBe(true);
+  });
+
+  it('keeps unsupported models and unverified tiers on the normal path', () => {
+    expect(supportsClaudeInlineToolChanges('pa/claude-sonnet-4-6')).toBe(false);
+    expect(supportsClaudeInlineToolChanges('anthropic/claude-sonnet-4-6-aws')).toBe(false);
+    expect(supportsClaudeInlineToolChanges('pa/claude-opus-4-8-hs')).toBe(false);
+    expect(supportsClaudeInlineToolChanges('anthropic.claude-opus-4-8')).toBe(false);
   });
 });

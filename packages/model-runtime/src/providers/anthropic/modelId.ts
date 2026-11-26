@@ -104,8 +104,20 @@ const inlineToolModels = new Set([
   'claude-mythos-5-2',
 ]);
 
+/**
+ * Novita serves the same Claude models behind routing tiers: a `pa/` prefix and an
+ * `-aws` suffix. Both accept inline tool additions (verified against Novita with the
+ * inline-tools beta), so they map back to the plain model id before the allowlist check.
+ * Other tiers (`-hs`, `-ps`) are unverified and stay on the normal path.
+ */
+const stripVerifiedInlineToolTier = (model: string) =>
+  model
+    .trim()
+    .replace(/^pa\//i, '')
+    .replace(/^(anthropic\/claude-.+)-aws$/i, '$1');
+
 export const supportsClaudeInlineToolChanges = (model: string): boolean => {
-  const parsed = parseClaudeModelId(model);
+  const parsed = parseClaudeModelId(stripVerifiedInlineToolTier(model));
   return (
     !!parsed &&
     parsed.source !== 'bedrock' &&
