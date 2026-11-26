@@ -9,6 +9,12 @@ import { useUserStore } from '@/store/user';
 
 import { SettingsGroupKey, useCategory } from './useCategory';
 
+const mocks = vi.hoisted(() => ({ codingPlans: false }));
+
+vi.mock('@/business/client/hooks/useCodingPlansTab', () => ({
+  useCodingPlansTab: () => (mocks.codingPlans ? { label: 'Business tab' } : null),
+}));
+
 vi.hoisted(() => {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -54,6 +60,7 @@ const initialUserStoreState = useUserStore.getState();
 
 afterEach(() => {
   cleanup();
+  mocks.codingPlans = false;
   useUserStore.setState(initialUserStoreState, true);
 });
 
@@ -122,6 +129,27 @@ describe('settings useCategory', () => {
     // from and the secrets it reads.
     expect(keys).not.toContain(SettingsTabs.Creds);
     expect(keys).not.toContain('drive');
+  });
+
+  it('lists the business tab after Usage, labelled by its slot, only where the slot supplies it', () => {
+    const subscriptionItems = () =>
+      renderHook(() => useCategory(), { wrapper: createWrapper(true, true) }).result.current.find(
+        (group) => group.key === SettingsGroupKey.Subscription,
+      )?.items;
+
+    expect(subscriptionItems()?.map((item) => item.key)).not.toContain(SettingsTabs.CodingPlans);
+
+    mocks.codingPlans = true;
+    const items = subscriptionItems();
+    expect(items?.map((item) => item.key)).toEqual([
+      SettingsTabs.Plans,
+      SettingsTabs.Usage,
+      SettingsTabs.CodingPlans,
+      SettingsTabs.Billing,
+    ]);
+    expect(items?.find((item) => item.key === SettingsTabs.CodingPlans)?.label).toBe(
+      'Business tab',
+    );
   });
 
   it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
