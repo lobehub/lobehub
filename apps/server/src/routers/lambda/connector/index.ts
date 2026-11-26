@@ -73,6 +73,7 @@ import { resolveVisibilityChange, resolveWriteVisibility } from '../_helpers/con
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
 import { connectorAccountProcedures } from './accounts';
 import { connectorAgentScopeRouter } from './agentScope';
+import { buildConnectorMigrationRow } from './legacyMigration';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
 import { connectorRunRouter } from './run';
 
@@ -528,6 +529,107 @@ const connectorCoreRouter = router({
     if (retried) return retried;
     throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
   }),
+
+  /**
+   * Copy a legacy MCP plugin row into a connector without sending its stored
+   * credentials through the client. The legacy row is deleted by the client
+   * only after the replacement connector has synchronized its tools.
+   */
+  migrateLegacyPlugin: connectorWriteProcedure
+    .input(z.object({ identifier: z.string().min(1).max(255) }))
+    .mutation(async ({ input, ctx }) => {
+      const plugin = await ctx.pluginModel.findById(input.identifier);
+      if (!plugin) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plugin not found' });
+      assertWorkspaceRowManageable(ctx, plugin.userId, 'plugin');
+
+      const migration = buildConnectorMigrationRow(plugin);
+      if (!migration.ok) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            migration.reason === 'no-mcp'
+              ? 'This legacy plugin has no MCP connection to migrate'
+              : 'This legacy MCP plugin has no usable server endpoint',
+        });
+      }
+
+      const visibility = 'public' as const;
+      const row = {
+        ...migration.payload,
+        metadata:
+          withoutEvalConnectorMarker(
+            withServerOwnedMetadata(migration.payload.metadata, undefined),
+          ) ?? null,
+      };
+      const assertWritable = async (existing?: {
+        agentId: string | null;
+        metadata?: Record<string, unknown> | null;
+        userId: string;
+        visibility: ConnectorVisibility;
+      }) => {
+        if (existing && existing.userId !== ctx.userId)
+          await assertConnectorCredentialsManageable(ctx, existing);
+        else await assertConnectorMaintainable(ctx, { userId: existing?.userId, visibility });
+        await assertConnectorDeviceBindingAllowed(ctx, {
+          connector: {
+            userId: existing?.userId ?? ctx.userId,
+            visibility: existing?.visibility ?? visibility,
+          },
+          metadata: migration.payload.metadata,
+          previous: existing
+            ? { metadata: existing.metadata, visibility: existing.visibility }
+            : undefined,
+        });
+      };
+      const reAdd = async (existing: {
+        agentId: string | null;
+        id: string;
+        metadata?: Record<string, unknown> | null;
+        userId: string;
+        visibility: ConnectorVisibility;
+      }) => {
+        // A user's existing connector is never overwritten by a legacy-row
+        // migration. Only the marker this endpoint writes may be retried: a
+        // rollback that failed after a tool-sync error would otherwise brick
+        // migration permanently.
+        if (existing.metadata?.migratedFromLegacyPlugin !== true) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A connector with this identifier already exists',
+          });
+        }
+        await assertWritable(existing);
+        const metadata =
+          withServerOwnedMetadata(row.metadata ?? {}, existing.metadata) ?? row.metadata;
+        const updated = await ctx.connectorModel.update(existing.id, {
+          ...row,
+          metadata: metadata && Object.keys(metadata).length > 0 ? metadata : null,
+        });
+        return updated ? { id: existing.id, isNew: false } : undefined;
+      };
+      const add = async () => {
+        const existing = await ctx.connectorModel.findScopedByIdentifier(
+          input.identifier,
+          undefined,
+          undefined,
+          visibility,
+        );
+        if (existing) return reAdd(existing);
+        await assertWritable();
+        const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
+          ...row,
+          visibility,
+        });
+        if ('holder' in claim) return reAdd(claim.holder);
+        return { id: claim.created.id, isNew: true };
+      };
+
+      const added = await add();
+      if (added) return added;
+      const retried = await add();
+      if (retried) return retried;
+      throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
+    }),
 
   /** Update connector configuration while preserving server-resolved OAuth state. */
   update: connectorWriteProcedure

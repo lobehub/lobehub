@@ -444,6 +444,45 @@ export class ConnectorActionImpl {
       uninstallCustomPlugin: (identifier) => this.#get().removeInstalledPluginRecord(identifier),
     });
 
+  /**
+   * Promote a legacy MCP plugin row server-side, preserving its endpoint,
+   * settings and stored credentials. The legacy row is removed only after the
+   * replacement connector has listed its tools; a failed migration of a newly
+   * created connector rolls that connector back.
+   */
+  migrateLegacyPluginToConnector = async (identifier: string): Promise<void> => {
+    const migrated = await lambdaClient.connector.migrateLegacyPlugin.mutate({ identifier });
+    try {
+      await this.#refreshConnectorLists();
+      await this.#writeConnectorTools(
+        migrated.id,
+        { pruneMissingAutoTools: true },
+        connectorSelectors.connectorById(migrated.id)(this.#get()),
+      );
+    } catch (error) {
+      if (migrated.isNew) {
+        await this.#deleteConnectorRecord(migrated.id).catch((rollbackError) => {
+          console.error(
+            '[connector] rollback of legacy migration %s (%s) failed:',
+            migrated.id,
+            identifier,
+            rollbackError,
+          );
+        });
+      }
+      throw error;
+    }
+
+    await this.#get().removeInstalledPluginRecord(identifier);
+    // The migration itself is complete here. A list refresh failure must not
+    // report it as failed after the legacy row has already been removed.
+    await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]).catch(
+      (error) => {
+        console.error('[connector-migration] refreshing lists failed', error);
+      },
+    );
+  };
+
   /** Connect an additional account and refresh all connector lists after authorization. */
   connectConnectorAccount = (
     connectorId: string,

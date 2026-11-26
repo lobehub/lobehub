@@ -1,7 +1,6 @@
-import { type LobeTool, type ToolManifest } from '@lobechat/types';
+import { type LobeTool } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 /**
  * Legacy `user_installed_plugins` rows. There is no create call: new MCP
@@ -14,19 +13,6 @@ export class PluginService {
 
   uninstallPlugin = async (identifier: string): Promise<void> => {
     await lambdaClient.plugin.removePlugin.mutate({ id: identifier });
-  };
-
-  updatePlugin = async (id: string, value: Partial<LobeToolCustomPlugin>): Promise<void> => {
-    await lambdaClient.plugin.updatePlugin.mutate({
-      customParams: value.customParams,
-      id,
-      manifest: value.manifest,
-      settings: value.settings,
-    });
-  };
-
-  updatePluginManifest = async (id: string, manifest: ToolManifest): Promise<void> => {
-    await lambdaClient.plugin.updatePlugin.mutate({ id, manifest });
   };
 
   updatePluginSettings = async (id: string, settings: any, signal?: AbortSignal): Promise<void> => {

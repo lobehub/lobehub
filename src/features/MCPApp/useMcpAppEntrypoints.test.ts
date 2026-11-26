@@ -15,9 +15,9 @@ const mocks = vi.hoisted(() => ({
     ensureConfirmedConnectors: vi.fn().mockResolvedValue(undefined),
     refreshPlugins: vi.fn().mockResolvedValue(undefined),
     syncConnectorTools: vi.fn().mockResolvedValue(undefined),
+    updateInstalledPluginManifestInMemory: vi.fn(),
   },
   discover: vi.fn().mockResolvedValue({ api: [], mcpAppEntrypoints: [] }),
-  save: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({}),
@@ -38,7 +38,6 @@ vi.mock('@/store/tool/selectors', () => ({
 vi.mock('@/services/mcp', () => ({
   mcpService: { getPluginMcpManifest: mocks.discover },
 }));
-vi.mock('@/services/plugin', () => ({ pluginService: { updatePluginManifest: mocks.save } }));
 beforeEach(() => {
   useMcpAppStore.setState(initialState);
   vi.clearAllMocks();
@@ -75,7 +74,12 @@ describe('gated entrypoint discovery refresh', () => {
       },
     ];
     const { rerender, unmount } = renderHook(() => useMcpAppEntrypoints());
-    await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(mocks.state.updateInstalledPluginManifestInMemory).toHaveBeenCalledWith(
+        'notes',
+        expect.objectContaining({ mcpAppEntrypoints: [] }),
+      ),
+    );
     // Read as the plugin's tool calls are: with its settings (credentials)
     expect(mocks.discover).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'notes', settings: { API_KEY: 'secret' } }),
@@ -83,7 +87,7 @@ describe('gated entrypoint discovery refresh', () => {
     mocks.state.installedPlugins = [...mocks.state.installedPlugins];
     rerender();
     expect(mocks.discover).toHaveBeenCalledOnce();
-    expect(mocks.state.refreshPlugins).toHaveBeenCalledOnce();
+    expect(mocks.state.refreshPlugins).not.toHaveBeenCalled();
     unmount();
     renderHook(() => useMcpAppEntrypoints());
     expect(mocks.discover).toHaveBeenCalledOnce();

@@ -13,6 +13,7 @@ vi.mock('@/libs/trpc/client', () => ({
       delete: { mutate: vi.fn() },
       list: { query: vi.fn() },
       listAgentBound: { query: vi.fn() },
+      migrateLegacyPlugin: { mutate: vi.fn() },
       syncTools: { mutate: vi.fn() },
       syncToolsFromClientById: { mutate: vi.fn() },
     },
@@ -44,6 +45,10 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       isInstalledPluginsInit: true,
     });
     vi.mocked(connector.create.mutate).mockResolvedValue({ id: 'created', isNew: true });
+    vi.mocked(connector.migrateLegacyPlugin.mutate).mockResolvedValue({
+      id: 'created',
+      isNew: true,
+    });
     vi.mocked(connector.list.query).mockResolvedValue([]);
     vi.mocked(connector.listAgentBound.query).mockResolvedValue([]);
     vi.mocked(plugin.getPlugins.query).mockResolvedValue([]);
@@ -118,4 +123,56 @@ describe('legacy MCP migration with the connector and plugin stores', () => {
       expect(plugin.removePlugin.mutate).not.toHaveBeenCalled();
     },
   );
+
+  it('server-side migration syncs the connector before deleting the legacy row', async () => {
+    vi.mocked(connector.list.query).mockResolvedValue([
+      { id: 'created', identifier: 'legacy', mcpConnectionType: 'http' },
+    ] as never);
+
+    await useToolStore.getState().migrateLegacyPluginToConnector('legacy');
+
+    expect(connector.migrateLegacyPlugin.mutate).toHaveBeenCalledWith({ identifier: 'legacy' });
+    expect(connector.syncTools.mutate).toHaveBeenCalledWith({
+      id: 'created',
+      pruneMissingAutoTools: true,
+    });
+    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+    expect(vi.mocked(plugin.removePlugin.mutate).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(connector.syncTools.mutate).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('server-side migration keeps the legacy row and rolls back a new connector when sync fails', async () => {
+    vi.mocked(connector.list.query).mockResolvedValue([
+      { id: 'created', identifier: 'legacy', mcpConnectionType: 'http' },
+    ] as never);
+    vi.mocked(connector.syncTools.mutate).mockRejectedValue(new Error('endpoint unreachable'));
+
+    await expect(useToolStore.getState().migrateLegacyPluginToConnector('legacy')).rejects.toThrow(
+      'endpoint unreachable',
+    );
+
+    expect(connector.delete.mutate).toHaveBeenCalledWith({ id: 'created' });
+    expect(plugin.removePlugin.mutate).not.toHaveBeenCalled();
+  });
+
+  it('does not report a completed server-side migration as failed when the final list refresh fails', async () => {
+    const readError = new Error('list read failed');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(connector.list.query)
+      .mockResolvedValueOnce([
+        { id: 'created', identifier: 'legacy', mcpConnectionType: 'http' },
+      ] as never)
+      .mockRejectedValue(readError);
+    vi.mocked(plugin.getPlugins.query).mockRejectedValue(readError);
+
+    await expect(
+      useToolStore.getState().migrateLegacyPluginToConnector('legacy'),
+    ).resolves.toBeUndefined();
+
+    expect(plugin.removePlugin.mutate).toHaveBeenCalledWith({ id: 'legacy' });
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith('[connector-migration] refreshing lists failed', readError),
+    );
+  });
 });

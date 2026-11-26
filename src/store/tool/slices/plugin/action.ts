@@ -133,6 +133,25 @@ export class PluginActionImpl {
     this.#installedPlugins.removeEntity(identifier);
   };
 
+  /**
+   * Runtime discovery may learn a legacy MCP's App entrypoints before the row is
+   * migrated. That discovery is session data, not a client-owned manifest write:
+   * show it in memory only, never persist it to IndexedDB or `plugin.updatePlugin`.
+   */
+  updateInstalledPluginManifestInMemory = (
+    identifier: string,
+    manifest: LobeTool['manifest'],
+  ): void => {
+    this.#installedPlugins.update(
+      INSTALLED_PLUGINS_KEY,
+      (plugins) =>
+        plugins?.map((plugin) =>
+          plugin.identifier === identifier ? { ...plugin, manifest } : plugin,
+        ),
+      { persist: false },
+    );
+  };
+
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
     this.#set(
       { pluginInstallLoading: { ...this.#get().pluginInstallLoading, [id]: loading } },
@@ -147,29 +166,6 @@ export class PluginActionImpl {
       false,
       'updateInstallError',
     );
-  };
-
-  updateInstallMcpPlugin = async (id: string, value: any): Promise<void> => {
-    // The server replaces `customParams` as a whole: merge onto the full record,
-    // never the display projection (which has no connection parameters).
-    if (!this.#hasServerRecords()) await this.#loadServerRecords();
-
-    const installedPlugin = pluginSelectors.getInstalledPluginById(id)(this.#get());
-
-    if (!installedPlugin) return;
-
-    const customParams = {
-      ...installedPlugin.customParams,
-      mcp: merge(installedPlugin.customParams?.mcp, value),
-    };
-
-    await this.#installedPlugins.optimistic(
-      INSTALLED_PLUGINS_KEY,
-      (plugins) => plugins.map((p) => (p.identifier === id ? { ...p, customParams } : p)),
-      () => pluginService.updatePlugin(id, { customParams: { mcp: customParams.mcp } }),
-    );
-
-    await this.#get().refreshPlugins();
   };
 
   updatePluginSettings = async <T>(

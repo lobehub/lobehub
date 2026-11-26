@@ -31,7 +31,6 @@ vi.mock('@/services/plugin', () => ({
   pluginService: {
     getInstalledPlugins: vi.fn(),
     uninstallPlugin: vi.fn(),
-    updatePlugin: vi.fn(),
     updatePluginSettings: vi.fn(),
   },
 }));
@@ -612,32 +611,6 @@ describe('installed plugins replica', () => {
         { a: 3, b: 'keep' },
         expect.any(AbortSignal),
       );
-    });
-
-    it('keeps the connection parameters the projection hid when writing an MCP delta', async () => {
-      const full = mcpPlugin('mcp-1');
-      await paintFromCache([full]);
-      expect(useToolStore.getState().installedPlugins[0].customParams).toEqual({
-        mcp: { type: 'http' },
-      });
-
-      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([full]);
-      vi.mocked(pluginService.updatePlugin).mockResolvedValue(undefined as any);
-
-      await act(async () => {
-        await useToolStore.getState().updateInstallMcpPlugin('mcp-1', { env: { EXTRA: '1' } });
-      });
-
-      expect(pluginService.updatePlugin).toHaveBeenCalledWith('mcp-1', {
-        customParams: {
-          mcp: expect.objectContaining({
-            env: { EXTRA: '1', TOKEN: SECRET },
-            headers: { Authorization: `Bearer ${SECRET}` },
-            type: 'http',
-            url: 'https://mcp.example.com',
-          }),
-        },
-      });
     });
   });
 });

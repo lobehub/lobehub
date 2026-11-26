@@ -1,6 +1,6 @@
 import { ActionIcon, Badge, Button, Flexbox, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { LucideRotateCw, LucideTrash2, RotateCwIcon } from 'lucide-react';
+import { LucideTrash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,11 +16,10 @@ interface PluginStatusProps {
 }
 const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
   const { t } = useTranslation();
-  const [status, installError, isCustom, reinstallCustomPlugin] = useToolStore((s) => [
+  const [status, installError, isCustom] = useToolStore((s) => [
     toolSelectors.getManifestLoadingStatus(id)(s),
     toolSelectors.getPluginInstallError(id)(s),
     customPluginSelectors.isCustomPlugin(id)(s),
-    s.reinstallCustomPlugin,
   ]);
 
   const manifest = useToolStore(toolSelectors.getManifestById(id), isEqual);
@@ -33,16 +32,7 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
         return <Badge color={'blue'} status={'processing'} />;
       }
       case 'error': {
-        return (
-          <ActionIcon
-            icon={LucideRotateCw}
-            size={'small'}
-            title={t('retry')}
-            onClick={() => {
-              reinstallCustomPlugin(id);
-            }}
-          />
-        );
+        return <Badge status={'error'} />;
       }
 
       default:
@@ -50,7 +40,7 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
         return <Badge status={'success'} />;
       }
     }
-  }, [id, reinstallCustomPlugin, status, t]);
+  }, [status]);
 
   const tag =
     // Deprecated tag
@@ -95,17 +85,6 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
         />
       ) : (
         <Flexbox horizontal align={'center'}>
-          {isCustom ? (
-            <ActionIcon
-              icon={RotateCwIcon}
-              size={'small'}
-              title={t('dev.meta.manifest.refresh', { ns: 'plugin' })}
-              onClick={(e) => {
-                e.stopPropagation();
-                reinstallCustomPlugin(id);
-              }}
-            />
-          ) : null}
           <ManifestPreviewer manifest={manifest || {}} trigger={'hover'}>
             <Button icon={renderStatus} size={'small'} type={'text'} />
           </ManifestPreviewer>

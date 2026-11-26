@@ -30,8 +30,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
+import { openLegacyPluginMigrationModal } from '@/features/Connectors/CustomConnectorModal/imperative';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
-import { openPluginEditModal } from '@/features/PluginDevModal/imperative';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
@@ -977,7 +977,7 @@ export const useControls = ({
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => openPluginEditModal(item.identifier) }
+        ? { onConfigure: () => openLegacyPluginMigrationModal(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: title,
