@@ -218,6 +218,8 @@ describe('GatewayActionImpl', () => {
         agentGatewayUrl: 'https://gateway.test.com',
         enableGatewayMode: true,
       });
+      // The user's default agent opt-out (the retired global switch) is ignored.
+      mockUserDefaultConfig.disableGatewayMode = true;
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
@@ -232,17 +234,6 @@ describe('GatewayActionImpl', () => {
         activeAgentId: 'agent-1',
         agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
       };
-
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
-    });
-
-    it('falls back to the app-level default agent config', () => {
-      const { action } = createTestAction();
-      setServerConfig({
-        agentGatewayUrl: 'https://gateway.test.com',
-        enableGatewayMode: true,
-      });
-      mockUserDefaultConfig.disableGatewayMode = true;
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
     });
@@ -1316,7 +1307,7 @@ describe('GatewayActionImpl', () => {
         expectedUrl: 'https://module-gateway.test.com',
         hasWindow: true,
         moduleEnabled: true,
-        name: 'explicit execution with the user default disabled',
+        name: 'explicit execution with the agent disabled',
       },
     ])(
       'executes and reconnects using $name',
@@ -1338,7 +1329,10 @@ describe('GatewayActionImpl', () => {
               : undefined,
           });
         } else Reflect.deleteProperty(globalThis, 'window');
-        mockUserDefaultConfig.disableGatewayMode = disableGatewayMode;
+        mockAgentStore.state = {
+          activeAgentId: 'agent-1',
+          agentMap: { 'agent-1': { chatConfig: { disableGatewayMode } } },
+        };
         vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
           serverConfig: {
             agentGatewayUrl: 'https://module-gateway.test.com',

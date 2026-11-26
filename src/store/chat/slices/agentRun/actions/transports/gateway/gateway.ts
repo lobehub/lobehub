@@ -56,8 +56,6 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import type { StoreSetter } from '@/store/types';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
@@ -886,12 +884,10 @@ export class GatewayActionImpl {
     const serverConfig = getGatewayServerConfig();
     const agentState = getAgentStoreState();
     const resolvedAgentId = agentId ?? agentState.activeAgentId;
-    const agentDisableGatewayMode = resolvedAgentId
+    // Per-agent only: the user's default agent config is no longer a fallback.
+    const disableGatewayMode = resolvedAgentId
       ? chatConfigByIdSelectors.getChatConfigById(resolvedAgentId)(agentState).disableGatewayMode
       : undefined;
-    const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
-      .chatConfig?.disableGatewayMode;
-    const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
 
     return (
       !!serverConfig?.agentGatewayUrl &&

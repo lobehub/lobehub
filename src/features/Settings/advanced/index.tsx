@@ -1,17 +1,15 @@
 'use client';
 
-import { Spin, Switch } from '@lobehub/ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { Spin } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { memo, useCallback, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AdvancedSkeleton from '@/components/Skeleton/Settings/tabs/Advanced';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
-import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type UserGeneralConfig } from '@/types/user/settings';
@@ -23,17 +21,9 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
   const { t } = useTranslation('setting');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
-  const defaultAgentGatewayModeEnabled = useUserStore(
-    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode !== true,
+  const [setSettings, isUserStateInit, isUserStateInitError, refreshUserState] = useUserStore(
+    (s) => [s.setSettings, s.isUserStateInit, s.isUserStateInitError, s.refreshUserState],
   );
-  const [setSettings, updateDefaultAgent, isUserStateInit, isUserStateInitError, refreshUserState] =
-    useUserStore((s) => [
-      s.setSettings,
-      s.updateDefaultAgent,
-      s.isUserStateInit,
-      s.isUserStateInitError,
-      s.refreshUserState,
-    ]);
   const [loading, setLoading] = useState(false);
   const form = useForm({
     initialValues: general,
@@ -45,18 +35,8 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
     },
   });
 
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const diagnosticsItems = useDiagnosticsItems<UserGeneralConfig>();
   const remoteDebuggingItem = useRemoteDebuggingItem<UserGeneralConfig>();
-
-  const handleGatewayModeChange = useCallback(
-    (checked: boolean) => {
-      updateDefaultAgent({
-        config: { chatConfig: { disableGatewayMode: checked ? false : true } },
-      });
-    },
-    [updateDefaultAgent],
-  );
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -72,36 +52,14 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
     // The registered tab skeleton, so the chunk and data waits show one shape.
     return (
       <>
-        {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
+        {showSettingHeader && <SettingHeader title={t('tab.diagnostics')} />}
         <AdvancedSkeleton.Body />
       </>
     );
   }
 
   const advancedGroup: FormGroupItem<UserGeneralConfig> = {
-    children: [
-      ...(enableGatewayMode
-        ? [
-            {
-              children: (
-                <Switch
-                  checked={defaultAgentGatewayModeEnabled}
-                  onChange={handleGatewayModeChange}
-                />
-              ),
-              desc: t('tab.advanced.gatewayMode.desc'),
-              label: (
-                <SettingsSearchAnchor id={'advanced-gateway-mode'}>
-                  {t('tab.advanced.gatewayMode.title')}
-                </SettingsSearchAnchor>
-              ),
-              minWidth: undefined,
-            } satisfies FormFieldProps<UserGeneralConfig>,
-          ]
-        : []),
-      ...diagnosticsItems,
-      ...(remoteDebuggingItem ? [remoteDebuggingItem] : []),
-    ],
+    children: [...diagnosticsItems, ...(remoteDebuggingItem ? [remoteDebuggingItem] : [])],
     extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: t('tab.advanced.toolsAndDiagnostics.title'),
   };
@@ -111,7 +69,7 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
 
   return (
     <>
-      {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
+      {showSettingHeader && <SettingHeader title={t('tab.diagnostics')} />}
       <Form
         collapsible={false}
         form={form}

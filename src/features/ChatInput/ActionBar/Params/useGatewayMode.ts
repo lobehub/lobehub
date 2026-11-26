@@ -3,8 +3,6 @@ import { useState } from 'react';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -14,9 +12,6 @@ export const useGatewayMode = () => {
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const serverEnabled = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
-  const defaultDisabled = useUserStore(
-    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
-  );
   const agentDisabled = useAgentStore(
     (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
   );
@@ -36,7 +31,7 @@ export const useGatewayMode = () => {
 
   return {
     available,
-    enabled: (agentDisabled ?? defaultDisabled) !== true,
+    enabled: agentDisabled !== true,
     loading,
     onChange,
   };

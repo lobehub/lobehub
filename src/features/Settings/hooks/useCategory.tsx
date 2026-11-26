@@ -12,7 +12,6 @@ import {
   ContainerIcon,
   CreditCard,
   Database,
-  EllipsisIcon,
   EthernetPort,
   FlaskConical,
   GaugeIcon,
@@ -25,6 +24,7 @@ import {
   MonitorSmartphoneIcon,
   PaletteIcon,
   Sparkles,
+  Stethoscope,
   TagIcon,
   TerminalSquare,
   Trash2,
@@ -89,10 +89,6 @@ export const useCategory = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
-  // Advanced holds gateway mode and desktop diagnostics; on the web without
-  // gateway mode it would be an empty page.
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
-  const showAdvanced = isDesktop || enableGatewayMode;
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -166,10 +162,12 @@ export const useCategory = () => {
         key: SettingsTabs.SystemTools,
         label: t('tab.systemTools'),
       },
-      showAdvanced && {
-        icon: EllipsisIcon,
+      // Diagnostics (route key `advanced`) holds desktop-only rows: the
+      // diagnostics package, debug logs and remote debugging.
+      isDesktop && {
+        icon: Stethoscope,
         key: SettingsTabs.Advanced,
-        label: t('tab.advanced'),
+        label: t('tab.diagnostics'),
       },
       enableOAuthApps && {
         icon: AppWindowIcon,
@@ -358,7 +356,6 @@ export const useCategory = () => {
     showProvider,
     enableOAuthApps,
     enableWebhook,
-    showAdvanced,
     avatarUrl,
     username,
   ]);

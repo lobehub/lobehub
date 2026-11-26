@@ -14,7 +14,6 @@ export interface SettingsSearchContext {
   enableBusinessFeatures: boolean;
   enableChannels: boolean;
   enableComposio: boolean;
-  enableGatewayMode: boolean;
   /** Whether the signed-in user has an email on their profile */
   hasEmail: boolean;
   hideDocs: boolean;
@@ -559,15 +558,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'settingSystemTools.shell.mode.title',
     tab: SettingsTabs.SystemTools,
     visible: (ctx) => ctx.isDesktop && ctx.isWindows,
-  },
-  // Advanced
-  {
-    anchor: 'advanced-gateway-mode',
-    descKey: 'tab.advanced.gatewayMode.desc',
-    keywords: ['gateway', 'agent runtime'],
-    labelKey: 'tab.advanced.gatewayMode.title',
-    tab: SettingsTabs.Advanced,
-    visible: (ctx) => ctx.enableGatewayMode,
   },
   // About
   {

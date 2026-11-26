@@ -52,13 +52,15 @@ describe('advanced parameters gateway mode', () => {
     mocks.updateAgentChatConfig.mockReset().mockResolvedValue(undefined);
   });
 
+  // Gateway Mode is per-agent only: the user's default agent config (the
+  // retired global switch) must not decide an agent that never set its own value.
   it.each([
     [undefined, undefined, true],
-    [undefined, true, false],
+    [undefined, true, true],
     [undefined, false, true],
     [false, true, true],
     [true, false, false],
-  ])('preserves agent=%s / default=%s as enabled=%s', (agent, defaults, enabled) => {
+  ])('resolves agent=%s / default=%s as enabled=%s', (agent, defaults, enabled) => {
     mocks.disabledByAgent['agent-1'] = agent;
     mocks.defaultDisabled = defaults;
     const { result } = renderHook(() => useGatewayMode());

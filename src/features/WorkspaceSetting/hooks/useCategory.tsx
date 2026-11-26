@@ -13,7 +13,6 @@ import {
   ContainerIcon,
   CreditCard,
   Database,
-  EllipsisIcon,
   EthernetPort,
   FlaskConical,
   GaugeIcon,
@@ -28,6 +27,7 @@ import {
   PaletteIcon,
   ScrollText,
   Sparkles,
+  Stethoscope,
   TagIcon,
   TerminalSquare,
   Trash2,
@@ -378,7 +378,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('group.data'),
         },
         // App preferences of the account set — low-frequency, so the sidebar
-        // starts it collapsed. Advanced and Labs are user preferences; OAuth
+        // starts it collapsed. Diagnostics (desktop only) and Labs are user preferences; OAuth
         // apps keep their Labs gate.
         {
           items: [
@@ -394,10 +394,10 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: SettingsTabs.SystemTools,
               label: t('tab.systemTools'),
             },
-            {
-              icon: EllipsisIcon,
+            isDesktop && {
+              icon: Stethoscope,
               key: WorkspaceSettingsTabs.Advanced,
-              label: t('tab.advanced'),
+              label: t('tab.diagnostics'),
             },
             enableOAuthApps && {
               icon: AppWindowIcon,
