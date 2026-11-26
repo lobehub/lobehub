@@ -71,6 +71,32 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     expect(runVerifySpy).toHaveBeenCalledTimes(1);
   });
 
+  // T-14103: the Task settles a capped run as `done` and, with a confirmed plan,
+  // waits for verify to drive it on — so verify must run for capped runs too.
+  it.each(['tool_name_unresolved', 'max_steps'])(
+    'runs the verify plan when a run capped by %s completes',
+    async (reason) => {
+      const lifecycle = buildLifecycle();
+      vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+      vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+      vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+      vi.spyOn(verifyServices, 'instantiateVerifyPlanOnStart').mockResolvedValue(undefined);
+      const runVerifySpy = vi
+        .spyOn(verifyServices, 'scheduleVerifyOnCompletion')
+        .mockResolvedValue(undefined);
+
+      await lifecycle.recordStart({ operationId: 'op-1', taskId: 'task-1' } as any);
+      await lifecycle.dispatchHooks(
+        'op-1',
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' },
+        reason,
+      );
+
+      expect(runVerifySpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('does not register an instantiation for a repair / verifier sub-op (parentOperationId set)', async () => {
     const lifecycle = buildLifecycle();
     const instantiateSpy = vi

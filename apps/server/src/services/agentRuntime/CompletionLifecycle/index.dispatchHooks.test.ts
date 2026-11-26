@@ -142,6 +142,31 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  // T-14103: a run ended for naming tools that do not exist is a `done` run
+  // with its own label, so the stop can be counted across operations.
+  it('persists a tool_name_unresolved stop under its own completion reason', async () => {
+    const lifecycle = buildLifecycle();
+    const model = {
+      findById: vi.fn(async () => ({ id: 'op-unresolved', status: 'running' })),
+      recordCompletion: vi.fn(async () => true),
+      sumChildUsage: vi.fn(async () => undefined),
+    };
+    (lifecycle as any).agentOperationModel = model;
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.dispatchHooks(
+      'op-unresolved',
+      { host: { hooks: [] }, status: 'done', stoppedByUnresolvedToolNames: true },
+      'tool_name_unresolved',
+    );
+
+    expect(model.recordCompletion).toHaveBeenCalledWith(
+      'op-unresolved',
+      expect.objectContaining({ completionReason: 'tool_name_unresolved', status: 'done' }),
+    );
+  });
+
   describe('a row the caller already retired as abandoned', () => {
     // Mirrors `recordCompletion`'s guard: a row the stale-lease CAS moved to
     // `abandoned` only accepts a write that keeps that status.

@@ -81,6 +81,11 @@ describe('isSuccessLikeCompletionReason', () => {
     expect(isSuccessLikeCompletionReason('cost_limit')).toBe(true);
   });
 
+  it('treats guard stops that keep the run as done as successful completions', () => {
+    expect(isSuccessLikeCompletionReason('tool_call_repeat_limit')).toBe(true);
+    expect(isSuccessLikeCompletionReason('tool_name_unresolved')).toBe(true);
+  });
+
   it('rejects non-success terminal and parked reasons', () => {
     expect(isSuccessLikeCompletionReason('error')).toBe(false);
     expect(isSuccessLikeCompletionReason('interrupted')).toBe(false);

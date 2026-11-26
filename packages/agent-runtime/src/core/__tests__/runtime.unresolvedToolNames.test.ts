@@ -140,6 +140,7 @@ describe('AgentRuntime with unresolvable tool names', () => {
     expect(llmTurns).toBe(5);
     expect(fixture.runTool).toHaveBeenCalledTimes(1);
     expect(state.unresolvedToolFeedbackRounds).toBe(1);
+    expect(state.stoppedByUnresolvedToolNames).toBeUndefined();
   });
 
   it('ends as done with a tool_name_unresolved reason after three consecutive misses', async () => {
@@ -159,6 +160,15 @@ describe('AgentRuntime with unresolvable tool names', () => {
       type: 'done',
     });
     expect(llmTurns).toBe(4);
+    // T-14103: the stop survives on the state, where the server reads the
+    // operation's completion reason from.
+    expect(state.stoppedByUnresolvedToolNames).toBe(true);
+    // Four LLM turns, one tool run and three rejection rounds, but the last
+    // round shares its step with `finish`, which the runtime does not count.
+    // Kept on purpose: the server ACKs a redelivered step once
+    // `stepCount > stepIndex`, so counting the terminal step would stop a
+    // retried terminal step from re-sending its completion hooks.
+    expect(state.stepCount).toBe(7);
     // The final turn's call is still answered with a rejected row, so the
     // persisted history stays well-formed for the next operation.
     const rejectedRows = fixture.createToolMessage.mock.calls.filter(

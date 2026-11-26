@@ -35,6 +35,9 @@ export const finish =
     const newState = structuredClone(state);
     newState.lastModified = new Date().toISOString();
     newState.status = 'done';
+    // The reason only lives on this step's `done` event; the server derives the
+    // operation's completion reason from state alone, so keep it there.
+    if (reason === 'tool_name_unresolved') newState.stoppedByUnresolvedToolNames = true;
 
     const events: AgentEvent[] = [{ finalState: newState, reason, reasonDetail, type: 'done' }];
 

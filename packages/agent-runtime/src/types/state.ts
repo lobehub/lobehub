@@ -620,6 +620,15 @@ export interface AgentState {
    */
   stepCount: number;
 
+  /**
+   * Set when the run ended because consecutive LLM turns kept naming tools
+   * that do not exist (finish reason `tool_name_unresolved`). The run lands in
+   * `status: 'done'` with its earlier work kept, so without this marker the
+   * stop is indistinguishable from a real answer once the step's `done` event
+   * is gone, and `agent_operations` cannot count it.
+   */
+  stoppedByUnresolvedToolNames?: boolean;
+
   systemRole?: string;
   /**
    * Consecutive LLM turns that emitted the same normalized tool calls.

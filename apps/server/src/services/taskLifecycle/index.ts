@@ -47,6 +47,7 @@ import { TopicModel } from '@/database/models/topic';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { taskRunSettleReason } from '@/server/services/agentRuntime/completionReason';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
@@ -133,15 +134,11 @@ export class TaskLifecycleService {
    * Flow: updateHeartbeat → updateTopicStatus → handoff → review → checkpoint
    */
   async onTopicComplete(params: TopicCompleteParams): Promise<void> {
-    const {
-      taskId,
-      taskIdentifier,
-      topicId,
-      reason,
-      lastAssistantContent,
-      errorMessage,
-      errorCode,
-    } = params;
+    const { taskId, taskIdentifier, topicId, lastAssistantContent, errorMessage, errorCode } =
+      params;
+    // Local hooks and the orphan sweep call in directly, so normalize here too:
+    // a capped run delivered, and only `done` settles it as such.
+    const reason = taskRunSettleReason(params.reason);
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 

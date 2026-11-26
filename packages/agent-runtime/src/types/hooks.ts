@@ -127,7 +127,7 @@ export interface AgentHookEvent {
   metadata?: Record<string, unknown>;
   operationId: string;
   // Execution result
-  reason?: string; // 'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit'
+  reason?: string; // 'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | …
   /** LLM reasoning / thinking content (afterStep only) */
   reasoning?: string;
   // Step-specific (for beforeStep/afterStep)

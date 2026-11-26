@@ -57,6 +57,11 @@ export type AgentOperationCompletionReason =
    * tool calls than the burst limit; a guard cut the run short.
    */
   | 'tool_call_repeat_limit'
+  /**
+   * Consecutive LLM turns kept calling tools that do not exist; the run was
+   * ended gracefully with its earlier work kept.
+   */
+  | 'tool_name_unresolved'
   | 'waiting_for_async_tool'
   | 'waiting_for_client'
   | 'waiting_for_human';

@@ -5,6 +5,7 @@ import type { Context } from 'hono';
 
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { taskRunSettleReason } from '@/server/services/agentRuntime/completionReason';
 import { redisService } from '@/server/services/redis';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { isRunAlreadySettled } from '@/server/services/taskLifecycle/reconcile';
@@ -41,13 +42,16 @@ export async function onTopicComplete(c: Context) {
       errorType,
       lastAssistantContent,
       operationId,
-      reason,
+      reason: runReason,
       runTrigger,
       taskId,
       taskIdentifier,
       topicId,
       userId,
     } = body;
+    // A capped run (`max_steps`, `tool_name_unresolved`, …) delivered: settle
+    // it as `done`, or it reaches no branch below and is later swept as failed.
+    const reason = taskRunSettleReason(runReason);
 
     if (!taskId || !userId || !operationId) {
       return c.json({ error: 'Missing required fields' }, 400);
