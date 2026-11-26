@@ -42,8 +42,9 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
-import type { DeviceCliRestartParams } from '@lobechat/types';
+import { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE, type DeviceCliRestartParams } from '@lobechat/types';
 
+import { toRedactedAgentCredentialError } from './agentCredentials/redact';
 import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
@@ -158,6 +159,11 @@ export const DEVICE_RPC_METHODS = [
   'getCliUpdateState',
   'checkCliUpdate',
   'restartCli',
+  // Provider credentials for heterogeneous agents. Server-internal only: the
+  // params carry a secret, so they never come from an LLM-facing tool call.
+  'installAgentCredential',
+  'removeAgentCredential',
+  'checkAgentCredential',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
@@ -169,6 +175,24 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
+
+export { AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE };
+
+/**
+ * Run an agent-credential handler so its failure can never carry the secret
+ * back over the gateway or into a device / server log.
+ */
+const runAgentCredentialRpc = async <T>(
+  handler: ((params: unknown) => Promise<T>) | undefined,
+  params: unknown,
+): Promise<T> => {
+  if (!handler) throw new Error(AGENT_CREDENTIAL_UNSUPPORTED_MESSAGE);
+  try {
+    return await handler(params);
+  } catch (error) {
+    throw toRedactedAgentCredentialError(error, params);
+  }
+};
 
 /** Why a client that runs no MCP servers rejects `listMcpTools`. */
 export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
@@ -640,6 +664,18 @@ export const executeDeviceRpc = async (
     case 'restartCli': {
       if (!deps.restartCli) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
       return deps.restartCli(params as DeviceCliRestartParams);
+    }
+
+    case 'installAgentCredential': {
+      return runAgentCredentialRpc(deps.installAgentCredential, params);
+    }
+
+    case 'removeAgentCredential': {
+      return runAgentCredentialRpc(deps.removeAgentCredential, params);
+    }
+
+    case 'checkAgentCredential': {
+      return runAgentCredentialRpc(deps.checkAgentCredential, params);
     }
 
     default: {

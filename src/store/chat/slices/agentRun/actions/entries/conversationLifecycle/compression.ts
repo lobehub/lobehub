@@ -61,10 +61,10 @@ export const executeContextCompression = async (
 
   const contextKey = messageMapKey(context as any);
   const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(get()) || [];
-  const visible = getCompressionCandidateMessages(
-    get().messagesMap[contextKey] ?? dbMessages,
-    options,
-  );
+  const visible = getCompressionCandidateMessages(get().messagesMap[contextKey] ?? dbMessages, {
+    ...options,
+    threadId: context.threadId,
+  });
   const visibleIds = new Set(contextReplayMessageIds(visible));
   const selected = dbMessages.filter(
     (message) =>
@@ -73,7 +73,12 @@ export const executeContextCompression = async (
       (visibleIds.has(message.id) ||
         (message.role === 'tool' && !!message.parentId && visibleIds.has(message.parentId))),
   );
-  const sourceGroups = selected.filter((message) => message.role === 'compressedGroup');
+  const sourceGroups = selected.filter(
+    (message) =>
+      message.role === 'compressedGroup' &&
+      message.threadId !== undefined &&
+      (message.threadId ?? null) === (context.threadId ?? null),
+  );
   const sourceGroupIds = sourceGroups.map((message) => message.id);
   const messageIds = selected
     .filter((message) => message.role !== 'compressedGroup')
@@ -94,6 +99,9 @@ export const executeContextCompression = async (
       agentId,
       groupId: context.groupId,
       id: tempId,
+      // Without `beforeMessageId` every message above is folded, so the group
+      // belongs at the end, not above the last question.
+      keepPosition: !options.beforeMessageId,
       threadId: context.threadId,
       topicId,
     }) as any,
@@ -104,6 +112,8 @@ export const executeContextCompression = async (
 
   try {
     // 1. Create compression group on server
+    // Scope the group to the open conversation: without `threadId` the server reads the main
+    // conversation, so a thread compaction summarized and returned the wrong messages.
     const result = await messageService.createCompressionGroup({
       agentId,
       groupId: context.groupId,
@@ -122,6 +132,7 @@ export const executeContextCompression = async (
         agentId,
         groupId: context.groupId,
         id: messageGroupId,
+        keepPosition: !options.beforeMessageId,
         threadId: context.threadId,
         topicId,
       }),

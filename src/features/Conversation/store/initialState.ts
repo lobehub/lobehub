@@ -71,6 +71,8 @@ export const createEphemeralResetState = (): Partial<State> => ({
   activeIndex: null,
   atBottom: true,
   autoScrollDetached: false,
+  compressedHistoryError: undefined,
+  compressedHistoryPages: {},
   earlierMessagesError: undefined,
   heteroOverloadRetryAttempts: {},
   heteroOverloadWaitOpIds: {},

@@ -3,6 +3,7 @@
 import { Text } from '@lobehub/ui';
 import { Fragment, useEffect, useState } from 'react';
 
+import { useCodingPlansTab } from '@/business/client/hooks/useCodingPlansTab';
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
@@ -31,7 +32,10 @@ interface SettingsContentProps {
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const navigate = useWorkspaceAwareNavigate();
-  const title = useSettingsTabTitle(activeTab);
+  const codingPlansTab = useCodingPlansTab();
+  // The optional business tab is titled by its slot; the rest by static copy.
+  const staticTitle = useSettingsTabTitle(activeTab);
+  const title = activeTab === SettingsTabs.CodingPlans ? codingPlansTab?.label : staticTitle;
   const [pageActions, setPageActions] = useState<HTMLElement | null>(null);
 
   useSettingsAnchorScroll();

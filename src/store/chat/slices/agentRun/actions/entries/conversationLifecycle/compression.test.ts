@@ -72,7 +72,13 @@ afterEach(() => {
 
 describe('executeCompression', () => {
   it('keeps a source-only compaction visible and allows the composer Stop action to cancel it', async () => {
-    const prior = { id: 'prior-summary', role: 'compressedGroup', content: 'prior', topicId };
+    const prior = {
+      id: 'prior-summary',
+      role: 'compressedGroup',
+      content: 'prior',
+      threadId: null,
+      topicId,
+    };
     useChatStore.setState({
       dbMessagesMap: { [key]: [prior] as any },
       messagesMap: { [key]: [prior] as any },
@@ -170,6 +176,7 @@ describe('executeCompression', () => {
       id: 'prior-summary',
       role: 'compressedGroup',
       content: 'stale local draft',
+      threadId: null,
       topicId,
     };
     vi.mocked(messageService.createCompressionGroup).mockResolvedValue({
@@ -312,6 +319,47 @@ describe('executeCompression', () => {
     });
     expect(messageService.cancelCompression).not.toHaveBeenCalled();
     expect(getMessageIds()).toEqual(['group-1']);
+  });
+
+  it('compacts the open thread, not the main conversation it branched from', async () => {
+    const threadId = 'thread-1';
+    const threadContext = { agentId, threadId, topicId };
+    const threadKey = messageMapKey(threadContext);
+    // A thread page shows the main-conversation turn it branched from (read back with
+    // `threadId: null`), then its own turns.
+    const threadMessages = [
+      ...originalMessages.map((message) => ({ ...message, threadId: null })),
+      { content: 'follow-up', id: 'thread-user-1', role: 'user', threadId, topicId },
+      { content: 'reply', id: 'thread-assistant-1', role: 'assistant', threadId, topicId },
+    ] as any[];
+    act(() => {
+      useChatStore.setState({
+        dbMessagesMap: { [threadKey]: threadMessages },
+        messagesMap: { [threadKey]: threadMessages },
+      });
+    });
+    const finalizeSpy = vi
+      .spyOn(messageService, 'finalizeCompression')
+      .mockResolvedValue({ messages: [] });
+    vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(
+      async ({ onMessageHandle }) => {
+        onMessageHandle?.({ text: 'summary', type: 'text' });
+      },
+    );
+
+    await act(async () => {
+      await useChatStore.getState().executeCompression(threadContext, '');
+    });
+
+    expect(messageService.createCompressionGroup).toHaveBeenCalledWith({
+      agentId,
+      groupId: undefined,
+      messageIds: ['thread-user-1', 'thread-assistant-1'],
+      sourceGroupIds: [],
+      threadId,
+      topicId,
+    });
+    expect(finalizeSpy).toHaveBeenCalledWith(expect.objectContaining({ threadId, topicId }));
   });
 
   describe('summary model', () => {

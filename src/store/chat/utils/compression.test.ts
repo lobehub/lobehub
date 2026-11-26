@@ -92,4 +92,14 @@ describe('compression utils', () => {
     expect(message.metadata).toEqual({ expanded: true });
     expect(message.compressedMessages).toEqual([]);
   });
+
+  it('marks a pending group that already sits after the history it folds', () => {
+    const message = createPendingCompressedGroup({
+      agentId: 'agent-1',
+      id: 't',
+      keepPosition: true,
+    });
+
+    expect(message.metadata).toEqual({ expanded: true, keepPosition: true });
+  });
 });

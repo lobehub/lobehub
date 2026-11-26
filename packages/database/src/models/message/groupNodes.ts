@@ -54,6 +54,11 @@ export interface MessageGroupMemberRecord {
   carriesTodos: boolean | null;
   favorite: boolean | null;
   id: string;
+  /**
+   * The member belongs to the conversation being read (see
+   * `QueryMessagesOptions.groupMemberScope`). Selected only for scoped reads.
+   */
+  inScope?: boolean | null;
   messageGroupId: string | null;
   /**
    * The row's parent has more than one non-tool child in the group: the group
@@ -64,7 +69,39 @@ export interface MessageGroupMemberRecord {
   pluginApiName: string | null;
   pluginIdentifier: string | null;
   role: string | null;
+  threadId?: string | null;
 }
+
+/**
+ * Keep the groups that belong to the conversation being read: a group with a
+ * member in scope, or one with no members at all (nothing places it elsewhere).
+ */
+export const filterGroupsByMemberScope = <T extends Pick<MessageGroupRow, 'id'>>(
+  groups: T[],
+  records: Pick<MessageGroupMemberRecord, 'inScope' | 'messageGroupId'>[],
+): T[] => {
+  const groupsWithMembers = new Set<string>();
+  const groupsInScope = new Set<string>();
+  for (const record of records) {
+    if (!record.messageGroupId) continue;
+    groupsWithMembers.add(record.messageGroupId);
+    if (record.inScope) groupsInScope.add(record.messageGroupId);
+  }
+
+  return groups.filter((group) => !groupsWithMembers.has(group.id) || groupsInScope.has(group.id));
+};
+
+/**
+ * The thread a group's members all belong to, or `null` for the main
+ * conversation. Mixed or empty groups have none: `undefined`.
+ */
+const resolveGroupThreadId = (
+  records: Pick<MessageGroupMemberRecord, 'threadId'>[],
+): string | null | undefined => {
+  if (records.length === 0 || records[0].threadId === undefined) return undefined;
+  const threadId = records[0].threadId ?? null;
+  return records.every((record) => (record.threadId ?? null) === threadId) ? threadId : undefined;
+};
 
 const carriesRuntimeState = (record: MessageGroupMemberRecord) =>
   record.role === 'tool' &&
@@ -224,6 +261,7 @@ export const buildMessageGroupNode = (
 ): UIChatMessage => {
   const records = plan.recordsByGroup.get(group.id) ?? [];
   const hydrated = plan.hydratedByGroup.get(group.id) ?? [];
+  const threadId = resolveGroupThreadId(records);
   const groupMsgs = hydrated
     .map((record) => messageMap.get(record.id))
     .filter(Boolean) as UIChatMessage[];
@@ -284,6 +322,9 @@ export const buildMessageGroupNode = (
     metadata: group.metadata,
     pinnedMessages,
     role: 'compressedGroup',
+    // Lets a compaction reading the page tell its own conversation's summaries
+    // from those of the parent rows a thread shows.
+    ...(threadId !== undefined && { threadId }),
     topicId: group.topicId,
     updatedAt: group.updatedAt,
   } as unknown as UIChatMessage;

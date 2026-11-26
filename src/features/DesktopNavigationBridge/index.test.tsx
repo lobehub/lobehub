@@ -55,7 +55,7 @@ describe('DesktopNavigationBridge', () => {
     openDirectoryHandler = null;
     navigateMock.mockReset();
     openDirectoryInAppMock.mockReset();
-    openDirectoryInAppMock.mockResolvedValue({ status: 'opened-topic' });
+    openDirectoryInAppMock.mockResolvedValue(undefined);
     clientReadyMock.mockReset();
     clientReadyMock.mockResolvedValue(false);
   });
@@ -135,7 +135,6 @@ describe('DesktopNavigationBridge', () => {
     emitOpenDirectory({ newWindow: false, path: '/repo' });
 
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
-      getDeviceId: expect.any(Function),
       navigate: navigateMock,
       reuseExisting: true,
       targetPath: '/repo',
@@ -149,7 +148,6 @@ describe('DesktopNavigationBridge', () => {
 
     // `--new-window` means "do not take over the conversation I already have".
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
-      getDeviceId: expect.any(Function),
       navigate: navigateMock,
       reuseExisting: false,
       targetPath: '/repo',
@@ -162,23 +160,5 @@ describe('DesktopNavigationBridge', () => {
     render(<DesktopNavigationBridge />);
 
     expect(clientReadyMock).toHaveBeenCalled();
-  });
-
-  it('reads the device id lazily instead of snapshotting it at mount', () => {
-    const getStateMock = vi.spyOn(useElectronStore, 'getState');
-    // On a cold start the launch replays before the identity resolves.
-    render(<DesktopNavigationBridge />);
-
-    emitOpenDirectory({ newWindow: false, path: '/repo' });
-
-    const { getDeviceId } = openDirectoryInAppMock.mock.calls[0][0];
-    // Nothing is read at mount; the getter answers when the resolver asks.
-    expect(getStateMock).not.toHaveBeenCalled();
-    useElectronStore.setState({
-      gatewayDeviceInfo: { deviceId: 'device-local', hostname: 'test', platform: 'darwin' },
-    });
-    expect(getDeviceId()).toBe('device-local');
-    expect(getStateMock).toHaveBeenCalled();
-    getStateMock.mockRestore();
   });
 });

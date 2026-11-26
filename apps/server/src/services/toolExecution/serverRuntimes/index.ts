@@ -47,6 +47,7 @@ import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { pageAgentRuntime } from './pageAgent';
+import { projectRuntime } from './project';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
@@ -107,6 +108,7 @@ registerRuntimes([
   userInteractionRuntime,
   credsRuntime,
   artboardRuntime,
+  projectRuntime,
   canvasRuntime,
   dashboardRuntime,
   groupAgentBuilderRuntime,

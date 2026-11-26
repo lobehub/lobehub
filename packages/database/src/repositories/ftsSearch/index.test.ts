@@ -4,7 +4,7 @@ import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { Pool as NodePool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
+import { getTestDatabaseUrl, getTestDB } from '../../core/getTestDB';
 import * as schema from '../../schemas';
 import { chatGroups, documents, userMemories, workspaces } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
@@ -1982,7 +1982,7 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       workspaceId?: string;
     }): Promise<CapturedStatement[]> => {
       const captured: CapturedStatement[] = [];
-      loggingPool ??= new NodePool({ connectionString: process.env.DATABASE_TEST_URL });
+      loggingPool ??= new NodePool({ connectionString: await getTestDatabaseUrl() });
       const db = nodeDrizzle(loggingPool, {
         logger: {
           logQuery: (query: string, params: unknown[]) => captured.push({ params, sql: query }),

@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { resolveCliDirName } from '../constants/identity';
 import { executeComputerUseCall, resolveComputerUseDevice } from './computerUse';
 
 // A stand-in `auv` that echoes its arguments, or fails like AUV does with a
@@ -36,7 +37,7 @@ describe.skipIf(process.platform === 'win32')('Computer Use on lh connect', () =
     it('stores runs under the CLI config directory', async () => {
       await expect(resolveComputerUseDevice(binary)).resolves.toEqual({
         binaryPath: binary,
-        storeRoot: path.join(os.homedir(), '.lobehub', 'auv', 'runs'),
+        storeRoot: path.join(os.homedir(), resolveCliDirName(), 'auv', 'runs'),
       });
     });
 

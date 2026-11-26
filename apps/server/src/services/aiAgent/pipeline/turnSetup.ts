@@ -26,6 +26,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import type { TopicModel } from '@/database/models/topic';
+import { ProjectDirectoryRepository } from '@/database/repositories/projectDirectory';
 import { defaultsToAuto } from '@/helpers/executionTarget';
 import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
@@ -77,9 +78,8 @@ export interface RunAttachments {
  * Build the reasoning snapshot for a topic being created — see
  * `ChatTopicMetadata.reasoningConfig` / `heteroEffort` / `heteroSpeed`. Returns
  * undefined when there is nothing to pin (non-reasoning model, hetero agent
- * without effort or speed)
- * so the caller leaves metadata untouched. Never throws: a failed lookup just
- * means the topic follows the user-level config until the user pins one.
+ * without effort or speed), leaving metadata untouched. Never throws: a failed
+ * lookup means the topic follows the user-level config until the user pins one.
  */
 const resolveTopicReasoningSnapshot = async ({
   deps,
@@ -738,7 +738,19 @@ export const setupTurn = async (
       // Explicit per-run values (such as callSubAgent) override their own field.
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
-      const existingTopic = await deps.topicModel.findById(topicId);
+      let existingTopic = await deps.topicModel.findById(topicId);
+      // The Project tool's `switchRunner` cannot move a conversation inside the
+      // turn that called it, so it records the folder; the move happens here,
+      // at the start of the next turn a user message opens (not a resume of
+      // the same turn), before anything below reads where the topic runs.
+      if (!resume && !shareGate && existingTopic?.metadata?.pendingProjectWorkingDirectoryId) {
+        const moved = await new ProjectDirectoryRepository(
+          deps.db,
+          deps.userId,
+          deps.workspaceId,
+        ).applyPendingTopicMove(topicId);
+        if (moved) existingTopic = { ...existingTopic, ...moved };
+      }
       const pendingRun = existingTopic?.metadata?.scheduledRun;
       if (
         existingTopic?.status === 'scheduled' &&

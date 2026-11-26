@@ -1,6 +1,7 @@
 import { A2uiApiName, A2uiIdentifier } from '@lobechat/builtin-tool-a2ui';
 import type { ChannelMessageSurface } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
+import { toSurfaceRecords } from '@lobehub/a2ui';
 
 import type { MessageModel } from '@/database/models/message';
 
@@ -19,12 +20,5 @@ export const runSurfaces = async (
     operationId,
     topicId,
   });
-  return states
-    .map((state) => (isRecord(state) ? state.surface : undefined))
-    .filter(
-      (surface): surface is ChannelMessageSurface =>
-        isRecord(surface) &&
-        typeof surface.surfaceId === 'string' &&
-        Array.isArray(surface.operations),
-    );
+  return toSurfaceRecords(states.map((state) => (isRecord(state) ? state.surface : undefined)));
 };

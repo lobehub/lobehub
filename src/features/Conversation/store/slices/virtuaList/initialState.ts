@@ -35,6 +35,15 @@ export interface VirtuaScrollMethods {
     index: number,
     options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
   ) => void;
+  /**
+   * Scroll to the row that renders a display message. Callers outside the list
+   * know message ids, not row indices: rows fold steered turns and unfold
+   * compressed history, so a message index does not address its row.
+   */
+  scrollToMessage: (
+    messageId: string,
+    options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
+  ) => void;
 }
 
 /**

@@ -14,10 +14,12 @@ export const isCompressionOperationType = (type?: string) =>
  * @param options.beforeMessageId Keep this message and everything after it out of the
  * summary, e.g. the user turn a recovery card regenerates after compacting. Compressing it
  * would hide it from the conversation, leaving nothing to regenerate.
+ * @param options.threadId Compacting a thread: leave out the main-conversation messages it
+ * branched from (read back with `threadId: null`); those belong to the main conversation.
  */
 export const getCompressionCandidateMessages = (
   messages: UIChatMessage[],
-  options?: { beforeMessageId?: string },
+  options?: { beforeMessageId?: string; threadId?: string | null },
 ) => {
   const keepFrom = options?.beforeMessageId
     ? messages.findIndex((message) =>
@@ -26,12 +28,15 @@ export const getCompressionCandidateMessages = (
     : -1;
 
   if (options?.beforeMessageId && keepFrom === -1) return [];
-  return keepFrom === -1 ? messages : messages.slice(0, keepFrom);
+  return (keepFrom === -1 ? messages : messages.slice(0, keepFrom)).filter(
+    (message) =>
+      !options?.threadId || message.threadId === undefined || message.threadId === options.threadId,
+  );
 };
 
 export const getCompressionCandidateMessageIds = (
   messages: UIChatMessage[],
-  options?: { beforeMessageId?: string },
+  options?: { beforeMessageId?: string; threadId?: string | null },
 ) =>
   contextReplayMessageIds(
     getCompressionCandidateMessages(messages, options).filter(
@@ -44,6 +49,7 @@ export const createPendingCompressedGroup = ({
   content = '...',
   groupId,
   id,
+  keepPosition,
   threadId,
   topicId,
 }: {
@@ -51,11 +57,15 @@ export const createPendingCompressedGroup = ({
   content?: string;
   groupId?: string | null;
   id: string;
+  /** See {@link CompressionGroupMetadata.keepPosition}. */
+  keepPosition?: boolean;
   threadId?: string | null;
   topicId?: string | null;
 }): UIChatMessage => {
   const now = Date.now();
-  const metadata: CompressionGroupMetadata = { expanded: true };
+  const metadata: CompressionGroupMetadata = keepPosition
+    ? { expanded: true, keepPosition }
+    : { expanded: true };
 
   return {
     agentId,

@@ -131,13 +131,25 @@ export const compressContext =
       ).filter(
         (message) =>
           (message.role === 'compressedGroup' ||
+            message.threadId === undefined ||
             (message.threadId ?? null) === (threadId ?? null)) &&
           (visibleIds.has(message.id) ||
             (message.role === 'tool' && !!message.parentId && visibleIds.has(message.parentId))),
       );
 
+      // A thread page also shows the main-conversation rows it branched from (and
+      // their summaries), read back with `threadId: null`. They belong to the main
+      // conversation, so a thread compaction leaves them alone. A row without the
+      // field is left to the server, which scopes the group by its stored thread.
+      // Only a group whose members all sit in this conversation can be superseded: the
+      // server refuses to merge any other (e.g. one an earlier thread compaction mixed
+      // with main-conversation rows), so its summary must not enter the new one either.
       const sourceCompressionGroups = dbMessages.filter(
-        (message) => message.role === 'compressedGroup' && Boolean(message.id),
+        (message) =>
+          message.role === 'compressedGroup' &&
+          Boolean(message.id) &&
+          message.threadId !== undefined &&
+          (message.threadId ?? null) === (threadId ?? null),
       );
       const sourceGroupIds = sourceCompressionGroups
         .map((message) => message.id)
